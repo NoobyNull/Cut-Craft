@@ -1,0 +1,42 @@
+#!/bin/bash
+# Points the AUR package (packaging/aur/cut-craft-bin) at a release: sets pkgver, starts
+# pkgrel again at 1 and fills in the checksums of the release's files.
+#   scripts/aur-update VERSION     (e.g. 0.6.6; default: Cargo.toml's version)
+# Refuses when the release's Linux download is not signed by Cut Craft's release key.
+# .SRCINFO is written afterwards with `makepkg --printsrcinfo` on Arch (see .github/workflows/aur.yml).
+# Needs curl, sha256sum and minisign.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+version=${1:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}
+version=${version#v}
+pkgbuild=packaging/aur/cut-craft-bin/PKGBUILD
+repo=https://github.com/NoobyNull/Cut-Craft
+tarball=cut-craft-$version-linux-x86_64.tar.gz
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+urls=("$repo/releases/download/v$version/$tarball"
+      "$repo/releases/download/v$version/$tarball.minisig"
+      "https://raw.githubusercontent.com/NoobyNull/Cut-Craft/v$version/packaging/linux/family.yax.CutCraft.desktop"
+      "https://raw.githubusercontent.com/NoobyNull/Cut-Craft/v$version/assets/cut-craft.svg")
+sums=()
+for i in "${!urls[@]}"; do
+    curl -sSL --fail --retry 5 --retry-all-errors -o "$work/$i" "${urls[$i]}"
+    sums+=("$(sha256sum "$work/$i" | cut -d' ' -f1)")
+done
+key=$(sed -n "s/^_minisign_key='\(.*\)'$/\1/p" "$pkgbuild")
+cp "$work/0" "$work/$tarball"
+cp "$work/1" "$work/$tarball.minisig"
+minisign -Vm "$work/$tarball" -P "$key" >/dev/null
+python3 - "$pkgbuild" "$version" "${sums[@]}" <<'PY'
+import re, sys
+path, version, *sums = sys.argv[1:]
+text = open(path).read()
+text = re.sub(r"^pkgver=.*$", f"pkgver={version}", text, flags=re.M)
+text = re.sub(r"^pkgrel=.*$", "pkgrel=1", text, flags=re.M)
+pad = " " * len("sha256sums=(")
+listed = ("\n" + pad).join(f"'{s}'" for s in sums)
+text, n = re.subn(r"^sha256sums=\([^)]*\)", f"sha256sums=({listed})", text, flags=re.M)
+assert n == 1, "PKGBUILD has no sha256sums"
+open(path, "w").write(text)
+PY
+echo "$pkgbuild now builds Cut Craft $version"

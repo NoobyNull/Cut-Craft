@@ -8,7 +8,7 @@ mod install;
 mod package;
 mod release;
 
-pub use install::{Install, Probe};
+pub use install::{Install, Probe, packaged_note_path};
 pub use package::clean_up;
 pub use release::{Asset, Release, version_of};
 pub use semver::Version;
@@ -34,10 +34,12 @@ pub fn this_install() -> Install {
     let exe = std::env::current_exe().unwrap_or_default();
     // the real file, not a link to it in ~/.local/bin or the like
     let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
+    let packaged = packaged_note_path(&exe).and_then(|p| std::fs::read_to_string(p).ok());
     Install::detect(&Probe {
         exe,
         appimage: std::env::var_os("APPIMAGE").map(PathBuf::from),
         flatpak: Path::new("/.flatpak-info").exists(),
+        packaged,
         os: std::env::consts::OS,
         arch: std::env::consts::ARCH,
         exists: &|p| p.exists(),
@@ -70,7 +72,7 @@ impl Found {
     /// What a newer release can do here: install itself, or why the user must update by hand.
     pub fn for_release(install: &Install, release: Release) -> Self {
         let ready = match install {
-            Install::Elsewhere { why } => Err(why.clone()),
+            Install::Packaged { why } | Install::Elsewhere { why } => Err(why.clone()),
             _ => match install.asset_suffix().and_then(|s| release.asset(s)) {
                 None => Err(format!(
                     "Version {} has no download for this kind of install. Download it from \
@@ -153,7 +155,9 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
                     };
                     package::program_from(&bytes, *windows, name)?
                 }
-                Install::Elsewhere { .. } => unreachable!("only downloads have an asset"),
+                Install::Packaged { .. } | Install::Elsewhere { .. } => {
+                    unreachable!("only downloads have an asset")
+                }
             };
             step(Step::Installing);
             package::replace(target, &program)?;

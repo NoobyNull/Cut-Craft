@@ -1,0 +1,56 @@
+# Maintainer: NoobyNull <6624403+NoobyNull@users.noreply.github.com>
+#
+# Cut Craft from its signed GitHub release. The release workflow (.github/workflows/aur.yml)
+# updates pkgver and the checksums with scripts/aur-update and pushes this to the AUR.
+
+pkgname=cut-craft-bin
+_pkgname=cut-craft
+pkgver=0.6.5
+pkgrel=1
+pkgdesc='Design in 2D and 3D and make CNC router toolpaths'
+arch=('x86_64')
+url='https://github.com/NoobyNull/Cut-Craft'
+license=('PolyForm-Noncommercial-1.0.0')
+# the window's libraries are loaded while it opens, so they are named here, not linked
+depends=('libgcc' 'glibc' 'hicolor-icon-theme' 'libx11' 'libxcb' 'libxcursor' 'libxi'
+         'libxkbcommon' 'libxkbcommon-x11' 'libxrandr' 'vulkan-icd-loader' 'wayland')
+makedepends=('minisign')
+optdepends=('vulkan-driver: draws with the graphics card (e.g. vulkan-radeon, vulkan-intel, nvidia-utils)'
+            'libglvnd: OpenGL fallback for graphics cards without Vulkan')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+options=('!strip' '!debug')
+_tarball="$_pkgname-$pkgver-linux-$CARCH.tar.gz"
+_raw="https://raw.githubusercontent.com/NoobyNull/Cut-Craft/v$pkgver"
+source=("$url/releases/download/v$pkgver/$_tarball"
+        "$url/releases/download/v$pkgver/$_tarball.minisig"
+        "family.yax.CutCraft-$pkgver.desktop::$_raw/packaging/linux/family.yax.CutCraft.desktop"
+        "family.yax.CutCraft-$pkgver.svg::$_raw/assets/cut-craft.svg")
+noextract=("$_tarball")
+sha256sums=('153abcef285909bf80125f8b708d32f726abcce0d1b04780a89f5ded377bb546'
+            '569f134cedbbb125fba3cd22fe0a072affb03613cd6a05ff05940ee12d7284c3'
+            'b65f2bb6322169db543deedb7cfda35c94cb1327fd5e61cf4708e15352a53bd1'
+            '247ac27c4c217b3c04c29fabbd9fdcd43e42235cbed2f42c22fa354ab8a71026')
+# Cut Craft's release key (minisign key id 8B54EF7B02BFA844), as in crates/updater/release-key.pub
+_minisign_key='RWREqL8Ce+9Ui1H22zpUrO70gsExl09GsmTXyiKuI7bGmjhypGIST+r1'
+
+prepare() {
+  # the download was signed by Cut Craft's release key, not only the file the sums name
+  minisign -Vm "$_tarball" -P "$_minisign_key"
+  tar -xzf "$_tarball"
+}
+
+package() {
+  cd "$_pkgname-$pkgver-linux-$CARCH"
+  install -Dm755 cut-craft "$pkgdir/usr/bin/cut-craft"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$srcdir/family.yax.CutCraft-$pkgver.desktop" \
+    "$pkgdir/usr/share/applications/family.yax.CutCraft.desktop"
+  install -Dm644 "$srcdir/family.yax.CutCraft-$pkgver.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/family.yax.CutCraft.svg"
+  # tells Cut Craft that pacman looks after it: it then checks for updates only when asked,
+  # and says to update with an AUR helper instead of replacing itself
+  install -dm755 "$pkgdir/usr/lib/cut-craft"
+  printf '%s\n' "This copy of Cut Craft came from the AUR package $pkgname. Update it with your AUR helper, for example \`paru -Syu\` or \`yay -Syu\`." \
+    > "$pkgdir/usr/lib/cut-craft/packaged-by"
+}

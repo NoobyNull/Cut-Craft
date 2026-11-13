@@ -10,6 +10,9 @@ pub struct Probe<'a> {
     pub appimage: Option<PathBuf>,
     /// Running in a Flatpak sandbox (`/.flatpak-info` exists).
     pub flatpak: bool,
+    /// What a system package (AUR, .deb, .rpm) wrote in its note file
+    /// ([`packaged_note_path`]) about how it is updated, when there is one.
+    pub packaged: Option<String>,
     /// `std::env::consts::OS` and `ARCH`.
     pub os: &'a str,
     pub arch: &'a str,
@@ -25,6 +28,9 @@ pub enum Install {
     Archive { exe: PathBuf, windows: bool },
     /// A Linux `AppImage`: the new `AppImage` replaces this file.
     AppImage { file: PathBuf },
+    /// Installed by the system's package manager (an AUR, .deb or .rpm package), which owns
+    /// the files and offers new versions itself; the reason says how to update, for the user.
+    Packaged { why: String },
     /// Updated some other way (a Flatpak, a Mac, a build from the source code); the reason
     /// says how, for the user.
     Elsewhere { why: String },
@@ -33,8 +39,44 @@ pub enum Install {
 /// Downloads are built for 64-bit Intel and AMD processors only.
 const ARCH: &str = "x86_64";
 
+/// Said to a package manager's copy when its package left no note of its own.
+const PACKAGED: &str = "This copy of Cut Craft was installed by your system's package manager, \
+                        so update it there: for example `sudo apt update && sudo apt upgrade`, \
+                        `sudo dnf upgrade`, or your AUR helper (`paru -Syu`, `yay -Syu`).";
+
+/// A package's note longer than this is not a sentence for the user.
+const MAX_NOTE: usize = 400;
+
+/// Where a system package puts its note on how it is updated: `<prefix>/lib/cut-craft/
+/// packaged-by`, for a program in `<prefix>/bin` or in `<prefix>/lib/cut-craft` itself.
+pub fn packaged_note_path(exe: &Path) -> Option<PathBuf> {
+    let dir = exe.parent()?;
+    let lib = if dir.file_name()? == "bin" {
+        dir.parent()?.join("lib").join("cut-craft")
+    } else {
+        dir.to_path_buf()
+    };
+    Some(lib.join("packaged-by"))
+}
+
 impl Install {
     pub fn detect(p: &Probe) -> Self {
+        let note = p
+            .packaged
+            .as_deref()
+            .map(str::trim)
+            .filter(|n| !n.is_empty() && n.len() <= MAX_NOTE);
+        if let Some(note) = note {
+            return Self::Packaged {
+                why: note.to_owned(),
+            };
+        }
+        // a program in /usr is a package's, whatever packed it
+        if p.os == "linux" && p.exe.starts_with("/usr") {
+            return Self::Packaged {
+                why: PACKAGED.to_owned(),
+            };
+        }
         if p.flatpak {
             return Self::Elsewhere {
                 why: "This copy of Cut Craft is a Flatpak. Download the new .flatpak file from \
@@ -76,8 +118,15 @@ impl Install {
             Self::Archive { windows: true, .. } => Some("windows-x86_64.zip"),
             Self::Archive { windows: false, .. } => Some("linux-x86_64.tar.gz"),
             Self::AppImage { .. } => Some("x86_64.AppImage"),
-            Self::Elsewhere { .. } => None,
+            Self::Packaged { .. } | Self::Elsewhere { .. } => None,
         }
+    }
+
+    /// Whether Cut Craft asks GitHub about new versions when it starts. A package manager
+    /// offers its own updates, often a little after GitHub has them, so its copy only checks
+    /// when asked (Help ▸ Check for Updates).
+    pub fn checks_at_startup(&self) -> bool {
+        !matches!(self, Self::Packaged { .. })
     }
 
     /// The program to start after updating.
@@ -85,7 +134,7 @@ impl Install {
         match self {
             Self::Archive { exe, .. } => Some(exe),
             Self::AppImage { file } => Some(file),
-            Self::Elsewhere { .. } => None,
+            Self::Packaged { .. } | Self::Elsewhere { .. } => None,
         }
     }
 }
@@ -119,6 +168,7 @@ mod tests {
             exe: exe.into(),
             appimage: None,
             flatpak: false,
+            packaged: None,
             os,
             arch: "x86_64",
             exists,
@@ -179,6 +229,56 @@ mod tests {
         assert!(matches!(lone, Install::Archive { .. }));
         let debug = Install::detect(&probe("/c/target/debug/cut-craft", "linux", EVERYTHING));
         assert!(matches!(debug, Install::Elsewhere { .. }));
+    }
+
+    #[test]
+    fn a_package_managers_copy_says_how_its_package_updates() {
+        let mut p = probe("/usr/bin/cut-craft", "linux", NOTHING);
+        p.packaged = Some("Update it with your AUR helper, for example `paru -Syu`.".into());
+        let found = Install::detect(&p);
+        assert_eq!(
+            found,
+            Install::Packaged {
+                why: "Update it with your AUR helper, for example `paru -Syu`.".into()
+            }
+        );
+        assert_eq!(found.asset_suffix(), None);
+        assert_eq!(found.program(), None);
+        assert!(
+            !found.checks_at_startup(),
+            "the package manager offers updates"
+        );
+    }
+
+    #[test]
+    fn a_copy_in_usr_with_no_note_is_still_the_package_managers() {
+        let found = Install::detect(&probe("/usr/bin/cut-craft", "linux", NOTHING));
+        let Install::Packaged { why } = &found else {
+            panic!("files in /usr belong to the package manager: {found:?}")
+        };
+        assert!(why.contains("package manager"), "{why}");
+        // a blank or overlong note is not shown; the plain words are
+        let mut p = probe("/usr/lib/cut-craft/cut-craft", "linux", NOTHING);
+        p.packaged = Some("  \n".into());
+        assert_eq!(Install::detect(&p), found);
+        p.packaged = Some("x".repeat(2000));
+        assert_eq!(Install::detect(&p), found);
+        // anywhere else is a download unpacked by the user
+        let home = Install::detect(&probe("/home/a/usrstuff/cut-craft", "linux", NOTHING));
+        assert!(matches!(home, Install::Archive { .. }));
+        assert!(home.checks_at_startup());
+    }
+
+    #[test]
+    fn the_note_sits_in_lib_beside_the_programs_bin() {
+        assert_eq!(
+            packaged_note_path(Path::new("/usr/bin/cut-craft")),
+            Some(PathBuf::from("/usr/lib/cut-craft/packaged-by"))
+        );
+        assert_eq!(
+            packaged_note_path(Path::new("/usr/lib/cut-craft/cut-craft")),
+            Some(PathBuf::from("/usr/lib/cut-craft/packaged-by"))
+        );
     }
 
     #[test]
