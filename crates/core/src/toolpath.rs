@@ -599,6 +599,12 @@ pub struct ToolDatabase {
     /// whose tools are all the user's own (added with My Tools)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub catalogues: Vec<String>,
+    /// Tools joined into another, by their old name: one bit listed once per material
+    /// came in as copies, now one tool with cutting data per material; toolpaths and tool
+    /// changers that name a copy find the bit ([`Self::index_of`]). See
+    /// [`crate::tool_copies`] (added with one shape per bit)
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub joined: std::collections::BTreeMap<String, String>,
 }
 
 /// The top-level group the catalogues are imported into, apart from My Tools.
@@ -725,6 +731,12 @@ impl ToolDatabase {
             .filter(named)
             .find(|&i| !self.is_catalogue(&self.tools[i]))
             .or_else(|| all.clone().find(named))
+            .or_else(|| {
+                // a copy joined into its bit: the bit
+                let bit = self.joined.get(name).filter(|b| *b != name)?;
+                let named = |i: &usize| self.tools[*i].name == *bit;
+                all.clone().find(named)
+            })
     }
 
     /// The tool `name` as a toolpath takes it: cutting with the active material's data.

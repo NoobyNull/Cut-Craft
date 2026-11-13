@@ -1653,7 +1653,29 @@ impl CutCraftApp {
         if let Some(path) = &self.machines_path {
             self.machines = cut_craft_machines::Machines::load(path);
         }
+        // a holder naming a bit's per-material copy holds the bit it was joined into
+        if self.rename_joined_in_holders()
+            && let Some(path) = &self.machines_path
+            && let Err(e) = self.machines.save(path)
+        {
+            self.status.set_message(&e);
+        }
         self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
+    }
+
+    /// Holders naming a tool joined into another ([`ToolDatabase::joined`]) name the
+    /// tool now; whether any did.
+    pub(super) fn rename_joined_in_holders(&mut self) -> bool {
+        let mut changed = false;
+        for machine in &mut self.machines.machines {
+            for slot in machine.slots.iter_mut().flatten() {
+                if let Some(bit) = self.tools.joined.get(slot.as_str()) {
+                    slot.clone_from(bit);
+                    changed = true;
+                }
+            }
+        }
+        changed
     }
 
     /// The active machine's tool changer was loaded differently: the machines are saved,
@@ -4785,8 +4807,23 @@ impl CutCraftApp {
     pub(super) fn load_tools(&mut self) {
         self.tools_path = files::tool_database_path();
         if let Some(path) = &self.tools_path {
-            match files::load_tools(path) {
-                Ok(tools) => self.tools = tools,
+            match files::load_tools_joining(path) {
+                Ok((tools, report)) => {
+                    self.tools = tools;
+                    // sizes a bit's copies gave differently, not kept: said once
+                    if let Some(first) = report.first() {
+                        for line in &report {
+                            log::warn!("joining a bit's per-material copies: {line}");
+                        }
+                        let more = match report.len() {
+                            1 => String::new(),
+                            n => format!(" (and {} more; see the log)", n - 1),
+                        };
+                        self.status.set_message(&format!(
+                            "Bits listed once per material are now one bit each. {first}{more}"
+                        ));
+                    }
+                }
                 Err(e) => {
                     self.status
                         .set_message(&format!("{e}; tool changes will not be saved"));

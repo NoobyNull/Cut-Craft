@@ -335,9 +335,13 @@ impl Manager {
     }
 
     /// Adds the tools of a picked file (named `name`) to the copy, in a group of their own.
-    pub fn import(&mut self, incoming: ToolDatabase, name: &str) {
+    /// A bit the file lists once per material becomes one bit
+    /// ([`ToolDatabase::join_material_copies`]); what was not kept, if anything.
+    pub fn import(&mut self, incoming: ToolDatabase, name: &str) -> Vec<String> {
         let group = tree::import(&mut self.draft, incoming, name);
+        let report = self.draft.join_material_copies();
         self.pick = Some(Pick::Group(group));
+        report
     }
 
     /// Draws the window; what it asks of the app, if anything.
