@@ -583,6 +583,9 @@ I[fl + "notes.svg"] = lambda: [rect(9, 6, 30, 36, 2, WOODD, 2.5, "#fff3c4")] + [
 I[fl + "job_setup.svg"] = lambda: [slab(4, 24, 30, 10, 9), darrow(4, 40, 34, 40, INK, 2), darrow(40, 22, 40, 32, INK, 2)]
 I[fl + "import_vectors.svg"] = lambda: [pl(star_pts(30, 28, 13, 6), INK, 2.5, LIGHT, True), arrow(4, 8, 18, 22)]
 I[fl + "export_vectors.svg"] = lambda: [pl(star_pts(18, 28, 13, 6), INK, 2.5, LIGHT, True), arrow(28, 20, 43, 5)]
+# a drawing coming in onto the shape it is fitted inside: the dashed circle is the chosen shape
+I[fl + "import_into_shape.svg"] = lambda: [circ(29, 29, 15, INK, 2.5, "none", "4 3"), pl(star_pts(29, 29.5, 9.5, 4.2), INK, 2.5, LIGHT, True),
+                                           arrow(3, 4, 14, 15)]
 I[fl + "import_vectors_bitmap.svg"] = lambda: [picture(14, 14, 30, 26), arrow(3, 4, 16, 17)]
 # the Import sub-tab's own: an orange arrow coming in onto what is brought in
 I[fl + "import_toolpaths_file.svg"] = lambda: [zigzag(16, 18, 26, 22, 4), arrow(3, 4, 15, 16)]

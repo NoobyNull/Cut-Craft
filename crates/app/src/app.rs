@@ -8,6 +8,7 @@ mod depth;
 mod draw3d;
 mod entry;
 mod first_run;
+mod fit_import;
 mod guide;
 mod help;
 #[cfg(test)]
@@ -266,7 +267,8 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 102] = [
+const BUILT_INS: [&str; 103] = [
+    "import_into_shape",
     "try_sample_project",
     "machine_files",
     "first_run_setup",
@@ -1150,6 +1152,8 @@ struct CutCraftApp {
     guide_props: Option<GuideProps>,
     /// Machine ▸ Tool Changer…: the active machine's holders loaded from the tools.
     tool_changer_window: bool,
+    /// Import Into Selected Shape's drawing and its window, while it is open.
+    fit_import: Option<fit_import::FitImport>,
     /// The Toolpath List's height as its divider was last dragged; None for half the page.
     list_height: Option<f32>,
     /// Measure / Inspect's last result, shown in its form while the tool is on.
@@ -2682,4 +2686,10 @@ fn wrap_for(
             if shift.is_finite() { shift } else { 0.0 }
         },
     })
+}
+
+/// Whether one closed vector is selected, for a drawing to be imported into (the 2D view's
+/// right-click Import Into This Shape…).
+pub fn shape_to_import_into(doc: &cut_craft_core::document::Document) -> bool {
+    fit_import::chosen_shape(doc).is_ok()
 }
