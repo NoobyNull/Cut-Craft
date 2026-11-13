@@ -878,6 +878,18 @@ instead of half-cell steps.
 - Not tried by hand: how the cube looks and feels, label fit at other font sizes, and
   side-on overlay speed on a big job.
 
+## The material in the 3D view (deliberate difference)
+
+- The 3D view always starts from the material Job Setup describes: a new job shows the uncut
+  block (its size, thickness and material look) at once, with nothing to create first, and a
+  drawing tool draws on its top. The model sits on that block, its uncut top round the
+  components and its sides shown, as the carving will look; a toolpath preview then cuts
+  into the same block, keeping whatever its toolpaths do not clear. [inf] The help's 3D view
+  shows the model alone until a preview; a novice expects to see the material they already
+  described, so we show it from the start.
+- Not on a rotary job (the model wraps round the axis) or while a 3D model is imported (it is
+  placed down in the material, which would hide it): there the model is shown alone.
+
 ## Drawing in the 3D view [inf] (help: What's New in Aspire V12.0, "Drawing in the 3D View")
 
 #### Aspire behaviour (sources)
@@ -902,7 +914,6 @@ instead of half-cell steps.
 #### What's left
 - Node editing and the selection's 2D handles in the 3D view; selecting vectors by clicking
   them there.
-- Drawing before any component exists (the 3D view shows "Nothing in 3D yet").
 - Drawing on the wrapped rotary view.
 
 ## Tool databases: `.vtdb` [obs] (vendor files from Amana, IDC Woodcraft and CIC; Aspire 12.5)

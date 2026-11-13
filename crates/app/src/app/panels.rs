@@ -1541,11 +1541,9 @@ impl CutCraftApp {
             }
             return Some(Cow::Owned(self.painted(coarse.clone())));
         }
-        // before a preview, the model alone: nothing where no component is; made once a
-        // change, not every frame
-        if self.doc.components.is_empty() {
-            return None;
-        }
+        // before a preview, the model alone: nothing where no component is; on a job with
+        // no model yet, the uncut material Job Setup describes. Made once a change, not
+        // every frame
         let key = super::RoughKey {
             revision: self.history.revision(),
             job: self.doc.job,
@@ -1559,6 +1557,12 @@ impl CutCraftApp {
         self.rough_3d
             .as_ref()
             .map(|(_, shape)| Cow::Borrowed(shape))
+    }
+
+    /// Whether the 3D view shows the job's material uncut: no preview, and no model yet
+    /// (the block Job Setup describes is there from the start, not made by the user).
+    pub(super) fn showing_uncut_material(&self) -> bool {
+        self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty()
     }
 
     /// Whether an imported model is shown whole, in place of its component.
@@ -1605,6 +1609,10 @@ impl CutCraftApp {
     /// The model's shape, `cells` across; while Orientate 3D Model shows its model whole,
     /// without the component the form made of it.
     pub(super) fn model_shape(&mut self, cells: usize) -> Material {
+        // nothing modelled yet: the material as it goes on the machine, uncut
+        if self.doc.components.is_empty() {
+            return Material::new(&self.doc.job, cells);
+        }
         let drawn = self
             .form
             .as_ref()
@@ -1616,11 +1624,27 @@ impl CutCraftApp {
             Some(std::mem::replace(&mut k.visible, visible))
         };
         let was = show(&mut self.doc, false);
-        let shape = cut_craft_core::component::model_shape(&self.doc, cells);
+        let mut shape = cut_craft_core::component::model_shape(&self.doc, cells);
         if let Some(was) = was {
             show(&mut self.doc, was);
         }
+        // the model sits on the material: where no component is, the material's uncut top
+        if self.model_on_material() {
+            for z in shape.heights.iter_mut().filter(|z| z.is_nan()) {
+                *z = 0.0;
+            }
+        }
         shape
+    }
+
+    /// Whether the 3D view shows the model on the job's whole block of material, its uncut
+    /// top round the model and its sides: on a flat job, not while a 3D model is imported
+    /// (it is placed in the material, which would hide it) or a preview shows.
+    pub(super) fn model_on_material(&self) -> bool {
+        self.simulation.is_none()
+            && self.playback.is_none()
+            && self.doc.job.rotary.is_none()
+            && !self.importing_whole()
     }
 
     /// The SpaceMouse's moves since the last frame, turning, panning and zooming the 3D view
@@ -1774,16 +1798,6 @@ impl CutCraftApp {
     pub(super) fn view_3d(&mut self, ui: &mut egui::Ui) {
         self.framing.field_of_view = self.options.view_3d.field_of_view();
         cut_craft_bug_report::mark(ui, "3D view");
-        if self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty() {
-            let empty = ui.centered_and_justified(|ui| {
-                ui.weak("Nothing in 3D yet: create a shape or preview the toolpaths")
-            });
-            // clipart dropped on the empty view goes in the middle of the job
-            if let Some(path) = empty.response.dnd_release_payload::<std::path::PathBuf>() {
-                self.import_clipart(&path, None, None);
-            }
-            return;
-        }
         ui.horizontal(|ui| self.view_3d_buttons(ui));
         let (area, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
@@ -2947,7 +2961,10 @@ impl CutCraftApp {
     /// The job point on the drawn surface at the point of the 3D view's picture `fit` under
     /// `at`; `None` off the surface.
     pub(super) fn point_at_3d(&mut self, fit: egui::Rect, at: egui::Pos2) -> Option<Point> {
-        let (job, previewing) = (self.shown_job(), self.simulation.is_some());
+        let (job, previewing) = (
+            self.shown_job(),
+            self.simulation.is_some() || self.showing_uncut_material(),
+        );
         let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
         let surface = self.surface_3d()?.into_owned();
         let wrap = wrap_for(&job, on, previewing, &surface);
@@ -3124,8 +3141,13 @@ impl CutCraftApp {
             } else {
                 ui.visuals().widgets.inactive.fg_stroke.color
             },
-            // the block's sides belong to a preview; the model alone has no excess material
-            sides: shown.material_block && (self.simulation.is_some() || self.playback.is_some()),
+            // the block's sides: a preview's, the uncut material's, the block the model
+            // sits on
+            sides: shown.material_block
+                && (self.simulation.is_some()
+                    || self.playback.is_some()
+                    || self.showing_uncut_material()
+                    || self.model_on_material()),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
             wrap: None,
             // a wood from Toolpaths ▸ Materials shows its grain
@@ -3141,7 +3163,9 @@ impl CutCraftApp {
             self.paint_background(ui, &painter, area);
         }
         let job = self.shown_job();
-        let previewing = self.simulation.is_some() || self.playback.is_some();
+        // the uncut material wraps as a preview's stock does: its top at the surface
+        let previewing =
+            self.simulation.is_some() || self.playback.is_some() || self.showing_uncut_material();
         // a playing preview's tool: where its tip is, and the parts it is drawn in
         let tool_at = self
             .playback
