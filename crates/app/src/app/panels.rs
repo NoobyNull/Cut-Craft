@@ -1102,6 +1102,7 @@ impl CutCraftApp {
     /// the playback, so its controls stay to scrub it again.
     pub(super) fn finish_playback(&mut self) {
         self.playback_goal = None;
+        (self.playback_view, self.playback_gpu) = (None, None);
         if let Some(playback) = self.playback.take() {
             self.simulation = Some(playback.material().clone());
             self.kept_playback = Some(playback);
@@ -1464,14 +1465,34 @@ impl CutCraftApp {
         }
     }
 
+    /// A playing preview's material at the moving detail, painted, as the 3D view draws it:
+    /// made again only once it has cut on (or the detail or the job changed).
+    fn playback_surface(&mut self) -> Option<Material> {
+        let playback = self.playback.as_ref()?;
+        let key = (
+            playback.revision(),
+            self.moving_cells(),
+            self.history.revision(),
+        );
+        if let Some((kept, surface)) = &self.playback_view
+            && *kept == key
+        {
+            return Some(surface.clone());
+        }
+        let coarse = view3d::coarse(playback.material(), key.1);
+        let surface = self.painted(coarse);
+        self.playback_view = Some((key, surface.clone()));
+        self.playback_builds += 1;
+        Some(surface)
+    }
+
     /// What the 3D view shows, at Options' detail while moving: the toolpath preview if
     /// there is one, else the model (kept until it changes: it is asked for several times a
     /// frame, and a big model takes long to mix).
     pub(super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
         let cells = self.options.view_3d.moving_cells();
-        if let Some(playback) = &self.playback {
-            let coarse = view3d::coarse(playback.material(), self.moving_cells());
-            return Some(Cow::Owned(self.painted(coarse)));
+        if self.playback.is_some() {
+            return self.playback_surface().map(Cow::Owned);
         }
         if let Some(material) = &self.simulation {
             if self
@@ -1958,9 +1979,22 @@ impl CutCraftApp {
         };
         if let Some(playback) = &self.playback {
             self.solid_gpu = None;
-            let moving = self.moving_cells();
-            let surface = self.painted(view3d::coarse(playback.material(), moving));
-            return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
+            let key = (
+                playback.revision(),
+                self.moving_cells(),
+                self.history.revision(),
+                wrap,
+                sides,
+            );
+            if let Some((kept, geometry)) = &self.playback_gpu
+                && *kept == key
+            {
+                return std::sync::Arc::clone(geometry);
+            }
+            let surface = self.playback_surface().expect("a playback");
+            let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
+            self.playback_gpu = Some((key, std::sync::Arc::clone(&geometry)));
+            return geometry;
         }
         let key = super::GeometryKey {
             revision: self.history.revision(),

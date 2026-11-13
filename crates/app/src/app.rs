@@ -603,6 +603,9 @@ const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI"
 /// A preview starts at ten times the machine's own speed (×1: each move at its tool's feed
 /// or plunge rate, rapids at the Toolpath Summary's rapid rate).
 pub(crate) const PLAYBACK_SPEED: f64 = 10.0;
+/// What a playing preview's GPU surface was made from: the playback's revision, the detail,
+/// the job's revision, the wrap and whether the sides are drawn.
+type PlaybackGpuKey = (u64, usize, u64, Option<view3d::Wrap>, bool);
 /// A frame's time for cutting a playing preview: the window still answers at once.
 const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30);
 /// How many times faster than the machine a preview can play: a long finishing toolpath
@@ -1221,6 +1224,14 @@ struct CutCraftApp {
     /// A preview stopped or played to its end, kept so its controls stay to scrub it back
     /// and forth, till another preview or Reset Preview.
     kept_playback: Option<cut_craft_core::playback::Playback>,
+    /// A playing preview's material as the 3D view draws it, and the GPU's surface of it,
+    /// kept by what they were made from (the playback's revision, the detail and the job's
+    /// revision; for the GPU, its wrap and sides too) so a paused preview is not made again
+    /// each frame, nor a moving one more than once a frame.
+    playback_view: Option<((u64, usize, u64), Material)>,
+    playback_gpu: Option<(PlaybackGpuKey, std::sync::Arc<view3d::gpu::Geometry>)>,
+    /// How many times the playback's view has been made (for tests).
+    playback_builds: usize,
     /// Where the Close up slider is centred, held while it is dragged so it stays put.
     close_up: Option<f64>,
     /// How long a frame may spend cutting a playing preview; the rest waits for the next

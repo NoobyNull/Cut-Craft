@@ -4490,6 +4490,21 @@ fn the_preview_controls_stay_once_it_has_played_to_the_end() {
 }
 
 #[test]
+fn a_paused_preview_is_not_rebuilt_for_the_3d_view_every_frame() {
+    let mut h = playing_preview();
+    h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    let built = h.app.playback_builds;
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.app.playback_builds, built, "kept while it shows the same");
+    h.click(h.text_at("Single Step").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.playback_builds > built, "made again once it cut on");
+}
+
+#[test]
 fn a_long_jump_is_cut_a_little_each_frame_and_stop_ends_it() {
     let mut h = playing_preview();
     // a step a frame, as a toolpath of millions of moves would go
