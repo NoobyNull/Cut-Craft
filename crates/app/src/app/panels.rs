@@ -18,9 +18,82 @@ pub(super) const PIN_ICON: &str = "view/pin.png";
 pub(super) const PINNED_ICON: &str = "view/pinned.png";
 
 impl CutCraftApp {
+    /// The Materials Library window; its edits (to the library and the bits' feeds) are
+    /// kept on Apply or OK.
+    pub(super) fn materials_library_window(&mut self, ctx: &egui::Context) {
+        use cut_craft_tool_database::materials::MaterialsOutcome;
+        let Some(window) = &mut self.materials_window else {
+            return;
+        };
+        // the tool selector is open over it
+        if self.tool_manager.is_some() {
+            return;
+        }
+        let Some(outcome) = window.show(ctx) else {
+            return;
+        };
+        match outcome {
+            MaterialsOutcome::Apply | MaterialsOutcome::Ok => {
+                self.materials = window.library.clone();
+                self.tools = window.tools.clone();
+                if outcome == MaterialsOutcome::Ok {
+                    self.materials_window = None;
+                }
+                let saved = self.materials_path.as_deref().map_or(Ok(()), |p| {
+                    files::write_creating(p, &self.materials.to_json())
+                });
+                match saved {
+                    Ok(()) => self.tools_changed("Materials Library saved"),
+                    Err(e) => self.status.set_message(&e),
+                }
+            }
+            MaterialsOutcome::Cancel => self.materials_window = None,
+            MaterialsOutcome::AddTool => {
+                let mut manager = cut_craft_tool_database::Manager::selecting(&window.tools, "");
+                manager.library = self.materials.clone();
+                self.open_tool_manager(manager);
+                self.picking = Some(super::PickFor::Material);
+            }
+        }
+    }
+
+    /// The manager's outcomes that belong to the Materials Library: a bit picked for its Add
+    /// Tool goes to its window, and the manager's Materials Library button opens it. True when
+    /// the outcome was handled here.
+    fn library_outcome(&mut self, outcome: &cut_craft_tool_database::Outcome) -> bool {
+        use cut_craft_tool_database::Outcome;
+        let Some(manager) = &mut self.tool_manager else {
+            return false;
+        };
+        match (outcome, self.picking) {
+            (Outcome::Select(name), Some(super::PickFor::Material)) => {
+                if let Some(window) = &mut self.materials_window {
+                    window.tools = manager.draft.clone();
+                    window.add_tool(name);
+                }
+                self.picking = None;
+            }
+            (Outcome::Cancel, Some(super::PickFor::Material)) => self.picking = None,
+            (Outcome::MaterialsLibrary, _) => {
+                // the edits so far kept, as Apply, then the library on them
+                self.tools = manager.draft.clone();
+                self.tools_changed("Tool database saved");
+                self.materials_window =
+                    Some(cut_craft_tool_database::materials::MaterialsWindow::new(
+                        &self.materials,
+                        &self.tools,
+                    ));
+            }
+            _ => return false,
+        }
+        self.tool_manager = None;
+        true
+    }
+
     /// The Tool Database manager; its edits are kept on Apply or OK.
     pub(super) fn tool_database_window(&mut self, ctx: &egui::Context) {
         use cut_craft_tool_database::Outcome;
+        self.materials_library_window(ctx);
         let Some(manager) = &mut self.tool_manager else {
             return;
         };
@@ -38,7 +111,14 @@ impl CutCraftApp {
         let Some(outcome) = manager.show(ctx, &look) else {
             return;
         };
+        if self.library_outcome(&outcome) {
+            return;
+        }
+        let Some(manager) = &mut self.tool_manager else {
+            return;
+        };
         match outcome {
+            Outcome::MaterialsLibrary => {}
             Outcome::Apply | Outcome::Ok | Outcome::Select(_) => {
                 self.tools = manager.draft.clone();
                 let mut changer = manager.changer.clone();
@@ -62,21 +142,7 @@ impl CutCraftApp {
                     if let Some(form) = &mut self.form {
                         form.dirty = true;
                     }
-                    let done = match picking {
-                        Some(super::PickFor::Listed(super::ToolList::Clearing, _)) => {
-                            format!("Clearing with {name}")
-                        }
-                        Some(super::PickFor::Listed(super::ToolList::Rest, _)) => {
-                            format!("Rest machining after {name}")
-                        }
-                        Some(super::PickFor::Holder(slot)) => {
-                            format!("{name} loaded in holder T{slot}")
-                        }
-                        Some(super::PickFor::Listed(super::ToolList::Tools, _)) | None => {
-                            format!("Cutting with {name}")
-                        }
-                    };
-                    self.status.set_message(&done);
+                    self.status.set_message(&picked_message(picking, name));
                 }
                 if let Some(changer) = changer
                     && let Some(machine) = self
@@ -4379,5 +4445,20 @@ fn times(x: f64) -> String {
         format!("{x:.2}").trim_end_matches('0').to_owned()
     } else {
         format!("{x:.0}")
+    }
+}
+
+/// The status bar's word on a bit picked with Select…, by what it was picked for.
+fn picked_message(picking: Option<super::PickFor>, name: &str) -> String {
+    match picking {
+        Some(super::PickFor::Listed(super::ToolList::Clearing, _)) => {
+            format!("Clearing with {name}")
+        }
+        Some(super::PickFor::Listed(super::ToolList::Rest, _)) => {
+            format!("Rest machining after {name}")
+        }
+        Some(super::PickFor::Holder(slot)) => format!("{name} loaded in holder T{slot}"),
+        Some(super::PickFor::Listed(super::ToolList::Tools, _) | super::PickFor::Material)
+        | None => format!("Cutting with {name}"),
     }
 }

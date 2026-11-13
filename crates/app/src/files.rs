@@ -357,6 +357,22 @@ pub fn tool_database_path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join("tools.json"))
 }
 
+/// Where the Materials Library is kept.
+pub fn materials_path() -> Option<PathBuf> {
+    config_dir().map(|dir| dir.join("materials.json"))
+}
+
+/// The Materials Library at `path`; the starter list when there is none yet.
+pub fn load_materials(
+    path: &Path,
+) -> Result<cut_craft_core::material_library::MaterialLibrary, String> {
+    use cut_craft_core::material_library::MaterialLibrary;
+    if !path.exists() {
+        return Ok(MaterialLibrary::starter());
+    }
+    MaterialLibrary::from_json(&read(path)?).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 pub fn recent_files_path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join("recent.json"))
 }
@@ -566,7 +582,7 @@ pub fn save_recent(recent: &[PathBuf], path: &Path) -> Result<(), String> {
 }
 
 /// Writes `bytes` to `path`, making its folder first.
-fn write_creating(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub fn write_creating(path: &Path, bytes: &[u8]) -> Result<(), String> {
     write_atomic(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 

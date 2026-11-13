@@ -101,6 +101,9 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
+            materials: cut_craft_core::material_library::MaterialLibrary::starter(),
+            materials_path: None,
+            materials_window: None,
             picking: None,
             deep_cut: None,
             units_ask: None,
@@ -4876,6 +4879,22 @@ impl CutCraftApp {
         }
     }
 
+    /// Reads the user's Materials Library (the starter list when there is none); a broken
+    /// one is reported, kept on disk and not saved over.
+    pub(super) fn load_materials(&mut self) {
+        self.materials_path = files::materials_path();
+        if let Some(path) = &self.materials_path {
+            match files::load_materials(path) {
+                Ok(lib) => self.materials = lib,
+                Err(e) => {
+                    self.status
+                        .set_message(&format!("{e}; material changes will not be saved"));
+                    self.materials_path = None;
+                }
+            }
+        }
+    }
+
     /// Reads the user's tool database; a broken one is reported and left untouched on disk.
     pub(super) fn load_tools(&mut self) {
         self.tools_path = files::tool_database_path();
@@ -4916,6 +4935,7 @@ impl CutCraftApp {
     /// The Tool Database window, `manager`, with the active machine's tool changer, its
     /// tools loaded with the tools.
     pub(super) fn open_tool_manager(&mut self, mut manager: cut_craft_tool_database::Manager) {
+        manager.library = self.materials.clone();
         manager.changer = self
             .machines
             .active()
@@ -4954,6 +4974,8 @@ impl CutCraftApp {
                 }
                 self.tool_changer_changed();
             }
+            // handled by the Materials Library window
+            Some(super::PickFor::Material) => {}
             None => self.choose_tool(name),
         }
     }
