@@ -441,7 +441,12 @@ impl Tool {
     /// Whether it keeps cutting data for `material` (always, for the default): the
     /// Tool Database greys the tools that do not.
     pub fn has_data_for(&self, material: &str) -> bool {
-        material.is_empty() || self.material_data(material).is_some()
+        // its own: data a material only borrows from its class is not set for it
+        material.is_empty()
+            || self
+                .materials
+                .iter()
+                .any(|m| m.material.eq_ignore_ascii_case(material))
     }
 
     /// Its cutting data for `material`: the material's own, else its class's (data kept for

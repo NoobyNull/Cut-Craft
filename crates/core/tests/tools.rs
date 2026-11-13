@@ -673,5 +673,5 @@ fn a_material_without_data_of_its_own_cuts_with_its_class_s() {
         "no data for its class: the default"
     );
     assert_eq!(tool.cutting("Maple").material, "Maple");
-    assert!(tool.has_data_for("Walnut"));
+    assert!(!tool.has_data_for("Walnut"), "borrowed, not its own");
 }

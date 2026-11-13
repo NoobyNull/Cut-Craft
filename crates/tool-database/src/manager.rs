@@ -567,7 +567,7 @@ impl Manager {
                 let label = ui.selectable_label(picked, name);
                 if unset {
                     label.clone().on_hover_hint(format!(
-                        "No cutting data for {}: it cuts with its default data",
+                        "No cutting data for {}: it cuts with its class's or its default data",
                         self.draft.material
                     ));
                 }
@@ -969,7 +969,7 @@ pub(crate) fn length(ui: &mut egui::Ui, value: &mut f64, units: Units) -> bool {
 }
 
 /// A rate (mm/min) shown in the tool's rate units; whether it changed.
-fn rate(ui: &mut egui::Ui, value: &mut f64, units: RateUnits) -> bool {
+pub(crate) fn rate(ui: &mut egui::Ui, value: &mut f64, units: RateUnits) -> bool {
     number(ui, value, units.mm_per_min(), units.label())
 }
 
@@ -1347,7 +1347,7 @@ fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
 }
 
 /// A stepover (a fraction of the diameter) shown as a percentage; whether it changed.
-fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
+pub(crate) fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
     let mut percent = *fraction * 100.0;
     let changed = ui
         .add(
