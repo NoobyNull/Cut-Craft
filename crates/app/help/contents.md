@@ -11,7 +11,7 @@ a CNC machine cuts them with.
 ## Finding help
 
 - **Search help** along the top of this window finds every page with the words you type:
-  a tool's name, a setting such as "stepover", or a word such as "tabs".
+  a tool's name, a setting such as "stepover", or any word for what you want to do.
 - **?** at the top of the Design or Toolpaths page lists that page's tools.
 - **F1** with a tool's form open goes straight to that tool; with none open, to this page.
 - Hover over a setting's name in a form for a short note about it.
