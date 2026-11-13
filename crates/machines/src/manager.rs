@@ -15,8 +15,6 @@ fn machine_window() -> egui::Id {
     egui::Id::unique("machine_configuration_management")
 }
 const WINDOW_SHARE: f32 = 0.4;
-/// A post's text in View, in rows of the theme's interactive height.
-const VIEW_ROWS: f32 = 20.0;
 /// Millimetres to an inch.
 const INCH: f64 = 25.4;
 
@@ -49,22 +47,31 @@ fn viewer(ctx: &egui::Context, viewing: &mut Option<(String, String)>) {
     let Some((title, text)) = viewing else { return };
     let mut open = true;
     let id = egui::Id::unique("post_processor_content");
-    cut_craft_bug_report::dialog(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
+    cut_craft_bug_report::dialog_with_panels(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
         if ui.button("Copy").clicked() {
             ui.ctx().copy_text(text.clone());
         }
-        let height = ui.spacing().interact_size.y * VIEW_ROWS;
-        egui::ScrollArea::both().max_height(height).show(ui, |ui| {
-            ui.add(
-                egui::TextEdit::multiline(&mut text.as_str())
-                    .code_editor()
-                    .desired_width(f32::INFINITY),
-            );
-        });
+        text_view(ui, &mut text.as_str());
     });
     if !open {
         *viewing = None;
     }
+}
+
+/// A post's text filling the rest of the window, scrolling when it is longer; where it shows.
+fn text_view(ui: &mut egui::Ui, text: &mut dyn egui::TextBuffer) -> egui::Rect {
+    egui::ScrollArea::both()
+        .auto_shrink(false)
+        .show(ui, |ui| {
+            let fill = ui.available_size();
+            ui.add(
+                egui::TextEdit::multiline(text)
+                    .code_editor()
+                    .desired_width(f32::INFINITY)
+                    .min_size(fill),
+            );
+        })
+        .inner_rect
 }
 
 fn view(entry: &Entry) -> Option<(String, String)> {
@@ -973,7 +980,7 @@ fn editor(ctx: &egui::Context, editing: &mut Option<Editing>) -> Option<PostOutc
         egui::Id::unique("post_processor_edit"),
         format!("Edit Post-Processor: {}", edit.name),
     );
-    cut_craft_bug_report::dialog(ctx, id, &title, dialog_size(ctx), &mut open, |ui| {
+    cut_craft_bug_report::dialog_with_panels(ctx, id, &title, dialog_size(ctx), &mut open, |ui| {
         cut_craft_bug_report::mark(ui, "Edit Post-Processor");
         match cut_craft_post::Post::parse(&edit.text) {
             Ok(post) if post.name == edit.name => {
@@ -1011,14 +1018,7 @@ fn editor(ctx: &egui::Context, editing: &mut Option<Editing>) -> Option<PostOutc
                 ui.weak("Unsaved changes are lost when this closes");
             }
         });
-        let height = ui.spacing().interact_size.y * VIEW_ROWS;
-        egui::ScrollArea::both().max_height(height).show(ui, |ui| {
-            ui.add(
-                egui::TextEdit::multiline(&mut edit.text)
-                    .code_editor()
-                    .desired_width(f32::INFINITY),
-            );
-        });
+        text_view(ui, &mut edit.text);
     });
     if !open {
         *editing = None;
@@ -1039,22 +1039,40 @@ impl PostManager {
             egui::Id::unique("post_processor_management"),
             "Post-Processor Management",
         );
-        cut_craft_bug_report::dialog(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
-            cut_craft_bug_report::mark(ui, "Post-Processor Management");
-            let height = ui.spacing().interact_size.y * VIEW_ROWS;
-            egui::ScrollArea::vertical()
-                .max_height(height)
-                .show(ui, |ui| {
-                    for entry in library.entries() {
-                        if let Some(asked) = self.row(ui, look, library, &entry) {
-                            outcome = Some(asked);
-                        }
-                    }
-                });
+        cut_craft_bug_report::dialog_with_panels(
+            ctx,
+            id,
+            title,
+            dialog_size(ctx),
+            &mut open,
+            |ui| {
+                cut_craft_bug_report::mark(ui, "Post-Processor Management");
+                outcome = self.contents(ui, library, look).1;
+            },
+        );
+        viewer(ctx, &mut self.viewing);
+        if let Some(said) = editor(ctx, &mut self.editing) {
+            outcome = Some(said);
+        }
+        if !open {
+            outcome = Some(PostOutcome::Close);
+        }
+        outcome
+    }
+
+    /// The window's insides: the buttons (and a delete waiting to be said again) along the
+    /// bottom, the post list filling the rest. Where the list shows, and what was asked.
+    fn contents(
+        &mut self,
+        ui: &mut egui::Ui,
+        library: &Library,
+        look: &Look,
+    ) -> (egui::Rect, Option<PostOutcome>) {
+        let mut outcome = None;
+        egui::Panel::bottom("post_processor_buttons").show(ui, |ui| {
             if let Some(asked) = self.confirm_delete(ui) {
                 outcome = Some(asked);
             }
-            ui.separator();
             ui.horizontal(|ui| {
                 if icon_button(ui, look, "common/open.png", "Install Post-Processor", true) {
                     outcome = Some(PostOutcome::Install);
@@ -1075,14 +1093,17 @@ impl PostManager {
                 });
             });
         });
-        viewer(ctx, &mut self.viewing);
-        if let Some(said) = editor(ctx, &mut self.editing) {
-            outcome = Some(said);
-        }
-        if !open {
-            outcome = Some(PostOutcome::Close);
-        }
-        outcome
+        let list = egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                for entry in library.entries() {
+                    if let Some(asked) = self.row(ui, look, library, &entry) {
+                        outcome = Some(asked);
+                    }
+                }
+            })
+            .inner_rect;
+        (list, outcome)
     }
 
     /// One post: a pencil for a custom one, its name, and its Inspect menu (also on a
@@ -1216,6 +1237,11 @@ impl PostManager {
 mod tests {
     use super::*;
 
+    /// `rows` rows of the theme's interactive height, with their spacing.
+    fn ui_rows(ctx: &egui::Context, rows: f32) -> f32 {
+        ctx.global_style().spacing.interact_size.y * rows * 1.5
+    }
+
     fn frame(ctx: &egui::Context, draw: impl FnMut(&egui::Context)) {
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
@@ -1256,6 +1282,51 @@ mod tests {
         assert!(
             window.height() < ctx.content_rect().height() - 2.0 * window.top(),
             "fits its contents, not the screen: {window:?}"
+        );
+    }
+
+    #[test]
+    fn a_posts_text_fills_the_window_below_its_buttons() {
+        let ctx = egui::Context::default();
+        let text = "G0 X0\n".repeat(400);
+        let (mut shown, mut panel) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+        for _ in 0..3 {
+            frame(&ctx, |ctx| {
+                egui::Window::new("fixed")
+                    .fixed_size([600.0, 800.0])
+                    .show(ctx, |ui| {
+                        panel = ui.max_rect();
+                        shown = text_view(ui, &mut text.as_str());
+                    });
+            });
+        }
+        assert!(
+            (panel.bottom() - shown.bottom()).abs() < 1.0,
+            "reaches the bottom: {shown:?} in {panel:?}"
+        );
+    }
+
+    #[test]
+    fn the_post_list_fills_the_window_down_to_its_buttons() {
+        let ctx = egui::Context::default();
+        let library = Library::new(None);
+        let look = Look { picture: &|_| None };
+        let mut posts = PostManager::default();
+        let (mut list, mut panel) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+        for _ in 0..3 {
+            frame(&ctx, |ctx| {
+                egui::Window::new("fixed")
+                    .fixed_size([600.0, 800.0])
+                    .show(ctx, |ui| {
+                        panel = ui.max_rect();
+                        (list, _) = posts.contents(ui, &library, &look);
+                    });
+            });
+        }
+        let footer = ui_rows(&ctx, 3.0);
+        assert!(
+            list.bottom() > panel.bottom() - footer,
+            "only the buttons below it: {list:?} in {panel:?}"
         );
     }
 
