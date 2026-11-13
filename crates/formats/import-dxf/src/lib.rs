@@ -59,9 +59,8 @@ impl Importer for ImportDxf {
 
 /// Millimetres per drawing unit, and what was assumed if the DXF does not say its units (an
 /// R12 file never does): the job's units, unless the drawing would then be too small to see
-/// or too big for the material and the other units would fit. Aspire reads a DXF in the
-/// job's units [inf]; the size check is ours, so a 6 inch drawing does not come into a
-/// millimetre job as a 6 mm speck.
+/// or too big for the material and the other units would fit, so a 6 inch drawing does not
+/// come into a millimetre job as a 6 mm speck (re/SPEC.md, Import).
 fn scale(units: Units, size: DVec2, job: &Job) -> (f64, Option<String>) {
     if units != Units::Unitless {
         return (mm_per_unit(units), None);
@@ -643,7 +642,7 @@ mod tests {
         assert_eq!(spline_sampled(&s, 1).unwrap().segments.len(), 4);
     }
 
-    /// A drawing in `version` that says nothing about its units, as Vectric's own DXFs.
+    /// A drawing in `version` that says nothing about its units, as R12 files never do.
     fn unitless(version: AcadVersion, entities: Vec<EntityType>) -> Vec<u8> {
         let mut drawing = Drawing::new();
         drawing.header.version = version;
@@ -718,7 +717,7 @@ mod tests {
 
     #[test]
     fn a_drawing_without_units_too_small_to_see_in_millimetres_is_read_in_inches() {
-        // the 6 inch Aztec calendar Vectric saved as a DXF, brought into a millimetre job:
+        // the 6 inch Aztec calendar saved as an R12 DXF, brought into a millimetre job:
         // 6 mm would be a speck on the material
         let bytes = unitless(AcadVersion::R12, square(6.0));
         let (size, notes) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
@@ -760,16 +759,16 @@ mod tests {
         assert!(notes.is_empty(), "{notes:?}");
     }
 
-    /// Vectric's R12 layout: CRLF lines, a POLYLINE's points as VERTEXes ended by SEQEND, no
+    /// An R12 file as CAD programs write them: CRLF lines, a POLYLINE's points as VERTEXes ended by SEQEND, no
     /// units in the header; with a text and a hatch fill, which are not vectors.
-    const VECTRIC_R12: &str = "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$ACADVER\r\n  1\r\nAC1009\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\nPOLYLINE\r\n  8\r\nLAYER_0\r\n 66\r\n     1\r\n 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n 70\r\n     1\r\n  0\r\nVERTEX\r\n  8\r\nLAYER_0\r\n 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n  0\r\nVERTEX\r\n  8\r\nLAYER_0\r\n 10\r\n6.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n  0\r\nVERTEX\r\n  8\r\nLAYER_0\r\n 10\r\n6.0\r\n 20\r\n6.0\r\n 30\r\n0.0\r\n  0\r\nVERTEX\r\n  8\r\nLAYER_0\r\n 10\r\n0.0\r\n 20\r\n6.0\r\n 30\r\n0.0\r\n  0\r\nSEQEND\r\n  8\r\nLAYER_0\r\n  0\r\nTEXT\r\n  8\r\nLAYER_0\r\n 10\r\n1.0\r\n 20\r\n1.0\r\n 30\r\n0.0\r\n 40\r\n0.5\r\n  1\r\nAztec\r\n  0\r\nTEXT\r\n  8\r\nLAYER_0\r\n 10\r\n1.0\r\n 20\r\n2.0\r\n 30\r\n0.0\r\n 40\r\n0.5\r\n  1\r\nSun\r\n  0\r\nHATCH\r\n  8\r\nLAYER_0\r\n  2\r\nSOLID\r\n  0\r\nENDSEC\r\n  0\r\nEOF\r\n";
+    const PLAIN_R12: &str = "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$ACADVER\r\n  1\r\nAC1009\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\nPOLYLINE\r\n  8\r\nLAYER_0\r\n 66\r\n     1\r\n 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n 70\r\n     1\r\n  0\r\nVERTEX\r\n  8\r\nLAYER_0\r\n 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n  0\r\nVERTEX\r\n  8\r\nLAYER_0\r\n 10\r\n6.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n  0\r\nVERTEX\r\n  8\r\nLAYER_0\r\n 10\r\n6.0\r\n 20\r\n6.0\r\n 30\r\n0.0\r\n  0\r\nVERTEX\r\n  8\r\nLAYER_0\r\n 10\r\n0.0\r\n 20\r\n6.0\r\n 30\r\n0.0\r\n  0\r\nSEQEND\r\n  8\r\nLAYER_0\r\n  0\r\nTEXT\r\n  8\r\nLAYER_0\r\n 10\r\n1.0\r\n 20\r\n1.0\r\n 30\r\n0.0\r\n 40\r\n0.5\r\n  1\r\nAztec\r\n  0\r\nTEXT\r\n  8\r\nLAYER_0\r\n 10\r\n1.0\r\n 20\r\n2.0\r\n 30\r\n0.0\r\n 40\r\n0.5\r\n  1\r\nSun\r\n  0\r\nHATCH\r\n  8\r\nLAYER_0\r\n  2\r\nSOLID\r\n  0\r\nENDSEC\r\n  0\r\nEOF\r\n";
 
     #[test]
-    fn vectric_r12_polylines_come_in_closed_at_their_size() {
-        let (size, notes) = imported(&job(JobUnits::Mm, 600.0, 400.0), VECTRIC_R12.as_bytes());
+    fn r12_polylines_come_in_closed_at_their_size() {
+        let (size, notes) = imported(&job(JobUnits::Mm, 600.0, 400.0), PLAIN_R12.as_bytes());
         assert!((size.x - 152.4).abs() < 1e-9, "{size:?}");
         let change =
-            ImportDxf::import(&job(JobUnits::Mm, 600.0, 400.0), VECTRIC_R12.as_bytes()).unwrap();
+            ImportDxf::import(&job(JobUnits::Mm, 600.0, 400.0), PLAIN_R12.as_bytes()).unwrap();
         let mut doc = Document::default();
         doc.apply(&change).unwrap();
         assert_eq!(doc.vectors.len(), 1);
@@ -779,7 +778,7 @@ mod tests {
 
     #[test]
     fn what_is_left_out_is_said_in_plain_words() {
-        let (_, notes) = imported(&job(JobUnits::Mm, 600.0, 400.0), VECTRIC_R12.as_bytes());
+        let (_, notes) = imported(&job(JobUnits::Mm, 600.0, 400.0), PLAIN_R12.as_bytes());
         assert_eq!(
             notes[1],
             "Left out 1 hatch fill and 2 texts: only the lines and curves of a DXF come in. \
