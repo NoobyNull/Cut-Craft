@@ -1,5 +1,5 @@
-- Shorter toolpath forms: pick every bit with Select Tool, Tabs in their own window, a preview you can stop and scrub
-- Send to Machine: save toolpaths straight to the CNC's card or WebDAV folder, a folder per project
-- Trace Bitmap trace window with live preview, Centerline and Quick Trace; decorative fills and relief
-- Pockets clear round islands, V-Carve is much faster, and every toolpath checks the bit can reach
-- My Tools kept apart from read-only maker catalogues, Suggest picks clearing bits, and every tool now has help
+- V-Carve carves down each shape's centre line, with Inside, On the Line and Outside
+- Every number box has up and down buttons, and every measurement shows in the job's units
+- The status bar counts what's selected, and edits that leave toolpaths out of date ask to recalculate them
+- Tool Database draws each bit in its own card; the preview shows the bit's real shape
+- Suggest clearing bits picks from My Tools; sculpt brush, grid rows and export line width are settings
