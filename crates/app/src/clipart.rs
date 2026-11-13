@@ -17,7 +17,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 /// A thumbnail's edge, in rows of the theme's interactive height.
-// ponytail: one size; Aspire's three view sizes can come with a setting
+// ponytail: one size; the three view sizes can come with a setting
 const THUMBNAIL_ROWS: f32 = 4.0;
 /// The pop-up preview's edge, in rows of buttons.
 const LARGE_ROWS: f32 = 16.0;
@@ -268,10 +268,7 @@ impl Clipart {
     /// The folders kept at `store`, looking in the folder looked in last (all of them, if
     /// none was or it is no longer in the library).
     fn kept(store: Option<PathBuf>) -> Self {
-        let loaded: Vec<PathBuf> = store
-            .as_deref()
-            .map(crate::files::load_recent)
-            .unwrap_or_default();
+        let loaded: Vec<PathBuf> = store.as_deref().map_or_default(crate::files::load_recent);
         let folders = outermost(&loaded);
         if folders != loaded
             && let Some(store) = &store

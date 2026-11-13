@@ -26,8 +26,8 @@ focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
 ## Update 2026-10-26 (Windows PC "cad", `0ed6bf2`…`2f15811`, pushed to PR #1's branch)
 
 - **Machine:** checkout at `C:\Users\CAD\Documents\cut-craft`, `core.autocrlf=false` (LF),
-  hook runs under Git for Windows' bash. No Python here; Aspire 12.5 Trial is installed
-  natively (`C:\Program Files\Aspire Trial Edition 12.5`), help text stripped into the
+  hook runs under Git for Windows' bash. No Python here; the reference program's trial is installed
+  natively, help text stripped into the
   gitignored `re/extracted/help-win/`. Windows fixes: icon paths keyed with `/`, the font
   test also accepts Arial.
 - **3D modeling (the focus Matthew asked for):**
@@ -45,14 +45,14 @@ focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
     (cylindrical z-buffer), Auto-Wrapping 3D view, Material Setup's model position
     (`Job::model_position`, `Job::model_shift`, used by `placed_model`).
   - Segment 3D Model (one plane), Export / import 3D clipart (`.ccclip`, our own JSON;
-    Aspire's `.3dclip` is encrypted), double-click picking in the 3D view.
+    the reference program's `.3dclip` is encrypted), double-click picking in the 3D view.
 - **Not tried by hand yet:** all of the above. Ask Matthew before driving his desktop.
 
 ## Update 2026-10-25 (40 local commits, `fc648d6`…`2b9c97a`, not pushed)
 
 - **Fonts:** `.vfont` decoded from the 23 samples (layout in `re/SPEC.md`, Fonts);
   `crates/core/src/vfont.rs` reads them, `font.rs` adds system TrueType (fontdb) and layout.
-  Fonts are read from `~/.config/cut-craft/fonts` (locally a link to Aspire's `Fonts/`).
+  Fonts are read from `~/.config/cut-craft/fonts` (locally a link to the reference program's `Fonts/`).
   Tests use the built-in "Test Boxes" font (testing feature).
 - **Built:** Draw Text (editable: `Document.texts`), Text in a Box, Text on a Curve; Fit
   Curves, Trace Bitmap, component boundary; Replace Below, Offset Model, Slice, Split,
@@ -65,18 +65,17 @@ focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
 - **New stdlib file readers:** `re/cfb.py` (OLE files), `re/vfont.py`.
 - **Left:** see "Not built yet". Mostly big or UI-heavy: Sculpt, Distort, Transform handles,
   guides, keep-out zones, Options, document variables, machine configuration, double-sided
-  jobs, sheets, true-shape nesting. Calibration against VCarve Pro under Wine still needs
+  jobs, sheets, true-shape nesting. Calibration against the reference program under Wine still needs
   Matthew's OK.
 
-# Handoff: Cut Craft (Rust, Vectric Aspire-style CNC CAD/CAM)
+# Handoff: Cut Craft (Rust CNC CAD/CAM)
 
 The sections below this heading are from 2026-10-24 and kept for their working notes; the
 "To do next" list there is done. The current list is `docs/ROADMAP.md`.
 
 ## Where things are
 
-- **Repo:** `/home/matthew/aspire-clone` (local folder still has the old name), also the
-  public GitHub repo https://github.com/NoobyNull/cut-craft (`origin`) and Gitea
+- **Repo:** the public GitHub repo https://github.com/NoobyNull/cut-craft (`origin`) and Gitea
   https://git.yax.family/matthew/cut-craft (`gitea`). Push `main` to both, only when asked.
 - **Health (2026-11-01):** 2204 tests pass; `.githooks/pre-commit` (fmt, clippy pedantic
   `-D warnings`, nextest) is green. Releases: the tag `vX.Y.Z` starts the Release (Linux,
@@ -86,7 +85,7 @@ The sections below this heading are from 2026-10-24 and kept for their working n
     the right-click "families" plan. **The main to-do list.**
   - `docs/superpowers/specs/2026-10-23-command-architecture-design.md` — architecture,
     contract, backlog (items 1–18 done; 19 open).
-  - `re/SPEC.md` — clean-room behaviour spec of Aspire 12, including the startup sequence,
+  - `re/SPEC.md` — clean-room behaviour spec of the reference program, including the startup sequence,
     the no-job menu (MENU 128) and every right-click popup menu.
   - `git log --oneline` — 43 commits; this session's run from `edde973` to `00de557`.
 
@@ -113,7 +112,7 @@ The sections below this heading are from 2026-10-24 and kept for their working n
 - Startup and Job Setup:
   - `045885e`: startup sequence (start page, recent files, Close).
   - `777e8d9`: form improvements (titles, radios, sections, colour, inch display).
-  - `0bb4778`, `c8c33fa`: Job Setup in Aspire's sections: Z zero, XY datum + offset (moves the
+  - `0bb4778`, `c8c33fa`: Job Setup in sections: Z zero, XY datum + offset (moves the
     job's origin), model resolution, material colour, datum corner picker, pinned OK/Cancel.
 - `7160202`: 2D viewport controls (wheel zoom, pan, Zoom Box / to Job / to Selection, F6,
   rulers).
@@ -133,7 +132,7 @@ The sections below this heading are from 2026-10-24 and kept for their working n
 1. **Right-click menus.** Done 2026-10-24 (`1b15d6e`…`52c6f51`): layer, toolpath, component
    and 2D selection menus as `gui::MenuItem` data, with `run:` / `form:` actions; see the
    right-click section of `docs/tool-inventory.md`.
-2. **Match Aspire 12, from the user's screenshots.**
+2. **Match the reference program, from the user's screenshots.**
    - Side tabs should be Design, Sheets, Layers, Components, Clipart. Design holds the drawing
      and modeling tools; Components is the component tree.
    - The view buttons belong at the **top right** of the 2D view and include Pan.
@@ -142,7 +141,7 @@ The sections below this heading are from 2026-10-24 and kept for their working n
    - Drawing: text, node editing, fillets, array / circular copy, trim, measure, …
    - Modeling: extrude, sweep, turn, zero plane, from bitmap, smooth, …
    - Toolpath strategies: fluting, inlay, chamfer, prism, …
-   - Also STL import as a component (with Aspire's Orientate 3D Model step), view toggles,
+   - Also STL import as a component (with an Orientate 3D Model step), view toggles,
      Help windows.
    - Update the inventory as items land.
 4. **Small open points:**
@@ -157,7 +156,7 @@ The sections below this heading are from 2026-10-24 and kept for their working n
   - Commit messages end with
     `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
   - **Push only when asked.**
-  - The user steers with Aspire screenshots; match what they show.
+  - The user steers with screenshots of the reference program; match what they show.
 - **Commands:**
   - One crate per command. Scaffold with
     `scripts/new-command <name> "Label" "Group" [icon]`; it also registers the command in
@@ -170,7 +169,7 @@ The sections below this heading are from 2026-10-24 and kept for their working n
     `chain_over`.
 - **GUI code:** no hardcoded values. Derive from the theme; when unavoidable, use a named
   constant with a `ponytail:` comment.
-- **Clean room:** Vectric material never goes in git.
+- **Clean room:** the reference program's material never goes in git.
   - `re/extracted/` is gitignored. Since 0.2.2 every icon is an original drawing made by
     `scripts/build-icons`, kept in `assets/icons/` in git and built into the binary
     (`crates/app/build.rs`); only the Icons8 GitHub / Thingiverse link PNGs are third-party.

@@ -1,9 +1,10 @@
-//! The manager window, laid out as Aspire's Tool Database: the tool tree with its buttons
+//! The manager window, laid out as the Tool Database: the tool tree with its buttons
 //! on the left, the picked group's or tool's settings on the right, OK / Cancel under both.
 //! Edits are made to a copy; only Apply and OK hand it back.
 
 use crate::tree;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::{CATALOGUES, CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use eframe::egui;
@@ -17,7 +18,7 @@ fn tool_window() -> egui::Id {
 const WINDOW_SHARE: f32 = 0.7;
 /// The tree's share of the window's width when it first opens.
 const TREE_SHARE: f32 = 0.35;
-/// Aspire's tool pictures are 90 × 130: their width for a height.
+/// The tool pictures are 90 × 130: their width for a height.
 const PICTURE_ASPECT: f32 = 90.0 / 130.0;
 /// Lines of the notes boxes.
 const NOTES_ROWS: usize = 4;
@@ -301,7 +302,7 @@ impl Manager {
         self.draft.number_by_slots(&changer.slots);
     }
 
-    /// Aspire's Duplicate Material: the active material copied under the typed name, or
+    /// The Duplicate Material: the active material copied under the typed name, or
     /// its own with " copy", with every tool's cutting data for it when asked, and made
     /// active.
     pub fn duplicate_material(&mut self) {
@@ -314,7 +315,7 @@ impl Manager {
             .duplicate_material(&from, &name, self.copy_cutting_data);
     }
 
-    /// Aspire's Add Material: the typed name joins the list and becomes active (the one
+    /// The Add Material: the typed name joins the list and becomes active (the one
     /// already listed, if it is there under another case).
     pub fn add_material(&mut self) {
         let name = self.new_material.trim().to_owned();
@@ -576,7 +577,7 @@ impl Manager {
         }
     }
 
-    /// Aspire's row under the tree: new tool, new group, copy, import, export, delete.
+    /// The row under the tree: new tool, new group, copy, import, export, delete.
     fn tree_buttons(&self, ui: &mut egui::Ui, look: &Look) -> Option<TreeAction> {
         let edge = ui.spacing().interact_size.y;
         let picked = self.pick.is_some();
@@ -758,7 +759,7 @@ impl Manager {
         }
     }
 
-    /// Aspire's Material combo and Material Management in one row: the active material,
+    /// The Material combo and Material Management in one row: the active material,
     /// whose cutting data tools show and toolpaths get; adding one, and deleting the active
     /// one with every tool's data for it.
     // ponytail: no renaming materials, and no machine combo (the data is per material only)
@@ -971,7 +972,7 @@ fn number(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) -> bool {
     let speed = (shown.abs() / 100.0).max(f64::EPSILON);
     let changed = ui
         .add(
-            egui::DragValue::new(&mut shown)
+            Number::new(&mut shown)
                 .speed(speed)
                 .range(0.0..=f64::MAX)
                 .max_decimals(4)
@@ -984,8 +985,8 @@ fn number(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) -> bool {
     changed
 }
 
-/// A framed block with a heading, as Aspire's Tool Info, Cutting Parameters and Feeds and
-/// Speeds are.
+/// A framed block with a heading (Tool Info, Cutting Parameters, Feeds and
+/// Speeds).
 fn section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
@@ -1001,10 +1002,29 @@ fn tool_details(
     (look, loaded): (&Look, Option<(&str, usize)>),
     material: &str,
 ) {
-    section(ui, "Tool Info", |ui| {
-        tool_info(ui, tool, (groups, formats), look, loaded);
-    });
-    // the cutting data shown is the active material's, as Aspire's
+    // the drawing in a card of its own right of Tool Info, so it does not push the cutting
+    // data down; under it when the window is too narrow for both
+    let gap = ui.spacing().item_spacing.x;
+    if let Some((info, card)) = split(ui.available_width(), gap) {
+        ui.horizontal_top(|ui| {
+            ui.vertical(|ui| {
+                ui.set_width(info);
+                section(ui, "Tool Info", |ui| {
+                    tool_info(ui, tool, (groups, formats), look, loaded);
+                });
+            });
+            ui.vertical(|ui| {
+                ui.set_width(card);
+                section(ui, "Tool Shape", |ui| geometry(ui, tool));
+            });
+        });
+    } else {
+        section(ui, "Tool Info", |ui| {
+            tool_info(ui, tool, (groups, formats), look, loaded);
+        });
+        section(ui, "Tool Shape", |ui| geometry(ui, tool));
+    }
+    // the cutting data shown is the active material's
     let own = tool
         .materials
         .iter()
@@ -1023,7 +1043,7 @@ fn tool_details(
     tool.renamed(material);
 }
 
-/// Aspire's Copy Settings From: the tool's cutting data for another material (or its
+/// The Copy Settings From: the tool's cutting data for another material (or its
 /// default) copied as its data for `material`, where it has any to copy.
 fn copy_settings_from(ui: &mut egui::Ui, tool: &mut Tool, material: &str) {
     let others: Vec<String> = std::iter::once(String::new())
@@ -1061,7 +1081,7 @@ fn keep_cutting(tool: &mut Tool, shown: &Tool, material: &str) {
     }
 }
 
-/// The tool's name format (Aspire's Name Format): `{Variable|Modifier}` filled in from the
+/// The tool's name format (Name Format): `{Variable|Modifier}` filled in from the
 /// tool, a variable picked from the list put on the end; Set as Default makes it its type's
 /// for new tools, Restore puts the type's back. A tool with a format is named by it.
 fn name_format(ui: &mut egui::Ui, tool: &mut Tool, formats: &mut BTreeMap<String, String>) {
@@ -1164,7 +1184,7 @@ fn tool_info(
             egui::TextEdit::singleline(&mut tool.name).desired_width(f32::INFINITY),
         );
         ui.end_row();
-        // under the name it makes (Aspire keeps it in a dialog of its own)
+        // under the name it makes (rather than in a dialog of its own)
         ui.label("Name Format");
         name_format(ui, tool, formats);
         ui.end_row();
@@ -1216,12 +1236,12 @@ fn tool_info(
         match loaded {
             Some((machine, slot)) => {
                 ui.horizontal(|ui| {
-                    ui.add_enabled(false, egui::DragValue::new(&mut tool.number));
+                    ui.add_enabled(false, Number::new(&mut tool.number));
                     ui.weak(format!("from slot T{slot} of {machine}'s tool changer"));
                 });
             }
             None => {
-                ui.add(egui::DragValue::new(&mut tool.number).range(0..=999));
+                ui.add(Number::new(&mut tool.number).range(0..=999));
             }
         }
         ui.end_row();
@@ -1234,8 +1254,21 @@ fn tool_info(
         );
         ui.end_row();
     });
-    ui.separator();
-    geometry(ui, tool);
+}
+
+/// The narrowest Tool Info beside the drawing's card.
+const INFO_MIN: f32 = 420.0;
+/// The drawing's card: its share of the width, between these.
+const SHAPE_SHARE: f32 = 0.45;
+const SHAPE_MIN: f32 = 380.0;
+const SHAPE_MAX: f32 = 500.0;
+
+/// Tool Info's and the drawing card's widths side by side in `width` (`gap` between),
+/// or `None` when both do not fit and the card goes under Tool Info.
+fn split(width: f32, gap: f32) -> Option<(f32, f32)> {
+    let card = (width * SHAPE_SHARE).clamp(SHAPE_MIN, SHAPE_MAX);
+    let info = width - card - gap;
+    (info >= INFO_MIN).then_some((info, card))
 }
 
 /// The tool's shape: drawn from its sizes, each typed on its dimension line, then what the
@@ -1250,13 +1283,13 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
             }
             ui.label("Number of Flutes")
                 .on_hover_hint("How many cutting edges the bit has, for the chip load");
-            ui.add(egui::DragValue::new(&mut tool.flutes).range(1..=12));
+            ui.add(Number::new(&mut tool.flutes).range(1..=12));
             ui.end_row();
         });
 }
 
 /// A single-point thread mill's tooth: size, height (which changes the size, the angle
-/// staying, as Aspire's form does) and offset.
+/// staying) and offset.
 fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
     ui.label("Tooth Size");
     length(ui, &mut tool.tooth_size, tool.units);
@@ -1310,7 +1343,7 @@ fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
     let mut percent = *fraction * 100.0;
     let changed = ui
         .add(
-            egui::DragValue::new(&mut percent)
+            Number::new(&mut percent)
                 .range(0.0..=100.0)
                 .max_decimals(2)
                 .suffix(" %"),
@@ -1326,12 +1359,12 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
     egui::Grid::new("tool_feeds").num_columns(2).show(ui, |ui| {
         ui.label("Spindle Speed");
         ui.add(
-            egui::DragValue::new(&mut tool.spindle_speed)
+            Number::new(&mut tool.spindle_speed)
                 .range(0.0..=f64::MAX)
                 .suffix(" r.p.m."),
         );
         ui.end_row();
-        // the rate units beside the feed rate, as Aspire's form has them
+        // the rate units beside the feed rate
         ui.label("Feed Rate");
         ui.horizontal(|ui| {
             rate(ui, &mut tool.feed_rate, tool.rate_units);
@@ -1350,7 +1383,7 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
         rate(ui, &mut tool.plunge_rate, tool.rate_units);
         ui.end_row();
     });
-    // Aspire shows the feed per tooth, to check against the cutter maker's figure
+    // the feed per tooth, to check against the cutter maker's figure
     if let Some(load) = tool.chip_load() {
         let (per, unit, places) = if tool.units == Units::Inch {
             (INCH, "in", 4)
@@ -1416,6 +1449,16 @@ mod tests {
         }
         // the starter tools give no flute or shank length; drawn, they are still unset
         assert_eq!(m.draft.tools, db.tools);
+    }
+
+    #[test]
+    fn the_drawing_sits_right_of_tool_info_when_both_fit() {
+        let (info, card) = split(1200.0, 8.0).expect("wide: side by side");
+        assert_eq!(card, SHAPE_MAX);
+        assert_eq!(info + card + 8.0, 1200.0);
+        let (info, card) = split(820.0, 8.0).expect("still fits");
+        assert!(info >= INFO_MIN && card >= SHAPE_MIN, "{info} {card}");
+        assert_eq!(split(700.0, 8.0), None, "narrow: the drawing goes under");
     }
 
     #[test]

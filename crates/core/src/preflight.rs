@@ -1,8 +1,8 @@
 //! The checks Save Toolpaths makes before writing a file: the job is simulated in cutting
 //! order to find rapid moves that would crash into the material and cutting that only cuts
 //! air, and each toolpath is checked against the machine (bed, Z travel, speeds, tool
-//! changer) and for settings that cannot cut (no moves, no feed rate). Aspire makes none of
-//! these; they are Cut Craft's own. Every message says how to put the problem right.
+//! changer) and for settings that cannot cut (no moves, no feed rate). These
+//! are Cut Craft's own. Every message says how to put the problem right.
 
 use crate::checks::{LEFT, problems_over};
 use crate::document::Document;
@@ -146,7 +146,7 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
             tool.name
         )));
     }
-    on_machine(toolpath, laser, limits, found);
+    on_machine(toolpath, laser, limits, doc.job.units, found);
     let deepest = toolpath
         .moves
         .iter()
@@ -156,8 +156,9 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
     let below = deepest - doc.job.thickness;
     if doc.job.thickness > 0.0 && below > SPOILBOARD {
         found.push(Finding::warning(format!(
-            "{name} cuts {below:.1} mm below the material, into the spoilboard. Check the \
-             material thickness in Job Setup and the toolpath's cut depth"
+            "{name} cuts {} below the material, into the spoilboard. Check the material \
+             thickness in Job Setup and the toolpath's cut depth",
+            doc.job.units.length(below, 1)
         )));
     }
     found.extend(
@@ -168,7 +169,13 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
 }
 
 /// Whether one toolpath's speeds suit the machine and its tool is in the tool changer.
-fn on_machine(toolpath: &Toolpath, laser: bool, limits: &Limits, found: &mut Vec<Finding>) {
+fn on_machine(
+    toolpath: &Toolpath,
+    laser: bool,
+    limits: &Limits,
+    units: crate::document::Units,
+    found: &mut Vec<Finding>,
+) {
     let (name, tool) = (&toolpath.name, &toolpath.tool);
     let [slowest, fastest] = limits.spindle;
     if !laser && tool.spindle_speed > 0.0 {
@@ -198,17 +205,23 @@ fn on_machine(toolpath: &Toolpath, laser: bool, limits: &Limits, found: &mut Vec
     };
     if sideways > 0.0 && tool.feed_rate > sideways {
         found.push(Finding::warning(format!(
-            "{name}: the feed rate of {} is {:.0} mm/min, faster than {} moves ({sideways:.0} \
-             mm/min). It will cut slower than planned; lower the feed rate to match",
-            tool.name, tool.feed_rate, limits.name
+            "{name}: the feed rate of {} is {}, faster than {} moves ({}). It will cut slower \
+             than planned; lower the feed rate to match",
+            tool.name,
+            units.feed(tool.feed_rate, 0),
+            limits.name,
+            units.feed(sideways, 0)
         )));
     }
     let plunges = toolpath.moves.iter().any(|m| m.kind == MoveKind::Plunge);
     if z > 0.0 && plunges && tool.plunge_rate > z {
         found.push(Finding::warning(format!(
-            "{name}: the plunge rate of {} is {:.0} mm/min, faster than {} moves in Z ({z:.0} \
-             mm/min). Lower the plunge rate to match",
-            tool.name, tool.plunge_rate, limits.name
+            "{name}: the plunge rate of {} is {}, faster than {} moves in Z ({}). Lower the \
+             plunge rate to match",
+            tool.name,
+            units.feed(tool.plunge_rate, 0),
+            limits.name,
+            units.feed(z, 0)
         )));
     }
     if !limits.slots.is_empty()
@@ -269,22 +282,26 @@ fn machine(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits, found: &mut
     let [width, height] = limits.bed;
     // a rotary job's moves go round the material, not along the bed
     let wraps = doc.job.rotary.is_some();
+    let units = doc.job.units;
     if !wraps && width > 0.0 && height > 0.0 && (span.x > width || span.y > height) {
         found.push(Finding::error(format!(
-            "The toolpaths cover {:.0} × {:.0} mm, more than the bed of {} ({width:.0} × \
-             {height:.0} mm). Make the job smaller, split it with Toolpath Tiling (or make \
-             its tiles smaller), or pick the right machine",
-            span.x, span.y, limits.name
+            "The toolpaths cover {} × {}, more than the bed of {} ({} × {}). Make the job \
+             smaller, split it with Toolpath Tiling (or make its tiles smaller), or pick the \
+             right machine",
+            units.length(span.x, 0),
+            units.length(span.y, 0),
+            limits.name,
+            units.length(width, 0),
+            units.length(height, 0)
         )));
     }
     if limits.z_travel > 0.0 && span.z > limits.z_travel {
         found.push(Finding::error(format!(
-            "The toolpaths go from {:.1} mm above the material to {:.1} mm below it, more \
-             than the {:.0} mm the Z axis of {} travels. Lower the clearance (Z1) in Job \
-             Setup or cut less deep",
-            hi.z.max(0.0),
-            (-lo.z).max(0.0),
-            limits.z_travel,
+            "The toolpaths go from {} above the material to {} below it, more than the {} \
+             the Z axis of {} travels. Lower the clearance (Z1) in Job Setup or cut less deep",
+            units.length(hi.z.max(0.0), 1),
+            units.length((-lo.z).max(0.0), 1),
+            units.length(limits.z_travel, 0),
             limits.name
         )));
     }
@@ -299,6 +316,12 @@ fn machine(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits, found: &mut
 )]
 fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     let job = &doc.job;
+    let units = job.units;
+    // a point's X or Y as the status bar shows it
+    let position = |mm: f64| match units {
+        crate::document::Units::Mm => format!("{mm:.1}"),
+        crate::document::Units::Inch => format!("{:.3}", mm / 25.4),
+    };
     let smallest = toolpaths
         .iter()
         .map(|t| t.tool.diameter)
@@ -352,11 +375,13 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
                 n => format!(" ({n} rapid moves in all)"),
             };
             found.push(Finding::error(format!(
-                "{name} would crash: a rapid move to X{:.1} Y{:.1} goes {into:.1} mm into \
-                 material that is still there{more}. Rapid moves run at full speed and are \
-                 meant to stay clear of the material. Raise the clearance (Z1) in Job Setup, \
-                 or recalculate the toolpath",
-                at.x, at.y
+                "{name} would crash: a rapid move to X{} Y{} goes {} into material that is \
+                 still there{more}. Rapid moves run at full speed and are meant to stay clear \
+                 of the material. Raise the clearance (Z1) in Job Setup, or recalculate the \
+                 toolpath",
+                position(at.x),
+                position(at.y),
+                units.length(into, 1)
             )));
         }
         if cutting > 0.0 && air > AIR_LENGTH && air / cutting > AIR_SHARE {
@@ -590,6 +615,40 @@ mod tests {
             warnings
                 .iter()
                 .any(|m| m.contains("not loaded in the tool changer"))
+        );
+    }
+
+    #[test]
+    fn an_inch_job_hears_about_its_machine_in_inches() {
+        let limits = Limits {
+            name: "Shapeoko".into(),
+            bed: [101.6, 101.6],
+            z_travel: 6.0,
+            max_rate: [508.0, 635.0, 127.0],
+            ..Limits::default()
+        };
+        let mut doc = job();
+        doc.job.units = crate::document::Units::Inch;
+        let found = check(&doc, &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)], &limits);
+        let all: Vec<&str> = found.iter().map(|f| f.message.as_str()).collect();
+        let says = |text: &str| all.iter().any(|m| m.contains(text));
+        assert!(says("(4.00 in × 4.00 in)"), "{all:?}");
+        assert!(says("faster than Shapeoko moves (20.0 in/min)"), "{all:?}");
+        assert!(says("moves in Z (5.0 in/min)"), "{all:?}");
+        assert!(says("the 0.24 in the Z axis"), "{all:?}");
+        // only the bit's own name says mm
+        assert!(
+            !all.iter()
+                .any(|m| m.replace("6 mm End Mill", "").contains(" mm")),
+            "{all:?}"
+        );
+        let deep = slot("Cut out", 50.0, 20.0, 180.0, 21.0);
+        let found = check(&doc, &[&deep], &Limits::default());
+        assert!(
+            found
+                .iter()
+                .any(|f| f.message.contains("0.118 in below the material")),
+            "{found:?}"
         );
     }
 

@@ -281,7 +281,7 @@ fn fill_centre(made: &mut Component, (one, two): (&Path, &Path), placed: &[(f64,
     }
 }
 
-/// An open cross-section, drawn upright as Aspire's are (or on its side): its height
+/// An open cross-section, drawn upright as the are (or on its side): its height
 /// above its lowest point against 0..1 across from its first end to its last, its width
 /// end to end across, the middle of its ends (where it was placed), and its nodes' shares
 /// across.

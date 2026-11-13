@@ -223,7 +223,7 @@ fn sharp_corners(path: &Path, which: Corners) -> Vec<(usize, Corner)> {
 }
 
 /// Where the fillet goes in `corner`, with `left` of the side in and the side out still
-/// straight. A radius needing more is cut to the largest that fits, as Aspire's help says.
+/// straight. A radius needing more is cut to the largest that fits.
 /// `None` when not even a tiny one fits.
 fn plan(mut corner: Corner, p: &Params, left: (f64, f64)) -> Option<Corner> {
     let (back, on) = (corner.back, corner.on);
@@ -364,8 +364,12 @@ pub fn at_click(
                 CommandError::Failed("no fillet fits that corner. Try a smaller radius".into())
             })?;
             let radius = (planned.center - planned.through).length();
-            let note = (radius < p.radius - STRAIGHT)
-                .then(|| format!("the radius was cut to {radius:.2} mm, the largest that fits"));
+            let note = (radius < p.radius - STRAIGHT).then(|| {
+                format!(
+                    "the radius was cut to {}, the largest that fits",
+                    doc.job.units.length(radius, 2)
+                )
+            });
             Ok((id, rebuilt(&doc.vectors[&id], &[(seg, planned)]), note))
         }
         (_, Some((_, id, seg))) => {

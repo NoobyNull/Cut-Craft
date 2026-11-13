@@ -254,7 +254,7 @@ impl Framing {
     }
 }
 
-/// What a drag in the 3D view does, from the buttons held (Aspire's mouse controls).
+/// What a drag in the 3D view does, from the buttons held (mouse controls).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DragMode {
     Rotate,
@@ -922,21 +922,27 @@ pub fn vector_plane(material: &Material, points: &[DVec2]) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// The outline on screen of an upright cylinder standing on `tip` (the moving tool in a
-/// playing preview): the convex hull of its top and bottom rims, `screen` placing points.
+/// The outline on screen of a solid turned round an upright axis standing on `tip`, its
+/// side through `rings` (out from the axis, up from the tip): the convex hull of the rims,
+/// `screen` placing points. A part of a playing preview's tool.
 #[expect(clippy::cast_precision_loss, reason = "a few rim points")]
-pub fn cylinder(screen: impl Fn(DVec3) -> Pos2, tip: DVec3, radius: f64, height: f64) -> Vec<Pos2> {
+pub fn turned_outline(screen: impl Fn(DVec3) -> Pos2, tip: DVec3, rings: &[[f64; 2]]) -> Vec<Pos2> {
     // ponytail: 24 points round each rim
     const RIM: usize = 24;
     let mut points: Vec<Pos2> = (0..RIM)
         .flat_map(|i| {
             let a = std::f64::consts::TAU * i as f64 / RIM as f64;
-            let round = DVec3::new(a.cos() * radius, a.sin() * radius, 0.0);
-            [screen(tip + round), screen(tip + round + DVec3::Z * height)]
+            let (cos, sin) = (a.cos(), a.sin());
+            rings
+                .iter()
+                .map(move |&[r, z]| DVec3::new(cos * r, sin * r, z))
+                .collect::<Vec<_>>()
         })
+        .map(|p| screen(tip + p))
         .collect();
     // convex hull (monotone chain) of the projected rims
     points.sort_by(|p, q| p.x.total_cmp(&q.x).then(p.y.total_cmp(&q.y)));
+    points.dedup();
     let turn = |o: Pos2, a: Pos2, b: Pos2| (a - o).x * (b - o).y - (a - o).y * (b - o).x;
     let mut hull: Vec<Pos2> = vec![];
     for pass in [false, true] {
@@ -957,6 +963,32 @@ pub fn cylinder(screen: impl Fn(DVec3) -> Pos2, tip: DVec3, radius: f64, height:
         hull.pop();
     }
     hull
+}
+
+/// A playing preview's tool as the parts it is drawn in, tip first, each the side of a
+/// [`turned_outline`] (out from the axis, up from the tip, mm): its cutting end (a V-bit's cone, a
+/// ball nose's ball) up to the top of its flutes, then its neck and shank, as the Tool
+/// Database draws it (a guess where a length is not set). Empty for a tool with no size.
+pub fn tool_parts(tool: &cut_craft_core::toolpath::Tool) -> Vec<Vec<[f64; 2]>> {
+    // ponytail: every fourth point of the edge is round enough at a preview's size
+    const EVERY: usize = 4;
+    let Some(shape) = cut_craft_tool_database::profile::outline(tool) else {
+        return vec![];
+    };
+    let last = shape.edge.len().saturating_sub(1);
+    let mut cutting: Vec<[f64; 2]> = (shape.edge.iter().enumerate())
+        .filter(|&(i, _)| i % EVERY == 0 || i == last)
+        .map(|(_, &p)| p)
+        .collect();
+    cutting.extend(shape.tooth.into_iter().flatten());
+    let neck = shape.body.min(shape.shank_radius);
+    let shank = vec![
+        [neck, shape.flute_top],
+        [neck, shape.neck_top],
+        [shape.shank_radius, shape.neck_top],
+        [shape.shank_radius, shape.top],
+    ];
+    vec![cutting, shank]
 }
 
 /// The material's width and height.
@@ -1456,7 +1488,7 @@ pub fn pick(
 }
 
 /// The view cube in a corner of the 3D view: a cube turned with the view whose faces, edges
-/// and corners each turn the view to look from there (Aspire's View Controller).
+/// and corners each turn the view to look from there (View Controller).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewCube {
     /// Where its middle shows.
@@ -1919,7 +1951,7 @@ mod tests {
     fn the_tool_is_an_upright_cylinder_on_its_tip() {
         // looking straight down: a circle; from the side: a rectangle as tall as the tool
         let down = |p: DVec3| Pos2::new(p.x as f32, -p.y as f32);
-        let ring = cylinder(down, DVec3::ZERO, 3.0, 12.0);
+        let ring = turned_outline(down, DVec3::ZERO, &[[3.0, 0.0], [3.0, 12.0]]);
         assert!(
             ring.len() >= 12
                 && ring
@@ -1927,11 +1959,90 @@ mod tests {
                     .all(|p| (p.to_vec2().length() - 3.0).abs() < 1e-3)
         );
         let side = |p: DVec3| Pos2::new(p.x as f32, -p.z as f32);
-        let outline = cylinder(side, DVec3::ZERO, 3.0, 12.0);
+        let outline = turned_outline(side, DVec3::ZERO, &[[3.0, 0.0], [3.0, 12.0]]);
         let (lo, hi) = outline.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
             (lo.min(p.y), hi.max(p.y))
         });
         assert!((hi - lo - 12.0).abs() < 1e-3, "{lo}..{hi}");
+    }
+
+    /// How wide and tall `parts` stand seen from the side, mm.
+    #[expect(clippy::cast_possible_truncation, reason = "small test coordinates")]
+    fn side_size(parts: &[Vec<[f64; 2]>]) -> Vec<(f32, f32)> {
+        let side = |p: DVec3| Pos2::new(p.x as f32, -p.z as f32);
+        parts
+            .iter()
+            .map(|rings| {
+                let o = turned_outline(side, DVec3::ZERO, rings);
+                let (x, y) = (o.iter().map(|p| p.x), o.iter().map(|p| p.y));
+                let span = |v: Vec<f32>| {
+                    v.iter().copied().fold(f32::MIN, f32::max)
+                        - v.iter().copied().fold(f32::MAX, f32::min)
+                };
+                (span(x.collect()), span(y.collect()))
+            })
+            .collect()
+    }
+
+    fn bit(
+        shape: cut_craft_core::toolpath::ToolShape,
+        diameter: f64,
+    ) -> cut_craft_core::toolpath::Tool {
+        cut_craft_core::toolpath::Tool {
+            shape,
+            diameter,
+            ..cut_craft_core::toolpath::Tool::default()
+        }
+    }
+
+    #[test]
+    fn the_previewed_tool_is_as_wide_as_the_bit_not_bigger() {
+        // a 1/4" end mill on a 1/4" shank: 6.35 mm across all the way up
+        let tool = cut_craft_core::toolpath::Tool {
+            shank_diameter: 6.35,
+            flute_length: 19.05,
+            shank_length: 25.4,
+            ..bit(cut_craft_core::toolpath::ToolShape::EndMill, 6.35)
+        };
+        let sizes = side_size(&tool_parts(&tool));
+        assert_eq!(sizes.len(), 2, "cutting end and shank");
+        for (wide, _) in &sizes {
+            assert!((wide - 6.35).abs() < 0.01, "{sizes:?}");
+        }
+        let tall: f32 = sizes.iter().map(|s| s.1).sum();
+        assert!((tall - 44.45).abs() < 0.01, "flutes and shank, {sizes:?}");
+    }
+
+    #[test]
+    #[expect(clippy::cast_possible_truncation, reason = "small test coordinates")]
+    fn a_v_bit_is_drawn_as_a_point_under_a_narrower_shank() {
+        // 3/4" across its cone, 90°, on a 1/4" shank
+        let tool = cut_craft_core::toolpath::Tool {
+            angle: 90.0,
+            shank_diameter: 6.35,
+            ..bit(cut_craft_core::toolpath::ToolShape::VBit, 19.05)
+        };
+        let parts = tool_parts(&tool);
+        let sizes = side_size(&parts);
+        let (cone, shank) = (sizes[0], sizes[1]);
+        assert!(
+            (cone.0 - 19.05).abs() < 0.01 && (cone.1 - 9.525).abs() < 0.01,
+            "{sizes:?}"
+        );
+        assert!((shank.0 - 6.35).abs() < 0.01, "{sizes:?}");
+        // a point on the axis at the tip, not a flat bottom
+        let side = |p: DVec3| Pos2::new(p.x as f32, -p.z as f32);
+        let o = turned_outline(side, DVec3::ZERO, &parts[0]);
+        let bottom: Vec<&Pos2> = o.iter().filter(|p| p.y.abs() < 1e-3).collect();
+        assert!(bottom.iter().all(|p| p.x.abs() < 1e-3), "{bottom:?}");
+    }
+
+    #[test]
+    fn a_tool_with_no_size_draws_nothing() {
+        assert_eq!(
+            tool_parts(&bit(cut_craft_core::toolpath::ToolShape::EndMill, 0.0)),
+            Vec::<Vec<[f64; 2]>>::new()
+        );
     }
 
     #[test]
@@ -2343,7 +2454,7 @@ mod tests {
     }
 
     #[test]
-    fn mouse_buttons_pick_rotate_or_pan_as_in_aspire() {
+    fn mouse_buttons_pick_rotate_or_pan() {
         assert_eq!(
             drag_mode([true, false, false], false),
             Some(DragMode::Rotate)

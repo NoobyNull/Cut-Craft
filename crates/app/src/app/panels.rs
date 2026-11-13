@@ -6,11 +6,11 @@ use super::{
     Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FineKey, HEIGHT_DRAG_EVERY,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
     Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_BOX_MARGIN,
-    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui,
-    file_dialog, file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d,
-    wrap_for,
+    TOOL_ICON_ROWS, TOOL_SHANK, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog,
+    file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
 };
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{MachinedArea, Units};
 
 /// The push-pin's two drawings (`scripts/make_icons.py`).
@@ -201,7 +201,7 @@ impl CutCraftApp {
         let folded = self.options.general.fold_tool_groups;
         let mut clicked = None;
         let mut chosen = None;
-        // plain sections, as Aspire's tool pages have: a heading over its tools
+        // plain sections: a heading over its tools
         for (name, tools) in sections {
             ui.strong(*name);
             if !among && !folded {
@@ -547,7 +547,7 @@ impl CutCraftApp {
     }
 
     /// Layers, top first: visibility and lock toggles, the current layer highlighted, and
-    /// Aspire's layer menu on a right-click.
+    /// The layer menu on a right-click.
     /// The arrows over the Layers List: the active layer one place up or down the list.
     fn layer_order_arrows(&mut self, ui: &mut egui::Ui) {
         use cmd_reorder_layer::{Direction, moved_to};
@@ -801,7 +801,7 @@ impl CutCraftApp {
         self.record(change, &format!("Imported {}", path.display()));
     }
 
-    /// Brings `path` into the job: meshes through Orientate 3D Model, as Aspire's import
+    /// Brings `path` into the job: meshes through Orientate 3D Model
     /// does; anything else through its importer.
     pub(super) fn import_file(&mut self, path: &std::path::Path) {
         if is_model(path) {
@@ -831,7 +831,7 @@ impl CutCraftApp {
         );
     }
 
-    /// The Sheets tab: Aspire's Sheets List (each sheet's name and size, the active one
+    /// The Sheets tab: the Sheets List (each sheet's name and size, the active one
     /// marked) and its Add New Sheet button. A click activates a sheet; a right-click has its
     /// menu.
     pub(super) fn sheets_panel(&mut self, ui: &mut egui::Ui) {
@@ -1134,7 +1134,7 @@ impl CutCraftApp {
         self.preview_in_background(&[id], start, |_| {});
     }
 
-    /// Aspire's Preview Control while a preview plays: Run / Pause, Single Step, Run to
+    /// The Preview Control while a preview plays: Run / Pause, Single Step, Run to
     /// Retract and Stop, the speed, the tool's place along the whole path and close up
     /// (drag to scrub), and how long is left. Over both views, so Stop is always to hand; Esc
     /// stops it too. Once stopped or played through they stay, to scrub it again, with
@@ -1283,7 +1283,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire's arrows over the tree: the picked component up or down its level, as
+    /// The arrows over the tree: the picked component up or down its level, as
     /// (component, direction, the id it moves to) when one is clicked.
     pub(super) fn tree_arrows(
         &self,
@@ -1329,7 +1329,7 @@ impl CutCraftApp {
     }
 
     /// The component tree, top first: each level (the last on top) with its components
-    /// under it, the model being built from the bottom up. Aspire's level and component
+    /// under it, the model being built from the bottom up. the level and component
     /// menus on a right-click; right-clicking an unpicked component picks it first.
     /// A level's row in the component tree: Expand or Collapse, then its name and combine
     /// mode; the name's response (for its menu) and whether the icon was clicked.
@@ -1358,7 +1358,7 @@ impl CutCraftApp {
     }
 
     pub(super) fn component_list(&mut self, ui: &mut egui::Ui) {
-        // the tree is the active sheet's, as Aspire's heading says
+        // the tree is the active sheet's
         if let Some(sheet) = self.doc.sheets.get(self.doc.active_sheet) {
             ui.strong(format!("Components ({})", sheet.name));
         }
@@ -1642,14 +1642,14 @@ impl CutCraftApp {
         if ui.small_button("Fit").clicked() {
             self.framing = self.framing.fitted();
         }
-        // Aspire's orthographic / perspective toggle
+        // The orthographic / perspective toggle
         let perspective = self.framing.perspective;
         if ui.selectable_label(perspective, "Perspective").clicked() {
             self.framing.perspective = !perspective;
         }
     }
 
-    /// The preview or model as a block, with Aspire's 3D mouse controls: left- or right-drag
+    /// The preview or model as a block, with the 3D mouse controls: left- or right-drag
     /// rotates, middle-drag (or Ctrl+right, or left and right together) pans, the wheel zooms
     /// about the cursor, and a double-click or F fits it again.
     /// A drag in the 3D view while Orientate 3D Model is open: with Drag turns on the model,
@@ -1743,7 +1743,7 @@ impl CutCraftApp {
         );
         // while sculpting the left button sculpts; the right turns the view, the middle pans
         let sculpting = self.view_3d_drop_and_sculpt(ui, &response, area);
-        // with a drawing tool open the left button draws on the model, as in Aspire 12
+        // with a drawing tool open the left button draws on the model
         let drawing = self.drawing_in_3d();
         let left = left && !sculpting && drawing.is_none();
         let delta = response.drag_delta();
@@ -1774,7 +1774,7 @@ impl CutCraftApp {
         } else if let Some(from) =
             pointed(on_cube.interact_pointer_pos()).filter(|_| on_cube.clicked())
         {
-            // ponytail: turns at once; Aspire's turns smoothly
+            // ponytail: turns at once; the turns smoothly
             self.orbit = view3d::Orbit::facing(from);
         }
         if let Some(at) = response.hover_pos().filter(|_| scroll != 0.0) {
@@ -1782,7 +1782,7 @@ impl CutCraftApp {
             let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
             self.framing = self.framing.zoomed_about(at - area.center(), factor);
         }
-        // a double-click picks the component under it, as in Aspire; off the model it fits
+        // a double-click picks the component under it; off the model it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         self.fit_3d = Some(fit);
         // F fits too, with the pointer over the view
@@ -1837,7 +1837,7 @@ impl CutCraftApp {
     }
 
     /// A double-click on component `id`: Shift adds or takes it away; again on a selected
-    /// one, its editing handles, as in Aspire; else it alone is selected.
+    /// one, its editing handles; else it alone is selected.
     fn pick_3d(&mut self, ui: &egui::Ui, id: EntityId) {
         if ui.input(|i| i.modifiers.shift) {
             if !self.doc.selected_components.remove(&id) {
@@ -2098,9 +2098,9 @@ impl CutCraftApp {
         faces_geometry(&mut self.model_gpu, model)
     }
 
-    /// Transform mode's handles in the 3D view, over whatever is selected: Aspire's 3D
+    /// Transform mode's handles in the 3D view, over whatever is selected: the 3D
     /// Transform Handles (see [`Self::transform_handles_3d`]) for vectors and components
-    /// alike, and for a component, Aspire 12's component editing icons, round buttons
+    /// alike, and for a component, the component editing icons, round buttons
     /// along the near edge of its box; a drag on the first three sets its total, shape or
     /// base height, and the last opens its settings. The model's own view has them, not a
     /// preview. With nothing selected the status bar says how to start.
@@ -2154,7 +2154,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire 12's component editing icons along the near edge of component `id`'s box, a
+    /// The component editing icons along the near edge of component `id`'s box, a
     /// button's height below it (the transform handles sit on the edge itself).
     fn component_icons_3d(
         &mut self,
@@ -2220,7 +2220,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire's 3D Transform Handles over the selection's box, level with the highest
+    /// The 3D Transform Handles over the selection's box, level with the highest
     /// surface inside it so they sit on what is selected rather than under it: the 2D
     /// view's handles at the same places (a cross in the middle moves, white corners and
     /// black edges scale) and a rotation arrow on a stem above the far edge. Dragged as the
@@ -2410,7 +2410,7 @@ impl CutCraftApp {
                 let f = factor(-by.y, quarter.y);
                 p.shape_height = base.shape_height * f;
                 p.base_height = base.base_height * f;
-                format!("Total height {:.2} mm", *top * f)
+                format!("Total height {}", doc.job.units.length(*top * f, 2))
             }
             Handle3d::Height => {
                 p.shape_height = base.shape_height * factor(-by.y, quarter.y);
@@ -2419,7 +2419,7 @@ impl CutCraftApp {
             _ => {
                 let per_pixel = doc.job.thickness / f64::from(quarter.y);
                 p.base_height = base.base_height - f64::from(by.y) * per_pixel;
-                format!("Base height {:.2} mm", p.base_height)
+                format!("Base height {}", doc.job.units.length(p.base_height, 2))
             }
         };
         let params = serde_json::to_value(&p).expect("component properties serialize");
@@ -2463,7 +2463,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The Settings handle's popup (Aspire 12's): the combine mode, Fade and Tilt with
+    /// The Settings handle's popup: the combine mode, Fade and Tilt with
     /// their anchors' Set, Appearance and its colour, and Close; each change applied
     /// through Component Properties as it is made, a dragged value as it goes (the drag
     /// one undo).
@@ -2487,7 +2487,7 @@ impl CutCraftApp {
                 egui::Grid::new("component_settings_3d").show(ui, |ui| {
                     let p = &mut s.params;
                     s.dirty |= ui.checkbox(&mut p.fade.on, "Fade").changed();
-                    // Set: then two clicks in the 3D view, as Aspire's help says
+                    // Set: then two clicks in the 3D view
                     let setting = s.anchors.map(|(which, _)| which);
                     let set_fade = egui::Button::new("Set").selected(setting == Some(Anchor::Fade));
                     if ui
@@ -2497,7 +2497,7 @@ impl CutCraftApp {
                     {
                         s.anchors = Some((Anchor::Fade, None));
                     }
-                    let percent = egui::DragValue::new(&mut p.fade.percent)
+                    let percent = Number::new(&mut p.fade.percent)
                         .range(0.0..=100.0)
                         .suffix(" %");
                     s.dirty |= ui.add_enabled(p.fade.on, percent).changed();
@@ -2511,7 +2511,7 @@ impl CutCraftApp {
                     {
                         s.anchors = Some((Anchor::Tilt, None));
                     }
-                    let angle = egui::DragValue::new(&mut p.tilt.angle)
+                    let angle = Number::new(&mut p.tilt.angle)
                         .range(-90.0..=90.0)
                         .suffix(" °");
                     s.dirty |= ui.add_enabled(p.tilt.on, angle).changed();
@@ -2569,7 +2569,7 @@ impl CutCraftApp {
     }
 
     /// Takes away the previewed material's piece under `at` in the 3D view's picture `fit`
-    /// (Aspire's double-click on waste); false when the click is off the material or on
+    /// (double-click on waste); false when the click is off the material or on
     /// material cut right through.
     /// The 3D view's drops, sculpting and saved image: clipart dropped on it goes where it
     /// was dropped on the material, while sculpting a left drag is a stroke (true then), and
@@ -2723,7 +2723,7 @@ impl CutCraftApp {
         self.components_at_3d(fit, at).first().copied()
     }
 
-    /// Aspire's rotation handles while Orientate 3D Model shows the model in a flat job: red,
+    /// The rotation handles while Orientate 3D Model shows the model in a flat job: red,
     /// green and blue rings round it turn it about X, Y and Z, and the grey sphere in its
     /// middle about all three (help: Import 3D Model, Initial Orientation).
     fn rings_3d(&mut self, ui: &egui::Ui, area: egui::Rect, fit: egui::Rect) {
@@ -2827,7 +2827,7 @@ impl CutCraftApp {
     }
 
     /// Set in the settings popup: two clicks on the model place the fade's or tilt's
-    /// anchors, as Aspire's help says the 3D view does; the status bar says which point to
+    /// anchors; the status bar says which point to
     /// click, and the first is marked while the second is awaited.
     fn anchors_3d(
         &mut self,
@@ -3060,12 +3060,12 @@ impl CutCraftApp {
         }
         let job = self.shown_job();
         let previewing = self.simulation.is_some() || self.playback.is_some();
-        // a playing preview's tool: where its tip is, and its diameter
+        // a playing preview's tool: where its tip is, and the parts it is drawn in
         let tool_at = self
             .playback
             .as_ref()
             .and_then(cut_craft_core::playback::Playback::tool)
-            .map(|(tip, tool)| (tip, tool.diameter));
+            .map(|(tip, tool)| (tip, view3d::tool_parts(tool)));
         let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
             return;
         };
@@ -3191,7 +3191,7 @@ impl CutCraftApp {
         surface: &Material,
         camera: &view3d::Camera,
         look: view3d::Look,
-        tool_at: Option<(cut_craft_core::glam::DVec3, f64)>,
+        tool_at: Option<(cut_craft_core::glam::DVec3, Vec<Vec<[f64; 2]>>)>,
         gpu: Option<&mut Option<view3d::gpu::Draw>>,
     ) {
         let (job, painter) = (self.shown_job(), ui.painter_at(area));
@@ -3225,20 +3225,27 @@ impl CutCraftApp {
                 }
             }
         }
-        // a playing preview's tool, an upright cylinder at the tip
-        // ponytail: drawn whole, over the surface it is cutting into
-        if let Some((tip, diameter)) = tool_at {
-            let at = local(tip.truncate(), tip.z);
-            let outline =
-                view3d::cylinder(screen, at, diameter / 2.0, diameter * TOOL_HEIGHT_DIAMETERS);
-            let selection = ui.visuals().selection;
-            painter.add(egui::Shape::convex_polygon(
-                outline,
-                selection.bg_fill,
-                selection.stroke,
-            ));
-        }
         self.overlays_3d(ui, &painter, surface, (orbit, framing), fit);
+        // a playing preview's tool standing upright on its tip, its own shape and size: the
+        // cutting end highlighted, the shank above it steel; over the vectors, which would
+        // otherwise print onto it
+        // ponytail: drawn whole, over the surface it is cutting into
+        if let Some((tip, parts)) = tool_at {
+            let at = local(tip.truncate(), tip.z);
+            let selection = ui.visuals().selection;
+            for (i, rings) in parts.iter().enumerate() {
+                let fill = if i == 0 {
+                    selection.bg_fill
+                } else {
+                    TOOL_SHANK
+                };
+                painter.add(egui::Shape::convex_polygon(
+                    view3d::turned_outline(screen, at, rings),
+                    fill,
+                    selection.stroke,
+                ));
+            }
+        }
     }
 
     /// The vectors, modeling plane and origin over the 3D view's (unwrapped) `surface`, each
@@ -3282,7 +3289,7 @@ impl CutCraftApp {
                 painter.add(egui::Shape::line(run, stroke));
             }
         }
-        // the keep-out zones in red, closed, over whatever they cover, as Aspire shows them
+        // the keep-out zones in red, closed, over whatever they cover
         let danger = egui::Stroke::new(2.0 * stroke.width, ui.visuals().error_fg_color);
         let zones: Vec<_> = if shown.keep_out_3d {
             self.doc.named_keep_out().collect()
@@ -3353,7 +3360,7 @@ impl CutCraftApp {
             self.form_panel(ui);
             return;
         }
-        // the toolpath list in its own bottom half, as Aspire's, so it never scrolls away;
+        // the toolpath list in its own bottom half, so it never scrolls away;
         // the strip over it drags it taller or shorter
         let row = ui.spacing().interact_size.y;
         let room = ui.available_height();
@@ -3559,11 +3566,11 @@ impl CutCraftApp {
                     self.selected_toolpath = if selected { None } else { Some(id) };
                     self.selected_group = None;
                 }
-                // a double-click opens the toolpath's form, as Aspire's list does
+                // a double-click opens the toolpath's form
                 if label.double_clicked() {
                     edit = Some(id);
                 }
-                // Aspire's toolpath menu acts on the row right-clicked, so it selects it
+                // The toolpath menu acts on the row right-clicked, so it selects it
                 if label.secondary_clicked() {
                     self.selected_toolpath = Some(id);
                     self.selected_group = None;
@@ -3711,6 +3718,12 @@ impl CutCraftApp {
                 }
                 ui.label(format!("Tool: {}", self.status.current_tool));
                 ui.separator();
+                if self.screen == Screen::Job
+                    && let Some(count) = self.doc.selected_vector_count().text()
+                {
+                    ui.label(count).on_hover_hint(SELECTION_COUNT_HINT);
+                    ui.separator();
+                }
                 if self.screen == Screen::Job && self.options.view_3d.show_frame_rate {
                     ui.weak(self.frame_rate_note()).on_hover_hint(
                         "How finely the 3D view draws the model, and how many pictures a \
@@ -3744,6 +3757,17 @@ impl CutCraftApp {
     }
 }
 
+/// What "by rule" beside a toolpath in the list means.
+pub(super) const FOLLOWS_RULE_HINT: &str = "This toolpath follows a Vector Selector: each time it is calculated it takes the vectors \
+     that pass its filters (open or closed, circles, layers), so vectors added later are cut \
+     too once it is recalculated";
+
+/// What the selection count in the status bar and on toolpath forms means.
+pub(super) const SELECTION_COUNT_HINT: &str = "A closed vector goes all the way round and ends where it starts, so it has an inside to \
+     pocket or carve. An open vector is a line with two loose ends: Pocket, V-Carve and the \
+     other area toolpaths leave it out. Join open ends with Join Open Ends, and see them with \
+     View ▸ Show Open Vector Ends";
+
 /// Each toolpath's place in the cut order.
 type Places = std::collections::BTreeMap<EntityId, usize>;
 
@@ -3774,7 +3798,7 @@ fn toolpath_row(
             if let Some((place, material)) = swatch {
                 rgb = preview_swatch(ui, toolpath, place, material);
             }
-            if toolpath.stale {
+            let row = if toolpath.stale {
                 let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
                     .color(ui.visuals().warn_fg_color);
                 ui.selectable_label(selected, name).on_hover_hint(format!(
@@ -3784,7 +3808,12 @@ fn toolpath_row(
             } else {
                 ui.selectable_label(selected, &toolpath.name)
                     .on_hover_hint(&toolpath.tool.name)
+            };
+            // made from whatever passes its Vector Selector, not a fixed set of vectors
+            if cut_craft_core::selector::Selector::of(&toolpath.params).is_some() {
+                ui.weak("by rule").on_hover_hint(FOLLOWS_RULE_HINT);
             }
+            row
         })
         .inner;
     (label, ticked, rgb)
@@ -3946,7 +3975,7 @@ fn modeling_plane(
     mesh
 }
 
-/// The combine modes as Aspire's small shape icons, the chosen one pressed and the names on
+/// The combine modes as the small shape icons, the chosen one pressed and the names on
 /// hover; where each is drawn goes to `s.radios`.
 fn combine_radios_3d(ui: &mut egui::Ui, icons: &crate::icons::Icons, s: &mut Settings3d) {
     let edge = ui.spacing().interact_size.y;

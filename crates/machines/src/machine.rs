@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// Aspire's Machine Configuration: what the machine is, and the posts it uses.
+/// The Machine Configuration: what the machine is, and the posts it uses.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Machine {

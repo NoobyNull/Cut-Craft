@@ -1,5 +1,5 @@
 //! Getting the tool into and out of a cut along a path: ramps in place of straight plunges,
-//! lead-in and lead-out moves, and tabs that hold a part in place (Aspire's profile options).
+//! lead-in and lead-out moves, and tabs that hold a part in place (profile options).
 
 use crate::geometry::Point;
 use crate::toolpath::{Move, MoveKind};
@@ -209,7 +209,7 @@ pub struct Ramping {
 
 impl Default for Ramping {
     fn default() -> Self {
-        // ponytail: Aspire's defaults are not known
+        // ponytail: our own defaults
         Self {
             by: RampBy::Distance,
             distance: 10.0,
@@ -252,7 +252,7 @@ pub struct Leads {
 
 impl Default for Leads {
     fn default() -> Self {
-        // ponytail: Aspire's defaults are not known
+        // ponytail: our own defaults
         Self {
             angle: 45.0,
             radius: 5.0,
@@ -351,7 +351,7 @@ fn many() -> u32 {
 
 impl Default for TabSettings {
     fn default() -> Self {
-        // ponytail: Aspire's defaults are not known; these are a woodworker's rule of thumb
+        // ponytail: our own defaults; these are a woodworker's rule of thumb
         Self {
             size_from_tool: true,
             length: 12.7,

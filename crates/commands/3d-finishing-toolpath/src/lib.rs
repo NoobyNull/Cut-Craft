@@ -100,7 +100,7 @@ impl Default for Params {
                     .find(|t| t.shape == ToolShape::BallNose)
                     .expect("the starter tools include a ball nose"),
             ],
-            // ponytail: Aspire's defaults are not known; a millimetre each
+            // ponytail: our own defaults; a millimetre each
             minimum_detail: 1.0,
             boundary_offset: 1.0,
             machining_boundary: MachiningBoundary::Material,
@@ -551,8 +551,7 @@ mod tests {
         };
         let why = FinishingToolpath3d::run(&domed(), &none)
             .err()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string());
         assert!(why.contains("tool"), "{why}");
     }
 
@@ -588,8 +587,7 @@ mod tests {
         doc.job.thickness = 5.0;
         let why = FinishingToolpath3d::run(&doc, &Params::default())
             .err()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string());
         assert!(
             why.contains("8.0 mm tall") && why.contains("5.0 mm thick"),
             "{why}"
@@ -600,8 +598,7 @@ mod tests {
     fn it_needs_a_model() {
         let why = FinishingToolpath3d::run(&Document::default(), &Params::default())
             .err()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string());
         assert!(why.contains("3D model"), "{why}");
     }
 

@@ -1,6 +1,6 @@
 //! Try a sample project, on the start page: a small sign (a word and a rounded border) whose
 //! toolpaths are made as it opens, so a newcomer can press Preview and see a result in the
-//! first minute. Cut Craft's own: Aspire has none (see `re/SPEC.md`, Start page).
+//! first minute. Cut Craft's own (see `re/SPEC.md`, Start page).
 
 use super::{CutCraftApp, Screen, View};
 use cut_craft_core::document::Document;

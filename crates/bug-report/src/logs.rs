@@ -116,22 +116,19 @@ impl Drop for Doing {
 /// What is running now, one line each, oldest first, with the step each is on.
 pub fn running() -> Vec<String> {
     // try_lock: a panic while the list was changing must still write its crash log
-    DOING
-        .try_lock()
-        .map(|doing| {
-            doing
-                .iter()
-                .map(|(_, what, stage)| {
-                    let now = stage.as_ref().map(|s| s()).unwrap_or_default();
-                    if now.is_empty() {
-                        what.clone()
-                    } else {
-                        format!("{what}{STAGE_MARK}{now}")
-                    }
-                })
-                .collect()
-        })
-        .unwrap_or_default()
+    DOING.try_lock().map_or_default(|doing| {
+        doing
+            .iter()
+            .map(|(_, what, stage)| {
+                let now = stage.as_ref().map_or_default(|s| s());
+                if now.is_empty() {
+                    what.clone()
+                } else {
+                    format!("{what}{STAGE_MARK}{now}")
+                }
+            })
+            .collect()
+    })
 }
 
 struct Logger;
@@ -238,8 +235,7 @@ pub fn recent() -> String {
     // try_lock: a panic while a line was being kept must still write its crash log
     RECENT
         .try_lock()
-        .map(|lines| lines.iter().cloned().collect::<Vec<_>>().join("\n"))
-        .unwrap_or_default()
+        .map_or_default(|lines| lines.iter().cloned().collect::<Vec<_>>().join("\n"))
 }
 
 /// What a crash log says: the version and system, the panic and where, what was running

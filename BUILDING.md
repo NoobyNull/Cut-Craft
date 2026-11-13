@@ -3,7 +3,7 @@
 Every command below is run from the repository's root folder, the one with `Cargo.toml` in it:
 
 ```bash
-cd ~/aspire-clone
+cd ~/cut-craft   # or wherever you cloned it
 ```
 
 ## One-time setup

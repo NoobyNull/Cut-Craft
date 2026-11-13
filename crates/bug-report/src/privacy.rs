@@ -8,6 +8,8 @@ const HOME: &str = "~";
 /// The longest title a crash report gets.
 const TITLE_CHARS: usize = 80;
 
+use std::fmt::Write as _;
+
 /// `text` with every home folder in it (`/home/<name>`, `/Users/<name>`,
 /// `C:\Users\<name>`, any drive or slash) put as `~`, so the user name goes with it; and the
 /// build machine's long library and compiler paths cut to `<crates>` and `<rust>`.
@@ -104,6 +106,133 @@ fn shorten(line: &str) -> String {
         }
     }
     line
+}
+
+/// What the person's own files end in (jobs, toolpaths, drawings, models, pictures, fonts):
+/// a crash report sent by itself names none of them.
+const THEIR_FILES: &[&str] = &[
+    "ccjob", "ajob", "nc", "gcode", "ngc", "tap", "cnc", "txt", "svg", "dxf", "eps", "ai", "pdf",
+    "stl", "obj", "3mf", "step", "stp", "png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
+    "csv", "json", "html", "pp", "vtdb", "ttf", "otf",
+];
+/// Where a path is in the person's own folders, once [`scrub`] has put home as `~`: home, a
+/// drive, a network share, a mounted disk.
+const THEIR_FOLDERS: &[&str] = &[
+    "~/",
+    "~\\",
+    "\\\\",
+    "/media/",
+    "/mnt/",
+    "/run/media/",
+    "/volumes/",
+    "/tmp/",
+    "/srv/",
+];
+
+/// `text` (already [`scrub`]bed) with the person's files and folders taken out, for a crash
+/// report that goes without them seeing it first: a path in their folders reads
+/// `<file>.ccjob` (or `<folder>`), and a file name of theirs anywhere `<file>.ccjob`. Source
+/// paths (`crates/app/src/view2d.rs:9:9`) stay: they are the build machine's.
+pub fn hide_files(text: &str) -> String {
+    text.split_inclusive('\n')
+        .map(|line| bare_names(&folders(line)))
+        .collect()
+}
+
+/// `line` with each path in the person's folders put as `<file>.<ext>` or `<folder>`.
+fn folders(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(start) = folder_start(rest) {
+        out.push_str(&rest[..start]);
+        let path = &rest[start..];
+        // a file of theirs ends the path, even past a space ("My Jobs/sign file.ccjob");
+        // else the path runs to the next space
+        let stop = path
+            .find(['\n', '\r', '\t', '"', '\'', '`', '<', '>', '|'])
+            .unwrap_or(path.len());
+        let (end, put) = if let Some((end, ext)) = their_file(&path[..stop]) {
+            (end, format!("<file>.{ext}"))
+        } else {
+            let end = path[..stop].find(char::is_whitespace).unwrap_or(stop);
+            let token = &path[..end];
+            let source = token
+                .rsplit_once('.')
+                .is_some_and(|(_, ext)| ext == "rs" || ext.starts_with("rs:"));
+            (
+                end,
+                if source {
+                    token.to_owned()
+                } else {
+                    "<folder>".to_owned()
+                },
+            )
+        };
+        out.push_str(&put);
+        rest = &path[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Where the first path in the person's folders starts in `text`.
+fn folder_start(text: &str) -> Option<usize> {
+    let lower = text.to_ascii_lowercase();
+    let bytes = text.as_bytes();
+    text.char_indices().map(|(i, _)| i).find(|&i| {
+        let free = i == 0
+            || !matches!(
+                bytes[i - 1],
+                b'/' | b'\\' | b'.' | b'_' | b'-' | b'~' | b':'
+            ) && !bytes[i - 1].is_ascii_alphanumeric();
+        let here = &lower[i..];
+        let drive = here.len() >= 3
+            && bytes[i].is_ascii_alphabetic()
+            && bytes[i + 1] == b':'
+            && matches!(bytes[i + 2], b'/' | b'\\');
+        free && (drive || THEIR_FOLDERS.iter().any(|f| here.starts_with(f)))
+    })
+}
+
+/// The end of the first name of one of the person's files in `text`, and its extension.
+fn their_file(text: &str) -> Option<(usize, String)> {
+    text.match_indices('.').find_map(|(dot, _)| {
+        let after = &text[dot + 1..];
+        let len = after
+            .find(|c: char| !c.is_ascii_alphanumeric())
+            .unwrap_or(after.len());
+        let ext = after[..len].to_ascii_lowercase();
+        (dot > 0 && THEIR_FILES.contains(&ext.as_str())).then(|| (dot + 1 + len, ext))
+    })
+}
+
+/// `line` with each file name of the person's put as `<file>.<ext>`.
+fn bare_names(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some((end, ext)) = their_file(rest) {
+        let dot = end - ext.len() - 1;
+        let start = rest[..dot]
+            .rfind(|c: char| {
+                c.is_whitespace()
+                    || matches!(
+                        c,
+                        '"' | '\'' | '`' | '(' | '[' | '/' | '\\' | '>' | ':' | '='
+                    )
+            })
+            .map_or(0, |at| {
+                at + rest[at..].chars().next().map_or(1, char::len_utf8)
+            });
+        out.push_str(&rest[..start]);
+        if start < dot {
+            let _ = write!(out, "<file>.{ext}");
+        } else {
+            out.push_str(&rest[start..end]);
+        }
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// A crash report's title, in plain words: what went wrong when it is a known kind of
@@ -261,5 +390,43 @@ mod tests {
         );
         assert!(crash_title(&long).ends_with('…'));
         assert!(crash_title(&long).chars().count() <= "Crash: ".len() + TITLE_CHARS + 1);
+    }
+
+    #[test]
+    fn a_report_sent_by_itself_names_none_of_the_persons_files() {
+        assert_eq!(
+            hide_files("opened ~/Jobs/Smith kitchen/sign file.ccjob at 12:00\n"),
+            "opened <file>.ccjob at 12:00\n"
+        );
+        assert_eq!(
+            hide_files("saved D:\\Work\\a.nc, then ~\\Desktop\\b.SVG"),
+            "saved <file>.nc, then <file>.svg"
+        );
+        assert_eq!(
+            hide_files("couldn't read /media/usb/Client Co/logo.png: denied"),
+            "couldn't read <file>.png: denied"
+        );
+        assert_eq!(
+            hide_files("config in ~/.config/cut-craft x"),
+            "config in <folder> x"
+        );
+        assert_eq!(
+            hide_files("Exported sign.nc (\"lid.stl\")"),
+            "Exported <file>.nc (\"<file>.stl\")"
+        );
+        let source = "panicked at crates/app/src/view2d.rs:9:9:\n   at ~/src/a.rs:1:1\n";
+        assert_eq!(
+            hide_files(source),
+            source,
+            "source paths are the build machine's"
+        );
+        assert_eq!(
+            hide_files("Cut Craft 0.6.3 on linux crashed: version 0.6.3"),
+            "Cut Craft 0.6.3 on linux crashed: version 0.6.3"
+        );
+        assert_eq!(
+            hide_files("see https://x.dev/a and C:"),
+            "see https://x.dev/a and C:"
+        );
     }
 }

@@ -129,7 +129,7 @@ impl Command for ArrayCopyToolpath {
             Spacing::Gap => size + Point::new(p.x, p.y),
         };
         let mut c = Change::builder(doc);
-        // ponytail: one array toolpath per source, so each tool's copies run together (Aspire's
+        // ponytail: one array toolpath per source, so each tool's copies run together (the
         // "minimize tool changes"); copy by copy would need a toolpath per copy and source
         for (id, source) in sources
             .iter()

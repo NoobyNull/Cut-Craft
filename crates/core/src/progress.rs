@@ -43,7 +43,7 @@ impl Progress {
 
     /// What the job says it is doing now (empty until it says).
     pub fn stage(&self) -> String {
-        self.0.stage.lock().map(|s| s.clone()).unwrap_or_default()
+        self.0.stage.lock().map_or_default(|s| s.clone())
     }
 
     /// Asks the job to stop: [`cancelled`] says so on its thread from now on.

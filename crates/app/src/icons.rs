@@ -184,11 +184,11 @@ fn is_bitmap(key: &str) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("bmp"))
 }
 
-/// A 32-bit bitmap with its alpha kept, as a PNG: Aspire's dialog pictures are drawn on a
+/// A 32-bit bitmap with its alpha kept, as a PNG: the dialog pictures are drawn on a
 /// see-through background, and egui's bitmap reader takes the fourth byte for padding and
 /// shows that background black. `None` for any other bitmap, or one whose alpha is all
 /// zero (which then is padding).
-// ponytail: uncompressed bitmaps with the 40-byte header, which is what Aspire's are
+// ponytail: uncompressed bitmaps with the 40-byte header, which is what the are
 fn with_alpha(bmp: &[u8]) -> Option<Vec<u8>> {
     let u32_at = |at: usize| Some(u32::from_le_bytes(bmp.get(at..at + 4)?.try_into().ok()?));
     let i32_at = |at: usize| Some(i32::from_le_bytes(bmp.get(at..at + 4)?.try_into().ok()?));
@@ -358,7 +358,7 @@ mod tests {
         assert!(decoded(&ctx, &uri).is_ok(), "decoded from the bytes read");
     }
 
-    /// A 2 × 1 32-bit bitmap, as Aspire's dialog pictures are: a clear white pixel, then an
+    /// A 2 × 1 32-bit bitmap, as the dialog pictures are: a clear white pixel, then an
     /// opaque black one (blue, green, red, alpha).
     fn clear_and_black_bmp() -> Vec<u8> {
         let mut bmp = b"BM".to_vec();

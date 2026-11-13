@@ -14,6 +14,7 @@
 mod github;
 pub mod hint;
 pub mod logs;
+pub mod number;
 pub mod privacy;
 pub mod relay;
 mod spot;
@@ -306,6 +307,9 @@ pub struct Reporter {
     pub crash_service: Option<String>,
     /// How a crash's log is posted to the service (replaced in tests).
     pub post: fn(&str, &str) -> Result<(), relay::Failure>,
+    /// How hard the proof of work sent with a crash's log is ([`relay::WORK_BITS`]; less in
+    /// tests, which have no service to satisfy).
+    pub work_bits: u32,
     /// Where a crash log that could not be sent for now is put back, to be sent at the next
     /// start (the folder `crash.log` is kept in).
     pub retry_dir: Option<PathBuf>,
@@ -336,6 +340,7 @@ impl Reporter {
             crash: None,
             crash_service: None,
             post: relay::post_https,
+            work_bits: relay::WORK_BITS,
             retry_dir: None,
             crash_sending: None,
         }
@@ -350,10 +355,16 @@ impl Reporter {
             return;
         };
         let (tx, rx) = mpsc::channel();
-        let (post, text, install, ctx) =
-            (self.post, crash.clone(), install.to_owned(), ctx.clone());
+        let (post, bits, text, install, ctx) = (
+            self.post,
+            self.work_bits,
+            crash.clone(),
+            install.to_owned(),
+            ctx.clone(),
+        );
+        // the proof of work takes a moment: never on the frame
         std::thread::spawn(move || {
-            let _ = tx.send(relay::send(&url, &text, &install, &post));
+            let _ = tx.send(relay::send(&url, &text, &install, bits, &post));
             ctx.request_repaint();
         });
         self.crash_sending = Some((crash, rx));

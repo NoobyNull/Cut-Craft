@@ -9,16 +9,16 @@ tracing core (`crates/core/src/trace.rs`).
 
 The same cycle for each item, one at a time, nothing pushed until asked.
 
-1. **Find Aspire's behaviour.** Only from Vectric's public documentation (the help, extracted
-   with `re/help2txt.py`; guides; tutorial videos) and hands-on use of the Aspire trial. Write
+1. **Find the reference program's behaviour.** Only from its maker's public documentation (the help, extracted
+   with `re/help2txt.py`; guides; tutorial videos) and hands-on use of its trial. Write
    what is found into `re/SPEC.md`, tagged [obs] (seen in the trial), [inf] (from the docs),
    [check] or [unk].
-   - Never decompile, disassemble or otherwise analyse Aspire's program files or resource
+   - Never decompile, disassemble or otherwise analyse the reference program's files or resource
      DLLs, and never extract artwork or strings from them.
 2. **Calibrate where exactness matters** (tracing, curve fitting, offsets, nesting, fonts):
-   run the same input through VCarve Pro 12.5 under Wine and through Cut Craft, compare the
+   run the same input through the reference program under Wine and through Cut Craft, compare the
    results (node counts, distances between outlines, areas), and tune until they agree.
-   The test inputs and Vectric's results stay outside git (`re/extracted/`); our tests
+   The test inputs and its results stay outside git (`re/extracted/`); our tests
    assert the agreed numbers. See section 4.
 3. **Write tests first**, then the code: a command crate per command (`scripts/new-command`),
    pure functions in `cut-craft-core` where several commands share them.

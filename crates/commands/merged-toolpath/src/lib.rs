@@ -13,10 +13,7 @@ use serde::{Deserialize, Serialize};
 pub struct MergedToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "Aspire's Ordering tick boxes"
-)]
+#[expect(clippy::struct_excessive_bools, reason = "the Ordering tick boxes")]
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
@@ -34,6 +31,15 @@ pub struct Params {
     #[serde(default = "yes")]
     #[schemars(title = "Grid", extend("x-group" = "Ordering"))]
     pub grid: bool,
+    /// How many rows the Grid order cuts the job into, bottom to top. More rows suit many
+    /// small parts; fewer suit a few big ones
+    #[serde(default = "grid_rows")]
+    #[schemars(
+        title = "Grid rows",
+        range(min = 1, max = 1000),
+        extend("x-group" = "Ordering", "x-show-when" = {"grid": "true"})
+    )]
+    pub grid_rows: u32,
     /// Each cut the nearest to where the last ended
     #[serde(default = "yes")]
     #[schemars(title = "Shortest Path", extend("x-group" = "Ordering"))]
@@ -49,6 +55,11 @@ fn yes() -> bool {
     true
 }
 
+/// The rows the Grid order used before it was a setting.
+fn grid_rows() -> u32 {
+    8
+}
+
 impl Default for Params {
     fn default() -> Self {
         Self {
@@ -57,6 +68,7 @@ impl Default for Params {
             left_to_right: true,
             bottom_to_top: true,
             grid: true,
+            grid_rows: grid_rows(),
             shortest_path: true,
             merge_by_part: false,
         }
@@ -127,9 +139,6 @@ fn sorted_by(cuts: &[Cut], key: impl Fn(Point) -> (f64, f64)) -> Vec<Cut> {
     order
 }
 
-/// How many rows the Grid order cuts the job into.
-const GRID_ROWS: f64 = 8.0;
-
 /// The orders asked for, each of `cuts` (the toolpath list's order): the quickest is kept.
 fn orders(cuts: &[Cut], p: &Params, height: f64) -> Vec<Vec<Cut>> {
     let mut tried = vec![];
@@ -140,7 +149,7 @@ fn orders(cuts: &[Cut], p: &Params, height: f64) -> Vec<Vec<Cut>> {
         tried.push(sorted_by(cuts, |q| (q.y, q.x)));
     }
     if p.grid {
-        let row = (height / GRID_ROWS).max(1e-9);
+        let row = (height / f64::from(p.grid_rows.max(1))).max(1e-9);
         tried.push(sorted_by(cuts, |q| ((q.y / row).floor(), q.x)));
     }
     if p.shortest_path {
@@ -437,6 +446,33 @@ mod tests {
             .into_values()
             .find(|t| t.strategy == MergedToolpath::ID)
             .unwrap()
+    }
+
+    #[test]
+    fn grid_rows_is_a_form_field_that_sets_how_tall_the_grid_rows_are() {
+        let old: Params = serde_json::from_value(serde_json::json!({
+            "name": "Merged", "sources": []
+        }))
+        .unwrap();
+        assert_eq!(old.grid_rows, 8, "the fixed value it replaces");
+        let at = |x: f64, y: f64| Cut {
+            moves: vec![Move {
+                kind: MoveKind::Rapid,
+                to: DVec3::new(x, y, 5.0),
+            }],
+            power: vec![0.0],
+        };
+        let cuts = [at(0.0, 9.0), at(50.0, 1.0)];
+        let grid_only = |rows| Params {
+            left_to_right: false,
+            bottom_to_top: false,
+            shortest_path: false,
+            grid_rows: rows,
+            ..Params::default()
+        };
+        let first_x = |rows| orders(&cuts, &grid_only(rows), 80.0)[0][0].start().x;
+        assert!(first_x(8) < 1.0, "8 rows of 10 mm: one row, left first");
+        assert!(first_x(16) > 49.0, "16 rows of 5 mm: the lower row first");
     }
 
     #[test]

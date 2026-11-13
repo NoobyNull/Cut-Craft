@@ -256,3 +256,21 @@ fn offsetting_again_and_again_keeps_an_inside_corner_light() {
     let once = polygon::offset(&[l], -15.0, Corners::Round);
     assert!(close(total_area(&rings), total_area(&once), 0.5));
 }
+
+#[test]
+fn pieces_keep_each_outline_with_its_holes() {
+    // a frame (a square with a square hole), an island in the hole, and a square apart
+    let regions = polygon::regions(&[
+        square(0.0, 0.0, 30.0),
+        square(5.0, 5.0, 20.0),
+        square(10.0, 10.0, 10.0),
+        square(50.0, 0.0, 10.0),
+    ]);
+    let mut pieces = polygon::pieces(&regions);
+    pieces.sort_by(|a, b| total_area(a).total_cmp(&total_area(b)));
+    let shapes: Vec<(usize, f64)> = pieces
+        .iter()
+        .map(|p| (p.len(), p.iter().map(polygon::area).fold(0.0, f64::max)))
+        .collect();
+    assert_eq!(shapes, vec![(1, 100.0), (1, 100.0), (2, 900.0)]);
+}

@@ -1,11 +1,12 @@
 //! First-time setup: four questions asked on the first run (which machine, millimetres or
 //! inches, the material usually cut, and whether crash logs may be sent) that add the
 //! machine, set the job new files start with, put the starter tools in those units first and
-//! keep the crash-log answer in Options ▸ Bug Reports. Cut Craft's own: Aspire has none (see
+//! keep the crash-log answer in Options ▸ Bug Reports. Cut Craft's own (see
 //! `re/SPEC.md`, First-time setup). Help ▸ Run First-Time Setup Again asks them again.
 
 use super::CutCraftApp;
 use crate::options::CrashLogs;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{Job, Units};
 use cut_craft_core::toolpath::ToolDatabase;
 use cut_craft_machines::{Controller, Machine, Machines};
@@ -24,8 +25,8 @@ const METRIC_TOOLS: &str = "Metric Tools";
 const IMPERIAL_TOOLS: &str = "Imperial Tools";
 /// What first-time setup says about crash reports.
 pub(super) const CRASH_LOGS_NOTE: &str = "A crash report says what Cut Craft was doing when it \
-    closed. You see it before it is sent, and your user name and folders are left out. Change \
-    this any time in Edit ▸ Options ▸ Bug Reports.";
+    closed. Your user name, folders and file names are left out of it. Change this any time in \
+    Edit ▸ Options ▸ Bug Reports.";
 /// What a machine not in the list is called.
 const MY_MACHINE: &str = "My Machine";
 
@@ -210,7 +211,7 @@ fn length(ui: &mut egui::Ui, mm: &mut f64, inches: bool) -> egui::Response {
     let scale = if inches { MM_PER_INCH } else { 1.0 };
     let mut shown = *mm / scale;
     let response = ui.add(
-        egui::DragValue::new(&mut shown)
+        Number::new(&mut shown)
             .range(0.01..=100_000.0)
             .speed(if inches { 0.05 } else { 1.0 })
             .max_decimals(if inches { 3 } else { 1 })

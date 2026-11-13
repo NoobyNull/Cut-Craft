@@ -4,7 +4,7 @@
 //! arrow in its corner, or press Down while it has the keyboard focus, and the rest open beside
 //! it, each with its name.
 //!
-//! Aspire lists every one of these as a loose icon; Cut Craft names each group so a beginner
+//! Rather than a row of loose icons, Cut Craft names each group so a beginner
 //! sees what the choices are (`re/SPEC.md`, Toolbox tool groups). Find Tool, the Rail layout's
 //! lists and Favourites name every tool on its own either way.
 
@@ -476,7 +476,7 @@ mod tests {
                 .sum()
         };
         // the Import sub-tab's tools are each a button of their own, so a beginner sees them
-        // all at once: the rest stay well under Aspire's count
+        // all at once: the rest stay well under the count
         let (import, rest): (Vec<_>, Vec<_>) = toolbar
             .groups
             .iter()

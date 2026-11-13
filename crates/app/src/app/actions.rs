@@ -25,9 +25,8 @@ impl CutCraftApp {
     pub(super) fn new() -> Self {
         let mut registry = commands::registry();
         let my_gadgets = crate::gadgets::my_gadgets_dir();
-        let addon_gadgets = crate::depth::addons_dir()
-            .map(|dir| crate::gadgets::from_addons(&dir))
-            .unwrap_or_default();
+        let addon_gadgets =
+            crate::depth::addons_dir().map_or_default(|dir| crate::gadgets::from_addons(&dir));
         let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
         let mut menus = gui::MenuSystem::new();
         menus.add_gadgets(&gadgets, my_gadgets.as_deref());
@@ -138,6 +137,7 @@ impl CutCraftApp {
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
             sketch_areas: None,
+            carve_area: None,
             reach_found: None,
             summary: super::Summary::default(),
             stroke: Vec::new(),
@@ -170,6 +170,8 @@ impl CutCraftApp {
             height_applied_at: None,
             job_epoch: 0,
             stale_known: 0,
+            stale_while_form: false,
+            recalculate_ask: None,
             drawn_on: None,
             model_3d: None,
             gpu_3d: None,
@@ -353,7 +355,7 @@ impl CutCraftApp {
             | "save_all_visible_toolpaths_as_template"
             | "load_template" => self.template_action(id),
             id if TOP_BAR_TOGGLES.contains(&id) => self.top_bar_toggle(id),
-            // Aspire's four Create Shape icons: the form with that profile chosen
+            // The four Create Shape icons: the form with that profile chosen
             "create_shape_round"
             | "create_shape_angled"
             | "create_shape_smooth"
@@ -383,7 +385,7 @@ impl CutCraftApp {
             id if crate::flyout::variant(id).is_some() => self.start_variant(id),
             // Edit Text: Draw Text opens on the selected text's settings
             "edit_text" => self.start_command("draw_text"),
-            // Aspire's three Join icons: Join / Close Vectors their way
+            // The three Join icons: Join / Close Vectors their way
             "join_straight_line" | "join_smooth_curve" | "join_move_end_points" => {
                 let method = id.trim_start_matches("join_");
                 let params = serde_json::json!({ "method": method });
@@ -404,7 +406,7 @@ impl CutCraftApp {
                 );
                 self.pages.open(Page::Design);
             }
-            // the Components tab, as Aspire's Component Levels icon shows
+            // the Components tab, as its Component Levels icon shows
             "component_levels" => {
                 self.set_design_tab(
                     DESIGN_TABS
@@ -880,8 +882,7 @@ impl CutCraftApp {
 
     /// Orientate 3D Model again on a model's own file, with the settings it was imported
     /// with, its Apply replacing the model: only while the file is where it was; a file
-    /// that has changed since is taken as it is now, with a warning (Aspire re-imports a
-    /// model "provided it has not been changed significantly").
+    /// that has changed since is taken as it is now, with a warning.
     fn reimport_model(&mut self, action: &str) {
         let Some(source) = self.model_source(action).cloned() else {
             return;
@@ -915,7 +916,7 @@ impl CutCraftApp {
 
     pub(super) fn file_action(&mut self, id: &str) {
         match id {
-            // a new job starts in Job Setup, as Aspire's does
+            // a new job starts in Job Setup
             "new" => {
                 if self.confirm_discard() {
                     self.reset_job();
@@ -1092,8 +1093,7 @@ impl CutCraftApp {
         let zones: Vec<_> = self
             .machines
             .active()
-            .map(|m| m.keep_out.as_slice())
-            .unwrap_or_default()
+            .map_or_default(|m| m.keep_out.as_slice())
             .iter()
             .enumerate()
             .filter(|(_, z)| z.width > 0.0 && z.height > 0.0)
@@ -1106,7 +1106,7 @@ impl CutCraftApp {
         changed
     }
 
-    /// The keep-out zones changed: every toolpath is made again round them, as Aspire's
+    /// The keep-out zones changed: every toolpath is made again round them
     /// are, and any that still cannot keep out is warned about.
     pub(super) fn keep_out_changed(&mut self) {
         if !self.doc.toolpaths.is_empty() {
@@ -1294,7 +1294,12 @@ impl CutCraftApp {
             return None;
         }
         let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
-        let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+        // out-of-date toolpaths are always asked about, whatever Options say
+        let stale = plan
+            .iter()
+            .flatten()
+            .any(|id| self.doc.toolpaths.get(id).is_some_and(|t| t.stale));
+        let ask = stale || self.options.confirmations.cutting_checks == CuttingChecks::Ask;
         if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
             self.status.set_message("Toolpaths not saved");
             return None;
@@ -1308,7 +1313,7 @@ impl CutCraftApp {
     }
 
     /// The name the form's file is saved under (before its extension): a group's own name,
-    /// as Aspire's, the selected toolpath's when saving only it, else the project's.
+    ///, the selected toolpath's when saving only it, else the project's.
     pub(super) fn output_name(&self, form: &SaveForm) -> String {
         let selected = (form.mode == files::SaveMode::Selected)
             .then(|| {
@@ -1525,7 +1530,7 @@ impl CutCraftApp {
         path: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, String> {
         let plan = self.plan(form, post)?;
-        // as Aspire's: a toolpath that cannot abide by the keep-out zones is not saved
+        // a toolpath that cannot abide by the keep-out zones is not saved
         let crossing = self.not_kept_out(&plan);
         if !crossing.is_empty() {
             return Err(format!(
@@ -1617,29 +1622,25 @@ impl CutCraftApp {
     /// What the active machine can do, for the checks before cutting; nothing is checked
     /// against a machine without one.
     pub(super) fn limits(&self) -> cut_craft_core::preflight::Limits {
-        let mut limits = self
-            .machines
-            .active()
-            .map(|m| cut_craft_core::preflight::Limits {
-                name: m.name.clone(),
-                bed: [m.width, m.height],
-                z_travel: m.depth,
-                max_rate: m.max_rate,
-                spindle: m.spindle,
-                slots: m.slots.clone(),
-                left: None,
-            })
-            .unwrap_or_default();
+        let mut limits =
+            self.machines
+                .active()
+                .map_or_default(|m| cut_craft_core::preflight::Limits {
+                    name: m.name.clone(),
+                    bed: [m.width, m.height],
+                    z_travel: m.depth,
+                    max_rate: m.max_rate,
+                    spindle: m.spindle,
+                    slots: m.slots.clone(),
+                    left: None,
+                });
         limits.left = Some(self.options.confirmations.left());
         limits
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.
     pub(super) fn slots(&self) -> Vec<Option<String>> {
-        self.machines
-            .active()
-            .map(|m| m.slots.clone())
-            .unwrap_or_default()
+        self.machines.active().map_or_default(|m| m.slots.clone())
     }
 
     /// Reads the machines and finds the custom posts, kept in the config folder.
@@ -1656,11 +1657,7 @@ impl CutCraftApp {
     /// and each tool now in a slot takes the slot as its tool number.
     pub(super) fn tool_changer_changed(&mut self) {
         self.machines_changed("Tool changer changed");
-        let slots = self
-            .machines
-            .active()
-            .map(|m| m.slots.clone())
-            .unwrap_or_default();
+        let slots = self.machines.active().map_or_default(|m| m.slots.clone());
         if self.tools.number_by_slots(&slots) {
             self.tools_changed("Tool changer changed; tools numbered by their slots");
             self.refresh_form_tool();
@@ -1847,7 +1844,7 @@ impl CutCraftApp {
             form::fields(&cmd.schema()),
             cmd.initial_params(&self.doc),
         );
-        // Orientate 3D Model offers what Options ▸ Importing says; one kind alone
+        // Orientate 3D Model offers what Options ▸ Importing and Exporting says; one kind alone
         // is the kind, with no choice shown
         if cmd.id() == "orientate_3d_model" {
             let offered = match self.options.import.model_types {
@@ -1862,7 +1859,7 @@ impl CutCraftApp {
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
         self.fill_drill_bank(cmd.id(), &mut params);
-        // a toolpath's form in Aspire's order
+        // a toolpath's form in the standard order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)
         } else {
@@ -2264,6 +2261,8 @@ impl CutCraftApp {
         if more == 0 || self.history.undo_depth() == 0 {
             return;
         }
+        // asked about once the edit is done (a form's, once it closes)
+        self.stale_while_form = true;
         let (count, it, its) = if more == 1 {
             ("1 toolpath is".to_owned(), "it", "its")
         } else {
@@ -2274,6 +2273,61 @@ impl CutCraftApp {
             "{message}. {count} now out of date (⚠ in the Toolpaths list): recalculate \
              {it}, and save {its} G-code again if you already have"
         ));
+    }
+
+    /// Once a form that left toolpaths out of date has closed: asks whether to recalculate
+    /// them all now. No just leaves them marked; Save Toolpaths still warns.
+    pub(super) fn ask_to_recalculate(&mut self, ctx: &egui::Context) {
+        let done = self.form.is_none() && self.drag_3d.is_none();
+        if done && std::mem::take(&mut self.stale_while_form) {
+            let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
+            let ask = self.options.confirmations.ask_to_recalculate;
+            self.recalculate_ask = (ask && stale > 0).then_some((stale, false));
+        }
+        // recalculated meanwhile (Plate Production remakes its own straight away)
+        let now = self.doc.toolpaths.values().filter(|t| t.stale).count();
+        if now == 0 {
+            self.recalculate_ask = None;
+        }
+        let Some((asked, mut silence)) = self.recalculate_ask else {
+            return;
+        };
+        let stale = asked.min(now);
+        let (mut yes, mut no) = (false, false);
+        egui::Modal::new(egui::Id::unique("recalculate_ask")).show(ctx, |ui| {
+            ui.set_max_width(ui.spacing().interact_size.x * 6.0);
+            ui.heading("Toolpaths out of date");
+            ui.label(recalculate_question(stale));
+            ui.checkbox(&mut silence, "Don't ask again").on_hover_hint(
+                "Stop this question (Options ▸ Confirmations turns it back on). Out-of-date \
+                 toolpaths are still marked ⚠, and saving them still asks first",
+            );
+            ui.separator();
+            ui.horizontal(|ui| {
+                yes = ui
+                    .button("Recalculate All")
+                    .on_hover_hint("Make every out-of-date toolpath again from its vectors now")
+                    .clicked();
+                no = ui
+                    .button("Not Now")
+                    .on_hover_hint(
+                        "Leave them marked ⚠ in the Toolpaths list; Recalculate All is there \
+                         when you want it",
+                    )
+                    .clicked();
+            });
+        });
+        self.recalculate_ask = Some((asked, silence));
+        if yes || no {
+            self.recalculate_ask = None;
+            if silence {
+                self.options.confirmations.ask_to_recalculate = false;
+                self.save_options();
+            }
+        }
+        if yes {
+            self.invoke(ctx, "recalculate_all_toolpaths");
+        }
     }
 
     /// A warning in the status bar about what was just made: the command's `notes`, and for
@@ -2392,7 +2446,7 @@ impl CutCraftApp {
         answer == rfd::MessageDialogResult::Yes
     }
 
-    /// Aspire's icons over the toolpath list: edit and hide the selected toolpath, and save
+    /// The icons over the toolpath list: edit and hide the selected toolpath, and save
     /// it, or every visible one, as a template.
     pub(super) fn toolpath_list_buttons(&mut self, ui: &mut egui::Ui) {
         let edge = ui.spacing().interact_size.y * TOOL_ICON_ROWS;
@@ -2449,7 +2503,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The file icons Aspire has beside its menus: Import Vectors and Export Vectors (vector
+    /// The file icons beside the menus: Import Vectors and Export Vectors (vector
     /// formats only), Open Folder (the job's folder) and Open Clipart Folder.
     pub(super) fn file_icon_action(&mut self, id: &str) {
         let result = match id {
@@ -2771,7 +2825,7 @@ impl CutCraftApp {
                     form.params["size"][key] = Value::from(value);
                 }
                 // Depth Below Top reads the model's height while the plane is at its
-                // bottom (0, or where its bottom was before it was sized), as Aspire's
+                // bottom (0, or where its bottom was before it was sized)
                 // does; a depth typed above the bottom stays, and one past it lifts the
                 // model off the plane, up to the material's top
                 let depth = &mut form.params["placing"]["depth_below_top"];
@@ -2885,8 +2939,7 @@ impl CutCraftApp {
             .path
             .as_deref()
             .and_then(std::path::Path::file_stem)
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .map_or_default(|s| s.to_string_lossy().into_owned());
         let path = std::env::temp_dir().join("cut-craft-part-labels.html");
         let opened = fmt_part_labels::labels(&self.doc, &self.options.part_labels, &job)
             .map_err(|e| e.to_string())
@@ -2940,8 +2993,7 @@ impl CutCraftApp {
             .path
             .as_deref()
             .filter(|p| p.is_file())
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
+            .map_or_default(|p| p.display().to_string());
         let job_copy = match (&self.recovery_path, job_file.is_empty()) {
             (Some(path), true) => {
                 cut_craft_core::file::write_atomic(path, &cut_craft_core::file::save_job(&self.doc))
@@ -2953,13 +3005,13 @@ impl CutCraftApp {
         fmt_create_job_sheet::Setup {
             job_file,
             job_copy,
-            machine: machine.map(|m| m.name.clone()).unwrap_or_default(),
+            machine: machine.map_or_default(|m| m.name.clone()),
             post: machine
                 .and_then(|m| m.post())
                 .unwrap_or_default()
                 .to_owned(),
             outputs: vec![],
-            slots: machine.map(|m| m.slots.clone()).unwrap_or_default(),
+            slots: machine.map_or_default(|m| m.slots.clone()),
             printed: chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
             rapid: self.summary.rapid,
             acceleration: machine
@@ -3043,7 +3095,7 @@ impl CutCraftApp {
     }
 
     /// Opens drawing tool `command` on vector `id` with `params`: changing the form redraws
-    /// that shape rather than drawing another, as Aspire's E and Shift-click do.
+    /// that shape rather than drawing another (E, or Shift-click).
     pub(super) fn edit_shape(&mut self, id: EntityId, command: &'static str, params: Value) {
         if self.form.as_ref().is_none_or(|f| f.id != command) {
             self.start_command(command);
@@ -3158,11 +3210,11 @@ impl CutCraftApp {
         }
         self.status
             .set_message(&format!("{} applied", cmd.meta().label));
-        // new keep-out zones: the toolpaths are made again round them, as Aspire's are
+        // new keep-out zones: the toolpaths are made again round them
         if id == "keep_out_zones" {
             self.keep_out_changed();
         }
-        // the spiral gadget says how many times round each strand goes, as Aspire's does
+        // the spiral gadget says how many times round each strand goes
         if id == "wrapped_spiral_layout"
             && let Ok(p) = serde_json::from_value(params.clone())
             && let Some(turns) = cmd_wrapped_spiral_layout::revolutions(&self.doc, &p)
@@ -3276,8 +3328,7 @@ impl CutCraftApp {
     }
 
     /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half
-    /// with Shift, a tenth with Ctrl + Shift (Matthew's steps; Aspire nudges with Ctrl +
-    /// Shift); with Ctrl alone, by Snapping Options' Fixed Nudge Distance.
+    /// with Shift, a tenth with Ctrl + Shift (Matthew's steps); with Ctrl alone, by Snapping Options' Fixed Nudge Distance.
     pub(super) fn nudge(&mut self, ctx: &egui::Context) {
         if self.screen != Screen::Job || ctx.egui_wants_keyboard_input() {
             return;
@@ -3526,7 +3577,7 @@ impl CutCraftApp {
             .collect()
     }
 
-    /// No job open: Aspire's startup tasks and the jobs opened lately.
+    /// No job open: the startup tasks and the jobs opened lately.
     pub(super) fn start_page(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Start page");
         let edge = ui.spacing().interact_size.y;
@@ -3617,7 +3668,7 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Design page");
         self.page_header(ui, Page::Design, DESIGN_TABS[self.design_tab]);
         let tab = DESIGN_TABS[self.design_tab];
-        // a tool's form takes the page's place, as Aspire's does
+        // a tool's form takes the page's place
         if self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
             self.form_panel(ui);
             return;
@@ -3745,7 +3796,7 @@ impl CutCraftApp {
         }
     }
 
-    /// A page's title with its push-pin and Aspire's Switch Layout button.
+    /// A page's title with its push-pin and the Switch Layout button.
     pub(super) fn page_header(&mut self, ui: &mut egui::Ui, page: Page, title: &str) {
         let row = ui.spacing().interact_size.y;
         let (mut pin, mut switch, mut help) = (false, false, false);
@@ -3875,7 +3926,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire's design tabs, down the left edge.
+    /// The design tabs, down the left edge.
     pub(super) fn design_tabs(&mut self, ui: &mut egui::Ui) {
         let shown = self.pages.shown(Page::Design) != Shown::Hidden;
         let only = self.options.favourites.of(Page::Design).1;
@@ -3933,7 +3984,7 @@ impl CutCraftApp {
         self.save_options();
     }
 
-    /// Going to another design tab closes a form open on the Design page, as Aspire's does.
+    /// Going to another design tab closes a form open on the Design page.
     pub(super) fn set_design_tab(&mut self, tab: usize) {
         if tab != self.design_tab && self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
             self.form = None;
@@ -4185,6 +4236,20 @@ impl CutCraftApp {
                 ui.label(step);
             });
         }
+        // what a toolpath (or the Vector Selector) will be made from, and what it leaves out
+        if open.id.ends_with("_toolpath") || open.id == "vector_selector" {
+            let count = self.doc.selected_vector_count();
+            if let Some(text) = count.text() {
+                ui.weak(text)
+                    .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
+            }
+            if closed_only_toolpath(open.id, &open.params)
+                && let Some(left_out) = count.left_out(open.label)
+            {
+                ui.colored_label(ui.visuals().warn_fg_color, left_out)
+                    .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
+            }
+        }
     }
 
     /// The open form filling `ui`: its settings scroll, while what went wrong and the
@@ -4248,6 +4313,7 @@ impl CutCraftApp {
                     &slots,
                     finishing_smallest,
                     suggested.as_deref(),
+                    units,
                 );
                 listed.set(listed.get() | changed);
                 if let Some(ask) = ask {
@@ -4257,7 +4323,7 @@ impl CutCraftApp {
             }
             if key != "tool" {
                 // the form's tools in the order they cut, each picked as the form's own tool
-                let (changed, ask) = super::tools_section(ui, key, params, tools, &slots);
+                let (changed, ask) = super::tools_section(ui, key, params, tools, &slots, units);
                 listed.set(listed.get() | changed);
                 if let Some(ask) = ask {
                     *list_ask.borrow_mut() = Some((super::ToolList::Tools, ask));
@@ -4267,7 +4333,7 @@ impl CutCraftApp {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
-                asked.set(tool_picker(ui, &params["tool"], params, tools, &slots));
+                asked.set(tool_picker(ui, params, tools, &slots, units));
                 if let Some(line) = &reach {
                     super::reach::show(ui, line);
                 }
@@ -4275,7 +4341,7 @@ impl CutCraftApp {
             });
             if cuts
                 && super::shows_rest(params)
-                && let Some(ask) = rest_section(ui, params, tools, &slots)
+                && let Some(ask) = rest_section(ui, params, tools, &slots, units)
             {
                 *list_ask.borrow_mut() = Some((super::ToolList::Rest, ask));
             }
@@ -4348,11 +4414,10 @@ impl CutCraftApp {
 
     /// The bits Suggest may pick from: the user's own (not a read-only catalogue's), each
     /// with whether the tool changer holds it.
-    fn suggest_candidates(&self) -> Vec<cmd_pocket_toolpath::Candidate> {
+    pub(super) fn suggest_candidates(&self) -> Vec<cmd_pocket_toolpath::Candidate> {
         let slots = self.slots();
         self.tools
-            .tools
-            .iter()
+            .my_tools()
             .map(|tool| cmd_pocket_toolpath::Candidate {
                 tool: self.tools.pick(&tool.name).unwrap_or_else(|| tool.clone()),
                 loaded: slots
@@ -4886,7 +4951,7 @@ impl CutCraftApp {
                 None => self.file_action("save_as"),
             },
             // ponytail: the drawing as a PDF opened in the system viewer, which prints it;
-            // Aspire's own print window (scale, tiling) is not done
+            // The own print window (scale, tiling) is not done
             "print" | "print_preview" => {
                 let path = std::env::temp_dir().join("cut-craft-print.pdf");
                 let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)
@@ -5302,5 +5367,41 @@ fn suggestion_note(s: &cmd_pocket_toolpath::Suggestion, finishing: &str) -> Stri
         names.join(", "),
         minutes(s.minutes),
         minutes(s.alone)
+    )
+}
+
+/// Whether toolpath `id` with `params` cuts only the closed vectors selected, leaving the
+/// open ones out: the area toolpaths, and Profile inside or outside (on the line cuts open
+/// ones too).
+pub(super) fn closed_only_toolpath(id: &str, params: &Value) -> bool {
+    match id {
+        "profile_toolpath" => params["side"].as_str() != Some("on"),
+        _ => CLOSED_ONLY_TOOLPATHS.contains(&id),
+    }
+}
+
+/// The toolpaths that take only closed vectors from the selection.
+const CLOSED_ONLY_TOOLPATHS: [&str; 9] = [
+    "chamfer_toolpath",
+    "drill_bank_toolpath",
+    "drilling_toolpath",
+    "inlay_toolpath",
+    "pocket_toolpath",
+    "prism_toolpath",
+    "sketch_carving_toolpath",
+    "vcarve_engrave_toolpath",
+    "vcarve_inlay_toolpath",
+];
+
+/// What the "recalculate all?" question says for `stale` toolpaths out of date.
+pub(super) fn recalculate_question(stale: usize) -> String {
+    let (count, them) = if stale == 1 {
+        ("1 toolpath is".to_owned(), "it")
+    } else {
+        (format!("{stale} toolpaths are"), "them")
+    };
+    format!(
+        "{count} now out of date: the vectors {them} cut have changed. Recalculate all \
+         toolpaths now, so the G-code you save matches the drawing?"
     )
 }

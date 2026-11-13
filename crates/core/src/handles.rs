@@ -1,4 +1,4 @@
-//! Transform mode's handles on a selection's bounds (Aspire's help: Interactive Selection
+//! Transform mode's handles on a selection's bounds (help: Interactive Selection
 //! Mode): the middle moves it; white corners scale it (Alt: each axis on its own, Shift:
 //! about the centre); edges scale one axis (Shift: both); with rotation on (a second click
 //! on the middle) the corners rotate it about the centre (Alt: in 15° steps).

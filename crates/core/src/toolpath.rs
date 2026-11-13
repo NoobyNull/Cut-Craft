@@ -34,7 +34,7 @@ pub enum ToolShape {
     FormTool,
 }
 
-/// The units a tool's feed and plunge rates are shown in, as Aspire's list. Rates are kept
+/// The units a tool's feed and plunge rates are shown in. Rates are kept
 /// in mm/min whatever the tool shows them in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -83,7 +83,7 @@ impl RateUnits {
     }
 }
 
-/// A tool's cutting data for one material: what Aspire keeps per material (and machine),
+/// A tool's cutting data for one material: what is kept per material (and machine),
 /// as against the tool's geometry. Rates in mm/min; stepovers a fraction of the diameter.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CuttingData {
@@ -385,8 +385,8 @@ impl Tool {
         }
     }
 
-    /// Whether it keeps cutting data for `material` (always, for the default): Aspire greys
-    /// the tools that do not.
+    /// Whether it keeps cutting data for `material` (always, for the default): the
+    /// Tool Database greys the tools that do not.
     pub fn has_data_for(&self, material: &str) -> bool {
         material.is_empty() || self.material_data(material).is_some()
     }
@@ -408,7 +408,7 @@ impl Tool {
         2.0 * self.tooth_size * (self.angle.to_radians() / 2.0).tan()
     }
 
-    /// Sets the tooth height by changing its size, keeping the angle, as Aspire's form does.
+    /// Sets the tooth height by changing its size, keeping the angle.
     pub fn set_tooth_height(&mut self, height: f64) {
         let slope = (self.angle.to_radians() / 2.0).tan();
         if slope > 0.0 {
@@ -580,13 +580,13 @@ pub struct ToolDatabase {
     /// is in the tree whether listed here or not (added with tool groups)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub groups: Vec<ToolGroup>,
-    /// The materials tools can keep cutting data for, Aspire's Material list (added with
+    /// The materials tools can keep cutting data for, the Material list (added with
     /// materials)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub materials: Vec<String>,
     /// The active material: tools picked from here cut with its data. Empty for each
     /// tool's default data.
-    // ponytail: active for the whole database, as Aspire's; not kept per job
+    // ponytail: active for the whole database; not kept per job
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub material: String,
     /// Each tool type's default name format, by type (`end_mill`), for tools made new
@@ -791,7 +791,7 @@ impl ToolDatabase {
         }
     }
 
-    /// Aspire's Duplicate Material: `from` copied as `name` (its own name and " copy" when
+    /// The Duplicate Material: `from` copied as `name` (its own name and " copy" when
     /// none is given; a number added while the name is taken), with every tool's cutting
     /// data for it when `with_data`. The copy becomes the active material; its name.
     pub fn duplicate_material(&mut self, from: &str, name: &str, with_data: bool) -> String {
@@ -818,8 +818,8 @@ impl ToolDatabase {
         copy
     }
 
-    /// Takes `name` off the material list with every tool's data for it, as Aspire's Delete
-    /// Material does; the default is active again if it was.
+    /// Takes `name` off the material list with every tool's data for it; the
+    /// default is active again if it was.
     pub fn delete_material(&mut self, name: &str) {
         self.materials.retain(|m| !m.eq_ignore_ascii_case(name));
         for tool in &mut self.tools {
@@ -977,7 +977,7 @@ impl Toolpath {
 
     /// Estimated machining time in minutes: each move's length at its rate (rapids at
     /// `rapid_rate`, mm/min), from the first move on.
-    // ponytail: no acceleration; Toolpath Summary's scale factor stands in for it, as Aspire's does
+    // ponytail: no acceleration; Toolpath Summary's scale factor stands in for it
     pub fn machining_minutes(&self, rapid_rate: f64) -> f64 {
         self.moves
             .windows(2)

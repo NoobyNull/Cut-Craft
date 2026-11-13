@@ -40,10 +40,7 @@ pub enum Direction {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "the tick boxes of Aspire's form"
-)]
+#[expect(clippy::struct_excessive_bools, reason = "the tick boxes of the form")]
 pub struct Params {
     /// The cut-out tool: the least gap left between parts
     #[schemars(title = "Tool dia. (D)", extend("x-unit" = "mm"), range(min = 0))]
@@ -185,8 +182,8 @@ impl Command for NestParts {
         let edge = p.border_gap + p.clearance;
         let area = doc.job.area();
         let room = area.size() - Point::splat(2.0 * edge);
-        // ponytail: boxes in rows (a shelf packer); Aspire nests true shapes at any step angle,
-        // mirrors and fills holes
+        // ponytail: boxes in rows (a shelf packer); true-shape nesting at any step angle,
+        // mirroring and filling holes are still to do
         // lay out in a frame where rows run along +u from the start corner and stack along +v
         let along_x = p.nest_direction == Direction::AlongX;
         let (room_u, room_v) = if along_x {

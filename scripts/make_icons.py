@@ -492,7 +492,7 @@ I[wo + "name_part.svg"] = lambda: [rect(5, 16, 30, 26, 2, INK, SW, LIGHT), line(
 I[wo + "engrave_part_names.svg"] = lambda: [rect(5, 8, 38, 32, 2, INK, SW, LIGHT), text("A1", 11, 16, 16, ACC, 3.5)]
 I[wo + "vector_texture_fill.svg"] = lambda: [circ(24, 24, 18, INK, SW, LIGHT)] + [line(10 + i * 6, 12 + abs(i - 2) * 1.5, 10 + i * 6, 36 - abs(i - 2) * 1.5, ACC, 2.5) for i in range(5)]
 
-# dialog pictures (were Aspire's bitmaps): grey shape, the dimension in orange
+# dialog pictures: grey shape, the dimension in orange
 df = "drawing_forms/"
 I[df + "circle_center.svg"] = lambda: [circ(24, 24, 16, GREY, 2.5, "#eef1f5"), line(17, 24, 31, 24, ACC, 2.5), line(24, 17, 24, 31, ACC, 2.5), dot(24, 24, 3.5)]
 I[df + "circle_radius.svg"] = lambda: [circ(24, 24, 16, GREY, 2.5, "#eef1f5"), dot(24, 24, 2.5, GREY), arrow(24, 24, 40, 24)]

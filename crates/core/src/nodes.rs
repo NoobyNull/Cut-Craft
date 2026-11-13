@@ -318,7 +318,7 @@ pub fn span_to_bezier(path: &Path, k: usize) -> Path {
 
 /// `path` with span `k` an arc: through a Bézier's middle, or bowed out an eighth of a
 /// line's length to its left.
-// ponytail: the line's bow is our own choice [inf]; Aspire's is not documented
+// ponytail: the line's bow is our own choice [inf]; the is not documented
 #[must_use]
 pub fn span_to_arc(path: &Path, k: usize) -> Path {
     let from = span_start(path, k);
@@ -340,7 +340,7 @@ fn replace_span(path: &Path, k: usize, s: Segment) -> Path {
     out
 }
 
-/// `path` with node `k` made smooth (Aspire's Smooth Point): the spans either side become
+/// `path` with node `k` made smooth (Smooth Point): the spans either side become
 /// Béziers whose handles at the node lie on one straight line through it, each keeping its
 /// length. `None` at the end of an open path, where there is nothing to smooth against.
 #[must_use]

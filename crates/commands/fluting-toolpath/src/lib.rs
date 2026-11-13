@@ -112,7 +112,7 @@ impl Params {
             let t = t.clamp(0.0, 1.0);
             match self.ramp_type {
                 RampType::Linear => t,
-                // ponytail: quarter sine (level at full depth); Aspire's exact curve is unknown
+                // ponytail: quarter sine (level at full depth); the exact curve is unknown
                 RampType::Smooth => (t * std::f64::consts::FRAC_PI_2).sin(),
             }
         };

@@ -1,7 +1,7 @@
 //! Fonts for Text: glyph outlines and laying a string out as vector paths.
 //!
 //! Font units are whatever the font file uses; `cap_height` (the height of a capital letter, in
-//! those units) is what Text's height scales to, as Aspire's Text Height does.
+//! those units) is what Text's height scales to.
 
 use crate::geometry::{Path, Point, Segment};
 use glam::DAffine2;
@@ -43,7 +43,7 @@ pub enum Align {
     Right,
 }
 
-/// A block's spacing changed in place (Aspire's kerning and line spacing in the 2D view):
+/// A block's spacing changed in place (kerning and line spacing in the 2D view):
 /// extra room after given letters, and the line pitch as a factor of the font's.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Spacing {
@@ -116,7 +116,7 @@ pub struct Placed {
 impl Font {
     /// The text as paths, `height` tall per capital letter. The anchor is where the last line's
     /// baseline meets the block's left edge, centre or right edge, following `align`.
-    // ponytail: anchor on the last baseline [inf]; Aspire's own anchor rule is not in its help
+    // ponytail: anchor on the last baseline [inf]
     pub fn layout(&self, text: &str, height: f64, align: Align, anchor: Point) -> Vec<Path> {
         self.layout_spaced(text, height, align, anchor, &Spacing::default())
     }

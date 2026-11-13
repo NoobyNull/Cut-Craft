@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 
 /// The label sizes offered: common label-printer rolls, and plain paper.
-// ponytail: Vectric's page says seven standard sizes without naming them; these are the
+// ponytail: our own pick of sizes; these are the
 // common rolls of 4-inch, Dymo / Zebra and Brother printers [inf]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

@@ -299,8 +299,7 @@ impl Addons {
         let official = |id: &str| OFFICIAL.iter().any(|a| a.id == id);
         let others: Vec<(String, Record)> = dir
             .as_deref()
-            .map(installed_ids)
-            .unwrap_or_default()
+            .map_or_default(installed_ids)
             .into_iter()
             .filter(|id| !official(id))
             .filter_map(|id| installed(&id).map(|r| (id, r)))

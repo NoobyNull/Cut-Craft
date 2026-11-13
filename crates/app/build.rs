@@ -66,14 +66,12 @@ fn main() {
 fn abouts() -> String {
     let commands = Path::new(env!("CARGO_MANIFEST_DIR")).join("../commands");
     println!("cargo:rerun-if-changed={}", commands.display());
-    let mut crates: Vec<PathBuf> = std::fs::read_dir(&commands)
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|e| e.path().join("src/lib.rs"))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut crates: Vec<PathBuf> = std::fs::read_dir(&commands).map_or_default(|entries| {
+        entries
+            .flatten()
+            .map(|e| e.path().join("src/lib.rs"))
+            .collect()
+    });
     crates.sort();
     let mut table = String::from(
         "/// What each command does, by id: its crate's first sentence.\n\

@@ -34,7 +34,6 @@ impl Command for SmoothSelectedComponents {
         Meta {
             label: "Smooth Selected Components",
             group: "Modeling",
-            // Aspire's art for it (png/34764), traced as the modeling strip's "texture" slot
             icon: "modeling/texture.png",
             shortcut: "",
         }

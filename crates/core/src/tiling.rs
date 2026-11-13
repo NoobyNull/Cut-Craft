@@ -1,5 +1,5 @@
 //! Toolpath tiling: a job bigger than the machine cut in tiles, each moved to the same place
-//! on the machine (Aspire's help: Toolpath Tiling Manager). Individual tiles split the job
+//! on the machine (help: Toolpath Tiling Manager). Individual tiles split the job
 //! both ways; feed-through splits it one way, the material fed through between tiles.
 
 use crate::document::Document;

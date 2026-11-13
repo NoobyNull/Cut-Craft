@@ -1,4 +1,4 @@
-//! Draw Line / Polyline drawn in the 2D view, as Aspire's tool is: a click adds a point, a
+//! Draw Line / Polyline drawn in the 2D view: a click adds a point, a
 //! click and drag adds one with a smooth span (the next span smooth too), S switches between
 //! curves and straight lines, Backspace takes the last point back, and typed values place
 //! the next point (a length along the pointer's direction, `x,y`, or `angle A length L`).

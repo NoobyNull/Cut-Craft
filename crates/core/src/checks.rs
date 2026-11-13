@@ -1,5 +1,5 @@
-//! Checks before cutting: what in a toolpath the tool may not manage on the machine. Aspire
-//! makes none of these; they are Cut Craft's own.
+//! Checks before cutting: what in a toolpath the tool may not manage on the machine. These
+//! checks are Cut Craft's own.
 
 use crate::component::placed_model;
 use crate::document::Document;
@@ -39,12 +39,14 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
         .filter(|m| m.kind != MoveKind::Rapid)
         .map(|m| -m.to.z)
         .fold(0.0, f64::max);
-    if let Some(deep) = too_deep(name, tool, deepest) {
+    let units = doc.job.units;
+    if let Some(deep) = too_deep(name, tool, deepest, units) {
         found.push(deep);
     } else if tool.known_flute_length().is_none() && deepest > 0.0 {
         found.push(format!(
-            "{name} cuts {deepest:.1} mm deep; {} has no flute length set, so whether it \
-             reaches is not checked: set it in the Tool Database",
+            "{name} cuts {} deep; {} has no flute length set, so whether it reaches is not \
+             checked: set it in the Tool Database",
+            units.length(deepest, 1),
             tool.name
         ));
     }
@@ -92,7 +94,7 @@ fn missed_spots(doc: &Document, toolpath: &Toolpath, left: f64) -> Option<String
     };
     missed
         .any()
-        .then(|| reach::missed_sentence(&toolpath.name, tool, &missed, fix))
+        .then(|| reach::missed_sentence(&toolpath.name, tool, &missed, fix, doc.job.units))
 }
 
 /// Whether another toolpath of `doc` cuts after `toolpath`'s tool, to get what it left:
@@ -188,10 +190,18 @@ mod tests {
             problems(&doc, &toolpath(tool.clone(), "pocket", 20.0)),
             Vec::<String>::new()
         );
-        let found = problems(&doc, &toolpath(tool, "pocket", 25.0));
+        let found = problems(&doc, &toolpath(tool.clone(), "pocket", 25.0));
         assert_eq!(found.len(), 1);
         assert!(
             found[0].contains("25.0 mm deep") && found[0].contains("22.0 mm"),
+            "{found:?}"
+        );
+        // an inch job says it in inches
+        let mut inch = domed();
+        inch.job.units = crate::document::Units::Inch;
+        let found = problems(&inch, &toolpath(tool, "pocket", 25.4));
+        assert!(
+            found[0].contains("1.000 in deep") && found[0].contains("0.866 in long"),
             "{found:?}"
         );
         let unknown = problems(&doc, &toolpath(Tool::default(), "pocket", 5.0));

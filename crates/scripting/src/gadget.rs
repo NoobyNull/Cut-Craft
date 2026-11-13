@@ -151,8 +151,7 @@ fn title_case(name: &str) -> String {
         .map(|w| {
             let mut c = w.chars();
             c.next()
-                .map(|f| f.to_uppercase().chain(c).collect::<String>())
-                .unwrap_or_default()
+                .map_or_default(|f| f.to_uppercase().chain(c).collect::<String>())
         })
         .collect::<Vec<_>>()
         .join(" ")

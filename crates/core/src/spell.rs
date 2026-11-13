@@ -242,8 +242,7 @@ impl Speller {
         let mut cap = lower.chars();
         let capital: String = cap
             .next()
-            .map(|c| c.to_uppercase().chain(cap).collect())
-            .unwrap_or_default();
+            .map_or_default(|c| c.to_uppercase().chain(cap).collect());
         word.chars().any(|c| c.is_ascii_digit())
             || self.user.contains(&lower)
             || self.known(word)
@@ -290,8 +289,7 @@ impl Speller {
             let t = if capitalised {
                 let mut c = t.chars();
                 c.next()
-                    .map(|f| f.to_uppercase().chain(c).collect())
-                    .unwrap_or_default()
+                    .map_or_default(|f| f.to_uppercase().chain(c).collect())
             } else {
                 t
             };
@@ -402,13 +400,13 @@ mod tests {
             s.suggest("Carvs")
         );
         assert_eq!(
-            s.misspelled("Carve woood, !!name!! Vectricky wood"),
-            ["woood", "Vectricky"]
+            s.misspelled("Carve woood, !!name!! Woodcrafty wood"),
+            ["woood", "Woodcrafty"]
         );
-        s.add_word("Vectricky");
-        assert_eq!(s.misspelled("Vectricky woood"), ["woood"]);
-        s.remove_word("vectricky");
-        assert!(!s.correct("Vectricky"));
+        s.add_word("Woodcrafty");
+        assert_eq!(s.misspelled("Woodcrafty woood"), ["woood"]);
+        s.remove_word("woodcrafty");
+        assert!(!s.correct("Woodcrafty"));
         assert_eq!(
             replace_word("woood and woood's woood", "woood", "wood"),
             "wood and wood's wood"

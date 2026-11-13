@@ -19,6 +19,7 @@ md-5 = "0.10"
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+spade = "2.15.1"
 ttf-parser = "0.20"
 
 [dev-dependencies]

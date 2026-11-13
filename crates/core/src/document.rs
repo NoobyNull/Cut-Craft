@@ -157,6 +157,51 @@ pub enum Units {
     Inch,
 }
 
+impl Units {
+    /// Millimetres in one of these units.
+    pub fn per(self) -> f64 {
+        match self {
+            Self::Mm => 1.0,
+            Self::Inch => 25.4,
+        }
+    }
+
+    /// The short name lengths are shown with: `mm` or `in`.
+    pub fn suffix(self) -> &'static str {
+        match self {
+            Self::Mm => "mm",
+            Self::Inch => "in",
+        }
+    }
+
+    /// `mm` as these units show it, with its unit: `decimals` places in millimetres, two more
+    /// in inches (an inch being 25.4 times longer), so `12.7 mm` reads `0.500 in`, not
+    /// `12.7 in`.
+    pub fn length(self, mm: f64, decimals: usize) -> String {
+        match self {
+            Self::Mm => format!("{mm:.decimals$} mm"),
+            Self::Inch => format!("{:.*} in", decimals + 2, mm / 25.4),
+        }
+    }
+
+    /// An area of `mm2` square millimetres, as [`Units::length`] shows a length.
+    pub fn area(self, mm2: f64, decimals: usize) -> String {
+        match self {
+            Self::Mm => format!("{mm2:.decimals$} mm²"),
+            Self::Inch => format!("{:.*} in²", decimals + 2, mm2 / (25.4 * 25.4)),
+        }
+    }
+
+    /// A speed of `mm_per_min` (a feed rate), as [`Units::length`] shows a length but one
+    /// more place in inches.
+    pub fn feed(self, mm_per_min: f64, decimals: usize) -> String {
+        match self {
+            Self::Mm => format!("{mm_per_min:.decimals$} mm/min"),
+            Self::Inch => format!("{:.*} in/min", decimals + 1, mm_per_min / 25.4),
+        }
+    }
+}
+
 /// Where Z = 0 is.
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
@@ -634,7 +679,7 @@ impl Guide {
     }
 
     /// Its direction in degrees anticlockwise from the X axis: 0 across, 90 up, plus its
-    /// tilt (Aspire's guide angle).
+    /// tilt (guide angle).
     #[must_use]
     pub fn angle(&self) -> f64 {
         let own = if self.vertical { 90.0 } else { 0.0 };
@@ -958,6 +1003,21 @@ impl Document {
             .is_some_and(|l| l.visible && !l.locked)
     }
 
+    /// How many of the selected vectors are closed and how many open.
+    pub fn selected_vector_count(&self) -> VectorCount {
+        let closed = self
+            .selection
+            .iter()
+            .filter(|id| self.vectors.get(id).is_some_and(|p| p.closed))
+            .count();
+        let open = self
+            .selection
+            .iter()
+            .filter(|id| self.vectors.get(id).is_some_and(|p| !p.closed))
+            .count();
+        VectorCount { closed, open }
+    }
+
     /// The selected vectors that pass `keep`, as ids and paths in matching order.
     pub fn selected_paths(&self, keep: impl Fn(&Path) -> bool) -> (Vec<EntityId>, Vec<Path>) {
         self.selection
@@ -1132,6 +1192,114 @@ impl Document {
             .find(|name| !groups.contains(name))
             .expect("one more name than groups")
     }
+}
+
+/// How many selected vectors are closed (they enclose an area to pocket or carve) and how
+/// many open (a line with two loose ends).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VectorCount {
+    pub closed: usize,
+    pub open: usize,
+}
+
+impl VectorCount {
+    pub fn total(self) -> usize {
+        self.closed + self.open
+    }
+
+    /// "42 vectors selected: 40 closed, 2 open", or `None` with none selected.
+    pub fn text(self) -> Option<String> {
+        let n = self.total();
+        let what = match (self.closed, self.open) {
+            (0, 0) => return None,
+            (_, 0) if n == 1 => "closed".to_owned(),
+            (0, _) if n == 1 => "open".to_owned(),
+            (_, 0) => "all closed".to_owned(),
+            (0, _) => "all open".to_owned(),
+            (closed, open) => format!("{closed} closed, {open} open"),
+        };
+        Some(format!("{n} vector{} selected: {what}", plural(n)))
+    }
+
+    /// For a tool that only works on closed vectors: what it will leave out, if anything.
+    pub fn left_out(self, tool: &str) -> Option<String> {
+        (self.open > 0).then(|| {
+            let (n, s) = (self.open, plural(self.open));
+            let they = if n == 1 { "it is" } else { "they are" };
+            format!(
+                "{n} open vector{s} will be left out: {tool} only cuts closed shapes, and \
+                 {they} not closed"
+            )
+        })
+    }
+}
+
+fn plural(n: usize) -> &'static str {
+    if n == 1 { "" } else { "s" }
+}
+
+#[cfg(test)]
+#[test]
+fn the_selection_count_says_how_many_are_closed_and_open() {
+    let count = |closed, open| VectorCount { closed, open };
+    assert_eq!(count(0, 0).text(), None);
+    assert_eq!(count(1, 0).text().unwrap(), "1 vector selected: closed");
+    assert_eq!(count(0, 1).text().unwrap(), "1 vector selected: open");
+    assert_eq!(
+        count(5, 0).text().unwrap(),
+        "5 vectors selected: all closed"
+    );
+    assert_eq!(count(0, 3).text().unwrap(), "3 vectors selected: all open");
+    assert_eq!(
+        count(40, 2).text().unwrap(),
+        "42 vectors selected: 40 closed, 2 open"
+    );
+    assert_eq!(count(4, 0).left_out("Pocket"), None);
+    assert_eq!(
+        count(4, 1).left_out("Pocket").unwrap(),
+        "1 open vector will be left out: Pocket only cuts closed shapes, and it is not closed"
+    );
+    assert!(
+        count(4, 2)
+            .left_out("V-Carve")
+            .unwrap()
+            .starts_with("2 open vectors")
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn the_selection_count_counts_the_selected_vectors_only() {
+    use crate::testing::{document_with, square};
+    let line = Path::polyline(&[Point::new(0.0, 0.0), Point::new(9.0, 0.0)], false);
+    let mut doc = document_with(vec![square(0.0, 0.0, 5.0), square(9.0, 0.0, 5.0), line]);
+    assert_eq!(
+        doc.selected_vector_count().total(),
+        3,
+        "new vectors come selected"
+    );
+    doc.selection.clear();
+    assert_eq!(doc.selected_vector_count(), VectorCount::default());
+    let ids: Vec<EntityId> = doc.vectors.keys().copied().collect();
+    doc.selection = ids[1..].iter().copied().collect();
+    assert_eq!(
+        doc.selected_vector_count(),
+        VectorCount { closed: 1, open: 1 }
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn measurements_read_in_the_units_chosen_never_relabelled() {
+    assert_eq!(Units::Mm.length(12.7, 1), "12.7 mm");
+    assert_eq!(Units::Inch.length(12.7, 1), "0.500 in");
+    assert_eq!(Units::Inch.length(15.0, 1), "0.591 in");
+    assert_eq!(Units::Inch.area(645.16, 1), "1.000 in²");
+    assert_eq!(Units::Mm.area(2.5, 1), "2.5 mm²");
+    assert_eq!(Units::Inch.feed(2540.0, 0), "100.0 in/min");
+    assert_eq!(Units::Mm.feed(2540.0, 0), "2540 mm/min");
+    assert_eq!((Units::Inch.per(), Units::Inch.suffix()), (25.4, "in"));
+    assert_eq!((Units::Mm.per(), Units::Mm.suffix()), (1.0, "mm"));
 }
 
 #[cfg(test)]

@@ -44,7 +44,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             fitting_type: FittingType::CircularArcs,
-            // ponytail: Aspire's defaults are not in its files [inf]; the help shows 20°
+            // ponytail: our own defaults [inf]; documented as 20°
             tolerance: 0.1,
             keep_sharp_corners: true,
             max_angle: 20.0,

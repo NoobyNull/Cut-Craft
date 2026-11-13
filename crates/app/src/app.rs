@@ -48,7 +48,7 @@ use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
 use std::borrow::Cow;
 
-/// Aspire 12's side tabs: Design holds the drawing and modeling tools.
+/// The side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Library"];
 /// The browser's tabs in the Rail and Ribbon layouts: the design tabs' panels and the
 /// toolpath list under one row of tabs.
@@ -252,6 +252,8 @@ const MODELING_PLANE_MARGIN: f64 = 0.1;
 const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// How strongly Sketch Carving's green shows the areas it would carve over the picture.
 const SKETCH_AREA_ALPHA: f32 = 0.45;
+/// How strongly V-Carve's area to carve is shaded over the vectors.
+const CARVE_AREA_ALPHA: f32 = 0.35;
 /// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
 const RING_SHARE: f64 = 0.6;
 
@@ -392,7 +394,7 @@ enum Info {
 #[derive(Clone, Debug)]
 pub(super) struct BeforePreview(Option<Material>);
 
-/// Save Toolpaths' choices (Aspire's Save Toolpaths form), while its window is open.
+/// Save Toolpaths' choices (Save Toolpaths form), while its window is open.
 #[derive(Clone, Debug)]
 pub(super) struct SaveForm {
     /// Which toolpaths go in which file.
@@ -428,7 +430,7 @@ struct Summary {
     rapid: f64,
     units: cut_craft_core::toolpath::RateUnits,
     scale: f64,
-    /// Aspire's Machine Acceleration: the times allow for the active machine's accelerations.
+    /// The Machine Acceleration: the times allow for the active machine's accelerations.
     acceleration: bool,
     picked: Option<EntityId>,
     notes: String,
@@ -549,7 +551,7 @@ const VECTOR_EXPORTERS: [&str; 5] = [
     "export_eps",
     "export_ai",
 ];
-/// Aspire's layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
+/// The layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
 const LAYOUT_KEYS: [(&str, &str); 3] = [
     ("design_layout", "F11"),
     ("machining_layout", "F12"),
@@ -569,7 +571,7 @@ const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
 /// Scrolling a view's height divided by this doubles the zoom.
 // ponytail: fixed rate until a preferences dialog exists
 const VIEW_ZOOM_QUARTERS: f32 = 4.0;
-/// Aspire's startup tasks: action, label and icon.
+/// The startup tasks: action, label and icon.
 const STARTUP_TASKS: [(&str, &str, &str); 4] = [
     ("new", "Create a new file", "file/new.png"),
     (
@@ -608,8 +610,8 @@ const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30
 /// How many times faster than the machine a preview can play: a long finishing toolpath
 /// takes hours at the machine's speed.
 const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 0.25..=1000.0;
-/// The tool drawn in the 3D view while a preview plays: this many diameters tall.
-const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
+/// The shank of the tool drawn in the 3D view while a preview plays: steel grey.
+const TOOL_SHANK: egui::Color32 = egui::Color32::from_rgb(168, 172, 178);
 /// Beside each recently opened file.
 const RECENT_FILE_ICON: &str = "file/new.png";
 /// This version's changes, one `- ` line each, shown on the start page.
@@ -762,7 +764,7 @@ const APP_ID: &str = "cut-craft";
 // ponytail: fixed ratio until a preferences dialog exists
 const TOOL_ICON_ROWS: f32 = 1.75;
 
-/// What the window shows: Aspire's start page, Job Setup for a new job, or the job.
+/// What the window shows: the start page, Job Setup for a new job, or the job.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Screen {
     /// No job open: the startup tasks and recently opened files.
@@ -792,7 +794,7 @@ enum View {
     ThreeD,
 }
 
-/// Both views at once, as Aspire's top bar splits them.
+/// Both views at once.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Split {
     /// 2D above 3D
@@ -801,7 +803,7 @@ enum Split {
     SideBySide,
 }
 
-/// Aspire 12's component editing icons in the 3D view (help: Editing in the 3D View):
+/// The component editing icons in the 3D view (help: Editing in the 3D View):
 /// Total Height, Shape Height, Base Height and Additional Settings, a row of round buttons
 /// along the near edge of the selected component's box in Transform mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -814,7 +816,7 @@ enum Handle3d {
     Base,
     /// Opens its combine mode, fade, tilt and appearance.
     Settings,
-    /// One of Aspire's 3D Transform Handles over the selection's box: the 2D view's handle
+    /// One of the 3D Transform Handles over the selection's box: the 2D view's handle
     /// at the same place; the rotation arrow above the far edge is `Rotate { x: 0, y: 1 }`.
     Transform(Handle),
 }
@@ -864,7 +866,7 @@ struct Settings3d {
     anchors: Option<(Anchor, Option<Point>)>,
 }
 
-/// Whose anchors the 3D view's clicks place (Aspire's help: in the 3D view, the fade's or
+/// Whose anchors the 3D view's clicks place (help: in the 3D view, the fade's or
 /// tilt's direction is set there).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Anchor {
@@ -906,7 +908,7 @@ struct OpenForm {
     /// Edit Toolpath: the toolpath Apply replaces rather than adding a new one.
     editing: Option<EntityId>,
     /// The shape a drawing tool's form last made: its Apply makes it again, in its place,
-    /// while it is the one shape selected (as Aspire's drawing forms do).
+    /// while it is the one shape selected (as the drawing forms do).
     drawn: Option<EntityId>,
     /// Settings changed since the shape it made last followed them.
     dirty: bool,
@@ -949,6 +951,15 @@ struct SketchAreas {
     revision: u64,
     selection: cut_craft_core::selection::Selection,
     areas: Vec<cut_craft_core::geometry::Rect>,
+}
+
+/// See [`CutCraftApp::carve_area`].
+struct CarveArea {
+    params: serde_json::Value,
+    revision: u64,
+    selection: cut_craft_core::selection::Selection,
+    /// The area V-Carve would carve, cut into triangles to fill on the 2D view.
+    triangles: Vec<[cut_craft_core::geometry::Point; 3]>,
 }
 
 #[expect(
@@ -1102,6 +1113,9 @@ struct CutCraftApp {
     /// Sketch Carving's green areas, with the form settings, revision and selection they
     /// were found for.
     sketch_areas: Option<SketchAreas>,
+    /// V-Carve's shaded area while its form is open, with the form settings, revision and
+    /// selection it was found for.
+    carve_area: Option<CarveArea>,
     /// The open form's reach line's measured shapes, kept while nothing they depend on changes.
     reach_found: Option<reach::ReachFound>,
     /// Toolpath Summary's settings.
@@ -1155,6 +1169,12 @@ struct CutCraftApp {
     rough_3d: Option<(RoughKey, Material)>,
     /// How many toolpaths were out of date last frame.
     stale_known: usize,
+    /// Toolpaths went out of date while a form was open: once it closes, ask whether to
+    /// recalculate them.
+    stale_while_form: bool,
+    /// The "recalculate all?" question showing: how many toolpaths are out of date, and
+    /// whether Don't ask again is ticked.
+    recalculate_ask: Option<(usize, bool)>,
     /// Counts the jobs opened or made: with the history's revision, which job and which
     /// change of it the 2D view draws (a new job's history starts its revisions again).
     job_epoch: u64,
@@ -1228,7 +1248,7 @@ struct CutCraftApp {
     playback_budget: std::time::Duration,
     /// How many times faster than the machine the preview plays (1: the machine's speed).
     playback_speed: f64,
-    /// Component tree levels collapsed (Aspire's Expand / Collapse).
+    /// Component tree levels collapsed (Expand / Collapse).
     collapsed_levels: std::collections::HashSet<u64>,
     /// A guide being dragged: whether it is vertical, and which it is (`None` a new one).
     guide_drag: Option<(bool, Option<usize>)>,
@@ -1265,7 +1285,7 @@ struct CutCraftApp {
     title_bar_at_start: bool,
 }
 
-/// A sheet's size in the Sheets List: one decimal in mm, as Aspire's, three in inches.
+/// A sheet's size in the Sheets List: one decimal in mm, three in inches.
 fn sheet_length(mm: f64, units: cut_craft_core::document::Units) -> String {
     match units {
         cut_craft_core::document::Units::Mm => format!("{mm:.1}"),
@@ -1399,7 +1419,7 @@ fn hms(minutes: f64) -> String {
 /// Each toolpath's estimated time, the visible ones' total, and the rate (in the units
 /// picked) and scale they use; a toolpath clicked has its notes written below, and Apply
 /// gives back the notes to keep with it.
-/// Aspire's Machine Acceleration: the summary's times allow for the active `machine`'s
+/// The Machine Acceleration: the summary's times allow for the active `machine`'s
 /// accelerations (its name and X, Y, Z from Machine Configuration), while there is one.
 fn acceleration_tick(
     ui: &mut egui::Ui,
@@ -1463,6 +1483,7 @@ fn summary_table(
                 integer: false,
                 steps: vec![],
                 slider: false,
+                percent_when: None,
             },
             section: false,
             icon: None,
@@ -1484,6 +1505,7 @@ fn summary_table(
                 integer: false,
                 steps: vec![],
                 slider: false,
+                percent_when: None,
             },
             section: false,
             icon: None,
@@ -1685,7 +1707,7 @@ fn menu_items(
     }
 }
 
-/// A menu item's shortcut as the system writes them: as Aspire does, or ⌘Z on a Mac.
+/// A menu item's shortcut as the system writes them: `Ctrl+Z`, or ⌘Z on a Mac.
 fn shortcut_label<'a>(ctx: &egui::Context, text: &'a str) -> Cow<'a, str> {
     if mac::is_mac(ctx) {
         Cow::Owned(mac::shortcut_text(text))
@@ -1787,25 +1809,26 @@ enum ToolAsk {
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
 fn tool_picker(
     ui: &mut egui::Ui,
-    tool: &Value,
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
+    units: cut_craft_core::document::Units,
 ) -> Option<ToolAsk> {
+    let tool = &top["tool"];
     let current = tool["name"].as_str().unwrap_or_default();
     let picked = serde_json::from_value::<Tool>(tool.clone())
         .ok()
         .filter(|_| !current.is_empty());
     match &picked {
         Some(tool) => {
-            // Aspire's Passes: how many the cut depth takes, as set in Edit Passes
+            // The Passes: how many the cut depth takes, as set in Edit Passes
             #[expect(clippy::cast_precision_loss, reason = "a small count")]
             let passes = top["depth"]
                 .as_f64()
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
             ui.strong(held_name(current, slots));
-            ui.label(tool_line(tool, passes));
+            ui.label(tool_line(tool, passes, units));
             if tools.get(current).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
@@ -1902,6 +1925,7 @@ fn clearing_section(
     slots: &[Option<String>],
     finishing_smallest: bool,
     suggested: Option<&str>,
+    units: cut_craft_core::document::Units,
 ) -> (bool, Option<ListAsk>) {
     if !params["clearance_tools"].is_array() {
         params["clearance_tools"] = Value::Array(vec![]);
@@ -1962,7 +1986,7 @@ fn clearing_section(
         for (i, tool) in list.iter().enumerate() {
             match ui
                 .push_id(("clearing", i), |ui| {
-                    clearing_bit(ui, i, tool, slots, depth)
+                    clearing_bit(ui, i, tool, slots, depth, units)
                 })
                 .inner
             {
@@ -2012,11 +2036,12 @@ fn clearing_bit(
     tool: &Tool,
     slots: &[Option<String>],
     depth: Option<f64>,
+    units: cut_craft_core::document::Units,
 ) -> Option<BitAsk> {
     ui.strong(held_name(&tool.name, slots));
-    ui.label(tool_line(tool, None));
+    ui.label(tool_line(tool, None, units));
     // can this bit reach the depth? the same line the form's own Tool has
-    if let Some(line) = cut_craft_core::reach::form_line(tool, depth, None) {
+    if let Some(line) = cut_craft_core::reach::form_line(tool, depth, None, units) {
         reach::show(ui, &line);
     }
     ui.horizontal(|ui| {
@@ -2076,14 +2101,12 @@ fn held_name(name: &str, slots: &[Option<String>]) -> String {
 }
 
 /// A tool in one line for its form: how wide, its angle or tip if it has one, how deep a
-/// pass, and how many passes the cut takes (`passes`, when known). Lengths in the tool's
-/// own units.
-fn tool_line(tool: &Tool, passes: Option<f64>) -> String {
+/// pass, and how many passes the cut takes (`passes`, when known). Lengths in the job's
+/// `units`: a tool keeps its own units in the Tool Database, but a toolpath shows it in the
+/// job's.
+fn tool_line(tool: &Tool, passes: Option<f64>, units: cut_craft_core::document::Units) -> String {
     use cut_craft_core::toolpath::ToolShape;
-    let length = |mm: f64| match form::shown_in("mm", tool.units) {
-        Some((per, to)) => format!("{} {to}", trimmed(mm / per)),
-        None => format!("{} mm", trimmed(mm)),
-    };
+    let length = |mm: f64| format!("{} {}", trimmed(mm / units.per()), units.suffix());
     let across = length(tool.diameter);
     let line = match tool.shape {
         ToolShape::EndMill => format!("{across} end mill"),
@@ -2122,6 +2145,7 @@ fn tool_list(
     tools: &ToolDatabase,
     slots: &[Option<String>],
     empty: &str,
+    units: cut_craft_core::document::Units,
 ) -> (bool, Option<ListAsk>) {
     let mut items: Vec<Tool> = serde_json::from_value(list.clone()).unwrap_or_default();
     let (mut ask, mut remove) = (None, None);
@@ -2131,7 +2155,7 @@ fn tool_list(
     for (i, tool) in items.iter().enumerate() {
         ui.push_id((key, i), |ui| {
             ui.strong(held_name(&tool.name, slots));
-            ui.label(tool_line(tool, None));
+            ui.label(tool_line(tool, None, units));
             if tools.get(&tool.name).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
@@ -2188,6 +2212,7 @@ fn tools_section(
     params: &mut Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
+    units: cut_craft_core::document::Units,
 ) -> (bool, Option<ListAsk>) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
@@ -2199,6 +2224,7 @@ fn tools_section(
             tools,
             slots,
             "No tool picked yet: Add a tool… to pick one",
+            units,
         )
     })
     .inner
@@ -2315,6 +2341,7 @@ fn rest_section(
     params: &mut Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
+    units: cut_craft_core::document::Units,
 ) -> Option<ListAsk> {
     use cut_craft_core::rest::Rest;
     let mut rest: Rest = params
@@ -2335,6 +2362,7 @@ fn rest_section(
             tools,
             slots,
             "Off: add the bigger tools that cut before this one to cut only what they left",
+            units,
         );
         ask = asked;
         if changed && let Ok(list) = serde_json::from_value(after) {
@@ -2346,19 +2374,11 @@ fn rest_section(
                 .show(ui, |ui| {
                     ui.label("Minimum detail")
                         .on_hover_hint("Leave alone unmachined areas narrower than this");
-                    ui.add(
-                        egui::DragValue::new(&mut rest.minimum_detail)
-                            .suffix(" mm")
-                            .range(0.0..=f64::INFINITY),
-                    );
+                    form::length_edit(ui, &mut rest.minimum_detail, units, 0.0);
                     ui.end_row();
                     ui.label("Overlap")
                         .on_hover_hint("Grow each unmachined area by this");
-                    ui.add(
-                        egui::DragValue::new(&mut rest.overlap)
-                            .suffix(" mm")
-                            .range(0.0..=f64::INFINITY),
-                    );
+                    form::length_edit(ui, &mut rest.overlap, units, 0.0);
                     ui.end_row();
                 });
         }
@@ -2422,7 +2442,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
     }
 }
 
-/// Tabs down a side of the window, text reading downwards as Aspire's side tabs do; the tab
+/// Tabs down a side of the window, text reading downwards as the side tabs do; the tab
 /// hovered and the tab clicked this frame.
 fn side_tabs(ui: &mut egui::Ui, labels: &[&str], current: Option<usize>) -> Vec<egui::Response> {
     let font = egui::TextStyle::Button.resolve(ui.style());

@@ -158,11 +158,11 @@ mod tests {
     #[test]
     fn a_build_from_a_clone_is_updated_by_hand() {
         let exists = |p: &Path| {
-            p == Path::new("/home/m/aspire-clone/Cargo.toml")
-                || p == Path::new("/home/m/aspire-clone/.git")
+            p == Path::new("/home/m/cut-craft/Cargo.toml")
+                || p == Path::new("/home/m/cut-craft/.git")
         };
         let found = Install::detect(&probe(
-            "/home/m/aspire-clone/target/release/cut-craft",
+            "/home/m/cut-craft/target/release/cut-craft",
             "linux",
             &exists,
         ));
@@ -170,7 +170,7 @@ mod tests {
             panic!("a build is not replaced: {found:?}")
         };
         assert!(
-            why.contains("/home/m/aspire-clone") && why.contains("git pull"),
+            why.contains("/home/m/cut-craft") && why.contains("git pull"),
             "{why}"
         );
         assert_eq!(found.asset_suffix(), None);

@@ -89,7 +89,7 @@ impl Command for SelectAllDuplicateVectors {
     }
 }
 
-/// Aspire 12.5's smart part selection from the menu: keeps the selection and adds every
+/// The smart part selection from the menu: keeps the selection and adds every
 /// vector lying wholly inside a selected closed shape (its holes, and anything in them), so
 /// a part can be picked whole without grouping it first.
 pub struct SelectVectorsInside;

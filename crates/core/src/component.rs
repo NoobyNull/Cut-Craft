@@ -216,7 +216,7 @@ pub struct Group {
     pub combine: Combine,
 }
 
-/// A component's dynamic properties (Aspire's Component Properties): they change how its
+/// A component's dynamic properties (Component Properties): they change how its
 /// heights enter the model without changing the heights, until the component is baked.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
@@ -703,7 +703,7 @@ pub fn silhouette(parts: &[&Component]) -> Vec<crate::geometry::Path> {
             .iter()
             .any(|part| part.height_at(centre(c, r)).is_some())
     });
-    // ponytail: arcs within half a cell, corners over 60° kept [inf]; Aspire's own smoothing
+    // ponytail: arcs within half a cell, corners over 60° kept [inf]; the own smoothing
     // is not described
     rings
         .iter()
@@ -976,10 +976,10 @@ pub fn placed_model(doc: &Document, tool: &Tool) -> Result<Material, CommandErro
         .fold(f64::INFINITY, f64::min);
     if top - lowest > doc.job.thickness {
         return Err(CommandError::Failed(format!(
-            "the model is {:.1} mm tall but the material is only {:.1} mm thick. Set a thicker \
-             material in Job Setup, or make the model lower",
-            top - lowest,
-            doc.job.thickness
+            "the model is {} tall but the material is only {} thick. Set a thicker material in \
+             Job Setup, or make the model lower",
+            doc.job.units.length(top - lowest, 1),
+            doc.job.units.length(doc.job.thickness, 1)
         )));
     }
     let shift = doc.job.model_shift(lowest, top);

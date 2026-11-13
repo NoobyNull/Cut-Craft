@@ -68,8 +68,7 @@ impl Session {
 pub fn import(registry: &Registry, doc: &Document, path: &Path) -> Result<Change, String> {
     let extension = path
         .extension()
-        .map(|e| e.to_string_lossy().into_owned())
-        .unwrap_or_default();
+        .map_or_default(|e| e.to_string_lossy().into_owned());
     let importer = registry
         .importer_for(&extension)
         .ok_or_else(|| format!("no importer for .{extension} files"))?;
@@ -118,7 +117,7 @@ pub enum ToolChanges {
     Pause,
 }
 
-/// How Save Toolpaths splits the toolpaths into files (Aspire's Save Toolpaths form).
+/// How Save Toolpaths splits the toolpaths into files (Save Toolpaths form).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SaveMode {
     /// The toolpath picked in the list, alone.
@@ -132,7 +131,7 @@ pub enum SaveMode {
 
 /// The toolpaths each file holds, in list order: the selected toolpath (or the toolpaths of
 /// the selected group, as one file); every shown one; or each shown one alone, where `group`
-/// puts toolpaths in a row that use the same tool in one file (Aspire's Group Where Possible).
+/// puts toolpaths in a row that use the same tool in one file (Group Where Possible).
 pub fn save_plan(
     doc: &Document,
     mode: SaveMode,
@@ -417,8 +416,7 @@ pub const TOOL_FILE_EXTENSIONS: [&str; 3] = ["vtdb", "tools", "json"];
 pub fn read_tool_file(path: &Path) -> Result<ToolDatabase, String> {
     let ext = path
         .extension()
-        .map(|e| e.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
+        .map_or_default(|e| e.to_string_lossy().to_lowercase());
     match ext.as_str() {
         "vtdb" => cut_craft_vtdb::read(path),
         "tools" => cut_craft_tool_database::fusion::read(&read(path)?)

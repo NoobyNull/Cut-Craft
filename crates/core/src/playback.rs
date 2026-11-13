@@ -1,4 +1,4 @@
-//! Animated toolpath preview (Aspire's help: Preview Toolpaths ▸ Animate preview, Preview
+//! Animated toolpath preview (help: Preview Toolpaths ▸ Animate preview, Preview
 //! Control): the toolpaths' moves played into the material as the machine would cut them.
 //! The position is the machine's time in seconds, each move taking as long as it would at
 //! its tool's feed or plunge rate (rapids at the rapid rate); moving it on cuts up to there,

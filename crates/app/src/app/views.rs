@@ -13,6 +13,7 @@ use super::{
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::snap::Snap;
 
@@ -57,6 +58,8 @@ impl CutCraftApp {
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);
+        // a form closed having left toolpaths out of date: recalculate them all?
+        self.ask_to_recalculate(ctx);
         // a playing preview cut on a frame's worth
         self.advance_playback(ctx);
         // a slow job's progress, over everything else
@@ -180,8 +183,7 @@ impl CutCraftApp {
     pub(super) fn drop_file(&mut self, path: &std::path::Path) {
         let ext = path
             .extension()
-            .map(|e| e.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string_lossy().to_lowercase());
         let job = [
             JOB_EXTENSION,
             OLD_JOB_EXTENSION,
@@ -411,7 +413,7 @@ impl CutCraftApp {
         let doc = &self.doc;
         let mut apply = None;
         let edge = ui.spacing().interact_size.y;
-        // each drop-down as Aspire's: its icon, then the name with a drop-down arrow
+        // each drop-down: its icon, then the name with a drop-down arrow
         let drop_down =
             |ui: &mut egui::Ui, icon: &str, name: &str, contents: &mut dyn FnMut(&mut egui::Ui)| {
                 if let Some(path) = self.icons.find(icon, "") {
@@ -540,7 +542,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire's top bar over the views: 2D / 3D and the split, the sheet, layer and level
+    /// The top bar over the views: 2D / 3D and the split, the sheet, layer and level
     /// drop-downs, and the geometry, smart and grid snapping toggles.
     pub(super) fn top_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Top bar");
@@ -633,7 +635,7 @@ impl CutCraftApp {
             .unwrap_or(self.doc.job)
     }
 
-    /// Zoom and pan: Aspire's 2D view controls.
+    /// Zoom and pan: the 2D view controls.
     pub(super) fn view_action(&mut self, ctx: &egui::Context, id: &str) {
         let label = match id {
             "pan" => {
@@ -687,7 +689,7 @@ impl CutCraftApp {
         label.clone_into(&mut self.status.current_tool);
     }
 
-    /// Sculpting's keys while its form is open, as Aspire's: 1 to 5 pick the tool, the
+    /// Sculpting's keys while its form is open: 1 to 5 pick the tool, the
     /// wheel sizes the brush (finer with Ctrl), Shift and the wheel set the strength, and
     /// Alt and the wheel zoom the view as the wheel alone otherwise does.
     pub(super) fn sculpt_keys(&mut self, ctx: &egui::Context) {
@@ -846,8 +848,7 @@ impl CutCraftApp {
         self.registry
             .get("draw_text")
             .and_then(|cmd| cmd.run_json(&self.doc, &value).ok())
-            .map(|change| change.added().cloned().collect())
-            .unwrap_or_default()
+            .map_or_default(|change| change.added().cloned().collect())
     }
 
     /// The text settings `p` into Draw Text's form, and the text made again with them.
@@ -862,7 +863,7 @@ impl CutCraftApp {
     }
 
     /// While Sketch Carving's form is open, the areas it would carve in translucent green,
-    /// as Aspire highlights them; found again only when the settings or the job change.
+    /// highlighted; found again only when the settings or the job change.
     fn paint_sketch_areas(&mut self, ui: &egui::Ui, canvas: &Canvas) {
         let Some(form) = self
             .form
@@ -903,7 +904,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire's two green handles over text Draw Text is editing: drag them to bend it.
+    /// The two green handles over text Draw Text is editing: drag them to bend it.
     fn paint_arc_handles(&self, ui: &egui::Ui, canvas: &Canvas) {
         let Some(handles) = self
             .edited_text()
@@ -930,7 +931,7 @@ impl CutCraftApp {
     }
 
     /// Shift-click in drawing tool `id`'s form: a shape that tool drew, under `at`, is
-    /// edited in the form, as Aspire's Shift-click does. A tool that keeps its settings with
+    /// edited in the form (Shift-click). A tool that keeps its settings with
     /// the group it made (Dimensions) gives them back from there.
     pub(super) fn shift_click_shape(&mut self, id: &'static str, at: Point, reach: f64) {
         let picked = self.doc.pick(at, reach);
@@ -1439,14 +1440,68 @@ impl CutCraftApp {
     }
 
     /// What open forms mark in the 2D view: Draw Text's arc handles, Sketch Carving's areas,
-    /// Trace Bitmap's area.
+    /// V-Carve's area to carve, Trace Bitmap's area.
     fn paint_form_marks(&mut self, ui: &egui::Ui, canvas: &Canvas) {
         self.paint_arc_handles(ui, canvas);
         self.paint_sketch_areas(ui, canvas);
+        self.paint_carve_area(ui, canvas);
         self.paint_trace_area(ui, canvas);
     }
 
-    /// While Job Setup is open a red square marks the datum, as in Aspire.
+    /// While V-Carve's form is open, the area it would carve shaded over the vectors: the
+    /// shapes for Fill (every other band of nested loops), the groove beside the edge for
+    /// Inside and Outside, along the lines for On the Line. Found again only when the
+    /// settings, the job or the selection change.
+    fn paint_carve_area(&mut self, ui: &egui::Ui, canvas: &Canvas) {
+        let Some(form) = self
+            .form
+            .as_ref()
+            .filter(|f| f.id == "vcarve_engrave_toolpath")
+        else {
+            self.carve_area = None;
+            return;
+        };
+        let fresh = self.carve_area.as_ref().is_some_and(|c| {
+            c.params == form.params
+                && c.revision == self.history.revision()
+                && c.selection == self.doc.selection
+        });
+        if !fresh {
+            let triangles = serde_json::from_value(form.params.clone())
+                .ok()
+                .map_or_default(|p| {
+                    let (_, paths) = self.doc.selected_paths(|_| true);
+                    cut_craft_core::medial::triangles(&cmd_vcarve_engrave_toolpath::carved_area(
+                        &paths, &p,
+                    ))
+                });
+            self.carve_area = Some(super::CarveArea {
+                params: form.params.clone(),
+                revision: self.history.revision(),
+                selection: self.doc.selection.clone(),
+                triangles,
+            });
+        }
+        let Some(area) = &self.carve_area else {
+            return;
+        };
+        let colour = ui
+            .visuals()
+            .selection
+            .bg_fill
+            .gamma_multiply(super::CARVE_AREA_ALPHA);
+        let mut mesh = egui::Mesh::default();
+        for t in &area.triangles {
+            let base = u32::try_from(mesh.vertices.len()).unwrap_or(u32::MAX);
+            for &p in t {
+                mesh.colored_vertex(canvas.transform.to_screen(p), colour);
+            }
+            mesh.add_triangle(base, base + 1, base + 2);
+        }
+        ui.painter_at(canvas.area).add(mesh);
+    }
+
+    /// While Job Setup is open a red square marks the datum.
     fn datum_mark(&self, ui: &egui::Ui, canvas: &Canvas, area: egui::Rect, datum: Point) {
         if self.form.as_ref().is_some_and(|f| f.id == "job_setup") {
             let edge = ui.spacing().interact_size.y / 2.0;
@@ -1567,6 +1622,7 @@ impl CutCraftApp {
         };
         let mut open = true;
         let (mut apply, mut create, mut delete) = (false, false, false);
+        let units = self.doc.job.units;
         egui::Window::new("Guide Properties")
             .id(egui::Id::unique("guide_properties"))
             .collapsible(false)
@@ -1581,12 +1637,19 @@ impl CutCraftApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label("Position");
-                    ui.add(egui::DragValue::new(&mut props.position).speed(0.1));
+                    crate::form::length_edit(ui, &mut props.position, units, f64::NEG_INFINITY);
                 });
                 ui.horizontal(|ui| {
                     ui.label("Angle");
-                    ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).suffix("°"))
-                        .on_hover_hint("Degrees anticlockwise from the X axis");
+                    let hint = "Degrees anticlockwise from the X axis";
+                    ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).show_value(false))
+                        .on_hover_hint(hint);
+                    ui.add(
+                        Number::new(&mut props.angle)
+                            .range(-180.0..=180.0)
+                            .suffix("°"),
+                    )
+                    .on_hover_hint(hint);
                 });
                 ui.checkbox(&mut props.locked, "Lock Guide")
                     .on_hover_hint("A locked guide cannot be dragged");
@@ -1594,7 +1657,7 @@ impl CutCraftApp {
                 ui.separator();
                 ui.strong("New guide");
                 ui.horizontal(|ui| {
-                    // an angled guide gives only relative parallels, as Aspire's
+                    // an angled guide gives only relative parallels
                     ui.add_enabled_ui(!g.tilted(), |ui| {
                         ui.radio_value(&mut props.relative, false, "Absolute");
                     });
@@ -1602,9 +1665,9 @@ impl CutCraftApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label(if props.relative { "Offset" } else { "Position" });
-                    ui.add(egui::DragValue::new(&mut props.new_at).speed(0.1));
+                    crate::form::length_edit(ui, &mut props.new_at, units, f64::NEG_INFINITY);
                     ui.label("Count");
-                    ui.add(egui::DragValue::new(&mut props.count).range(1..=100));
+                    ui.add(Number::new(&mut props.count).range(1..=100));
                 });
                 create = ui
                     .button("Create New Guide")
@@ -1802,7 +1865,7 @@ impl CutCraftApp {
             .collect()
     }
 
-    /// A select-mode drag let go: what it took hold of moves (as one undo), as Aspire's
+    /// A select-mode drag let go: what it took hold of moves (as one undo)
     /// select tool does; a drag from empty space selects by window.
     pub(super) fn select_drop(&mut self, drag: Drag, shift: bool, reach: f64) {
         let Some(grab) = self.grabbed(drag.start, reach) else {
@@ -2165,7 +2228,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire's view buttons over the top right of the 2D view, below the ruler.
+    /// The view buttons over the top right of the 2D view, below the ruler.
     pub(super) fn view_buttons(&mut self, ui: &mut egui::Ui, area: egui::Rect) {
         let row = ui.spacing().interact_size.y;
         let edge = TOOL_ICON_ROWS * row;
@@ -2183,7 +2246,7 @@ impl CutCraftApp {
             None => false,
         };
         let mut clicked = None;
-        // Aspire's toolpath drawing toggles over the top left of the 2D view
+        // The toolpath drawing toggles over the top left of the 2D view
         ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                 let shown = self.display.previews_2d;
@@ -2278,7 +2341,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Trace Bitmap's area, dashed, as Aspire marks it.
+    /// Trace Bitmap's area, dashed.
     fn paint_trace_area(&self, ui: &egui::Ui, canvas: &Canvas) {
         let Some(area) = self
             .form
@@ -2586,7 +2649,7 @@ impl CutCraftApp {
 
     /// The 2D view's right-click menu: a node's while node editing, else the selection's.
     pub(super) fn view_menu(&mut self, ui: &egui::Ui, canvas: &Canvas, reach: f64) {
-        // a right-click finishes a polyline being drawn, as in Aspire
+        // a right-click finishes a polyline being drawn
         if !self.polyline.is_empty() && canvas.response().secondary_clicked() {
             self.finish_polyline(false);
             return;
@@ -2652,8 +2715,7 @@ impl CutCraftApp {
                     let cmd = self.registry.get("move_nodes")?;
                     cmd.run_json(&self.doc, &params).ok()
                 })
-                .map(|change| change.added().cloned().collect())
-                .unwrap_or_default(),
+                .map_or_default(|change| change.added().cloned().collect()),
             Some(Gesture::Dragging(drag)) => self
                 .node_target(drag.start, reach)
                 .and_then(|t| {
@@ -2798,8 +2860,7 @@ impl CutCraftApp {
         let mut paths: Vec<Path> = cmd
             .drag_params(form.way.apply(drag), &self.with_stroke(id, &form.params))
             .and_then(|params| cmd.run_json(&self.doc, &params))
-            .map(|change| change.added().cloned().collect())
-            .unwrap_or_default();
+            .map_or_default(|change| change.added().cloned().collect());
         // Freehand's stabilizing circle, round the path's end: the pointer pulls from its edge
         if id == "draw_freehand"
             && let Some(radius) = form.params["stabilize"].as_f64().filter(|r| *r > 0.0)
@@ -3102,7 +3163,7 @@ impl CutCraftApp {
         )
     }
 
-    /// Edit ▸ Options: Aspire's sections; a change is saved and applied at once.
+    /// Edit ▸ Options: the sections; a change is saved and applied at once.
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
         let mut open = self.options_window;
         let schema = serde_json::to_value(schemars::schema_for!(crate::options::Options))
@@ -3431,8 +3492,7 @@ impl CutCraftApp {
         {
             let ext = path
                 .extension()
-                .map(|e| e.to_string_lossy().into_owned())
-                .unwrap_or_default();
+                .map_or_default(|e| e.to_string_lossy().into_owned());
             match std::fs::read(&path)
                 .map_err(|e| e.to_string())
                 .and_then(|bytes| fmt_create_job_sheet::logo(&bytes, &ext))
@@ -3846,7 +3906,7 @@ pub(super) fn immediate_output(
         if double_sided {
             ui.checkbox(&mut output.add_side, "Add side to toolpath name");
         }
-        // ponytail: Aspire's Output Direct to Machine needs a transfer driver; none here
+        // ponytail: the Output Direct to Machine needs a transfer driver; none here
         save = ui
             .add_enabled(ready, egui::Button::new("Save Toolpath Now..."))
             .on_hover_hint(

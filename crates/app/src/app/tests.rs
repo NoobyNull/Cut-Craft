@@ -861,6 +861,47 @@ fn sketch_carving_shows_the_areas_it_would_carve_while_its_form_is_open() {
 }
 
 #[test]
+fn vcarve_shades_the_area_it_would_carve_while_its_form_is_open() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.app.invoke(&h.ctx, "vcarve_engrave_toolpath");
+    h.frame(vec![]);
+    let area = |h: &Harness| -> f64 {
+        let found = h.app.carve_area.as_ref().expect("found");
+        found
+            .triangles
+            .iter()
+            .map(|[a, b, c]| ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.0)
+            .sum()
+    };
+    let fill = area(&h);
+    assert!(
+        (fill - 200.0).abs() < 1e-6,
+        "Fill shades the whole shape: {fill}"
+    );
+    // Outside: a band beside the edge, outside the rectangle
+    h.app.form.as_mut().expect("open").params["place"] = "outside".into();
+    h.frame(vec![]);
+    let outside = area(&h);
+    assert!(outside > 0.0 && (outside - fill).abs() > 1.0, "{outside}");
+    assert!(
+        h.app
+            .carve_area
+            .as_ref()
+            .expect("found")
+            .triangles
+            .iter()
+            .flatten()
+            .any(|p| p.x < 10.0),
+        "outside the edge"
+    );
+    h.app.form = None;
+    h.frame(vec![]);
+    assert!(h.app.carve_area.is_none(), "gone with the form");
+}
+
+#[test]
 fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
     use cut_craft_core::bitmap::Bitmap;
     use cut_craft_core::geometry::{Point, Rect};
@@ -2144,7 +2185,7 @@ fn the_component_menu_acts_on_the_component_clicked() {
             .icon
             .as_deref(),
         Some("modeling/combine_add.png"),
-        "Aspire's combine icons"
+        "the combine icons"
     );
     h.choose(menu, &["Combine Mode", "Subtract"]);
     assert_eq!(component(&h.app).combine, Combine::Subtract);
@@ -3301,7 +3342,7 @@ fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.app.handles_3d.is_empty(), "not until Transform mode");
-    // a double-click on the selected component enters it, as Aspire's second click does
+    // a double-click on the selected component enters it
     let fit = h.app.fit_3d.unwrap();
     let surface = h.app.surface_3d().unwrap().into_owned();
     let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
@@ -3354,11 +3395,15 @@ fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     h.drag(from, from - vec2(0.0, quarter));
     let base = dome(&h).shaping.base_height;
     assert!((base - h.app.doc.job.thickness).abs() < 0.5, "{base}");
-    // the total height handle scales shape and base together
+    let said = |h: &Harness| h.app.status.message.clone();
+    assert!(said(&h).starts_with("Base height") && said(&h).ends_with(" mm"));
+    // the total height handle scales shape and base together, said in an inch job's inches
+    h.app.doc.job.units = cut_craft_core::document::Units::Inch;
     h.frame(vec![]);
     let before = dome(&h);
     let from = at(&h, Handle3d::Total);
     h.drag(from, from - vec2(0.0, quarter));
+    assert!(said(&h).starts_with("Total height") && said(&h).ends_with(" in"));
     let after = dome(&h);
     assert!(
         (after.shaping.shape_height - 200.0).abs() < 5.0,
@@ -3998,7 +4043,7 @@ fn zoom_box_zoom_to_selection_and_zoom_to_job() {
 }
 
 #[test]
-fn the_side_tabs_are_aspire_12s_with_drawing_and_modeling_on_design() {
+fn the_side_tabs_put_drawing_and_modeling_on_design() {
     assert_eq!(
         DESIGN_TABS,
         ["Design", "Sheets", "Layers", "Components", "Library"]
@@ -4535,8 +4580,15 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     let ctx = egui::Context::default();
     let mut section = serde_json::json!({});
     let out = headless(ctx.run_ui(RawInput::default(), |ui| {
-        egui::CentralPanel::default()
-            .show(ui, |ui| rest_section(ui, &mut section, &h.app.tools, &[]));
+        egui::CentralPanel::default().show(ui, |ui| {
+            rest_section(
+                ui,
+                &mut section,
+                &h.app.tools,
+                &[],
+                cut_craft_core::document::Units::Mm,
+            )
+        });
     }));
     let drawn = |text: &str| {
         out.shapes
@@ -4561,6 +4613,75 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
         cut_craft_core::rest::Rest::of(&rest.params).is_some(),
         "kept to recalculate"
     );
+}
+
+/// The text drawn by `draw`, alone in a window of its own.
+fn drawn_alone(draw: impl FnMut(&mut egui::Ui)) -> Vec<String> {
+    let ctx = egui::Context::default();
+    let mut draw = draw;
+    let out = headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| draw(ui));
+    }));
+    out.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `texts` show a number box holding `value` in `unit` (drawn as two pieces of text).
+fn shows_number(texts: &[String], value: &str, unit: &str) -> bool {
+    texts.windows(2).any(|w| w[0] == value && w[1] == unit)
+}
+
+#[test]
+fn rest_machining_sizes_show_in_inches_in_an_inch_job() {
+    use cut_craft_core::document::Units;
+    let h = Harness::new();
+    let tool = h.app.tools.tools.first().cloned().expect("a starter tool");
+    let mut section = serde_json::json!({
+        "rest": { "after": [tool], "minimum_detail": 2.54, "overlap": 12.7 }
+    });
+    let texts = drawn_alone(|ui| {
+        rest_section(ui, &mut section, &h.app.tools, &[], Units::Inch);
+    });
+    assert!(shows_number(&texts, "0.100", " in"), "{texts:?}");
+    assert!(shows_number(&texts, "0.500", " in"), "{texts:?}");
+    // the bit's line too, though the bit is kept in mm in the Tool Database
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "0.118 in end mill, 0.059 in a pass"),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn guide_positions_show_in_the_jobs_units() {
+    use cut_craft_core::document::{Guide, Units};
+    let mut h = Harness::new();
+    h.app.doc.guides.push(Guide::vertical(50.8));
+    h.app.doc.job.units = Units::Inch;
+    h.app.guide_props = Some(GuideProps {
+        index: 0,
+        position: 50.8,
+        angle: 90.0,
+        locked: false,
+        new_at: 25.4,
+        relative: true,
+        count: 1,
+    });
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let texts = h.texts();
+    assert!(shows_number(&texts, "2.000", " in"), "{texts:?}");
+    assert!(shows_number(&texts, "1.000", " in"), "{texts:?}");
+    h.app.doc.job.units = Units::Mm;
+    h.frame(vec![]);
+    let texts = h.texts();
+    assert!(shows_number(&texts, "50.8", " mm"), "{texts:?}");
 }
 
 #[test]
@@ -4636,7 +4757,7 @@ fn a_tool_from_a_flown_out_page_hides_it_unless_it_opens_a_form() {
 }
 
 #[test]
-fn a_tools_form_takes_the_place_of_the_page_as_in_aspire() {
+fn a_tools_form_takes_the_place_of_the_page() {
     let mut h = Harness::new();
     h.app.pages.set_pinned(Page::Design, true);
     h.app.pages.set_pinned(Page::Toolpaths, true);
@@ -6123,6 +6244,7 @@ fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
         h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
         h.app.reporter.crash_service = Some("https://crash.example/v1/crash".into());
         h.app.reporter.post = post;
+        h.app.reporter.work_bits = 4;
         h.app.reporter.retry_dir = Some(dir.clone());
         let ctx = h.ctx.clone();
         h.app.offer_crash(&ctx, CRASH.into());
@@ -6874,6 +6996,10 @@ fn a_toolpath_with_a_vector_selector_takes_the_vectors_on_its_layers_each_time()
     // a new rectangle on Cut joins it when the toolpath is recalculated
     h.app.form = None;
     h.rectangle(80.0, 10.0, 30.0, 30.0);
+    assert!(
+        h.app.doc.toolpaths[&id].stale,
+        "out of date once a new vector passes its selector"
+    );
     h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
     assert_eq!(
         h.app.doc.toolpaths[&id].vectors.len(),
@@ -10591,18 +10717,19 @@ fn an_embellishment_follows_its_settings_in_place_and_one_undo_takes_it_away() {
 }
 
 #[test]
-fn a_form_tool_reads_in_one_line() {
+fn a_form_tool_reads_in_one_line_in_the_jobs_units() {
+    use cut_craft_core::document::Units;
     let tool = Tool {
         diameter: 6.35,
         pass_depth: 3.0,
         ..Tool::default()
     };
     assert_eq!(
-        tool_line(&tool, Some(2.0)),
+        tool_line(&tool, Some(2.0), Units::Mm),
         "6.35 mm end mill, 3 mm a pass, 2 passes"
     );
     assert_eq!(
-        tool_line(&tool, Some(1.0)),
+        tool_line(&tool, Some(1.0), Units::Mm),
         "6.35 mm end mill, 3 mm a pass, 1 pass"
     );
     let v = Tool {
@@ -10613,8 +10740,22 @@ fn a_form_tool_reads_in_one_line() {
         ..Tool::default()
     };
     assert_eq!(
-        tool_line(&v, None),
+        tool_line(&v, None, Units::Mm),
         "60° V-bit, 12.7 mm across, 2 mm a pass"
+    );
+    // a metric bit kept in mm in the Tool Database reads in inches in an inch job's toolpath
+    assert_eq!(
+        tool_line(&v, None, Units::Inch),
+        "60° V-bit, 0.5 in across, 0.079 in a pass"
+    );
+    // and an inch bit in a metric job's toolpath in mm
+    let inch_bit = Tool {
+        units: Units::Inch,
+        ..tool
+    };
+    assert_eq!(
+        tool_line(&inch_bit, None, Units::Mm),
+        "6.35 mm end mill, 3 mm a pass"
     );
     let slots = [None, Some("Badger".to_owned())];
     assert_eq!(held_name("Badger", &slots), "T2  Badger");
@@ -10896,7 +11037,7 @@ fn an_older_pocket_with_a_rest_list_still_shows_it() {
 
 /// Tools that were only in a menu get a button too (Matthew, 2026-11-10): the left page's
 /// for what changes the shape to cut, the right page's for how it is cut and sent to the
-/// machine, each where Aspire's help puts its icon. Buttons already there stay put.
+/// machine, each where the help puts its icon. Buttons already there stay put.
 #[test]
 fn menu_only_tools_have_a_button_on_their_side() {
     let h = Harness::new();
@@ -11217,4 +11358,157 @@ fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
             if t.galley.text().contains("min with 3 mm End Mill alone"))
     });
     assert!(said, "how much quicker, on the form");
+}
+
+#[test]
+fn the_status_bar_and_a_pocket_form_count_the_selected_vectors() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.rectangle(40.0, 10.0, 20.0, 10.0);
+    let line = serde_json::json!({ "points": [
+        { "x": 10.0, "y": 40.0 }, { "x": 60.0, "y": 40.0 }
+    ], "closed": false });
+    h.app.apply("draw_polyline", &line).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.frame(vec![]);
+    let count = "3 vectors selected: 2 closed, 1 open";
+    let at = h.text_at(count).expect("the status bar counts them");
+    assert!(at.y > 700.0, "in the status bar: {at:?}");
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    // the Toolpaths page flies out unseen on its first frame
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let on_form = h
+        .shapes
+        .iter()
+        .filter(
+            |clipped| matches!(&clipped.shape, egui::Shape::Text(t) if t.galley.text() == count),
+        )
+        .count();
+    assert_eq!(on_form, 2, "on the form too, as well as the status bar");
+    assert!(
+        h.text_at("1 open vector will be left out: Pocket Toolpath only cuts closed shapes, and it is not closed")
+            .is_some(),
+        "the form says what Pocket will leave out"
+    );
+}
+
+#[test]
+fn an_on_the_line_profile_leaves_no_open_vector_out() {
+    assert!(actions::closed_only_toolpath(
+        "pocket_toolpath",
+        &serde_json::json!({})
+    ));
+    assert!(actions::closed_only_toolpath(
+        "profile_toolpath",
+        &serde_json::json!({ "side": "outside" })
+    ));
+    assert!(!actions::closed_only_toolpath(
+        "profile_toolpath",
+        &serde_json::json!({ "side": "on" })
+    ));
+    assert!(!actions::closed_only_toolpath(
+        "quick_engrave_toolpath",
+        &serde_json::json!({})
+    ));
+}
+
+/// A job with a pocket toolpath made from its one rectangle, the form closed.
+fn pocketed() -> Harness {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let params = h
+        .app
+        .registry
+        .get("pocket_toolpath")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    h.app.apply("pocket_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.frame(vec![]);
+    h
+}
+
+/// Moves the job's first vector, as dragging it would.
+fn move_first_vector(h: &mut Harness) {
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    let moved = h.app.doc.vectors[&id].transformed(
+        &cut_craft_core::glam::DAffine2::from_translation(Point::new(5.0, 0.0)),
+    );
+    let mut c = cut_craft_core::Change::builder(&h.app.doc);
+    c.replace(id, moved);
+    let change = c.finish();
+    h.app.history.apply(&mut h.app.doc, change).unwrap();
+}
+
+#[test]
+fn an_edit_that_leaves_toolpaths_out_of_date_asks_to_recalculate_them() {
+    let mut h = pocketed();
+    assert!(h.text_at("Toolpaths out of date").is_none());
+    move_first_vector(&mut h);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Toolpaths out of date").is_some(), "asked");
+    let yes = h.text_at("Recalculate All").expect("the button");
+    h.click(yes, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at("Toolpaths out of date").is_none(), "answered");
+    assert!(
+        h.app.doc.toolpaths.values().all(|t| !t.stale),
+        "recalculated"
+    );
+}
+
+#[test]
+fn dont_ask_again_stops_the_question_but_not_the_mark() {
+    let mut h = pocketed();
+    move_first_vector(&mut h);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let silence = h.text_at("Don't ask again").expect("the tick box");
+    h.click(silence, Modifiers::NONE);
+    let no = h.text_at("Not Now").expect("the button");
+    h.click(no, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(!h.app.options.confirmations.ask_to_recalculate);
+    move_first_vector(&mut h);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Toolpaths out of date").is_none(),
+        "not asked again"
+    );
+    assert!(
+        h.app.doc.toolpaths.values().all(|t| t.stale),
+        "still marked out of date"
+    );
+}
+
+#[test]
+fn the_recalculate_question_counts_the_toolpaths() {
+    assert!(actions::recalculate_question(1).starts_with("1 toolpath is now out of date"));
+    assert!(actions::recalculate_question(3).starts_with("3 toolpaths are now out of date"));
+}
+
+#[test]
+fn suggest_takes_bits_from_my_tools_only() {
+    let mut h = Harness::new();
+    let mut catalogue = h.app.tools.get("12 mm End Mill").unwrap().clone();
+    catalogue.name = "Vendor 16 mm End Mill".into();
+    catalogue.diameter = 16.0;
+    catalogue.group = "Vendor/End Mills".into();
+    h.app.tools.tools.push(catalogue);
+    h.app.tools.catalogues = vec!["Vendor".into()];
+    let names: Vec<String> = h
+        .app
+        .suggest_candidates()
+        .into_iter()
+        .map(|c| c.tool.name)
+        .collect();
+    assert!(names.iter().any(|n| n == "12 mm End Mill"), "{names:?}");
+    assert!(
+        !names.iter().any(|n| n.starts_with("Vendor")),
+        "a read-only catalogue's bit is not suggested: {names:?}"
+    );
 }

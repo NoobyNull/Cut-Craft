@@ -1,4 +1,4 @@
-//! Create Job Sheet: an HTML page for the machine operator, in Aspire's five sections: the
+//! Create Job Sheet: an HTML page for the machine operator, in the five sections: the
 //! job layout, the job notes, the material setup, the toolpaths summary and each toolpath.
 //! The Job Setup Sheet Editor's [`Style`] sets its title, logo, header and footer colours and
 //! which sections it has. A job of several sheets gets a page for each sheet with toolpaths,
@@ -143,8 +143,7 @@ pub fn sheets(
     let side = |d: &Document| {
         d.job
             .double_sided
-            .map(|_| if d.bottom_side { "_Bottom" } else { "_Top" })
-            .unwrap_or_default()
+            .map_or_default(|_| if d.bottom_side { "_Bottom" } else { "_Top" })
     };
     if doc.sheets.len() <= 1 {
         return Ok(vec![(side(doc).to_owned(), sheet_for(doc, style, setup)?)]);
@@ -295,8 +294,7 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
         let layout = String::from_utf8(fmt_export_svg::ExportSvg::export(doc)?)
             .unwrap_or_default()
             .split_once("<svg")
-            .map(|(_, svg)| format!("<svg{svg}"))
-            .unwrap_or_default();
+            .map_or_default(|(_, svg)| format!("<svg{svg}"));
         let _ = write!(h, "<h2>Job Layout</h2>{layout}");
     }
     if style.notes && !doc.notes.is_empty() {
@@ -332,14 +330,14 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
             h,
             "<h3>{}</h3><table><tr><th>Tool</th><td>{}</td></tr><tr><th>{slot_heading}</th><td>{}</td></tr>\
              <tr><th>Diameter</th><td>{}</td></tr>\
-             <tr><th>Feed rate</th><td>{:.0} mm/min</td></tr><tr><th>Plunge rate</th><td>{:.0} mm/min</td></tr>\
+             <tr><th>Feed rate</th><td>{}</td></tr><tr><th>Plunge rate</th><td>{}</td></tr>\
              <tr><th>Spindle speed</th><td>{:.0} rpm</td></tr><tr><th>Estimated time</th><td>{}</td></tr></table>",
             escape(&t.name),
             escape(&tool.name),
             slot(number(&tool.name)),
             len(tool.diameter),
-            tool.feed_rate,
-            tool.plunge_rate,
+            job.units.feed(tool.feed_rate, 0),
+            job.units.feed(tool.plunge_rate, 0),
             tool.spindle_speed,
             hms(minutes(t)),
         );
@@ -457,6 +455,19 @@ mod tests {
         ] {
             assert!(html.contains(part), "missing {part}");
         }
+    }
+
+    #[test]
+    fn an_inch_jobs_sheet_gives_every_size_and_speed_in_inches() {
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        doc.job.units = Units::Inch;
+        let html = String::from_utf8(JobSheet::export(&doc).unwrap()).unwrap();
+        assert!(html.contains("23.622 in"), "the material's width");
+        assert!(
+            html.contains(" in/min</td>"),
+            "feed rates in inches a minute"
+        );
+        assert!(!html.contains("mm/min"), "{html}");
     }
 
     #[test]

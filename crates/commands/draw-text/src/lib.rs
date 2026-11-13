@@ -152,7 +152,7 @@ impl Default for Params {
             bold: false,
             italic: false,
             align: Align::Left,
-            // ponytail: 10 mm [inf]; Aspire remembers the last height used
+            // ponytail: 10 mm [inf]; could remember the last height used
             height: 10.0,
             anchor: Xy::new(10.0, 10.0),
             mode: Mode::Text,

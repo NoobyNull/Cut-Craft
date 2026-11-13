@@ -29,7 +29,7 @@ flag, and the physical part stays the same: a pocket 1 inch deep reads 25.4 mm a
   millimetres). It says how the tool's lengths show, never how they are stored (still mm).
 - **Tool Database**: a tool's Diameter, Tip Radius, tooth sizes, Pass Depth and chip load
   show in the tool's units, with a Units drop-down (mm / inches) beside the Tool Type, as
-  Aspire's tool form has. Changing it changes only the display: a 6 mm end mill switched to
+  a tool form usually has. Changing it changes only the display: a 6 mm end mill switched to
   inches reads 0.2362 in; the tool is the same tool. The job's units no longer reach the
   Tool Database (`Look::inch` goes).
 - **Toolpath forms**: the Tool block's diameter, tip radius and pass depth show in the

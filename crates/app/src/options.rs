@@ -1,4 +1,4 @@
-//! Edit ▸ Options: settings kept between runs, in Aspire's sections. Only the settings Cut
+//! Edit ▸ Options: settings kept between runs, in the sections. Only the settings Cut
 //! Craft acts on are here: what the views draw when it starts, and the recent files kept.
 
 use crate::display::Display;
@@ -457,7 +457,7 @@ fn solid_colour() -> [u8; 3] {
 }
 
 /// A ten-thousandth of an inch.
-// ponytail: Aspire's defaults are not known
+// ponytail: our own defaults
 fn tolerance() -> f64 {
     0.002_54
 }
@@ -518,6 +518,11 @@ pub struct Confirmations {
         range(min = 0, max = 10)
     )]
     pub material_left: f64,
+    /// After an edit leaves toolpaths out of date, ask whether to recalculate them all. Off,
+    /// they are still marked ⚠ in the Toolpaths list, and saving them still asks first
+    #[serde(default = "ask_to_recalculate")]
+    #[schemars(title = "Ask to recalculate out-of-date toolpaths")]
+    pub ask_to_recalculate: bool,
 }
 
 impl Default for Confirmations {
@@ -528,8 +533,13 @@ impl Default for Confirmations {
             sharp_offset_intersections: IntersectionCheck::default(),
             cutting_checks: CuttingChecks::default(),
             material_left: material_left(),
+            ask_to_recalculate: ask_to_recalculate(),
         }
     }
+}
+
+fn ask_to_recalculate() -> bool {
+    true
 }
 
 fn material_left() -> f64 {
@@ -642,7 +652,7 @@ impl General {
 }
 
 /// Importing pictures and 3D models: the size pictures come in at, and what Orientate 3D
-/// Model offers.
+/// Model offers; and the line width of exported PDF, EPS and AI files.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Import {
     /// How big an imported picture comes in: this many of its pixels make an inch. 96 suits
@@ -669,6 +679,20 @@ pub struct Import {
     #[serde(default = "out_of_bounds_percent")]
     #[schemars(title = "Out-of-bounds opacity (%)", range(min = 1, max = 100))]
     pub out_of_bounds_percent: u8,
+    /// How thick the lines are in exported PDF, EPS and AI files, in points (a point is
+    /// 1/72 inch). Thicker shows better on paper; laser and vinyl cutter software often
+    /// wants a hairline, so set it thin for those
+    #[serde(default = "export_line_points")]
+    #[schemars(
+        title = "Exported PDF, EPS and AI line width",
+        extend("x-unit" = "pt"),
+        range(min = 0.05, max = 10)
+    )]
+    pub export_line_points: f64,
+}
+
+fn export_line_points() -> f64 {
+    fmt_export_pdf::LINE
 }
 
 fn preview_faces() -> u32 {
@@ -687,6 +711,7 @@ impl Import {
     /// Hands these settings to the importers.
     pub fn apply(&self) {
         cut_craft_core::import_settings::set_pixels_per_inch(self.picture_pixels_per_inch);
+        fmt_export_pdf::set_line_width(self.export_line_points);
     }
 
     /// The red a model's parts past the material's edges are drawn in: see-through, as
@@ -705,6 +730,7 @@ impl Default for Import {
             model_types: ModelTypes::default(),
             preview_faces: preview_faces(),
             out_of_bounds_percent: out_of_bounds_percent(),
+            export_line_points: export_line_points(),
         }
     }
 }
@@ -1169,8 +1195,8 @@ pub struct BugReports {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CrashLogs {
-    /// Send the crash log to Cut Craft's crash-report service by itself (home folders and
-    /// your user name left out). Where that can't be done, open a bug report with it ticked
+    /// Send the crash log to Cut Craft's crash-report service by itself (your user name,
+    /// folders and file names left out). Where that can't be done, open a bug report with it ticked
     #[schemars(title = "Send the crash log")]
     Send,
     /// Open a bug report, and ask each time whether the crash log goes with it
@@ -1265,7 +1291,7 @@ impl Default for Theme {
 }
 
 impl Theme {
-    /// Light, as Aspire is; on a Mac the desktop's own, as Mac users expect apps to follow
+    /// Light; on a Mac the desktop's own, as Mac users expect apps to follow
     /// their light or dark appearance.
     pub fn for_system(os: egui::os::OperatingSystem) -> Self {
         if os == egui::os::OperatingSystem::Mac {
@@ -1297,7 +1323,7 @@ pub enum WindowLayout {
     Ribbon,
 }
 
-// ponytail: Aspire's third choice, a folder remembered for each kind of operation, is left out
+// ponytail: the third choice, a folder remembered for each kind of operation, is left out
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FileDialogDefault {
@@ -1325,7 +1351,7 @@ pub struct Options {
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
     #[serde(default)]
-    #[schemars(title = "Importing", extend("x-section" = true))]
+    #[schemars(title = "Importing and Exporting", extend("x-section" = true))]
     pub import: Import,
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
@@ -1687,7 +1713,7 @@ mod tests {
                 "Toolpath Settings",
                 "General Settings",
                 "Confirmation Choices",
-                "Importing",
+                "Importing and Exporting",
                 "Appearance",
                 "SpaceMouse",
                 "Updates",
@@ -1835,6 +1861,9 @@ mod tests {
         assert_eq!(o.advanced.dxf_spline_detail, SPLINE_SAMPLES);
         assert_eq!(import_settings::pixels_per_inch(), PIXELS_PER_INCH);
         assert_eq!(import_settings::spline_samples(), SPLINE_SAMPLES);
+        assert!((o.import.export_line_points - fmt_export_pdf::LINE).abs() < 1e-12);
+        let old: Import = serde_json::from_str("{}").unwrap();
+        assert!((old.export_line_points - fmt_export_pdf::LINE).abs() < 1e-12);
     }
 
     #[test]

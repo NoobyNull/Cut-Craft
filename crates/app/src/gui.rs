@@ -39,7 +39,7 @@ fn group(name: &'static str, tools: &'static [&'static str]) -> ToolGroup {
 }
 
 /// A sub-tab of the Design page: a few of its tool groups, one job at a time, so the page
-/// shows a couple of dozen buttons instead of every icon at once. Aspire shows them all down
+/// shows a couple of dozen buttons instead of every icon at once down
 /// one long page; a beginner finds a tool faster under a word that says what it is for
 /// (`re/SPEC.md`, Design sub-tabs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,7 +165,7 @@ pub fn placed(sections: &[String], action: &str) -> Option<Vec<String>> {
 }
 
 /// Names and descriptions of the built-in tools on the Import sub-tab, which have no
-/// command crate to give them: Aspire's names run words together ("Import Vectors Bitmap")
+/// command crate to give them: the names run words together ("Import Vectors Bitmap")
 /// and say nothing about the files they take.
 pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
@@ -343,7 +343,7 @@ impl Toolbar {
     }
 }
 
-/// Aspire's Drawing tab. Group names and which tool sits in which group follow the help
+/// The Drawing tab. Group names and which tool sits in which group follow the help
 /// topics and the trial (see `re/SPEC.md`). Ids match
 /// the icon file names, so unimplemented tools still show their icon.
 #[expect(clippy::too_many_lines, reason = "the drawing tab's tool list")]
@@ -359,12 +359,12 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "paste_in_place",
                 "open_folder",
                 "job_setup",
-                // Aspire keeps the job's notes with its files
+                // the job's notes are kept with its files
                 "notes",
             ],
         ),
-        // every way to bring something into the job, on the Import sub-tab: Aspire spreads
-        // them over the File menu, the Drawing and Modeling tabs and the Clipart tab
+        // every way to bring something into the job, on the Import sub-tab, rather
+        // than spread over the File menu, the Drawing and Modeling tabs and the Clipart tab
         group(
             "Import",
             &[
@@ -416,7 +416,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "document_variables",
             ],
         ),
-        // Aspire's Edit Objects section, in two: picking and reshaping, then the tools that
+        // The Edit Objects section, in two: picking and reshaping, then the tools that
         // make one vector of several or cut them (each a job a beginner names differently)
         group(
             "Select and Edit",
@@ -448,7 +448,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "trim_objects",
             ],
         ),
-        // Aspire's Align Objects section (help: Alignment Tools): the common alignments
+        // The Align Objects section (help: Alignment Tools): the common alignments
         group(
             "Align Objects",
             &[
@@ -525,7 +525,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "split",
                 "bake_components",
                 "component_levels",
-                // Aspire's Model Editing row (help: Clearing or Splitting Components,
+                // The Model Editing row (help: Clearing or Splitting Components,
                 // Create Vector Boundary From Selected Components, Create Cross Section
                 // Vector): the model cleared inside or outside vectors, vectors drawn from
                 // it, and the visible model as one component
@@ -536,7 +536,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "create_component_from_visible_model",
             ],
         ),
-        // Aspire's second row of modeling icons: the model saved for other programs
+        // The second row of modeling icons: the model saved for other programs
         group(
             "Export Model",
             &[
@@ -592,7 +592,7 @@ fn toolpath_groups() -> Vec<ToolGroup> {
             &[
                 "array_copy_toolpath",
                 "merged_toolpath",
-                // Aspire's Toolpath Templates icons, which were only in the Toolpaths menu
+                // The Toolpath Templates icons, which were only in the Toolpaths menu
                 "load_template",
                 "save_selected_toolpath_as_template",
                 "save_all_visible_toolpaths_as_template",
@@ -622,8 +622,7 @@ pub fn title_case(id: &str) -> String {
         .map(|w| {
             let mut c = w.chars();
             c.next()
-                .map(|f| f.to_uppercase().chain(c).collect::<String>())
-                .unwrap_or_default()
+                .map_or_default(|f| f.to_uppercase().chain(c).collect::<String>())
         })
         .collect::<Vec<_>>()
         .join(" ")
@@ -704,7 +703,7 @@ pub struct MenuSystem {
     pub menus: Vec<Menu>,
 }
 
-/// The node-editing popup for the node or span at `at` (Aspire's popup menus 142, 317, 635).
+/// The node-editing popup for the node or span at `at`.
 /// Edit Polyline's action: drawing on from an open vector's end node, `edit_polyline:` then
 /// the vector's id and `start` or `end`.
 pub const EDIT_POLYLINE: &str = "edit_polyline:";
@@ -784,9 +783,8 @@ impl MenuSystem {
         };
         // Add-ons... stays last, after the gadgets
         let addons = menu.items.iter().position(|i| i.action == "addons");
-        let tail: Vec<MenuItem> = addons
-            .map(|at| menu.items.drain(at.saturating_sub(1)..).collect())
-            .unwrap_or_default();
+        let tail: Vec<MenuItem> =
+            addons.map_or_default(|at| menu.items.drain(at.saturating_sub(1)..).collect());
         menu.items.push(MenuItem::separator());
         menu.items.extend(loaded.built_in.iter().map(item));
         menu.items.push(MenuItem::submenu("My Gadgets", mine));
@@ -808,7 +806,7 @@ impl MenuSystem {
             .unwrap_or_else(|| panic!("there is an Edit ▸ {name}"))
     }
 
-    /// The 3D view's right-click menu: Aspire 12's 2D/3D view menu (help: Right Mouse Click
+    /// The 3D view's right-click menu: the 2D/3D view menu (help: Right Mouse Click
     /// Menu) headed by the components `under` the click, topmost first and the selected
     /// ticked (a click picks that one, so a buried component can be picked); its vector
     /// items greyed while no vector is selected, and Component ▸ the chosen component's own
@@ -867,7 +865,7 @@ impl MenuSystem {
             MenuItem::with_action("Activate Layer of Selection", "activate_layer_of_selection")
                 .enabled(vectors),
             MenuItem::separator(),
-            // ponytail: Aspire's Text ▸ also removes text from a curve and breaks a block
+            // ponytail: the Text ▸ also removes text from a curve and breaks a block
             // into lines; neither exists yet
             MenuItem::submenu(
                 "Text",
@@ -902,7 +900,7 @@ impl MenuSystem {
         menu
     }
 
-    /// The 2D view's right-click menu: Aspire's selection menu (MENU 318), plus Move to Layer,
+    /// The 2D view's right-click menu: the selection menu, plus Move to Layer,
     /// the vector booleans and Align. Edit menu items are reused as they are.
     pub fn selection_menu(&self, doc: &Document) -> Vec<MenuItem> {
         let edit = |name: &str| self.edit(name);
@@ -1062,7 +1060,7 @@ pub struct MenuItem {
     pub is_checked: bool,
     /// Non-empty for a submenu
     pub children: Vec<MenuItem>,
-    /// Its picture, an icon path, where Aspire's menu has one (the combine modes).
+    /// Its picture, an icon path, where the menu has one (the combine modes).
     pub icon: Option<String>,
 }
 
@@ -1153,7 +1151,7 @@ impl MenuItem {
     }
 }
 
-/// Show ▸ and Hide ▸ for one layer, toolpath or component: Aspire's Show / Hide family.
+/// Show ▸ and Hide ▸ for one layer, toolpath or component: the Show / Hide family.
 fn show_hide(items: Items, item: u64) -> [MenuItem; 2] {
     use cmd_show_hide::{Action, Params, ShowHide};
     let run = |name: &str, action| {
@@ -1183,7 +1181,7 @@ fn show_hide(items: Items, item: u64) -> [MenuItem; 2] {
     ]
 }
 
-/// Delete ▸ for one layer, toolpath or component: Aspire's Delete family.
+/// Delete ▸ for one layer, toolpath or component: the Delete family.
 fn delete(items: Items, item: u64, which: &[(&str, cmd_delete_items::Which)]) -> MenuItem {
     use cmd_delete_items::{DeleteItems, Params};
     let run = |&(name, which): &(&str, _)| {
@@ -1192,7 +1190,7 @@ fn delete(items: Items, item: u64, which: &[(&str, cmd_delete_items::Which)]) ->
     MenuItem::submenu("Delete", which.iter().map(run).collect())
 }
 
-/// Aspire's toolpath menu (MENU 968) for toolpath `id`. Right-clicking a toolpath selects it,
+/// The toolpath menu for toolpath `id`. Right-clicking a toolpath selects it,
 /// so Recalculate ▸ This and Preview act on it.
 pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
     use cmd_delete_items::Which;
@@ -1324,9 +1322,9 @@ fn other_sheets(doc: &Document, item: impl Fn(usize) -> MenuItem) -> Vec<MenuIte
         .collect()
 }
 
-/// Aspire's level menu (MENU 1046) for level `id`: combine mode ticked, clipping, mirror mode
+/// The level menu for level `id`: combine mode ticked, clipping, mirror mode
 /// and (rotary jobs) wrapping.
-/// A level's Combine Mode submenu, in Aspire's order.
+/// A level's Combine Mode submenu, in the standard order.
 /// A favourites action: then the page (`design` or `toolpaths`), what to do (`add`,
 /// `remove`, `earlier`, `later`) and the tool's id.
 pub const FAVOURITE: &str = "favourite:";
@@ -1406,7 +1404,7 @@ pub const GUIDE: &str = "guide:";
 /// Save as Sculpting Brush on a component: then its id.
 pub const SAVE_BRUSH: &str = "save_brush:";
 
-/// The combine modes in Aspire's order, each with its icon.
+/// The combine modes in the standard order, each with its icon.
 pub const COMBINE_MODES: [(&str, Combine, &str); 5] = [
     ("Add", Combine::Add, "modeling/combine_add.png"),
     (
@@ -1423,7 +1421,7 @@ pub const COMBINE_MODES: [(&str, Combine, &str); 5] = [
     ),
 ];
 
-/// A level's Mirror Mode submenu, in Aspire's order.
+/// A level's Mirror Mode submenu, in the standard order.
 const MIRROR_MODES: [(&str, Mirror); 9] = [
     ("Off", Mirror::Off),
     ("Left to Right", Mirror::LeftToRight),
@@ -1636,7 +1634,7 @@ fn component_items(
     }
 }
 
-/// Aspire's component menu (MENU 613) for component `id`, its combine mode ticked.
+/// The component menu for component `id`, its combine mode ticked.
 pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Vec<MenuItem> {
     use cmd_component_properties::{ComponentProperties, Params};
     let properties = Params::of(id, component);
@@ -1699,7 +1697,7 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
     menu
 }
 
-/// Aspire's layer menu (MENU 967) for `layer`.
+/// The layer menu for `layer`.
 /// A menu's categories: the runs of items between separators, each drawn in a border.
 pub fn categories(items: &[MenuItem]) -> Vec<&[MenuItem]> {
     items
@@ -1708,7 +1706,7 @@ pub fn categories(items: &[MenuItem]) -> Vec<&[MenuItem]> {
         .collect()
 }
 
-/// The right-click menu of sheet `sheet` in the Sheets tab (MENU 5030).
+/// The right-click menu of sheet `sheet` in the Sheets tab.
 pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
     use cmd_sheet_properties::SheetProperties;
     let Some(s) = doc.sheets.get(sheet) else {
@@ -1753,7 +1751,7 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
                 ..cmd_add_sheet::AddSheet::initial_params(doc)
             },
         ),
-        // ponytail: a sheet is edited while active, in Job Setup; Aspire's Sheet Editor is that form
+        // ponytail: a sheet is edited while active, in Job Setup; the Sheet Editor is that form
         MenuItem::with_action("Edit Sheet...", "job_setup").enabled(sheet == doc.active_sheet),
         MenuItem::form::<SheetProperties>("Rename", &props),
         MenuItem::run::<cmd_delete_sheet::DeleteSheet>(
@@ -1833,7 +1831,7 @@ pub fn command_action(action: &str) -> Option<(bool, &str, serde_json::Value)> {
 }
 
 impl MenuSystem {
-    /// Aspire's main menu (see `re/SPEC.md`, Menus), minus vendor web links and licensing.
+    /// The main menu (see `re/SPEC.md`, Menus), minus vendor web links and licensing.
     /// Shortcuts follow the keyboard shortcut table there where the two disagree.
     #[expect(clippy::too_many_lines, reason = "the menu table is data, not logic")]
     pub fn new() -> Self {
@@ -2016,7 +2014,7 @@ impl MenuSystem {
                         i("Export as Grayscale Bitmap"),
                         i("Export as 3D Clipart"),
                         sep(),
-                        // Job Setup's Resolution (Aspire's level of detail), here too
+                        // Job Setup's Resolution (level of detail), here too
                         sub(
                             "Model Resolution",
                             vec![
