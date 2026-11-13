@@ -238,6 +238,13 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub form: Vec<[f64; 2]>,
+    /// Feeds and speeds for whole material classes, from the class's softest material to
+    /// its hardest: a material in between cuts with data placed by its hardness
+    /// ([`crate::material_library`]); a material's own data comes first (added with the
+    /// Materials Library)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub class_feeds: Vec<crate::material_library::ClassFeeds>,
 }
 
 /// A form tool's edge height at `r` out, between the profile's points (flat past its ends).
@@ -361,7 +368,11 @@ impl Tool {
     /// else the default's values under its name, ready to become its set.
     pub fn cutting(&self, material: &str) -> CuttingData {
         if let Some(set) = self.material_data(material) {
-            return set.clone();
+            // its class's data, as this material's
+            return CuttingData {
+                material: material.to_owned(),
+                ..set.clone()
+            };
         }
         CuttingData {
             material: material.to_owned(),
@@ -433,15 +444,29 @@ impl Tool {
         material.is_empty() || self.material_data(material).is_some()
     }
 
-    /// `material`'s own set, matched whatever the case; none for the default.
+    /// Its cutting data for `material`: the material's own, else its class's (data kept for
+    /// the class by name, or for another material in it: a bit's Hardwood data cuts Maple).
     fn material_data(&self, material: &str) -> Option<&CuttingData> {
-        (!material.is_empty())
-            .then(|| {
+        use crate::material_class::MaterialClass;
+        if material.is_empty() {
+            return None;
+        }
+        let own = self
+            .materials
+            .iter()
+            .find(|m| m.material.eq_ignore_ascii_case(material));
+        own.or_else(|| {
+            let class = MaterialClass::of(material)?;
+            let named = self
+                .materials
+                .iter()
+                .find(|m| m.material.eq_ignore_ascii_case(class.name()));
+            named.or_else(|| {
                 self.materials
                     .iter()
-                    .find(|m| m.material.eq_ignore_ascii_case(material))
+                    .find(|m| MaterialClass::of(&m.material) == Some(class))
             })
-            .flatten()
+        })
     }
 
     /// A thread mill's tooth height (H): its size and angle make a triangle, so this
@@ -621,6 +646,7 @@ impl Default for Tool {
             tooth_size: default_tooth_size(),
             tooth_offset: default_tooth_offset(),
             form: vec![],
+            class_feeds: vec![],
         }
     }
 }

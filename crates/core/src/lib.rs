@@ -23,6 +23,8 @@ pub mod geometry;
 pub mod handles;
 pub mod import_settings;
 pub mod keep_out;
+pub mod material_class;
+pub mod material_library;
 pub mod medial;
 pub mod nodes;
 pub mod packed;

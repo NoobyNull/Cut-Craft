@@ -637,3 +637,41 @@ fn the_starter_tools_have_a_surfacing_bit_that_cuts_flat_and_steps_over_wide() {
         "flat to its edge"
     );
 }
+
+#[test]
+fn a_material_without_data_of_its_own_cuts_with_its_class_s() {
+    use cut_craft_core::toolpath::{CuttingData, Tool};
+    let data = |material: &str, feed_rate| CuttingData {
+        material: material.into(),
+        pass_depth: 3.0,
+        stepover: 0.4,
+        finish_stepover: 0.0,
+        feed_rate,
+        plunge_rate: 300.0,
+        spindle_speed: 18000.0,
+    };
+    let tool = Tool {
+        feed_rate: 1000.0,
+        materials: vec![
+            data("Hardwood", 1500.0),
+            data("Pine", 2500.0),
+            data("Softwoods", 2000.0),
+        ],
+        ..Tool::default()
+    };
+    let feed = |m: &str| tool.for_material(m).feed_rate;
+    assert_eq!(feed("Maple"), 1500.0, "another hardwood's data");
+    assert_eq!(feed("Pine"), 2500.0, "its own first");
+    assert_eq!(
+        feed("Cedar"),
+        2000.0,
+        "the class's own data before another member's"
+    );
+    assert_eq!(
+        feed("Aluminium"),
+        1000.0,
+        "no data for its class: the default"
+    );
+    assert_eq!(tool.cutting("Maple").material, "Maple");
+    assert!(tool.has_data_for("Walnut"));
+}
