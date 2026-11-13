@@ -1411,7 +1411,7 @@ mod tests {
     }
 
     /// Units a number may be shown in that are not lengths, so never change with mm / inches.
-    const NOT_LENGTHS: [&str; 12] = [
+    const NOT_LENGTHS: [&str; 13] = [
         "%",
         "min",
         "MB",
@@ -1424,12 +1424,14 @@ mod tests {
         "frames/s",
         "×",
         "kerf widths",
+        // a printed line's width in points, the same whatever the job's units
+        "pt",
     ];
 
     /// Numbers with no unit that are not measurements: counts, ids, shares and strengths. A
     /// new number that is none of these needs an `x-unit` (`mm` for a length), so it is
     /// shown converted in an inch job, or a place here saying why not.
-    const UNITLESS: [&str; 63] = [
+    const UNITLESS: [&str; 64] = [
         // counts
         "sides",
         "points",
@@ -1497,6 +1499,7 @@ mod tests {
         "picture_pixels_per_inch",
         "gadget_million_instructions",
         "gadget_most_commands",
+        "grid_rows",
     ];
 
     /// Numbers with no unit that are measurements of something other than the job's
