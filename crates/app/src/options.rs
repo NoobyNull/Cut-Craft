@@ -1195,8 +1195,8 @@ pub struct BugReports {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CrashLogs {
-    /// Send the crash log to Cut Craft's crash-report service by itself (home folders and
-    /// your user name left out). Where that can't be done, open a bug report with it ticked
+    /// Send the crash log to Cut Craft's crash-report service by itself (your user name,
+    /// folders and file names left out). Where that can't be done, open a bug report with it ticked
     #[schemars(title = "Send the crash log")]
     Send,
     /// Open a bug report, and ask each time whether the crash log goes with it

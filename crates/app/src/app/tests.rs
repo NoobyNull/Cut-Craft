@@ -6244,6 +6244,7 @@ fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
         h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
         h.app.reporter.crash_service = Some("https://crash.example/v1/crash".into());
         h.app.reporter.post = post;
+        h.app.reporter.work_bits = 4;
         h.app.reporter.retry_dir = Some(dir.clone());
         let ctx = h.ctx.clone();
         h.app.offer_crash(&ctx, CRASH.into());

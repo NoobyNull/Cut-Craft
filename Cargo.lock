@@ -2385,6 +2385,7 @@ dependencies = [
  "image",
  "log",
  "serde_json",
+ "sha2",
  "ureq",
 ]
 
