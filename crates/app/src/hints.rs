@@ -566,7 +566,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "help_contents",
-        "Help Contents: opens Cut Craft's help, with a page for every tool",
+        "Help Contents: opens Cut Craft's help, with a page for every tool and a search box",
+    ),
+    (
+        "did_you_know",
+        "Did You Know?: short tips for getting more out of Cut Craft, one at a time",
     ),
     (
         "check_for_updates",

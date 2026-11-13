@@ -136,6 +136,10 @@ impl CutCraftApp {
             turn_ring: None,
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
+            help_search: String::new(),
+            help_index: vec![],
+            tip: None,
+            tips_cache: egui_commonmark::CommonMarkCache::default(),
             sketch_areas: None,
             carve_area: None,
             reach_found: None,
@@ -508,6 +512,7 @@ impl CutCraftApp {
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
             "first_run_setup" => self.open_first_run(),
+            "did_you_know" => self.open_tips(self.options.next_tip),
             "try_sample_project" => self.open_sample(),
             id if id.starts_with(gui::COMMUNITY) => {
                 let link = id[gui::COMMUNITY.len()..].parse::<usize>().ok();

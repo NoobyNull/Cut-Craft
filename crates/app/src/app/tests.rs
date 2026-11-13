@@ -11628,3 +11628,149 @@ fn suggest_takes_bits_from_my_tools_only() {
         "a read-only catalogue's bit is not suggested: {names:?}"
     );
 }
+
+fn help_menu(app: &CutCraftApp) -> Vec<crate::gui::MenuItem> {
+    app.current_menus()
+        .menus
+        .iter()
+        .find(|m| m.name == "Help")
+        .unwrap()
+        .items
+        .clone()
+}
+
+#[test]
+fn help_contents_opens_from_the_help_menu_with_or_without_a_job() {
+    for start in [Harness::at_start as fn() -> Harness, Harness::new] {
+        let mut h = start();
+        for item in help_menu(&h.app)
+            .iter()
+            .filter(|i| !i.action.is_empty() && i.children.is_empty())
+        {
+            assert!(h.app.available(&item.action), "{} is greyed", item.name);
+        }
+        h.choose(help_menu, &["Help Contents"]);
+        assert_eq!(h.app.info, Some(Info::Help("contents")));
+    }
+}
+
+#[test]
+fn help_search_lists_matching_pages_and_opens_one() {
+    let mut h = Harness::new();
+    let found = h.app.help_search_results("job setup");
+    assert_eq!(
+        found[0].0, "job_setup",
+        "a name that matches first: {found:?}"
+    );
+    assert!(
+        h.app.help_search_results("tabs").len() > 1,
+        "a word finds every page using it"
+    );
+    assert!(
+        h.app
+            .help_search_results("did you know")
+            .iter()
+            .any(|(t, ..)| *t == "tips"),
+        "the tips are a page of their own"
+    );
+    h.app.invoke(&h.ctx, "help_contents");
+    h.app.help_search = "job setup".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the first result, just under the count (the Design page has a Job Setup too)
+    let count = h
+        .text_at(&format!("{} pages found", found.len()))
+        .expect("the results counted");
+    let at = *h
+        .texts_at("Job Setup")
+        .iter()
+        .filter(|p| p.y > count.y)
+        .min_by(|a, b| a.y.total_cmp(&b.y))
+        .expect("listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.info, Some(Info::Help("job_setup")));
+    assert!(
+        h.app.help_search.is_empty(),
+        "the page shown in place of the list"
+    );
+}
+
+#[test]
+fn did_you_know_steps_through_the_tips() {
+    let mut h = Harness::at_start();
+    assert_eq!(h.app.tip, None, "tests start without it");
+    h.choose(help_menu, &["Did You Know?..."]);
+    assert_eq!(h.app.tip, Some(0));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at(&format!("Tip 1 of {}", super::tips::TIPS.len()))
+            .is_some()
+    );
+    let next = h.text_at("Next ▶").unwrap();
+    h.click(next, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.tip, Some(1));
+    let previous = h.text_at("◀ Previous").unwrap();
+    h.click(previous, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.tip, Some(0));
+    // the tip's length moves the buttons
+    let previous = h.text_at("◀ Previous").unwrap();
+    h.click(previous, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.tip,
+        Some(super::tips::TIPS.len() - 1),
+        "round to the last"
+    );
+    let show = h.text_at("Show a tip when Cut Craft starts").unwrap();
+    h.click(show, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(!h.app.options.general.show_tips_at_startup, "turned off");
+    let close = h.text_at("Close").unwrap();
+    h.click(close, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.tip, None);
+}
+
+#[test]
+fn a_different_tip_shows_each_start_unless_turned_off() {
+    let mut h = Harness::at_start();
+    h.app.options.next_tip = 3;
+    h.app.tip_at_startup();
+    assert_eq!(h.app.tip, Some(3));
+    assert_eq!(h.app.options.next_tip, 4, "the next one next time");
+    h.app.tip = None;
+    h.app.options.next_tip = super::tips::TIPS.len() - 1;
+    h.app.tip_at_startup();
+    assert_eq!(
+        h.app.options.next_tip, 0,
+        "back to the first after the last"
+    );
+    h.app.tip = None;
+    h.app.options.general.show_tips_at_startup = false;
+    h.app.tip_at_startup();
+    assert_eq!(h.app.tip, None, "turned off");
+    h.app.options.general.show_tips_at_startup = true;
+    h.app.open_first_run();
+    h.app.tip_at_startup();
+    assert_eq!(h.app.tip, None, "not over first-time setup");
+}
+
+#[test]
+fn every_tip_says_something_and_its_more_is_a_help_page() {
+    let h = Harness::new();
+    let topics = h.app.help_topics();
+    let mut seen = std::collections::HashSet::new();
+    for tip in super::tips::TIPS {
+        assert!(tip.text.split_whitespace().count() >= 10, "{}", tip.text);
+        assert!(seen.insert(tip.text), "said twice: {}", tip.text);
+        if let Some(t) = tip.topic {
+            assert!(topics.contains(&t), "{t} is not a help page");
+        }
+    }
+    let page = h.app.help_markdown("tips");
+    assert!(page.contains(super::tips::TIPS[0].text));
+}

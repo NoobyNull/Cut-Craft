@@ -6,9 +6,12 @@ a CNC machine cuts them with.
 - [Design](help:design): the page down the left. Draw and edit vectors, then model in 3D.
 - [Toolpaths](help:toolpaths): the page down the right. Turn vectors into toolpaths,
   preview them and save them for the machine.
+- [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
 
 ## Finding help
 
+- **Search help** along the top of this window finds every page with the words you type:
+  a tool's name, a setting such as "stepover", or a word such as "tabs".
 - **?** at the top of the Design or Toolpaths page lists that page's tools.
 - **F1** with a tool's form open goes straight to that tool; with none open, to this page.
 - Hover over a setting's name in a form for a short note about it.

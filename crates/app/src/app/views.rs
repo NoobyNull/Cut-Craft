@@ -350,7 +350,7 @@ impl CutCraftApp {
         self.tool_changer_window(ctx);
         self.updates_window(ctx);
         self.addons.window(ctx);
-        self.first_run_window(ctx);
+        self.welcome_windows(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));

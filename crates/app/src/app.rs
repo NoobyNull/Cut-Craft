@@ -25,6 +25,7 @@ mod surfacing;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod tips;
 mod title_bar;
 mod trace_window;
 mod updates;
@@ -266,7 +267,7 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 102] = [
+const BUILT_INS: [&str; 104] = [
     "try_sample_project",
     "machine_files",
     "first_run_setup",
@@ -328,6 +329,8 @@ const BUILT_INS: [&str; 102] = [
     "increment_and_save",
     "open_application_data_folder",
     "keyboard_shortcuts",
+    "help_contents",
+    "did_you_know",
     "third_party_licenses",
     "about_cut_craft",
     "check_for_updates",
@@ -1124,6 +1127,14 @@ struct CutCraftApp {
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.
     help_cache: egui_commonmark::CommonMarkCache,
+    /// What is typed in the Help window's search box.
+    help_search: String,
+    /// Every help page as (topic, title, Markdown), made the first time help is searched.
+    help_index: Vec<(&'static str, String, String)>,
+    /// The Did You Know? window, open on this tip.
+    tip: Option<usize>,
+    /// The Did You Know? window's rendered tips.
+    tips_cache: egui_commonmark::CommonMarkCache,
     /// Sketch Carving's green areas, with the form settings, revision and selection they
     /// were found for.
     sketch_areas: Option<SketchAreas>,
