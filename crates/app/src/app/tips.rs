@@ -2,153 +2,191 @@
 //! (Edit ▸ Options ▸ General turns that off) and all of them from Help ▸ Did You Know? and
 //! the Help window's own page of them. Cut Craft's own (see `re/SPEC.md`, Did You Know?).
 
-use super::{CutCraftApp, Info, egui};
+use super::{CutCraftApp, Info, SPLASH_LOGO, egui};
 
-/// A tip: what it says (Markdown), and the help page that says more, if one does.
+/// A tip: its picture (an icon key, or "" for Cut Craft's logo), what it says (Markdown),
+/// and the help page that says more, if one does.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Tip {
+    pub picture: &'static str,
     pub text: &'static str,
     pub topic: Option<&'static str>,
 }
 
-const fn tip(text: &'static str, topic: &'static str) -> Tip {
+const fn tip(picture: &'static str, text: &'static str, topic: &'static str) -> Tip {
     Tip {
+        picture,
         text,
         topic: Some(topic),
     }
 }
 
-const fn plain(text: &'static str) -> Tip {
-    Tip { text, topic: None }
+const fn plain(picture: &'static str, text: &'static str) -> Tip {
+    Tip {
+        picture,
+        text,
+        topic: None,
+    }
 }
 
 /// Every tip, in the order startup shows them: the first few are what a beginner needs on day
 /// one, the rest make the work quicker.
 pub(super) const TIPS: &[Tip] = &[
     plain(
+        "drawing/create_vectors/draw_text.png",
         "New to Cut Craft? On the start page, **Try a sample project** opens a finished sign \
          with its toolpaths already made, so you can see the whole journey from drawing to \
          cutting file before you start your own.",
     ),
     tip(
+        "",
         "Press **F1** with a tool's settings open to read the help for that tool. With nothing \
          open, F1 opens Help Contents, where you can search every tool.",
         "contents",
     ),
     plain(
+        "",
         "Not sure what a setting means? Hover the pointer over its name for a short note about \
          it.",
     ),
     tip(
+        "view/interface_layout.png",
         "The **?** at the top of the Design and Toolpaths pages lists every tool on that page, \
          each with a page of help.",
         "design",
     ),
     tip(
+        "toolpaths/edit_toolpath.png",
         "Cut Craft works in two steps. **Design** (down the left) is where you draw what you \
          want. **Toolpaths** (down the right) is where you tell the machine how to cut it.",
         "contents",
     ),
     tip(
+        "toolpaths/preview_toolpaths.png",
         "Always **Preview** a toolpath before you cut. It shows the bit carving the material on \
          screen, so a mistake costs nothing but a click.",
         "toolpaths",
     ),
     plain(
+        "drawing/join/join_open_ends.png",
         "Most toolpaths need a **closed** shape: one whose line meets itself all the way round. \
          **View ▸ Show Open Vector Ends** marks the gaps, and **Edit ▸ Join Open Ends** closes \
          them.",
     ),
     plain(
+        "toolpaths/tool_database.png",
         "Picking a bit from the **Tool Database** fills in its speeds, feeds and depth per pass \
          for you. Set them once for each bit and every toolpath uses them.",
     ),
     tip(
+        "toolpaths/recalculate_toolpath.png",
         "Changed a shape after making its toolpath? The toolpath is marked out of date, and \
          Cut Craft offers to recalculate it. Saving or sending an out-of-date toolpath always \
          stops to ask first.",
         "toolpaths",
     ),
     tip(
+        "drawing/edit_objects/set_size.png",
         "Number fields take sums. Type **W/2** for half the material's width, or **T** for its \
          thickness, and the answer is worked out when you press Enter.",
         "contents",
     ),
     tip(
+        "drawing/edit_objects/set_size.png",
         "Every number field has small up and down arrows. Hold **Shift** while clicking them \
          for steps ten times as big.",
         "contents",
     ),
     plain(
+        "file/job_setup.png",
         "Switching between millimetres and inches converts every measurement in the job, so \
          nothing changes size. Work in whichever your rulers and bits use.",
     ),
     plain(
+        "view/pan.png",
         "Roll the mouse wheel to zoom in and out about the pointer. Drag with the middle mouse \
          button to move around the drawing.",
     ),
     tip(
+        "view/3d_view.png",
         "**F2** shows the 2D view and **F3** the 3D view. **F11** and **F12** switch between \
          the layout for designing and the layout for machining.",
         "contents",
     ),
     tip(
+        "common/error_close.png",
         "Press **Esc** to close the open tool's settings without making anything.",
         "contents",
     ),
     tip(
+        "common/edit.png",
         "Select a shape and press **E** to change it in the tool that made it, with the same \
          settings you used.",
         "contents",
     ),
     plain(
+        "snapping/smart_snapping_on.png",
         "Drawing snaps to the grid, guides and the ends and middles of lines. **F4** chooses \
          what it snaps to, and holding **Shift** while you draw turns snapping off.",
     ),
     plain(
+        "file/undo.png",
         "Made a mistake? **Ctrl+Z** undoes it, as many times as you need. **Ctrl+Y** puts it \
          back.",
     ),
     plain(
+        "drawing/create_vectors/draw_star.png",
         "Use a tool all the time? Right-click its button ▸ **Add to Favourites**, then \
          right-click the page's tab to show just your favourites.",
     ),
     plain(
+        "toolpaths/pocket_toolpath.png",
         "Pockets with fine detail cut much faster with **Clear with bigger bits first**: a \
          large bit clears the open space and the small bit only cuts the corners it can't \
          reach.",
     ),
     tip(
+        "toolpaths/toolpath_summary.png",
         "**Toolpath Summary**, on the Toolpaths page, says how long each toolpath takes to cut, \
          so you know how long the machine will be busy before you start.",
         "toolpath_summary",
     ),
     plain(
+        "file/save.png",
         "**File ▸ Increment and Save** saves a new copy with the next number on its name (Sign \
          2, Sign 3), so you can always go back to an earlier version.",
     ),
     plain(
+        "file/open.png",
         "Cut Craft keeps a recovery copy of unsaved work every 30 seconds. If the power goes \
          off, your work can be opened again. **Edit ▸ Options ▸ General** sets how often.",
     ),
-    plain("Have a picture or logo? **Trace Bitmap** turns it into vectors you can carve."),
     plain(
+        "drawing/create_vectors/trace_bitmap.png",
+        "Have a picture or logo? **Trace Bitmap** turns it into vectors you can carve.",
+    ),
+    plain(
+        "modeling/relief_from_photo.png",
         "**Relief from Photo** (Modeling ▸ Shape Creation) turns a picture into a 3D shape to \
          carve.",
     ),
     plain(
+        "toolpaths/print_job_sheet.png",
         "**Toolpaths ▸ Print Job Sheet** prints what the job needs at the machine: the file \
          names, each bit and where it goes, and how long it all takes.",
     ),
     plain(
+        "file/github_link.png",
         "Something not working as it should? Right-click ▸ **Report a Bug Here…** sends a \
          report about the part of the window you clicked on.",
     ),
     plain(
+        "job_setup/z_zero_machine_bed.png",
         "Got a new machine, or set it up wrong the first time? **Help ▸ Run First-Time Setup \
          Again** asks the starting questions again.",
     ),
     tip(
+        "",
         "**Help ▸ Keyboard Shortcuts** lists the key for every tool, so you can work without \
          the menus.",
         "contents",
@@ -218,12 +256,23 @@ impl CutCraftApp {
         let mut show = self.options.general.show_tips_at_startup;
         let mut press = None;
         let size = egui::vec2(28.0, 12.0) * ctx.global_style().spacing.interact_size.y;
-        let cache = &mut self.tips_cache;
+        let (cache, icons) = (&mut self.tips_cache, &self.icons);
         let id = egui::Id::unique("did_you_know");
         cut_craft_bug_report::dialog(ctx, id, "Did You Know?", size, &mut open, |ui| {
             let tip = TIPS[n];
             ui.weak(format!("Tip {} of {}", n + 1, TIPS.len()));
-            egui_commonmark::CommonMarkViewer::new().show(ui, cache, tip.text);
+            ui.horizontal_top(|ui| {
+                let edge = egui::vec2(3.0, 3.0) * ui.spacing().interact_size.y;
+                let picture = match icons.find(tip.picture, "") {
+                    Some(key) => icons.image(key),
+                    None => egui::Image::from_bytes("bytes://splash-logo.jpg", SPLASH_LOGO)
+                        .corner_radius(edge.x * 0.06),
+                };
+                ui.add(picture.fit_to_exact_size(edge));
+                ui.vertical(|ui| {
+                    egui_commonmark::CommonMarkViewer::new().show(ui, cache, tip.text);
+                });
+            });
             ui.add_space(ui.spacing().item_spacing.y);
             ui.horizontal(|ui| {
                 if ui.button("◀ Previous").clicked() {

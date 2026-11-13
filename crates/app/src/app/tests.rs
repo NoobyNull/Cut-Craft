@@ -11770,6 +11770,12 @@ fn every_tip_says_something_and_its_more_is_a_help_page() {
         if let Some(t) = tip.topic {
             assert!(topics.contains(&t), "{t} is not a help page");
         }
+        // a picture of its own, or the logo ("") where no icon fits
+        let picture = tip.picture;
+        assert!(
+            picture.is_empty() || icon_set().contains(picture),
+            "{picture} is not an icon"
+        );
     }
     let page = h.app.help_markdown("tips");
     assert!(page.contains(super::tips::TIPS[0].text));
