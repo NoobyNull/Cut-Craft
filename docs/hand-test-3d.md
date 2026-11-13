@@ -12,7 +12,7 @@ expected). A screenshot path is enough for anything visual.
 - [ ] Base Height lifts the component.
 - [ ] Fade: anchors typed in; the far side drops by the percentage.
 - [ ] Tilt: pivot + raised point + angle; the shape leans (expect the side behind the
-      pivot to dip too — that's by design, flag it if it looks wrong next to Aspire).
+      pivot to dip too — that's by design, flag it if it looks wrong).
 - [ ] Bake: properties reset to defaults, the shape stays as it looked.
 
 ## Transforming components (select in 2D view or Components tab)
@@ -57,7 +57,7 @@ expected). A screenshot path is enough for anything visual.
 
 ## General feel
 - [ ] Anything slow (more than a second or so after a change)?
-- [ ] Anything that looks different from Aspire 12's equivalent?
+- [ ] Anything that looks wrong or unclear?
 
 # Hand test: the 2026-11-01 batch (version 0.4.2)
 
