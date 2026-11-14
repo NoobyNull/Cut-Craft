@@ -105,7 +105,8 @@ mod tests {
                 id: LayerId(1),
                 name: "Top".into(),
                 visible: false,
-                locked: true
+                locked: true,
+                made: None,
             }
         );
     }

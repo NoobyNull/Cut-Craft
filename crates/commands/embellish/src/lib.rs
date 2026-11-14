@@ -40,7 +40,7 @@ use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::trace::{Fit, fit};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
-use design::{Settings, Where};
+use design::{Motifs, Settings, Where};
 use field::Field;
 use motif::Item;
 use schemars::JsonSchema;
@@ -48,38 +48,62 @@ use serde::{Deserialize, Serialize};
 
 pub struct Embellish;
 
-/// Where the ornament goes in the shape.
+/// The one look the embellishment has: an ornament inside the shape, or a border round its
+/// edge.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum Place {
-    /// Inside, with no border
-    Fill,
-    /// A border band and bead row round the edge, and ornament along it
-    Border,
-    /// The border and the inside
+pub enum Style {
+    /// A band and bead row round the edge, and inside it a vine with scrolls, flowers, leaf
+    /// fans and small curls together
     #[default]
-    Both,
+    #[schemars(title = "Folk mix")]
+    FolkMix,
+    /// Inside only: a vine down the middle with scrolls curling off it, and small S-curls
+    Scrolls,
+    /// Inside only: rosettes where there is most room, and smaller flowers round them
+    Flowers,
+    /// Round the edge only: a rounded band with a row of beads inside it
+    #[schemars(title = "Band and beads border")]
+    BandBorder,
+    /// Round the edge only: slanted strands laid side by side
+    #[schemars(title = "Rope border")]
+    Rope,
+    /// Round the edge only: oval links seen face on, joined by links seen edge on
+    #[schemars(title = "Chain border")]
+    Chain,
+    /// Round the edge only: two strands twisting round each other
+    #[schemars(title = "Twist border")]
+    Twist,
+    /// Round the edge only: three strands plaited over and under
+    #[schemars(title = "Braid border")]
+    Braid,
+    /// Round the edge only: oval beads with a pair of thin discs between each two
+    #[schemars(title = "Bead and reel border")]
+    BeadAndReel,
 }
 
-/// What runs round the edge.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum BorderStyle {
-    /// A rounded band with a row of beads inside it, and ornament along it
-    #[default]
-    #[schemars(title = "Band and beads")]
-    Band,
-    /// Slanted strands laid side by side
-    Rope,
-    /// Oval links seen face on, joined by links seen edge on
-    Chain,
-    /// Two strands twisting round each other
-    Twist,
-    /// Three strands plaited over and under
-    Braid,
-    /// Oval beads with a pair of thin discs between each two
-    #[schemars(title = "Bead and reel")]
-    BeadAndReel,
+impl Style {
+    /// Where it goes, and what goes inside.
+    fn layout(self) -> (Where, Motifs) {
+        match self {
+            Self::FolkMix => (Where::Both, Motifs::Mix),
+            Self::Scrolls => (Where::Fill, Motifs::Scrolls),
+            Self::Flowers => (Where::Fill, Motifs::Flowers),
+            _ => (Where::Border, Motifs::Nothing),
+        }
+    }
+
+    /// The patterned border's own pattern, for the patterned borders.
+    fn pattern(self) -> Option<border::Style> {
+        Some(match self {
+            Self::Rope => border::Style::Rope,
+            Self::Chain => border::Style::Chain,
+            Self::Twist => border::Style::Twist,
+            Self::Braid => border::Style::Braid,
+            Self::BeadAndReel => border::Style::BeadAndReel,
+            _ => return None,
+        })
+    }
 }
 
 /// Which way the carving's pieces go.
@@ -113,35 +137,34 @@ pub enum Make {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct Params {
-    #[schemars(title = "Where", extend("x-widget" = "row"))]
-    pub place: Place,
-    #[schemars(title = "Border", extend("x-hide-when" = {"place": "fill"}))]
-    pub border: BorderStyle,
+    /// The one look it has. Folk mix, Scrolls and Flowers fill the shape; the borders run
+    /// round its edge (and round any hole in it)
+    pub style: Style,
     /// How wide the patterned border is
-    #[schemars(title = "Border width", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Border width", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
     pub border_width: f64,
     /// How long each repeat of the pattern is, against the width; the count is rounded so the
     /// pattern meets itself
-    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
     pub repeat: u32,
     /// How steeply the rope's strands lie
-    #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"border": "rope"}))]
+    #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"style": "rope"}))]
     pub twist: u32,
     /// How far in from the edge the patterned border starts
-    #[schemars(title = "Border inset", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Border inset", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
     pub border_inset: f64,
     /// Raised rails along both sides of the patterned border
-    #[schemars(title = "Rails", extend("x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Rails", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
     pub rails: bool,
     /// Low makes bold, plain pieces; high adds bead rows, sunbursts, striped scrolls and
     /// small curls
-    #[schemars(range(min = 1, max = 10), extend("x-widget" = "slider"))]
+    #[schemars(range(min = 1, max = 10), extend("x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers", "band_border"]}))]
     pub refinement: u32,
-    /// How many scrolls and small pieces go in: low leaves open ground
-    #[schemars(title = "Number of objects", range(min = 1, max = 10), extend("x-widget" = "slider"))]
+    /// How full the shape gets: low leaves open ground between the pieces
+    #[schemars(title = "How full", range(min = 1, max = 10), extend("x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub objects: u32,
     /// How big the scrolls may grow
-    #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-unit" = "%", "x-widget" = "slider"))]
+    #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls"]}))]
     pub scroll_size: u32,
     /// How close the pieces sit: the smallest gap between them is 3 mm at 1 and 0.75 mm at
     /// 10. Finish with a ball-nose bit no wider than the gap
@@ -186,8 +209,7 @@ pub struct Editing {
 impl Default for Params {
     fn default() -> Self {
         Self {
-            place: Place::Both,
-            border: BorderStyle::Band,
+            style: Style::FolkMix,
             border_width: 14.0,
             repeat: 100,
             twist: 45,
@@ -218,14 +240,7 @@ impl Params {
 
     /// The patterned border, when one is chosen.
     fn pattern(&self) -> Option<border::Spec> {
-        let style = match self.border {
-            BorderStyle::Band => return None,
-            BorderStyle::Rope => border::Style::Rope,
-            BorderStyle::Chain => border::Style::Chain,
-            BorderStyle::Twist => border::Style::Twist,
-            BorderStyle::Braid => border::Style::Braid,
-            BorderStyle::BeadAndReel => border::Style::BeadAndReel,
-        };
+        let style = self.style.pattern()?;
         Some(border::Spec {
             style,
             width: self.border_width,
@@ -243,11 +258,8 @@ impl Params {
             detail: unit(self.refinement),
             density: unit(self.objects),
             scale: f64::from(self.scroll_size.clamp(50, 160)) / 100.0,
-            place: match self.place {
-                Place::Fill => Where::Fill,
-                Place::Border => Where::Border,
-                Place::Both => Where::Both,
-            },
+            place: self.style.layout().0,
+            motifs: self.style.layout().1,
             stipple: self.stipple,
             seed,
             inner_from: 0.0,
@@ -437,8 +449,7 @@ fn picked(doc: &Document, by_outlines: bool) -> Option<Kept> {
     let kept = all_kept(doc);
     let by_component = || {
         kept.iter().position(|k| {
-            k.at
-                .component
+            k.at.component
                 .is_some_and(|c| doc.selected_components.contains(&c))
         })
     };
@@ -550,14 +561,17 @@ impl Command for Embellish {
             .any(|it| matches!(it, Item::Shape { sink: false, .. }))
         {
             return Err(CommandError::Failed(
-                "the shape is too small for the ornament. Draw it bigger, or turn Tightness up"
+                "the shape is too small for the ornament. Draw it bigger, or turn Tightness up, or pick another style"
                     .into(),
             ));
         }
-        let at = editing.as_ref().map(|k| k.at).unwrap_or(Editing {
-            layer: None,
-            component: None,
-        });
+        let at = editing.as_ref().map_or(
+            Editing {
+                layer: None,
+                component: None,
+            },
+            |k| k.at,
+        );
         let mut c = Change::builder(doc);
         // an embellishment edited: its old pieces go, and its layer if it no longer has any
         if let Some(old) = at.layer {
@@ -734,15 +748,22 @@ mod tests {
         let doc = document_with(vec![polygon(6, 110.0)]);
         let p = Params {
             name: "Lid".into(),
-            border: BorderStyle::Chain,
+            style: Style::Scrolls,
             objects: 3,
             ..Params::default()
         };
         let once = selecting_components(&made(&doc, &p));
-        assert_eq!(Embellish::initial_params(&doc).editing, None, "nothing to edit yet");
+        assert_eq!(
+            Embellish::initial_params(&doc).editing,
+            None,
+            "nothing to edit yet"
+        );
         let opened = Embellish::initial_params(&once);
-        assert!(opened.editing.is_some(), "the component opens Embellish on itself");
-        assert_eq!(opened.border, BorderStyle::Chain);
+        assert!(
+            opened.editing.is_some(),
+            "the component opens Embellish on itself"
+        );
+        assert_eq!(opened.style, Style::Scrolls);
         assert_eq!(opened.objects, 3);
         assert_eq!(opened.name, "Lid");
         let changed = Params {
@@ -755,7 +776,13 @@ mod tests {
         assert_eq!(twice.components.len(), 1, "remade, not added");
         let layer = twice.layers.last().unwrap();
         assert_eq!(layer.name, "Top");
-        let fresh = made(&doc, &Params { editing: None, ..changed.clone() });
+        let fresh = made(
+            &doc,
+            &Params {
+                editing: None,
+                ..changed.clone()
+            },
+        );
         assert_eq!(
             layer_vectors(&twice, layer.id),
             layer_vectors(&fresh, fresh.layers.last().unwrap().id),
@@ -802,7 +829,9 @@ mod tests {
         assert_eq!(opened.objects, 2);
         // another outline is a new embellishment
         let mut other = after.clone();
-        other.apply(&Change::swap(&other, [], vec![square(400.0, 0.0, 100.0)])).unwrap();
+        other
+            .apply(&Change::swap(&other, [], vec![square(400.0, 0.0, 100.0)]))
+            .unwrap();
         assert_eq!(Embellish::initial_params(&other).editing, None);
     }
 
@@ -817,10 +846,13 @@ mod tests {
         assert!(once.components.is_empty());
         let opened = Embellish::initial_params(&once);
         assert!(opened.editing.is_some());
-        let both = made(&once, &Params {
-            make: Make::Both,
-            ..opened
-        });
+        let both = made(
+            &once,
+            &Params {
+                make: Make::Both,
+                ..opened
+            },
+        );
         assert_eq!(both.components.len(), 1, "a carving added to it");
         assert_eq!(both.layers.len(), once.layers.len());
         assert!(
@@ -828,19 +860,29 @@ mod tests {
             "the component keeps the settings now"
         );
         let opened = Embellish::initial_params(&selecting_components(&both));
-        let carving = made(&both, &Params {
-            make: Make::Carving,
-            ..opened
-        });
-        assert_eq!(carving.layers.len(), doc.layers.len(), "its vectors and layer go");
+        let carving = made(
+            &both,
+            &Params {
+                make: Make::Carving,
+                ..opened
+            },
+        );
+        assert_eq!(
+            carving.layers.len(),
+            doc.layers.len(),
+            "its vectors and layer go"
+        );
         assert_eq!(carving.vectors.len(), doc.vectors.len());
         assert_eq!(carving.components.len(), 1);
         let opened = Embellish::initial_params(&selecting_components(&carving));
         assert_eq!(opened.make, Make::Carving);
-        let back = made(&carving, &Params {
-            make: Make::Vectors,
-            ..opened
-        });
+        let back = made(
+            &carving,
+            &Params {
+                make: Make::Vectors,
+                ..opened
+            },
+        );
         assert!(back.components.is_empty(), "the carving goes");
         assert_eq!(back.layers.len(), doc.layers.len() + 1);
         assert!(Embellish::initial_params(&back).editing.is_some());
@@ -906,9 +948,9 @@ mod tests {
         assert!(hi <= 0.0 && (lo + 1.5).abs() < 0.3, "sunk {lo} {hi}");
         let (lo, hi) = range_of(&made(&doc, &with(Direction::Mixed)));
         assert!((hi - 3.0).abs() < 0.15 && lo < -1.0, "mixed {lo} {hi}");
-        for pattern in [BorderStyle::Band, BorderStyle::Rope] {
+        for style in [Style::FolkMix, Style::Scrolls] {
             let p = Params {
-                border: pattern,
+                style,
                 ..with(Direction::Mixed)
             };
             let (pieces, n) = {
@@ -1011,9 +1053,9 @@ mod tests {
         let shape = polygon(4, 110.0);
         let doc = document_with(vec![shape]);
         let centre = Point::new(150.0, 150.0);
-        let near_middle = |place| {
+        let near_middle = |style| {
             let p = Params {
-                place,
+                style,
                 make: Make::Vectors,
                 ..Params::default()
             };
@@ -1026,25 +1068,24 @@ mod tests {
                 })
                 .count()
         };
-        assert_eq!(near_middle(Place::Border), 0);
-        assert!(near_middle(Place::Both) > 0);
+        assert_eq!(near_middle(Style::BandBorder), 0);
+        assert!(near_middle(Style::FolkMix) > 0);
     }
 
     #[test]
-    fn a_patterned_border_runs_round_the_edge_with_the_ornament_clear_inside_it() {
+    fn a_patterned_border_runs_round_the_edge_alone() {
         let shape = polygon(6, 110.0);
         let doc = document_with(vec![shape.clone()]);
         let centre = Point::new(150.0, 150.0);
         for border in [
-            BorderStyle::Rope,
-            BorderStyle::Chain,
-            BorderStyle::Twist,
-            BorderStyle::Braid,
-            BorderStyle::BeadAndReel,
+            Style::Rope,
+            Style::Chain,
+            Style::Twist,
+            Style::Braid,
+            Style::BeadAndReel,
         ] {
             let only = Params {
-                place: Place::Border,
-                border,
+                style: border,
                 make: Make::Vectors,
                 ..Params::default()
             };
@@ -1056,16 +1097,60 @@ mod tests {
                 let d = v.bounds().center().distance(centre);
                 assert!(d > 65.0 || v.bounds().size().x > 100.0, "{border:?} at {d}");
             }
-            let both = Params {
-                place: Place::Both,
-                ..only
+        }
+    }
+
+    /// The pieces' sizes, longest side, biggest first.
+    fn piece_sizes(doc: &Document, outline: &Path) -> Vec<f64> {
+        let mut sizes: Vec<f64> = doc
+            .vectors
+            .values()
+            .filter(|v| *v != outline)
+            .map(|v| {
+                let s = v.bounds().size();
+                s.x.max(s.y)
+            })
+            .collect();
+        sizes.sort_by(|a, b| b.total_cmp(a));
+        sizes
+    }
+
+    #[test]
+    fn each_style_is_one_kind_of_piece() {
+        for shape in [lopsided(), polygon(6, 110.0)] {
+            let doc = document_with(vec![shape.clone()]);
+            let of = |style| {
+                made(
+                    &doc,
+                    &Params {
+                        style,
+                        make: Make::Vectors,
+                        ..Params::default()
+                    },
+                )
             };
-            let inside = made(&doc, &both)
-                .vectors
-                .values()
-                .filter(|v| v.bounds().center().distance(centre) < 60.0)
-                .count();
-            assert!(inside > 5, "{border:?}: ornament inside");
+            let (mix, scrolls, flowers) =
+                (of(Style::FolkMix), of(Style::Scrolls), of(Style::Flowers));
+            let (m, sc, fl) = (
+                piece_sizes(&mix, &shape),
+                piece_sizes(&scrolls, &shape),
+                piece_sizes(&flowers, &shape),
+            );
+            eprintln!(
+                "mix {:?}\nscrolls {:?}\nflowers {:?}",
+                &m[..8],
+                &sc[..8.min(sc.len())],
+                &fl[..8.min(fl.len())]
+            );
+            assert!(sc.len() > 10 && fl.len() > 10, "{} {}", sc.len(), fl.len());
+            assert!(
+                sc.len() < m.len() && fl.len() < m.len(),
+                "fewer kinds, fewer pieces"
+            );
+            // no border band (the biggest piece of the mix) in either
+            let outline = shape.bounds().size().x;
+            assert!(m[0] > outline * 0.8);
+            assert!(sc[0] < outline * 0.8 && fl[0] < outline * 0.8);
         }
     }
 
@@ -1199,35 +1284,35 @@ mod pictures {
             (
                 "-border",
                 Params {
-                    place: Place::Border,
+                    style: Style::BandBorder,
                     ..Params::default()
                 },
             ),
             (
                 "-rope",
                 Params {
-                    border: BorderStyle::Rope,
+                    style: Style::Rope,
                     ..Params::default()
                 },
             ),
             (
                 "-chain",
                 Params {
-                    border: BorderStyle::Chain,
+                    style: Style::Chain,
                     ..Params::default()
                 },
             ),
             (
                 "-twist",
                 Params {
-                    border: BorderStyle::Twist,
+                    style: Style::Twist,
                     ..Params::default()
                 },
             ),
             (
                 "-braid",
                 Params {
-                    border: BorderStyle::Braid,
+                    style: Style::Braid,
                     rails: true,
                     ..Params::default()
                 },
@@ -1235,7 +1320,21 @@ mod pictures {
             (
                 "-bead",
                 Params {
-                    border: BorderStyle::BeadAndReel,
+                    style: Style::BeadAndReel,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-scrolls",
+                Params {
+                    style: Style::Scrolls,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-flowers",
+                Params {
+                    style: Style::Flowers,
                     ..Params::default()
                 },
             ),
@@ -1257,18 +1356,37 @@ mod pictures {
                 "-mixed-rope",
                 Params {
                     direction: Direction::Mixed,
-                    border: BorderStyle::Rope,
+                    style: Style::Rope,
                     ..Params::default()
                 },
             ),
         ];
         let only = std::env::var("EMBELLISH_ONLY").unwrap_or_default();
+        let only_variant = std::env::var("EMBELLISH_VARIANT").ok();
+        let mut shapes: Vec<(String, Vec<Path>)> =
+            shapes.into_iter().map(|(n, p)| (n, vec![p])).collect();
+        // a ring: a round shape with a round hole
+        let circle = |r: f64| {
+            let pts: Vec<Point> = (0..240)
+                .map(|k| {
+                    Point::new(150.0, 150.0) + Point::from_angle(TAU * f64::from(k) / 240.0) * r
+                })
+                .collect();
+            Path::polyline(&pts, true)
+        };
+        shapes.push(("ring".into(), vec![circle(120.0), circle(35.0)]));
         for (name, shape) in &shapes {
             if !only.is_empty() && !name.contains(&only) {
                 continue;
             }
             for (suffix, p) in &variants {
-                let doc = cut_craft_core::testing::document_with(vec![shape.clone()]);
+                if only_variant
+                    .as_ref()
+                    .is_some_and(|v| !v.split(',').any(|v| v == *suffix))
+                {
+                    continue;
+                }
+                let doc = cut_craft_core::testing::document_with(shape.clone());
                 let t = std::time::Instant::now();
                 let change = Embellish::run(&doc, p).unwrap();
                 let ms = t.elapsed().as_millis();

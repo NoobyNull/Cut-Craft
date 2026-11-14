@@ -873,6 +873,7 @@ mod tests {
             name: name.into(),
             visible: true,
             locked: false,
+            made: None,
         });
         for v in ids {
             doc.vector_layers.insert(*v, id);

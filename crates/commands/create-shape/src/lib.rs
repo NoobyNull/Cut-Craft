@@ -170,7 +170,12 @@ pub fn made_here(kept: &serde_json::Value) -> bool {
 /// the selected closed vectors and the first open one (a custom profile).
 fn outlines(doc: &Document, p: &Params) -> (Option<EntityId>, Vec<Path>) {
     let kept = p.replaces.and_then(|id| {
-        let shape = doc.components.get(&id)?.shape.as_ref().filter(|k| made_here(k))?;
+        let shape = doc
+            .components
+            .get(&id)?
+            .shape
+            .as_ref()
+            .filter(|k| made_here(k))?;
         Some((id, Vec::<Path>::deserialize(&shape["paths"]).ok()?))
     });
     if let Some((id, paths)) = kept {
@@ -256,7 +261,12 @@ impl Command for CreateShape {
             .iter()
             .rev()
             .find_map(|&id| {
-                let kept = doc.components.get(&id)?.shape.as_ref().filter(|k| made_here(k))?;
+                let kept = doc
+                    .components
+                    .get(&id)?
+                    .shape
+                    .as_ref()
+                    .filter(|k| made_here(k))?;
                 let p = Params::deserialize(&kept["params"]).ok()?;
                 Some(Params {
                     replaces: Some(id),

@@ -16,6 +16,34 @@ pub enum Where {
     Both,
 }
 
+/// Which kinds of piece go inside the border: one kind alone, or the folk mix of them all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Motifs {
+    /// Vine, scrolls, flowers, leaf fans, sunbursts and small curls together
+    Mix,
+    /// Only scrolls: the vine and its curls, and small S-curls
+    Scrolls,
+    /// Only flowers: rosettes where there is most room, small flowers round them
+    Flowers,
+    /// Nothing inside: a border alone
+    Nothing,
+}
+
+impl Motifs {
+    pub fn scrolls(self) -> bool {
+        matches!(self, Self::Mix | Self::Scrolls)
+    }
+
+    pub fn flowers(self) -> bool {
+        matches!(self, Self::Mix | Self::Flowers)
+    }
+
+    /// Leaf fans, stems and sunbursts, which only the mix has.
+    pub fn leaves(self) -> bool {
+        self == Self::Mix
+    }
+}
+
 /// The settings, as the form gives them (each 0 to 1 unless said).
 #[derive(Clone, Copy, Debug)]
 pub struct Settings {
@@ -26,6 +54,7 @@ pub struct Settings {
     /// How big scrolls may grow, 1 as designed.
     pub scale: f64,
     pub place: Where,
+    pub motifs: Motifs,
     pub stipple: bool,
     pub seed: u32,
     /// How far in from the edge the ornament starts at the least (past a patterned border).
