@@ -1,5 +1,4 @@
-- Toolpaths page split into Make, List, Preview and Save; tool forms show measurement pictures with callout letters
-- Import a drawing to fit inside a selected shape; a DXF without units asks which it is, then zooms to it
-- Help Contents opens again, with search and Did You Know? tips; the 3D view shows the material from the start
-- Each bit has one shape, listed once per material; drag knives cut at zero depth on a flat surface
-- Keyhole single or double entry, and V-bit chamfers can't go deeper than the bit's V
+- Materials Library sorted by class and hardness; jobs and layers name their material
+- Bend an imported drawing along a selected open line
+- The Toolpaths panel keeps its list in sight, with Create, Preview, Analyse and Output tabs
+- Every Did You Know? tip has an illustration of its own
