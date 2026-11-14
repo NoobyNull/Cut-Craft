@@ -748,9 +748,14 @@ fn icon_row(
                     ui.end_row();
                 }
                 ui.vertical(|ui| {
-                    ui.set_max_width(edge.x + ui.spacing().button_padding.x * 2.0);
+                    let width = edge.x + ui.spacing().button_padding.x * 2.0;
+                    ui.set_max_width(width);
                     let r = ui.add(button).on_hover_hint(&hover);
-                    ui.small(&o.label);
+                    // the name has a fixed place under its picture: a longer one never
+                    // makes its row taller and moves what is below
+                    fixed_text(ui, width, NAMED_LABEL_ROWS, |ui| {
+                        ui.small(&o.label);
+                    });
                     r
                 })
                 .inner
@@ -767,6 +772,27 @@ fn icon_row(
 
 /// How many rows tall a named icon's picture is.
 const NAMED_ICON_ROWS: f32 = 2.0;
+
+/// How many lines of small text a named icon's name has room for.
+const NAMED_LABEL_ROWS: u8 = 2;
+
+/// A fixed place, `width` wide and `rows` lines of small text tall, for text that changes or
+/// differs in length: it wraps inside it and anything past is cut off, so it never grows
+/// or shrinks its panel (which flickers and moves everything below).
+pub fn fixed_text(ui: &mut egui::Ui, width: f32, rows: u8, add: impl FnOnce(&mut egui::Ui)) {
+    let line = ui.text_style_height(&egui::TextStyle::Small);
+    fixed_area(ui, egui::vec2(width, line * f32::from(rows)), add);
+}
+
+/// A fixed place of `size` for what `add` shows, clipped to it.
+pub fn fixed_area(ui: &mut egui::Ui, size: egui::Vec2, add: impl FnOnce(&mut egui::Ui)) {
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let clip = rect.intersect(ui.clip_rect());
+    // a child that does not move the cursor on: only `rect` is taken, whatever it holds
+    let mut inside = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    inside.set_clip_rect(clip);
+    add(&mut inside);
+}
 
 fn radios(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<String> {
     let mut picked = None;
@@ -1439,15 +1465,15 @@ mod tests {
                 "Folk mix",
                 "Scrolls",
                 "Flowers",
-                "Band and beads border",
-                "Rope border",
-                "Chain border",
-                "Twist border",
-                "Braid border",
-                "Bead and reel border",
-                "Laurel leaves border",
-                "Feathers border",
-                "Chevrons border"
+                "Band and beads",
+                "Rope",
+                "Chain",
+                "Twist",
+                "Braid",
+                "Bead and reel",
+                "Laurel leaves",
+                "Feathers",
+                "Chevrons"
             ]
         );
         // each setting only shows for the styles it changes

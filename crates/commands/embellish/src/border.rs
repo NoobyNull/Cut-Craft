@@ -20,6 +20,7 @@ pub enum Style {
     Laurel,
     Feathers,
     Chevrons,
+    BandBeads,
 }
 
 /// How the border is drawn, in mm.
@@ -37,6 +38,8 @@ pub struct Spec {
     pub rails: bool,
     /// One row only, down the middle of a narrow band, rather than one along each edge.
     pub single: bool,
+    /// The pattern runs the other way along its line.
+    pub reverse: bool,
 }
 
 impl Spec {
@@ -547,7 +550,16 @@ fn lay(lp: &Loop, b: &Spec, g: f64) -> Vec<Item> {
         Style::Laurel => laurel(lp, hw, p * 0.75, g),
         Style::Feathers => feathers(lp, hw, p * 2.8, g),
         Style::Chevrons => chevrons(lp, hw, p * 0.6, g),
+        Style::BandBeads => beads_beside_band(lp, hw, p * 0.5, g),
     };
+    if b.reverse {
+        // mirrored along the line: what pointed forward points back
+        let len = lp.len;
+        parts = parts
+            .iter()
+            .map(|it| it.map(&|q: Point| pt(len - q.x, q.y)))
+            .collect();
+    }
     // along an open line: the repeats that fit between its ends, moved to sit centred
     let (mut from, mut to) = (0.0, lp.len);
     if !lp.closed {
@@ -580,6 +592,12 @@ fn lay(lp: &Loop, b: &Spec, g: f64) -> Vec<Item> {
         .iter()
         .map(|it| it.map(&|q: Point| lp.at(q.x, q.y)))
         .collect();
+    // the band beside the beads, all the way round (or along)
+    if b.style == Style::BandBeads && laid {
+        let (wb, side) = band_and_bead_sizes(hw, g);
+        let v = if b.reverse { -side } else { side };
+        items.push(strip(lp, v, wb, from, to, 0.9));
+    }
     // the laurel's stem, one band all the way round (or along)
     if b.style == Style::Laurel && laid {
         let ws = stem_width(hw, g);
@@ -659,6 +677,38 @@ fn chevrons(lp: &Loop, hw: f64, p: f64, g: f64) -> Vec<Item> {
         out.push(sh(dense_ring(&corners, 0.6), 1.0));
     }
     out
+}
+
+/// The band and beads' band width, and how far its middle is off the line (on the outer
+/// side); the beads fill the rest of the width, a gap from it.
+fn band_and_bead_sizes(hw: f64, g: f64) -> (f64, f64) {
+    let wb = hw.max(g * 1.2);
+    (wb, hw - wb / 2.0)
+}
+
+/// Band and beads: a row of round beads beside a rounded band (the band is laid by
+/// [`lay`]).
+fn beads_beside_band(lp: &Loop, hw: f64, p: f64, g: f64) -> Vec<Item> {
+    let (wb, _) = band_and_bead_sizes(hw, g);
+    // the beads between the band's inner edge (a gap off) and the far edge
+    let room = 2.0 * hw - wb - g;
+    let r = room / 2.0;
+    if r < g * 0.5 {
+        return vec![];
+    }
+    let (n, pp) = count(lp.len, p.max(2.0 * r + g), 3.0);
+    let v = -hw + r;
+    (0..n as usize)
+        .map(|k| {
+            let s0 = (k as f64 + 0.5) * pp;
+            Item::Shape {
+                rings: vec![ellipse(s0, v, r, r, 32)],
+                h: 0.8,
+                profile: Profile::Ball,
+                sink: false,
+            }
+        })
+        .collect()
 }
 
 /// The laurel's stem width.
@@ -808,6 +858,7 @@ mod tests {
             inset: 3.0,
             rails: true,
             single: false,
+            reverse: false,
         }
     }
 
@@ -826,7 +877,8 @@ mod tests {
         }
     }
 
-    const ALL: [Style; 8] = [
+    const ALL: [Style; 9] = [
+        Style::BandBeads,
         Style::Rope,
         Style::Chain,
         Style::Twist,
@@ -919,9 +971,63 @@ mod tests {
     }
 
     #[test]
+    fn reverse_runs_the_pattern_the_other_way_along_the_line() {
+        // chevrons point along the line: their tips are the pieces' furthest-forward points
+        let line: Vec<Point> = (0..=200).map(|i| pt(f64::from(i), 0.0)).collect();
+        let tips = |reverse: bool| {
+            let b = Spec {
+                reverse,
+                rails: false,
+                ..spec(Style::Chevrons)
+            };
+            along(&line, &b, 1.5)
+                .iter()
+                .map(|it| {
+                    // the point on the middle line, against the arms' ends' mean
+                    let pts: Vec<Point> = it.points().collect();
+                    let mid = pts
+                        .iter()
+                        .filter(|q| q.y.abs() < 0.5)
+                        .map(|q| q.x)
+                        .fold(f64::NAN, f64::max);
+                    let ends = pts.iter().map(|q| q.x).sum::<f64>() / pts.len() as f64;
+                    mid - ends
+                })
+                .collect::<Vec<f64>>()
+        };
+        assert!(tips(false).iter().all(|&d| d > 0.0), "forward");
+        assert!(tips(true).iter().all(|&d| d < 0.0), "back");
+    }
+
+    #[test]
+    fn band_and_beads_lays_a_band_and_a_row_of_beads_beside_it() {
+        let line: Vec<Point> = (0..=200).map(|i| pt(f64::from(i), 0.0)).collect();
+        let b = Spec {
+            rails: false,
+            ..spec(Style::BandBeads)
+        };
+        let items = along(&line, &b, 1.5);
+        let beads = items
+            .iter()
+            .filter(|it| {
+                matches!(
+                    it,
+                    Item::Shape {
+                        profile: Profile::Ball,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert!(beads > 15, "{beads} beads");
+        assert_eq!(items.len(), beads + 1, "and one band");
+    }
+
+    #[test]
     fn every_style_keeps_inside_its_band_and_clear_of_the_edge() {
         let field = square_field();
         for style in [
+            Style::BandBeads,
             Style::Rope,
             Style::Chain,
             Style::Twist,

@@ -1,3 +1,4 @@
+- Embellish: works along open lines, every style fills a closed shape, plain style names, Reverse, Reset and Apply
 - Embellish: pick one style, fill with borders, new Laurel, Feathers and Chevrons, and press E to edit one
 - Set shortcuts to keys or mouse buttons in Options
 - Each form's button says what it does (Create, Calculate or Apply) and hides when changes show live

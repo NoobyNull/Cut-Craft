@@ -1,11 +1,14 @@
-//! Embellish: folk-swirl ornament designed for the selected shape rather than cut out of a
-//! pattern. The shape is read as a distance field (how far each point is from its edge):
-//! a border band and bead row follow the outline, and inside, a shape that repeats round
-//! its middle (a regular polygon, a star) is designed one wedge at a time and mirrored into
-//! the rest, while any other shape gets a vine down its middle with scrolls branching off
-//! it, leaf fans in its points and flowers where it is roomiest. Every piece keeps the
-//! smallest gap from the others, so the finishing bit can carve between them. The pieces
-//! come out as vectors, as a 3D component, or both.
+//! Embellish: ornament designed for the selected shape or line rather than cut out of a
+//! pattern. A closed shape is filled: Folk mix, Scrolls and Flowers are designed for it
+//! (a vine down its middle with scrolls, leaf fans in its points, flowers where it is
+//! roomiest, mirrored when the shape repeats round its middle), and the patterns (Band and
+//! beads, Rope, Chain, Twist, Braid, Bead and reel, Laurel leaves, Feathers, Chevrons) fill
+//! it row after row inward from the edge. An open line has the style run along it, end to
+//! end. Reverse runs a pattern the other way along its line; Reset puts every setting back
+//! to its default and makes it again as new; Apply makes changes to one already made (select
+//! it, or press E on it, to open it again). Every piece keeps the smallest gap from the
+//! others, so the finishing bit can carve between them. The pieces come out as vectors, as a
+//! 3D component, or both.
 
 #![allow(
     clippy::many_single_char_names,
@@ -48,46 +51,46 @@ use serde::{Deserialize, Serialize};
 
 pub struct Embellish;
 
-/// The one look the embellishment has: an ornament inside the shape, or a border round its
-/// edge.
+/// The one look the embellishment has. Every style fills a closed shape and runs along an
+/// open line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Style {
     /// A band and bead row round the edge, and inside it a vine with scrolls, flowers, leaf
-    /// fans and small curls together
+    /// fans and small curls together (along a line, the vine and its scrolls)
     #[default]
     #[schemars(title = "Folk mix")]
     FolkMix,
-    /// Inside only: a vine down the middle with scrolls curling off it, and small S-curls
+    /// A vine down the middle with scrolls curling off it, and small S-curls
     Scrolls,
-    /// Inside only: rosettes where there is most room, and smaller flowers round them
+    /// Rosettes where there is most room, and smaller flowers round them
     Flowers,
-    /// Round the edge only: a rounded band with a row of beads inside it
-    #[schemars(title = "Band and beads border")]
+    /// A rounded band with a row of beads beside it
+    #[schemars(title = "Band and beads")]
     BandBorder,
-    /// Round the edge only: slanted strands laid side by side
-    #[schemars(title = "Rope border")]
+    /// Slanted strands laid side by side
+    #[schemars(title = "Rope")]
     Rope,
-    /// Round the edge only: oval links seen face on, joined by links seen edge on
-    #[schemars(title = "Chain border")]
+    /// Oval links seen face on, joined by links seen edge on
+    #[schemars(title = "Chain")]
     Chain,
-    /// Round the edge only: two strands twisting round each other
-    #[schemars(title = "Twist border")]
+    /// Two strands twisting round each other
+    #[schemars(title = "Twist")]
     Twist,
-    /// Round the edge only: three strands plaited over and under
-    #[schemars(title = "Braid border")]
+    /// Three strands plaited over and under
+    #[schemars(title = "Braid")]
     Braid,
-    /// Round the edge only: oval beads with a pair of thin discs between each two
-    #[schemars(title = "Bead and reel border")]
+    /// Oval beads with a pair of thin discs between each two
+    #[schemars(title = "Bead and reel")]
     BeadAndReel,
-    /// Round the edge only: pairs of laurel leaves along a stem, as in a wreath
-    #[schemars(title = "Laurel leaves border")]
+    /// Pairs of laurel leaves along a stem, as in a wreath
+    #[schemars(title = "Laurel leaves")]
     Laurel,
-    /// Round the edge only: feathers one after another, each with a quill and barbs
-    #[schemars(title = "Feathers border")]
+    /// Feathers one after another, each with a quill and barbs
+    #[schemars(title = "Feathers")]
     Feathers,
-    /// Round the edge only: V shapes one after another, all pointing the same way
-    #[schemars(title = "Chevrons border")]
+    /// V shapes one after another, all pointing the same way
+    #[schemars(title = "Chevrons")]
     Chevrons,
 }
 
@@ -113,6 +116,7 @@ impl Style {
             Self::Laurel => border::Style::Laurel,
             Self::Feathers => border::Style::Feathers,
             Self::Chevrons => border::Style::Chevrons,
+            Self::BandBorder => border::Style::BandBeads,
             _ => return None,
         })
     }
@@ -149,41 +153,41 @@ pub enum Make {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct Params {
-    /// The one look it has. Folk mix, Scrolls and Flowers fill the shape; the borders run
-    /// round its edge (and round any hole in it)
+    /// The one look it has. A closed shape is filled with it; an open line has it run
+    /// along the line
     #[schemars(extend("x-section" = true, "x-widget" = "named-icons", "x-icon" = "drawing_forms/embellish_{}.png"))]
     pub style: Style,
-    /// Fill the whole shape with the pattern: row after row following the outline inward,
-    /// instead of one row round the edge
-    #[schemars(title = "Fill the shape", extend("x-group" = "Pattern", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
-    pub fill_rows: bool,
-    /// How wide the pattern is. On a shape narrower than this it is made narrower to fit,
-    /// one row down the middle
-    #[schemars(title = "Width", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    /// How wide one row of the pattern is. A closed shape is filled row after row inward; on
+    /// a shape narrower than this it is made narrower to fit, one row down the middle
+    #[schemars(title = "Width", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub border_width: f64,
     /// How long each repeat of the pattern is, against its width; the count is rounded so
     /// the pattern meets itself
-    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-group" = "Pattern", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-group" = "Pattern", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub repeat: u32,
+    /// Run the pattern the other way along its line: chevrons, feathers and leaves point
+    /// back, and the rope and plaits twist the other way
+    #[schemars(extend("x-group" = "Pattern", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    pub reverse: bool,
     /// How steeply the rope's strands lie
     #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-group" = "Pattern", "x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"style": "rope"}))]
     pub twist: u32,
     /// How far in from the shape's edge the pattern starts
-    #[schemars(title = "Gap from the edge", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    #[schemars(title = "Gap from the edge", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub border_inset: f64,
     /// Thin raised lines along both sides of the pattern, framing it
-    #[schemars(title = "Edge lines", extend("x-group" = "Pattern", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    #[schemars(title = "Edge lines", extend("x-group" = "Pattern", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub rails: bool,
     /// Low makes a few bold, plain pieces; high adds bead rows, sunbursts, striped scrolls
     /// and small curls
-    #[schemars(title = "Detail", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers", "band_border"]}))]
+    #[schemars(title = "Detail", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub refinement: u32,
     /// How full the shape gets: low leaves open ground between the pieces
     #[schemars(title = "How full", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub objects: u32,
     /// On an open line, how wide a band of ornament runs along it (a closed shape is filled
     /// whole)
-    #[schemars(title = "Width on a line", range(min = 0), extend("x-group" = "Ornament", "x-unit" = "mm", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers", "band_border"]}))]
+    #[schemars(title = "Width on a line", range(min = 0), extend("x-group" = "Ornament", "x-unit" = "mm", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub line_width: f64,
     /// How big the scrolls may grow
     #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-group" = "Ornament", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls"]}))]
@@ -242,7 +246,7 @@ impl Default for Params {
             twist: 45,
             border_inset: 3.0,
             rails: false,
-            fill_rows: false,
+            reverse: false,
             refinement: 6,
             objects: 6,
             scroll_size: 100,
@@ -278,6 +282,7 @@ impl Params {
             inset: self.border_inset.max(0.0),
             rails: self.rails,
             single: false,
+            reverse: self.reverse,
         })
     }
 
@@ -696,7 +701,7 @@ impl Command for Embellish {
             }
         }
         if p.pattern().is_some() {
-            ensure_positive("border width", p.border_width)?;
+            ensure_positive("pattern width", p.border_width)?;
         }
         let selected = doc.selected_paths(|_| true).1;
         if p.pattern().is_none() && selected.iter().any(|s| !s.closed) {
@@ -756,7 +761,7 @@ impl Command for Embellish {
                         };
                         design(&region.field, s, None, false)
                     }
-                    _ => design(&region.field, p.settings(seed, g), p.pattern(), p.fill_rows),
+                    _ => design(&region.field, p.settings(seed, g), p.pattern(), true),
                 };
                 // a border alone, its pieces or ornament missing, is not what was asked;
                 // nor are pieces too big for the shape, out over its edge
@@ -1292,7 +1297,7 @@ mod tests {
     }
 
     #[test]
-    fn a_border_keeps_to_the_edge_and_a_fill_has_no_band() {
+    fn the_ornament_reaches_the_middle() {
         let shape = polygon(4, 110.0);
         let doc = document_with(vec![shape]);
         let centre = Point::new(150.0, 150.0);
@@ -1311,39 +1316,7 @@ mod tests {
                 })
                 .count()
         };
-        assert_eq!(near_middle(Style::BandBorder), 0);
         assert!(near_middle(Style::FolkMix) > 0);
-    }
-
-    #[test]
-    fn a_patterned_border_runs_round_the_edge_alone() {
-        let shape = polygon(6, 110.0);
-        let doc = document_with(vec![shape.clone()]);
-        let centre = Point::new(150.0, 150.0);
-        for border in [
-            Style::Rope,
-            Style::Chain,
-            Style::Twist,
-            Style::Braid,
-            Style::BeadAndReel,
-            Style::Laurel,
-            Style::Feathers,
-            Style::Chevrons,
-        ] {
-            let only = Params {
-                style: border,
-                make: Make::Vectors,
-                ..Params::default()
-            };
-            let after = made(&doc, &only);
-            let pieces: Vec<&Path> = after.vectors.values().filter(|v| **v != shape).collect();
-            assert!(pieces.len() > 30, "{border:?}: {}", pieces.len());
-            // the hexagon's apothem is 95 mm: the border keeps to its outer part
-            for v in &pieces {
-                let d = v.bounds().center().distance(centre);
-                assert!(d > 65.0 || v.bounds().size().x > 100.0, "{border:?} at {d}");
-            }
-        }
     }
 
     /// The pieces' sizes, longest side, biggest first.
@@ -1401,11 +1374,12 @@ mod tests {
     }
 
     #[test]
-    fn a_patterned_border_can_fill_the_shape_row_after_row() {
+    fn every_patterned_style_fills_a_closed_shape_row_after_row() {
         let shape = polygon(6, 110.0);
         let doc = document_with(vec![shape.clone()]);
         let centre = Point::new(150.0, 150.0);
         for style in [
+            Style::BandBorder,
             Style::Rope,
             Style::Chain,
             Style::BeadAndReel,
@@ -1413,20 +1387,12 @@ mod tests {
             Style::Feathers,
             Style::Chevrons,
         ] {
-            let p = |fill_rows| Params {
+            let p = Params {
                 style,
-                fill_rows,
                 make: Make::Vectors,
                 ..Params::default()
             };
-            let one = made(&doc, &p(false));
-            let rows = made(&doc, &p(true));
-            assert!(
-                rows.vectors.len() > 2 * one.vectors.len(),
-                "{style:?}: {} rows vs {}",
-                rows.vectors.len(),
-                one.vectors.len()
-            );
+            let rows = made(&doc, &p);
             let near_middle = rows
                 .vectors
                 .values()
@@ -1434,6 +1400,16 @@ mod tests {
                 .count();
             assert!(near_middle > 0, "{style:?}: rows reach the middle");
         }
+    }
+
+    #[test]
+    fn no_style_is_named_a_border() {
+        let schema = serde_json::to_string(&schemars::schema_for!(Params)).unwrap();
+        assert!(
+            !schema.contains(" border\""),
+            "a style title ends in border"
+        );
+        assert!(!schema.contains("Fill the shape"));
     }
 
     /// A band `w` mm wide round a 200 mm square.
@@ -1609,12 +1585,7 @@ mod tests {
         let line = wave();
         let flat = line.flatten(0.05);
         let doc = document_with(vec![line.clone()]);
-        for style in [
-            Style::FolkMix,
-            Style::Scrolls,
-            Style::Flowers,
-            Style::BandBorder,
-        ] {
+        for style in [Style::FolkMix, Style::Scrolls, Style::Flowers] {
             let p = Params {
                 style,
                 line_width: 36.0,
@@ -1945,7 +1916,6 @@ mod pictures {
                 "-chain-fill",
                 Params {
                     style: Style::Chain,
-                    fill_rows: true,
                     ..Params::default()
                 },
             ),
@@ -1953,7 +1923,6 @@ mod pictures {
                 "-rope-fill",
                 Params {
                     style: Style::Rope,
-                    fill_rows: true,
                     ..Params::default()
                 },
             ),
@@ -1961,7 +1930,6 @@ mod pictures {
                 "-braid-fill",
                 Params {
                     style: Style::Braid,
-                    fill_rows: true,
                     ..Params::default()
                 },
             ),
@@ -1990,7 +1958,6 @@ mod pictures {
                 "-laurel-fill",
                 Params {
                     style: Style::Laurel,
-                    fill_rows: true,
                     ..Params::default()
                 },
             ),
@@ -1998,7 +1965,6 @@ mod pictures {
                 "-feathers-fill",
                 Params {
                     style: Style::Feathers,
-                    fill_rows: true,
                     ..Params::default()
                 },
             ),
@@ -2006,7 +1972,6 @@ mod pictures {
                 "-chevrons-fill",
                 Params {
                     style: Style::Chevrons,
-                    fill_rows: true,
                     ..Params::default()
                 },
             ),

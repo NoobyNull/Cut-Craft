@@ -63,11 +63,19 @@ pub(super) const CREATE_FORMS: &[&str] = &[
     "wrapped_spiral_layout",
 ];
 
+/// Remaking forms that still show Apply once what they made follows them.
+const KEEPS_APPLY: &[&str] = &["embellish"];
+
 /// The commit button form `id` shows, if any. `drawing`: the tool can be drawn with the
 /// mouse; `made`: what the form made still follows its settings.
 pub(super) fn commit(id: &str, page: Page, drawing: bool, made: bool) -> Option<Commit> {
     if GESTURE_TOOLS.contains(&id) || LIVE_FORMS.contains(&id) {
         return None;
+    }
+    // Embellish keeps an Apply once made, for changes to be seen to go on the one there
+    // (Matthew's ask: tweak it later without deleting and remaking it)
+    if KEEPS_APPLY.contains(&id) && made {
+        return Some(Commit::Apply);
     }
     if drawing || REMAKE_FORMS.contains(&id) {
         return (!made).then_some(Commit::Create);
@@ -133,7 +141,12 @@ mod tests {
     fn a_remaking_form_creates_once_then_follows_its_settings() {
         for id in REMAKE_FORMS {
             assert_eq!(commit(id, Page::Design, false, false), Some(Commit::Create));
-            assert_eq!(commit(id, Page::Design, false, true), None, "{id}");
+            let once_made = if KEEPS_APPLY.contains(id) {
+                Some(Commit::Apply)
+            } else {
+                None
+            };
+            assert_eq!(commit(id, Page::Design, false, true), once_made, "{id}");
         }
     }
 
