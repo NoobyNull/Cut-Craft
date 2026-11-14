@@ -673,6 +673,12 @@ pub struct ToolDatabase {
     /// whose tools are all the user's own (added with My Tools)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub catalogues: Vec<String>,
+    /// Tools joined into another, by their old name: one bit listed once per material
+    /// came in as copies, now one tool with cutting data per material; toolpaths and tool
+    /// changers that name a copy find the bit ([`Self::index_of`]). See
+    /// [`crate::tool_copies`] (added with one shape per bit)
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub joined: std::collections::BTreeMap<String, crate::tool_copies::JoinedCopy>,
 }
 
 /// The top-level group the catalogues are imported into, apart from My Tools.
@@ -801,6 +807,12 @@ impl ToolDatabase {
             .filter(named)
             .find(|&i| !self.is_catalogue(&self.tools[i]))
             .or_else(|| all.clone().find(named))
+            .or_else(|| {
+                // a copy joined into its bit: the bit
+                let bit = &self.joined.get(name).filter(|j| j.bit != name)?.bit;
+                let named = |i: &usize| self.tools[*i].name == *bit;
+                all.clone().find(named)
+            })
     }
 
     /// The tool `name` as a toolpath takes it: cutting with the active material's data.
@@ -840,7 +852,21 @@ impl ToolDatabase {
     }
 
     pub fn pick(&self, name: &str) -> Option<Tool> {
+        // a toolpath naming a bit's per-material copy keeps cutting with that copy's data,
+        // whatever the active material, under the name it has
+        if let Some(copy) = self.joined_copy(name) {
+            let bit = self.get(name)?;
+            let mut tool = bit.for_material(&copy.material);
+            name.clone_into(&mut tool.name);
+            return Some(tool);
+        }
         self.get(name).map(|t| t.for_material(&self.material))
+    }
+
+    /// The copy `name` was, when it is a copy joined into a bit and no tool has the name now.
+    fn joined_copy(&self, name: &str) -> Option<&crate::tool_copies::JoinedCopy> {
+        let copy = self.joined.get(name)?;
+        (!self.tools.iter().any(|t| t.name == name)).then_some(copy)
     }
 
     /// Puts back a tool as [`Self::pick`] gave it: with a material active its cutting data
@@ -909,6 +935,16 @@ impl ToolDatabase {
 
     /// Replaces the tool with the same name, or adds it at the end.
     pub fn put(&mut self, mut tool: Tool) {
+        // a joined copy's data goes back as its bit's for the copy's material
+        if let Some(copy) = self.joined_copy(&tool.name).cloned() {
+            if let Some(i) = self.index_of(&tool.name) {
+                self.tools[i].set_cutting(CuttingData {
+                    material: copy.material,
+                    ..tool.cutting("")
+                });
+            }
+            return;
+        }
         match self.index_of(&tool.name) {
             Some(i) if !self.is_catalogue(&self.tools[i]) => self.tools[i] = tool,
             // a catalogue stays as it came: the changed tool joins My Tools

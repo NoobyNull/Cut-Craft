@@ -409,6 +409,30 @@ pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
     ToolDatabase::from_json(&read(path)?).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Where the tool database is copied before it is first changed by one shape per bit.
+pub fn tools_backup_path(path: &Path) -> std::path::PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_owned();
+    name.push(".before-one-shape-per-bit");
+    path.with_file_name(name)
+}
+
+/// [`load_tools`], each bit listed once per material joined into one
+/// ([`ToolDatabase::join_material_copies`]): when any was, the file as it was is copied to
+/// [`tools_backup_path`] (once) and the joined database saved. What was not kept, if any.
+pub fn load_tools_joining(path: &Path) -> Result<(ToolDatabase, Vec<String>), String> {
+    let mut db = load_tools(path)?;
+    let before = db.tools.len();
+    let report = db.join_material_copies();
+    if db.tools.len() != before && path.exists() {
+        let backup = tools_backup_path(path);
+        if !backup.exists() {
+            std::fs::copy(path, &backup).map_err(|e| format!("{}: {e}", backup.display()))?;
+        }
+        save_tools(&db, path)?;
+    }
+    Ok((db, report))
+}
+
 /// Tool database files Tool Database ▸ Import Tools reads.
 pub const TOOL_FILE_EXTENSIONS: [&str; 3] = ["vtdb", "tools", "json"];
 
@@ -939,6 +963,48 @@ mod tests {
         db.tools.truncate(1);
         save_tools(&db, &path).unwrap();
         assert_eq!(load_tools(&path).unwrap(), db);
+    }
+
+    #[test]
+    fn a_bit_listed_per_material_is_joined_on_loading_after_a_backup() {
+        use cut_craft_core::toolpath::{Tool, ToolShape};
+        let path = temp("joined/tools.json");
+        let copy = |name: &str, folder: &str, shank: f64| Tool {
+            name: name.into(),
+            group: format!("SpeTool/V-BIT/{folder}/1/4\" SHANK"),
+            shape: ToolShape::VBit,
+            diameter: 19.05,
+            angle: 90.0,
+            shank_diameter: shank,
+            ..Tool::default()
+        };
+        let db = ToolDatabase {
+            tools: vec![
+                copy("V 90", "MDF", 6.35),
+                copy("V 90 2", "SOFTWOOD", 0.0),
+                copy("V 90 3", "HARDWOOD", 12.7),
+            ],
+            ..ToolDatabase::default()
+        };
+        save_tools(&db, &path).unwrap();
+        let (joined, report) = load_tools_joining(&path).unwrap();
+        assert_eq!(joined.tools.len(), 1);
+        assert_eq!(joined.get("V 90 3").unwrap().shank_diameter, 6.35);
+        assert_eq!(report.len(), 1, "the 12.7 shank is said: {report:?}");
+        assert_eq!(
+            load_tools(&tools_backup_path(&path)).unwrap(),
+            db,
+            "the file as it was is kept"
+        );
+        assert_eq!(
+            load_tools(&path).unwrap(),
+            joined,
+            "and the joined one saved"
+        );
+        // loading again changes nothing and keeps the first backup
+        let (again, report) = load_tools_joining(&path).unwrap();
+        assert_eq!((again, report), (joined, vec![]));
+        assert_eq!(load_tools(&tools_backup_path(&path)).unwrap(), db);
     }
 
     #[test]

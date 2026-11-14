@@ -1659,6 +1659,7 @@ impl CutCraftApp {
         if let Some(path) = &self.machines_path {
             self.machines = cut_craft_machines::Machines::load(path);
         }
+
         self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
     }
 
@@ -4794,8 +4795,23 @@ impl CutCraftApp {
     pub(super) fn load_tools(&mut self) {
         self.tools_path = files::tool_database_path();
         if let Some(path) = &self.tools_path {
-            match files::load_tools(path) {
-                Ok(tools) => self.tools = tools,
+            match files::load_tools_joining(path) {
+                Ok((tools, report)) => {
+                    self.tools = tools;
+                    // sizes a bit's copies gave differently, not kept: said once
+                    if let Some(first) = report.first() {
+                        for line in &report {
+                            log::warn!("joining a bit's per-material copies: {line}");
+                        }
+                        let more = match report.len() {
+                            1 => String::new(),
+                            n => format!(" (and {} more; see the log)", n - 1),
+                        };
+                        self.status.set_message(&format!(
+                            "Bits listed once per material are now one bit each. {first}{more}"
+                        ));
+                    }
+                }
                 Err(e) => {
                     self.status
                         .set_message(&format!("{e}; tool changes will not be saved"));

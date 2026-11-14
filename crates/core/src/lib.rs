@@ -42,6 +42,7 @@ pub mod spell;
 pub mod testing;
 pub mod texture_area;
 pub mod tiling;
+pub mod tool_copies;
 pub mod tool_names;
 pub mod toolpath;
 pub mod trace;

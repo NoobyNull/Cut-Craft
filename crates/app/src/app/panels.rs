@@ -134,12 +134,19 @@ impl CutCraftApp {
             Ok(tools) => {
                 let n = tools.tools.len();
                 let done = format!("Imported {n} tools from {}", file_name(path));
+                // a bit listed once per material becomes one bit: what was not kept is said
+                let said = |report: Vec<String>| match report.first() {
+                    Some(first) => format!("; {first}"),
+                    None => String::new(),
+                };
                 if let Some(manager) = &mut self.tool_manager {
-                    manager.import(tools, &name);
-                    self.status.set_message(&format!("{done}; OK keeps them"));
+                    let report = manager.import(tools, &name);
+                    self.status
+                        .set_message(&format!("{done}; OK keeps them{}", said(report)));
                 } else {
                     cut_craft_tool_database::tree::import(&mut self.tools, tools, &name);
-                    self.tools_changed(&done);
+                    let report = self.tools.join_material_copies();
+                    self.tools_changed(&format!("{done}{}", said(report)));
                 }
             }
             Err(e) => self.status.set_message(&e),
