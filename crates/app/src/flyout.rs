@@ -227,6 +227,29 @@ pub fn clusters(tools: &[&'static str]) -> Vec<Cluster> {
     out
 }
 
+/// How many tool buttons `button` wide, `gap` apart, go side by side in `room`: at least one.
+///
+/// Rows of tool buttons are cut by this count, worked out from sizes that never change, rather
+/// than wrapped where the buttons happen to end: a hovered button is drawn a fraction of a
+/// point wider (its border thickens), and wrapping on that sent a full row's last button to
+/// the next row and back every frame the pointer was over the row.
+pub fn per_row(room: f32, button: f32, gap: f32) -> usize {
+    // a hair over the exact fit still counts, so a row sized for n buttons holds n
+    let fit = ((room + gap + 0.01) / (button + gap)).floor();
+    if fit.is_finite() && fit >= 1.0 {
+        // a page is never more than some thousands of points across
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "1 or more, small"
+        )]
+        let fit = fit as usize;
+        fit
+    } else {
+        1
+    }
+}
+
 /// Remembers `id` as its flyout's face; a tool in no flyout changes nothing.
 pub fn remember(faces: &mut Faces, id: &str) {
     if let Some(flyout) = flyout_of(id) {
@@ -318,6 +341,30 @@ pub fn variant(id: &str) -> Option<&'static Variant> {
 mod tests {
     use super::*;
     use cut_craft_core::geometry::Point;
+
+    #[test]
+    fn a_row_sized_for_six_buttons_holds_six() {
+        let (button, gap) = (39.5, 8.0);
+        let six = 6.0 * button + 5.0 * gap;
+        assert_eq!(per_row(six, button, gap), 6);
+        assert_eq!(
+            per_row(six - 1.0, button, gap),
+            5,
+            "a point short holds five"
+        );
+        assert_eq!(
+            per_row(six + button, button, gap),
+            6,
+            "not quite room for a seventh"
+        );
+    }
+
+    #[test]
+    fn a_row_too_narrow_for_one_button_still_holds_one() {
+        assert_eq!(per_row(10.0, 39.5, 8.0), 1);
+        assert_eq!(per_row(0.0, 39.5, 8.0), 1);
+        assert_eq!(per_row(f32::NAN, 39.5, 8.0), 1);
+    }
 
     fn faces(pairs: &[(&str, &str)]) -> Faces {
         pairs
