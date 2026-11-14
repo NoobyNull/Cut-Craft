@@ -498,18 +498,39 @@ say "not implemented yet".
     repeats so it closes on itself: Rope (twist angle), Chain (face and edge links), Twist
     (two plaited strands), Braid (three) or Bead and reel, with Border width, Repeat size,
     Inset from the edge and optional rails; the ornament inside keeps clear of it.
-    One Style list picks a single look: Folk mix (band and beads plus everything inside),
-    Scrolls only, Flowers only, or one border alone (Band and beads, Rope, Chain, Twist,
-    Braid, Bead and reel, Laurel leaves, Feathers, Chevrons); settings that don't change
-    the chosen style are hidden. Fill the shape repeats a patterned border row after row
-    inward until the shape is full (a row that would run into one from another edge, round
-    a hole, is left out). Its
+    One Style list picks a single look, with plain names (Matthew 2026-11-14: no style is
+    a "border"): Folk mix, Scrolls, Flowers, Band and beads, Rope, Chain, Twist, Braid, Bead
+    and reel, Laurel leaves, Feathers, Chevrons. Every style fills a closed shape: the
+    patterns row after row inward until the shape is full (a row that would run into one
+    from another edge, round a hole, is left out); on an open line it runs along the line.
+    Reverse runs a pattern the other way; Reset puts every setting back to its default and
+    makes it again; Apply stays once it is made. Settings that don't change the chosen style
+    are hidden. The Next line, style names and red text have fixed places so the form never
+    jumps. Its
     component (or, for vectors only, its layer) keeps the settings and the outlines it was
     made for: E on it, or on any of its pieces, reopens Embellish and remakes it in place;
     opening Embellish on an outline that already has one edits that one.
     Direction sets which way the 3D carving goes: Raised (Raise height), Sunk in (Sink
     depth, an incised carving) or Mixed (the border and bigger pieces raised, the small
     fillers hollowed in), each distance set on its own.
+    On an open vector the embellishment runs along the line instead: a patterned border
+    style is laid from one end to the other (whole repeats, centred, the line's sharp bends
+    rounded so the band never folds), its Width set as for a border; Folk mix, Scrolls,
+    Flowers and Band and beads fill a band Width on a line wide round it (Folk mix as a
+    vine along the line with scrolls off it, no band round the edge). Closed shapes and open
+    lines can be selected together; selecting the line again reopens its embellishment.
+    Sequence (Matthew 2026-11-14) says how each repeat is drawn in turn: 0 a space, 1 as
+    designed, 2 flipped across the line, 3 back to front, 4 both; /n turns a repeat by
+    180° ÷ n, R (before or after) turns it the other way (back to front with no turn), S a
+    random size, T (or O) a random lean, and S or T before brackets reach every entry in
+    them, as ST(1,2). Entries are split by commas; plain digits need none. It starts again
+    when it runs out with nothing added between, and empty is 1 over and over (12 makes the
+    vine wave up and down; a closed line gets a whole number of turns of it). The pattern
+    maker under the box draws a sample of the chosen style for each digit with the chosen
+    turn, R, S and T, adds it on a click, and has Undo, Clear and Random. Random size and
+    Random rotation tick boxes vary every repeat; Layout picks the pieces' shape (scroll
+    curl, petals, leaf fan), the same in every repeat, 1 as designed. Not for Twist and
+    Braid, which have no separate repeats.
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.

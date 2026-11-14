@@ -4357,10 +4357,12 @@ impl CutCraftApp {
         if committing.is_none() {
             new_shape = live_row(ui, open.id, drawing, made);
         }
+        let mut reset = false;
         ui.horizontal(|ui| {
             if let Some((label, hint)) = committing {
                 apply = ui.button(label).on_hover_hint(hint).clicked();
             }
+            reset = reset_button(ui, open.id);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 close = ui
                     .button(close_label)
@@ -4389,6 +4391,10 @@ impl CutCraftApp {
             if let Some(form) = self.form.as_mut() {
                 (form.drawn, form.applied) = (None, None);
             }
+            return;
+        }
+        if reset {
+            self.reset_form();
             return;
         }
         if default {
@@ -4492,6 +4498,26 @@ impl CutCraftApp {
         }
     }
 
+    /// Reset on a form: every setting back to its default, and what it made (or is editing)
+    /// made again with them, as if it were new.
+    pub(super) fn reset_form(&mut self) {
+        let Some(form) = self.form.as_mut() else {
+            return;
+        };
+        let Some(command) = self.registry.get(form.id) else {
+            return;
+        };
+        let mut fresh = command.default_params();
+        // still the embellishment it was opened on
+        if let Some(editing) = form.params.get("editing").filter(|e| !e.is_null()) {
+            fresh["editing"] = editing.clone();
+        }
+        form.params = fresh;
+        form.error = None;
+        form.warning = None;
+        form.dirty = true;
+    }
+
     /// Cancel on a tool's form: everything done since the form opened is undone (and can be
     /// redone), and the form closes.
     pub(super) fn cancel_form(&mut self) {
@@ -4517,7 +4543,19 @@ impl CutCraftApp {
             }
             ui.strong(open.label);
         });
-        if let Some(step) = self.form_guidance() {
+        let step = self.form_guidance();
+        if FIXED_TEXT_FORMS.contains(&open.id) {
+            // a fixed place for the Next line, there or not, so the form never jumps
+            let rows = ui.text_style_height(&egui::TextStyle::Body) * NEXT_LINE_ROWS;
+            crate::form::fixed_area(ui, egui::vec2(ui.available_width(), rows), |ui| {
+                if let Some(step) = step {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.strong("Next:");
+                        ui.label(step);
+                    });
+                }
+            });
+        } else if let Some(step) = step {
             ui.horizontal_wrapped(|ui| {
                 ui.strong("Next:");
                 ui.label(step);
@@ -4553,6 +4591,40 @@ impl CutCraftApp {
 
     /// Why the open form's last Apply failed, or what it warned of, in red, over its buttons.
     fn form_error(&self, ui: &mut egui::Ui) {
+        let Some(form) = self.form.as_ref() else {
+            return;
+        };
+        if FIXED_TEXT_FORMS.contains(&form.id) {
+            // what the setting under the pointer does, in a box of its own under the
+            // settings, always the same size
+            let rows = ui.text_style_height(&egui::TextStyle::Body) * HELP_BOX_ROWS;
+            let said = form::pointed_at_help(ui.ctx());
+            ui.group(|ui| {
+                crate::form::fixed_area(
+                    ui,
+                    egui::vec2(ui.available_width(), rows),
+                    |ui| match said {
+                        Some(help) => {
+                            ui.label(help);
+                        }
+                        None => {
+                            ui.weak("Point at a setting to see what it does.");
+                        }
+                    },
+                );
+            });
+            // a fixed place for the red text, shown or not, so the settings above never
+            // jump as it comes and goes
+            let rows = ui.text_style_height(&egui::TextStyle::Body) * WARNING_ROWS;
+            crate::form::fixed_area(ui, egui::vec2(ui.available_width(), rows), |ui| {
+                self.form_error_text(ui);
+            });
+        } else {
+            self.form_error_text(ui);
+        }
+    }
+
+    fn form_error_text(&self, ui: &mut egui::Ui) {
         let Some(form) = self.form.as_ref() else {
             return;
         };
@@ -4646,8 +4718,7 @@ impl CutCraftApp {
                 selector_section(ui, params, &layers, units);
             }
         };
-        let bed = self.machines.active().map(|m| [m.width, m.height]);
-        let stock = form_stock(&self.doc, units, bed.unwrap_or_default());
+        let stock = form_stock(&self.doc, units, bed(&self.machines));
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
         };
@@ -4658,6 +4729,7 @@ impl CutCraftApp {
             tool: Some(&tool),
             group_end: Some(&group_end),
             materials: Some(&self.materials),
+            pattern: Some(pattern_maker()),
         };
         let icon = |path: &str| self.icons.find(path, "").map(|p| self.icons.image(p));
         // Trace Bitmap's settings are in its trace window, beside the preview
@@ -5515,6 +5587,8 @@ fn show_form(
     job: &cut_craft_core::document::Job,
     icon: &dyn Fn(&str) -> Option<egui::Image<'static>>,
 ) -> bool {
+    // what the pointer was on last frame; the fields note it again this frame
+    form::forget_help(ui.ctx());
     let changed = form::show(ui, &open.fields, &mut open.params, look);
     changed | align_in_material(ui, open, job, icon) | update_undercuts(ui, open)
 }
@@ -5800,6 +5874,32 @@ fn page_key(page: Page) -> &'static str {
 
 /// A form with no commit button: why there is none, and on a drawing tool whose shape follows
 /// the form, New Shape to let it go and type another; whether New Shape was pressed.
+/// Forms with a Reset button: their settings back to the defaults, the look made again as
+/// if new.
+const RESET_FORMS: &[&str] = &["embellish"];
+
+/// Forms whose changing text (the Next line, the red text at the foot) has a fixed place,
+/// so the form never grows, shrinks or flickers as it changes.
+const FIXED_TEXT_FORMS: &[&str] = &["embellish"];
+
+/// Lines kept for a fixed form's Next line.
+const NEXT_LINE_ROWS: f32 = 2.0;
+
+/// Lines kept for what the setting under the pointer does.
+const HELP_BOX_ROWS: f32 = 4.0;
+
+/// Lines kept for a fixed form's red text at its foot.
+const WARNING_ROWS: f32 = 3.0;
+
+/// A form's Reset button, for the forms that have one.
+fn reset_button(ui: &mut egui::Ui, id: &str) -> bool {
+    RESET_FORMS.contains(&id)
+        && ui
+            .button("Reset")
+            .on_hover_hint("Put every setting back to its default and make it again, as if new")
+            .clicked()
+}
+
 fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
     ui.horizontal_wrapped(|ui| {
         ui.weak(commit::live_note(id, drawing));
@@ -5811,4 +5911,24 @@ fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
                 .clicked()
     })
     .inner
+}
+
+/// Embellish's samples and random sequences, for the pattern maker under its Sequence box.
+fn pattern_maker() -> form::PatternMaker<'static> {
+    form::PatternMaker {
+        sample: &embellish_sample,
+        random: &cmd_embellish::random_sequence,
+    }
+}
+
+fn embellish_sample(params: &Value, entry: &str) -> form::SampleRings {
+    cmd_embellish::sample(params, entry)
+        .into_iter()
+        .map(|ring| ring.into_iter().map(|q| [q.x, q.y]).collect())
+        .collect()
+}
+
+/// The active machine's bed, width and height (none without a machine).
+fn bed(machines: &cut_craft_machines::Machines) -> [f64; 2] {
+    machines.active().map_or_default(|m| [m.width, m.height])
 }

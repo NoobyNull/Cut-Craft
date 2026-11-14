@@ -13,6 +13,10 @@ use std::f64::consts::TAU;
 pub enum Where {
     Fill,
     Border,
+    #[expect(
+        dead_code,
+        reason = "the shape-aware designs, kept while every style is a repeating pattern"
+    )]
     Both,
 }
 
@@ -22,8 +26,16 @@ pub enum Motifs {
     /// Vine, scrolls, flowers, leaf fans, sunbursts and small curls together
     Mix,
     /// Only scrolls: the vine and its curls, and small S-curls
+    #[expect(
+        dead_code,
+        reason = "the shape-aware designs, kept while every style is a repeating pattern"
+    )]
     Scrolls,
     /// Only flowers: rosettes where there is most room, small flowers round them
+    #[expect(
+        dead_code,
+        reason = "the shape-aware designs, kept while every style is a repeating pattern"
+    )]
     Flowers,
     /// Nothing inside: a border alone
     Nothing,

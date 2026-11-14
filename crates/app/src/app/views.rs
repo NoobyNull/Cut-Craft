@@ -3520,6 +3520,7 @@ impl CutCraftApp {
                 tool: None,
                 group_end: None,
                 materials: None,
+                pattern: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(style) = serde_json::from_value(values)
@@ -3599,6 +3600,7 @@ impl CutCraftApp {
                 tool: None,
                 group_end: None,
                 materials: None,
+                pattern: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(style) = serde_json::from_value(values)
@@ -3657,6 +3659,7 @@ impl CutCraftApp {
                 tool: None,
                 group_end: None,
                 materials: None,
+                pattern: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(settings) = serde_json::from_value(values)
@@ -3721,6 +3724,7 @@ impl CutCraftApp {
                 tool: None,
                 group_end: None,
                 materials: None,
+                pattern: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(options) = serde_json::from_value(values)

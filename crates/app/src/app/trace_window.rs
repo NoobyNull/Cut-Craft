@@ -617,6 +617,7 @@ impl CutCraftApp {
             tool: None,
             group_end: None,
             materials: None,
+            pattern: None,
         };
         open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
         let Ok(p) = serde_json::from_value::<Params>(open.params.clone()) else {
