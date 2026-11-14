@@ -33,6 +33,11 @@ pub struct Layer {
     pub visible: bool,
     /// Locked layers are drawn but cannot be picked or edited.
     pub locked: bool,
+    /// The tool and settings that made what is on this layer, and the outlines it was made
+    /// for, so the tool can open on it again and remake it (added with editable
+    /// embellishments): `{"command": .., "params": .., "paths": ..}`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub made: Option<serde_json::Value>,
 }
 
 impl Layer {
@@ -42,6 +47,7 @@ impl Layer {
             name: name.to_owned(),
             visible: true,
             locked: false,
+            made: None,
         }
     }
 }

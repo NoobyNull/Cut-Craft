@@ -62,6 +62,8 @@ impl Command for LayerProperties {
             name: ensure_named(&p.name)?,
             visible: p.visible,
             locked: p.locked,
+            // what made the layer's contents stays with it
+            made: doc.layer(p.layer).and_then(|l| l.made.clone()),
         };
         let mut c = Change::builder(doc);
         // only editable vectors may stay selected

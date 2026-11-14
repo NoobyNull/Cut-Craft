@@ -36,7 +36,7 @@ mod rng;
 mod sym;
 
 use cut_craft_core::component::{Combine, Component};
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::trace::{Fit, fit};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -167,6 +167,20 @@ pub struct Params {
     /// Names the new layer the ornament's vectors go on, and its 3D component
     pub name: String,
     pub combine: Combine,
+    /// The embellishment being edited: it is made again, in place, from the outlines it keeps
+    #[schemars(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editing: Option<Editing>,
+}
+
+/// Where an embellishment Embellish made lives: its layer of vectors, its 3D component, or
+/// both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Editing {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<LayerId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub component: Option<EntityId>,
 }
 
 impl Default for Params {
@@ -191,6 +205,7 @@ impl Default for Params {
             seed: 4,
             name: "Embellishment".into(),
             combine: Combine::Add,
+            editing: None,
         }
     }
 }
@@ -351,6 +366,116 @@ fn fill(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
     }
 }
 
+/// What Embellish keeps with an embellishment: on its component when it has one, else on its
+/// layer.
+fn recipe(p: &Params, paths: &[Path], layer: Option<LayerId>) -> serde_json::Value {
+    let kept = Params {
+        editing: None,
+        ..p.clone()
+    };
+    serde_json::json!({
+        "command": Embellish::ID,
+        "params": kept,
+        "paths": paths,
+        "layer": layer,
+    })
+}
+
+/// One embellishment in the document: its settings, the outlines it was made for and where it
+/// lives.
+struct Kept {
+    params: Params,
+    paths: Vec<Path>,
+    at: Editing,
+}
+
+fn read_recipe(v: &serde_json::Value) -> Option<(Params, Vec<Path>)> {
+    if v.get("command")?.as_str()? != Embellish::ID {
+        return None;
+    }
+    Some((
+        Params::deserialize(&v["params"]).ok()?,
+        Vec::<Path>::deserialize(&v["paths"]).ok()?,
+    ))
+}
+
+/// Every embellishment Embellish made in `doc`.
+fn all_kept(doc: &Document) -> Vec<Kept> {
+    let on_components = doc.components.iter().filter_map(|(&id, part)| {
+        let shape = part.shape.as_ref()?;
+        let (params, paths) = read_recipe(shape)?;
+        let layer = Option::<LayerId>::deserialize(&shape["layer"])
+            .ok()
+            .flatten()
+            .filter(|l| doc.layers.iter().any(|x| x.id == *l));
+        Some(Kept {
+            params,
+            paths,
+            at: Editing {
+                layer,
+                component: Some(id),
+            },
+        })
+    });
+    let on_layers = doc.layers.iter().filter_map(|layer| {
+        let (params, paths) = read_recipe(layer.made.as_ref()?)?;
+        Some(Kept {
+            params,
+            paths,
+            at: Editing {
+                layer: Some(layer.id),
+                component: None,
+            },
+        })
+    });
+    on_components.chain(on_layers).collect()
+}
+
+/// The embellishment the selection picks: its component, any of its pieces, or (with
+/// `by_outlines`) the very outlines it was made for.
+fn picked(doc: &Document, by_outlines: bool) -> Option<Kept> {
+    let kept = all_kept(doc);
+    let by_component = || {
+        kept.iter().position(|k| {
+            k.at
+                .component
+                .is_some_and(|c| doc.selected_components.contains(&c))
+        })
+    };
+    let by_piece = || {
+        let mut layers = doc.selection.iter().map(|&id| doc.layer_of(id));
+        let first = layers.next()?;
+        if !layers.all(|l| l == first) {
+            return None;
+        }
+        kept.iter().position(|k| k.at.layer == Some(first))
+    };
+    let by_outline = || {
+        if !by_outlines {
+            return None;
+        }
+        let (_, closed) = doc.selected_paths(|path| path.closed);
+        if closed.is_empty() {
+            return None;
+        }
+        kept.iter().position(|k| {
+            k.paths.len() == closed.len() && closed.iter().all(|q| k.paths.contains(q))
+        })
+    };
+    let i = if doc.selection.is_empty() {
+        by_component()?
+    } else {
+        by_piece().or_else(by_outline)?
+    };
+    kept.into_iter().nth(i)
+}
+
+/// Whether the selection is an embellishment Embellish made, its component or any of its
+/// pieces: E opens Embellish on it. (Its outline stays its drawing tool's to edit.)
+pub fn edits_selection(doc: &Document) -> bool {
+    picked(doc, false).is_some()
+}
+
 impl Command for Embellish {
     const ID: &'static str = "embellish";
     type Params = Params;
@@ -362,6 +487,15 @@ impl Command for Embellish {
             icon: "drawing/create_vectors/embellish.png",
             shortcut: "",
         }
+    }
+
+    /// On a selected embellishment (its component, a piece of it, or its outline), its own
+    /// settings, so the form edits it rather than adding another.
+    fn initial_params(doc: &Document) -> Params {
+        picked(doc, true).map_or_else(Params::default, |k| Params {
+            editing: Some(k.at),
+            ..k.params
+        })
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
@@ -376,7 +510,17 @@ impl Command for Embellish {
         if p.pattern().is_some() {
             ensure_positive("border width", p.border_width)?;
         }
-        let (_, shapes) = doc.selected_paths(|path| path.closed);
+        let editing = p.editing.and_then(|at| {
+            all_kept(doc).into_iter().find(|k| {
+                k.at == at
+                    || (at.component.is_some() && k.at.component == at.component)
+                    || (at.component.is_none() && at.layer.is_some() && k.at.layer == at.layer)
+            })
+        });
+        let shapes = match &editing {
+            Some(k) => k.paths.clone(),
+            None => doc.selected_paths(|path| path.closed).1,
+        };
         if shapes.is_empty() {
             return Err(CommandError::Failed(
                 "select a closed vector to embellish: the ornament is designed to fit it".into(),
@@ -410,20 +554,74 @@ impl Command for Embellish {
                     .into(),
             ));
         }
+        let at = editing.as_ref().map(|k| k.at).unwrap_or(Editing {
+            layer: None,
+            component: None,
+        });
         let mut c = Change::builder(doc);
-        if p.make != Make::Carving {
-            let group = doc.next_group();
-            let layer = c.add_layer(&p.name);
-            for it in &items {
-                for path in outlines(it) {
-                    let id = c.add(path);
-                    c.move_to_layer(id, layer);
-                    c.set_group(id, Some(group));
-                }
+        // an embellishment edited: its old pieces go, and its layer if it no longer has any
+        if let Some(old) = at.layer {
+            let pieces: Vec<EntityId> = doc
+                .vectors
+                .keys()
+                .copied()
+                .filter(|&id| doc.layer_of(id) == old)
+                .collect();
+            for id in pieces {
+                c.remove(id);
+            }
+            if p.make == Make::Carving {
+                c.remove_layer(old);
             }
         }
-        if p.make != Make::Vectors {
-            c.add_component(carving(p, &regions, &items, &sunk, doc.job.model_cell()));
+        let layer = if p.make == Make::Carving {
+            None
+        } else {
+            let id = match at.layer {
+                Some(old) => old,
+                None => c.add_layer(&p.name),
+            };
+            let mut layer = c
+                .layers()
+                .iter()
+                .find(|l| l.id == id)
+                .cloned()
+                .expect("the layer was just found or added");
+            layer.name.clone_from(&p.name);
+            layer.made = (p.make == Make::Vectors).then(|| recipe(p, &shapes, None));
+            c.replace_layer(layer);
+            let group = doc.next_group();
+            for it in &items {
+                for path in outlines(it) {
+                    let piece = c.add(path);
+                    c.move_to_layer(piece, id);
+                    c.set_group(piece, Some(group));
+                }
+            }
+            Some(id)
+        };
+        let old_part = at.component.filter(|id| doc.components.contains_key(id));
+        if p.make == Make::Vectors {
+            if let Some(id) = old_part {
+                c.remove_component(id);
+            }
+        } else {
+            let mut part = carving(p, &regions, &items, &sunk, doc.job.model_cell());
+            part.shape = Some(recipe(p, &shapes, layer));
+            match old_part {
+                Some(id) => {
+                    let old = &doc.components[&id];
+                    part.level = old.level;
+                    part.group.clone_from(&old.group);
+                    part.visible = old.visible;
+                    part.colour = old.colour;
+                    part.shaping = old.shaping.clone();
+                    c.replace_component(id, part);
+                }
+                None => {
+                    c.add_component(part);
+                }
+            }
         }
         Ok(c.finish())
     }
@@ -478,6 +676,7 @@ fn carving(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cut_craft_core::Change;
     use cut_craft_core::testing::{document_with, square};
     use std::f64::consts::TAU;
 
@@ -514,6 +713,137 @@ mod tests {
         let mut after = doc.clone();
         after.apply(&Embellish::run(doc, p).unwrap()).unwrap();
         after
+    }
+
+    fn selecting_components(doc: &Document) -> Document {
+        let mut d = doc.clone();
+        d.selection = cut_craft_core::selection::Selection::default();
+        d.selected_components = d.components.keys().copied().collect();
+        d
+    }
+
+    fn layer_vectors(doc: &Document, layer: cut_craft_core::document::LayerId) -> usize {
+        doc.vectors
+            .keys()
+            .filter(|id| doc.layer_of(**id) == layer)
+            .count()
+    }
+
+    #[test]
+    fn a_selected_embellishment_opens_with_its_own_settings_and_is_remade_in_place() {
+        let doc = document_with(vec![polygon(6, 110.0)]);
+        let p = Params {
+            name: "Lid".into(),
+            border: BorderStyle::Chain,
+            objects: 3,
+            ..Params::default()
+        };
+        let once = selecting_components(&made(&doc, &p));
+        assert_eq!(Embellish::initial_params(&doc).editing, None, "nothing to edit yet");
+        let opened = Embellish::initial_params(&once);
+        assert!(opened.editing.is_some(), "the component opens Embellish on itself");
+        assert_eq!(opened.border, BorderStyle::Chain);
+        assert_eq!(opened.objects, 3);
+        assert_eq!(opened.name, "Lid");
+        let changed = Params {
+            name: "Top".into(),
+            objects: 9,
+            ..opened
+        };
+        let twice = made(&once, &changed);
+        assert_eq!(twice.layers.len(), once.layers.len(), "the same layer");
+        assert_eq!(twice.components.len(), 1, "remade, not added");
+        let layer = twice.layers.last().unwrap();
+        assert_eq!(layer.name, "Top");
+        let fresh = made(&doc, &Params { editing: None, ..changed.clone() });
+        assert_eq!(
+            layer_vectors(&twice, layer.id),
+            layer_vectors(&fresh, fresh.layers.last().unwrap().id),
+            "new pieces replace the old"
+        );
+        assert_eq!(twice.components.values().next().unwrap().name, "Top");
+        assert_eq!(
+            Embellish::initial_params(&selecting_components(&twice)).objects,
+            9,
+            "and it remembers the new settings"
+        );
+        // undo brings back the first one exactly
+        let mut undone = twice.clone();
+        undone
+            .apply(&Embellish::run(&once, &changed).unwrap().inverse())
+            .unwrap();
+        assert_eq!(undone.vectors.len(), once.vectors.len());
+        assert_eq!(undone.layers, once.layers);
+    }
+
+    #[test]
+    fn its_pieces_or_the_outline_it_was_made_for_open_it_too() {
+        let shape = polygon(6, 110.0);
+        let doc = document_with(vec![shape.clone()]);
+        let p = Params {
+            objects: 2,
+            ..Params::default()
+        };
+        let after = made(&doc, &p);
+        assert!(
+            Embellish::initial_params(&after).editing.is_some(),
+            "the outline is still selected: Embellish edits its embellishment"
+        );
+        let layer = after.layers.last().unwrap().id;
+        let piece = *after
+            .vectors
+            .keys()
+            .find(|id| after.layer_of(**id) == layer)
+            .unwrap();
+        let mut picked = after.clone();
+        picked.selection = [piece].into();
+        let opened = Embellish::initial_params(&picked);
+        assert!(opened.editing.is_some(), "a piece of it");
+        assert_eq!(opened.objects, 2);
+        // another outline is a new embellishment
+        let mut other = after.clone();
+        other.apply(&Change::swap(&other, [], vec![square(400.0, 0.0, 100.0)])).unwrap();
+        assert_eq!(Embellish::initial_params(&other).editing, None);
+    }
+
+    #[test]
+    fn vectors_only_keeps_its_settings_on_its_layer_and_can_become_a_carving() {
+        let doc = document_with(vec![polygon(6, 110.0)]);
+        let p = Params {
+            make: Make::Vectors,
+            ..Params::default()
+        };
+        let once = made(&doc, &p);
+        assert!(once.components.is_empty());
+        let opened = Embellish::initial_params(&once);
+        assert!(opened.editing.is_some());
+        let both = made(&once, &Params {
+            make: Make::Both,
+            ..opened
+        });
+        assert_eq!(both.components.len(), 1, "a carving added to it");
+        assert_eq!(both.layers.len(), once.layers.len());
+        assert!(
+            both.layers.last().unwrap().made.is_none(),
+            "the component keeps the settings now"
+        );
+        let opened = Embellish::initial_params(&selecting_components(&both));
+        let carving = made(&both, &Params {
+            make: Make::Carving,
+            ..opened
+        });
+        assert_eq!(carving.layers.len(), doc.layers.len(), "its vectors and layer go");
+        assert_eq!(carving.vectors.len(), doc.vectors.len());
+        assert_eq!(carving.components.len(), 1);
+        let opened = Embellish::initial_params(&selecting_components(&carving));
+        assert_eq!(opened.make, Make::Carving);
+        let back = made(&carving, &Params {
+            make: Make::Vectors,
+            ..opened
+        });
+        assert!(back.components.is_empty(), "the carving goes");
+        assert_eq!(back.layers.len(), doc.layers.len() + 1);
+        assert!(Embellish::initial_params(&back).editing.is_some());
     }
 
     #[test]
