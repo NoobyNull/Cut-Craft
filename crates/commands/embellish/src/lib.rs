@@ -153,6 +153,10 @@ pub struct Params {
     /// How far in from the edge the patterned border starts
     #[schemars(title = "Border inset", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
     pub border_inset: f64,
+    /// Fill the whole shape with the pattern: row after row following the outline inward,
+    /// instead of one row round the edge
+    #[schemars(title = "Fill the shape", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    pub fill_rows: bool,
     /// Raised rails along both sides of the patterned border
     #[schemars(title = "Rails", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
     pub rails: bool,
@@ -215,6 +219,7 @@ impl Default for Params {
             twist: 45,
             border_inset: 3.0,
             rails: false,
+            fill_rows: false,
             refinement: 6,
             objects: 6,
             scroll_size: 100,
@@ -327,11 +332,42 @@ fn regions(rings: &[Vec<Point>]) -> Vec<Region> {
 /// The ornament for one shape, in its field's frame: a patterned border when there is one,
 /// then the ornament inside it, kept clear of it. Also how many of the pieces, from the
 /// start, are the patterned border's.
-fn design(field: &Field, s: Settings, pattern: Option<border::Spec>) -> (Vec<Item>, usize) {
+fn design(
+    field: &Field,
+    s: Settings,
+    pattern: Option<border::Spec>,
+    rows: bool,
+) -> (Vec<Item>, usize) {
     let Some(b) = pattern.filter(|_| s.place != Where::Fill) else {
         return (fill(field, s, &[]), 0);
     };
-    let (mut items, reach) = border::design(field, &b, s.gap);
+    let (mut items, mut reach) = border::design(field, &b, s.gap);
+    // more rows inward, each a gap in from the last, while there is room for one
+    if rows {
+        // where rows coming in from different edges meet (round a hole), pieces that would
+        // overlap the rows already laid are left out
+        // (the rows already keep a gap apart, so this only needs to catch real overlaps)
+        let mut occ = occ::Occ::new(field.w, field.h, s.gap * 0.4, |q, _| field.sample(q) > 0.0);
+        occ.mark(&items);
+        for _ in 0..200 {
+            let next = border::Spec {
+                inset: reach + s.gap,
+                ..b
+            };
+            let (more, r) = border::design(field, &next, s.gap);
+            if more.is_empty() {
+                break;
+            }
+            for piece in more {
+                let one = std::slice::from_ref(&piece);
+                if occ.fits(one) {
+                    occ.mark(one);
+                    items.push(piece);
+                }
+            }
+            reach = r;
+        }
+    }
     let n = items.len();
     if s.place == Where::Border {
         return (items, n);
@@ -548,7 +584,7 @@ impl Command for Embellish {
         for (k, region) in regions.iter().enumerate() {
             let seed = p.seed.wrapping_add(k as u32 * 7919);
             let offset = region.offset;
-            let (made, n) = design(&region.field, p.settings(seed), p.pattern());
+            let (made, n) = design(&region.field, p.settings(seed), p.pattern(), p.fill_rows);
             sunk.extend(match p.direction {
                 Direction::Raised => vec![false; made.len()],
                 Direction::Sunk => vec![true; made.len()],
@@ -956,7 +992,7 @@ mod tests {
             let (pieces, n) = {
                 let rings: Vec<Vec<Point>> = vec![polygon(6, 110.0).flatten(0.05)];
                 let r = regions(&rings);
-                design(&r[0].field, p.settings(4), p.pattern())
+                design(&r[0].field, p.settings(4), p.pattern(), false)
             };
             let small = small_ones(&pieces, n);
             assert!(small[..n].iter().all(|s| !s), "the border stays raised");
@@ -1155,6 +1191,35 @@ mod tests {
     }
 
     #[test]
+    fn a_patterned_border_can_fill_the_shape_row_after_row() {
+        let shape = polygon(6, 110.0);
+        let doc = document_with(vec![shape.clone()]);
+        let centre = Point::new(150.0, 150.0);
+        for style in [Style::Rope, Style::Chain, Style::BeadAndReel] {
+            let p = |fill_rows| Params {
+                style,
+                fill_rows,
+                make: Make::Vectors,
+                ..Params::default()
+            };
+            let one = made(&doc, &p(false));
+            let rows = made(&doc, &p(true));
+            assert!(
+                rows.vectors.len() > 2 * one.vectors.len(),
+                "{style:?}: {} rows vs {}",
+                rows.vectors.len(),
+                one.vectors.len()
+            );
+            let near_middle = rows
+                .vectors
+                .values()
+                .filter(|v| v.bounds().center().distance(centre) < 40.0)
+                .count();
+            assert!(near_middle > 0, "{style:?}: rows reach the middle");
+        }
+    }
+
+    #[test]
     fn tightness_sets_the_gap() {
         let p = |tightness| Params {
             tightness,
@@ -1321,6 +1386,30 @@ mod pictures {
                 "-bead",
                 Params {
                     style: Style::BeadAndReel,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-chain-fill",
+                Params {
+                    style: Style::Chain,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-rope-fill",
+                Params {
+                    style: Style::Rope,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-braid-fill",
+                Params {
+                    style: Style::Braid,
+                    fill_rows: true,
                     ..Params::default()
                 },
             ),

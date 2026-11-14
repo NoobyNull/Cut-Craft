@@ -93,7 +93,8 @@ impl Loop {
 /// The centre lines `d` in from the edge, rounded to at least twice `hw`.
 pub fn centre_loops(field: &Field, d: f64, hw: f64) -> Vec<Loop> {
     let mut out = vec![];
-    for ring in field.rings(d) {
+    // a line too short to go round a circle the pattern can bend to holds none of it
+    for ring in field.rings_longer(d, (4.0 * d + 6.0).min(TAU * 2.0 * hw)) {
         let mut p = resample_loop(&ring, 1.0);
         if p.len() < 20 {
             continue;

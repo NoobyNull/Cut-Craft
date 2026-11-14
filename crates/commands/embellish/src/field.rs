@@ -298,12 +298,17 @@ impl Field {
 
     /// The outline moved in by `inset`, smoothed: one ring per piece it falls into.
     pub fn rings(&self, inset: f64) -> Vec<Vec<Point>> {
+        self.rings_longer(inset, 4.0 * inset + 6.0)
+    }
+
+    /// The lines `inset` in from the edge that are longer than `least`.
+    pub fn rings_longer(&self, inset: f64, least: f64) -> Vec<Vec<Point>> {
         let res = self.res;
         contour_loops(&self.d, self.nx, self.ny, inset as f32, |i, j| {
             Point::new(i * res, j * res)
         })
         .into_iter()
-        .filter(|l| loop_len(l) > 4.0 * inset + 6.0)
+        .filter(|l| loop_len(l) > least)
         .map(|l| crate::motif::chaikin(&resample_loop(&l, 1.2), 1))
         .collect()
     }
