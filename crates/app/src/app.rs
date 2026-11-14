@@ -22,6 +22,7 @@ mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod send;
+mod shortcuts_page;
 mod surfacing;
 mod tabs;
 #[cfg(test)]
@@ -385,6 +386,19 @@ const CRASH_SERVICE: &str = "https://cutcraft-crash-reports.mattyax.workers.dev/
 /// Points crash reports elsewhere, such as the service run locally for a test
 /// (`http://localhost:8787/v1/crash`), never the live one.
 const CRASH_SERVICE_VARIABLE: &str = "CUTCRAFT_CRASH_URL";
+/// A shortcut being set: for which action, and what the last press gave when it was not taken
+/// straight away.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ShortcutCapture {
+    /// The action the shortcut is for.
+    id: String,
+    /// A button that can't be a shortcut, and why.
+    refused: Option<&'static str>,
+    /// A shortcut another action already has, and that action: kept until the person says
+    /// to move it here or to leave it.
+    clash: Option<(shortcut::Trigger, String)>,
+}
+
 /// The Help windows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Info {
@@ -1330,6 +1344,14 @@ struct CutCraftApp {
     /// Show advanced settings is ticked: the Advanced category lists. Off at every start, so
     /// reaching them is always a deliberate step.
     show_advanced: bool,
+    /// The Options category to show when the window next draws, by its key (Help ▸
+    /// Keyboard Shortcuts' Change Shortcuts opens Mouse and Shortcuts).
+    options_goto: Option<&'static str>,
+    /// A shortcut being set in Options ▸ Mouse and Shortcuts: the next key or mouse button
+    /// pressed is taken for it, and runs nothing.
+    capture: Option<ShortcutCapture>,
+    /// What the shortcut list is narrowed to, typed in its search box.
+    shortcut_search: String,
     /// Both views shown at once.
     split: Option<Split>,
     /// The Library tab.
@@ -1740,7 +1762,7 @@ struct Menus<'a> {
     available: &'a dyn Fn(&str) -> bool,
     /// Ticked state of the items that are settings; `None` keeps the item's own.
     checked: &'a dyn Fn(&str) -> Option<bool>,
-    shortcut_of: &'a dyn Fn(&str) -> Option<&'static str>,
+    shortcut_of: &'a dyn Fn(&str) -> Option<String>,
     /// Filled in where the menus have a Recent Files entry.
     recent: &'a [gui::MenuItem],
     /// An item's picture by its icon path; `None` when the icon is missing.
@@ -1769,8 +1791,8 @@ fn menu_items(
     let widest = items
         .iter()
         .map(|i| {
-            let shortcut = (menus.shortcut_of)(&i.action).unwrap_or(&i.shortcut);
-            text(&i.name) + text(&shortcut_label(ui.ctx(), shortcut)) + room
+            let shortcut = (menus.shortcut_of)(&i.action).unwrap_or_else(|| i.shortcut.clone());
+            text(&i.name) + text(&shortcut_label(ui.ctx(), &shortcut)) + room
         })
         .fold(0.0, f32::max);
     for category in gui::categories(items) {
@@ -2517,7 +2539,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
         }
         .shortcut_text(shortcut_label(
             ui.ctx(),
-            (menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut),
+            &(menus.shortcut_of)(&item.action).unwrap_or_else(|| item.shortcut.clone()),
         ))
         .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
         let available = (menus.available)(&item.action);

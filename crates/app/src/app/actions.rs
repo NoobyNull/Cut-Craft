@@ -221,6 +221,9 @@ impl CutCraftApp {
             options_window: false,
             options_page: 0,
             show_advanced: false,
+            options_goto: None,
+            capture: None,
+            shortcut_search: String::new(),
             split: None,
             clipart: crate::clipart::Clipart::default(),
             import_queue: std::collections::VecDeque::new(),
@@ -3412,8 +3415,9 @@ impl CutCraftApp {
     }
 
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
-        // while a slow job runs, the window only shows its progress
-        if self.busy.is_some() {
+        // while a slow job runs, the window only shows its progress; while a shortcut is
+        // being set, the keys and buttons pressed are for it
+        if self.busy.is_some() || self.capture.is_some() {
             return;
         }
         // Ctrl+X, Ctrl+C and Ctrl+V reach egui as clipboard events, never as keys; the system
@@ -3452,20 +3456,7 @@ impl CutCraftApp {
                 }
             }
         }
-        // single-letter shortcuts must not fire while typing in a form field
-        if !ctx.egui_wants_keyboard_input() {
-            let job = self.screen == Screen::Job;
-            let fired: Vec<String> = self
-                .bindings(ctx)
-                .into_iter()
-                .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))
-                .filter(|(_, keys)| ctx.input_mut(|i| i.consume_shortcut(keys)))
-                .map(|(id, _)| id)
-                .collect();
-            for id in fired {
-                self.invoke(ctx, &id);
-            }
-        }
+        self.run_shortcuts(ctx);
         // Escape during a 3D handle drag cancels only the drag, staying in Transform mode
         let escape = KeyboardShortcut::new(Modifiers::NONE, Key::Escape);
         if self.drag_3d.is_some()
@@ -3521,9 +3512,35 @@ impl CutCraftApp {
         });
     }
 
-    /// Every key binding: each command's own shortcut, plus the built-ins as the menus spell them,
-    /// and on a Mac its own keys for some of them ([`super::mac::extra_bindings`]).
-    pub(super) fn bindings(&self, ctx: &egui::Context) -> Vec<(String, KeyboardShortcut)> {
+    /// Runs the actions whose shortcut was pressed: a key's, or a mouse button's.
+    fn run_shortcuts(&mut self, ctx: &egui::Context) {
+        // single-letter shortcuts must not fire while typing in a form field; a mouse
+        // button's can, as it types nothing
+        let typing = ctx.egui_wants_keyboard_input();
+        let job = self.screen == Screen::Job;
+        let fired: Vec<String> = self
+            .bindings(ctx)
+            .into_iter()
+            .filter(|(id, _)| id != shortcut::PAN_DRAG)
+            .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))
+            .filter(|(_, trigger)| match trigger {
+                shortcut::Trigger::Key(keys) => {
+                    !typing && ctx.input_mut(|i| i.consume_shortcut(keys))
+                }
+                shortcut::Trigger::Mouse(held, button) => ctx.input(|i| {
+                    i.pointer.button_pressed(*button) && i.modifiers.matches_exact(*held)
+                }),
+            })
+            .map(|(id, _)| id)
+            .collect();
+        for id in fired {
+            self.invoke(ctx, &id);
+        }
+    }
+
+    /// Every action's own shortcuts: each command's, the built-ins' as the menus spell them,
+    /// the layouts', and dragging with the wheel pressed to pan.
+    pub(super) fn default_bindings(&self) -> Vec<(String, shortcut::Trigger)> {
         let commands = self
             .registry
             .iter()
@@ -3537,12 +3554,98 @@ impl CutCraftApp {
         let layouts = LAYOUT_KEYS
             .iter()
             .filter_map(|&(id, keys)| Some((id.to_owned(), shortcut::parse(keys)?)));
-        let mut bindings: Vec<_> = commands.chain(built_ins).chain(layouts).collect();
+        let keys = commands.chain(built_ins).chain(layouts);
+        let mut bindings: Vec<_> = keys
+            .map(|(id, keys)| (id, shortcut::Trigger::Key(keys)))
+            .collect();
+        bindings.extend(
+            shortcut::parse_trigger(shortcut::PAN_DRAG_DEFAULT)
+                .map(|t| (shortcut::PAN_DRAG.to_owned(), t)),
+        );
+        bindings
+    }
+
+    /// Every shortcut in use: [`Self::default_bindings`] with those set in Options in their
+    /// place, and on a Mac its own keys for some of them ([`super::mac::extra_bindings`]).
+    pub(super) fn bindings(&self, ctx: &egui::Context) -> Vec<(String, shortcut::Trigger)> {
+        let mut bindings =
+            shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts);
         if super::mac::is_mac(ctx) {
-            let extra = super::mac::extra_bindings(&bindings);
-            bindings.extend(extra);
+            let keys: Vec<(String, KeyboardShortcut)> = bindings
+                .iter()
+                .filter_map(|(id, t)| match t {
+                    shortcut::Trigger::Key(k) => Some((id.clone(), *k)),
+                    shortcut::Trigger::Mouse(..) => None,
+                })
+                .collect();
+            let extra = super::mac::extra_bindings(&keys);
+            bindings.extend(
+                extra
+                    .into_iter()
+                    .map(|(id, k)| (id, shortcut::Trigger::Key(k))),
+            );
         }
         bindings
+    }
+
+    /// The mouse buttons that pan either view while held and dragged.
+    pub(super) fn pan_buttons(&self) -> Vec<egui::PointerButton> {
+        let defaults = (shortcut::parse_trigger(shortcut::PAN_DRAG_DEFAULT))
+            .map(|t| (shortcut::PAN_DRAG.to_owned(), t));
+        shortcut::effective(
+            defaults.into_iter().collect(),
+            &self.options.controls.shortcuts,
+        )
+        .into_iter()
+        .filter(|(id, _)| id == shortcut::PAN_DRAG)
+        .filter_map(|(_, t)| t.button())
+        .collect()
+    }
+
+    /// Whether a pan button ([`Self::pan_buttons`]) is held down.
+    pub(super) fn pan_button_down(&self, ctx: &egui::Context) -> bool {
+        let buttons = self.pan_buttons();
+        ctx.input(|i| buttons.iter().any(|&b| i.pointer.button_down(b)))
+    }
+
+    /// Every action a shortcut can be set for, by id, with its name as the menus write it:
+    /// panning by dragging first, then the commands and the built-in menu items by name.
+    pub(super) fn shortcut_actions(&self) -> Vec<(String, String)> {
+        let mut actions: Vec<(String, String)> = vec![];
+        let named = self.menus.items();
+        let name_of = |id: &str| {
+            named
+                .iter()
+                .find(|i| i.action == id)
+                .map_or_else(|| gui::title_case(id), |i| i.name.clone())
+        };
+        actions.extend(
+            self.registry
+                .iter()
+                .map(|c| (c.id().to_owned(), c.meta().label.to_owned())),
+        );
+        for id in BUILT_INS.iter().chain(LAYOUT_KEYS.iter().map(|(id, _)| id)) {
+            if !actions.iter().any(|(a, _)| a == id) {
+                actions.push(((*id).to_owned(), name_of(id)));
+            }
+        }
+        actions.sort_by(|a, b| a.1.cmp(&b.1));
+        // panning first: the mouse's own, and what most people come here to set
+        let pan = (
+            shortcut::PAN_DRAG.to_owned(),
+            "Pan (hold and drag)".to_owned(),
+        );
+        actions.insert(0, pan);
+        actions
+    }
+
+    /// The shortcut a menu shows for `id`: the first one set in Options, else the command's
+    /// own; `None` leaves the menu item's own.
+    pub(super) fn shortcut_text(&self, id: &str) -> Option<String> {
+        match self.options.controls.shortcuts.get(id) {
+            Some(set) => Some(set.first().cloned().unwrap_or_default()),
+            None => self.registry.get(id).map(|c| c.meta().shortcut.to_owned()),
+        }
     }
 
     pub(super) fn menu_bar(&mut self, ui: &mut egui::Ui) {
@@ -3580,7 +3683,7 @@ impl CutCraftApp {
                                     .or_else(|| self.units_checked(id))
                                     .or_else(|| self.layout_checked(id))
                             },
-                            shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
+                            shortcut_of: &|id| self.shortcut_text(id),
                             recent: &recent,
                             image: &|path| self.icons.find(path, "").map(|p| self.icons.image(p)),
                         },
@@ -5144,6 +5247,30 @@ impl CutCraftApp {
         }
     }
 
+    /// Help ▸ Keyboard Shortcuts' rows: each shortcut in use and what it runs, by name.
+    fn shortcut_list(&self, ctx: &egui::Context) -> Vec<(String, String)> {
+        let mut rows: Vec<(String, String)> = self
+            .bindings(ctx)
+            .into_iter()
+            .map(|(id, trigger)| {
+                let label = if id == shortcut::PAN_DRAG {
+                    "Pan (hold and drag)".to_owned()
+                } else {
+                    self.registry
+                        .get(&id)
+                        .map_or_else(|| gui::title_case(&id), |c| c.meta().label.to_owned())
+                };
+                let keys = match trigger {
+                    shortcut::Trigger::Key(keys) => ctx.format_shortcut(&keys),
+                    mouse @ shortcut::Trigger::Mouse(..) => mouse.text(),
+                };
+                (keys, label)
+            })
+            .collect();
+        rows.sort_by(|a, b| a.1.cmp(&b.1));
+        rows
+    }
+
     /// The Help windows: About, Keyboard Shortcuts, Third Party Licenses.
     pub(super) fn info_window(&mut self, ctx: &egui::Context) {
         let Some(info) = self.info else { return };
@@ -5159,25 +5286,14 @@ impl CutCraftApp {
             Info::Summary => "Toolpath Summary".to_owned(),
             Info::Help(_) => unreachable!("returned above"),
         };
-        let shortcuts: Vec<(String, String)> = if info == Info::Shortcuts {
-            let mut rows: Vec<(String, String)> = self
-                .bindings(ctx)
-                .into_iter()
-                .map(|(id, keys)| {
-                    let label = self
-                        .registry
-                        .get(&id)
-                        .map_or_else(|| gui::title_case(&id), |c| c.meta().label.to_owned());
-                    (ctx.format_shortcut(&keys), label)
-                })
-                .collect();
-            rows.sort_by(|a, b| a.1.cmp(&b.1));
-            rows
+        let shortcuts = if info == Info::Shortcuts {
+            self.shortcut_list(ctx)
         } else {
             vec![]
         };
         let rows = self.summary_rows();
         let mut noted = None;
+        let mut change_shortcuts = false;
         let machine = self
             .machines
             .active()
@@ -5190,6 +5306,16 @@ impl CutCraftApp {
             Info::Summary => noted = summary_table(ui, &rows, summary, units, machine.clone()),
             Info::About => about(ui),
             Info::Shortcuts => {
+                if ui
+                    .button("Change Shortcuts…")
+                    .on_hover_text(
+                        "Set your own keys, or the mouse's thumb buttons and wheel click, in \
+                         Options ▸ Mouse and Shortcuts",
+                    )
+                    .clicked()
+                {
+                    change_shortcuts = true;
+                }
                 egui::ScrollArea::vertical()
                     .max_height(400.0)
                     .show(ui, |ui| {
@@ -5227,6 +5353,11 @@ impl CutCraftApp {
         }
         if !open {
             self.info = None;
+        }
+        if change_shortcuts {
+            self.info = None;
+            self.options_window = true;
+            self.options_goto = Some(super::shortcuts_page::CATEGORY);
         }
     }
 }

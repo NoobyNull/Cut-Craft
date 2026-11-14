@@ -961,7 +961,7 @@ impl CutCraftApp {
             let menus = Menus {
                 available: &|id| self.available(id),
                 checked: &|_| None,
-                shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
+                shortcut_of: &|id| self.shortcut_text(id),
                 recent: &[],
                 image: &|path| self.icons.find(path, "").map(|p| self.icons.image(p)),
             };
@@ -1886,13 +1886,14 @@ impl CutCraftApp {
             ui.scope_id().with("view_cube"),
             egui::Sense::click_and_drag(),
         );
-        let (left, right, middle, ctrl, scroll, fit_key) = ui.input(|i| {
+        // the pan buttons (the wheel, to start with) pan, as in the 2D view
+        let middle = self.pan_button_down(ui.ctx());
+        let (left, right, ctrl, scroll, fit_key) = ui.input(|i| {
             (
                 i.pointer.primary_down(),
                 i.pointer.secondary_down(),
-                i.pointer.middle_down(),
                 i.modifiers.ctrl,
-                i.smooth_scroll_delta.y,
+                i.smooth_scroll_delta,
                 i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::F6),
             )
         });
@@ -1936,10 +1937,15 @@ impl CutCraftApp {
             // ponytail: turns at once; the turns smoothly
             self.orbit = view3d::Orbit::facing(from);
         }
-        if let Some(at) = response.hover_pos().filter(|_| scroll != 0.0) {
+        if let Some(at) = response.hover_pos().filter(|_| scroll.y != 0.0) {
             // as in the 2D view: a quarter of the view's height doubles the zoom
-            let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
+            let factor = 2f32.powf(scroll.y / (area.height() / VIEW_ZOOM_QUARTERS));
             self.framing = self.framing.zoomed_about(at - area.center(), factor);
+        }
+        // and tilting the wheel pans sideways
+        let sideways = self.options.controls.tilt.pan(scroll.x);
+        if response.hovered() && sideways != 0.0 {
+            self.framing = self.framing.panned(egui::vec2(sideways, 0.0));
         }
         // a double-click picks the component under it; off the model it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
