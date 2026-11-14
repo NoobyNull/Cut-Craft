@@ -2,6 +2,7 @@
 
 pub mod accuracy;
 pub mod adaptive;
+pub mod bend;
 pub mod bitmap;
 pub mod calc;
 mod change;

@@ -24,6 +24,10 @@ pub enum FitError {
     NoShape,
     /// The margin leaves no room inside the shape.
     MarginTooBig,
+    /// The line to bend along has no length.
+    NoLine,
+    /// The gaps at the line's ends leave none of it to bend along.
+    GapTooBig,
 }
 
 impl std::fmt::Display for FitError {
@@ -32,6 +36,8 @@ impl std::fmt::Display for FitError {
             Self::NoDrawing => "the drawing has nothing in it to fit",
             Self::NoShape => "the chosen shape is not a closed shape: pick a circle, rectangle or other closed vector",
             Self::MarginTooBig => "the margin leaves no room inside the shape: make it smaller",
+            Self::NoLine => "the chosen line has no length: pick a longer open vector",
+            Self::GapTooBig => "the gaps at the ends leave none of the line to bend along: make them smaller",
         })
     }
 }

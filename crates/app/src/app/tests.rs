@@ -12133,3 +12133,61 @@ fn the_chamfer_form_says_when_it_goes_deeper_than_the_v() {
     );
     assert!(line.text().contains("the cut is 8.0 mm"), "{line:?}");
 }
+
+#[test]
+fn a_drawing_imports_along_the_selected_open_line_and_its_window_moves_it_below() {
+    use cut_craft_core::geometry::{Path, Point, Rect};
+    let mut h = Harness::new();
+    // a straight open line 200 long, selected
+    let mut c = Change::builder(&h.app.doc);
+    let line = c.add(Path::polyline(
+        &[Point::new(0.0, 100.0), Point::new(200.0, 100.0)],
+        false,
+    ));
+    c.select([line]);
+    h.app.record(Ok(c.finish()), "line");
+    assert!(super::line_to_import_along(&h.app.doc));
+    let before = h.app.history.undo_depth();
+    let svg = std::env::temp_dir().join(format!("cut-craft-along-{}.svg", std::process::id()));
+    std::fs::write(
+        &svg,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10"><rect x="0" y="0" width="20" height="10"/></svg>"#,
+    )
+    .unwrap();
+    h.app.import_into(&svg, line);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let drawn = |h: &Harness| {
+        h.app
+            .doc
+            .vectors
+            .iter()
+            .filter(|(id, _)| **id != line)
+            .map(|(_, p)| p.bounds())
+            .reduce(Rect::union)
+            .expect("the drawing came in")
+    };
+    let b = drawn(&h);
+    // runs the line's length, proportions kept, standing on it
+    assert!(
+        (b.min.x).abs() < 1e-6 && (b.max.x - 200.0).abs() < 1e-6,
+        "{b:?}"
+    );
+    assert!(
+        (b.min.y - 100.0).abs() < 1e-6 && (b.max.y - 200.0).abs() < 1e-6,
+        "{b:?}"
+    );
+    assert!(
+        h.text_at("Import Along Line").is_some(),
+        "its window is open"
+    );
+    h.app.fit_import.as_mut().unwrap().side = cut_craft_core::bend::Side::Below;
+    h.app.place_fit_import();
+    let b = drawn(&h);
+    assert!(
+        (b.max.y - 100.0).abs() < 1e-6 && (b.min.y).abs() < 1e-6,
+        "{b:?}"
+    );
+    assert_eq!(h.app.history.undo_depth(), before + 1, "still one step");
+    let _ = std::fs::remove_file(svg);
+}
