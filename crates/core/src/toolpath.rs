@@ -288,11 +288,11 @@ fn default_tip_radius() -> f64 {
 
 impl Tool {
     /// Whether the bit must never go straight down into the material: a surfacing,
-    /// spoilboard or fly cutter bit (known by its name, there being no shape for them), or a
+    /// spoilboard or fly cutter bit (the Surfacing Bit shape, or known by its name), or a
     /// form tool. Its entries ramp instead.
     pub fn cannot_plunge(&self) -> bool {
         let name = self.name.to_lowercase();
-        self.shape == ToolShape::FormTool
+        matches!(self.shape, ToolShape::FormTool | ToolShape::SurfacingBit)
             || [
                 "surfac",
                 "spoilboard",
