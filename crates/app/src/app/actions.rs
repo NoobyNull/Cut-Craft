@@ -1908,6 +1908,7 @@ impl CutCraftApp {
                 fields,
                 params,
                 error: None,
+                warning: None,
                 new_job: false,
                 page,
                 editing: None,
@@ -3276,7 +3277,13 @@ impl CutCraftApp {
             .copied()
             .filter(|t| self.doc.toolpaths.get(t).is_some_and(|t| t.stale))
             .collect();
-        let notes = [notes, kept].concat();
+        let mut notes = [notes, kept].concat();
+        notes.dedup();
+        // the form's own command: its warnings stay in red at the form's foot until its
+        // next Apply
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == id) {
+            form.warning = (!notes.is_empty()).then(|| notes.join("\n"));
+        }
         if stale.is_empty() {
             self.warn(&made, &notes);
         } else {
@@ -4371,9 +4378,16 @@ impl CutCraftApp {
         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
     }
 
-    /// Why the open form's last Apply failed, in red, over its buttons.
+    /// Why the open form's last Apply failed, or what it warned of, in red, over its buttons.
     fn form_error(&self, ui: &mut egui::Ui) {
-        let Some(error) = self.form.as_ref().and_then(|f| f.error.as_ref()) else {
+        let Some(form) = self.form.as_ref() else {
+            return;
+        };
+        // what the last Apply made is not quite what was asked: said in red, never a pop-up
+        if let Some(warning) = form.warning.as_ref().filter(|_| form.error.is_none()) {
+            ui.colored_label(ui.visuals().error_fg_color, warning);
+        }
+        let Some(error) = form.error.as_ref() else {
             return;
         };
         let shown = ui.colored_label(ui.visuals().error_fg_color, error);

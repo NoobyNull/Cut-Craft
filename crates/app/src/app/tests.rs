@@ -12174,3 +12174,30 @@ fn the_chamfer_form_says_when_it_goes_deeper_than_the_v() {
     );
     assert!(line.text().contains("the cut is 8.0 mm"), "{line:?}");
 }
+
+#[test]
+fn embellish_drawn_finer_than_it_carves_says_so_in_red_at_the_foot_of_its_form() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 3.0, 3.0);
+    h.app.start_command("embellish");
+    let params = h
+        .app
+        .form
+        .as_ref()
+        .expect("Embellish opened")
+        .params
+        .clone();
+    h.app.apply_form("embellish", &params).unwrap();
+    let form = h.app.form.as_ref().unwrap();
+    assert!(form.error.is_none(), "{:?}", form.error);
+    let warning = form.warning.as_deref().unwrap_or_default();
+    assert!(warning.contains("smaller than it will carve"), "{warning}");
+    // a shape it fits: the warning goes
+    h.app.form = None;
+    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.rectangle(30.0, 10.0, 120.0, 120.0);
+    h.app.start_command("embellish");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("embellish", &params).unwrap();
+    assert_eq!(h.app.form.as_ref().unwrap().warning, None);
+}

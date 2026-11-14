@@ -276,10 +276,10 @@ impl Params {
         })
     }
 
-    fn settings(&self, seed: u32) -> Settings {
+    fn settings(&self, seed: u32, gap: f64) -> Settings {
         let unit = |v: u32| f64::from(v.clamp(1, 10) - 1) / 9.0;
         Settings {
-            gap: self.gap(),
+            gap,
             detail: unit(self.refinement),
             density: unit(self.objects),
             scale: f64::from(self.scroll_size.clamp(50, 160)) / 100.0,
@@ -454,6 +454,14 @@ fn half_width(field: &Field) -> f64 {
             along >= longest * 0.5
         })
         .unwrap_or(0.0)
+}
+
+/// How wide the shapes are, as told in a message: the widest circle in any.
+fn wide(regions: &[Region]) -> f64 {
+    regions
+        .iter()
+        .map(|r| 2.0 * r.field.dmax)
+        .fold(0.0, f64::max)
 }
 
 /// Which of one shape's pieces a Mixed carving hollows in: the small fillers (dots, beads,
@@ -659,10 +667,40 @@ impl Command for Embellish {
         let regions = regions(&rings);
         let mut items: Vec<Item> = vec![];
         let mut sunk: Vec<bool> = vec![];
+        // the smallest gap any shape needed
+        let mut gap = p.gap();
         for (k, region) in regions.iter().enumerate() {
             let seed = p.seed.wrapping_add(k as u32 * 7919);
             let offset = region.offset;
-            let (made, n) = design(&region.field, p.settings(seed), p.pattern(), p.fill_rows);
+            // a shape too narrow for the style at the gap asked is still drawn, the gap
+            // halved until it fits: what was asked for is made, too fine to carve in full
+            // (the note says so)
+            let mut g = p.gap();
+            let (made, n) = loop {
+                let (made, n) =
+                    design(&region.field, p.settings(seed, g), p.pattern(), p.fill_rows);
+                // a border alone, its pieces or ornament missing, is not what was asked;
+                // nor are pieces too big for the shape, out over its edge
+                let raised = made
+                    .iter()
+                    .filter(|it| matches!(it, Item::Shape { sink: false, .. }))
+                    .count();
+                let enough = if p.style.layout().0 == Where::Border {
+                    raised > 0
+                } else {
+                    raised > 2
+                };
+                // (the patterned border's own rows, the first `n`, are laid inside it)
+                let inside = made[n..]
+                    .iter()
+                    .flat_map(Item::points)
+                    .all(|q| region.field.sample(q) > region.field.res * 0.5);
+                if (enough && inside) || g < 0.05 {
+                    break (made, n);
+                }
+                g /= 2.0;
+            };
+            gap = gap.min(g);
             sunk.extend(match p.direction {
                 Direction::Raised => vec![false; made.len()],
                 Direction::Sunk => vec![true; made.len()],
@@ -674,17 +712,10 @@ impl Command for Embellish {
             .iter()
             .any(|it| matches!(it, Item::Shape { sink: false, .. }))
         {
-            let wide = 2.0
-                * regions
-                    .iter()
-                    .map(|r| half_width(&r.field))
-                    .fold(0.0, f64::max);
+            let wide = wide(&regions);
             return Err(CommandError::Failed(format!(
-                "nothing fits: the shape is only about {wide:.1} mm wide, too \
-                 narrow for this style with a {gap:.2} mm smallest gap between pieces. Pick a \
-                 wider shape, or turn Tightness up for a smaller gap (and finish with a bit \
-                 that fits it). A pattern needs a band roughly six times the gap wide",
-                gap = p.gap(),
+                "the shape is only about {wide:.2} mm wide: too small to draw this style in. \
+                 Pick a bigger shape"
             )));
         }
         let at = editing.as_ref().map_or(
@@ -742,7 +773,7 @@ impl Command for Embellish {
                 c.remove_component(id);
             }
         } else {
-            let mut part = carving(p, &regions, &items, &sunk, doc.job.model_cell());
+            let mut part = carving(p, &regions, &items, &sunk, doc.job.model_cell(), gap);
             part.shape = Some(recipe(p, &shapes, layer));
             match old_part {
                 Some(id) => {
@@ -759,7 +790,17 @@ impl Command for Embellish {
                 }
             }
         }
-        Ok(c.finish())
+        let mut change = c.finish();
+        if gap < p.gap() - 1e-9 {
+            let wide = wide(&regions);
+            change.notes.push(format!(
+                "Drawn smaller than it will carve: the shape is about {wide:.1} mm wide, so \
+                 the pieces sit {gap:.2} mm apart, not {asked:.2} mm. A bit wider than \
+                 {gap:.2} mm will lose the fine detail",
+                asked = p.gap(),
+            ));
+        }
+        Ok(change)
     }
 }
 
@@ -785,6 +826,7 @@ fn carving(
     items: &[Item],
     sunk: &[bool],
     model_cell: f64,
+    gap: f64,
 ) -> Component {
     let area = regions
         .iter()
@@ -797,7 +839,7 @@ fn carving(
         .reduce(Rect::union)
         .expect("at least one shape");
     let size = area.size();
-    let cell = (p.gap() / 4.0)
+    let cell = (gap / 4.0)
         .min(model_cell)
         .max((size.x * size.y / MOST_CELLS).sqrt());
     let mut part = Component::from_fn(&p.name, p.combine, area, cell, |_| None);
@@ -1078,7 +1120,7 @@ mod tests {
             let (pieces, n) = {
                 let rings: Vec<Vec<Point>> = vec![polygon(6, 110.0).flatten(0.05)];
                 let r = regions(&rings);
-                design(&r[0].field, p.settings(4), p.pattern(), false)
+                design(&r[0].field, p.settings(4, p.gap()), p.pattern(), false)
             };
             let small = small_ones(&pieces, n);
             assert!(small[..n].iter().all(|s| !s), "the border stays raised");
@@ -1355,15 +1397,51 @@ mod tests {
     }
 
     #[test]
-    fn too_narrow_a_shape_says_how_wide_it_is_and_what_to_change() {
-        let doc = band(1.5);
-        let p = Params {
-            style: Style::Rope,
-            ..Params::default()
-        };
-        let err = Embellish::run(&doc, &p).unwrap_err().to_string();
-        assert!(err.contains("mm wide"), "{err}");
-        assert!(err.contains("Tightness"), "{err}");
+    fn too_narrow_a_shape_is_still_drawn_with_a_note_that_it_is_too_fine_to_carve() {
+        let doc = band(4.0);
+        for style in [Style::Rope, Style::Chain, Style::FolkMix, Style::Laurel] {
+            let p = Params {
+                style,
+                ..Params::default()
+            };
+            let change = Embellish::run(&doc, &p).unwrap_or_else(|e| panic!("{style:?}: {e}"));
+            let mut after = doc.clone();
+            after.apply(&change).unwrap();
+            assert!(
+                after.vectors.len() > doc.vectors.len() + 10,
+                "{style:?}: {}",
+                after.vectors.len() - doc.vectors.len()
+            );
+            let note = change.notes.join(" ");
+            assert!(
+                note.contains("smaller than it will carve"),
+                "{style:?}: {note}"
+            );
+        }
+        // a shape it fits makes no such note
+        let fits = Embellish::run(&band(40.0), &Params::default()).unwrap();
+        assert!(fits.notes.is_empty(), "{:?}", fits.notes);
+    }
+
+    #[test]
+    fn a_tiny_shapes_pieces_are_made_small_enough_to_stay_inside_it() {
+        let doc = document_with(vec![square(10.0, 10.0, 3.0)]);
+        let change = Embellish::run(&doc, &Params::default()).unwrap();
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        // (to the field's half cell: 0.25 mm)
+        let inside = Rect::new(Point::splat(9.75), Point::splat(13.25));
+        for v in after.vectors.values() {
+            for q in v.flatten(0.01) {
+                assert!(inside.contains(q), "{q:?}");
+            }
+        }
+        assert!(
+            change
+                .notes
+                .join(" ")
+                .contains("smaller than it will carve")
+        );
     }
 
     #[test]

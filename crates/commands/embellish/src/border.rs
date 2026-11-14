@@ -63,6 +63,10 @@ fn wrap(a: f64) -> f64 {
 /// The radius of the circle through the points `k` either side of `i`, round a ring.
 fn ring_radius(p: &[Point], i: usize, k: usize) -> f64 {
     let n = p.len();
+    if n < 3 {
+        return 1e9;
+    }
+    let k = k.min((n - 1) / 2).max(1);
     let (a, b, c) = (p[(i + n - k) % n], p[i], p[(i + k) % n]);
     let cr = (b - a).perp_dot(c - a).abs();
     if cr < 1e-9 {
@@ -375,6 +379,13 @@ pub fn design_loops(field: &Field, b: &Spec, g: f64) -> (Vec<Vec<Item>>, f64) {
     let p = b.repeat * b.width;
     let mut loops = vec![];
     let mut lines = centre_loops(field, dc, hw);
+    // a single row down a narrow band's middle: where the line is too broken up to follow,
+    // a little nearer the edge
+    let mut d = dc;
+    while b.single && lines.is_empty() && d > b.inset + field.res {
+        d -= field.res * 0.5;
+        lines = centre_loops(field, d, hw);
+    }
     if b.single {
         // the two lines either side of the band's middle: the longer one alone
         lines.sort_by(|a, c| c.len.total_cmp(&a.len));

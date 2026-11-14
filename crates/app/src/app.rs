@@ -921,6 +921,9 @@ struct OpenForm {
     fields: Vec<Field>,
     params: Value,
     error: Option<String>,
+    /// What its last Apply made that is not quite what was asked (Embellish drawn finer
+    /// than it carves): red text at the panel's foot, never a pop-up.
+    warning: Option<String>,
     /// Job Setup for a new job: OK and Cancel instead of Apply and Close.
     new_job: bool,
     /// The tool page it shows in: Toolpaths for toolpath strategies, else Design.

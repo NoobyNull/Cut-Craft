@@ -72,10 +72,12 @@ pub fn edt2(f: &mut [f64], w: usize, h: usize) {
 }
 
 /// Fills `f` with `value` inside `rings` (even-odd), the grid's points `res` apart from 0.
+/// A point on the outline itself is outside, on every side alike (else the distances
+/// measured from it lean a cell one way).
 pub fn fill_rings(f: &mut [f64], nx: usize, ny: usize, res: f64, rings: &[Vec<Point>], value: f64) {
+    let e = res * 1e-6;
     let mut xs = vec![];
-    for j in 0..ny {
-        let y = j as f64 * res;
+    let spans = |y: f64, xs: &mut Vec<f64>| {
         xs.clear();
         for p in rings {
             let n = p.len();
@@ -87,13 +89,27 @@ pub fn fill_rings(f: &mut [f64], nx: usize, ny: usize, res: f64, rings: &[Vec<Po
             }
         }
         xs.sort_by(f64::total_cmp);
-        for k in (0..xs.len().saturating_sub(1)).step_by(2) {
-            let i0 = (xs[k] / res).ceil().max(0.0) as usize;
-            let i1 = (xs[k + 1] / res).floor();
-            if i1 < 0.0 {
-                continue;
+    };
+    let mut inside = vec![0_u8; nx];
+    for j in 0..ny {
+        let y = j as f64 * res;
+        inside.fill(0);
+        // inside just above the point and just below it
+        for y in [y - e, y + e] {
+            spans(y, &mut xs);
+            for k in (0..xs.len().saturating_sub(1)).step_by(2) {
+                let i0 = ((xs[k] + e) / res).ceil().max(0.0) as usize;
+                let i1 = ((xs[k + 1] - e) / res).floor();
+                if i1 < 0.0 || i0 as f64 > i1 {
+                    continue;
+                }
+                for c in &mut inside[i0.min(nx)..=(i1 as usize).min(nx - 1)] {
+                    *c += 1;
+                }
             }
-            for i in i0..=(i1 as usize).min(nx - 1) {
+        }
+        for (i, c) in inside.iter().enumerate() {
+            if *c == 2 {
                 f[j * nx + i] = value;
             }
         }
