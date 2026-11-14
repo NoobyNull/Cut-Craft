@@ -104,6 +104,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Group Toolpaths: puts the selected toolpaths together in a folder in the toolpath list, to keep a long list tidy",
     ),
     (
+        "arrange_toolpaths",
+        "Arrange Toolpaths: puts the toolpaths in a new cutting order, and in or out of groups, in one step, as dragging them in the toolpath list does",
+    ),
+    (
         "rename_toolpath_group",
         "Rename Toolpath Group: gives a folder of toolpaths a new name",
     ),

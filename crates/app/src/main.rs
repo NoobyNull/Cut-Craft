@@ -27,6 +27,7 @@ mod polyline;
 mod shortcut;
 mod spacemouse;
 mod startup;
+mod toolpath_order;
 mod update;
 mod view2d;
 mod view3d;
