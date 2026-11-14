@@ -1058,6 +1058,799 @@ pub const TOURS: &[Tour] = &[
             },
         ],
     },
+    Tour {
+        tool: "material_setup",
+        steps: &[
+            Step {
+                caption: "Before the first toolpath, tell Cut Craft about the board on the \
+                          machine. On the Toolpaths page, press **Material Setup** (under Job \
+                          and Tools). It also opens by itself the first time you make a \
+                          toolpath.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:material_setup"),
+            },
+            Step {
+                caption: "Check the **Thickness**: measure the board, because every depth is \
+                          worked out from it.",
+                setup: |app, ctx| app.invoke(ctx, "material_setup"),
+                mark: Mark::At("field:thickness"),
+            },
+            Step {
+                caption: "Choose where the bit's **Z zero** is: on the top of the board, or on \
+                          the machine bed under it. Touch the bit off at the same place on the \
+                          machine.",
+                setup: |_, _| {},
+                mark: Mark::At("field:z_zero"),
+            },
+            Step {
+                caption: "Choose the **XY datum**: the corner (or the middle) of the board that \
+                          is X0, Y0 on the machine.",
+                setup: |_, _| {},
+                mark: Mark::At("field:datum"),
+            },
+            Step {
+                caption: "Check how high the bit lifts between cuts (**Rapid Z gaps**), then \
+                          press **Apply**.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Apply"),
+            },
+        ],
+    },
+    Tour {
+        tool: "materials",
+        steps: &[
+            Step {
+                caption: "Materials shows the job in the wood (or plastic or metal) you will \
+                          cut. On the Toolpaths page, press **Materials** (under Job and \
+                          Tools).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:materials"),
+            },
+            Step {
+                caption: "Pick the **Material**. Woods show their grain in the 3D view; \
+                          **Custom** is a plain colour of your own.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "materials");
+                    set(app, "material", "walnut".into());
+                },
+                mark: Mark::At("field:material"),
+            },
+            Step {
+                caption: "Choose how the preview colours what the toolpaths cut (**Machined \
+                          area**): the material's own colour, one colour, or each toolpath's \
+                          colour. Then press **OK**.",
+                setup: |_, _| {},
+                mark: Mark::At("field:machined_area"),
+            },
+            Step {
+                caption: "The 3D view and the toolpath previews now show the job in that \
+                          material.",
+                setup: |app, ctx| {
+                    if let Some(open) = &app.form {
+                        let (id, params) = (open.id, open.params.clone());
+                        let _ = app.apply(id, &params);
+                    }
+                    app.form = None;
+                    app.view = View::ThreeD;
+                    app.framing = crate::view3d::Framing::default();
+                    let _ = ctx;
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "tool_database",
+        steps: &[
+            Step {
+                caption: "The Tool Database keeps your bits, each with its size, shape, feeds \
+                          and speeds. On the Toolpaths page, press **Tool Database** (under Job \
+                          and Tools).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:tool_database"),
+            },
+            Step {
+                caption: "**My Tools** are the bits you own; the makers' catalogues below are \
+                          for copying from. Click a bit to see its drawing and settings, or add \
+                          your own. Every toolpath's **Select…** picks from My Tools, and \
+                          brings that bit's feeds, speeds and depth per pass with it.",
+                setup: |app, ctx| app.invoke(ctx, "tool_database"),
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "keep_out_zones",
+        steps: &[
+            Step {
+                caption: "A keep-out zone is an area the bit must never cross, such as a clamp. \
+                          Draw round each clamp and select the shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    for x in [40.0, 330.0] {
+                        let clamp = serde_json::json!({
+                            "x": x, "y": 130.0, "width": 30.0, "height": 40.0
+                        });
+                        let clamp = with(app, "draw_rectangle", &clamp);
+                        draw(app, "draw_rectangle", clamp);
+                    }
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Keep-Out Zones** (under Job and Tools).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:keep_out_zones"),
+            },
+            Step {
+                caption: "Set the **Clearance**: how far beyond the shapes the zone reaches, so \
+                          the side of the bit stays clear too.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "keep_out_zones");
+                    set(app, "clearance", 5.0.into());
+                },
+                mark: Mark::At("field:clearance"),
+            },
+            Step {
+                caption: "Give the zones a **Name** (they are labelled Clamp 1, Clamp 2…), then \
+                          press **OK**. A toolpath that would cut into a zone is not made.",
+                setup: |_, _| {},
+                mark: Mark::At("field:name"),
+            },
+        ],
+    },
+    Tour {
+        tool: "3d_roughing_toolpath",
+        steps: &[
+            Step {
+                caption: "3D roughing clears away most of the wood above a 3D model quickly, \
+                          leaving a little for the finishing toolpath. Make or load the model \
+                          first: here, a dome.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    dome(app, ctx);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **3D Roughing** (under 3D Toolpaths).",
+                setup: |app, _| {
+                    app.view = View::TwoD;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:3d_roughing_toolpath"),
+            },
+            Step {
+                caption: "Set the **Allowance**: the wood left on the model for the finishing \
+                          toolpath to take off cleanly.",
+                setup: |app, ctx| app.invoke(ctx, "3d_roughing_toolpath"),
+                mark: Mark::At("field:allowance"),
+            },
+            Step {
+                caption: "Choose the **Strategy**: **Z level** clears flat steps, one pass \
+                          depth at a time; **3D raster** rides over the model in rows.",
+                setup: |_, _| {},
+                mark: Mark::At("field:strategy"),
+            },
+            Step {
+                caption: "Use a big end mill to clear quickly, then press **Calculate**.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths**: the dome comes out in steps, ready \
+                          for finishing.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "3d_finishing_toolpath",
+        steps: &[
+            Step {
+                caption: "3D finishing runs a ball nose bit over a 3D model in fine rows, as \
+                          low as it can go without cutting into it. Make or load the model \
+                          first: here, a dome.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    dome(app, ctx);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **3D Finishing** (under 3D Toolpaths).",
+                setup: |app, _| {
+                    app.view = View::TwoD;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:3d_finishing_toolpath"),
+            },
+            Step {
+                caption: "Choose the **Strategy**: **Raster** rows back and forth, or \
+                          **Offset** rings following the outline.",
+                setup: |app, ctx| app.invoke(ctx, "3d_finishing_toolpath"),
+                mark: Mark::At("field:strategy"),
+            },
+            Step {
+                caption: "Pick a ball nose bit. Its stepover sets how close the rows are: \
+                          closer rows leave a smoother surface but take longer. Add more bits \
+                          to finish the fine detail the first one cannot reach.",
+                setup: |_, _| {},
+                mark: Mark::At("field:tools"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths** to see the smooth dome.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "rounding_toolpath",
+        steps: &[
+            Step {
+                caption: "Rounding turns a square or round blank into a smooth cylinder on a \
+                          rotary axis. Start a **rotary** job in Job Setup, with the finished \
+                          diameter.",
+                setup: |app, ctx| {
+                    app.form = None;
+                    app.reset_job();
+                    app.invoke(ctx, "new");
+                    set(app, "job_type", "rotary".into());
+                },
+                mark: Mark::At("field:job_type"),
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Rounding** (under 3D Toolpaths).",
+                setup: |app, ctx| {
+                    app.job_setup_ok();
+                    (app.design_subtab, app.toolpath_subtab) = (0, 0);
+                    app.view = View::TwoD;
+                    app.camera = None;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                    let _ = ctx;
+                },
+                mark: Mark::At("tool:rounding_toolpath"),
+            },
+            Step {
+                caption: "Say what you start from (**Blank**: square or round) and its \
+                          **Blank size**.",
+                setup: |app, ctx| app.invoke(ctx, "rounding_toolpath"),
+                mark: Mark::At("field:blank"),
+            },
+            Step {
+                caption: "Choose the **Method**: round the cylinder as it turns, or along it in \
+                          rows.",
+                setup: |_, _| {},
+                mark: Mark::At("field:method"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
+        tool: "laser_cut_fill_toolpath",
+        steps: &[
+            Step {
+                caption: "A laser can cut shapes out or mark them with a hatched fill. Select \
+                          the shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    draw(app, "draw_star", star());
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Laser Cut / Fill** (under Laser).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:laser_cut_fill_toolpath"),
+            },
+            Step {
+                caption: "Choose the **Strategy**: cut outside, inside or on the line (the \
+                          beam's width is allowed for), or **Hatch fill** to mark the inside \
+                          with lines.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "laser_cut_fill_toolpath");
+                    set(app, "strategy", "hatch_fill".into());
+                    set(app, "stepover", 2.0.into());
+                },
+                mark: Mark::At("field:strategy"),
+            },
+            Step {
+                caption: "Set the **Power** and the number of **Passes**: more passes cut \
+                          through thicker material. Try them on a scrap first.",
+                setup: |_, _| {},
+                mark: Mark::At("field:power"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "The hatch lines fill the star, with an outline round it for a crisp \
+                          edge.",
+                setup: calculate,
+                mark: Mark::Everything,
+            },
+        ],
+    },
+    Tour {
+        tool: "laser_picture_toolpath",
+        steps: &[
+            Step {
+                caption: "A laser can burn a photo or picture: darker parts get more power. \
+                          Import the picture (drop it on the sheet) and click it to select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    picture(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Laser Picture** (under Laser).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:laser_picture_toolpath"),
+            },
+            Step {
+                caption: "Set the **Power** for black. Light parts get less.",
+                setup: |app, ctx| app.invoke(ctx, "laser_picture_toolpath"),
+                mark: Mark::At("field:power"),
+            },
+            Step {
+                caption: "Tick **Dither image** for materials that only burn or don't (such as \
+                          some plastics): the laser switches fully on and off in tiny dots to \
+                          give the greys.",
+                setup: |_, _| {},
+                mark: Mark::At("field:dither_image"),
+            },
+            Step {
+                caption: "Set the **Line spacing**: closer lines give more detail but take \
+                          longer. Then press **Calculate**.",
+                setup: |app, _| set(app, "line_spacing", 10.0.into()),
+                mark: Mark::At("field:line_spacing"),
+            },
+            Step {
+                caption: "The toolpath follows the picture: more power where it is darker. \
+                          It joins the toolpath list, ready to save for the laser.",
+                setup: calculate,
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "photo_vcarve_toolpath",
+        steps: &[
+            Step {
+                caption: "Photo V-carving carves a picture as grooves with a V-bit: deeper, so \
+                          wider, where it is darker. Import the picture and select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    picture(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Photo V-Carve** (under Carve and \
+                          Engrave).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:photo_vcarve_toolpath"),
+            },
+            Step {
+                caption: "Set the **Max carving depth**: how deep the grooves go where the \
+                          picture is black.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "photo_vcarve_toolpath");
+                    set(app, "max_carving_depth", 3.0.into());
+                },
+                mark: Mark::At("field:max_carving_depth"),
+            },
+            Step {
+                caption: "Choose the **Strategy**: straight lines across (**Raster**), crossing \
+                          lines (**Hatch**), or along vectors you drew.",
+                setup: |_, _| {},
+                mark: Mark::At("field:strategy"),
+            },
+            Step {
+                caption: "Press **Calculate**. Use a V-bit with a fine point for detail.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths** to see the picture in grooves.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "sketch_carving_toolpath",
+        steps: &[
+            Step {
+                caption: "Sketch carving carves the lines of a picture, like a pencil sketch: \
+                          wherever it is darker than around it. Import the picture and select \
+                          it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    picture(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Sketch Carving** (under Carve and \
+                          Engrave).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:sketch_carving_toolpath"),
+            },
+            Step {
+                caption: "Choose the **Source**: the picture, or the 3D model's dips and \
+                          edges.",
+                setup: |app, ctx| app.invoke(ctx, "sketch_carving_toolpath"),
+                mark: Mark::At("field:source"),
+            },
+            Step {
+                caption: "Set the **Line thickness**: heavier lines, but less detail, as it \
+                          goes up.",
+                setup: |_, _| {},
+                mark: Mark::At("field:line_thickness"),
+            },
+            Step {
+                caption: "Press **Calculate**, then **Preview All Toolpaths** to see the \
+                          sketch.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "The sketch's lines carved into the board.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "array_copy_toolpath",
+        steps: &[
+            Step {
+                caption: "Array Copy repeats a toolpath in a grid, to cut several of the same \
+                          part from one board. Make the toolpath for one part first: here a \
+                          Profile round a circle.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    small_profile(app, ctx);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Array Copy** (under From Other \
+                          Toolpaths).",
+                setup: |app, _| {
+                    app.form = None;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:array_copy_toolpath"),
+            },
+            Step {
+                caption: "Set how many **Rows** and **Columns** of copies, counting the first.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "array_copy_toolpath");
+                    set(app, "rows", 2.into());
+                    set(app, "columns", 3.into());
+                },
+                mark: Mark::At("field:rows"),
+            },
+            Step {
+                caption: "Set the distances between copies across (**X**) and up (**Y**) the \
+                          job.",
+                setup: |app, _| {
+                    set(app, "x", 110.0.into());
+                    set(app, "y", 110.0.into());
+                },
+                mark: Mark::At("field:x"),
+            },
+            Step {
+                caption: "Press **Calculate**. The copies follow the first: change and \
+                          recalculate it, and they change too.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Six parts from one toolpath.",
+                setup: calculate,
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "merged_toolpath",
+        steps: &[
+            Step {
+                caption: "Merged joins toolpaths that use the same bit into one, in the order \
+                          that travels least. Make the toolpaths first: here a Profile round the \
+                          circle…",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    two_shapes(app);
+                    select(app, CIRCLE_X - CIRCLE_R, CIRCLE_Y);
+                    app.invoke(ctx, "profile_toolpath");
+                    calculate(app, ctx);
+                },
+                mark: Mark::Shape(CIRCLE_X - CIRCLE_R, CIRCLE_Y),
+            },
+            Step {
+                caption: "…and a Profile round the rectangle, with the same bit.",
+                setup: |app, ctx| {
+                    app.form = None;
+                    select(app, RECT2_X, RECT_Y + RECT_H / 2.0);
+                    app.invoke(ctx, "profile_toolpath");
+                    calculate(app, ctx);
+                },
+                mark: Mark::Shape(RECT2_X, RECT_Y + RECT_H / 2.0),
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Merged** (under From Other \
+                          Toolpaths). It merges the toolpaths shown in the list.",
+                setup: |app, _| {
+                    app.form = None;
+                    app.doc.selection.clear();
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:merged_toolpath"),
+            },
+            Step {
+                caption: "Tick the orders to try: left to right, bottom to top, in a grid, or \
+                          nearest next. The quickest is kept. **Merge by part** keeps each \
+                          part's cuts together.",
+                setup: |app, ctx| app.invoke(ctx, "merged_toolpath"),
+                mark: Mark::At("field:shortest_path"),
+            },
+            Step {
+                caption: "Press **Calculate**: one toolpath now cuts both, and the originals \
+                          are hidden.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
+        tool: "load_template",
+        steps: &[
+            Step {
+                caption: "A toolpath template brings saved toolpath settings and bits into this \
+                          job. On the Toolpaths page, press **Load Toolpath Template** (under \
+                          Templates) and pick the template file.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    two_shapes(app);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:load_template"),
+            },
+            Step {
+                caption: "Its toolpaths join the list, ready for you to pick the vectors each \
+                          one cuts: select the shapes, edit the toolpath and press \
+                          **Calculate**.",
+                setup: |_, _| {},
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "save_selected_toolpath_as_template",
+        steps: &[
+            Step {
+                caption: "Save a toolpath you like as a template, to make the same cut on \
+                          other jobs. Click it in the toolpath list to select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    small_profile(app, ctx);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Press **Save Toolpath as Template** (under Templates) and name the \
+                          file. It keeps the settings and the bits, not the shapes.",
+                setup: |app, _| {
+                    app.form = None;
+                    app.selected_toolpath = app.doc.toolpaths.keys().next().copied();
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:save_selected_toolpath_as_template"),
+            },
+        ],
+    },
+    Tour {
+        tool: "save_all_visible_toolpaths_as_template",
+        steps: &[
+            Step {
+                caption: "Save every toolpath shown in the list as one template: a whole \
+                          job's cuts, such as a sign's lettering, pocket and cut-out, ready for \
+                          the next sign. Untick any you do not want in it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    small_profile(app, ctx);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Press **Save All Shown Toolpaths as Template** (under Templates) and \
+                          name the file. Use **Load Toolpath Template** to bring them into \
+                          another job.",
+                setup: |app, _| {
+                    app.form = None;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:save_all_visible_toolpaths_as_template"),
+            },
+        ],
+    },
+    Tour {
+        tool: "toolpath_summary",
+        steps: &[
+            Step {
+                caption: "Once the toolpaths are made, open the **Analyse** tab on the \
+                          Toolpaths page and press **Toolpath Summary**.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    small_profile(app, ctx);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Press **Toolpath Summary** (under Reports).",
+                setup: |app, _| {
+                    app.form = None;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                    app.toolpath_subtab = 2;
+                },
+                mark: Mark::At("tool:toolpath_summary"),
+            },
+            Step {
+                caption: "It lists each toolpath with its bit and how long it takes to cut, \
+                          and the whole job's time.",
+                setup: |app, ctx| app.invoke(ctx, "toolpath_summary"),
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "create_job_sheet",
+        steps: &[Step {
+            caption: "A job sheet is a page to take to the machine: the job, the material, \
+                          and each toolpath's bit and time. Open the **Output** tab on the \
+                          Toolpaths page and press **Save Job Sheet** (under Paperwork for the \
+                          Job), then name the file.",
+            setup: |app, ctx| {
+                fresh_job(app, ctx);
+                small_profile(app, ctx);
+                app.pages.set_pinned(Page::Toolpaths, true);
+                app.toolpath_subtab = 3;
+            },
+            mark: Mark::At("tool:create_job_sheet"),
+        }],
+    },
+    Tour {
+        tool: "print_job_sheet",
+        steps: &[Step {
+            caption: "To print the job sheet, open the **Output** tab on the Toolpaths page \
+                          and press **Print Job Sheet** (under Paperwork for the Job). It opens \
+                          in your web browser; print it from there.",
+            setup: |app, ctx| {
+                fresh_job(app, ctx);
+                small_profile(app, ctx);
+                app.pages.set_pinned(Page::Toolpaths, true);
+                app.toolpath_subtab = 3;
+            },
+            mark: Mark::At("tool:print_job_sheet"),
+        }],
+    },
+    Tour {
+        tool: "part_labels",
+        steps: &[
+            Step {
+                caption: "Part labels are stickers for the parts you cut out, one for each \
+                          named part. Open the **Output** tab on the Toolpaths page and press \
+                          **Print Part Labels** (under Paperwork for the Job).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    small_profile(app, ctx);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                    app.toolpath_subtab = 3;
+                },
+                mark: Mark::At("tool:part_labels"),
+            },
+            Step {
+                caption: "Choose what goes on each label and the label sheet, then print.",
+                setup: |app, ctx| {
+                    app.form = None;
+                    app.invoke(ctx, "part_labels");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "cut_list",
+        steps: &[Step {
+            caption: "A cut list is a spreadsheet of the job's parts and their sizes. Open \
+                          the **Output** tab on the Toolpaths page and press **Save Cut List** \
+                          (under Paperwork for the Job), then name the file. It opens in any \
+                          spreadsheet program.",
+            setup: |app, ctx| {
+                fresh_job(app, ctx);
+                small_profile(app, ctx);
+                app.pages.set_pinned(Page::Toolpaths, true);
+                app.toolpath_subtab = 3;
+            },
+            mark: Mark::At("tool:cut_list"),
+        }],
+    },
+    Tour {
+        tool: "toolpath_tiling",
+        steps: &[
+            Step {
+                caption: "Tiling cuts a job bigger than your machine in pieces: the board is \
+                          moved along between tiles. Open the **Output** tab on the Toolpaths \
+                          page and press **Toolpath Tiling** (under Big Jobs).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    small_profile(app, ctx);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                    app.toolpath_subtab = 3;
+                },
+                mark: Mark::At("tool:toolpath_tiling"),
+            },
+            Step {
+                caption: "Tick it on, and set how the job is split into tiles: their size and \
+                          how much they overlap.",
+                setup: |app, ctx| {
+                    app.form = None;
+                    app.invoke(ctx, "toolpath_tiling");
+                    set(app, "enabled", true.into());
+                },
+                mark: Mark::At("field:tiling"),
+            },
+            Step {
+                caption: "Press **Apply**. The tiles are drawn on the job, and **Save \
+                          Toolpaths** writes one file for each tile.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Apply"),
+            },
+        ],
+    },
 ];
 
 const CIRCLE_X: f64 = 200.0;
@@ -1138,6 +1931,8 @@ fn preview_3d(app: &mut CutCraftApp, ctx: &egui::Context) {
 /// A new job, nothing drawn, the 2D view.
 fn fresh_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
+    // the last tour's windows closed
+    (app.tool_manager, app.info, app.part_labels_window) = (None, None, false);
     // the last tour's job goes without asking whether to save it
     app.reset_job();
     app.invoke(ctx, "new");
@@ -1213,4 +2008,80 @@ fn moulding_shapes(app: &mut CutCraftApp) {
 fn rect(app: &mut CutCraftApp) {
     let rect = with(app, "draw_rectangle", &rectangle());
     draw(app, "draw_rectangle", rect);
+}
+
+/// A circle made into a dome-shaped 3D model.
+fn dome(app: &mut CutCraftApp, ctx: &egui::Context) {
+    draw(app, "draw_circle", circle());
+    app.form = None;
+    select(app, CIRCLE_X - CIRCLE_R, CIRCLE_Y);
+    app.invoke(ctx, "create_shape_round");
+    // lower than the material is thick
+    set(app, "total_height", 12.0.into());
+    if let Some(open) = &app.form {
+        let (id, params) = (open.id, open.params.clone());
+        let _ = app.apply(id, &params);
+    }
+    app.form = None;
+    app.doc.selection.clear();
+    app.view = View::ThreeD;
+}
+
+/// A small circle near the job's corner with a Profile toolpath round it.
+fn small_profile(app: &mut CutCraftApp, ctx: &egui::Context) {
+    let part = serde_json::json!({ "center": { "x": 70.0, "y": 70.0 }, "radius": 40.0 });
+    draw(app, "draw_circle", part);
+    app.form = None;
+    select(app, 30.0, 70.0);
+    app.invoke(ctx, "profile_toolpath");
+    calculate(app, ctx);
+    app.form = None;
+}
+
+/// A made-up picture, selected: a sun over hills under a sky that darkens upwards.
+fn picture(app: &mut CutCraftApp) {
+    use cut_craft_core::bitmap::Bitmap;
+    let (columns, rows) = (240_u32, 150_u32);
+    let grey = (0..rows)
+        .flat_map(|r| {
+            (0..columns).map(move |c| {
+                landscape(
+                    f64::from(c) / f64::from(columns),
+                    f64::from(r) / f64::from(rows),
+                )
+            })
+        })
+        .collect();
+    let mut change = cut_craft_core::Change::builder(&app.doc);
+    let rect =
+        cut_craft_core::geometry::Rect::new(Point::new(40.0, 50.0), Point::new(360.0, 250.0));
+    let id = change.add_bitmap(Bitmap {
+        name: "Hills".into(),
+        columns: columns as usize,
+        rows: rows as usize,
+        grey,
+        rect,
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    app.record(Ok(change.finish()), "Picture added");
+    app.doc.selected_bitmaps = [id].into();
+}
+
+/// The made-up picture's grey at `(x, y)` across and down it (0 to 1): 0 black, 255 white.
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn landscape(x: f64, y: f64) -> u8 {
+    let far = 0.55 + 0.08 * (x * 9.0).sin() + 0.05 * (x * 23.0).cos();
+    let near = 0.72 + 0.1 * (x * 5.0 + 1.0).sin();
+    let sun = ((x - 0.7).powi(2) + (y - 0.3).powi(2)).sqrt() < 0.12;
+    let tone = if y > near {
+        0.15 + 0.1 * (x * 60.0).sin().abs()
+    } else if y > far {
+        0.4
+    } else if sun {
+        0.97
+    } else {
+        0.55 + 0.4 * y
+    };
+    (tone.clamp(0.0, 1.0) * 255.0) as u8
 }
