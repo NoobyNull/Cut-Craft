@@ -1,3 +1,8 @@
+---
+reviewed: 2026-11-14
+see-also:
+---
+
 # Cut Craft Help
 
 Cut Craft draws 2D vectors and 3D models on a sheet of material, then makes the toolpaths

@@ -1,0 +1,9 @@
+[package]
+name = "cut-craft-help"
+description = "Cut Craft's help pages: Markdown with pictures, each page's links to others, and the checks that keep them valid"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[lints]
+workspace = true

@@ -1,3 +1,8 @@
+---
+reviewed: 2026-11-14
+see-also:
+---
+
 # Design
 
 The Design page, down the left, draws and edits vectors, then models them in 3D. Its side

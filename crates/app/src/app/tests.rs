@@ -6162,6 +6162,39 @@ fn help_contents_links_to_the_pages_and_their_tools() {
 }
 
 #[test]
+fn every_help_link_goes_to_a_help_page() {
+    let h = Harness::new();
+    let topics = h.app.help_topics();
+    let problems = cut_craft_help::problems(|id| topics.contains(&id));
+    assert!(problems.is_empty(), "{problems:#?}");
+}
+
+#[test]
+fn every_command_has_a_help_page_to_update() {
+    // scripts/help-touched asks a pull request changing a command to change this page
+    let missing: Vec<&str> = crate::gui::command_ids()
+        .filter(|id| cut_craft_help::page(id).is_none())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "add crates/help/pages/tools/<id>.md (a header is enough to start) for {missing:?}"
+    );
+}
+
+#[test]
+fn a_tools_help_page_shows_its_steps_settings_and_related_pages() {
+    let h = Harness::new();
+    let pocket = h.app.help_markdown("pocket_toolpath");
+    assert!(pocket.contains("## Settings"), "{pocket}");
+    // see-also on its own page
+    assert!(pocket.contains("](help:profile_toolpath)"), "{pocket}");
+    // and back the other way: Profile's page never names Pocket, Pocket's names Profile
+    let profile = h.app.help_markdown("profile_toolpath");
+    assert!(profile.contains("## See also"), "{profile}");
+    assert!(profile.contains("](help:pocket_toolpath)"), "{profile}");
+}
+
+#[test]
 fn a_tools_help_page_falls_back_to_its_own_description() {
     let h = Harness::new();
     // Profile's params carry no doc comment of their own; its crate says what it does
