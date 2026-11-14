@@ -1,5 +1,6 @@
 //! Keyhole Toolpath: hanging slots on the back of a sign. A keyhole cutter plunges at the
-//! centre of each selected vector, runs along the slot and back, and lifts out where it went in.
+//! centre of each selected vector and runs along the slot. Single entry comes back and lifts out
+//! where it went in; double entry lifts out at the far end, leaving a hole at both ends.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
@@ -25,6 +26,16 @@ pub enum Direction {
     RightToLeft,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Entry {
+    /// Goes in and out through one hole; the screw head slides to the closed end
+    #[default]
+    Single,
+    /// Goes in at one end and out at the other, leaving a hole at both ends
+    Double,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// What the toolpath is called in the toolpath list
@@ -32,6 +43,10 @@ pub struct Params {
     /// Which way the slot runs from the entry hole
     #[schemars(extend("x-group" = "Keyhole"))]
     pub direction: Direction,
+    /// One entry hole, or a hole at both ends of the slot
+    #[serde(default)]
+    #[schemars(extend("x-group" = "Keyhole"))]
+    pub entry: Entry,
     /// Deep enough that the cutter's wide part is below the surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
@@ -64,6 +79,7 @@ impl Default for Params {
         Self {
             name: "Keyhole".into(),
             direction: Direction::BottomToTop,
+            entry: Entry::Single,
             slot_depth: 6.35,
             slot_length: 25.4,
             create_preview_vectors: true,
@@ -86,15 +102,29 @@ impl Params {
             }
     }
 
-    /// The outline of a slot on the surface: the entry hole and a round-ended slot.
+    /// The cutter's path at slot depth: single entry runs out and back to lift where it went
+    /// in; double entry runs once and lifts out through a second hole at the far end.
+    fn route(&self, start: Point, end: Point) -> Vec<Point> {
+        match self.entry {
+            Entry::Single => vec![start, end, start],
+            Entry::Double => vec![start, end],
+        }
+    }
+
+    /// The outline of a slot on the surface: the entry hole (both ends for double entry)
+    /// and a round-ended slot.
     fn preview(&self, start: Point, end: Point) -> Vec<Path> {
         let r = self.slot_diameter / 2.0;
+        let end_r = match self.entry {
+            Entry::Single => r,
+            Entry::Double => self.entry_hole_diameter / 2.0,
+        };
         let side = (end - start).normalize().perp() * r;
         let slot = Path::polyline(&[start + side, end + side, end - side, start - side], true);
         polygon::union(&[
             Path::circle(start, self.entry_hole_diameter / 2.0),
             slot,
-            Path::circle(end, r),
+            Path::circle(end, end_r),
         ])
     }
 }
@@ -132,7 +162,7 @@ impl Command for KeyholeToolpath {
             let start = path.bounds().center();
             let end = p.slot_end(start);
             moves.extend(contour_moves(
-                &[start, end, start],
+                &p.route(start, end),
                 false,
                 &[-p.slot_depth],
                 safe,
@@ -204,5 +234,67 @@ mod tests {
             (b.min.y - (40.0 - p.entry_hole_diameter / 2.0)).abs() < 0.01,
             "{b:?}"
         );
+    }
+
+    #[test]
+    fn single_entry_is_the_default_and_old_files_read_as_single() {
+        assert_eq!(Params::default().entry, Entry::Single);
+        let mut v = serde_json::to_value(Params::default()).unwrap();
+        v.as_object_mut().unwrap().remove("entry");
+        let p: Params = serde_json::from_value(v).unwrap();
+        assert_eq!(p.entry, Entry::Single);
+    }
+
+    #[test]
+    fn double_entry_plunges_at_one_end_and_lifts_out_at_the_other() {
+        let p = Params {
+            direction: Direction::LeftToRight,
+            entry: Entry::Double,
+            create_preview_vectors: false,
+            ..Params::default()
+        };
+        let t =
+            made_toolpath::<KeyholeToolpath>(vec![Path::circle(Point::new(50.0, 40.0), 5.0)], &p)
+                .unwrap();
+        let kinds: Vec<_> = t.moves.iter().map(|m| (m.kind, m.to)).collect();
+        let at = |x: f64, z: f64| cut_craft_core::glam::DVec3::new(x, 40.0, z);
+        let d = -p.slot_depth;
+        let end = 50.0 + p.slot_length;
+        assert!(kinds[1].0 == MoveKind::Plunge && kinds[1].1.distance(at(50.0, d)) < 1e-9);
+        assert!(kinds[2].1.distance(at(end, d)) < 1e-9);
+        assert_eq!(
+            kinds[3].0,
+            MoveKind::Rapid,
+            "lifts straight out at the far end"
+        );
+        assert!((kinds[3].1.x - end).abs() < 1e-9);
+        let cut: f64 = t
+            .moves
+            .windows(2)
+            .filter(|w| w[1].kind != MoveKind::Rapid && w[1].to.z < 0.0 && w[0].to.z < 0.0)
+            .map(|w| w[0].to.distance(w[1].to))
+            .sum();
+        assert!((cut - p.slot_length).abs() < 1e-9, "slot cut once: {cut}");
+    }
+
+    #[test]
+    fn double_entry_preview_shows_a_hole_at_both_ends() {
+        let mut doc = document_with(vec![Path::circle(Point::new(50.0, 40.0), 5.0)]);
+        let p = Params {
+            entry: Entry::Double,
+            ..Params::default()
+        };
+        let change = KeyholeToolpath::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        assert_eq!(doc.vectors.len(), 2, "the circle and one keyhole outline");
+        let b = doc
+            .vectors
+            .values()
+            .map(Path::bounds)
+            .max_by(|a, b| a.max.y.total_cmp(&b.max.y))
+            .unwrap();
+        let r = p.entry_hole_diameter / 2.0;
+        assert!((b.max.y - (40.0 + p.slot_length + r)).abs() < 0.01, "{b:?}");
+        assert!((b.min.y - (40.0 - r)).abs() < 0.01, "{b:?}");
     }
 }
