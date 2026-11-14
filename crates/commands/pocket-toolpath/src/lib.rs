@@ -122,6 +122,7 @@ pub struct Params {
     /// one thin, even skim, for a straighter, cleaner wall; 0 clears right up to it
     #[serde(default)]
     #[schemars(title = "Leave for Edge Pass", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "A", "x-diagram" = "diagrams/edge_pass.png"))]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub edge_allowance: f64,
     /// Go round the edge once, at the full depth, after all the clearing passes: one clean
