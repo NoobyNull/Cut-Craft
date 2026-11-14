@@ -15,6 +15,9 @@ use std::collections::HashMap;
 use std::path::Path;
 
 const MM_PER_INCH: f64 = 25.4;
+/// How far apart, mm, an arc's printed ends may be from its centre before the post nudges
+/// the centre a printed step to bring them closer (controllers allow 0.005 mm or so).
+const CLOSE_ENOUGH: f64 = 0.0005;
 /// Numeric values a post can print; the ones in `LENGTHS` become inches for inch posts
 /// (feed rates are lengths per minute).
 const NUMBERS: &[&str] = &[
@@ -692,7 +695,8 @@ impl Post {
                         v.numbers.insert("FI", rate / length);
                         let start = feeding.replace(rate) != Some(rate);
                         if let Step::Arc(_, arc) = step {
-                            v.arc(from, &arc);
+                            let (printed_from, arc) = self.as_printed(from, arc);
+                            v.arc(printed_from, &arc);
                             self.arc_block(&arc, from, start)
                         } else {
                             self.feed_block(kind, start)
@@ -800,6 +804,79 @@ impl Post {
         } else {
             then
         }
+    }
+
+    /// How many millimetres `mm` is once printed as `label`: rounded to the places the post
+    /// prints it to, in its units.
+    fn printed(&self, label: &str, mm: f64) -> f64 {
+        let step = self.printed_step(label);
+        (mm / step).round() * step
+    }
+
+    /// The smallest step, in millimetres, `label` prints in.
+    fn printed_step(&self, label: &str) -> f64 {
+        let format = self
+            .formats
+            .get(label)
+            .cloned()
+            .unwrap_or_else(|| Format::default_for(label));
+        let unit = if self.inches && LENGTHS.contains(&label) {
+            MM_PER_INCH
+        } else {
+            1.0
+        };
+        let places = i32::try_from(format.decimals).unwrap_or(i32::MAX);
+        let multiplier = if format.multiplier.abs() > f64::EPSILON {
+            format.multiplier.abs()
+        } else {
+            1.0
+        };
+        unit / multiplier / 10_f64.powi(places)
+    }
+
+    /// `arc` from `from` as the machine reads it: from where the last move was printed to,
+    /// with its centre moved onto the line halfway between its printed ends and to the
+    /// printed step nearest that keeps both ends the same distance from it. Controllers
+    /// check this (GRBL stops with error 33 past 0.005 mm), and rounding to the places an
+    /// inch post prints could otherwise put a small arc's ends that far apart.
+    fn as_printed(&self, from: DVec3, arc: arcs::Arc) -> (DVec3, arcs::Arc) {
+        let at = |p: DVec3| {
+            cut_craft_core::glam::DVec2::new(self.printed("X", p.x), self.printed("Y", p.y))
+        };
+        let (start, end) = (at(from), at(arc.to));
+        let chord = end - start;
+        let mut centre = arc.centre;
+        if chord.length_squared() > f64::EPSILON {
+            let middle = (start + end) / 2.0;
+            centre -= chord * (centre - middle).dot(chord) / chord.length_squared();
+        }
+        let (si, sj) = (self.printed_step("I"), self.printed_step("J"));
+        let offset = centre - start;
+        let (i, j) = ((offset.x / si).round(), (offset.y / sj).round());
+        let mismatch = |c: cut_craft_core::glam::DVec2| (c.distance(start) - c.distance(end)).abs();
+        let nearest = start + cut_craft_core::glam::DVec2::new(i * si, j * sj);
+        // the nearest rounding unless a step either way matches the ends noticeably better
+        if mismatch(nearest) <= CLOSE_ENOUGH {
+            return (
+                start.extend(from.z),
+                arcs::Arc {
+                    centre: nearest,
+                    ..arc
+                },
+            );
+        }
+        let best = (-1..=1)
+            .flat_map(|a| (-1..=1).map(move |b| (f64::from(a), f64::from(b))))
+            .map(|(a, b)| start + cut_craft_core::glam::DVec2::new((i + a) * si, (j + b) * sj))
+            .min_by(|a, b| mismatch(*a).total_cmp(&mismatch(*b)))
+            .unwrap_or(centre);
+        (
+            start.extend(from.z),
+            arcs::Arc {
+                centre: best,
+                ..arc
+            },
+        )
     }
 
     /// The block for an arc starting at `from`, by its direction and whether it changes
@@ -2070,6 +2147,82 @@ begin FOOTER
             .find_map(|l| l.split_whitespace().find(|w| w.starts_with('F')))
             .unwrap();
         assert_eq!(fed, format!("F{plunge:.1}"), "{lines:#?}");
+    }
+
+    /// How far, in mm, the end of each arc in `lines` (in `post`'s units) is from its centre
+    /// further than its start is, with the arc's radius: what GRBL compares (error 33).
+    fn arc_mismatches(lines: &[String], inches: bool) -> Vec<(f64, f64)> {
+        let unit = if inches { MM_PER_INCH } else { 1.0 };
+        let word = |line: &str, letter: char| {
+            line.split_whitespace()
+                .find_map(|w| w.strip_prefix(letter)?.parse::<f64>().ok())
+                .map(|v| v * unit)
+        };
+        let (mut x, mut y) = (0.0, 0.0);
+        let mut out = vec![];
+        for line in lines {
+            let to_x = word(line, 'X').unwrap_or(x);
+            let to_y = word(line, 'Y').unwrap_or(y);
+            if line.starts_with("G2 ") || line.starts_with("G3 ") {
+                let c = (
+                    x + word(line, 'I').unwrap_or(0.0),
+                    y + word(line, 'J').unwrap_or(0.0),
+                );
+                let r0 = f64::hypot(x - c.0, y - c.1);
+                let r1 = f64::hypot(to_x - c.0, to_y - c.1);
+                out.push(((r1 - r0).abs(), r0));
+            }
+            if line.starts_with('G') {
+                (x, y) = (to_x, to_y);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn every_arc_passes_grbls_check_that_its_ends_are_the_same_distance_from_its_centre() {
+        // small arcs at awkward places, where rounding to the printed places matters most:
+        // GRBL stops a job with error 33 when the ends differ by over 0.005 mm and 0.1%
+        let mut seed = 12_345_u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            #[expect(clippy::cast_precision_loss)]
+            let r = (seed >> 11) as f64 / (1_u64 << 53) as f64;
+            r
+        };
+        let mut toolpaths = vec![];
+        for k in 0..3000 {
+            let (cx, cy) = (10.0 + 80.0 * next(), 10.0 + 80.0 * next());
+            let radius = 0.2 + 2.0 * next();
+            let (start, sweep) = (std::f64::consts::TAU * next(), 2.4 + 0.7 * next());
+            let way = if k % 2 == 0 { 1.0 } else { -1.0 };
+            let points: Vec<DVec3> = (0..=24)
+                .map(|i| {
+                    let a = start + way * sweep * f64::from(i) / 24.0;
+                    DVec3::new(cx + radius * a.cos(), cy + radius * a.sin(), -1.0)
+                })
+                .collect();
+            toolpaths.push(cutting(&points));
+        }
+        for (name, text) in BUILT_IN {
+            let post = Post::parse(text).unwrap();
+            if post.arc_limits(false).is_none() {
+                continue;
+            }
+            let lines = render_with(
+                &post,
+                cut_craft_core::document::Job::default(),
+                toolpaths.clone(),
+            );
+            let arcs = arc_mismatches(&lines, post.inches);
+            assert!(arcs.len() >= 3000, "{name}: {} arcs", arcs.len());
+            for (off, radius) in arcs {
+                assert!(
+                    off <= 0.005 || (off <= 0.5 && off <= 0.001 * radius),
+                    "{name}: an arc of radius {radius:.4} mm ends {off:.4} mm off its circle"
+                );
+            }
+        }
     }
 
     #[test]
