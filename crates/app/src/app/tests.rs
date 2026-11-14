@@ -297,7 +297,7 @@ fn the_rail_layout_lists_a_groups_tools_by_name() {
         h.text_at("Draw Circle").is_some(),
         "the form in the inspector"
     );
-    assert!(h.text_at("Apply").is_some());
+    assert!(h.text_at("Create").is_some());
 }
 
 #[test]
@@ -6261,6 +6261,30 @@ fn reset_to_defaults_puts_back_only_the_page_shown() {
 }
 
 #[test]
+fn appearance_sets_the_2d_sheet_and_grid_colours_for_each_theme() {
+    let mut h = Harness::new();
+    h.app.options.appearance.dark_2d.grid_color = [1, 2, 3];
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = *h.texts_at("Appearance").last().expect("listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    for label in ["2D view in the light theme", "2D view in the dark theme"] {
+        assert!(h.text_at(label).is_some(), "{label}");
+    }
+    assert_eq!(h.texts_at("Sheet color").len(), 2, "one for each theme");
+    assert_eq!(h.texts_at("Grid color").len(), 2, "one for each theme");
+    let reset = h.text_at("Reset to defaults").expect("the page's reset");
+    h.click(reset, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.options.appearance.dark_2d,
+        crate::options::CanvasColours::dark()
+    );
+}
+
+#[test]
 fn the_window_title_sits_in_the_menu_bar_unless_the_desktop_s_is_chosen() {
     let mut h = Harness::new();
     let title = h.app.title.clone();
@@ -7652,7 +7676,10 @@ fn the_toolpath_summary_keeps_notes_per_toolpath_and_shows_the_rapid_rate_in_its
     assert_eq!(h.app.summary.picked, Some(id));
     h.app.summary.notes = "Use the 1/4 in downcut".into();
     h.frame(vec![]);
-    let apply = *h.texts_at("Apply").last().expect("the notes have Apply");
+    let apply = *h
+        .texts_at("Save Notes")
+        .last()
+        .expect("the notes have Save Notes");
     h.click(apply, Modifiers::NONE);
     assert_eq!(
         h.app.doc.toolpaths[&id].summary_notes(),
@@ -7796,6 +7823,52 @@ fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
         .unwrap();
     h.frame(vec![key(Key::E)]);
     assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
+}
+
+#[test]
+fn e_on_an_embellishment_opens_embellish_on_it_and_remakes_it_in_place() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 120.0, 120.0);
+    let mut params = h.app.registry.get("embellish").unwrap().default_params();
+    params["objects"] = 3.into();
+    h.app.apply("embellish", &params).unwrap();
+    assert_eq!(h.app.doc.components.len(), 1);
+    let layers = h.app.doc.layers.len();
+    let id = *h.app.doc.components.keys().next().unwrap();
+    // its component
+    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.app.doc.selected_components = [id].into();
+    assert!(h.app.available("edit_object"));
+    h.frame(vec![key(Key::E)]);
+    let form = h.app.form.as_mut().expect("Embellish opened");
+    assert_eq!(form.id, "embellish");
+    assert_eq!(form.params["objects"], 3);
+    let mut edited = form.params.clone();
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Apply").is_some() && h.text_at("Create").is_none(),
+        "it changes the one it opened on"
+    );
+    edited["objects"] = 8.into();
+    h.app.apply_form("embellish", &edited).unwrap();
+    assert_eq!(h.app.doc.components.len(), 1, "remade, not added");
+    assert_eq!(h.app.doc.layers.len(), layers, "on its own layer still");
+    // one of its pieces
+    h.app.form = None;
+    let layer = h.app.doc.layers.last().unwrap().id;
+    let piece = *h
+        .app
+        .doc
+        .vectors
+        .keys()
+        .find(|v| h.app.doc.layer_of(**v) == layer)
+        .unwrap();
+    h.app.doc.selected_components.clear();
+    h.app.doc.selection = [piece].into();
+    h.frame(vec![key(Key::E)]);
+    let form = h.app.form.as_ref().expect("Embellish opened");
+    assert_eq!(form.id, "embellish");
+    assert_eq!(form.params["objects"], 8);
 }
 
 #[test]
@@ -10377,7 +10450,7 @@ fn a_cut_deeper_than_the_material_asks_first() {
     let mut h = profile_form();
     let thickness = h.app.doc.job.thickness;
     let calculate = |h: &mut Harness| {
-        let apply = h.text_at("Apply").or_else(|| h.text_at("Calculate"));
+        let apply = h.text_at("Calculate");
         h.click(apply.expect("the form's button"), Modifiers::NONE);
         h.frame(vec![]);
         h.frame(vec![]);
@@ -10422,8 +10495,8 @@ fn a_cut_deeper_than_the_material_asks_first() {
 #[test]
 fn a_long_forms_apply_button_and_error_stay_in_sight() {
     let mut h = profile_form();
-    let apply = h.text_at("Apply").expect("Apply");
-    assert!(apply.y < 800.0, "Apply is in the window: {apply:?}");
+    let apply = h.text_at("Calculate").expect("Calculate");
+    assert!(apply.y < 800.0, "Calculate is in the window: {apply:?}");
     assert!(
         h.text_at("Add ramps to toolpath").is_none(),
         "the form runs on out of sight, under the pinned buttons"
@@ -10434,7 +10507,7 @@ fn a_long_forms_apply_button_and_error_stay_in_sight() {
     let error = h
         .text_at("select the vectors to profile")
         .expect("the error");
-    let apply = h.text_at("Apply").unwrap();
+    let apply = h.text_at("Calculate").unwrap();
     assert!(
         error.y < apply.y && error.y > 600.0,
         "{error:?} over {apply:?}"
@@ -10444,7 +10517,7 @@ fn a_long_forms_apply_button_and_error_stay_in_sight() {
 /// Wheels the form under `over` down until `text` sits clear of the buttons pinned at its
 /// foot, and gives where it is.
 fn scroll_above_foot(h: &mut Harness, over: Pos2, text: &str) -> Pos2 {
-    let apply = h.text_at("Apply").expect("the form's buttons");
+    let apply = h.text_at("Close").expect("the form's buttons");
     for _ in 0..40 {
         if let Some(at) = h.text_at(text).filter(|at| at.y < apply.y - 80.0) {
             return at;
@@ -12364,4 +12437,411 @@ fn the_first_click_on_the_toolpaths_page_opens_material_setup_once_per_job() {
     h.click(h.text_at("Drill").unwrap(), Modifiers::NONE);
     assert!(h.app.form.is_none(), "asked once");
     assert_eq!(h.app.selected_toolpath, Some(EntityId(2)));
+}
+
+/// A drawing tool's form offers Create until its shape is drawn; then the shape follows the
+/// form, so there is nothing to press, and New Shape lets it go to type another.
+#[test]
+fn a_drawing_tools_form_creates_until_its_shape_is_drawn() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    assert!(h.text_at("Create").is_some(), "Create, with nothing drawn");
+    assert!(h.text_at("Apply").is_none());
+    let (from, to) = (h.at(100.0, 100.0), h.at(140.0, 100.0));
+    h.drag(from, to);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    assert!(h.text_at("Create").is_none(), "drawn: it follows the form");
+    assert!(h.text_at("Apply").is_none());
+    assert!(h.text_at("Close").is_some() && h.text_at("Cancel").is_some());
+    assert!(
+        h.text_at(commit::live_note("draw_circle", true)).is_some(),
+        "says why there is no button"
+    );
+    let new = h.text_at("New Shape").expect("a way to type another");
+    h.click(new, Modifiers::NONE);
+    h.frame(vec![]);
+    let create = h.text_at("Create").expect("Create again");
+    h.click(create, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.doc.vectors.len(),
+        2,
+        "a second circle, the first kept"
+    );
+}
+
+/// A circle selected as Draw Circle opens is loaded into the form, and changing the form
+/// changes that circle: no second circle, no button to press.
+#[test]
+fn a_selected_shape_opens_in_its_drawing_tool_and_follows_the_form() {
+    let mut h = Harness::new();
+    let circle = serde_json::json!({ "center": { "x": 50.0, "y": 50.0 }, "radius": 10.0 });
+    h.app.apply("draw_circle", &circle).unwrap();
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    assert!(h.app.doc.selection.contains(&id));
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.drawn, Some(id), "the form edits the selected circle");
+    assert_eq!(form.params["radius"].as_f64(), Some(10.0));
+    assert!(h.text_at("Create").is_none() && h.text_at("Apply").is_none());
+    let form = h.app.form.as_mut().unwrap();
+    form.params["radius"] = Value::from(20.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.vectors.len(), 1, "the same circle, not another");
+    let width = h.app.doc.vectors.values().next().unwrap().bounds().size().x;
+    assert!((width - 40.0).abs() < 1e-6, "{width}");
+    // a rectangle is not Draw Circle's: it opens on new settings
+    h.app.invoke(&h.ctx, "undo");
+    h.app.form = None;
+    h.app.doc.selection.clear();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().unwrap().drawn, None);
+}
+
+/// Tools used only on the canvas have nothing to press: Vector Trim's Apply used to trim
+/// at 0,0.
+#[test]
+fn canvas_only_tools_have_no_commit_button() {
+    let mut h = Harness::new();
+    h.rectangle(-10.0, -10.0, 20.0, 20.0);
+    let before = h.app.doc.vectors.len();
+    for id in ["interactive_vector_trim", "draw_freehand"] {
+        h.app.invoke(&h.ctx, id);
+        h.frame(vec![]);
+        for label in ["Apply", "Create", "Calculate"] {
+            assert!(h.text_at(label).is_none(), "{id}: {label}");
+        }
+        assert!(h.text_at("Close").is_some(), "{id}");
+        assert!(h.text_at(commit::live_note(id, true)).is_some(), "{id}");
+        h.app.form = None;
+    }
+    assert_eq!(h.app.doc.vectors.len(), before, "nothing trimmed or drawn");
+}
+
+#[test]
+fn toolpath_forms_calculate_and_selection_tools_apply() {
+    let mut h = profile_form();
+    assert!(h.text_at("Calculate").is_some());
+    assert!(h.text_at("Apply").is_none());
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "offset_vectors");
+    h.frame(vec![]);
+    assert!(h.text_at("Apply").is_some());
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "circular_copy");
+    h.frame(vec![]);
+    assert!(h.text_at("Create").is_some());
+}
+
+/// Polygons, stars and ellipses open in their drawing tool as circles and rectangles do, and
+/// a square opens in whichever of Draw Rectangle or Draw Polygon is picked; E picks Draw
+/// Rectangle for it.
+#[test]
+fn polygons_stars_and_ellipses_open_in_their_drawing_tools() {
+    let shapes = [
+        (
+            "draw_polygon",
+            serde_json::json!({ "center": { "x": 40.0, "y": 40.0 }, "radius": 15.0, "sides": 5, "rotation": 10.0 }),
+            "sides",
+            5.0,
+        ),
+        (
+            "draw_star",
+            serde_json::json!({ "center": { "x": 40.0, "y": 40.0 }, "outer_radius": 15.0, "inner_radius": 6.0, "points": 6, "rotation": 0.0 }),
+            "points",
+            6.0,
+        ),
+        (
+            "draw_ellipse",
+            serde_json::json!({ "center": { "x": 40.0, "y": 40.0 }, "width": 30.0, "height": 12.0 }),
+            "height",
+            12.0,
+        ),
+    ];
+    for (id, params, key, want) in shapes {
+        let mut h = Harness::new();
+        h.app.apply(id, &params).unwrap();
+        let shape = *h.app.doc.vectors.keys().next().unwrap();
+        h.app.invoke(&h.ctx, id);
+        h.frame(vec![]);
+        let form = h.app.form.as_ref().unwrap();
+        assert_eq!(form.drawn, Some(shape), "{id} edits the selected shape");
+        assert_eq!(form.params[key].as_f64(), Some(want), "{id}");
+        assert!(h.text_at("Create").is_none(), "{id}");
+        // changed on the form, the same shape changes
+        let form = h.app.form.as_mut().unwrap();
+        form.params["center"]["x"] = Value::from(60.0);
+        form.dirty = true;
+        h.frame(vec![]);
+        assert_eq!(h.app.doc.vectors.len(), 1, "{id}: no second shape");
+        let middle = h.app.doc.vectors.values().next().unwrap().bounds().center();
+        assert!((middle.y - 40.0).abs() < 1.0, "{id}: {middle:?}");
+        // E opens the same tool on it
+        h.app.form = None;
+        assert_eq!(h.app.object_to_edit().map(|(_, c, _)| c), Some(id));
+    }
+    // a square: Draw Polygon reads it as a four-sided polygon, E as the rectangle it is
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    assert_eq!(
+        h.app.object_to_edit().map(|(_, c, _)| c),
+        Some("draw_rectangle")
+    );
+    h.app.invoke(&h.ctx, "draw_polygon");
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(form.drawn.is_some(), "Draw Polygon edits the square");
+    assert_eq!(form.params["sides"].as_u64(), Some(4));
+    assert_eq!(
+        form.params["rotation"].as_f64(),
+        Some(135.0),
+        "a whole angle"
+    );
+}
+
+/// A press or a let-go of `button` at `pos`.
+fn mouse(button: PointerButton, pos: Pos2, pressed: bool) -> Event {
+    Event::PointerButton {
+        pos,
+        button,
+        pressed,
+        modifiers: Modifiers::NONE,
+    }
+}
+
+/// A drag with `button` from `from` by `by`, a frame at a time.
+fn drag_with(h: &mut Harness, button: PointerButton, from: Pos2, by: egui::Vec2) {
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.frame(vec![mouse(button, from, true)]);
+    h.frame(vec![Event::PointerMoved(from + by * 0.5)]);
+    h.frame(vec![Event::PointerMoved(from + by)]);
+    h.frame(vec![mouse(button, from + by, false)]);
+    h.frame(vec![]);
+}
+
+/// A sideways scroll of `x` points: the wheel tilted, or Shift and the wheel.
+fn tilt(x: f32) -> Event {
+    Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(x, 0.0),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+        modifiers: Modifiers::NONE,
+    }
+}
+
+/// Where job point `p` shows in the 2D view.
+fn on_screen(h: &Harness, p: Point) -> Pos2 {
+    h.app.view_transform.unwrap().to_screen(p)
+}
+
+#[test]
+fn a_thumb_button_set_to_pan_pans_both_views() {
+    let mut h = Harness::new();
+    let p = Point::new(100.0, 100.0);
+    let from = view_middle(&h);
+    // to start with only the wheel pans: a thumb button drag does nothing
+    let before = on_screen(&h, p);
+    drag_with(&mut h, PointerButton::Extra1, from, vec2(40.0, 10.0));
+    assert!(
+        (on_screen(&h, p) - before).length() < 0.5,
+        "not a pan button yet"
+    );
+    // Mouse Back added to Pan (hold and drag): it pans as the wheel does
+    h.app.add_shortcut(
+        shortcut::PAN_DRAG,
+        shortcut::parse_trigger("Mouse Back").unwrap(),
+    );
+    assert_eq!(
+        h.app.options.controls.shortcuts[shortcut::PAN_DRAG],
+        ["Wheel Click", "Mouse Back"]
+    );
+    let before = on_screen(&h, p);
+    drag_with(&mut h, PointerButton::Extra1, from, vec2(40.0, 10.0));
+    let moved = on_screen(&h, p) - before;
+    assert!((moved - vec2(40.0, 10.0)).length() < 1.0, "{moved:?}");
+    // the wheel still pans
+    let before = on_screen(&h, p);
+    drag_with(&mut h, PointerButton::Middle, from, vec2(-20.0, 0.0));
+    assert!((on_screen(&h, p) - before - vec2(-20.0, 0.0)).length() < 1.0);
+    // and in the 3D view
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    let (orbit, framing) = (h.app.orbit, h.app.framing);
+    let mid = h.app.view_3d_area.expect("the 3D view is drawn").center();
+    drag_with(&mut h, PointerButton::Extra1, mid, vec2(30.0, 0.0));
+    assert!(h.app.framing.pan.x > framing.pan.x + 10.0, "panned");
+    assert_eq!(h.app.orbit, orbit, "not turned");
+}
+
+#[test]
+fn tilting_the_wheel_pans_sideways_unless_set_not_to() {
+    let mut h = Harness::new();
+    let p = Point::new(100.0, 100.0);
+    let at = view_middle(&h);
+    h.frame(vec![Event::PointerMoved(at)]);
+    let (before, scale) = (on_screen(&h, p), h.app.view_transform.unwrap().scale);
+    for _ in 0..20 {
+        h.frame(vec![tilt(-10.0)]);
+    }
+    let moved = on_screen(&h, p) - before;
+    assert!(moved.x < -20.0 && moved.y.abs() < 0.5, "{moved:?}");
+    assert!(
+        (h.app.view_transform.unwrap().scale - scale).abs() < 1e-6,
+        "no zoom"
+    );
+    // the other way round
+    h.app.options.controls.tilt = crate::options::Tilt::PanReversed;
+    let before = on_screen(&h, p);
+    for _ in 0..20 {
+        h.frame(vec![tilt(-10.0)]);
+    }
+    assert!(on_screen(&h, p).x - before.x > 20.0);
+    // or not at all
+    h.app.options.controls.tilt = crate::options::Tilt::Nothing;
+    let before = on_screen(&h, p);
+    for _ in 0..20 {
+        h.frame(vec![tilt(-10.0)]);
+    }
+    assert!((on_screen(&h, p) - before).length() < 0.5);
+    // in the 3D view it pans too
+    h.app.options.controls.tilt = crate::options::Tilt::Pan;
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    let mid = h.app.view_3d_area.expect("the 3D view is drawn").center();
+    h.frame(vec![Event::PointerMoved(mid)]);
+    let framing = h.app.framing;
+    for _ in 0..20 {
+        h.frame(vec![tilt(-10.0)]);
+    }
+    assert!(h.app.framing.pan.x < framing.pan.x - 20.0);
+    assert!((h.app.framing.zoom - framing.zoom).abs() < 1e-6);
+}
+
+#[test]
+fn a_mouse_button_set_as_a_shortcut_runs_its_action() {
+    let mut h = Harness::new();
+    let forward = shortcut::parse_trigger("Mouse Forward").unwrap();
+    h.app.add_shortcut("pan", forward);
+    assert_eq!(h.app.view_tool, None);
+    let at = view_middle(&h);
+    h.frame(vec![mouse(PointerButton::Extra2, at, true)]);
+    h.frame(vec![mouse(PointerButton::Extra2, at, false)]);
+    assert_eq!(h.app.view_tool, Some(ViewTool::Pan), "Pan picked up");
+    // the menus show it
+    assert_eq!(h.app.shortcut_text("pan").as_deref(), Some("Mouse Forward"));
+    // with Ctrl held it is another shortcut, which runs nothing
+    h.app.view_tool = None;
+    h.frame_holding(
+        Modifiers::COMMAND,
+        vec![Event::PointerButton {
+            pos: at,
+            button: PointerButton::Extra2,
+            pressed: true,
+            modifiers: Modifiers::COMMAND,
+        }],
+    );
+    assert_eq!(h.app.view_tool, None);
+}
+
+#[test]
+fn setting_a_shortcut_takes_the_next_button_and_asks_before_taking_anothers() {
+    use super::shortcuts_page::Edit;
+    let mut h = Harness::new();
+    let at = view_middle(&h);
+    h.app.options_window = true;
+    h.app.options_goto = Some(super::shortcuts_page::CATEGORY);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.texts().iter().any(|t| t == "Pan (hold and drag)"),
+        "{:?}",
+        h.texts()
+    );
+    // Add… for Zoom to Drawing, then the thumb button: it is set, and runs nothing yet
+    h.app
+        .apply_shortcut_edit(Edit::Start("zoom_to_drawing".to_owned()));
+    h.frame(vec![mouse(PointerButton::Extra1, at, true)]);
+    h.frame(vec![mouse(PointerButton::Extra1, at, false)]);
+    assert_eq!(h.app.capture, None, "done waiting");
+    let back = shortcut::parse_trigger("Mouse Back").unwrap();
+    assert!(h.app.shortcuts_of("zoom_to_drawing").contains(&back));
+    // the same button for Pan (hold and drag): it asks first
+    h.app
+        .apply_shortcut_edit(Edit::Start(shortcut::PAN_DRAG.to_owned()));
+    h.frame(vec![mouse(PointerButton::Extra1, at, true)]);
+    let asking = h.app.capture.clone().expect("still asking");
+    assert_eq!(asking.clash, Some((back, "zoom_to_drawing".to_owned())));
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.contains("Mouse Back already runs")),
+        "{:?}",
+        h.texts()
+    );
+    h.app.apply_shortcut_edit(Edit::Move);
+    assert!(h.app.shortcuts_of(shortcut::PAN_DRAG).contains(&back));
+    assert!(!h.app.shortcuts_of("zoom_to_drawing").contains(&back));
+    // a key can't pan; Esc stops waiting, changing nothing
+    h.app
+        .apply_shortcut_edit(Edit::Start(shortcut::PAN_DRAG.to_owned()));
+    h.frame(vec![key(Key::K)]);
+    assert!(h.app.capture.as_ref().unwrap().refused.is_some());
+    h.frame(vec![key(Key::Escape)]);
+    assert_eq!(h.app.capture, None);
+    assert!(h.app.options_window, "Esc only stopped the waiting");
+    // a key for an action, then Reset puts its own back
+    h.app
+        .apply_shortcut_edit(Edit::Start("zoom_to_drawing".to_owned()));
+    // (another key: K is still held, so egui reads it again as a repeat)
+    h.frame(vec![key(Key::F8)]);
+    assert_eq!(h.app.capture, None, "F8 runs nothing else");
+    assert!(
+        h.app
+            .shortcuts_of("zoom_to_drawing")
+            .contains(&shortcut::parse_trigger("F8").unwrap())
+    );
+    h.app
+        .apply_shortcut_edit(Edit::Reset("zoom_to_drawing".to_owned()));
+    assert!(
+        !h.app
+            .options
+            .controls
+            .shortcuts
+            .contains_key("zoom_to_drawing")
+    );
+}
+
+#[test]
+fn embellish_drawn_finer_than_it_carves_says_so_in_red_at_the_foot_of_its_form() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 3.0, 3.0);
+    h.app.start_command("embellish");
+    let params = h
+        .app
+        .form
+        .as_ref()
+        .expect("Embellish opened")
+        .params
+        .clone();
+    h.app.apply_form("embellish", &params).unwrap();
+    let form = h.app.form.as_ref().unwrap();
+    assert!(form.error.is_none(), "{:?}", form.error);
+    let warning = form.warning.as_deref().unwrap_or_default();
+    assert!(warning.contains("smaller than it will carve"), "{warning}");
+    // a shape it fits: the warning goes
+    h.app.form = None;
+    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.rectangle(30.0, 10.0, 120.0, 120.0);
+    h.app.start_command("embellish");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("embellish", &params).unwrap();
+    assert_eq!(h.app.form.as_ref().unwrap().warning, None);
 }

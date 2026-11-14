@@ -8,7 +8,7 @@ use super::{
     PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS, SECTION_PICTURE_ROWS,
     SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen, Session,
     Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
-    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
+    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, commit, dialog_size, egui,
     file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
     message_dialog, on_the_desktop, page_width, rest_section, selector_section, shortcut,
     show_page, side_tabs, side_tabs_width, summary_table, template_dialog, texture_dialog,
@@ -221,6 +221,9 @@ impl CutCraftApp {
             options_window: false,
             options_page: 0,
             show_advanced: false,
+            options_goto: None,
+            capture: None,
+            shortcut_search: String::new(),
             split: None,
             clipart: crate::clipart::Clipart::default(),
             import_queue: std::collections::VecDeque::new(),
@@ -580,12 +583,12 @@ impl CutCraftApp {
             "create_job_sheet" => self.create_job_sheet(),
             "print_job_sheet" => self.print_job_sheet(),
             "edit_object" => {
-                if let Some((id, command, params)) = self.object_to_edit() {
-                    self.edit_shape(id, command, params);
-                } else if self.shape_to_edit() {
-                    // the form opens on the selected shape's own settings
+                if let Some(command) = self.made_to_edit() {
+                    // the form opens on what it made, with its own settings
                     self.form = None;
-                    self.start_command("create_shape");
+                    self.start_command(command);
+                } else if let Some((id, command, params)) = self.object_to_edit() {
+                    self.edit_shape(id, command, params);
                 }
             }
             "object_properties" => {
@@ -1874,6 +1877,7 @@ impl CutCraftApp {
             return;
         };
         let page = self.page_of(cmd.id());
+        let (id, interactive) = (cmd.id(), cmd.interactive());
         let (meta, fields, mut params) = (
             cmd.meta(),
             form::fields(&cmd.schema()),
@@ -1914,6 +1918,7 @@ impl CutCraftApp {
                 fields,
                 params,
                 error: None,
+                warning: None,
                 new_job: false,
                 page,
                 editing: None,
@@ -1934,6 +1939,10 @@ impl CutCraftApp {
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
                 self.pages.open(page);
+            }
+            // a shape this tool draws, selected as it opens: the form edits that shape
+            if let Some((shape, params)) = self.drawn_by_tool(id).filter(|_| interactive) {
+                self.edit_shape(shape, id, params);
             }
         }
     }
@@ -3123,15 +3132,40 @@ impl CutCraftApp {
         }
     }
 
-    /// A component Create Shape made is picked (and no vector): E edits it in the form.
-    pub(super) fn shape_to_edit(&self) -> bool {
-        self.doc.selection.is_empty()
+    /// The tool that made what is picked and keeps its settings, so E edits it in the form:
+    /// Embellish for an embellishment (its component, or any of its pieces), Create Shape
+    /// for a component it made (and no vector picked).
+    pub(super) fn made_to_edit(&self) -> Option<&'static str> {
+        use cut_craft_core::Command as _;
+        if cmd_embellish::edits_selection(&self.doc) {
+            return Some(cmd_embellish::Embellish::ID);
+        }
+        let shaped = self.doc.selection.is_empty()
             && self.doc.selected_components.iter().any(|id| {
                 self.doc
                     .components
                     .get(id)
-                    .is_some_and(|k| k.shape.is_some())
-            })
+                    .and_then(|k| k.shape.as_ref())
+                    .is_some_and(cmd_create_shape::made_here)
+            });
+        shaped.then_some(cmd_create_shape::CreateShape::ID)
+    }
+
+    /// See [`Self::made_to_edit`].
+    pub(super) fn shape_to_edit(&self) -> bool {
+        self.made_to_edit().is_some()
+    }
+
+    /// The one vector selected, if drawing tool `id` draws shapes like it, with the settings
+    /// that draw it again (a square reads as Draw Rectangle's, or as Draw Polygon's).
+    fn drawn_by_tool(&self, id: &str) -> Option<(EntityId, Value)> {
+        let [shape] = self.doc.selection.iter().copied().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let path = self.doc.vectors.get(&shape)?;
+        let cmd = self.registry.get(id)?;
+        let params = cmd.params_from(path, &cmd.initial_params(&self.doc))?;
+        Some((shape, params))
     }
 
     /// Opens drawing tool `command` on vector `id` with `params`: changing the form redraws
@@ -3269,7 +3303,13 @@ impl CutCraftApp {
             .copied()
             .filter(|t| self.doc.toolpaths.get(t).is_some_and(|t| t.stale))
             .collect();
-        let notes = [notes, kept].concat();
+        let mut notes = [notes, kept].concat();
+        notes.dedup();
+        // the form's own command: its warnings stay in red at the form's foot until its
+        // next Apply
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == id) {
+            form.warning = (!notes.is_empty()).then(|| notes.join("\n"));
+        }
         if stale.is_empty() {
             self.warn(&made, &notes);
         } else {
@@ -3412,8 +3452,9 @@ impl CutCraftApp {
     }
 
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
-        // while a slow job runs, the window only shows its progress
-        if self.busy.is_some() {
+        // while a slow job runs, the window only shows its progress; while a shortcut is
+        // being set, the keys and buttons pressed are for it
+        if self.busy.is_some() || self.capture.is_some() {
             return;
         }
         // Ctrl+X, Ctrl+C and Ctrl+V reach egui as clipboard events, never as keys; the system
@@ -3452,20 +3493,7 @@ impl CutCraftApp {
                 }
             }
         }
-        // single-letter shortcuts must not fire while typing in a form field
-        if !ctx.egui_wants_keyboard_input() {
-            let job = self.screen == Screen::Job;
-            let fired: Vec<String> = self
-                .bindings(ctx)
-                .into_iter()
-                .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))
-                .filter(|(_, keys)| ctx.input_mut(|i| i.consume_shortcut(keys)))
-                .map(|(id, _)| id)
-                .collect();
-            for id in fired {
-                self.invoke(ctx, &id);
-            }
-        }
+        self.run_shortcuts(ctx);
         // Escape during a 3D handle drag cancels only the drag, staying in Transform mode
         let escape = KeyboardShortcut::new(Modifiers::NONE, Key::Escape);
         if self.drag_3d.is_some()
@@ -3521,9 +3549,35 @@ impl CutCraftApp {
         });
     }
 
-    /// Every key binding: each command's own shortcut, plus the built-ins as the menus spell them,
-    /// and on a Mac its own keys for some of them ([`super::mac::extra_bindings`]).
-    pub(super) fn bindings(&self, ctx: &egui::Context) -> Vec<(String, KeyboardShortcut)> {
+    /// Runs the actions whose shortcut was pressed: a key's, or a mouse button's.
+    fn run_shortcuts(&mut self, ctx: &egui::Context) {
+        // single-letter shortcuts must not fire while typing in a form field; a mouse
+        // button's can, as it types nothing
+        let typing = ctx.egui_wants_keyboard_input();
+        let job = self.screen == Screen::Job;
+        let fired: Vec<String> = self
+            .bindings(ctx)
+            .into_iter()
+            .filter(|(id, _)| id != shortcut::PAN_DRAG)
+            .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))
+            .filter(|(_, trigger)| match trigger {
+                shortcut::Trigger::Key(keys) => {
+                    !typing && ctx.input_mut(|i| i.consume_shortcut(keys))
+                }
+                shortcut::Trigger::Mouse(held, button) => ctx.input(|i| {
+                    i.pointer.button_pressed(*button) && i.modifiers.matches_exact(*held)
+                }),
+            })
+            .map(|(id, _)| id)
+            .collect();
+        for id in fired {
+            self.invoke(ctx, &id);
+        }
+    }
+
+    /// Every action's own shortcuts: each command's, the built-ins' as the menus spell them,
+    /// the layouts', and dragging with the wheel pressed to pan.
+    pub(super) fn default_bindings(&self) -> Vec<(String, shortcut::Trigger)> {
         let commands = self
             .registry
             .iter()
@@ -3537,12 +3591,98 @@ impl CutCraftApp {
         let layouts = LAYOUT_KEYS
             .iter()
             .filter_map(|&(id, keys)| Some((id.to_owned(), shortcut::parse(keys)?)));
-        let mut bindings: Vec<_> = commands.chain(built_ins).chain(layouts).collect();
+        let keys = commands.chain(built_ins).chain(layouts);
+        let mut bindings: Vec<_> = keys
+            .map(|(id, keys)| (id, shortcut::Trigger::Key(keys)))
+            .collect();
+        bindings.extend(
+            shortcut::parse_trigger(shortcut::PAN_DRAG_DEFAULT)
+                .map(|t| (shortcut::PAN_DRAG.to_owned(), t)),
+        );
+        bindings
+    }
+
+    /// Every shortcut in use: [`Self::default_bindings`] with those set in Options in their
+    /// place, and on a Mac its own keys for some of them ([`super::mac::extra_bindings`]).
+    pub(super) fn bindings(&self, ctx: &egui::Context) -> Vec<(String, shortcut::Trigger)> {
+        let mut bindings =
+            shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts);
         if super::mac::is_mac(ctx) {
-            let extra = super::mac::extra_bindings(&bindings);
-            bindings.extend(extra);
+            let keys: Vec<(String, KeyboardShortcut)> = bindings
+                .iter()
+                .filter_map(|(id, t)| match t {
+                    shortcut::Trigger::Key(k) => Some((id.clone(), *k)),
+                    shortcut::Trigger::Mouse(..) => None,
+                })
+                .collect();
+            let extra = super::mac::extra_bindings(&keys);
+            bindings.extend(
+                extra
+                    .into_iter()
+                    .map(|(id, k)| (id, shortcut::Trigger::Key(k))),
+            );
         }
         bindings
+    }
+
+    /// The mouse buttons that pan either view while held and dragged.
+    pub(super) fn pan_buttons(&self) -> Vec<egui::PointerButton> {
+        let defaults = (shortcut::parse_trigger(shortcut::PAN_DRAG_DEFAULT))
+            .map(|t| (shortcut::PAN_DRAG.to_owned(), t));
+        shortcut::effective(
+            defaults.into_iter().collect(),
+            &self.options.controls.shortcuts,
+        )
+        .into_iter()
+        .filter(|(id, _)| id == shortcut::PAN_DRAG)
+        .filter_map(|(_, t)| t.button())
+        .collect()
+    }
+
+    /// Whether a pan button ([`Self::pan_buttons`]) is held down.
+    pub(super) fn pan_button_down(&self, ctx: &egui::Context) -> bool {
+        let buttons = self.pan_buttons();
+        ctx.input(|i| buttons.iter().any(|&b| i.pointer.button_down(b)))
+    }
+
+    /// Every action a shortcut can be set for, by id, with its name as the menus write it:
+    /// panning by dragging first, then the commands and the built-in menu items by name.
+    pub(super) fn shortcut_actions(&self) -> Vec<(String, String)> {
+        let mut actions: Vec<(String, String)> = vec![];
+        let named = self.menus.items();
+        let name_of = |id: &str| {
+            named
+                .iter()
+                .find(|i| i.action == id)
+                .map_or_else(|| gui::title_case(id), |i| i.name.clone())
+        };
+        actions.extend(
+            self.registry
+                .iter()
+                .map(|c| (c.id().to_owned(), c.meta().label.to_owned())),
+        );
+        for id in BUILT_INS.iter().chain(LAYOUT_KEYS.iter().map(|(id, _)| id)) {
+            if !actions.iter().any(|(a, _)| a == id) {
+                actions.push(((*id).to_owned(), name_of(id)));
+            }
+        }
+        actions.sort_by(|a, b| a.1.cmp(&b.1));
+        // panning first: the mouse's own, and what most people come here to set
+        let pan = (
+            shortcut::PAN_DRAG.to_owned(),
+            "Pan (hold and drag)".to_owned(),
+        );
+        actions.insert(0, pan);
+        actions
+    }
+
+    /// The shortcut a menu shows for `id`: the first one set in Options, else the command's
+    /// own; `None` leaves the menu item's own.
+    pub(super) fn shortcut_text(&self, id: &str) -> Option<String> {
+        match self.options.controls.shortcuts.get(id) {
+            Some(set) => Some(set.first().cloned().unwrap_or_default()),
+            None => self.registry.get(id).map(|c| c.meta().shortcut.to_owned()),
+        }
     }
 
     pub(super) fn menu_bar(&mut self, ui: &mut egui::Ui) {
@@ -3580,7 +3720,7 @@ impl CutCraftApp {
                                     .or_else(|| self.units_checked(id))
                                     .or_else(|| self.layout_checked(id))
                             },
-                            shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
+                            shortcut_of: &|id| self.shortcut_text(id),
                             recent: &recent,
                             image: &|path| self.icons.find(path, "").map(|p| self.icons.image(p)),
                         },
@@ -4161,23 +4301,47 @@ impl CutCraftApp {
             .rect
     }
 
-    /// The open form's buttons: OK and Cancel for a new job's setup, else Apply and Close.
+    /// The open form's commit button, its label and hint, if pressing it would do something:
+    /// OK for a new job's setup, else named for what it does ([`commit`]).
+    fn commit_button(&self) -> Option<(&'static str, &'static str)> {
+        let open = self.form.as_ref()?;
+        if open.new_job {
+            return Some(("OK", "Accept these settings and start the job"));
+        }
+        let drawing = self.drawing_tool().is_some();
+        let made = self.drawn_shape().is_some() || self.remade_last().is_some();
+        // opened on an embellishment it made (E): pressing it changes that one
+        let reopened = !made
+            && open.id == <cmd_embellish::Embellish as cut_craft_core::Command>::ID
+            && cmd_embellish::edits_selection(&self.doc);
+        commit::commit(open.id, open.page, drawing, made).map(|c| {
+            let c = if reopened && c == commit::Commit::Create {
+                commit::Commit::Apply
+            } else {
+                c
+            };
+            (c.label(), commit::hint(c, drawing, open.editing.is_some()))
+        })
+    }
+
+    /// The open form's buttons: OK and Cancel for a new job's setup; else its commit button
+    /// when pressing it would do something (named for what it does, [`commit`]), Close and
+    /// Cancel.
     pub(super) fn form_buttons(&mut self, ui: &mut egui::Ui) {
         let Some(open) = &self.form else { return };
         if open.id == "orientate_3d_model" {
             return self.import_buttons(ui);
         }
         let new_job = open.new_job;
-        let (apply_label, close_label) = if new_job {
-            ("OK", "Cancel")
-        } else {
-            ("Apply", "Close")
-        };
+        let committing = self.commit_button();
+        let drawing = self.drawing_tool().is_some();
+        let made = self.drawn_shape().is_some() || self.remade_last().is_some();
+        let close_label = if new_job { "Cancel" } else { "Close" };
         let job_setup = open.id == "job_setup";
         // what the form has done that Cancel would take back
         let done = self.history.undo_depth() > open.undo_from;
         let (mut apply, mut close, mut default, mut cancel) = (false, false, false, false);
-        let (mut save, mut load) = (false, false);
+        let (mut save, mut load, mut new_shape) = (false, false, false);
         if open.page == Page::Toolpaths {
             ui.horizontal(|ui| {
                 save = ui
@@ -4190,22 +4354,27 @@ impl CutCraftApp {
                     .clicked();
             });
         }
+        if committing.is_none() {
+            new_shape = live_row(ui, open.id, drawing, made);
+        }
         ui.horizontal(|ui| {
-            apply = ui.button(apply_label).clicked();
+            if let Some((label, hint)) = committing {
+                apply = ui.button(label).on_hover_hint(hint).clicked();
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 close = ui
                     .button(close_label)
                     .on_hover_hint(if new_job {
                         "Leave the job as it was"
                     } else {
-                        "Close, keeping what was applied"
+                        "Close, keeping what is there"
                     })
                     .clicked();
                 if !new_job {
                     cancel = ui
                         .add_enabled(done, egui::Button::new("Cancel"))
                         .on_hover_hint("Undo what this tool did since it opened, and close it")
-                        .on_disabled_hover_text("Nothing applied to take back")
+                        .on_disabled_hover_text("Nothing done yet to take back")
                         .clicked();
                 }
                 if job_setup {
@@ -4216,6 +4385,12 @@ impl CutCraftApp {
                 }
             });
         });
+        if new_shape {
+            if let Some(form) = self.form.as_mut() {
+                (form.drawn, form.applied) = (None, None);
+            }
+            return;
+        }
         if default {
             self.job_setup_default();
             return;
@@ -4376,9 +4551,16 @@ impl CutCraftApp {
         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
     }
 
-    /// Why the open form's last Apply failed, in red, over its buttons.
+    /// Why the open form's last Apply failed, or what it warned of, in red, over its buttons.
     fn form_error(&self, ui: &mut egui::Ui) {
-        let Some(error) = self.form.as_ref().and_then(|f| f.error.as_ref()) else {
+        let Some(form) = self.form.as_ref() else {
+            return;
+        };
+        // what the last Apply made is not quite what was asked: said in red, never a pop-up
+        if let Some(warning) = form.warning.as_ref().filter(|_| form.error.is_none()) {
+            ui.colored_label(ui.visuals().error_fg_color, warning);
+        }
+        let Some(error) = form.error.as_ref() else {
             return;
         };
         let shown = ui.colored_label(ui.visuals().error_fg_color, error);
@@ -5144,6 +5326,30 @@ impl CutCraftApp {
         }
     }
 
+    /// Help ▸ Keyboard Shortcuts' rows: each shortcut in use and what it runs, by name.
+    fn shortcut_list(&self, ctx: &egui::Context) -> Vec<(String, String)> {
+        let mut rows: Vec<(String, String)> = self
+            .bindings(ctx)
+            .into_iter()
+            .map(|(id, trigger)| {
+                let label = if id == shortcut::PAN_DRAG {
+                    "Pan (hold and drag)".to_owned()
+                } else {
+                    self.registry
+                        .get(&id)
+                        .map_or_else(|| gui::title_case(&id), |c| c.meta().label.to_owned())
+                };
+                let keys = match trigger {
+                    shortcut::Trigger::Key(keys) => ctx.format_shortcut(&keys),
+                    mouse @ shortcut::Trigger::Mouse(..) => mouse.text(),
+                };
+                (keys, label)
+            })
+            .collect();
+        rows.sort_by(|a, b| a.1.cmp(&b.1));
+        rows
+    }
+
     /// The Help windows: About, Keyboard Shortcuts, Third Party Licenses.
     pub(super) fn info_window(&mut self, ctx: &egui::Context) {
         let Some(info) = self.info else { return };
@@ -5159,25 +5365,14 @@ impl CutCraftApp {
             Info::Summary => "Toolpath Summary".to_owned(),
             Info::Help(_) => unreachable!("returned above"),
         };
-        let shortcuts: Vec<(String, String)> = if info == Info::Shortcuts {
-            let mut rows: Vec<(String, String)> = self
-                .bindings(ctx)
-                .into_iter()
-                .map(|(id, keys)| {
-                    let label = self
-                        .registry
-                        .get(&id)
-                        .map_or_else(|| gui::title_case(&id), |c| c.meta().label.to_owned());
-                    (ctx.format_shortcut(&keys), label)
-                })
-                .collect();
-            rows.sort_by(|a, b| a.1.cmp(&b.1));
-            rows
+        let shortcuts = if info == Info::Shortcuts {
+            self.shortcut_list(ctx)
         } else {
             vec![]
         };
         let rows = self.summary_rows();
         let mut noted = None;
+        let mut change_shortcuts = false;
         let machine = self
             .machines
             .active()
@@ -5190,6 +5385,16 @@ impl CutCraftApp {
             Info::Summary => noted = summary_table(ui, &rows, summary, units, machine.clone()),
             Info::About => about(ui),
             Info::Shortcuts => {
+                if ui
+                    .button("Change Shortcuts…")
+                    .on_hover_text(
+                        "Set your own keys, or the mouse's thumb buttons and wheel click, in \
+                         Options ▸ Mouse and Shortcuts",
+                    )
+                    .clicked()
+                {
+                    change_shortcuts = true;
+                }
                 egui::ScrollArea::vertical()
                     .max_height(400.0)
                     .show(ui, |ui| {
@@ -5227,6 +5432,11 @@ impl CutCraftApp {
         }
         if !open {
             self.info = None;
+        }
+        if change_shortcuts {
+            self.info = None;
+            self.options_window = true;
+            self.options_goto = Some(super::shortcuts_page::CATEGORY);
         }
     }
 }
@@ -5586,4 +5796,19 @@ fn page_key(page: Page) -> &'static str {
         Page::Design => "design",
         Page::Toolpaths => "toolpaths",
     }
+}
+
+/// A form with no commit button: why there is none, and on a drawing tool whose shape follows
+/// the form, New Shape to let it go and type another; whether New Shape was pressed.
+fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
+    ui.horizontal_wrapped(|ui| {
+        ui.weak(commit::live_note(id, drawing));
+        drawing
+            && made
+            && ui
+                .button("New Shape")
+                .on_hover_hint("Leave this shape as it is, to type the numbers for another")
+                .clicked()
+    })
+    .inner
 }

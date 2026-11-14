@@ -47,16 +47,29 @@ impl Command for DrawEllipse {
         }
     }
 
+    /// An ellipse square to the axes (a circle too), wherever and however big.
+    fn params_from(path: &Path, _: &Params) -> Option<Params> {
+        let b = path.bounds();
+        let p = Params {
+            center: Xy::new(b.center().x, b.center().y),
+            width: b.size().x,
+            height: b.size().y,
+        };
+        (p.width > 0.0 && p.height > 0.0 && path.matches(&outline(&p), 1e-6)).then_some(p)
+    }
+
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("width", p.width)?;
         ensure_positive("height", p.height)?;
-        let fit = DAffine2::from_translation(p.center.into())
-            * DAffine2::from_scale(DVec2::new(p.width, p.height) / 2.0);
-        Ok(Change::add_and_select(
-            doc,
-            Path::circle(DVec2::ZERO, 1.0).transformed(&fit),
-        ))
+        Ok(Change::add_and_select(doc, outline(p)))
     }
+}
+
+/// The ellipse `p` draws.
+fn outline(p: &Params) -> Path {
+    let fit = DAffine2::from_translation(p.center.into())
+        * DAffine2::from_scale(DVec2::new(p.width, p.height) / 2.0);
+    Path::circle(DVec2::ZERO, 1.0).transformed(&fit)
 }
 
 impl Interactive for DrawEllipse {
@@ -77,6 +90,31 @@ mod tests {
     use cut_craft_core::testing::{drawn_path, rejection};
 
     cut_craft_core::contract_tests!(DrawEllipse);
+
+    #[test]
+    fn a_drawn_ellipse_reads_back_and_a_rectangle_does_not() {
+        for (w, h) in [(80.0, 40.0), (25.0, 25.0)] {
+            let p = Params {
+                center: Xy::new(3.0, -7.0),
+                width: w,
+                height: h,
+            };
+            let back = DrawEllipse::params_from(&drawn_path::<DrawEllipse>(&p), &Params::default())
+                .expect("an ellipse");
+            assert!((back.width - w).abs() < 1e-9 && (back.height - h).abs() < 1e-9);
+            assert!((back.center.x - 3.0).abs() < 1e-9 && (back.center.y + 7.0).abs() < 1e-9);
+        }
+        let square = Path::polyline(
+            &[
+                Point::new(0.0, 0.0),
+                Point::new(1.0, 0.0),
+                Point::new(1.0, 1.0),
+                Point::new(0.0, 1.0),
+            ],
+            true,
+        );
+        assert!(DrawEllipse::params_from(&square, &Params::default()).is_none());
+    }
 
     #[test]
     fn spans_exactly_its_width_and_height() {

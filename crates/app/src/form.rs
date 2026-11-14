@@ -737,7 +737,18 @@ fn icon_row(
                 .as_deref()
                 .map_or_else(|| o.label.clone(), |h| format!("{}: {h}", o.label));
             let response = if named {
+                // a picture with its name under it is a block egui cannot measure before
+                // laying it out, so it never wraps by itself: start a new row when it would
+                // not fit
+                // (measured to what can be seen: the panel may be laid out wider than it shows)
+                let room = ui
+                    .available_width()
+                    .min(ui.clip_rect().max.x - ui.cursor().min.x);
+                if room < edge.x + ui.spacing().button_padding.x * 2.0 {
+                    ui.end_row();
+                }
                 ui.vertical(|ui| {
+                    ui.set_max_width(edge.x + ui.spacing().button_padding.x * 2.0);
                     let r = ui.add(button).on_hover_hint(&hover);
                     ui.small(&o.label);
                     r
@@ -1415,21 +1426,39 @@ mod tests {
     }
 
     #[test]
-    fn embellishs_settings_are_sliders_with_where_in_a_row_and_a_new_design_button() {
+    fn embellishs_settings_start_with_one_style_list_and_have_a_new_design_button() {
         let f = fields(&schema("embellish"));
-        assert_eq!(keys(&f)[..2], ["place", "border"]);
-        // the patterned border's own settings only show for a patterned border
-        let rope = serde_json::json!({ "place": "both", "border": "rope" });
-        let band = serde_json::json!({ "place": "both", "border": "band" });
-        let shown = |key, params| field(&f, key).when.as_ref().is_none_or(|w| w.shown(params));
-        assert!(shown("border_width", &rope) && !shown("border_width", &band));
-        assert!(shown("twist", &rope));
-        assert!(!shown("border", &serde_json::json!({ "place": "fill" })));
-        let Kind::Choice(places, Widget::Row) = &field(&f, "place").kind else {
-            panic!("{:?}", field(&f, "place").kind);
+        assert_eq!(keys(&f)[0], "style");
+        let Kind::Choice(styles, _) = &field(&f, "style").kind else {
+            panic!("{:?}", field(&f, "style").kind);
         };
-        let labels: Vec<&str> = places.iter().map(|c| c.label.as_str()).collect();
-        assert_eq!(labels, ["Fill", "Border", "Both"]);
+        let labels: Vec<&str> = styles.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "Folk mix",
+                "Scrolls",
+                "Flowers",
+                "Band and beads border",
+                "Rope border",
+                "Chain border",
+                "Twist border",
+                "Braid border",
+                "Bead and reel border",
+                "Laurel leaves border",
+                "Feathers border",
+                "Chevrons border"
+            ]
+        );
+        // each setting only shows for the styles it changes
+        let style = |s: &str| serde_json::json!({ "style": s });
+        let (rope, chain, mix) = (style("rope"), style("chain"), style("folk_mix"));
+        let (scrolls, flowers) = (style("scrolls"), style("flowers"));
+        let shown = |key, params| field(&f, key).when.as_ref().is_none_or(|w| w.shown(params));
+        assert!(shown("border_width", &rope) && !shown("border_width", &mix));
+        assert!(shown("twist", &rope) && !shown("twist", &chain));
+        assert!(shown("scroll_size", &scrolls) && !shown("scroll_size", &flowers));
+        assert!(shown("objects", &flowers) && !shown("objects", &chain));
         for key in ["refinement", "objects", "tightness"] {
             assert_eq!(
                 field(&f, key).kind,
@@ -1445,7 +1474,7 @@ mod tests {
                 "{key}"
             );
         }
-        assert_eq!(field(&f, "objects").label, "Number of objects");
+        assert_eq!(field(&f, "objects").label, "How full");
         assert!(matches!(
             field(&f, "height").kind,
             Kind::Number { slider: false, .. }

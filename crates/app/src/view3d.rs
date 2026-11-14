@@ -261,8 +261,9 @@ pub enum DragMode {
     Pan,
 }
 
-/// Middle-drag, Ctrl+right-drag or left and right together pan; left or right alone rotate.
-/// `held` is the left, right and middle buttons.
+/// Dragging with a pan button (the middle, unless Options ▸ Mouse and Shortcuts says other),
+/// Ctrl+right-drag or left and right together pan; left or right alone rotate. `held` is the
+/// left and right buttons, and whether a pan button is held.
 pub fn drag_mode(held: [bool; 3], ctrl: bool) -> Option<DragMode> {
     let [left, right, middle] = held;
     match (left, right, middle) {

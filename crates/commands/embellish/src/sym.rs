@@ -4,7 +4,7 @@
 //! fan, sides a half sunburst, the middle a rosette with a petal for every corner and side,
 //! and the scrolls are searched for the biggest that fits the wedge.
 
-use crate::design::{Gen, Settings, Where};
+use crate::design::{Gen, Motifs, Settings, Where};
 use crate::field::Field;
 use crate::motif::{
     Item, Level, Profile, band, circ, curl_path, dir, dot, dot_trio, fan_burst, flower_ring,
@@ -275,7 +275,8 @@ pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<It
     // the centre rosette: long petals toward the corners, short ones toward the sides
     let r_ros = ai * gn.r(0.2, 0.26);
     let rc = g.max(r_ros * 0.28);
-    if !border_only {
+    let m = s.motifs;
+    if !border_only && m.flowers() {
         put(&mut gn, &[sh(circ(Point::ZERO, rc), 1.1)], &[(0.0, 1.0)]);
         let cap = |r: f64| PI / (2.0 * nf) - g / (2.0 * r);
         let long = sh(
@@ -317,7 +318,7 @@ pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<It
     let lp = ai * gn.r(0.26, 0.34);
     let rp = rci - lp - g * 1.5;
     let r_start = r_ros + g * 1.2 + (g * 0.5).max(r_ros * 0.06) * 2.0 + g;
-    let stem = !border_only && rp - rcal - g - r_start > 3.0 * g;
+    let stem = !border_only && m.leaves() && rp - rcal - g - r_start > 3.0 * g;
     if stem {
         let st = trace(
             pt(0.0, -r_start),
@@ -332,8 +333,10 @@ pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<It
             .collect();
         put(&mut gn, &[sh(band(&st, &sw, true, true), 0.9)], &turns);
     }
-    put(&mut gn, &[sh(circ(pt(0.0, -rp), rcal), 1.0)], &turns);
-    {
+    if m.leaves() {
+        put(&mut gn, &[sh(circ(pt(0.0, -rp), rcal), 1.0)], &turns);
+    }
+    if m.leaves() {
         let sig = gn.r(0.38, 0.5);
         let inside_i = |q: Point| field.sample(fr.to_board(q)) > ii;
         let mut leaves = vec![];
@@ -369,7 +372,7 @@ pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<It
         }
     }
     // a half sunburst against each side
-    {
+    if m.leaves() {
         let rf = (ai * 0.2).min(ai * (PI / nf).tan() * 0.32);
         let ctr = u * (ai - g * 0.3);
         let ang = u.y.atan2(u.x);
@@ -391,7 +394,9 @@ pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<It
         put(&mut gn, &fit, &turns);
     }
     // the main scrolls: searched, off the stem or anywhere in the wedge
-    let passes: &[bool] = if den > 0.7 {
+    let passes: &[bool] = if !m.scrolls() {
+        &[]
+    } else if den > 0.7 {
         &[false, true, true]
     } else if den < 0.3 {
         &[false]
@@ -444,7 +449,8 @@ pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<It
         }
     }
     // more scrolls, smaller, wherever they fit
-    for _ in 0..(420.0 * den).round() as usize {
+    let more = if m.scrolls() { 420.0 * den } else { 0.0 };
+    for _ in 0..more.round() as usize {
         let size = ai * gn.r(0.18, 0.42) * sc;
         let spec = gn.curl(
             size,
@@ -490,18 +496,32 @@ pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<It
         }
     }
     // small pieces, sized from the room left
-    let levels: [Level; 4] = [
-        (
-            0.24,
-            160.0,
-            &[(flower_ring, 1.0), (spiral_s, 2.0), (fan_burst, 1.0)],
-            0.0,
-        ),
-        (0.15, 200.0, &[(spiral_s, 2.0), (flower_ring, 1.0)], 0.35),
-        (0.1, 120.0, &[(spiral_s, 1.0), (dot_trio, 0.5)], 0.65),
-        (0.05, 260.0, &[(dot, 1.0)], 0.88),
-    ];
-    for (f, tries, makers, dmin) in levels {
+    let levels: &[Level] = match m {
+        Motifs::Mix => &[
+            (
+                0.24,
+                160.0,
+                &[(flower_ring, 1.0), (spiral_s, 2.0), (fan_burst, 1.0)],
+                0.0,
+            ),
+            (0.15, 200.0, &[(spiral_s, 2.0), (flower_ring, 1.0)], 0.35),
+            (0.1, 120.0, &[(spiral_s, 1.0), (dot_trio, 0.5)], 0.65),
+            (0.05, 260.0, &[(dot, 1.0)], 0.88),
+        ],
+        Motifs::Scrolls => &[
+            (0.24, 160.0, &[(spiral_s, 1.0)], 0.0),
+            (0.15, 200.0, &[(spiral_s, 1.0)], 0.35),
+            (0.1, 120.0, &[(spiral_s, 1.0)], 0.65),
+        ],
+        Motifs::Flowers => &[
+            (0.3, 300.0, &[(flower_ring, 1.0)], 0.0),
+            (0.2, 400.0, &[(flower_ring, 1.0)], 0.0),
+            (0.12, 300.0, &[(flower_ring, 1.0)], 0.35),
+            (0.05, 260.0, &[(dot, 1.0)], 0.88),
+        ],
+        Motifs::Nothing => &[],
+    };
+    for &(f, tries, makers, dmin) in levels {
         if det < dmin {
             continue;
         }

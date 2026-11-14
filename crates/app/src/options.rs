@@ -268,6 +268,50 @@ impl Rotation {
     }
 }
 
+/// The mouse in the 2D and 3D views, and the shortcuts set in place of Cut Craft's own.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Controls {
+    /// What tilting the mouse wheel left or right does over the 2D and 3D views. Holding
+    /// Shift while turning the wheel, or swiping sideways on a touchpad, does the same
+    #[serde(default)]
+    #[schemars(title = "Tilting the wheel left or right")]
+    pub tilt: Tilt,
+    /// The shortcuts changed from Cut Craft's own, by action, written as the menus write
+    /// them (`Ctrl+K`, `Mouse Back`); an empty list takes an action's shortcuts away. Set on
+    /// this page's shortcut list, below its settings.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[schemars(skip)]
+    pub shortcuts: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// What tilting the mouse wheel sideways does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Tilt {
+    /// Tilting right moves the view to show more to the right, as a web page scrolls
+    #[default]
+    #[schemars(title = "Pans the view sideways")]
+    Pan,
+    /// Tilting right moves the drawing to the right, for those whose wheel feels backwards
+    #[schemars(title = "Pans the other way")]
+    PanReversed,
+    /// Tilting the wheel is ignored by the views
+    #[schemars(title = "Does nothing")]
+    Nothing,
+}
+
+impl Tilt {
+    /// How far the views pan sideways for a sideways scroll of `x` points: nothing, `x`, or
+    /// the other way.
+    pub fn pan(self, x: f32) -> f32 {
+        match self {
+            Self::Pan => x,
+            Self::PanReversed => -x,
+            Self::Nothing => 0.0,
+        }
+    }
+}
+
 /// A 3Dconnexion SpaceMouse turning the 3D view (Linux, through spacenavd).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
@@ -1235,10 +1279,14 @@ pub struct Appearance {
     #[serde(default)]
     #[schemars(title = "Use the desktop's title bar")]
     pub system_title_bar: bool,
-    /// The snap grid's points in the 2D view
-    #[serde(default = "grid_color")]
-    #[schemars(title = "Grid color", extend("x-kind" = "colour"))]
-    pub grid_color: [u8; 3],
+    /// The 2D view's colors while the light theme is on
+    #[serde(default = "CanvasColours::light")]
+    #[schemars(title = "2D view in the light theme")]
+    pub light_2d: CanvasColours,
+    /// The 2D view's colors while the dark theme is on
+    #[serde(default = "CanvasColours::dark")]
+    #[schemars(title = "2D view in the dark theme")]
+    pub dark_2d: CanvasColours,
     /// How big the snap grid's points are drawn, in screen points
     #[serde(default = "grid_point_size")]
     #[schemars(range(min = 0.5, max = 10))]
@@ -1260,7 +1308,8 @@ impl Default for Appearance {
         Self {
             theme: Theme::default(),
             system_title_bar: false,
-            grid_color: grid_color(),
+            light_2d: CanvasColours::light(),
+            dark_2d: CanvasColours::dark(),
             grid_point_size: grid_point_size(),
             text_size: text_size(),
         }
@@ -1268,6 +1317,11 @@ impl Default for Appearance {
 }
 
 impl Appearance {
+    /// The 2D view's colours for the dark theme, or for the light one.
+    pub fn canvas(&self, dark: bool) -> &CanvasColours {
+        if dark { &self.dark_2d } else { &self.light_2d }
+    }
+
     /// What egui's text and control sizes are multiplied by, kept between 80% and 200%.
     pub fn text_scale(&self) -> f32 {
         #[expect(clippy::cast_precision_loss, reason = "80 to 200")]
@@ -1276,10 +1330,92 @@ impl Appearance {
     }
 }
 
-/// The light theme's faint text colour, as other faint marks are.
-fn grid_color() -> [u8; 3] {
-    let c = egui::Visuals::light().weak_text_color();
-    [c.r(), c.g(), c.b()]
+/// The colors of the 2D view's material sheet and of the snap grid's points over it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct CanvasColours {
+    /// The material sheet the drawing sits on
+    #[schemars(title = "Sheet color", extend("x-kind" = "colour"))]
+    pub sheet_color: [u8; 3],
+    /// The snap grid's points: pick one that stands out from the sheet color
+    #[schemars(title = "Grid color", extend("x-kind" = "colour"))]
+    pub grid_color: [u8; 3],
+}
+
+impl CanvasColours {
+    /// The light theme's: its own field colour for the sheet, a grey that stands out on it.
+    pub fn light() -> Self {
+        Self::of(&egui::Visuals::light())
+    }
+
+    /// The dark theme's, as [`Self::light`].
+    pub fn dark() -> Self {
+        Self::of(&egui::Visuals::dark())
+    }
+
+    /// The sheet in the theme's field colour, the grid as near it as stays easy to see.
+    fn of(visuals: &egui::Visuals) -> Self {
+        let sheet = rgb(visuals.widgets.inactive.bg_fill);
+        Self {
+            sheet_color: sheet,
+            grid_color: contrasting(sheet, rgb(visuals.text_color())),
+        }
+    }
+}
+
+/// The colour the grid was before each theme had its own: the light theme's faint text,
+/// all but hidden on the dark theme's sheet. Options saved with it drop it.
+fn old_grid_color() -> [u8; 3] {
+    rgb(egui::Visuals::light().weak_text_color())
+}
+
+/// The least blend of `under` toward `toward` that stands out from `under` as well as
+/// WCAG asks of shapes (3 to 1); black or white, whichever stands out more, if none does.
+fn contrasting(under: [u8; 3], toward: [u8; 3]) -> [u8; 3] {
+    const ENOUGH: f64 = 3.0;
+    let mixed = |t: f64| {
+        let mix = |a: u8, b: u8| {
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "between two bytes"
+            )]
+            let v = (f64::from(a) + (f64::from(b) - f64::from(a)) * t).round() as u8;
+            v
+        };
+        [
+            mix(under[0], toward[0]),
+            mix(under[1], toward[1]),
+            mix(under[2], toward[2]),
+        ]
+    };
+    (1..=20)
+        .map(|step| mixed(f64::from(step) / 20.0))
+        .find(|c| contrast(*c, under) >= ENOUGH)
+        .unwrap_or_else(|| {
+            let (black, white) = ([0, 0, 0], [255, 255, 255]);
+            if contrast(black, under) > contrast(white, under) {
+                black
+            } else {
+                white
+            }
+        })
+}
+
+/// WCAG's contrast ratio between two colours, from 1 (the same) to 21 (black on white).
+fn contrast(a: [u8; 3], b: [u8; 3]) -> f64 {
+    let luminance = |c: [u8; 3]| {
+        let channel = |v: u8| {
+            let v = f64::from(v) / 255.0;
+            if v <= 0.040_45 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2])
+    };
+    let (la, lb) = (luminance(a), luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
 /// As thick as two of the theme's lines.
@@ -1373,6 +1509,9 @@ pub struct Options {
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub appearance: Appearance,
+    #[serde(default)]
+    #[schemars(title = "Mouse and Shortcuts", extend("x-section" = true))]
+    pub controls: Controls,
     #[serde(default)]
     #[schemars(title = "SpaceMouse", extend("x-section" = true))]
     pub space_mouse: SpaceMouse,
@@ -1528,6 +1667,7 @@ impl Default for Options {
             import: Import::default(),
             appearance: Appearance::default(),
             advanced: Advanced::default(),
+            controls: Controls::default(),
             space_mouse: SpaceMouse::default(),
             updates: Updates::default(),
             bug_reports: BugReports::default(),
@@ -1573,9 +1713,18 @@ impl Options {
             .as_object_mut()
             .and_then(|o| o.remove(SEAL))
             .and_then(|s| s.as_str().map(String::from));
+        // the one grid colour of older versions: kept for the light theme if it was chosen
+        let old_grid = file
+            .get_mut("appearance")
+            .and_then(serde_json::Value::as_object_mut)
+            .and_then(|a| a.remove("grid_color"))
+            .and_then(|g| serde_json::from_value::<[u8; 3]>(g).ok());
         let Ok(mut options) = serde_json::from_value::<Self>(file) else {
             return (Self::default(), false);
         };
+        if let Some(grid) = old_grid.filter(|g| *g != old_grid_color()) {
+            options.appearance.light_2d.grid_color = grid;
+        }
         let tampered = !options.advanced.sealed_by(seal.as_deref());
         if tampered {
             options.advanced = Advanced::default();
@@ -1638,6 +1787,28 @@ fn path() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tilting_pans_as_set_and_reset_puts_back_cut_crafts_own_shortcuts() {
+        assert!((Tilt::default().pan(-3.0) + 3.0).abs() < f32::EPSILON);
+        assert!((Tilt::PanReversed.pan(-3.0) - 3.0).abs() < f32::EPSILON);
+        assert!(Tilt::Nothing.pan(-3.0).abs() < f32::EPSILON);
+        let mut options = Options::default();
+        options.controls.tilt = Tilt::Nothing;
+        (options.controls.shortcuts).insert("pan".to_owned(), vec!["Mouse Back".to_owned()]);
+        let saved = serde_json::to_string(&options).unwrap();
+        let read: Options = serde_json::from_str(&saved).unwrap();
+        assert_eq!(
+            read.controls, options.controls,
+            "kept from one run to the next"
+        );
+        assert_eq!(options.reset("controls").controls, Controls::default());
+        // options saved before there were any read as the defaults
+        let mut old = serde_json::to_value(Options::default()).unwrap();
+        old.as_object_mut().unwrap().remove("controls");
+        let old: Options = serde_json::from_value(old).unwrap();
+        assert_eq!(old.controls, Controls::default());
+    }
 
     #[test]
     fn a_mac_starts_following_the_desktops_light_or_dark() {
@@ -1745,6 +1916,7 @@ mod tests {
                 "Confirmation Choices",
                 "Importing and Exporting",
                 "Appearance",
+                "Mouse and Shortcuts",
                 "SpaceMouse",
                 "Updates",
                 "Bug Reports",
@@ -2135,5 +2307,81 @@ mod tests {
         fields.remove("change_by_changer");
         let older: ToolpathSettings = serde_json::from_value(saved).unwrap();
         assert_eq!(older, o.toolpaths);
+    }
+
+    /// WCAG's contrast ratio between two colours, 1 to 21.
+    fn contrast_of(a: [u8; 3], b: [u8; 3]) -> f64 {
+        contrast(a, b)
+    }
+
+    #[test]
+    fn the_2d_grid_stands_out_from_the_sheet_in_both_themes() {
+        let a = Appearance::default();
+        for dark in [false, true] {
+            let c = a.canvas(dark);
+            assert!(
+                contrast_of(c.grid_color, c.sheet_color) >= 3.0,
+                "dark {dark}: grid {:?} on sheet {:?}",
+                c.grid_color,
+                c.sheet_color
+            );
+        }
+        // the sheet looks as it always has: each theme's own field colour
+        let field = |v: egui::Visuals| rgb(v.widgets.inactive.bg_fill);
+        assert_eq!(a.canvas(false).sheet_color, field(egui::Visuals::light()));
+        assert_eq!(a.canvas(true).sheet_color, field(egui::Visuals::dark()));
+        assert_ne!(a.canvas(false), a.canvas(true), "each theme its own");
+    }
+
+    #[test]
+    fn the_old_grid_colour_is_dropped_unless_it_was_chosen() {
+        let saved = |grid: [u8; 3]| {
+            let mut file = serde_json::to_value(Options::default()).unwrap();
+            file["appearance"] = serde_json::json!({ "theme": "dark", "grid_color": grid });
+            Options::from_bytes(file.to_string().as_bytes()).0
+        };
+        // the old default, the light theme's faint text, all but hid the grid in the dark
+        let old = saved(old_grid_color());
+        assert_eq!(old.appearance.theme, Theme::Dark);
+        assert_eq!(old.appearance.light_2d, CanvasColours::light());
+        assert_eq!(old.appearance.dark_2d, CanvasColours::dark());
+        // one picked on purpose is kept, for the light theme it was picked in
+        let picked = saved([200, 0, 0]);
+        assert_eq!(picked.appearance.light_2d.grid_color, [200, 0, 0]);
+        assert_eq!(picked.appearance.dark_2d, CanvasColours::dark());
+        let file = serde_json::to_value(&picked).unwrap();
+        assert!(
+            file["appearance"].get("grid_color").is_none(),
+            "not written back"
+        );
+    }
+
+    #[test]
+    fn reset_puts_the_2d_colours_back() {
+        let mut o = Options::default();
+        o.appearance.dark_2d.sheet_color = [1, 2, 3];
+        o.appearance.light_2d.grid_color = [4, 5, 6];
+        let reset = o.reset("appearance");
+        assert_eq!(reset.appearance.dark_2d, CanvasColours::dark());
+        assert_eq!(reset.appearance.light_2d, CanvasColours::light());
+    }
+
+    #[test]
+    fn a_colour_that_contrasts_is_found_for_any_sheet() {
+        for sheet in [
+            [0, 0, 0],
+            [255, 255, 255],
+            [128, 128, 128],
+            [60, 60, 60],
+            [200, 30, 30],
+        ] {
+            for toward in [[0, 0, 0], [255, 255, 255], [128, 128, 128]] {
+                let grid = contrasting(sheet, toward);
+                assert!(
+                    contrast_of(grid, sheet) >= 3.0,
+                    "{sheet:?} toward {toward:?}: {grid:?}"
+                );
+            }
+        }
     }
 }

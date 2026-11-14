@@ -52,7 +52,8 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 - **ViewCube** in the 3D view. Drag it to orbit, click a face to animate to that view, double-click a face to go to the opposite side.
 - **Help prompts:** an on-screen panel that follows the active tool, with a `?` on every form linking to its help topic.
 - **[unk]** Status bar contents: no evidence found yet.
-- **Deliberate differences, for novices (Cut Craft):** every tool form keeps its Apply / Close (OK / Cancel) buttons and the red reason a calculation failed pinned at the foot of its panel, with only the settings scrolling above them, so the next step and the error are never out of sight on a long form such as Profile's. The Toolpaths panel numbers the job's stages on its sub-tabs (see *Toolpaths sub-tabs*): **1 Create a toolpath** over the strategies, **2 Preview** (Preview All Toolpaths and Reset Preview, Recalculate All too while a toolpath is out of date, then every other preview and recalculation as a button of its own, with no More… menu), **3 Analyse** (the checks before cutting) and **4 Output**, one wide labelled **Save Toolpaths for the Machine…** button, greyed with "Make a toolpath first" while the list is empty. The Ribbon and Rail layouts keep the older arrangement: Preview and Save pinned under the toolpath list, the other previews in a More… menu. Aspire puts the list under large preview and recalculate buttons and Save Toolpaths among small unlabelled icons.
+- **Deliberate differences, for novices (Cut Craft):** every tool form keeps its buttons (commit button, Close, Cancel; OK / Cancel for a new job) and the red reason a calculation failed pinned at the foot of its panel, with only the settings scrolling above them, so the next step and the error are never out of sight on a long form such as Profile's. The Toolpaths panel numbers the job's stages on its sub-tabs (see *Toolpaths sub-tabs*): **1 Create a toolpath** over the strategies, **2 Preview** (Preview All Toolpaths and Reset Preview, Recalculate All too while a toolpath is out of date, then every other preview and recalculation as a button of its own, with no More… menu), **3 Analyse** (the checks before cutting) and **4 Output**, one wide labelled **Save Toolpaths for the Machine…** button, greyed with "Make a toolpath first" while the list is empty. The Ribbon and Rail layouts keep the older arrangement: Preview and Save pinned under the toolpath list, the other previews in a More… menu. Aspire puts the list under large preview and recalculate buttons and Save Toolpaths among small unlabelled icons.
+- **Form commit buttons [inf] (Cut Craft, Matthew 2026-11-14):** a form's commit button is named for what it does and shows only when pressing it would do something (`crates/app/src/app/commit.rs`). No button when the result already follows the form: a drawn shape still selected, Relief from Photo, Embellish / Vector Texture / Decorative Relief once made; Sculpting, Draw Freehand and Interactive Vector Trim never have one (they work on the canvas; Vector Trim's Apply used to trim at 0,0). A line says why: "Changes show as you make them". **Create** for forms that make new pieces (drawing tools before they draw, copies, patterns, Create Shape, Add Layer…); **Calculate** for toolpaths (new or edited); **Apply** for forms that change what is there (Move, Offset, Set Size, properties and settings). Close keeps what is there; Cancel undoes what the form did since it opened.
 
 ### Startup sequence [obs] (help: how-to-get-started, create-a-new-file, Job Setup Single; trial screenshots)
 - **Start page, no job open:** the left panel holds *Startup Tasks*: Create a new file, New file from template, Open an existing file. Below them is *Recently opened files*, a rolling list of the last 4 jobs, empty on a first run. The rest of the panel is vendor links (tutorial videos, online resources, social media, clipart shop), which are out of scope. The centre shows the product splash. There are no Drawing or Toolpaths panels, and no 2D/3D view.
@@ -178,6 +179,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   2. **Quick Keys:** type values while still holding the mouse button, then Enter. `a,b`↵ sets width and height, `a`↵ makes a square, and suffix letters pick fields (`X`, `Y`, `W`, `H`, `R` = corner radius), e.g. `0.1R1X`.
   3. A form offers the same values as exact typed input. Rectangle corners can be square, external-radius or internal-radius, with draggable green radius handles.
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
+     - **[inf] Deliberate difference (Cut Craft, Matthew 2026-11-14):** no Apply on a drawn shape. A drawing tool's form says **Create** (make the shape from the typed numbers) only while nothing it drew is selected. Once a shape is drawn, or a shape that tool could have drawn is selected as the tool opens (circle, ellipse, rectangle, regular polygon, star; moved or turned, not squashed; a square opens in Draw Rectangle or Draw Polygon, whichever is picked, and E picks Draw Rectangle), or picked with E or Shift-click, the form edits it live (each change one undo) and shows "Changes show on the selected shape as you make them" with a **New Shape** button that lets it go to type another.
   5. Every tool works in both the 2D and 3D views.
 - **Toolbox tool groups** (Cut Craft's own choice, not Aspire's) [inf]: tools that do one job
   different ways (the circles, the text tools, the joins, the alignments…) are gathered in
@@ -530,6 +532,13 @@ percentages and passes get no letter.
 | Rotate | — | right-drag ("twiddle") **[unk: the component-tree page says left-drag; the two help pages conflict]** |
 | Fit | F / F6 = job limits, Ctrl+F = selection | zoom-to-fit / zoom-to-selection buttons |
 
+**[inf]** Cut Craft adds, on purpose: tilting the wheel left or right (or Shift and the wheel,
+or a sideways touchpad swipe) pans sideways in both views; **Edit ▸ Options ▸ Mouse and
+Shortcuts** can reverse it or turn it off. The buttons that pan when held and dragged are a
+setting too ("Pan (hold and drag)", the wheel click to start with), so a mouse's thumb
+buttons (Back and Forward) can pan as well. The left and right buttons are never offered:
+they pick and open menus everywhere.
+
 ### Selection and transform [obs]
 - Click selects. **Shift+click** toggles an object in or out of the selection.
 - A drag **left→right** selects objects *fully inside* the box. A drag **right→left** selects objects *touching* it.
@@ -595,6 +604,15 @@ percentages and passes get no letter.
 | Ctrl+F (Ctrl+F6) | Zoom selected | PgUp / PgDn (any modifier) | Tile views |
 | = | Single/double-sided view | 1 / 2 | **[unk]** (likely top/bottom side) |
 | Ctrl+F1…F9 | **[unk]** (unnamed command ids 33786–33796) | | |
+
+**[inf]** Cut Craft differs on purpose: every shortcut can be changed in **Edit ▸ Options ▸
+Mouse and Shortcuts** (Help ▸ Keyboard Shortcuts has a Change Shortcuts button to it). Add…
+waits for a key, with Ctrl, Alt or Shift if wanted, or for the wheel click or a thumb button,
+so a tool can run from the mouse. A shortcut another action already has is not taken
+silently: the page names that action and asks whether to move it. Each changed action has a
+Reset, and the page's Reset to defaults puts every shortcut back. Menus and the Keyboard
+Shortcuts list show the shortcuts as set. Saved in options.json as `controls.shortcuts`,
+only for actions changed.
 
 ---
 
@@ -1169,9 +1187,9 @@ instead of half-cell steps.
 - **[inf]** Cut Craft: a pixel is traced only when its centre is inside the box. A click, with a box, clears the box; without one, in Colors mode, the colour group under the click is ticked to trace, or let go if it was traced.
 
 ### Trace Bitmap: trace window, live preview and colour groups [inf: Matthew, 2026-11-11; modelled on CorelDRAW PowerTRACE's public help, not on Aspire]
-- Deliberate difference from Aspire, whose Trace Bitmap is a side form with no preview: Matthew asked for a live preview and colour grouping in the way CorelDRAW's PowerTRACE works. Trace Bitmap opens a resizable trace window; the side form only points to it (its Apply / Close stay).
+- Deliberate difference from Aspire, whose Trace Bitmap is a side form with no preview: Matthew asked for a live preview and colour grouping in the way CorelDRAW's PowerTRACE works. Trace Bitmap opens a resizable trace window; the side form only points to it (its Apply / Close stay). The window's own button says **Trace**.
 - Preview: Before and after (picture beside the result, drawn filled), Result only, or Outlines over picture with a slider for how strongly the picture shows. Zoom in / out / Fit, the wheel zooms about the pointer, a drag pans; both panes move together. A details line gives shapes, nodes and colours traced.
-- Live updates (ticked to start): the preview traces again once the settings rest for 0.2 s, one trace at a time off the window's thread (a newer change waits and replaces it). Unticked, Update preview traces. A picture over 1 megapixel is previewed from a copy cut down to about 1 megapixel by picking pixels (never blending, so no colours appear that the picture lacks), noise filter scaled to match; Apply always traces the whole picture.
+- Live updates (ticked to start): the preview traces again once the settings rest for 0.2 s, one trace at a time off the window's thread (a newer change waits and replaces it). Unticked, Update preview traces. A picture over 1 megapixel is previewed from a copy cut down to about 1 megapixel by picking pixels (never blending, so no colours appear that the picture lacks), noise filter scaled to match; Trace always traces the whole picture.
 - Picture type (Line art, Logo, Detailed logo, Clipart, Rough photo, Detailed photo) fills in mode, colour similarity, corner fit and noise filter (our own values); Reset goes back to the defaults, keeping the area.
 - Colors mode replaces Aspire's Number of colors (k-means to 2–16): every colour of the picture is a swatch (binned 5 bits a channel; at most 48 by median cut, each the mean of its pixels), so flat artwork shows each of its colours. Swatches join into groups: each with the first more-used swatch within Color similarity (CIE76 ΔE, 0–60, 12 to start), then the sets merged by hand (pick swatches in the list or by clicking the preview, Shift or Ctrl for more, Merge: traced as their pixel-weighted average; Separate takes swatches back out), then groups under 0.2 % of the picture into the nearest larger one. Groups are listed darkest first (Similar) or Most used, each with a tick for whether it is traced and its share of the picture.
 - Background: the group most of the picture's edge pixels are in (not, as before, the lightest) is not traced unless ticked. Edge blends: a group under 5 % of the picture with 85 % or more of its pixels touching another colour (anti-aliasing between colours) is not traced unless ticked, and its pixels go to the neighbouring colour they look most like, so colours meet without slivers. Each traced colour still goes on a layer of its own, its shapes not overlapping the others' (CorelDRAW's Remove overlap, which suits cutting).

@@ -1,4 +1,4 @@
-- Materials Library sorted by class and hardness; jobs and layers name their material
-- Bend an imported drawing along a selected open line
-- The Toolpaths panel keeps its list in sight, with Create, Preview, Analyse and Output tabs
-- Every Did You Know? tip has an illustration of its own
+- Embellish: pick one style, fill with borders, new Laurel, Feathers and Chevrons, and press E to edit one
+- Set shortcuts to keys or mouse buttons in Options
+- Each form's button says what it does (Create, Calculate or Apply) and hides when changes show live
+- The 2D grid stands out from the sheet in the dark theme

@@ -188,7 +188,8 @@ pub(super) const TIPS: &[Tip] = &[
     tip(
         "tips/keyboard.png",
         "**Help ▸ Keyboard Shortcuts** lists the key for every tool, so you can work without \
-         the menus.",
+         the menus. **Edit ▸ Options ▸ Mouse and Shortcuts** changes them, and can put a tool \
+         or panning on your mouse's thumb buttons.",
         "contents",
     ),
 ];

@@ -1430,6 +1430,11 @@ impl ChangeBuilder<'_> {
         id
     }
 
+    /// The layers as this change has left them so far.
+    pub fn layers(&self) -> &[Layer] {
+        &self.layers
+    }
+
     /// Removes an empty layer, first making another layer current if it was.
     pub fn remove_layer(&mut self, id: LayerId) {
         let index = self

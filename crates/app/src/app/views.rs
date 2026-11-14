@@ -329,6 +329,7 @@ impl CutCraftApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
         }
+        self.capture_shortcut(ctx);
         self.polyline_keys(ctx);
         self.sculpt_keys(ctx);
         self.shaded_image_arrived();
@@ -1193,6 +1194,9 @@ impl CutCraftApp {
 
     /// The 2D view's drawing, and the snap grid's points while snapping to it.
     fn paint_2d(&self, ui: &egui::Ui, canvas: &view2d::Canvas, overlay: &view2d::Overlay) {
+        let look = &self.options.appearance;
+        let colours = look.canvas(ui.visuals().dark_mode);
+        canvas.paint_sheet(ui, colours.sheet_color);
         // Join Open Ends marks the ends it joins, whether or not the view shows them
         let display = crate::display::Display {
             open_ends: self.display.open_ends || self.joining_ends(),
@@ -1207,11 +1211,10 @@ impl CutCraftApp {
             (self.job_epoch, self.history.revision()),
         );
         if self.options.snapping.snap_to_grid {
-            let look = &self.options.appearance;
             canvas.paint_grid(
                 ui,
                 self.options.snapping.grid_spacing,
-                look.grid_color,
+                colours.grid_color,
                 look.grid_point_size,
             );
         }
@@ -3173,24 +3176,34 @@ impl CutCraftApp {
     /// Edit ▸ Options: the sections; a change is saved and applied at once.
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
         let mut open = self.options_window;
-        let schema = serde_json::to_value(schemars::schema_for!(crate::options::Options))
-            .expect("a schema serialises");
-        let mut fields = crate::form::fields(&schema);
-        // Advanced lists only once asked for, and its Wayland choice only on Wayland
-        for f in &mut fields {
-            if let crate::form::Kind::Group(inner) = &mut f.kind
-                && f.key == "advanced"
-                && !crate::options::Advanced::wayland()
-            {
-                inner.retain(|f| f.key != "wayland_native");
-            }
-        }
-        if !self.show_advanced {
-            fields.retain(|f| f.key != "advanced");
-        }
+        let fields = self.options_categories();
         let mut values = serde_json::to_value(&self.options).expect("options serialise");
         let mut changed = None;
         let mut reset = None;
+        if let Some(key) = self.options_goto.take()
+            && let Some(at) = fields.iter().position(|f| f.key == key)
+        {
+            self.options_page = at;
+        }
+        // Mouse and Shortcuts lists every action's shortcuts under its settings
+        let on_shortcuts = fields
+            .get(self.options_page)
+            .is_some_and(|f| f.key == super::shortcuts_page::CATEGORY);
+        let rows = if on_shortcuts {
+            self.shortcut_rows(&self.shortcut_search)
+        } else {
+            vec![]
+        };
+        let names = self.shortcut_actions();
+        let label_of = |id: &str| {
+            names
+                .iter()
+                .find(|(a, _)| a == id)
+                .map_or_else(|| id.to_owned(), |(_, label)| label.clone())
+        };
+        let capture = self.capture.clone();
+        let search = &mut self.shortcut_search;
+        let mut shortcut_edit = None;
         let show_advanced = &mut self.show_advanced;
         let page = &mut self.options_page;
         *page = (*page).min(fields.len().saturating_sub(1));
@@ -3239,37 +3252,79 @@ impl CutCraftApp {
                     if crate::form::show(ui, one, &mut values, &look) {
                         changed = serde_json::from_value::<crate::options::Options>(values).ok();
                     }
+                    if category.key == super::shortcuts_page::CATEGORY {
+                        shortcut_edit = super::shortcuts_page::show(
+                            ui,
+                            &rows,
+                            capture.as_ref(),
+                            search,
+                            &label_of,
+                        );
+                    }
                 });
             });
         });
         if let Some(page) = reset {
             changed = Some(self.options.reset(&page));
         }
+        // closing the window, or leaving the page, stops waiting for a shortcut
+        if !open || !on_shortcuts {
+            self.capture = None;
+        }
         self.options_window = open;
         if let Some(options) = changed {
-            options.apply_to(&mut self.display);
-            ctx.set_theme(options.appearance.theme.preference());
-            let frame = options.appearance.system_title_bar;
-            if frame != self.options.appearance.system_title_bar {
-                if super::mac::is_mac(ctx) {
-                    // a Mac's window can't change its title bar while open
-                    self.status
-                        .set_message("The title bar changes next time Cut Craft starts.");
-                } else {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
-                }
+            self.options_changed(ctx, options);
+        }
+        // after the page's settings, so they don't put back the shortcuts as they were
+        if let Some(edit) = shortcut_edit {
+            self.apply_shortcut_edit(edit);
+        }
+    }
+
+    /// The Options window's categories, each with its settings: Advanced only once asked
+    /// for, and its Wayland choice only on Wayland.
+    fn options_categories(&self) -> Vec<crate::form::Field> {
+        let schema = serde_json::to_value(schemars::schema_for!(crate::options::Options))
+            .expect("a schema serialises");
+        let mut fields = crate::form::fields(&schema);
+        for f in &mut fields {
+            if let crate::form::Kind::Group(inner) = &mut f.kind
+                && f.key == "advanced"
+                && !crate::options::Advanced::wayland()
+            {
+                inner.retain(|f| f.key != "wayland_native");
             }
-            self.recent.truncate(options.recent_count());
-            if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
-                self.playback_speed = options.toolpaths.preview_speed();
+        }
+        if !self.show_advanced {
+            fields.retain(|f| f.key != "advanced");
+        }
+        fields
+    }
+
+    /// Options changed in the Options window: what they change, done, and kept.
+    fn options_changed(&mut self, ctx: &egui::Context, options: crate::options::Options) {
+        options.apply_to(&mut self.display);
+        ctx.set_theme(options.appearance.theme.preference());
+        let frame = options.appearance.system_title_bar;
+        if frame != self.options.appearance.system_title_bar {
+            if super::mac::is_mac(ctx) {
+                // a Mac's window can't change its title bar while open
+                self.status
+                    .set_message("The title bar changes next time Cut Craft starts.");
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
-            options.apply();
-            self.options = options;
-            self.save_options();
-            // clipping turned on or off: the toolpaths made again with or without it
-            if self.sync_machine_keep_out() {
-                self.keep_out_changed();
-            }
+        }
+        self.recent.truncate(options.recent_count());
+        if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
+            self.playback_speed = options.toolpaths.preview_speed();
+        }
+        options.apply();
+        self.options = options;
+        self.save_options();
+        // clipping turned on or off: the toolpaths made again with or without it
+        if self.sync_machine_keep_out() {
+            self.keep_out_changed();
         }
     }
 
@@ -3677,15 +3732,21 @@ impl CutCraftApp {
         self.snap_window = open;
     }
 
-    /// The wheel zooms about the cursor; the middle button (or the Pan tool) pans.
+    /// The wheel zooms about the cursor, and tilting it pans sideways (as Options ▸ Mouse and
+    /// Shortcuts says); the pan buttons (the wheel, to start with) or the Pan tool pan.
     pub(super) fn zoom_and_pan(&mut self, ui: &egui::Ui, canvas: &mut Canvas) {
         let area = canvas.area;
         // the wheel zooms about the cursor: a quarter of the view's height doubles the zoom
         if let Some(at) = canvas.hover() {
-            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-            if scroll != 0.0 {
-                let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
+            let scroll = ui.input(|i| i.smooth_scroll_delta);
+            if scroll.y != 0.0 {
+                let factor = 2f32.powf(scroll.y / (area.height() / VIEW_ZOOM_QUARTERS));
                 canvas.transform = canvas.transform.zoomed_about(at, factor);
+                self.camera = Some(canvas.transform);
+            }
+            let sideways = self.options.controls.tilt.pan(scroll.x);
+            if sideways != 0.0 {
+                canvas.transform = canvas.transform.panned(egui::vec2(sideways, 0.0));
                 self.camera = Some(canvas.transform);
             }
         }
@@ -3693,7 +3754,7 @@ impl CutCraftApp {
             Some(ViewTool::Pan) => canvas.dragged_by(egui::PointerButton::Primary),
             _ => None,
         }
-        .or_else(|| canvas.dragged_by(egui::PointerButton::Middle));
+        .or_else(|| (self.pan_buttons().into_iter()).find_map(|b| canvas.dragged_by(b)));
         if let Some(by) = pan {
             canvas.transform = canvas.transform.panned(by);
             self.camera = Some(canvas.transform);
@@ -3918,7 +3979,7 @@ pub(super) fn immediate_output(
             .on_hover_hint(
                 "Save the toolpath calculated last through the post, keeping the form open",
             )
-            .on_disabled_hover_text("Apply first: there is no quick engrave toolpath yet")
+            .on_disabled_hover_text("Calculate first: there is no quick engrave toolpath yet")
             .clicked();
     });
     save

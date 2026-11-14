@@ -34,6 +34,10 @@ fn cells_round(
         lo = lo.min(p);
         hi = hi.max(p);
     }
+    // no points (a piece shrunk away to nothing in a tiny shape)
+    if !(lo.is_finite() && hi.is_finite()) {
+        return None;
+    }
     let a = ((lo - grid.origin) / grid.cell - pad)
         .floor()
         .max(Point::ZERO);

@@ -20,9 +20,10 @@ pub fn registry() -> Registry {
     r.add::<cmd_draw_arc::DrawArc>();
     r.add_interactive::<cmd_draw_circle::DrawCircle>();
     r.add_interactive::<cmd_draw_ellipse::DrawEllipse>();
+    // before Draw Polygon: E on a square opens the tool that drew it most likely
+    r.add_interactive::<cmd_draw_rectangle::DrawRectangle>();
     r.add_interactive::<cmd_draw_polygon::DrawPolygon>();
     r.add_interactive::<cmd_draw_polyline::DrawPolyline>();
-    r.add_interactive::<cmd_draw_rectangle::DrawRectangle>();
     r.add_interactive::<cmd_draw_star::DrawStar>();
     r.add::<cmd_mirror::Mirror>();
     r.add::<cmd_move::Move>();
