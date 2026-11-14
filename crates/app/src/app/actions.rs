@@ -110,6 +110,7 @@ impl CutCraftApp {
             deep_cut: None,
             units_ask: None,
             shots: None,
+            help_shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
                 .mine
@@ -4359,7 +4360,9 @@ impl CutCraftApp {
         }
         ui.horizontal(|ui| {
             if let Some((label, hint)) = committing {
-                apply = ui.button(label).on_hover_hint(hint).clicked();
+                let button = ui.button(label);
+                crate::marks::note(ui.ctx(), &format!("button:{label}"), button.rect);
+                apply = button.on_hover_hint(hint).clicked();
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 close = ui

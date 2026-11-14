@@ -14,6 +14,8 @@ mod guide;
 mod help;
 #[cfg(test)]
 mod help_coverage;
+#[path = "help_pictures.rs"]
+mod help_pictures;
 mod layouts;
 mod mac;
 mod panels;
@@ -1146,6 +1148,8 @@ struct CutCraftApp {
     space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
     shots: Option<screenshots::Shots>,
+    /// `--help-pictures`: the help pages' step pictures being taken.
+    help_shots: Option<help_pictures::HelpShots>,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
     clipboard_components: Vec<cut_craft_core::component::Component>,
@@ -1963,8 +1967,9 @@ fn tool_picker(
         }
     }
     ui.horizontal(|ui| {
-        let select = ui
-            .button("Select…")
+        let select = ui.button("Select…");
+        crate::marks::note(ui.ctx(), "button:Select…", select.rect);
+        let select = select
             .on_hover_hint(
                 "Pick the bit this toolpath cuts with in the Tool Database: it brings its own \
                  feeds, speeds and pass depth",
@@ -2634,9 +2639,30 @@ fn window_frame(builder: egui::ViewportBuilder, system_title_bar: bool) -> egui:
     }
 }
 
-/// Opens the main window and runs until it is closed; with `shots`, takes the README's
-/// pictures into that folder instead and quits ([`screenshots`]).
-pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
+/// Pictures the app takes of itself, then quits.
+pub enum Pictures {
+    /// The README's ([`screenshots`]), into this folder.
+    Readme(std::path::PathBuf),
+    /// The help pages' step pictures ([`help_pictures`]), into this folder: every tour's, or
+    /// only the tools named.
+    Help(std::path::PathBuf, Vec<String>),
+}
+
+impl CutCraftApp {
+    /// Takes `pictures` of itself from the next frame on, then quits.
+    fn take_pictures(&mut self, ctx: &egui::Context, pictures: Pictures) {
+        match pictures {
+            Pictures::Readme(dir) => self.shots = Some(screenshots::Shots::new(dir)),
+            Pictures::Help(dir, only) => {
+                self.help_shots = Some(help_pictures::HelpShots::new(ctx, dir, &only));
+            }
+        }
+    }
+}
+
+/// Opens the main window and runs until it is closed; with `shots`, takes those pictures
+/// instead and quits.
+pub fn run(title: &str, shots: Option<Pictures>) {
     // winit 0.29 delivered dropped files only on X11; 0.30 should on Wayland too, but until that
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
@@ -2720,9 +2746,9 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
                     );
                 }
             }
-            if let Some(dir) = shots {
+            if let Some(pictures) = shots {
                 // what a fresh clone shows: its icons, the starter tools, nothing of the user's
-                app.shots = Some(screenshots::Shots::new(dir));
+                app.take_pictures(&cc.egui_ctx, pictures);
                 crate::startup::window_opened();
                 return Ok(Box::new(app));
             }

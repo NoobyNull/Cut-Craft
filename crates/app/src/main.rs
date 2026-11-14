@@ -21,6 +21,7 @@ mod gadgets;
 mod gui;
 mod hints;
 mod icons;
+mod marks;
 mod options;
 mod pages;
 mod polyline;
@@ -38,7 +39,8 @@ fn main() {
     let shots = match startup::parse(std::env::args().skip(1)) {
         startup::Start::Version => return startup::print(&format!("{}\n", startup::version())),
         startup::Start::Help => return startup::print(&startup::help()),
-        startup::Start::Screenshots(dir) => Some(dir),
+        startup::Start::Screenshots(dir) => Some(app::Pictures::Readme(dir)),
+        startup::Start::HelpPictures(dir, tools) => Some(app::Pictures::Help(dir, tools)),
         startup::Start::App => None,
     };
     // the log and, on a panic, the crash log the next start offers to report

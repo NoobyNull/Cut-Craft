@@ -383,7 +383,8 @@ fn plain(
         if (section.key == "tool" || TOOL_LISTS.contains(&section.key.as_str())) && !section.section
         {
             if let Some(tool) = look.tool {
-                tool(ui, &section.key, params);
+                let place = ui.scope(|ui| tool(ui, &section.key, params)).response.rect;
+                crate::marks::note(ui.ctx(), &format!("field:{}", section.key), place);
             }
             continue;
         }
@@ -443,18 +444,21 @@ fn grid(
                     .filter(|_| own)
                     .and_then(|template| (look.picture)(&icon_path(template, &params[&f.key])));
                 let enabled = f.enabled.as_ref().is_none_or(|w| w.shown(top));
-                ui.add_enabled_ui(enabled, |ui| {
-                    ui.horizontal(|ui| {
-                        if let Some(picture) = picture {
-                            let edge = ui.spacing().interact_size.y * FIELD_PICTURE_ROWS;
-                            ui.add(picture.fit_to_exact_size(egui::vec2(edge, edge)));
-                        }
-                        if let Some(dim) = &f.dim {
-                            dim_letter(ui, dim);
-                        }
-                        hover(ui.label(&f.label), f.help.as_ref());
-                    });
-                });
+                let label_rect = ui
+                    .add_enabled_ui(enabled, |ui| {
+                        ui.horizontal(|ui| {
+                            if let Some(picture) = picture {
+                                let edge = ui.spacing().interact_size.y * FIELD_PICTURE_ROWS;
+                                ui.add(picture.fit_to_exact_size(egui::vec2(edge, edge)));
+                            }
+                            if let Some(dim) = &f.dim {
+                                dim_letter(ui, dim);
+                            }
+                            hover(ui.label(&f.label), f.help.as_ref());
+                        });
+                    })
+                    .response
+                    .rect;
                 // a picture named by the fields beside it reads them as they were this frame
                 let around = match &f.kind {
                     Kind::Choice(
@@ -470,11 +474,12 @@ fn grid(
                     } => serde_json::json!({ &w.key: params[&w.key] }),
                     _ => Value::Null,
                 };
-                changed |= ui
-                    .add_enabled_ui(enabled, |ui| {
-                        edit(ui, &f.kind, &mut params[&f.key], &around, look)
-                    })
-                    .inner;
+                let edited = ui.add_enabled_ui(enabled, |ui| {
+                    edit(ui, &f.kind, &mut params[&f.key], &around, look)
+                });
+                changed |= edited.inner;
+                let place = label_rect.union(edited.response.rect);
+                crate::marks::note(ui.ctx(), &format!("field:{}", f.key), place);
                 ui.end_row();
             }
         });

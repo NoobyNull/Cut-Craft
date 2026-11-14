@@ -455,6 +455,7 @@ impl CutCraftApp {
             .icon_button(explicit, id, &label, edge)
             .selected(self.status.current_tool == label);
         let response = ui.add_enabled(self.available(id), button);
+        crate::marks::note(ui.ctx(), &format!("tool:{id}"), response.rect);
         self.with_guidance(response, id)
             .on_disabled_hover_text(format!("{label}: not implemented yet"))
     }
@@ -495,6 +496,9 @@ impl CutCraftApp {
                 .selected(in_hand),
         );
         super::guide::hover(&response, &tip);
+        for m in &button.members {
+            crate::marks::note(ui.ctx(), &format!("tool:{m}"), response.rect);
+        }
         let response = response
             .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
             .on_disabled_hover_text(format!("{label}: not implemented yet"));

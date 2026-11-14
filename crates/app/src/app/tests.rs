@@ -6164,7 +6164,7 @@ fn help_contents_links_to_the_pages_and_their_tools() {
 #[test]
 fn every_help_link_goes_to_a_help_page() {
     let h = Harness::new();
-    let topics = h.app.help_topics();
+    let topics = h.app.all_help_topics();
     let problems = cut_craft_help::problems(|id| topics.contains(&id));
     assert!(problems.is_empty(), "{problems:#?}");
 }

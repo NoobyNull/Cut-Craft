@@ -79,6 +79,10 @@ impl CutCraftApp {
             shots.step(self, ctx);
             self.shots = Some(shots);
         }
+        if let Some(mut shots) = self.help_shots.take() {
+            shots.step(self, ctx);
+            self.help_shots = Some(shots);
+        }
     }
 
     /// Whether Model ▸ Model Resolution's item `id` is the job's resolution; `None` for any

@@ -5,6 +5,9 @@ use super::{CutCraftApp, Info, Page, dialog_size, egui, form, gui};
 use egui_commonmark::CommonMarkViewer;
 use std::fmt::Write as _;
 
+/// The widest a help picture is shown, points: the step pictures' own width.
+const HELP_PICTURE_WIDTH: usize = 720;
+
 /// The words of help page `id` from the help crate, without its header: empty when it has none.
 fn written(id: &str) -> &'static str {
     cut_craft_help::page(id).map_or("", |p| p.body)
@@ -14,7 +17,8 @@ impl CutCraftApp {
     /// The Help window on `topic`: a `help:` link clicked goes to its page. The search box
     /// along its top lists every page whose name or words match, in place of the page.
     pub(super) fn help_window(&mut self, ctx: &egui::Context, topic: &'static str) {
-        let topics = self.help_topics();
+        load_pictures(ctx);
+        let topics = self.all_help_topics();
         for t in &topics {
             self.help_cache.add_link_hook(format!("help:{t}"));
         }
@@ -25,7 +29,7 @@ impl CutCraftApp {
             self.help_search_results(&query)
         };
         let markdown = if query.is_empty() {
-            self.help_markdown(topic)
+            cut_craft_help::with_picture_uris(&self.help_markdown(topic))
         } else {
             String::new()
         };
@@ -52,7 +56,10 @@ impl CutCraftApp {
             ui.separator();
             egui::ScrollArea::vertical().id_salt(topic).show(ui, |ui| {
                 if query.is_empty() {
-                    CommonMarkViewer::new().show(ui, cache, &markdown);
+                    // pictures no wider than a step picture is taken, so they stay sharp
+                    CommonMarkViewer::new()
+                        .max_image_width(Some(HELP_PICTURE_WIDTH))
+                        .show(ui, cache, &markdown);
                     return;
                 }
                 if found.is_empty() {
@@ -100,7 +107,7 @@ impl CutCraftApp {
     ) -> Vec<(&'static str, String, String)> {
         if self.help_index.is_empty() {
             self.help_index = self
-                .help_topics()
+                .all_help_topics()
                 .into_iter()
                 .map(|t| (t, self.help_title(t), self.help_markdown(t)))
                 .collect();
@@ -115,6 +122,7 @@ impl CutCraftApp {
             "design" => "Design page".into(),
             "toolpaths" => "Toolpaths page".into(),
             "tips" => "Did You Know?".into(),
+            id if self.is_concept(id) => concept_title(id),
             id => self.tool_label(id),
         }
     }
@@ -126,6 +134,23 @@ impl CutCraftApp {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
         }
         topics
+    }
+
+    /// [`Self::help_topics`] and the help crate's other pages: the ideas behind the tools
+    /// (stepover, tabs…), each linked from the tools and settings that use it.
+    pub(super) fn all_help_topics(&self) -> Vec<&'static str> {
+        let mut topics = self.help_topics();
+        let concepts: Vec<&'static str> = cut_craft_help::pages()
+            .map(|p| p.id)
+            .filter(|id| !topics.contains(id))
+            .collect();
+        topics.extend(concepts);
+        topics
+    }
+
+    /// Whether `id` is a help page of its own, not a tool's, nor one the app writes.
+    fn is_concept(&self, id: &str) -> bool {
+        !self.help_topics().contains(&id) && cut_craft_help::page(id).is_some()
     }
 
     fn help_groups(&self, page: Page) -> Vec<gui::ToolGroup> {
@@ -153,6 +178,14 @@ impl CutCraftApp {
             "design" => tools_page(Page::Design, written("design")),
             "toolpaths" => tools_page(Page::Toolpaths, written("toolpaths")),
             "tips" => super::tips::markdown(),
+            id if self.is_concept(id) => {
+                let mut md = format!("[Contents](help:contents)\n\n{}\n", written(id).trim_end());
+                let related = cut_craft_help::related_markdown(id, |t| self.help_title(t));
+                if !related.is_empty() {
+                    let _ = write!(md, "\n{related}");
+                }
+                md
+            }
             id => {
                 let (page, name) = match self.page_of(id) {
                     Page::Design => ("design", "Design"),
@@ -227,6 +260,7 @@ fn search(
             let line = md
                 .lines()
                 .filter(|l| !l.starts_with('[') && !l.starts_with('#'))
+                .filter(|l| !l.trim_start().starts_with("!["))
                 .find(|l| {
                     let l = l.to_lowercase();
                     words.iter().any(|w| l.contains(w.as_str()))
@@ -255,6 +289,26 @@ fn plain_line(line: &str) -> String {
     }
     out.push_str(rest);
     out.replace(['*', '[', '`'], "")
+}
+
+/// A help page's name from its first `# ` heading, else its id.
+fn concept_title(id: &str) -> String {
+    written(id)
+        .lines()
+        .find_map(|l| l.strip_prefix("# "))
+        .map_or_else(|| id.to_owned(), |t| t.trim().to_owned())
+}
+
+/// Hands the help's pictures to the window's picture loader, once.
+fn load_pictures(ctx: &egui::Context) {
+    let done = egui::Id::unique("help-pictures-loaded");
+    if ctx.data(|d| d.get_temp::<bool>(done).unwrap_or(false)) {
+        return;
+    }
+    for (path, bytes) in cut_craft_help::PICTURES {
+        ctx.include_bytes(cut_craft_help::picture_uri(path), *bytes);
+    }
+    ctx.data_mut(|d| d.insert_temp(done, true));
 }
 
 /// The command whose form tool `id` opens: itself, or the one a flyout variant or a Create

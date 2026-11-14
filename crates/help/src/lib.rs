@@ -168,8 +168,38 @@ pub fn related_markdown(id: &str, title: impl Fn(&str) -> String) -> String {
     md
 }
 
-/// What is wrong with the pages: a header that will not read, or a link (see-also or `help:`)
-/// to a page that is neither among them nor one `known` says the program makes itself.
+/// The pictures `markdown` shows, by their path under `pictures/` (written
+/// `![words](pictures/<path>)`), in order.
+pub fn pictures_named(markdown: &str) -> Vec<&str> {
+    let mut out = vec![];
+    let mut rest = markdown;
+    while let Some(at) = rest.find("](pictures/") {
+        rest = &rest[at + "](pictures/".len()..];
+        let end = rest.find([')', ' ']).unwrap_or(rest.len());
+        out.push(&rest[..end]);
+    }
+    out
+}
+
+/// Picture `path` (under `pictures/`), as carried into the program.
+pub fn picture(path: &str) -> Option<&'static [u8]> {
+    PICTURES.iter().find(|(p, _)| *p == path).map(|(_, b)| *b)
+}
+
+/// Where the program's picture loader finds picture `path` once it is handed the bytes:
+/// `bytes://help/pictures/<path>`.
+pub fn picture_uri(path: &str) -> String {
+    format!("bytes://help/pictures/{path}")
+}
+
+/// `markdown` with each picture's path made the URI it is shown from ([`picture_uri`]).
+pub fn with_picture_uris(markdown: &str) -> String {
+    markdown.replace("](pictures/", "](bytes://help/pictures/")
+}
+
+/// What is wrong with the pages: a header that will not read, a link (see-also or `help:`)
+/// to a page that is neither among them nor one `known` says the program makes itself, or a
+/// picture that is not under `pictures/`.
 pub fn problems(known: impl Fn(&str) -> bool) -> Vec<String> {
     let ids: Vec<&str> = PAGES.iter().map(|(id, _)| *id).collect();
     let mut out = vec![];
@@ -180,6 +210,13 @@ pub fn problems(known: impl Fn(&str) -> bool) -> Vec<String> {
                 for to in links(&page) {
                     if !ids.contains(&to) && !known(to) {
                         out.push(format!("{id}: links to \"{to}\", which is no help page"));
+                    }
+                }
+                for path in pictures_named(page.body) {
+                    if picture(path).is_none() {
+                        out.push(format!(
+                            "{id}: shows pictures/{path}, which is not in crates/help/pictures"
+                        ));
                     }
                 }
             }
@@ -251,6 +288,29 @@ mod tests {
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), all, "two pages share a file name");
+    }
+
+    #[test]
+    fn pictures_are_found_by_path_and_shown_from_the_programs_copy() {
+        let md = "1. Press it.\n\n   ![Step 1](pictures/pocket_toolpath/step-1.png)\n\
+                  ![Loop](pictures/concepts/stepover.gif) [not](https://x.com/a.png)";
+        assert_eq!(
+            pictures_named(md),
+            ["pocket_toolpath/step-1.png", "concepts/stepover.gif"]
+        );
+        assert!(
+            with_picture_uris(md).contains("![Loop](bytes://help/pictures/concepts/stepover.gif)")
+        );
+        assert_eq!(picture("no/such.png"), None);
+    }
+
+    #[test]
+    fn every_picture_a_page_shows_is_carried_in() {
+        let missing: Vec<String> = problems(|_| true)
+            .into_iter()
+            .filter(|p| p.contains("pictures/"))
+            .collect();
+        assert!(missing.is_empty(), "{missing:#?}");
     }
 
     #[test]
