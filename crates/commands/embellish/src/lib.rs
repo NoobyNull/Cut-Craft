@@ -682,8 +682,8 @@ impl Command for Embellish {
             return Err(CommandError::Failed(format!(
                 "nothing fits: the shape is only about {wide:.1} mm wide, too \
                  narrow for this style with a {gap:.2} mm smallest gap between pieces. Pick a \
-                 wider shape, turn Tightness up for a smaller gap, or try Chevrons or Laurel \
-                 leaves, which fit the narrowest bands",
+                 wider shape, or turn Tightness up for a smaller gap (and finish with a bit \
+                 that fits it). A pattern needs a band roughly six times the gap wide",
                 gap = p.gap(),
             )));
         }
