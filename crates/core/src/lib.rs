@@ -12,6 +12,7 @@ pub mod compute;
 pub mod constraint;
 pub mod csv;
 pub mod document;
+pub mod drag_knife;
 pub mod drill_bank;
 pub mod entry;
 pub mod file;

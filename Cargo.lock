@@ -878,6 +878,7 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

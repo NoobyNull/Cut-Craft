@@ -620,6 +620,12 @@ pub struct Document {
     /// of not being made: set by the app from Options (off unless turned on), not saved.
     #[serde(skip)]
     pub clip_keep_out: bool,
+    /// The toolpath being made again (Edit Toolpath, recalculating), while its strategy runs:
+    /// a strategy that depends on what is cut before it (a drag knife needs a flat surface)
+    /// looks only at the toolpaths above it in the list. `None` while a new one is made,
+    /// which goes at the bottom. Never saved.
+    #[serde(skip)]
+    pub remaking: Option<EntityId>,
     /// Double-sided jobs: the bottom side is being worked on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bottom_side: bool,
@@ -779,6 +785,7 @@ impl Default for Document {
             keep_out: vec![],
             machine_keep_out: vec![],
             clip_keep_out: false,
+            remaking: None,
             guides: vec![],
             toolpath_groups: vec![],
             part_names: BTreeMap::new(),
@@ -791,6 +798,15 @@ impl Default for Document {
 }
 
 impl Document {
+    /// The toolpaths cut before the one being made, in list order: those above it when one
+    /// is made again ([`Self::remaking`]), else every toolpath, a new one going last.
+    pub fn toolpaths_before_made(&self) -> Vec<&crate::toolpath::Toolpath> {
+        match self.remaking {
+            Some(id) => self.toolpaths.range(..id).map(|(_, t)| t).collect(),
+            None => self.toolpaths.values().collect(),
+        }
+    }
+
     /// Replaces the sheet list and active sheet, `before` being what they are now.
     pub(crate) fn set_sheets(
         &mut self,

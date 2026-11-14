@@ -1843,11 +1843,18 @@ enum ToolAsk {
     Edit,
 }
 
+/// What a drag knife form says of its tool, in place of a bit's size and pass: a knife
+/// has no flutes; it presses into the top by a share of its spring travel.
+pub(crate) const KNIFE_LINE: &str = "Drag knife: zero Z with the blade tip touching the \
+                                     material. It presses in by the Pressure, a share of the \
+                                     Spring Travel, so no flute length is needed";
+
 /// A toolpath form's tool, kept short: its name (with its tool changer holder), its size and
 /// pass in one line, Select… to pick it in the Tool Database (where the tool changer's
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
 fn tool_picker(
     ui: &mut egui::Ui,
+    id: &str,
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
@@ -1867,7 +1874,11 @@ fn tool_picker(
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
             ui.strong(held_name(current, slots));
-            ui.label(tool_line(tool, passes, units));
+            if id == cut_craft_core::drag_knife::STRATEGY {
+                ui.label(KNIFE_LINE);
+            } else {
+                ui.label(tool_line(tool, passes, units));
+            }
             if surfacing::wants_surfacing_bit(top, tool) {
                 ui.weak(surfacing::NOT_A_SURFACING_BIT);
             }
