@@ -132,6 +132,13 @@ impl Cutting {
                 way(!self.clockwise())
             ));
         }
+        if self.raster {
+            lines.push(
+                "Rows go back and forth, stepping over along the wall without lifting: \
+                 one row cuts climb, the next conventional"
+                    .to_owned(),
+            );
+        }
         if let Some(rings) = &self.rings
             && !self.trochoidal
         {

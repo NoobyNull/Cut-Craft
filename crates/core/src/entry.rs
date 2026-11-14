@@ -346,11 +346,9 @@ impl Room {
         }
     }
 
-    /// How far `p` is from the room's edge, or None when it is not in the room.
-    fn clearance(&self, p: Point) -> Option<f64> {
-        if crate::geometry::inside(&self.rings, p) != self.inside {
-            return None;
-        }
+    /// How far `p` is from the room's edge: less than nothing when it is not in the room (a
+    /// point on the edge itself may count as either, so is about nothing).
+    fn clearance(&self, p: Point) -> f64 {
         let mut near = f64::INFINITY;
         for ring in &self.rings {
             for (i, &a) in ring.iter().enumerate() {
@@ -358,19 +356,23 @@ impl Room {
                 near = near.min(segment_gap(p, a, b));
             }
         }
-        Some(near)
+        if crate::geometry::inside(&self.rings, p) == self.inside {
+            near
+        } else {
+            -near
+        }
     }
 
     /// Whether a circle `radius` round `centre` is in the room.
     pub fn fits(&self, centre: Point, radius: f64) -> bool {
-        self.clearance(centre).is_some_and(|c| c >= radius - 1e-9)
+        self.clearance(centre) >= radius - 1e-9
     }
 
     /// Whether the straight line from `a` to `b` stays in the room.
     pub fn holds(&self, a: Point, b: Point) -> bool {
         (0..=8).all(|i| {
             let p = a.lerp(b, f64::from(i) / 8.0);
-            self.clearance(p).is_some_and(|c| c >= -1e-6) || p.distance(b) < 1e-6
+            self.clearance(p) >= -1e-6 || p.distance(b) < 1e-6
         })
     }
 }

@@ -26,7 +26,8 @@ pub enum Strategy {
     #[default]
     #[serde(alias = "trochoidal")]
     Offset,
-    /// Straight lines across, at the raster angle
+    /// Straight lines across, at the raster angle, back and forth: each line steps over to
+    /// the next along the wall without lifting
     Raster,
     /// Keeps the bit taking a thin, steady bite everywhere, never cutting full width in
     /// a corner: gentler on the bit and machine, so it can go a full pass deep with confidence
@@ -284,7 +285,9 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         let entry = entry_for(p, &edge);
         // each path at depth `z`, entering from the level above; `back` runs it the other
         // way (Both directions' every other pass)
-        let cut = |paths: &[Path], z: f64, above: f64, back: bool| -> Vec<Move> {
+        // `lines`: open paths (raster lines) link on at depth too, each from where the last
+        // ended, along the wall
+        let cut = |paths: &[Path], z: f64, above: f64, back: bool, lines: bool| -> Vec<Move> {
             let way = |r: &Path| {
                 let mut points = if r.closed {
                     oriented(p.direction, r)
@@ -304,10 +307,10 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             }
             linked(
                 paths.iter().map(|r| (way(r), r.closed)).collect(),
-                z,
-                above,
+                (z, above),
                 safe,
                 &entry,
+                lines,
             )
         };
         // ponytail: each ring or line retracts between cuts; link them with a stepover move
@@ -316,7 +319,8 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         let mut above = 0.0;
         for (pass, z) in p.tool.pass_depths(p.depth).into_iter().enumerate() {
             let back = p.ways == Ways::Both && pass % 2 == 1;
-            let cut_way = |paths: &[Path], back: bool| cut(paths, z, above, back);
+            let cut_way = |paths: &[Path], back: bool| cut(paths, z, above, back, false);
+            let cut_lines = |paths: &[Path]| cut(paths, z, above, back, true);
             let cut = |paths: &[Path]| cut_way(paths, back);
             match (p.motion, p.strategy) {
                 (_, Strategy::Adaptive) => {
@@ -331,14 +335,14 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                     moves.extend(cut_way(if inward { &outline_in } else { &rings }, back));
                 }
                 (Motion::Straight, Strategy::Raster) => {
-                    if p.profile_pass == ProfilePass::First {
-                        moves.extend(cut(&edge));
-                    }
+                    // the edge and the lines in one run, so each links on to the next
                     let lines = raster(&edge, step, p.raster_angle);
-                    moves.extend(cut(&lines));
-                    if p.profile_pass == ProfilePass::Last {
-                        moves.extend(cut(&edge));
-                    }
+                    let all = match p.profile_pass {
+                        ProfilePass::First => [edge.as_slice(), &lines].concat(),
+                        ProfilePass::Last => [lines.as_slice(), &edge].concat(),
+                        ProfilePass::None => lines,
+                    };
+                    moves.extend(cut_lines(&all));
                 }
             }
             above = z;
@@ -375,13 +379,15 @@ fn entry_for(p: &Params, edge: &[Path]) -> Entry {
 /// The rings and lines `paths` cut at `z`, entering from `above` only where the tool must go
 /// down into the material: a closed ring within a bit's width of where the last one ended,
 /// with a straight way across to it in the pocket, is cut next, linked to at depth, so each
-/// area of the pocket is entered once. The rest keep their order.
+/// area of the pocket is entered once. With `lines`, an open path (a raster line) whose start
+/// is that near is linked to the same way: the step over along the wall from one line to the
+/// next, instead of a lift and a plunge into uncut material. The rest keep their order.
 fn linked(
     mut paths: Vec<(Vec<Point>, bool)>,
-    z: f64,
-    above: f64,
+    (z, above): (f64, f64),
     safe: f64,
     entry: &Entry,
+    lines: bool,
 ) -> Vec<Move> {
     let reach = entry.tool_diameter;
     let mut moves: Vec<Move> = vec![];
@@ -390,8 +396,14 @@ fn linked(
     while !paths.is_empty() {
         let next = down.and_then(|at| {
             paths.iter().enumerate().find_map(|(i, (points, closed))| {
-                let (k, gap) = nearest_vertex(points, at)?;
-                let near = *closed && gap <= reach + 1e-9;
+                let (k, gap) = if *closed {
+                    nearest_vertex(points, at)?
+                } else if lines {
+                    (0, points.first()?.distance(at))
+                } else {
+                    return None;
+                };
+                let near = gap <= reach + 1e-9;
                 let across = entry.room.as_ref().is_none_or(|r| r.holds(at, points[k]));
                 (near && across).then_some((i, k))
             })
@@ -399,7 +411,7 @@ fn linked(
         let Some((i, k)) = next else {
             let (points, closed) = paths.remove(0);
             moves.extend(path_moves(&points, closed, &[z], above, safe, entry));
-            down = closed.then(|| at_depth(&moves, z)).flatten();
+            down = (closed || lines).then(|| at_depth(&moves, z)).flatten();
             continue;
         };
         let (mut points, closed) = paths.remove(i);
@@ -1447,6 +1459,25 @@ mod tests {
             pocket(20.0, &p).unwrap_err(),
             "Set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database."
         );
+    }
+
+    #[test]
+    fn raster_lines_link_along_the_wall_without_lifting() {
+        // like the reference zig-zag: down once per pass, each line stepping over to the next
+        // at depth along the wall, never back down into uncut material
+        let p = Params {
+            strategy: Strategy::Raster,
+            depth: 6.0,
+            ..Params::default()
+        };
+        let tp = pocket(40.0, &p).unwrap();
+        let lifts = tp
+            .moves
+            .windows(2)
+            .filter(|w| w[1].kind == MoveKind::Rapid && w[1].to.z > w[0].to.z)
+            .count();
+        // a lift at the end of each pass (two passes), none between lines
+        assert!(lifts <= 2, "it lifts {lifts} times");
     }
 
     #[test]
