@@ -671,6 +671,14 @@ impl Canvas {
         }
     }
 
+    /// The job's material sheet, filled in `colour`, under everything else drawn.
+    pub fn paint_sheet(&self, ui: &egui::Ui, colour: [u8; 3]) {
+        let t = self.transform;
+        let job = Rect::from_two_pos(t.to_screen(self.job.min), t.to_screen(self.job.max));
+        let colour = egui::Color32::from_rgb(colour[0], colour[1], colour[2]);
+        ui.painter_at(self.area).rect_filled(job, 0.0, colour);
+    }
+
     pub fn paint(
         &self,
         ui: &egui::Ui,
@@ -688,8 +696,6 @@ impl Canvas {
             ui.spacing().item_spacing.x / 2.0,
         );
 
-        let job = Rect::from_two_pos(t.to_screen(self.job.min), t.to_screen(self.job.max));
-        painter.rect_filled(job, 0.0, visuals.widgets.inactive.bg_fill);
         for (id, bitmap) in &doc.bitmaps {
             let texture = bitmap_texture(ui.ctx(), *id, bitmap);
             let at = Rect::from_two_pos(t.to_screen(bitmap.rect.min), t.to_screen(bitmap.rect.max));

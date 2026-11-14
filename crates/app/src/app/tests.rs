@@ -6261,6 +6261,30 @@ fn reset_to_defaults_puts_back_only_the_page_shown() {
 }
 
 #[test]
+fn appearance_sets_the_2d_sheet_and_grid_colours_for_each_theme() {
+    let mut h = Harness::new();
+    h.app.options.appearance.dark_2d.grid_color = [1, 2, 3];
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = *h.texts_at("Appearance").last().expect("listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    for label in ["2D view in the light theme", "2D view in the dark theme"] {
+        assert!(h.text_at(label).is_some(), "{label}");
+    }
+    assert_eq!(h.texts_at("Sheet color").len(), 2, "one for each theme");
+    assert_eq!(h.texts_at("Grid color").len(), 2, "one for each theme");
+    let reset = h.text_at("Reset to defaults").expect("the page's reset");
+    h.click(reset, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.options.appearance.dark_2d,
+        crate::options::CanvasColours::dark()
+    );
+}
+
+#[test]
 fn the_window_title_sits_in_the_menu_bar_unless_the_desktop_s_is_chosen() {
     let mut h = Harness::new();
     let title = h.app.title.clone();

@@ -398,7 +398,7 @@ say "not implemented yet".
   holder with its tool. Every tool in a list (clearance tools, finishing tool sets, rest
   machining) has the same picker, Edit... and summary.
 - Snap grid: while Snap to Grid is on, the 2D view draws its points over the job (thinned
-  when zoomed out so they never crowd); Options ▸ Appearance sets the grid colour and point size.
+  when zoomed out so they never crowd); Options ▸ Appearance sets the sheet and grid colours for each theme (light and dark, defaults chosen so the grid stands out from the sheet) and the point size.
 - Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
 - Clearing bits on Pocket and V-Carve ("Clear with bigger bits first" / "Clear the flat
   bottom with end mills first", each bit picked with Select… in the Tool Database, kept
