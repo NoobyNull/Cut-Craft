@@ -19,7 +19,4 @@ see-also: draw_ellipse, draw_rectangle, pocket_toolpath
 
    ![Step 3](pictures/draw_circle/step-3.png)
 
-
-
-
 Next, turn the circle into something the machine cuts: a [Pocket](help:pocket_toolpath) clears its inside, a [Profile](help:profile_toolpath) cuts round its edge.

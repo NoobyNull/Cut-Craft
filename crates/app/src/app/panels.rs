@@ -4218,6 +4218,7 @@ impl CutCraftApp {
                 "Check the toolpaths and write the G-code file your machine runs, using its \
                  post processor",
             );
+        crate::marks::note(ui.ctx(), "tool:save_toolpaths", save.rect);
         if !ready {
             ui.weak(SAVE_NEEDS);
         }

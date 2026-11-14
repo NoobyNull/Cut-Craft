@@ -6170,6 +6170,22 @@ fn every_help_link_goes_to_a_help_page() {
 }
 
 #[test]
+fn every_tool_on_the_pages_has_a_help_page() {
+    let h = Harness::new();
+    let missing: Vec<&str> = h
+        .app
+        .help_topics()
+        .into_iter()
+        .filter(|id| cut_craft_help::page(id).is_none() && *id != "tips")
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "add crates/help/pages/tools/<id>.md (a header is enough to start) for:\n{}",
+        missing.join("\n")
+    );
+}
+
+#[test]
 fn every_command_has_a_help_page_to_update() {
     // scripts/help-touched asks a pull request changing a command to change this page
     let missing: Vec<&str> = crate::gui::command_ids()

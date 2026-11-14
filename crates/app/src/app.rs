@@ -16,6 +16,8 @@ mod help;
 mod help_coverage;
 #[path = "help_pictures.rs"]
 mod help_pictures;
+#[path = "help_tours.rs"]
+mod help_tours;
 mod layouts;
 mod mac;
 mod panels;

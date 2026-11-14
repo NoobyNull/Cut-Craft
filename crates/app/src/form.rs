@@ -389,34 +389,38 @@ fn plain(
             continue;
         }
         let enabled = section.enabled.as_ref().is_none_or(|w| w.shown(top));
-        changed |= ui
-            .add_enabled_ui(enabled, |ui| {
-                ui.group(|ui| {
-                    ui.set_width(ui.available_width());
-                    hover(ui.strong(&section.label), section.help.as_ref());
-                    let value = &mut params[&section.key];
-                    let picture = section
-                        .icon
-                        .as_ref()
-                        .and_then(|template| (look.picture)(&icon_path(template, value)));
-                    ui.horizontal(|ui| {
-                        if let Some(picture) = picture {
-                            ui.add(picture);
+        let shown = ui.add_enabled_ui(enabled, |ui| {
+            ui.group(|ui| {
+                ui.set_width(ui.available_width());
+                hover(ui.strong(&section.label), section.help.as_ref());
+                let value = &mut params[&section.key];
+                let picture = section
+                    .icon
+                    .as_ref()
+                    .and_then(|template| (look.picture)(&icon_path(template, value)));
+                ui.horizontal(|ui| {
+                    if let Some(picture) = picture {
+                        ui.add(picture);
+                    }
+                    ui.vertical(|ui| match &section.kind {
+                        Kind::Group(inner) => {
+                            let inner: Vec<&Field> = inner.iter().collect();
+                            show_within(ui, &inner, value, look, top)
                         }
-                        ui.vertical(|ui| match &section.kind {
-                            Kind::Group(inner) => {
-                                let inner: Vec<&Field> = inner.iter().collect();
-                                show_within(ui, &inner, value, look, top)
-                            }
-                            kind => edit(ui, kind, value, &Value::Null, look),
-                        })
-                        .inner
+                        kind => edit(ui, kind, value, &Value::Null, look),
                     })
                     .inner
                 })
                 .inner
             })
-            .inner;
+            .inner
+        });
+        crate::marks::note(
+            ui.ctx(),
+            &format!("field:{}", section.key),
+            shown.response.rect,
+        );
+        changed |= shown.inner;
     }
     changed
 }

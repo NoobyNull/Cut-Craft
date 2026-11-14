@@ -8,8 +8,8 @@
 //! into the pictures, so search finds them.
 //! What to ring is found by name ([`crate::marks`]), so the rings land right in any layout.
 
+use super::help_tours::TOURS;
 use super::{CutCraftApp, View};
-use crate::pages::Page;
 use cut_craft_core::geometry::Point;
 use eframe::egui;
 use std::fmt::Write as _;
@@ -41,6 +41,8 @@ pub enum Mark {
     At(&'static str),
     /// The shape drawn through this point of the job (mm from its corner).
     Shape(f64, f64),
+    /// Every shape in the job.
+    Everything,
 }
 
 /// One step: its words, how the app is set up for it, and what to ring.
@@ -54,142 +56,6 @@ pub struct Step {
 pub struct Tour {
     pub tool: &'static str,
     pub steps: &'static [Step],
-}
-
-/// Every tool's tour.
-pub const TOURS: &[Tour] = &[
-    Tour {
-        tool: "draw_circle",
-        steps: &[
-            Step {
-                caption: "On the Design page, press **Draw Circle**.",
-                setup: |app, ctx| {
-                    fresh_job(app, ctx);
-                    app.pages.set_pinned(Page::Design, true);
-                },
-                mark: Mark::At("tool:draw_circle"),
-            },
-            Step {
-                caption: "Click on the sheet where the middle of the circle goes, move out, and \
-                          click again when it is the size you want.",
-                setup: |app, ctx| {
-                    app.invoke(ctx, "draw_circle");
-                    draw(app, "draw_circle", circle());
-                },
-                mark: Mark::Shape(CIRCLE_X - CIRCLE_R, CIRCLE_Y),
-            },
-            Step {
-                caption: "To make it an exact size, type the **Radius** (or the centre's X and Y) \
-                          in the form. The circle on the sheet follows what you type.",
-                setup: |_, _| {},
-                mark: Mark::At("field:radius"),
-            },
-        ],
-    },
-    Tour {
-        tool: "pocket_toolpath",
-        steps: &[
-            Step {
-                caption: "Draw the shape to hollow out on the Design page. Here it is a circle.",
-                setup: |app, ctx| {
-                    fresh_job(app, ctx);
-                    draw(app, "draw_circle", circle());
-                    app.form = None;
-                    app.doc.selection.clear();
-                },
-                mark: Mark::Shape(CIRCLE_X - CIRCLE_R, CIRCLE_Y),
-            },
-            Step {
-                caption: "Click the shape to select it. A pocket clears everything inside the \
-                          selected shapes.",
-                setup: |app, _| select(app, CIRCLE_X - CIRCLE_R, CIRCLE_Y),
-                mark: Mark::Shape(CIRCLE_X - CIRCLE_R, CIRCLE_Y),
-            },
-            Step {
-                caption: "On the Toolpaths page, press **Pocket** (under Cut Out and Clear).",
-                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
-                mark: Mark::At("tool:pocket_toolpath"),
-            },
-            Step {
-                caption: "Set the **Cut Depth** (D): how far below the top of the material the \
-                          floor of the pocket ends up. Here it is 10 mm.",
-                setup: |app, ctx| {
-                    app.invoke(ctx, "pocket_toolpath");
-                    if let Some(open) = app.form.as_mut() {
-                        open.params["depth"] = 10.0.into();
-                    }
-                },
-                mark: Mark::At("field:depth"),
-            },
-            Step {
-                caption: "Check the bit. **Select…** picks another one from your Tool Database; \
-                          its feeds, speeds and depth per pass come with it.",
-                setup: |_, _| {},
-                mark: Mark::At("button:Select…"),
-            },
-            Step {
-                caption: "Press **Calculate** to make the toolpath.",
-                setup: |_, _| {},
-                mark: Mark::At("button:Calculate"),
-            },
-            Step {
-                caption: "The orange lines are the path the bit will follow, round and round \
-                          until the inside is cleared.",
-                setup: |app, _| {
-                    if let Some(open) = &app.form {
-                        let (id, params) = (open.id, open.params.clone());
-                        app.calculate_checked(id, &params);
-                    }
-                },
-                mark: Mark::Shape(CIRCLE_X - CIRCLE_R, CIRCLE_Y),
-            },
-            Step {
-                caption: "Press **Preview All Toolpaths** to watch it cut in 3D before you send \
-                          it to the machine.",
-                setup: |app, ctx| {
-                    app.form = None;
-                    app.doc.selection.clear();
-                    app.display.animate_preview = false;
-                    app.invoke(ctx, "preview_all_toolpaths");
-                    app.view = View::ThreeD;
-                    app.framing =
-                        crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, 1.6);
-                },
-                mark: Mark::None,
-            },
-        ],
-    },
-];
-
-const CIRCLE_X: f64 = 200.0;
-const CIRCLE_Y: f64 = 150.0;
-const CIRCLE_R: f64 = 90.0;
-
-fn circle() -> serde_json::Value {
-    serde_json::json!({ "center": { "x": CIRCLE_X, "y": CIRCLE_Y }, "radius": CIRCLE_R })
-}
-
-/// A new job, nothing drawn, the 2D view.
-fn fresh_job(app: &mut CutCraftApp, ctx: &egui::Context) {
-    app.form = None;
-    app.invoke(ctx, "new");
-    app.job_setup_ok();
-    app.view = View::TwoD;
-    app.camera = None;
-}
-
-/// Runs drawing tool `id` with `params`, as its form would.
-fn draw(app: &mut CutCraftApp, id: &str, params: serde_json::Value) {
-    let _ = app.apply(id, &params);
-    if let Some(open) = app.form.as_mut().filter(|f| f.id == id) {
-        open.params = params;
-    }
-}
-
-/// Selects the shape through `(x, y)` of the job.
-fn select(app: &mut CutCraftApp, x: f64, y: f64) {
-    let at = app.doc.job.area().min + Point::new(x, y);
-    app.doc.selection = app.doc.pick(at, 2.0).into_iter().collect();
 }
 
 /// The tours to take: all of them, or those of the tools named.
@@ -216,6 +82,9 @@ pub struct HelpShots {
 impl HelpShots {
     pub fn new(ctx: &egui::Context, dir: PathBuf, only: &[String]) -> Self {
         crate::marks::switch_on(ctx);
+        // dialogs (Help, the Tool Database, Save Toolpaths) drawn inside the main window, so
+        // its picture shows them
+        ctx.set_embed_viewports(true);
         Self {
             dir,
             tours: tours(only),
@@ -275,7 +144,7 @@ impl HelpShots {
             Ok(()) => println!("{}", path.display()),
             Err(e) => eprintln!("{}: {e}", path.display()),
         }
-        if place.is_none() && self.step > 0 {
+        if place.is_none() && !matches!(step.mark, Mark::None) {
             log::warn!("{} step {}: nothing to ring", tour.tool, self.step + 1);
         }
         self.frames.push(picture);
@@ -378,6 +247,19 @@ fn where_is(app: &CutCraftApp, ctx: &egui::Context, mark: Mark) -> Option<egui::
     match mark {
         Mark::None => None,
         Mark::At(name) => crate::marks::get(ctx, name),
+        Mark::Everything => {
+            let view = app.view_transform?;
+            let bounds = app
+                .doc
+                .vectors
+                .values()
+                .map(cut_craft_core::geometry::Path::bounds)
+                .reduce(cut_craft_core::geometry::Rect::union)?;
+            Some(egui::Rect::from_two_pos(
+                view.to_screen(bounds.min),
+                view.to_screen(bounds.max),
+            ))
+        }
         Mark::Shape(x, y) => {
             let at = app.doc.job.area().min + Point::new(x, y);
             let id = app.doc.pick(at, 2.0)?;
@@ -402,7 +284,9 @@ fn ring(ctx: &egui::Context, rect: egui::Rect, number: usize) {
         egui::Stroke::new(4.0, RING),
         egui::StrokeKind::Outside,
     );
-    let badge = ring.left_top() + egui::vec2(-4.0, -4.0);
+    // the number at the ring's corner, kept inside the window
+    let screen = ctx.content_rect().shrink(18.0);
+    let badge = (ring.left_top() + egui::vec2(-4.0, -4.0)).clamp(screen.min, screen.max);
     painter.circle_filled(badge, 15.0, RING);
     painter.circle_stroke(badge, 15.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
     painter.text(

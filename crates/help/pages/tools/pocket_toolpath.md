@@ -39,6 +39,4 @@ see-also: profile_toolpath, vcarve_engrave_toolpath, stepover
 
    ![Step 8](pictures/pocket_toolpath/step-8.png)
 
-
-
 The bit clears the inside in rows that overlap a little. How far over each row moves is the [stepover](help:stepover), set with the bit in the Tool Database.
