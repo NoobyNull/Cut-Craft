@@ -1970,7 +1970,7 @@ fn tool_picker(
     }
     ui.horizontal(|ui| {
         let select = ui.button("Select…");
-        crate::marks::note(ui.ctx(), "button:Select…", select.rect);
+        crate::marks::note(ui, "button:Select…", select.rect);
         let select = select
             .on_hover_hint(
                 "Pick the bit this toolpath cuts with in the Tool Database: it brings its own \

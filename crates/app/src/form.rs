@@ -384,7 +384,7 @@ fn plain(
         {
             if let Some(tool) = look.tool {
                 let place = ui.scope(|ui| tool(ui, &section.key, params)).response.rect;
-                crate::marks::note(ui.ctx(), &format!("field:{}", section.key), place);
+                crate::marks::note(ui, &format!("field:{}", section.key), place);
             }
             continue;
         }
@@ -415,11 +415,7 @@ fn plain(
             })
             .inner
         });
-        crate::marks::note(
-            ui.ctx(),
-            &format!("field:{}", section.key),
-            shown.response.rect,
-        );
+        crate::marks::note(ui, &format!("field:{}", section.key), shown.response.rect);
         changed |= shown.inner;
     }
     changed
@@ -483,7 +479,7 @@ fn grid(
                 });
                 changed |= edited.inner;
                 let place = label_rect.union(edited.response.rect);
-                crate::marks::note(ui.ctx(), &format!("field:{}", f.key), place);
+                crate::marks::note(ui, &format!("field:{}", f.key), place);
                 ui.end_row();
             }
         });

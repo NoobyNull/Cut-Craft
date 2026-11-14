@@ -455,7 +455,7 @@ impl CutCraftApp {
             .icon_button(explicit, id, &label, edge)
             .selected(self.status.current_tool == label);
         let response = ui.add_enabled(self.available(id), button);
-        crate::marks::note(ui.ctx(), &format!("tool:{id}"), response.rect);
+        crate::marks::note(ui, &format!("tool:{id}"), response.rect);
         self.with_guidance(response, id)
             .on_disabled_hover_text(format!("{label}: not implemented yet"))
     }
@@ -497,7 +497,7 @@ impl CutCraftApp {
         );
         super::guide::hover(&response, &tip);
         for m in &button.members {
-            crate::marks::note(ui.ctx(), &format!("tool:{m}"), response.rect);
+            crate::marks::note(ui, &format!("tool:{m}"), response.rect);
         }
         let response = response
             .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
@@ -4218,7 +4218,7 @@ impl CutCraftApp {
                 "Check the toolpaths and write the G-code file your machine runs, using its \
                  post processor",
             );
-        crate::marks::note(ui.ctx(), "tool:save_toolpaths", save.rect);
+        crate::marks::note(ui, "tool:save_toolpaths", save.rect);
         if !ready {
             ui.weak(SAVE_NEEDS);
         }

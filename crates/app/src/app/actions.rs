@@ -4361,7 +4361,7 @@ impl CutCraftApp {
         ui.horizontal(|ui| {
             if let Some((label, hint)) = committing {
                 let button = ui.button(label);
-                crate::marks::note(ui.ctx(), &format!("button:{label}"), button.rect);
+                crate::marks::note(ui, &format!("button:{label}"), button.rect);
                 apply = button.on_hover_hint(hint).clicked();
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

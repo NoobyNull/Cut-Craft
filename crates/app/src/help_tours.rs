@@ -457,6 +457,607 @@ pub const TOURS: &[Tour] = &[
             },
         ],
     },
+    Tour {
+        tool: "surfacing_toolpath",
+        steps: &[
+            Step {
+                caption: "Surfacing flattens the top of the board, or your spoilboard, with a \
+                          wide bit. Nothing needs to be selected to flatten the whole board. On \
+                          the Toolpaths page, press **Surfacing** (under Cut Out and Clear).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:surfacing_toolpath"),
+            },
+            Step {
+                caption: "Choose what to flatten: the **whole material**, the **spoilboard** on \
+                          your machine's bed, or the inside of the shapes you selected.",
+                setup: |app, ctx| app.invoke(ctx, "surfacing_toolpath"),
+                mark: Mark::At("field:area"),
+            },
+            Step {
+                caption: "Set the **Depth to Take Off** the top. A light skim of a \
+                          millimetre or so is usually enough to make it flat.",
+                setup: |app, _| set(app, "depth", 1.0.into()),
+                mark: Mark::At("field:depth"),
+            },
+            Step {
+                caption: "Pick the **Pattern**: rows along X, rows along Y, or a spiral from the \
+                          outside in. The bit always starts beside the board, never plunging \
+                          into it.",
+                setup: |_, _| {},
+                mark: Mark::At("field:pattern"),
+            },
+            Step {
+                caption: "Press **Calculate**. The rows run past every edge so the edges come \
+                          out clean.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths** to see the whole top skimmed flat.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "drag_knife_toolpath",
+        steps: &[
+            Step {
+                caption: "A drag knife cuts thin sheet (vinyl, card, thin plastic) with a \
+                          blade that trails behind like a castor. Select the shapes to cut.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    draw(app, "draw_star", star());
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Drag Knife** (under Cut Out and Clear).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:drag_knife_toolpath"),
+            },
+            Step {
+                caption: "Type the **Blade Offset** from the knife's maker: how far the tip \
+                          trails behind the pivot. The knife swings round sharp corners by \
+                          this much so the blade faces the new way.",
+                setup: |app, ctx| app.invoke(ctx, "drag_knife_toolpath"),
+                mark: Mark::At("field:blade_offset"),
+            },
+            Step {
+                caption: "Set the **Pressure**: how hard the blade presses while it cuts. Use \
+                          more for thicker or tougher sheet.",
+                setup: |_, _| {},
+                mark: Mark::At("field:pressure"),
+            },
+            Step {
+                caption: "**Overshoot** runs each cut on a little past a sharp corner, so the \
+                          cuts meet and the corner peels away cleanly.",
+                setup: |_, _| {},
+                mark: Mark::At("field:overshoot"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath. Switch the spindle off: the \
+                          knife does not spin.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "The path follows each line, with small loops at the sharp points \
+                          where the blade swivels round.",
+                setup: calculate,
+                mark: Mark::Everything,
+            },
+        ],
+    },
+    Tour {
+        tool: "drill_bank_toolpath",
+        steps: &[
+            Step {
+                caption: "A drill bank is a head with several drills side by side, found on \
+                          some panel machines. Draw a circle for each hole and select them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    holes(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Drill Bank** (under Holes).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:drill_bank_toolpath"),
+            },
+            Step {
+                caption: "Set the **Depth** of the holes. The hole sizes come from the drills \
+                          themselves.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "drill_bank_toolpath");
+                    set(app, "depth", 12.0.into());
+                },
+                mark: Mark::At("field:depth"),
+            },
+            Step {
+                caption: "The drills come from **Machine Configuration**. Describe your \
+                          machine's drill bank there first: each drill's place and size. Then \
+                          press **Calculate**: each plunge drops the drills that line up with \
+                          holes and keeps the others up.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
+        tool: "thread_milling_toolpath",
+        steps: &[
+            Step {
+                caption: "Thread milling cuts a screw thread inside a hole (a nut) or round a \
+                          post (a bolt). Draw a circle at each thread and select them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    holes(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Thread Milling** (under Holes).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:thread_milling_toolpath"),
+            },
+            Step {
+                caption: "Choose **Internal** for a thread inside a hole, or **External** for a \
+                          thread round a post.",
+                setup: |app, ctx| app.invoke(ctx, "thread_milling_toolpath"),
+                mark: Mark::At("field:thread_type"),
+            },
+            Step {
+                caption: "Set the thread's **Diameter** (its largest size) and **Pitch** (the \
+                          distance between ridges), or pick a standard thread.",
+                setup: |_, _| {},
+                mark: Mark::At("field:diameter"),
+            },
+            Step {
+                caption: "Clear the hole first with a Pocket toolpath. Then press \
+                          **Calculate**: the thread mill spirals round each centre.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
+        tool: "keyhole_toolpath",
+        steps: &[
+            Step {
+                caption: "Keyhole slots let a sign hang flat on screws. On the back of the \
+                          sign, draw a small circle where each slot starts and select them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    for x in [120.0, 280.0] {
+                        let hole = serde_json::json!({
+                            "center": { "x": x, "y": 150.0 }, "radius": 5.0
+                        });
+                        draw(app, "draw_circle", hole);
+                    }
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Keyhole** (under Holes).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:keyhole_toolpath"),
+            },
+            Step {
+                caption: "Choose which way the slot runs from the hole (**Direction**). For a \
+                          sign hung on the wall, the slot runs up, so the screw head slides to \
+                          its top.",
+                setup: |app, ctx| app.invoke(ctx, "keyhole_toolpath"),
+                mark: Mark::At("field:direction"),
+            },
+            Step {
+                caption: "Set the **Slot Length** and the **Slot Depth**: deep enough that the \
+                          cutter's wide part is below the surface.",
+                setup: |_, _| {},
+                mark: Mark::At("field:slot_length"),
+            },
+            Step {
+                caption: "Press **Calculate**. The keyhole cutter plunges at each circle and \
+                          runs along the slot.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "The new lines show each slot running from its entry hole.",
+                setup: calculate,
+                mark: Mark::Shape(115.0, 150.0),
+            },
+        ],
+    },
+    Tour {
+        tool: "quick_engrave_toolpath",
+        steps: &[
+            Step {
+                caption: "Quick Engrave marks shapes or lettering at a shallow depth. Select \
+                          what to engrave.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    draw(app, "draw_star", star());
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Quick Engrave** (under Carve and \
+                          Engrave).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:quick_engrave_toolpath"),
+            },
+            Step {
+                caption: "Choose **Outline** to run along the lines, or **Fill** to mark the \
+                          whole inside with rings or hatching.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "quick_engrave_toolpath");
+                    set(app, "strategy", "fill".into());
+                },
+                mark: Mark::At("field:strategy"),
+            },
+            Step {
+                caption: "Set the **Depth**: a shallow mark, often half a millimetre.",
+                setup: |_, _| {},
+                mark: Mark::At("field:depth"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "With Fill, the lines step in from the outline until the star is \
+                          covered.",
+                setup: calculate,
+                mark: Mark::Everything,
+            },
+        ],
+    },
+    Tour {
+        tool: "fluting_toolpath",
+        steps: &[
+            Step {
+                caption: "Flutes are grooves that taper in and out, as on a column. Draw a line \
+                          for each flute and select them. Each flute starts at its line's \
+                          first point.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    lines(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Fluting** (under Carve and Engrave).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:fluting_toolpath"),
+            },
+            Step {
+                caption: "Set the **Flute Depth**: how deep the groove is at its deepest.",
+                setup: |app, ctx| app.invoke(ctx, "fluting_toolpath"),
+                mark: Mark::At("field:flute_depth"),
+            },
+            Step {
+                caption: "Choose the **Flute Type**: taper down over the whole line, taper at \
+                          the start only, or taper in at the start and out at the end.",
+                setup: |app, _| set(app, "flute_type", "ramp_at_start_and_end".into()),
+                mark: Mark::At("field:flute_type"),
+            },
+            Step {
+                caption: "Press **Calculate**. A ball nose bit gives rounded flutes, a V-bit \
+                          sharp ones.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths**: each flute is shallow at its ends and \
+                          deepest in the middle.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "prism_toolpath",
+        steps: &[
+            Step {
+                caption: "Prism carving leaves each shape standing as a raised, ridged bevel, \
+                          like a cut gem. Select the shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    draw(app, "draw_star", star());
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Prism Carving** (under Carve and \
+                          Engrave).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:prism_toolpath"),
+            },
+            Step {
+                caption: "Set the **Prism Depth**: how deep the sloping sides go. Too shallow \
+                          and the top is left flat; deep enough and they meet in a sharp \
+                          ridge. **Depth for Full Prism** works that depth out for you.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "prism_toolpath");
+                    set(app, "prism_depth", 6.0.into());
+                },
+                mark: Mark::At("field:prism_depth"),
+            },
+            Step {
+                caption: "Check the bit is a **V-bit**: its sloping sides make the bevel.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Select…"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths**: a sloping bevel runs round the star. A \
+                          wider V-bit, or a smaller shape, brings the slopes together in a ridge.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "texture_toolpath",
+        steps: &[
+            Step {
+                caption: "Texture covers an area with shallow scallops of random depth and \
+                          length, like a hand-tooled finish. Select the area's outline.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    rect(app);
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Texture** (under Carve and Engrave).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:texture_toolpath"),
+            },
+            Step {
+                caption: "Set the **Max Cut Depth** and **Max Cut Length**: the deepest and \
+                          longest any scallop can be. Each is shorter and shallower at random.",
+                setup: |app, ctx| app.invoke(ctx, "texture_toolpath"),
+                mark: Mark::At("field:max_cut_depth"),
+            },
+            Step {
+                caption: "Set the **Stepover** (the gap between rows) and the rows' **Angle**.",
+                setup: |_, _| {},
+                mark: Mark::At("field:stepover"),
+            },
+            Step {
+                caption: "Press **Calculate**. Change the **Seed** for another random pattern.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths** to see the tooled surface.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "chamfer_toolpath",
+        steps: &[
+            Step {
+                caption: "A chamfer is a sloped edge. Select the shapes whose edges you want \
+                          sloped.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    rect(app);
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Chamfer** (under Edges and Inlays).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:chamfer_toolpath"),
+            },
+            Step {
+                caption: "Set the **Width** across the slope. With a V-bit, its angle sets how \
+                          steep the slope is.",
+                setup: |app, ctx| app.invoke(ctx, "chamfer_toolpath"),
+                mark: Mark::At("field:width"),
+            },
+            Step {
+                caption: "Choose the **Side**: **Outside** slopes the edge of a part you cut \
+                          out, **Inside** slopes the rim of a hole or recess.",
+                setup: |_, _| {},
+                mark: Mark::At("field:side"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths** to see the sloped edge.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "moulding_toolpath",
+        steps: &[
+            Step {
+                caption: "A moulding sweeps a shape (the profile) along a path (the rail), like \
+                          a picture frame's edge. Draw the rail, then the profile as an open \
+                          line: across is its width, up is its height.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    moulding_shapes(app);
+                    app.doc.selection.clear();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Select the rail first, then Shift-click the profile last: the open \
+                          line picked last is the profile.",
+                setup: |app, _| {
+                    let ids: Vec<_> = app.doc.vectors.keys().copied().collect();
+                    app.doc.selection = ids.into_iter().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Moulding** (under Edges and Inlays).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:moulding_toolpath"),
+            },
+            Step {
+                caption: "Check the bit, usually a ball nose. Its stepover sets how close the \
+                          passes run.",
+                setup: |app, ctx| app.invoke(ctx, "moulding_toolpath"),
+                mark: Mark::At("button:Select…"),
+            },
+            Step {
+                caption: "Press **Calculate**. The passes follow the rail, each as low as the \
+                          profile allows.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths** to see the moulding.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "vcarve_inlay_toolpath",
+        steps: &[
+            Step {
+                caption: "A V-carve inlay is two carvings that fit together: a pocket in one \
+                          board and a plug from another, turned over and glued in. Select the \
+                          shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    draw(app, "draw_star", star());
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **V-Carve Inlay** (under Edges and \
+                          Inlays).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:vcarve_inlay_toolpath"),
+            },
+            Step {
+                caption: "Set the **Pocket Depth**: the deepest the pocket goes.",
+                setup: |app, ctx| app.invoke(ctx, "vcarve_inlay_toolpath"),
+                mark: Mark::At("field:pocket_depth"),
+            },
+            Step {
+                caption: "Set the **Glue Gap**: the space left under the plug for glue once it \
+                          is pressed home.",
+                setup: |_, _| {},
+                mark: Mark::At("field:glue_gap"),
+            },
+            Step {
+                caption: "Press **Calculate**. You get two toolpaths: the pocket, and the plug \
+                          carved round a mirrored copy.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "Press **Preview All Toolpaths** to check both halves.",
+                setup: |app, ctx| {
+                    calculate(app, ctx);
+                    preview_3d(app, ctx);
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "inlay_toolpath",
+        steps: &[
+            Step {
+                caption: "An inlay is a part and the hole it fits, both cut with one bit. \
+                          Select the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    draw(app, "draw_star", star());
+                    app.form = None;
+                    app.doc.selection = app.doc.vectors.keys().copied().collect();
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Inlay** (under Edges and Inlays).",
+                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                mark: Mark::At("tool:inlay_toolpath"),
+            },
+            Step {
+                caption: "Choose which half this toolpath cuts: **Male** is the insert \
+                          (straight, or stepped with a shelf round its base), **Female** is the \
+                          pocket or hole it fits in. Make one toolpath for each half.",
+                setup: |app, ctx| app.invoke(ctx, "inlay_toolpath"),
+                mark: Mark::At("field:inlay_type"),
+            },
+            Step {
+                caption: "Set the **Allowance**: the insert is cut this much smaller (or the \
+                          pocket this much bigger) so they fit.",
+                setup: |_, _| {},
+                mark: Mark::At("field:allowance"),
+            },
+            Step {
+                caption: "Press **Calculate**. The star's inside corners are rounded to the \
+                          bit's radius, so the two halves match.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+            Step {
+                caption: "The toolpath runs round the shape with the corners rounded.",
+                setup: calculate,
+                mark: Mark::Everything,
+            },
+        ],
+    },
 ];
 
 const CIRCLE_X: f64 = 200.0;
@@ -531,7 +1132,7 @@ fn preview_3d(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.display.animate_preview = false;
     app.invoke(ctx, "preview_all_toolpaths");
     app.view = View::ThreeD;
-    app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, 1.6);
+    app.framing = crate::view3d::Framing::default().zoomed_about(egui::vec2(-70.0, -10.0), 2.2);
 }
 
 /// A new job, nothing drawn, the 2D view.
@@ -559,4 +1160,57 @@ fn draw(app: &mut CutCraftApp, id: &str, params: serde_json::Value) {
 fn select(app: &mut CutCraftApp, x: f64, y: f64) {
     let at = app.doc.job.area().min + Point::new(x, y);
     app.doc.selection = app.doc.pick(at, 2.0).into_iter().collect();
+}
+
+/// Sets setting `key` of the open form to `value`.
+fn set(app: &mut CutCraftApp, key: &str, value: serde_json::Value) {
+    if let Some(open) = app.form.as_mut() {
+        open.params[key] = value;
+    }
+}
+
+/// Four small circles in a row, all selected: holes to drill or thread.
+fn holes(app: &mut CutCraftApp) {
+    for x in [100.0, 180.0, 260.0, 340.0] {
+        let hole = serde_json::json!({ "center": { "x": x, "y": 150.0 }, "radius": 8.0 });
+        draw(app, "draw_circle", hole);
+    }
+    app.form = None;
+    app.doc.selection = app.doc.vectors.keys().copied().collect();
+}
+
+/// Three upright open lines, all selected: flutes.
+fn lines(app: &mut CutCraftApp) {
+    for x in [140.0, 200.0, 260.0] {
+        let line = serde_json::json!({
+            "points": [{ "x": x, "y": 50.0 }, { "x": x, "y": 250.0 }],
+            "closed": false,
+            "curves": []
+        });
+        draw(app, "draw_polyline", with(app, "draw_polyline", &line));
+    }
+    app.form = None;
+    app.doc.selection = app.doc.vectors.keys().copied().collect();
+}
+
+/// A rectangle (the rail) and, to its right, an open quarter-round (the profile).
+fn moulding_shapes(app: &mut CutCraftApp) {
+    rect(app);
+    // 40 mm across, 12 mm high: a quarter round
+    let (x, y, across, high) = (RECT_X + RECT_W + 30.0, RECT_Y, 40.0, 12.0);
+    let points: Vec<_> = (0..=8)
+        .map(|i| {
+            let a = f64::from(i) / 8.0 * std::f64::consts::FRAC_PI_2;
+            serde_json::json!({ "x": x + across * (1.0 - a.cos()), "y": y + high * a.sin() })
+        })
+        .collect();
+    let profile = serde_json::json!({ "points": points, "closed": false, "curves": [] });
+    draw(app, "draw_polyline", with(app, "draw_polyline", &profile));
+    app.form = None;
+}
+
+/// The [`rectangle`], drawn.
+fn rect(app: &mut CutCraftApp) {
+    let rect = with(app, "draw_rectangle", &rectangle());
+    draw(app, "draw_rectangle", rect);
 }

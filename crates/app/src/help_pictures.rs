@@ -113,6 +113,9 @@ impl HelpShots {
         };
         let Some(since) = self.since else {
             (step.setup)(app, ctx);
+            if let Mark::At(name) = step.mark {
+                crate::marks::want(ctx, name);
+            }
             self.since = Some(now);
             return;
         };

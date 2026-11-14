@@ -25,10 +25,34 @@ pub fn switch_on(ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(on_id(), true));
 }
 
-/// Notes that `name` was drawn at `rect` this frame.
-pub fn note(ctx: &egui::Context, name: &str, rect: egui::Rect) {
-    if on(ctx) {
+fn wanted_id() -> egui::Id {
+    egui::Id::unique("help-mark-wanted")
+}
+
+/// Asks for `name` to be scrolled into view wherever it is drawn (a setting low on a long
+/// form), until another is wanted.
+pub fn want(ctx: &egui::Context, name: &str) {
+    ctx.data_mut(|d| d.insert_temp(wanted_id(), name.to_owned()));
+}
+
+fn wanted(ctx: &egui::Context, name: &str) -> bool {
+    ctx.data(|d| d.get_temp::<String>(wanted_id()))
+        .is_some_and(|w| w == name)
+}
+
+/// Notes that `name` was drawn at `rect` this frame, in `ui`; scrolls it into view when it is
+/// [`want`]ed.
+pub fn note(ui: &egui::Ui, name: &str, rect: egui::Rect) {
+    if keep(ui.ctx(), name, rect) && !ui.clip_rect().contains_rect(rect) {
+        ui.scroll_to_rect(rect, Some(egui::Align::Center));
+    }
+}
+
+/// Keeps where `name` was drawn, while noting is on; whether it is the one wanted.
+fn keep(ctx: &egui::Context, name: &str, rect: egui::Rect) -> bool {
+    on(ctx) && {
         ctx.data_mut(|d| d.insert_temp(id(name), rect));
+        wanted(ctx, name)
     }
 }
 
@@ -45,11 +69,16 @@ mod tests {
     fn places_are_noted_only_once_switched_on() {
         let ctx = egui::Context::default();
         let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(30.0, 40.0));
-        note(&ctx, "tool:pocket_toolpath", rect);
+        assert!(!keep(&ctx, "tool:pocket_toolpath", rect));
         assert_eq!(get(&ctx, "tool:pocket_toolpath"), None, "off: nothing kept");
         switch_on(&ctx);
-        note(&ctx, "tool:pocket_toolpath", rect);
+        assert!(!keep(&ctx, "tool:pocket_toolpath", rect), "not wanted");
         assert_eq!(get(&ctx, "tool:pocket_toolpath"), Some(rect));
+        want(&ctx, "tool:pocket_toolpath");
+        assert!(
+            keep(&ctx, "tool:pocket_toolpath", rect),
+            "wanted: scrolled to"
+        );
         assert_eq!(get(&ctx, "tool:profile_toolpath"), None);
     }
 }
