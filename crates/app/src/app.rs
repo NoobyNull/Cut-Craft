@@ -1225,6 +1225,11 @@ struct CutCraftApp {
     job_sheet_window: bool,
     /// Toolpaths ▸ Print Part Labels is open.
     part_labels_window: bool,
+    /// Toolpaths ▸ Clearing Settings is open (or Clearing Settings… in a form's Cutting
+    /// window): the job's own, kept in `doc.job.clearing`.
+    clearing_window: bool,
+    /// The job's Clearing Settings before a slider in them began to be dragged.
+    clearing_before: Option<cut_craft_core::entry::ClearingSettings>,
     /// Export as STL's form is open.
     stl_window: bool,
     /// The triangle count and largest error of its last Triangulate.

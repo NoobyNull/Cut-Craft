@@ -8868,21 +8868,83 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     for (choice, key, value) in [
         ("Both directions", "ways", "both"),
         ("From the outline in", "rings", "outline_in"),
-        ("Trochoidal", "motion", "trochoidal"),
     ] {
         h.click(h.text_at(choice).expect(choice), Modifiers::NONE);
         h.frame(vec![]);
         assert_eq!(params(&h)[key], value, "{choice}");
     }
-    // trochoidal: the loops' settings appear, their turn set apart
-    h.frame(vec![]);
-    h.click(h.text_at("Clockwise").expect("the loops"), Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(params(&h)["loops"]["turn"], "clockwise");
-    assert!(
-        h.text_at("In loops turning clockwise: each loop cuts conventional")
-            .is_some()
+    // a pocket clears with a light bite by Adaptive, not in loops
+    assert!(h.text_at("Trochoidal").is_none());
+    h.app.form.as_mut().unwrap().params["strategy"] = "adaptive".into();
+    // adaptive: the job's Clearing Settings, a button away, set its bite and the loops
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    h.click(
+        h.text_at("Clearing Settings…").expect("the button"),
+        Modifiers::NONE,
     );
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(h.app.clearing_window);
+    h.click(h.text_at("Clockwise").expect("the loops"), Modifiers::NONE);
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert_eq!(
+        h.app.doc.job.clearing.loops.turn,
+        cut_craft_core::entry::Turn::Clockwise
+    );
+}
+
+#[test]
+fn clearing_settings_are_the_jobs_an_edit_that_undoes_and_marks_toolpaths_out_of_date() {
+    use cut_craft_core::entry::WayBack;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "clearing_settings");
+    let frames = |h: &mut Harness| {
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+    };
+    frames(&mut h);
+    assert!(h.text_at("Light Step").is_some() && h.text_at("On the Way Back").is_some());
+    h.click(
+        h.text_at("Alternate").expect("the way back"),
+        Modifiers::NONE,
+    );
+    frames(&mut h);
+    assert_eq!(h.app.doc.job.clearing.way_back, WayBack::Alternate);
+    // kept as the default for new jobs, then undone in this one
+    h.click(
+        h.text_at("Use as My Default").expect("the button"),
+        Modifiers::NONE,
+    );
+    frames(&mut h);
+    let default = |h: &Harness| h.app.options.default_job.map(|j| j.clearing.way_back);
+    assert_eq!(default(&h), Some(WayBack::Alternate));
+    h.app.invoke(&h.ctx, "undo");
+    frames(&mut h);
+    assert_eq!(h.app.doc.job.clearing.way_back, WayBack::KeepClimb);
+    // an adaptive pocket, then the job back to the default: the pocket is out of date
+    let mut params = h
+        .app
+        .registry
+        .get("pocket_toolpath")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    params["strategy"] = "adaptive".into();
+    h.app.apply("pocket_toolpath", &params).unwrap();
+    frames(&mut h);
+    h.click(
+        h.text_at("Reset to My Defaults").expect("the button"),
+        Modifiers::NONE,
+    );
+    frames(&mut h);
+    assert_eq!(h.app.doc.job.clearing.way_back, WayBack::Alternate);
+    assert!(h.app.doc.toolpaths.values().all(|t| t.stale), "out of date");
 }
 
 /// The middles of the corner arrows the last frame drew on flyout buttons.

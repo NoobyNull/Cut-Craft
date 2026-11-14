@@ -1143,6 +1143,17 @@ impl Toolpath {
             || self.params["project_onto_model"].as_bool() == Some(true)
     }
 
+    /// Whether the job's Clearing Settings shape it: adaptive and raster pockets, and
+    /// anything cut in trochoidal loops.
+    pub fn reads_clearing(&self) -> bool {
+        let pocket = self.strategy == "pocket_toolpath"
+            && matches!(
+                self.params["strategy"].as_str(),
+                Some("adaptive" | "raster")
+            );
+        pocket || self.params["motion"].as_str() == Some("trochoidal")
+    }
+
     /// Estimated machining time in minutes: each move's length at its rate (rapids at
     /// `rapid_rate`, mm/min), from the first move on.
     // ponytail: no acceleration; Toolpath Summary's scale factor stands in for it

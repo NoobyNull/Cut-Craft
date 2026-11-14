@@ -354,7 +354,9 @@ impl Command for ProfileToolpath {
                     Motion::Straight => {
                         directed_moves(p.ways, &cut.points, cut.closed, &depths, 0.0, safe, &entry)
                     }
-                    Motion::Trochoidal => trochoidal(cut, &depths, &entry, safe, p),
+                    Motion::Trochoidal => {
+                        trochoidal(cut, &depths, &entry, safe, p, &doc.job.clearing)
+                    }
                 }
             })
             .collect();
@@ -398,14 +400,19 @@ fn entry_for(p: &Params, depth: f64, tab: TabSettings) -> Entry {
 /// (on the line itself for On), so each loop just reaches the line, then the line straight.
 /// The loops cut every pass down to the tabs' tops and the line the rest, so the tabs are
 /// left; with no tabs the loops go all the way and the line is cut once at the bottom.
+/// The loops' size and turn come from the job's Clearing Settings; with Both directions,
+/// a pass back runs the other way along with its loops still turning the same way when they
+/// keep climb.
 fn trochoidal(
     cut: &Cut,
     depths: &[f64],
     entry: &Entry,
     safe: f64,
     p: &Params,
+    clearing: &cut_craft_core::entry::ClearingSettings,
 ) -> Vec<cut_craft_core::toolpath::Move> {
-    let (radius, advance) = p.loops.sized(p.tool.diameter);
+    let (radius, advance) = clearing.loops.sized(p.tool.diameter);
+    let anticlockwise = clearing.loops.anticlockwise();
     let rings: Vec<(Vec<Point>, bool)> = if cut.closed && p.side != Side::On {
         let out = if cut.waste_inside { -radius } else { radius };
         let ring = Path::polyline(&cut.points, true);
@@ -432,8 +439,27 @@ fn trochoidal(
     let mut moves: Vec<_> = rings
         .iter()
         .flat_map(|(ring, closed)| {
-            let loops = trochoid(ring, *closed, radius, advance, p.loops.anticlockwise());
-            directed_moves(p.ways, &loops, false, &loop_depths, 0.0, safe, &looping)
+            let loops = trochoid(ring, *closed, radius, advance, anticlockwise);
+            if p.ways == Ways::One || !clearing.keeps_climb() || loop_depths.len() < 2 {
+                return directed_moves(p.ways, &loops, false, &loop_depths, 0.0, safe, &looping);
+            }
+            let reversed: Vec<Point> = ring.iter().rev().copied().collect();
+            let back = trochoid(&reversed, *closed, radius, advance, anticlockwise);
+            let mut above = 0.0;
+            let mut moves = vec![];
+            for (pass, &z) in loop_depths.iter().enumerate() {
+                let way = if pass % 2 == 0 { &loops } else { &back };
+                moves.extend(cut_craft_core::entry::path_moves(
+                    way,
+                    false,
+                    &[z],
+                    above,
+                    safe,
+                    &looping,
+                ));
+                above = z;
+            }
+            moves
         })
         .collect();
     let top = loop_depths.last().copied().unwrap_or(0.0);
@@ -890,6 +916,40 @@ mod tests {
             .filter(|m| m.kind == MoveKind::Cut && (m.to.z - z).abs() < 1e-9)
             .map(|m| polyline_distance(&edge, m.to.truncate()))
             .fold((f64::MAX, 0.0), |(lo, hi), d| (lo.min(d), hi.max(d)))
+    }
+
+    #[test]
+    fn loops_keep_turning_anticlockwise_on_a_pass_back_unless_the_job_alternates() {
+        use cut_craft_core::geometry::Point;
+        // how the path bends, move to move, at `z`: positive where it turns anticlockwise
+        let bending = |tp: &Toolpath, z: f64| -> f64 {
+            let at: Vec<Point> = tp
+                .moves
+                .iter()
+                .filter(|m| m.kind == MoveKind::Cut && (m.to.z - z).abs() < 1e-9)
+                .map(|m| m.to.truncate())
+                .collect();
+            at.windows(3)
+                .map(|w| (w[1] - w[0]).perp_dot(w[2] - w[1]).signum())
+                .sum()
+        };
+        let p = Params {
+            depth: 9.0,
+            motion: Motion::Trochoidal,
+            ways: Ways::Both,
+            ..plain()
+        };
+        let made = |way_back| {
+            let mut doc = cut_craft_core::testing::document_with(vec![square(0.0, 0.0, 40.0)]);
+            doc.job.clearing.way_back = way_back;
+            let change = ProfileToolpath::run(&doc, &p).unwrap();
+            doc.apply(&change).unwrap();
+            doc.toolpaths.into_values().next().unwrap()
+        };
+        let kept = made(cut_craft_core::entry::WayBack::KeepClimb);
+        assert!(bending(&kept, -3.0) > 0.0 && bending(&kept, -6.0) > 0.0);
+        let alternate = made(cut_craft_core::entry::WayBack::Alternate);
+        assert!(bending(&alternate, -3.0) > 0.0 && bending(&alternate, -6.0) < 0.0);
     }
 
     #[test]

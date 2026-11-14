@@ -282,6 +282,7 @@ impl Command for JobSetup {
             resolution: p.resolution,
             colour: p.colour,
             model_position: doc.job.model_position,
+            clearing: doc.job.clearing,
             ..shape
         };
         let mut c = Change::builder(doc);

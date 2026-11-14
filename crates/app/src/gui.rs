@@ -332,6 +332,12 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "Print a label for each named part, to stick on it once it is cut out",
     ),
     (
+        "clearing_settings",
+        "Clearing Settings",
+        "How adaptive and trochoidal clearing cut in this job: the light step, the loops, \
+         and whether rows and loops keep climb on the way back",
+    ),
+    (
         "cut_list",
         "Save Cut List",
         "Save a list of the job's parts and their sizes, as a spreadsheet (CSV)",
@@ -2252,6 +2258,7 @@ impl MenuSystem {
                         a("Print Part Labels...", "part_labels"),
                         a("Save Cut List...", "cut_list"),
                         sep(),
+                        a("Clearing Settings...", "clearing_settings"),
                         i("Materials..."),
                         sep(),
                         i("Tool Database..."),

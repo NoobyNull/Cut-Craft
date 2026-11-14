@@ -1,7 +1,7 @@
 //! Pocket Toolpath: clears the inside of the selected closed vectors at each depth, with
-//! rings that step in from the outline (worked from the middle outwards) or with raster
-//! lines and a profile pass round the edge; or, trochoidal, with the tool circling in small
-//! loops as it moves on, so it never cuts with more than a sliver of its edge.
+//! rings that step in from the outline (worked from the middle outwards), with raster
+//! lines and a profile pass round the edge, or adaptively, the tool keeping a thin, steady
+//! bite everywhere so it never cuts with more than a sliver of its edge.
 
 use cut_craft_core::adaptive::{self, Clearing, Piece};
 use cut_craft_core::document::Document;
@@ -273,21 +273,26 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         // the same rings from the outline in: turning the same way, they cut conventional
         // where the rings from the middle out cut climb (or the other way about)
         let outline_in: Vec<Path> = rings.iter().rev().cloned().collect();
+        let clearing = doc.job.clearing;
+        let keep_climb = clearing.keeps_climb();
         let mut loops = vec![];
+        let mut loops_back = vec![];
         if p.motion == Motion::Trochoidal {
-            loops = trochoidal(&edge, p);
+            loops = trochoidal(&edge, p, &clearing.loops, false);
+            // run back the other way, still turning the same way: still climb
+            loops_back = trochoidal(&edge, p, &clearing.loops, true);
             if loops.is_empty() {
                 loops.clone_from(&rings); // too narrow for loops: rings
             }
         }
-        let plan = adaptive_plan(p, &edge);
+        let plan = adaptive_plan(p, &edge, &clearing);
         let safe = doc.job.clearance;
         let entry = entry_for(p, &edge);
         // each path at depth `z`, entering from the level above; `back` runs it the other
         // way (Both directions' every other pass)
         // `lines`: open paths (raster lines) link on at depth too, each from where the last
         // ended, along the wall
-        let cut = |paths: &[Path], z: f64, above: f64, back: bool, lines: bool| -> Vec<Move> {
+        let cut_any = |paths: &[Path], z: f64, above: f64, back: bool, lines: bool| -> Vec<Move> {
             let way = |r: &Path| {
                 let mut points = if r.closed {
                     oriented(p.direction, r)
@@ -319,30 +324,29 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         let mut above = 0.0;
         for (pass, z) in p.tool.pass_depths(p.depth).into_iter().enumerate() {
             let back = p.ways == Ways::Both && pass % 2 == 1;
-            let cut_way = |paths: &[Path], back: bool| cut(paths, z, above, back, false);
-            let cut_lines = |paths: &[Path]| cut(paths, z, above, back, true);
+            let cut_way = |paths: &[Path], back: bool| cut_any(paths, z, above, back, false);
             let cut = |paths: &[Path]| cut_way(paths, back);
             match (p.motion, p.strategy) {
                 (_, Strategy::Adaptive) => {
                     moves.extend(adaptive_pass(&plan, &edge, p, (z, above), safe, &entry));
                 }
                 (Motion::Trochoidal, _) => {
-                    moves.extend(cut(&loops));
-                    moves.extend(cut(&edge));
+                    if back && keep_climb && !loops_back.is_empty() {
+                        moves.extend(cut_way(&loops_back, false));
+                        moves.extend(cut_way(&edge, true));
+                    } else {
+                        moves.extend(cut(&loops));
+                        moves.extend(cut(&edge));
+                    }
                 }
                 (Motion::Straight, Strategy::Offset) => {
                     let inward = p.rings.inward(pass);
                     moves.extend(cut_way(if inward { &outline_in } else { &rings }, back));
                 }
                 (Motion::Straight, Strategy::Raster) => {
-                    // the edge and the lines in one run, so each links on to the next
-                    let lines = raster(&edge, step, p.raster_angle);
-                    let all = match p.profile_pass {
-                        ProfilePass::First => [edge.as_slice(), &lines].concat(),
-                        ProfilePass::Last => [lines.as_slice(), &edge].concat(),
-                        ProfilePass::None => lines,
-                    };
-                    moves.extend(cut_lines(&all));
+                    // rows kept one way stay that way on a pass back
+                    let all = raster_run(&edge, step, p, keep_climb);
+                    moves.extend(cut_any(&all, z, above, back && !keep_climb, true));
                 }
             }
             above = z;
@@ -452,7 +456,11 @@ fn nearest_vertex(points: &[Point], at: Point) -> Option<(usize, f64)> {
 
 /// The adaptive clearing of the pocket whose tool centre keeps inside `edge`, the same at
 /// every depth; empty unless `p` clears adaptively.
-fn adaptive_plan(p: &Params, edge: &[Path]) -> Vec<Piece> {
+fn adaptive_plan(
+    p: &Params,
+    edge: &[Path],
+    clearing: &cut_craft_core::entry::ClearingSettings,
+) -> Vec<Piece> {
     if p.strategy != Strategy::Adaptive {
         return vec![];
     }
@@ -460,7 +468,7 @@ fn adaptive_plan(p: &Params, edge: &[Path]) -> Vec<Piece> {
         region: edge,
         cleared: &[],
         radius: p.tool.diameter / 2.0,
-        bite: adaptive_bite(&p.tool),
+        bite: adaptive_bite(&p.tool, clearing),
         climb: p.direction == Direction::Climb,
     })
 }
@@ -482,14 +490,11 @@ fn adaptive_pass(
     moves
 }
 
-/// How wide a bite adaptive clearing takes with `tool`: its clearing stepover, but no more
-/// than a quarter of its diameter, so it stays a light cut at full pass depth.
-fn adaptive_bite(tool: &Tool) -> f64 {
-    tool.stepover.min(ADAPTIVE_MOST_BITE) * tool.diameter
+/// How wide a bite adaptive clearing takes with `tool`: the job's light step (Clearing
+/// Settings), a share of the bit's diameter, so every bit takes the same gentle bite.
+fn adaptive_bite(tool: &Tool, clearing: &cut_craft_core::entry::ClearingSettings) -> f64 {
+    clearing.light_bite(tool.diameter)
 }
-
-/// The widest bite adaptive clearing takes, as a share of the bit's diameter.
-const ADAPTIVE_MOST_BITE: f64 = 0.25;
 
 /// The moves that clear `plan` at depth `z`, coming down from `above`: each area entered
 /// once (the way `entry` says, on the first stretch of cutting), then at depth throughout,
@@ -630,17 +635,21 @@ fn oriented(direction: Direction, ring: &Path) -> Vec<Point> {
 
 /// The trochoidal clearing of the region inside `edge` (where the tool's middle may go):
 /// looping bands from the outline in, each band's loops reaching from the one outside it to
-/// the one inside, then plain rings for a middle too small for a band.
-fn trochoidal(edge: &[Path], p: &Params) -> Vec<Path> {
-    let (radius, advance) = p.loops.sized(p.tool.diameter);
+/// the one inside, then plain rings for a middle too small for a band. `back`: each band runs
+/// the other way round, its loops still turning `loops`' way.
+fn trochoidal(edge: &[Path], p: &Params, loops: &Loops, back: bool) -> Vec<Path> {
+    let (radius, advance) = loops.sized(p.tool.diameter);
     let step = p.tool.stepover * p.tool.diameter;
     let mut out = vec![];
     let mut band = polygon::offset_regions(edge, -radius, Corners::Round);
     let mut last = vec![];
     while !band.is_empty() {
         for ring in &band {
-            let ring = oriented(p.direction, ring);
-            let points = trochoid(&ring, true, radius, advance, p.loops.anticlockwise());
+            let mut ring = oriented(p.direction, ring);
+            if back {
+                ring.reverse();
+            }
+            let points = trochoid(&ring, true, radius, advance, loops.anticlockwise());
             out.push(Path::polyline(&points, false));
         }
         last = band;
@@ -656,11 +665,45 @@ fn trochoidal(edge: &[Path], p: &Params) -> Vec<Path> {
     out
 }
 
+/// A raster pocket's rows and its pass round the edge, in the order they are cut, as one
+/// run so each links on to the next; rows kept climb (or `p`'s direction) with `keep_climb`.
+fn raster_run(edge: &[Path], step: f64, p: &Params, keep_climb: bool) -> Vec<Path> {
+    let climb = p.direction == Direction::Climb;
+    let lines = raster(edge, step, p.raster_angle, keep_climb.then_some(climb));
+    match p.profile_pass {
+        ProfilePass::First => [edge, &lines].concat(),
+        ProfilePass::Last => [lines.as_slice(), edge].concat(),
+        ProfilePass::None => lines,
+    }
+}
+
 /// Raster lines `step` apart at `angle` across the region inside `edge`, every other one
-/// back the other way.
-fn raster(edge: &[Path], step: f64, angle: f64) -> Vec<Path> {
-    hatch_lines(edge, step, angle)
-        .into_iter()
+/// back the other way; or, with `one_way` (climb or not), every row cutting that way, each
+/// followed by the way back through it, so the next row starts where it did.
+fn raster(edge: &[Path], step: f64, angle: f64, one_way: Option<bool>) -> Vec<Path> {
+    let rows = hatch_lines(edge, step, angle);
+    if let Some(climb) = one_way {
+        // a row's spans run along the angle and the rows step to its left, the material
+        // ahead of them there: climb (the material on the bit's right) runs back along it
+        let spans: Vec<Path> = rows
+            .into_iter()
+            .flatten()
+            .map(|(a, b)| {
+                let (from, to) = if climb { (b, a) } else { (a, b) };
+                Path::polyline(&[from, to], false)
+            })
+            .collect();
+        let last = spans.len().saturating_sub(1);
+        return spans
+            .into_iter()
+            .enumerate()
+            .flat_map(|(i, span)| {
+                let back = (i < last).then(|| span.reversed());
+                std::iter::once(span).chain(back)
+            })
+            .collect();
+    }
+    rows.into_iter()
         .enumerate()
         .flat_map(|(row, spans)| {
             let mut spans: Vec<Path> = spans
@@ -1074,15 +1117,133 @@ mod tests {
         assert_eq!(back.strategy, Strategy::Adaptive);
     }
 
+    /// The pocket `p` makes in a `size` square, with the job's Clearing Settings `clearing`.
+    fn pocket_with(
+        clearing: cut_craft_core::entry::ClearingSettings,
+        size: f64,
+        p: &Params,
+    ) -> Toolpath {
+        let mut doc = cut_craft_core::testing::document_with(vec![square(0.0, 0.0, size)]);
+        doc.job.clearing = clearing;
+        let change = PocketToolpath::run(&doc, p).unwrap();
+        doc.apply(&change).unwrap();
+        doc.toolpaths.into_values().next().unwrap()
+    }
+
+    fn stepping(step: f64) -> cut_craft_core::entry::ClearingSettings {
+        let mut clearing = cut_craft_core::entry::ClearingSettings::default();
+        clearing.loops.step = step;
+        clearing
+    }
+
     #[test]
-    fn adaptive_takes_at_most_a_quarter_of_the_bit() {
-        let mut tool = Tool {
-            stepover: 0.4,
-            ..Tool::default()
+    fn adaptive_bites_the_jobs_light_step_of_the_bit() {
+        let tool = Tool::default();
+        let ten = stepping(10.0);
+        assert!((adaptive_bite(&tool, &ten) - 0.1 * tool.diameter).abs() < 1e-12);
+        // a lighter step is a longer path, whatever the tool's own clearing stepover
+        let p = Params {
+            strategy: Strategy::Adaptive,
+            ..Params::default()
         };
-        assert!((adaptive_bite(&tool) - 0.25 * tool.diameter).abs() < 1e-12);
-        tool.stepover = 0.1;
-        assert!((adaptive_bite(&tool) - 0.1 * tool.diameter).abs() < 1e-12);
+        let light = cut_length(&pocket_with(stepping(8.0), 30.0, &p));
+        let heavy = cut_length(&pocket_with(stepping(20.0), 30.0, &p));
+        assert!(light > 1.3 * heavy, "8%: {light:.0} mm, 20%: {heavy:.0} mm");
+    }
+
+    /// The long cuts across a raster pocket at angle 0: true for each that runs towards -x.
+    fn rows_heading_left(tp: &Toolpath) -> Vec<bool> {
+        tp.moves
+            .windows(2)
+            .filter(|w| w[1].kind == MoveKind::Cut && (w[1].to.z - w[0].to.z).abs() < 1e-9)
+            .filter(|w| {
+                (w[1].to.y - w[0].to.y).abs() < 1e-9 && (w[1].to.x - w[0].to.x).abs() > 20.0
+            })
+            .map(|w| w[1].to.x < w[0].to.x)
+            .collect()
+    }
+
+    #[test]
+    fn keep_climb_raster_rows_all_cut_climb_and_come_back_through_the_row_just_cut() {
+        let p = Params {
+            strategy: Strategy::Raster,
+            profile_pass: ProfilePass::None,
+            ..Params::default()
+        };
+        let tp = pocket_with(cut_craft_core::entry::ClearingSettings::default(), 40.0, &p);
+        // rows step up the pocket (+y), the material above: climb keeps it on the bit's
+        // right, so a row cuts right to left, and comes back left to right in it
+        let rows = rows_heading_left(&tp);
+        let (cutting, returning): (Vec<bool>, Vec<bool>) = rows.iter().partition(|&&left| left);
+        assert!(cutting.len() >= 10, "{rows:?}");
+        assert_eq!(
+            returning.len(),
+            cutting.len() - 1,
+            "a return after every row but the last"
+        );
+        // and still without lifting between rows
+        let lifts = tp
+            .moves
+            .windows(2)
+            .filter(|w| w[1].kind == MoveKind::Rapid && w[1].to.z > w[0].to.z)
+            .count();
+        assert_eq!(lifts, 1, "one pass, one lift at its end");
+        // conventional: the other way
+        let conventional = Params {
+            direction: Direction::Conventional,
+            ..p
+        };
+        let tp = pocket_with(
+            cut_craft_core::entry::ClearingSettings::default(),
+            40.0,
+            &conventional,
+        );
+        let rows = rows_heading_left(&tp);
+        assert!(rows.iter().filter(|&&l| !l).count() > rows.iter().filter(|&&l| l).count());
+    }
+
+    #[test]
+    fn alternate_raster_rows_go_back_and_forth() {
+        let p = Params {
+            strategy: Strategy::Raster,
+            profile_pass: ProfilePass::None,
+            ..Params::default()
+        };
+        let clearing = cut_craft_core::entry::ClearingSettings {
+            way_back: cut_craft_core::entry::WayBack::Alternate,
+            ..Default::default()
+        };
+        let rows = rows_heading_left(&pocket_with(clearing, 40.0, &p));
+        assert!(rows.len() >= 10);
+        assert!(rows.windows(2).all(|w| w[0] != w[1]), "{rows:?}");
+    }
+
+    #[test]
+    fn changing_the_clearing_settings_marks_adaptive_and_raster_pockets_stale() {
+        let mut doc = cut_craft_core::testing::document_with(vec![square(0.0, 0.0, 30.0)]);
+        let mut history = cut_craft_core::History::default();
+        for strategy in [Strategy::Adaptive, Strategy::Raster, Strategy::Offset] {
+            let p = Params {
+                strategy,
+                ..Params::default()
+            };
+            let change = PocketToolpath::run(&doc, &p).unwrap();
+            history.apply(&mut doc, change).unwrap();
+        }
+        let mut c = cut_craft_core::Change::builder(&doc);
+        let mut job = doc.job;
+        job.clearing.loops.step = 15.0;
+        c.set_job(job);
+        let change = c.finish();
+        history.apply(&mut doc, change).unwrap();
+        let stale: Vec<(String, bool)> = doc
+            .toolpaths
+            .values()
+            .map(|t| (t.params["strategy"].as_str().unwrap().to_owned(), t.stale))
+            .collect();
+        for (strategy, is_stale) in &stale {
+            assert_eq!(*is_stale, strategy != "offset", "{stale:?}");
+        }
     }
 
     #[test]
@@ -1127,6 +1288,40 @@ mod tests {
     }
 
     #[test]
+    fn keep_climb_loops_still_turn_anticlockwise_on_the_pass_back() {
+        // how the path bends, move to move, at `z`: positive where it turns anticlockwise
+        let bending = |tp: &Toolpath, z: f64| -> f64 {
+            let at: Vec<Point> = tp
+                .moves
+                .iter()
+                .filter(|m| m.kind == MoveKind::Cut && (m.to.z - z).abs() < 1e-9)
+                .map(|m| m.to.truncate())
+                .collect();
+            at.windows(3)
+                .map(|w| (w[1] - w[0]).perp_dot(w[2] - w[1]).signum())
+                .sum()
+        };
+        let p = Params {
+            depth: 6.0,
+            motion: Motion::Trochoidal,
+            ways: Ways::Both,
+            ..Params::default()
+        };
+        let tp = pocket_with(cut_craft_core::entry::ClearingSettings::default(), 30.0, &p);
+        assert!(bending(&tp, -3.0) > 0.0 && bending(&tp, -6.0) > 0.0);
+        // and the second pass does run back the other way round the pocket
+        let first = tp
+            .moves
+            .iter()
+            .find(|m| m.kind == MoveKind::Cut && (m.to.z + 3.0).abs() < 1e-9);
+        let second = tp
+            .moves
+            .iter()
+            .find(|m| m.kind == MoveKind::Cut && (m.to.z + 6.0).abs() < 1e-9);
+        assert!(first.is_some() && second.is_some());
+    }
+
+    #[test]
     fn both_directions_take_turns_climb_then_conventional() {
         // twice the area the cuts at `z` go round: positive anticlockwise (climb in a pocket)
         let turning = |tp: &Toolpath, z: f64| -> f64 {
@@ -1137,7 +1332,12 @@ mod tests {
                 .map(|w| w[0].to.truncate().perp_dot(w[1].to.truncate()))
                 .sum()
         };
-        // each pass goes back round the other way, rings and loops alike
+        // each pass goes back round the other way, rings and loops alike, when the job's
+        // Clearing Settings alternate
+        let alternate = cut_craft_core::entry::ClearingSettings {
+            way_back: cut_craft_core::entry::WayBack::Alternate,
+            ..Default::default()
+        };
         for motion in [Motion::Straight, Motion::Trochoidal] {
             let p = Params {
                 depth: 9.0,
@@ -1145,7 +1345,7 @@ mod tests {
                 ways: Ways::Both,
                 ..Params::default()
             };
-            let tp = pocket(30.0, &p).unwrap();
+            let tp = pocket_with(alternate, 30.0, &p);
             let ways: Vec<f64> = [-3.0, -6.0, -9.0].map(|z| turning(&tp, z)).to_vec();
             assert!(
                 ways[0] > 0.0 && ways[1] < 0.0 && ways[2] > 0.0,
@@ -1162,13 +1362,11 @@ mod tests {
             let p = Params {
                 motion: Motion::Trochoidal,
                 direction,
-                loops: Loops {
-                    turn,
-                    ..Loops::default()
-                },
                 ..Params::default()
             };
-            let tp = pocket(30.0, &p).unwrap();
+            let mut clearing = cut_craft_core::entry::ClearingSettings::default();
+            clearing.loops.turn = turn;
+            let tp = pocket_with(clearing, 30.0, &p);
             tp.moves
                 .windows(2)
                 .filter(|w| w.iter().all(|m| m.kind == MoveKind::Cut))

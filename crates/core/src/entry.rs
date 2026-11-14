@@ -89,6 +89,43 @@ impl Default for Loops {
     }
 }
 
+/// Which way a pass that travels back the other way cuts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WayBack {
+    /// Every cut climb: raster rows all run one way (the tool comes back through the row
+    /// it just cut), and loops keep turning the same way when the path runs back
+    #[default]
+    KeepClimb,
+    /// Back and forth: raster rows cut climb then conventional, and loops run backwards
+    /// turn the other way, cutting conventional; quicker, with a rougher wall
+    Alternate,
+}
+
+/// How the light-cut clearing styles cut, for the whole job and saved with it
+/// (Toolpaths ▸ Clearing Settings): a new job starts with the settings kept as the default.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct ClearingSettings {
+    /// Trochoidal loops' width, turn and step; the step is also how wide a bite adaptive
+    /// clearing takes (the light step), as a share of the bit's diameter
+    #[serde(default)]
+    pub loops: Loops,
+    /// Raster rows and loops on a pass that runs back the other way
+    #[serde(default)]
+    pub way_back: WayBack,
+}
+
+impl ClearingSettings {
+    /// How wide a bite, in mm, the light step is for a bit `diameter` across.
+    pub fn light_bite(&self, diameter: f64) -> f64 {
+        diameter * self.loops.step / 100.0
+    }
+
+    pub fn keeps_climb(&self) -> bool {
+        self.way_back == WayBack::KeepClimb
+    }
+}
+
 impl Loops {
     /// Whether the loops turn anticlockwise.
     pub fn anticlockwise(self) -> bool {

@@ -658,6 +658,7 @@ impl Change {
     #[must_use]
     pub fn marking_stale(mut self, doc: &Document) -> Self {
         let mut model = false;
+        let mut clearing = false;
         let mut vectors = std::collections::BTreeSet::new();
         let mut made = std::collections::BTreeSet::new();
         for edit in &self.edits {
@@ -669,6 +670,9 @@ impl Change {
                 | Edit::RemoveComponent { .. }
                 | Edit::ReplaceComponent { .. }
                 | Edit::SetLevel { .. } => model = true,
+                Edit::SetJob { before, after } if before.clearing != after.clearing => {
+                    clearing = true;
+                }
                 Edit::AddToolpath { id, .. }
                 | Edit::RemoveToolpath { id, .. }
                 | Edit::ReplaceToolpath { id, .. } => {
@@ -680,6 +684,7 @@ impl Change {
         let picks_again = self.picks_again(doc);
         for (&id, toolpath) in &doc.toolpaths {
             let outdated = (model && toolpath.reads_model())
+                || (clearing && toolpath.reads_clearing())
                 || toolpath.vectors.iter().any(|v| vectors.contains(v))
                 || picks_again.contains(&id);
             if outdated && !toolpath.stale && !made.contains(&id) {
