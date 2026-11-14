@@ -122,6 +122,7 @@ pub struct Params {
     /// one thin, even skim, for a straighter, cleaner wall; 0 clears right up to it
     #[serde(default)]
     #[schemars(title = "Leave for Edge Pass", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "A", "x-diagram" = "diagrams/edge_pass.png"))]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub edge_allowance: f64,
     /// Go round the edge once, at the full depth, after all the clearing passes: one clean
@@ -311,6 +312,8 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             }
         }
         let plan = adaptive_plan(p, &walls_at.inner, &clearing);
+        // a long adaptive clearing stops where it got to: nothing more to make
+        cut_craft_core::progress::stop_if_cancelled()?;
         let safe = doc.job.clearance;
         let entry = entry_for(p, &edge);
         // each path at depth `z`, entering from the level above; `back` runs it the other

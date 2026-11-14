@@ -12907,3 +12907,57 @@ fn embellish_drawn_finer_than_it_carves_says_so_in_red_at_the_foot_of_its_form()
     h.app.apply_form("embellish", &params).unwrap();
     assert_eq!(h.app.form.as_ref().unwrap().warning, None);
 }
+
+#[test]
+fn every_picture_in_the_help_is_in_the_icon_set() {
+    let known = icon_set();
+    let h = Harness::new();
+    let mut pictures = vec![];
+    for topic in h.app.help_topics() {
+        let md = h.app.help_markdown(topic);
+        let mut at = md.as_str();
+        while let Some(i) = at.find("](bytes://icons/") {
+            let after = &at[i + "](bytes://icons/".len()..];
+            let end = after.find(')').expect("a picture's link ends");
+            pictures.push(after[..end].to_owned());
+            at = &after[end..];
+        }
+    }
+    for p in &pictures {
+        assert!(
+            known.contains(p),
+            "{p} is not in assets/icons: run scripts/build-icons"
+        );
+    }
+    // the clearing pictures: the light step's bite, the edge pass, a channel's loops
+    for p in [
+        "diagrams/light_step.png",
+        "diagrams/edge_pass.png",
+        "diagrams/adaptive_channel.png",
+    ] {
+        assert!(pictures.iter().any(|q| q == p), "the help shows {p}");
+    }
+}
+
+#[test]
+fn the_pockets_clearing_settings_have_their_picture() {
+    fn find<'a>(fields: &'a [form::Field], key: &str) -> Option<&'a form::Field> {
+        fields.iter().find_map(|f| {
+            if f.key == key {
+                return Some(f);
+            }
+            match &f.kind {
+                form::Kind::Group(inner) => find(inner, key),
+                _ => None,
+            }
+        })
+    }
+    let pocket = commands::registry()
+        .get("pocket_toolpath")
+        .expect("pocket")
+        .schema();
+    let fields = form::fields(&pocket);
+    let edge = find(&fields, "edge_allowance").expect("Leave for Edge Pass");
+    assert_eq!(edge.diagram.as_deref(), Some("diagrams/edge_pass.png"));
+    assert_eq!(edge.dim.as_deref(), Some("A"));
+}
