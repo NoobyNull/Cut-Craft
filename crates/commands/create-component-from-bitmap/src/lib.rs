@@ -15,9 +15,11 @@ pub struct Params {
     pub name: String,
     /// Height added by the lightest (or darkest) parts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/height_base.png"))]
     pub max_height: f64,
     /// Height under the whole picture
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "H2"))]
     pub base_height: f64,
     /// White is high; otherwise black is
     pub white_high: bool,

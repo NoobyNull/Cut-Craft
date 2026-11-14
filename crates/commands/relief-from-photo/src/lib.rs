@@ -55,6 +55,7 @@ pub struct Params {
     pub smoothness: u32,
     /// How high the nearest point stands
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/height_base.png"))]
     pub max_height: f64,
     /// Height of the subject's lowest point, so it stands clear of the background
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -65,6 +66,7 @@ pub struct Params {
     pub soft_edge: f64,
     /// A flat slab under the whole picture, for a plaque or a printed base. 0 for none
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "H2"))]
     pub base_height: f64,
     /// Shows the relief as your bit will really carve it: pits and grooves too narrow for
     /// the bit fill in, and the foot of a steep wall slopes at the bit's taper

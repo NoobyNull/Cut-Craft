@@ -81,6 +81,7 @@ pub struct Params {
     /// Below the material surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_pocket.png"))]
     pub depth: f64,
     /// The bit that cuts the walls and finishes the pocket; Select… picks one from your tools
     pub tool: Tool,

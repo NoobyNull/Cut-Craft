@@ -34,10 +34,12 @@ pub struct Params {
     /// Below the material surface where the carving is (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_photo_vcarve.png"))]
     pub start_depth: f64,
     /// Where the picture is black
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D"))]
     pub max_carving_depth: f64,
     /// Lift above the start depth to move between lines
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

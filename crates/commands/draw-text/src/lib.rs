@@ -84,6 +84,7 @@ pub struct Params {
     pub align: Align,
     /// Height of a capital letter
     #[schemars(title = "Text height", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/text_height.png"))]
     pub height: f64,
     /// Where the text sits: its lower-left corner. Click in the 2D view to place it
     #[schemars(title = "Anchor point")]

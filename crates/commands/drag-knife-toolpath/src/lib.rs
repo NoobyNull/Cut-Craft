@@ -20,6 +20,7 @@ pub struct Params {
     /// From the knife's pivot to its tip (from the maker)
     #[schemars(extend("x-unit" = "mm", "x-dim" = "O"), range(min = 0))]
     #[schemars(extend("x-group" = "Knife"))]
+    #[schemars(extend("x-diagram" = "diagrams/drag_knife_corners.png"))]
     pub blade_offset: f64,
     /// Corners turning less than this are cut straight through, without a swivel
     #[schemars(extend("x-unit" = "°", "x-dim" = "A"), range(min = 0, max = 180))]

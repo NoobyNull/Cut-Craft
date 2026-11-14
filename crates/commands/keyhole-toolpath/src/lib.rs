@@ -35,10 +35,12 @@ pub struct Params {
     /// Deep enough that the cutter's wide part is below the surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_keyhole.png"))]
     pub slot_depth: f64,
     /// How far the slot runs from the entry hole
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Keyhole"))]
+    #[schemars(extend("x-dim" = "L", "x-diagram" = "diagrams/keyhole_shape.png"))]
     pub slot_length: f64,
     /// Draw how the slots will look on the surface
     #[schemars(extend("x-group" = "Keyhole"))]
@@ -46,10 +48,12 @@ pub struct Params {
     /// Of the hole the cutter makes going in, for the preview
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Keyhole"))]
+    #[schemars(extend("x-dim" = "Dia"))]
     pub entry_hole_diameter: f64,
     /// Of the slot on the surface, for the preview
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Keyhole"))]
+    #[schemars(extend("x-dim" = "Dia2"))]
     pub slot_diameter: f64,
     /// An end mill with the keyhole cutter's feed rates
     pub tool: Tool,

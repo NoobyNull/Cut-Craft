@@ -35,6 +35,7 @@ pub enum AngleMode {
 pub struct Params {
     /// How many in all, the original included
     #[schemars(range(min = 2))]
+    #[schemars(extend("x-diagram" = "diagrams/circular_angle.png"))]
     pub items: u32,
     /// The rotation centre
     pub around: Around,
@@ -48,6 +49,7 @@ pub struct Params {
     pub angle_mode: AngleMode,
     /// Positive places the copies clockwise, negative counter-clockwise
     #[schemars(extend("x-unit" = "°"))]
+    #[schemars(extend("x-dim" = "A"))]
     pub angle: f64,
     /// Turn each copy to match its place on the circle; off, copies keep the original's
     /// orientation

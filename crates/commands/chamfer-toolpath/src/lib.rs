@@ -50,18 +50,22 @@ pub struct Params {
     /// Below the material surface where the top of the chamfer is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_chamfer.png"))]
     pub start_depth: f64,
     /// Across the chamfer
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Chamfer"))]
+    #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/chamfer_shape.png"))]
     pub width: f64,
     /// Slope from vertical for a ball nose (a V-bit's is half its angle)
     #[schemars(extend("x-unit" = "°"), range(min = 0, max = 90))]
     #[schemars(extend("x-group" = "Chamfer"))]
+    #[schemars(extend("x-dim" = "A"))]
     pub angle: f64,
     /// Moves a V-bit's point off the chamfer so its side cuts (makes it cut deeper)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Chamfer"))]
+    #[schemars(extend("x-dim" = "O"))]
     pub overcut: f64,
     /// Which side of the vectors the chamfer goes
     #[schemars(extend("x-group" = "Chamfer"))]

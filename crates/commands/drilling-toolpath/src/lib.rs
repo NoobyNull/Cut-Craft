@@ -29,6 +29,7 @@ pub struct Params {
     /// Below the material surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_drill.png"))]
     pub depth: f64,
     /// Peck drilling goes one pass depth deeper each peck
     pub tool: Tool,

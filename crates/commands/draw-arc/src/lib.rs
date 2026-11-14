@@ -14,6 +14,7 @@ pub struct Params {
     pub center: Xy,
     /// From the centre to the curve
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "R", "x-diagram" = "diagrams/arc_radius.png"))]
     pub radius: f64,
     /// Measured counter-clockwise from +X
     #[schemars(extend("x-unit" = "deg"))]
