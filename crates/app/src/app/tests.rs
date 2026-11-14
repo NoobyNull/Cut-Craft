@@ -11748,3 +11748,104 @@ fn import_into_selected_shape_with_nothing_selected_says_what_to_pick() {
         h.app.status.message
     );
 }
+
+/// A 6 x 6 square in an R12 DXF, which never says its units.
+fn unitless_dxf(name: &str) -> std::path::PathBuf {
+    use std::fmt::Write as _;
+    let mut text = String::from(
+        "  0\nSECTION\n  2\nHEADER\n  9\n$ACADVER\n  1\nAC1009\n  0\nENDSEC\n  0\nSECTION\n  2\n\
+         ENTITIES\n  0\nPOLYLINE\n  8\n0\n 66\n     1\n 70\n     1\n",
+    );
+    for (x, y) in [(0, 0), (6, 0), (6, 6), (0, 6)] {
+        let _ = write!(
+            text,
+            "  0\nVERTEX\n  8\n0\n 10\n{x}.0\n 20\n{y}.0\n 30\n0.0\n"
+        );
+    }
+    text += "  0\nSEQEND\n  0\nENDSEC\n  0\nEOF\n";
+    let path = std::env::temp_dir().join(format!("cut-craft-{name}-{}.dxf", std::process::id()));
+    std::fs::write(&path, text).unwrap();
+    path
+}
+
+/// The width of everything in the job.
+fn drawn_width(h: &Harness) -> f64 {
+    h.app
+        .doc
+        .vectors
+        .values()
+        .map(cut_craft_core::geometry::Path::bounds)
+        .reduce(cut_craft_core::geometry::Rect::union)
+        .map_or(0.0, |b| b.size().x)
+}
+
+#[test]
+fn a_dxf_without_units_asks_which_with_the_guess_picked_then_zooms_to_it() {
+    let mut h = Harness::new();
+    // a 600 x 400 mm job: 6 mm would be a speck, so inches are picked
+    h.app.import_file(&unitless_dxf("units-ask"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.app.doc.vectors.is_empty(),
+        "nothing comes in before the answer"
+    );
+    assert!(
+        h.text_at("This drawing doesn't say what units it was made in")
+            .is_some()
+    );
+    assert!(
+        h.text_at("Inches: 6.000 in by 6.000 in (fits the material)")
+            .is_some()
+    );
+    assert!(
+        h.text_at("Millimetres: 6.0 mm by 6.0 mm (too small to see)")
+            .is_some()
+    );
+    let camera = h.app.camera.map(|c| c.scale);
+    h.click(h.text_at("Zoom to It").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(
+        (drawn_width(&h) - 152.4).abs() < 1e-6,
+        "{}",
+        drawn_width(&h)
+    );
+    assert_eq!(h.app.doc.selection.len(), 1, "still selected");
+    assert_ne!(h.app.camera.map(|c| c.scale), camera, "zoomed to it");
+    assert!(h.app.form.is_none());
+    // undone in one step
+    h.app.invoke(&h.ctx, "undo");
+    assert!(h.app.doc.vectors.is_empty());
+}
+
+#[test]
+fn the_other_units_can_be_chosen_and_set_size_opened() {
+    let mut h = Harness::new();
+    h.app.import_file(&unitless_dxf("units-other"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.click(
+        h.text_at("Millimetres: 6.0 mm by 6.0 mm (too small to see)")
+            .unwrap(),
+        Modifiers::NONE,
+    );
+    h.click(h.text_at("Zoom and Set Size…").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!((drawn_width(&h) - 6.0).abs() < 1e-6, "{}", drawn_width(&h));
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("set_size"));
+}
+
+#[test]
+fn cancel_brings_nothing_in() {
+    let mut h = Harness::new();
+    h.app.import_file(&unitless_dxf("units-cancel"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.click(*h.texts_at("Cancel").last().unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.doc.vectors.is_empty());
+    assert!(
+        h.text_at("This drawing doesn't say what units it was made in")
+            .is_none()
+    );
+}

@@ -363,6 +363,18 @@ pub struct Change {
     /// undercuts...), shown with its result; not part of the document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
+    /// An import that had to guess its drawing's units (a DXF that doesn't say them), so the
+    /// person can be asked; not part of the document.
+    #[serde(skip)]
+    pub unit_guess: Option<UnitGuess>,
+}
+
+/// The units an import took its drawing to be in, when the file doesn't say, and the
+/// drawing's size in its own units: read in other units it is that size times their length.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UnitGuess {
+    pub taken: crate::document::Units,
+    pub size: glam::DVec2,
 }
 
 impl Change {
@@ -697,7 +709,7 @@ impl Change {
     pub fn inverse(&self) -> Self {
         Self {
             edits: self.edits.iter().rev().map(Edit::inverse).collect(),
-            notes: vec![],
+            ..Self::default()
         }
     }
 
@@ -1731,6 +1743,7 @@ impl ChangeBuilder<'_> {
         Change {
             edits: self.edits,
             notes: self.notes,
+            unit_guess: None,
         }
     }
 }

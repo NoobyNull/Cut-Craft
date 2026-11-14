@@ -64,6 +64,8 @@ impl CutCraftApp {
         self.advance_playback(ctx);
         // a slow job's progress, over everything else
         self.busy_window(ctx);
+        // an import that doesn't say its units, waiting to be told
+        self.units_question(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
         if !self.tracing() {

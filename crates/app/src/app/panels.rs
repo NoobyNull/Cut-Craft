@@ -805,7 +805,9 @@ impl CutCraftApp {
                 None => c,
             })
             .map_err(cut_craft_core::CommandError::Failed);
-        self.record(change, &format!("Imported {}", path.display()));
+        // dropped at a point, other units are scaled about it
+        let pivot = at.unwrap_or(cut_craft_core::geometry::Point::ZERO);
+        self.record_import(change, &format!("Imported {}", path.display()), pivot);
     }
 
     /// Brings `path` into the job: meshes through Orientate 3D Model
@@ -833,7 +835,8 @@ impl CutCraftApp {
             &format!("Importing {}", super::file_name(path)),
             move || files::import(&registry, &doc, &reading),
             move |app, change| {
-                app.record(change.map_err(cut_craft_core::CommandError::Failed), &done);
+                let change = change.map_err(cut_craft_core::CommandError::Failed);
+                app.record_import(change, &done, cut_craft_core::geometry::Point::ZERO);
             },
         );
     }
