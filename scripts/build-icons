@@ -3,7 +3,7 @@
 #   scripts/build-icons                         the drawings; the model pictures stay as they are
 #   scripts/build-icons HAND.stl STATUE.stl     the model pictures too, rendered from those models
 # Needs python3 with numpy, ImageMagick (`magick`), and rsvg-convert or the cairosvg module.
-# Toolbar icons are 128 px, dialog pictures 256 px, measurement pictures 448 x 224 px.
+# Toolbar icons are 128 px, dialog pictures 256 px, measurement and tip pictures 448 x 224 px.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 icons=$here/../assets/icons
@@ -19,9 +19,9 @@ find . -name '*.svg' | sort | while read -r svg; do
     name=${svg#./}
     name=${name%.svg}
     [[ $models == *" $name "* ]] && continue
-    # the measurement pictures are 2:1, drawn 448 px wide; the rest square
+    # the measurement and tip pictures are 2:1, drawn 448 px wide; the rest square
     case $name in
-        diagrams/*) width=448 height=224 ;;
+        diagrams/* | tips/*) width=448 height=224 ;;
         drawing_forms/* | import/* | tool_database/* | job_setup/*) width=256 height=256 ;;
         *) width=128 height=128 ;;
     esac

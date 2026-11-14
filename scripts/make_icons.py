@@ -164,7 +164,26 @@ GLYPHS = {
           [(0.85, 0.65), (0.3, 0.65), (0.1, 0.8), (0.3, 1), (0.85, 0.9)]],
     "R": [[(0, 1), (0, 0), (0.7, 0), (1, 0.15), (1, 0.4), (0.7, 0.55), (0, 0.55)], [(0.45, 0.55), (1, 1)]],
     "B": [[(0, 0), (0, 1), (0.75, 1), (1, 0.85), (1, 0.62), (0.75, 0.5), (0, 0.5)], [(0, 0), (0.7, 0), (0.92, 0.12), (0.92, 0.38), (0.7, 0.5)]],
-    "O": [[(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3), (0.3, 0)]],
+    "O": [[(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3), (0.3, 0)]],    "F": [[(1, 0), (0, 0), (0, 1)], [(0, 0.5), (0.75, 0.5)]],
+    "E": [[(1, 0), (0, 0), (0, 1), (1, 1)], [(0, 0.5), (0.75, 0.5)]],
+    "C": [[(1, 0.15), (0.7, 0), (0.3, 0), (0, 0.3), (0, 0.7), (0.3, 1), (0.7, 1), (1, 0.85)]],
+    "N": [[(0, 1), (0, 0), (1, 1), (1, 0)]],
+    "I": [[(0.5, 0), (0.5, 1)], [(0.15, 0), (0.85, 0)], [(0.15, 1), (0.85, 1)]],
+    "0": [[(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3), (0.3, 0)]],
+    "4": [[(0.75, 1), (0.75, 0), (0, 0.7), (1, 0.7)]],
+    "/": [[(0.9, 0), (0.1, 1)]],
+    "+": [[(0, 0.55), (1, 0.55)], [(0.5, 0.2), (0.5, 0.9)]],
+    "?": [[(0.05, 0.22), (0.3, 0), (0.75, 0), (1, 0.2), (0.95, 0.4), (0.5, 0.6), (0.5, 0.75)], [(0.5, 0.95), (0.5, 1)]],
+    "s": [[(0.95, 0.45), (0.5, 0.4), (0.1, 0.48), (0.15, 0.65), (0.85, 0.75), (0.9, 0.92), (0.5, 1), (0.05, 0.95)]],
+    "c": [[(0.95, 0.45), (0.4, 0.4), (0.05, 0.6), (0.05, 0.8), (0.4, 1), (0.95, 0.95)]],
+    "m": [[(0, 1), (0, 0.4)], [(0, 0.55), (0.25, 0.4), (0.5, 0.55), (0.5, 1)], [(0.5, 0.55), (0.75, 0.4), (1, 0.55), (1, 1)]],
+    "n": [[(0, 1), (0, 0.4)], [(0, 0.55), (0.45, 0.4), (1, 0.55), (1, 1)]],
+    "t": [[(0.4, 0.1), (0.4, 0.88), (0.6, 1), (0.95, 1)], [(0.05, 0.4), (0.9, 0.4)]],
+    "r": [[(0.1, 1), (0.1, 0.4)], [(0.1, 0.62), (0.5, 0.4), (0.95, 0.45)]],
+    "l": [[(0.5, 0), (0.5, 1)]],
+    "h": [[(0.05, 0), (0.05, 1)], [(0.05, 0.55), (0.45, 0.4), (0.95, 0.55), (0.95, 1)]],
+    "f": [[(0.95, 0.05), (0.65, 0), (0.4, 0.12), (0.4, 1)], [(0.05, 0.42), (0.85, 0.42)]],
+    "x": [[(0, 0.4), (1, 1)], [(1, 0.4), (0, 1)]],
 }
 
 
@@ -172,7 +191,7 @@ def text(s, x, y, h, c=INK, w=SW, gap=0.35):
     """`s` in the stroke font, `h` tall with its top left at (x, y)."""
     out, cx = [], x
     for ch in s:
-        wd = h * (0.2 if ch == "i" else 0.62)
+        wd = h * (0.2 if ch in "il" else 0.62)
         for stroke_ in GLYPHS[ch]:
             out.append(pl([(cx + px * wd, y + py * h) for px, py in stroke_], c, w))
         cx += wd + h * gap
@@ -953,7 +972,7 @@ def dim_right(y0, y1, label, x=97, reach=X1 - 12):
 
 
 def text_width(s, h, gap=0.35):
-    return sum(h * (0.2 if ch == "i" else 0.62) for ch in s) + (len(s) - 1) * h * gap
+    return sum(h * (0.2 if ch in "il" else 0.62) for ch in s) + (len(s) - 1) * h * gap
 
 
 def dim_left(y0, y1, label, x=18, reach=X0 + 10):
@@ -1170,8 +1189,311 @@ DIAGRAMS[dg + "height_base.svg"] = lambda: [
     line(18, 48, 28, 48, ACC, 2, GUIDE), label("H2", 4, 40)]
 
 
-def render_diagram(name):
-    body = "".join(e for e in DIAGRAMS[name]() if e)
+# ---- the Did You Know? tips' illustrations -----------------------------------------------
+# The same 112 x 56 as the measurement pictures and the same parts (the ink, the orange on
+# what the tip is about, green toolpaths, wood), but a little scene each: what the tip says,
+# shown. Drawn 448 x 224 above the tip's words.
+TIP_PICS = {}
+tp_ = "tips/"
+PAPER = WHITE
+
+
+def keycap(x, y, label, w=None, h=16, c=INK, lc=None):
+    """A key on the keyboard with `label` on it."""
+    th = 7 if len(label) < 3 else 6
+    w = w or max(h, text_width(label, th) + 9)
+    tw = text_width(label, th)
+    return (rect(x, y, w, h, 3, c, 2, SHEET) + line(x + 3, y + h - 3.5, x + w - 3, y + h - 3.5, c, 2)
+            + text(label, x + (w - tw) / 2, y + (h - 3.5 - th) / 2, th, lc or c, 2))
+
+
+def pointer(x, y, s=1.0):
+    """The mouse pointer with its tip at (x, y)."""
+    pts = [(0, 0), (0, 14), (3.6, 10.6), (6.4, 16.4), (9, 15.2), (6.3, 9.6), (11, 9.6)]
+    return pl([(x + px * s, y + py * s) for px, py in pts], INK, 2, PAPER, closed=True)
+
+
+def panel(x, y, w, h, rows=3, title=True, fill=PAPER):
+    """A tool's settings: a title bar and rows of name and box."""
+    els = [rect(x, y, w, h, 2, INK, 2, fill)]
+    top = y
+    if title:
+        els.append(line(x, y + 7, x + w, y + 7, INK, 2))
+        top = y + 7
+    step = (h - (top - y) - 4) / rows
+    for i in range(rows):
+        ry = top + 4 + step * i + step / 2 - 2
+        els.append(line(x + 4, ry, x + w * 0.42, ry, GREY, 2))
+        els.append(rect(x + w * 0.5, ry - 3, w * 0.5 - 4, 6, 1, GREY, 2, "none"))
+    return "".join(els)
+
+
+def menu(x, y, w, rows, lit, rh=9):
+    """A right-click menu, row `lit` highlighted: each row a short grey line."""
+    h = rows * rh + 4
+    els = [rect(x, y, w, h, 2, INK, 2, PAPER)]
+    for i in range(rows):
+        ry = y + 2 + i * rh
+        if i == lit:
+            els.append(rect(x + 2, ry, w - 4, rh, 1, ACC, 2, "#fde6cc"))
+        els.append(line(x + (rh + 8 if i == lit else 6), ry + rh / 2, x + w - 8, ry + rh / 2, GREY, 2))
+    return "".join(els)
+
+
+def mini_bit(x, y, h=12, v=False):
+    """A small bit for lists and the machine: shank and cutter, no flutes (they blur when small)."""
+    cut = (f"M{x - 3},{y + h * 0.45} H{x + 3} L{x},{y + h} Z" if v
+           else f"M{x - 3},{y + h * 0.45} H{x + 3} V{y + h} H{x - 3} Z")
+    return rect(x - 1.5, y, 3, h * 0.45, 0, INK, 2, "#d2d7df") + path(cut, INK, 2, "#b4bcc8")
+
+
+def tip_arrow(x0, x1, y=28):
+    return arrow(x0, y, x1, y, ACC, 2.5, 6)
+
+
+def sign(x, y, w, h, word="SIGN"):
+    th = h * 0.42
+    tw = text_width(word, th)
+    return rect(x, y, w, h, 3, WOODD, 2, WOOD) + text(word, x + (w - tw) / 2, y + (h - th) / 2, th, WOODD, 2.5)
+
+
+def rounded_box(x0, y0, x1, y1, r=4):
+    return f"M{x0 + r},{y0} H{x1 - r} Q{x1},{y0} {x1},{y0 + r} V{y1 - r} Q{x1},{y1} {x1 - r},{y1} H{x0 + r} Q{x0},{y1} {x0},{y1 - r} V{y0 + r} Q{x0},{y0} {x0 + r},{y0} Z"
+
+
+def clock(cx, cy, r, hand=ACC):
+    return (circ(cx, cy, r, INK, 2.5, PAPER) + line(cx, cy, cx, cy - r * 0.7, INK, 2.5)
+            + line(cx, cy, cx + r * 0.55, cy + r * 0.25, hand, 2.5) + dot(cx, cy, 1.6, INK))
+
+
+def warning(cx, cy, s=8):
+    return (pl([(cx, cy - s), (cx + s, cy + s * 0.75), (cx - s, cy + s * 0.75)], ACC, 2, "#fde6cc", closed=True)
+            + line(cx, cy - s * 0.3, cx, cy + s * 0.2, ACC, 2) + dot(cx, cy + s * 0.48, 1.2, ACC))
+
+
+def bug(cx, cy, s=1.0):
+    els = [ell(cx, cy, 3.2 * s, 4.2 * s, ACC, 2, "#fde6cc"), circ(cx, cy - 5.2 * s, 1.8 * s, ACC, 2, ACC)]
+    for dy in (-2, 1, 4):
+        els += [line(cx - 3 * s, cy + dy * s * 0.7, cx - 6 * s, cy + dy * s), line(cx + 3 * s, cy + dy * s * 0.7, cx + 6 * s, cy + dy * s)]
+    return "".join(e.replace(f'stroke="{INK}"', f'stroke="{ACC}"').replace('stroke-width="2.5"', 'stroke-width="2"') for e in els)
+
+
+TIP_PICS[tp_ + "sample_project.svg"] = lambda: [
+    # the start page's sample card, clicked, and the finished sign it opens with its toolpaths
+    rect(6, 8, 38, 40, 3, INK, 2, PAPER), sign(11, 13, 28, 16, "AB"), line(11, 34, 33, 34, GREY, 2),
+    rect(11, 39, 28, 6, 2, ACC, 2, "#fde6cc"), pointer(30, 41),
+    tip_arrow(50, 60),
+    path(rounded_box(66, 8, 108, 48, 6), TP, 2, dash="3 2.5"), sign(70, 12, 34, 32, "AB")]
+TIP_PICS[tp_ + "f1_help.svg"] = lambda: [
+    panel(6, 8, 34, 40), keycap(24, 34, "F1", 22, 18, INK, ACC),
+    tip_arrow(52, 64),
+    page(70, 4, 34, 48, 9), text("?", 80, 14, 18, ACC, 3), line(76, 38, 96, 38, GREY, 2), line(76, 44, 92, 44, GREY, 2)]
+TIP_PICS[tp_ + "hover_note.svg"] = lambda: [
+    panel(6, 4, 58, 46, 3), line(10, 29.6, 30.4, 29.6, ACC, 2.5), pointer(22, 30),
+    path("M40,34 H104 Q106,34 106,36 V50 Q106,52 104,52 H44 Q42,52 42,50 V38 L36,36 Z", INK, 2, PAPER),
+    line(48, 40, 98, 40, GREY, 2), line(48, 46, 86, 46, GREY, 2)]
+TIP_PICS[tp_ + "tool_list.svg"] = lambda: [
+    rect(6, 4, 100, 12, 2, INK, 2, SHEET), *[rect(10 + i * 13, 6.5, 9, 7, 1, INK, 2, PAPER) for i in range(5)],
+    circ(97, 10, 5, ACC, 2, "#fde6cc"), text("?", 95.2, 7, 6, ACC, 2), pointer(100.5, 13.5, 0.75),
+    rect(50, 18, 56, 36, 2, INK, 2, PAPER),
+    *[rect(54, 21 + i * 8, 6, 6, 1, INK, 2, "none") + line(64, 24 + i * 8, 100 - (i % 2) * 10, 24 + i * 8, GREY, 2) for i in range(4)],
+    rect(6, 18, 18, 36, 2, INK, 2, SHEET), *[rect(10, 22 + i * 10, 10, 7, 1, INK, 2, PAPER) for i in range(3)]]
+TIP_PICS[tp_ + "design_then_toolpaths.svg"] = lambda: [
+    rect(4, 4, 104, 48, 3, INK, 2, PAPER),
+    rect(4, 4, 22, 48, 3, INK, 2, SHEET), text("1", 11, 8, 9, ACC, 2.5),
+    *[rect(9, 22 + i * 9, 12, 6, 1, INK, 2) for i in range(3)],
+    rect(86, 4, 22, 48, 3, INK, 2, SHEET), text("2", 93, 8, 9, ACC, 2.5),
+    *[rect(91, 22 + i * 9, 12, 6, 1, TP, 2) for i in range(3)],
+    pl(star_pts(56, 30, 15, 7), INK, 2.5, closed=True), pl(star_pts(56, 30, 19.5, 10), TP, 2, closed=True, dash="3 2.5"),
+    curved_arrow(56, 46, 28, 200, 340, ACC, 2, 5)]
+
+
+def preview_cut():
+    # the material, a groove the bit has carved behind it, and the green path still to cut
+    top = [(6, 32), (20, 18), (106, 18), (92, 32)]
+    groove = "M22,26 C34,20 46,30 60,25"
+    return [pl(top, WOODD, 2, WOOD, closed=True), rect(6, 32, 86, 14, 0, WOODD, 2, "#e8c793"),
+            pl([(92, 32), (106, 18), (106, 32), (92, 46)], WOODD, 2, "#e2bd83", closed=True),
+            path(groove, WOODD, 3.5), path("M22,27.5 C34,21.5 46,31.5 60,26.5", "#8c6a3c", 2),
+            path("M60,25 C70,21 78,26 90,22", TP, 2, dash="3 2.5"),
+            bit("end_mill", 60, -4, 25, 4.5),
+            circ(14, 12, 8, ACC, 2, "#fde6cc"), solid("M11.5,8 L18.5,12 L11.5,16 Z", ACC)]
+
+
+TIP_PICS[tp_ + "preview_cut.svg"] = preview_cut
+OPEN_BOX = "M32,10 H14 Q10,10 10,14 V42 Q10,46 14,46 H42 Q46,46 46,42 V14 Q46,10 42,10"
+TIP_PICS[tp_ + "closed_shape.svg"] = lambda: [
+    path(OPEN_BOX, INK, 2.5), dot(32, 10, 3, ACC), dot(42, 10, 3, ACC),
+    tip_arrow(52, 62),
+    group([path(OPEN_BOX + " Z", INK, 2.5, SHEET), line(32, 10, 42, 10, ACC, 3)], "translate(56 0)"),
+    tick(91, 28, 1.1)]
+TIP_PICS[tp_ + "tool_database.svg"] = lambda: [
+    bit("end_mill", 22, 2, 52, 8), tip_arrow(36, 46),
+    rect(52, 6, 54, 44, 3, INK, 2, PAPER),
+    *[text(k, 57, 12 + i * 12, 6, ACC, 2) + rect(66, 11 + i * 12, 34, 8, 1, GREY, 2) + line(69, 15 + i * 12, 69 + 22 - i * 5, 15 + i * 12, INK, 2)
+      for i, k in enumerate(("S", "F", "D"))]]
+TIP_PICS[tp_ + "out_of_date.svg"] = lambda: [
+    ell(26, 30, 15, 13, INK, 2.5, SHEET), circ(20, 28, 14, TP, 2, dash="3 2.5"), warning(42, 12),
+    curved_arrow(58, 30, 7, 200, 520, ACC, 2.5, 5),
+    ell(88, 30, 15, 13, INK, 2.5, SHEET), ell(88, 30, 19, 17, TP, 2, dash="3 2.5"), tick(88, 30, 0.9)]
+TIP_PICS[tp_ + "number_sums.svg"] = lambda: [
+    rect(14, 4, 34, 8, 0, WOODD, 2, WOOD), dim_across(14, 48, 16, "W", below=True),
+    rect(6, 28, 48, 18, 2, INK, 2, PAPER), text("W/2", 12, 33, 8, INK, 2.5), line(37, 31, 37, 43, ACC, 2),
+    tip_arrow(60, 70, 37),
+    rect(74, 28, 34, 18, 2, INK, 2, PAPER), text("300", 79, 33, 8, ACC, 2.5)]
+TIP_PICS[tp_ + "number_arrows.svg"] = lambda: [
+    rect(6, 18, 46, 20, 2, INK, 2, PAPER), text("10", 12, 24, 8, INK, 2.5),
+    line(42, 18, 42, 38, INK, 2), line(42, 28, 52, 28, INK, 2),
+    solid("M44,25 L47,21 L50,25 Z", ACC), solid("M44,31 L47,35 L50,31 Z", INK), pointer(48, 24),
+    text("+", 60, 21, 9, ACC, 2.5), keycap(72, 10, "Shift", 34, 18),
+    text("x10", 77, 36, 8, ACC, 2.5)]
+
+
+def ruler(x, y, w, n, sub, label):
+    els = [rect(x, y, w, 10, 1, INK, 2, PAPER)]
+    for i in range(n + 1):
+        tx = x + w * i / n
+        long_ = i % sub == 0
+        els.append(line(tx, y, tx, y + (6 if long_ else 3), INK if long_ else GREY, 2))
+    els.append(text(label, x + w + 5, y + 1.5, 7, ACC, 2))
+    return "".join(els)
+
+
+TIP_PICS[tp_ + "units.svg"] = lambda: [
+    rect(8, 4, 76, 9, 1, WOODD, 2, WOOD), guide_up(8, 13, 20), guide_up(84, 13, 20),
+    ruler(8, 20, 76, 20, 5, "mm"), ruler(8, 38, 76, 6, 2, "in"),
+    darrow(104, 22, 104, 46, ACC, 2, 4)]
+
+
+def mouse(x, y):
+    return (path(f"M{x},{y + 12} Q{x},{y} {x + 12},{y} Q{x + 24},{y} {x + 24},{y + 12} V{y + 30} Q{x + 24},{y + 42} {x + 12},{y + 42} Q{x},{y + 42} {x},{y + 30} Z", INK, 2.5, PAPER)
+            + line(x, y + 16, x + 24, y + 16, INK, 2) + line(x + 12, y, x + 12, y + 16, INK, 2)
+            + rect(x + 9.5, y + 4, 5, 9, 2.5, ACC, 2, "#fde6cc"))
+
+
+TIP_PICS[tp_ + "mouse_zoom.svg"] = lambda: [
+    mouse(6, 7), arrow(38, 18, 38, 8, ACC, 2, 4), arrow(38, 22, 38, 32, ACC, 2, 4),
+    magnifier(62, 22, 11, INK), plus(62, 22, 5, ACC, 2.5),
+    arrow(92, 28, 92, 10, ACC, 2, 5), arrow(92, 28, 92, 46, ACC, 2, 5), arrow(92, 28, 76, 28, ACC, 2, 5), arrow(92, 28, 108, 28, ACC, 2, 5)]
+TIP_PICS[tp_ + "views_2d_3d.svg"] = lambda: [
+    keycap(18, 2, "F2", 20, 15), rect(8, 22, 40, 30, 1, GREY, 2, SHEET), circ(28, 37, 9, INK, 2.5),
+    keycap(72, 2, "F3", 20, 15), slab(58, 38, 36, 10, 10), dome(80, 35, 26, 13)]
+TIP_PICS[tp_ + "esc_close.svg"] = lambda: [
+    keycap(6, 20, "Esc", 30, 18, INK, ACC), tip_arrow(42, 54),
+    panel(60, 6, 46, 44), cross(100, 9.5, 2.5, ACC, 2)]
+TIP_PICS[tp_ + "edit_again.svg"] = lambda: [
+    pl(star_pts(22, 30, 15, 7), INK, 2.5, closed=True), rect(6, 14, 32, 30, 0, INK, 2, dash="2 2"),
+    *[node(x, y, 3.5) for x in (6, 38) for y in (14, 44)],
+    keycap(44, 22, "E", 16, 16, INK, ACC), tip_arrow(64, 72),
+    panel(76, 4, 30, 48, 3, False), pl(star_pts(91, 12, 5, 2.4), INK, 2, closed=True),
+    line(80, 18.5, 102, 18.5, INK, 2)]
+
+
+def grid_dots(x0, y0, x1, y1, step=8):
+    return [dot(x, y, 1, GREY) for x in range(x0, x1 + 1, step) for y in range(y0, y1 + 1, step)]
+
+
+TIP_PICS[tp_ + "snapping.svg"] = lambda: [
+    *grid_dots(8, 8, 72, 48), line(16, 48, 48, 16, INK, 2.5), line(48, 16, 66, 30, INK, 2, "3 2.5"),
+    rect(44, 12, 8, 8, 0, ACC, 2), pointer(66, 30, 0.9), keycap(84, 20, "F4", 22, 16)]
+TIP_PICS[tp_ + "undo.svg"] = lambda: [
+    keycap(6, 30, "Ctrl", 28, 18), text("+", 38, 34, 8, INK, 2.5), keycap(50, 30, "Z", 18, 18, INK, ACC),
+    pl(star_pts(92, 34, 14, 6.5), INK, 2.5, SHEET, closed=True), pl(star_pts(98, 26, 9, 4.2), GREY, 2, closed=True, dash="2 2"),
+    curved_arrow(60, 28, 22, 330, 210, ACC, 2.5, 6)]
+TIP_PICS[tp_ + "favourites.svg"] = lambda: [
+    rect(4, 4, 26, 48, 2, INK, 2, SHEET), *[rect(10, 8 + i * 15, 14, 12, 2, INK, 2, PAPER) for i in range(3)],
+    pl(star_pts(26, 25, 5, 2.2), ACC, 2, ACC, closed=True), pointer(18, 28, 0.9),
+    menu(36, 26, 70, 2, 1), pl(star_pts(44, 37.5, 4, 1.8), ACC, 2, ACC, closed=True)]
+
+
+def bigger_bits():
+    pts = star_pts(32, 29, 25, 12)
+    els = [pl(pts, INK, 2.5, SHEET, closed=True)]
+    # the big bit's rings in the open middle, then the small bit's runs into each point
+    els += [circ(32, 29, r, TP, 2) for r in (4, 8)]
+    for i in range(0, 10, 2):
+        ox, oy = pts[i]
+        els.append(line(32 + (ox - 32) * 0.45, 29 + (oy - 29) * 0.45, 32 + (ox - 32) * 0.82, 29 + (oy - 29) * 0.82, ACC, 2))
+    els += [bit("end_mill", 78, 4, 44, 7), bit("end_mill", 100, 14, 44, 3)]
+    els += [line(71, 51, 85, 51, TP, 3), line(96, 51, 104, 51, ACC, 3)]
+    return els
+
+
+TIP_PICS[tp_ + "bigger_bits_first.svg"] = bigger_bits
+TIP_PICS[tp_ + "toolpath_time.svg"] = lambda: [
+    clock(24, 28, 18),
+    rect(52, 6, 54, 44, 2, INK, 2, PAPER),
+    *[rect(56, 11 + i * 11, 6, 6, 1, TP, 2) + line(66, 14 + i * 11, 84, 14 + i * 11, GREY, 2) + line(88, 14 + i * 11, 88 + 12 - i * 4, 14 + i * 11, ACC, 2.5)
+      for i in range(4)]]
+TIP_PICS[tp_ + "increment_save.svg"] = lambda: [
+    page(6, 10, 24, 34, 7), text("1", 14, 20, 12, GREY, 2.5),
+    tip_arrow(34, 42, 27),
+    page(46, 10, 24, 34, 7), text("2", 53, 20, 12, INK, 2.5),
+    tip_arrow(74, 82, 27),
+    page(86, 10, 24, 34, 7), text("3", 93, 20, 12, ACC, 2.5)]
+TIP_PICS[tp_ + "recovery_copy.svg"] = lambda: [
+    solid("M20,4 L8,30 H18 L13,52 L32,22 H21 L28,4 Z", ACC),
+    page(42, 6, 30, 44, 8), pl(star_pts(57, 32, 9, 4.2), INK, 2.5, closed=True),
+    curved_arrow(90, 28, 14, -60, 230, TP, 2.5, 5), clock(90, 28, 8, TP)]
+
+
+def trace_bitmap():
+    # a blocky picture of a heart, a pixel at a time, then the smooth vector Trace makes of it
+    els = []
+    for i in range(11):
+        for j in range(10):
+            x, y = (i - 5) / 4.2, (4.2 - j) / 3.9
+            if (x * x + y * y - 1) ** 3 - x * x * y ** 3 < 0:
+                els.append(f'<rect x="{6 + i * 4.2:.1f}" y="{7 + j * 4.2:.1f}" width="3.6" height="3.6" fill="{INK}"/>')
+    els.append(tip_arrow(54, 64))
+    els.append(path("M84,13 C78,6 68,10 70,22 C72,34 84,46 88,48 C92,46 104,34 106,22 C108,10 98,6 92,13 L88,18 Z", INK, 2.5, SHEET))
+    els += [node(x, y, 3.5, ACC) for x, y in ((88, 18), (70, 22), (88, 48), (106, 22))]
+    return els
+
+
+TIP_PICS[tp_ + "trace_bitmap.svg"] = trace_bitmap
+TIP_PICS[tp_ + "relief_from_photo.svg"] = lambda: [
+    picture(6, 8, 42, 36), tip_arrow(52, 62),
+    slab(66, 38, 32, 10, 10), dome(86, 35, 26, 16)]
+TIP_PICS[tp_ + "job_sheet.svg"] = lambda: [
+    rect(14, 10, 28, 12, 1, INK, 2, PAPER), rect(6, 20, 44, 20, 3, INK, 2, SHEET), rect(14, 34, 28, 12, 1, INK, 2, PAPER),
+    dot(42, 26, 2, TP), tip_arrow(54, 62),
+    page(66, 2, 40, 52, 8),
+    *[mini_bit(75, 9 + i * 12, 9, i == 1) + line(82, 14 + i * 12, 98, 14 + i * 12, GREY, 2) for i in range(3)],
+    clock(74, 48, 3.5), line(81, 48, 92, 48, ACC, 2.5)]
+TIP_PICS[tp_ + "report_bug.svg"] = lambda: [
+    rect(4, 4, 56, 48, 3, INK, 2, PAPER), rect(4, 4, 14, 48, 3, INK, 2, SHEET), circ(38, 22, 9, INK, 2.5),
+    pointer(30, 22), menu(38, 24, 68, 2, 1, 13), bug(49, 45, 0.9)]
+
+
+def machine():
+    return [pl([(8, 44), (18, 36), (72, 36), (62, 44)], WOODD, 2, WOOD, closed=True), rect(8, 44, 54, 5, 0, WOODD, 2, "#e8c793"),
+            rect(14, 8, 5, 34, 1, INK, 2, SHEET), rect(58, 8, 5, 34, 1, INK, 2, SHEET), rect(12, 6, 54, 7, 1, INK, 2, SHEET),
+            rect(32, 13, 13, 11, 1, INK, 2, PAPER), mini_bit(38.5, 24, 12)]
+
+
+TIP_PICS[tp_ + "first_setup.svg"] = lambda: [
+    *machine(),
+    path("M78,6 H104 Q108,6 108,10 V26 Q108,30 104,30 H88 L82,36 L83,30 H78 Q74,30 74,26 V10 Q74,6 78,6 Z", ACC, 2, "#fde6cc"),
+    text("?", 87.5, 10, 14, ACC, 2.5)]
+
+
+def keyboard():
+    els = [rect(4, 10, 104, 40, 4, INK, 2.5, SHEET)]
+    lit = {(0, 2), (1, 7), (2, 4)}
+    for r, (n, off) in enumerate(((12, 8), (11, 11), (10, 14))):
+        for k in range(n):
+            x, y = off + k * 8, 15 + r * 9
+            els.append(rect(x, y, 6.5, 7, 1.5, ACC if (r, k) in lit else INK, 2, "#fde6cc" if (r, k) in lit else PAPER))
+    els.append(rect(30, 42, 52, 5, 1.5, INK, 2, PAPER))
+    return els
+
+
+TIP_PICS[tp_ + "keyboard.svg"] = keyboard
+
+
+def render_diagram(name, table=None):
+    body = "".join(e for e in (table or DIAGRAMS)[name]() if e)
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {DW} {DH}" width="{DW}" height="{DH}">{body}</svg>\n'
 
 
@@ -1195,7 +1517,7 @@ def main():
             if f.endswith((".svg", ".bmp", ".png")):
                 wanted.add(rel[:-4] + ".svg")
     # the measurement pictures are checked against DIAGRAMS, not the icons
-    wanted = {w for w in wanted if not w.startswith("diagrams/")}
+    wanted = {w for w in wanted if not w.startswith(("diagrams/", "tips/"))}
     # credited third-party icons, pictures rendered from models (scripts/model_pictures.py), and
     # the seven drawn by scripts/draw_icons.py
     wanted -= {"file/github_link.svg", "file/thingiverse_link.svg", "import/pointing_hand.svg",
@@ -1220,7 +1542,12 @@ def main():
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         with open(dest, "w") as fh:
             fh.write(render_diagram(name))
-    print(f"{len(I)} icons and {len(DIAGRAMS)} measurement pictures written to {out}" + (f" ({len(extra)} new: {', '.join(extra)})" if extra else ""))
+    for name in sorted(TIP_PICS):
+        dest = os.path.join(out, name)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "w") as fh:
+            fh.write(render_diagram(name, TIP_PICS))
+    print(f"{len(I)} icons, {len(TIP_PICS)} tip pictures and {len(DIAGRAMS)} measurement pictures written to {out}" + (f" ({len(extra)} new: {', '.join(extra)})" if extra else ""))
 
 
 if __name__ == "__main__":
