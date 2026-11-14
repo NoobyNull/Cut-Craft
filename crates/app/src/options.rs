@@ -1410,6 +1410,10 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub design_sections: Vec<String>,
+    /// The Toolpaths sub-tabs shown as sections of their own, as `design_sections`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub toolpath_sections: Vec<String>,
     /// The tool each toolbox flyout shows: the one picked from it last.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
@@ -1513,6 +1517,7 @@ impl Default for Options {
             first_run_done: false,
             favourites: Favourites::default(),
             design_sections: vec![],
+            toolpath_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
         }
     }

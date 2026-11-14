@@ -50,6 +50,9 @@ impl CutCraftApp {
             design_tab: 0,
             design_subtab: 0,
             design_unfold: None,
+            toolpath_subtab: 0,
+            toolpath_unfold: None,
+            toolpaths_seen: 0,
             first_steps: std::cell::RefCell::default(),
             view: View::TwoD,
             cursor: None,
@@ -157,7 +160,6 @@ impl CutCraftApp {
             guide_props: None,
             tool_changer_window: false,
             fit_import: None,
-            list_height: None,
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
             simulation: None,
@@ -234,7 +236,10 @@ impl CutCraftApp {
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(gui::SELECT_COMPONENT) => true,
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
-            id if id.starts_with(gui::SUBTAB_PLACE) || id.starts_with(gui::FOLD_TOOL_GROUPS) => {
+            id if id.starts_with(gui::SUBTAB_PLACE)
+                || id.starts_with(gui::TOOLPATH_SUBTAB_PLACE)
+                || id.starts_with(gui::FOLD_TOOL_GROUPS) =>
+            {
                 true
             }
             "add_clipart_folder" => true,
@@ -654,8 +659,14 @@ impl CutCraftApp {
                 self.save_options();
             }
             id if id.starts_with(gui::SUBTAB_PLACE) => {
-                if let Some(sections) = gui::placed(&self.options.design_sections, id) {
+                if let Some(sections) = gui::DESIGN.placed(&self.options.design_sections, id) {
                     self.options.design_sections = sections;
+                    self.save_options();
+                }
+            }
+            id if id.starts_with(gui::TOOLPATH_SUBTAB_PLACE) => {
+                if let Some(sections) = gui::TOOLPATHS.placed(&self.options.toolpath_sections, id) {
+                    self.options.toolpath_sections = sections;
                     self.save_options();
                 }
             }
@@ -2458,9 +2469,10 @@ impl CutCraftApp {
         answer == rfd::MessageDialogResult::Yes
     }
 
-    /// The icons over the toolpath list: edit and hide the selected toolpath, and save
-    /// it, or every visible one, as a template.
-    pub(super) fn toolpath_list_buttons(&mut self, ui: &mut egui::Ui) {
+    /// The icons over the toolpath list: edit and hide the selected toolpath, and with
+    /// `templates` save it, or every visible one, as a template (the Toolpaths page has those
+    /// under the list, with the other ways to reuse toolpaths).
+    pub(super) fn toolpath_list_buttons(&mut self, ui: &mut egui::Ui, templates: bool) {
         let edge = ui.spacing().interact_size.y * TOOL_ICON_ROWS;
         let mut clicked = None;
         ui.horizontal(|ui| {
@@ -2485,7 +2497,10 @@ impl CutCraftApp {
                     "toolpaths/save_all_as_template.png",
                     "Save All Visible Toolpaths as Template",
                 ),
-            ] {
+            ]
+            .into_iter()
+            .take(if templates { 4 } else { 2 })
+            {
                 let available =
                     id == "hide_toolpath" && self.selected_toolpath.is_some() || self.available(id);
                 let button = self.icon_button(icon, "", tip, edge);
@@ -3720,20 +3735,30 @@ impl CutCraftApp {
     }
 
     /// The Design tab's sub-tabs, under the groups always shown: Create, Edit, Arrange,
-    /// Model, Import. Each names what its tools are for on hover, so a beginner looks under a
-    /// word rather than down one long page of icons. A right-click moves one out of the row
-    /// into a section of its own below it (or back), so tools used together can all show at
-    /// once; the choice is kept in the options.
+    /// Model, Import (see [`Self::subtabs`]).
     pub(super) fn design_subtabs(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Design sub-tabs");
+        self.subtabs(ui, Page::Design);
+    }
+
+    /// A page's sub-tabs, under the groups always shown. Each names what its tools are for on
+    /// hover, so a beginner looks under a word rather than down one long page of icons. A
+    /// right-click moves one out of the row into a section of its own below it (or back), so
+    /// tools used together can all show at once; the choice is kept in the options. The
+    /// Design and Toolpaths pages follow the same rules.
+    pub(super) fn subtabs(&mut self, ui: &mut egui::Ui, page: Page) {
         /// The share of the usual padding and spacing the sub-tabs keep between them.
         const SUBTAB_PADDING: f32 = 0.5;
-        cut_craft_bug_report::mark(ui, "Design sub-tabs");
-        let always = self.toolbar.named(gui::ALWAYS_SHOWN);
-        self.tool_groups(ui, &always, Page::Design);
+        let set = subtab_set(page);
+        let always = match page {
+            Page::Design => self.toolbar.named(set.always),
+            Page::Toolpaths => self.toolbar.toolpath_named(set.always),
+        };
+        self.tool_groups(ui, &always, page);
         ui.separator();
-        let sections = self.options.design_sections.clone();
-        let (row, apart) = gui::subtab_layout(&sections);
-        let open = gui::open_subtab(self.design_subtab, &sections);
+        let sections = self.subtab_sections(page).to_vec();
+        let (row, apart) = set.layout(&sections);
+        let open = set.open(*self.open_subtab_mut(page), &sections);
         let (mut picked, mut chosen) = (None, None);
         if !row.is_empty() {
             ui.horizontal_wrapped(|ui| {
@@ -3741,9 +3766,9 @@ impl CutCraftApp {
                 ui.spacing_mut().button_padding.x *= SUBTAB_PADDING;
                 ui.spacing_mut().item_spacing.x *= SUBTAB_PADDING;
                 for &i in &row {
-                    let tab = &gui::DESIGN_SUBTABS[i];
+                    let tab = &set.tabs[i];
                     let response = ui
-                        .selectable_label(Some(i) == open, tab.name)
+                        .selectable_label(Some(i) == open, self.subtab_label(page, i))
                         .on_hover_hint(format!(
                             "{}. Right-click to show it as its own section",
                             tab.hint
@@ -3751,41 +3776,36 @@ impl CutCraftApp {
                     if response.clicked() {
                         picked = Some(i);
                     }
-                    if let Some(action) =
-                        self.popup(&response, || gui::subtab_menu(tab.name, &sections))
-                    {
+                    if let Some(action) = self.popup(&response, || set.menu(tab.name, &sections)) {
                         chosen = Some(action);
                     }
                 }
             });
             ui.add_space(ui.spacing().item_spacing.y);
             if let Some(i) = picked.or(open) {
-                self.design_subtab = i;
-                let groups = self.toolbar.subtab_groups(i);
-                self.tool_groups(ui, &groups, Page::Design);
+                *self.open_subtab_mut(page) = i;
+                self.subtab_contents(ui, page, i);
             }
         }
         for i in apart {
-            let tab = &gui::DESIGN_SUBTABS[i];
+            let tab = &set.tabs[i];
             ui.separator();
             // a tool picked elsewhere unfolds its section once; it can be folded again
-            let unfold = (self.design_unfold == Some(tab.name)).then_some(true);
+            let unfold = (*self.unfold_mut(page) == Some(tab.name)).then_some(true);
             if unfold.is_some() {
-                self.design_unfold = None;
+                *self.unfold_mut(page) = None;
             }
-            let header = egui::CollapsingHeader::new(egui::RichText::new(tab.name).strong())
-                .id_salt(("design section", tab.name))
+            let label = egui::RichText::new(self.subtab_label(page, i)).strong();
+            let header = egui::CollapsingHeader::new(label)
+                .id_salt((page_key(page), "section", tab.name))
                 .default_open(true)
                 .open(unfold)
-                .show(ui, |ui| {
-                    let groups = self.toolbar.subtab_groups(i);
-                    self.tool_groups(ui, &groups, Page::Design);
-                });
+                .show(ui, |ui| self.subtab_contents(ui, page, i));
             let response = header.header_response.on_hover_hint(format!(
                 "{}. Right-click to put it back in the tab row",
                 tab.hint
             ));
-            if let Some(action) = self.popup(&response, || gui::subtab_menu(tab.name, &sections)) {
+            if let Some(action) = self.popup(&response, || set.menu(tab.name, &sections)) {
                 chosen = Some(action);
             }
         }
@@ -3794,17 +3814,72 @@ impl CutCraftApp {
         }
     }
 
+    /// What sub-tab `i` of `page` shows: its groups' tools, or the Toolpaths page's own.
+    fn subtab_contents(&mut self, ui: &mut egui::Ui, page: Page, i: usize) {
+        match page {
+            Page::Design => {
+                let groups = self.toolbar.subtab_groups(i);
+                self.tool_groups(ui, &groups, Page::Design);
+            }
+            Page::Toolpaths => self.toolpath_subtab(ui, i),
+        }
+    }
+
+    /// Sub-tab `i`'s name in its row or on its section: the toolpath List calls out any
+    /// toolpath out of date, so it is seen from whichever sub-tab is open.
+    fn subtab_label(&self, page: Page, i: usize) -> String {
+        let name = subtab_set(page).tabs[i].name;
+        let stale = self.doc.toolpaths.values().any(|t| t.stale);
+        if page == Page::Toolpaths && name == "List" && stale {
+            format!("{name} ⚠")
+        } else {
+            name.to_owned()
+        }
+    }
+
+    /// The sub-tabs of `page` shown as sections of their own.
+    fn subtab_sections(&self, page: Page) -> &[String] {
+        match page {
+            Page::Design => &self.options.design_sections,
+            Page::Toolpaths => &self.options.toolpath_sections,
+        }
+    }
+
+    /// The open sub-tab of `page`.
+    fn open_subtab_mut(&mut self, page: Page) -> &mut usize {
+        match page {
+            Page::Design => &mut self.design_subtab,
+            Page::Toolpaths => &mut self.toolpath_subtab,
+        }
+    }
+
+    /// The section of `page` to unfold next frame.
+    fn unfold_mut(&mut self, page: Page) -> &mut Option<&'static str> {
+        match page {
+            Page::Design => &mut self.design_unfold,
+            Page::Toolpaths => &mut self.toolpath_unfold,
+        }
+    }
+
     /// Opens the sub-tab `id` is on, so a tool picked from Find Tool, a menu or a shortcut
     /// shows highlighted where it lives: its tab in the row, or its section unfolded.
     pub(super) fn show_subtab_of(&mut self, id: &str) {
-        let Some(tab) = self.toolbar.subtab_of(id, self.design_subtab) else {
-            return;
-        };
-        let name = gui::DESIGN_SUBTABS[tab].name;
-        if self.options.design_sections.iter().any(|s| s == name) {
-            self.design_unfold = Some(name);
+        let design = self.toolbar.subtab_of(id, self.design_subtab);
+        let toolpaths = self.toolbar.toolpath_subtab_of(id, self.toolpath_subtab);
+        for (page, tab) in [(Page::Design, design), (Page::Toolpaths, toolpaths)] {
+            if let Some(tab) = tab {
+                self.open_subtab(page, tab);
+            }
+        }
+    }
+
+    /// Opens sub-tab `tab` of `page`: in the row, or its section unfolded.
+    pub(super) fn open_subtab(&mut self, page: Page, tab: usize) {
+        let name = subtab_set(page).tabs[tab].name;
+        if self.subtab_sections(page).iter().any(|s| s == name) {
+            *self.unfold_mut(page) = Some(name);
         } else {
-            self.design_subtab = tab;
+            *self.open_subtab_mut(page) = tab;
         }
     }
 
@@ -5436,4 +5511,20 @@ pub(super) fn recalculate_question(stale: usize) -> String {
         "{count} now out of date: the vectors {them} cut have changed. Recalculate all \
          toolpaths now, so the G-code you save matches the drawing?"
     )
+}
+
+/// The sub-tabs of `page`.
+fn subtab_set(page: Page) -> gui::SubTabSet {
+    match page {
+        Page::Design => gui::DESIGN,
+        Page::Toolpaths => gui::TOOLPATHS,
+    }
+}
+
+/// `page`'s name in ids.
+fn page_key(page: Page) -> &'static str {
+    match page {
+        Page::Design => "design",
+        Page::Toolpaths => "toolpaths",
+    }
 }
