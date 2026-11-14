@@ -251,7 +251,8 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "import_into_shape",
         "Import Into Selected Shape",
         "Select a closed shape first (a circle, plaque or heart), then bring in a drawing or \
-         picture sized to fit inside it: scaled, stretched or bent to follow its outline",
+         picture sized to fit inside it: scaled, stretched or bent to follow its outline. \
+         Select an open line instead to bend the drawing along it, like lettering on an arc",
     ),
     (
         "import_component_3d_model",
@@ -1041,8 +1042,15 @@ impl MenuSystem {
             edit("Delete"),
             MenuItem::separator(),
             MenuItem::with_action("Select Vectors Inside", "select_vectors_inside"),
-            MenuItem::with_action("Import Into This Shape…", "import_into_shape")
-                .enabled(crate::app::shape_to_import_into(doc)),
+            MenuItem::with_action(
+                if crate::app::line_to_import_along(doc) {
+                    "Import Along This Line…"
+                } else {
+                    "Import Into This Shape…"
+                },
+                "import_into_shape",
+            )
+            .enabled(crate::app::shape_to_import_into(doc)),
             MenuItem::submenu("Move to Layer", layers.collect()),
             MenuItem::with_action("Copy to Other Side", "copy_to_other_side")
                 .enabled(doc.job.double_sided.is_some()),

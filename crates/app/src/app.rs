@@ -2737,8 +2737,14 @@ fn wrap_for(
     })
 }
 
-/// Whether one closed vector is selected, for a drawing to be imported into (the 2D view's
-/// right-click Import Into This Shape…).
+/// Whether one vector is selected, for a drawing to be imported into (the 2D view's
+/// right-click Import Into This Shape…) or, an open one, bent along.
 pub fn shape_to_import_into(doc: &cut_craft_core::document::Document) -> bool {
     fit_import::chosen_shape(doc).is_ok()
+}
+
+/// Whether the one vector selected is an open line, for the right-click item to read
+/// Import Along This Line….
+pub fn line_to_import_along(doc: &cut_craft_core::document::Document) -> bool {
+    fit_import::chosen_is_line(doc)
 }
