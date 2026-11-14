@@ -583,12 +583,12 @@ impl CutCraftApp {
             "create_job_sheet" => self.create_job_sheet(),
             "print_job_sheet" => self.print_job_sheet(),
             "edit_object" => {
-                if let Some((id, command, params)) = self.object_to_edit() {
-                    self.edit_shape(id, command, params);
-                } else if self.shape_to_edit() {
-                    // the form opens on the selected shape's own settings
+                if let Some(command) = self.made_to_edit() {
+                    // the form opens on what it made, with its own settings
                     self.form = None;
-                    self.start_command("create_shape");
+                    self.start_command(command);
+                } else if let Some((id, command, params)) = self.object_to_edit() {
+                    self.edit_shape(id, command, params);
                 }
             }
             "object_properties" => {
@@ -1918,6 +1918,7 @@ impl CutCraftApp {
                 fields,
                 params,
                 error: None,
+                warning: None,
                 new_job: false,
                 page,
                 editing: None,
@@ -3131,15 +3132,28 @@ impl CutCraftApp {
         }
     }
 
-    /// A component Create Shape made is picked (and no vector): E edits it in the form.
-    pub(super) fn shape_to_edit(&self) -> bool {
-        self.doc.selection.is_empty()
+    /// The tool that made what is picked and keeps its settings, so E edits it in the form:
+    /// Embellish for an embellishment (its component, or any of its pieces), Create Shape
+    /// for a component it made (and no vector picked).
+    pub(super) fn made_to_edit(&self) -> Option<&'static str> {
+        use cut_craft_core::Command as _;
+        if cmd_embellish::edits_selection(&self.doc) {
+            return Some(cmd_embellish::Embellish::ID);
+        }
+        let shaped = self.doc.selection.is_empty()
             && self.doc.selected_components.iter().any(|id| {
                 self.doc
                     .components
                     .get(id)
-                    .is_some_and(|k| k.shape.is_some())
-            })
+                    .and_then(|k| k.shape.as_ref())
+                    .is_some_and(cmd_create_shape::made_here)
+            });
+        shaped.then_some(cmd_create_shape::CreateShape::ID)
+    }
+
+    /// See [`Self::made_to_edit`].
+    pub(super) fn shape_to_edit(&self) -> bool {
+        self.made_to_edit().is_some()
     }
 
     /// The one vector selected, if drawing tool `id` draws shapes like it, with the settings
@@ -3289,7 +3303,13 @@ impl CutCraftApp {
             .copied()
             .filter(|t| self.doc.toolpaths.get(t).is_some_and(|t| t.stale))
             .collect();
-        let notes = [notes, kept].concat();
+        let mut notes = [notes, kept].concat();
+        notes.dedup();
+        // the form's own command: its warnings stay in red at the form's foot until its
+        // next Apply
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == id) {
+            form.warning = (!notes.is_empty()).then(|| notes.join("\n"));
+        }
         if stale.is_empty() {
             self.warn(&made, &notes);
         } else {
@@ -4515,9 +4535,16 @@ impl CutCraftApp {
         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
     }
 
-    /// Why the open form's last Apply failed, in red, over its buttons.
+    /// Why the open form's last Apply failed, or what it warned of, in red, over its buttons.
     fn form_error(&self, ui: &mut egui::Ui) {
-        let Some(error) = self.form.as_ref().and_then(|f| f.error.as_ref()) else {
+        let Some(form) = self.form.as_ref() else {
+            return;
+        };
+        // what the last Apply made is not quite what was asked: said in red, never a pop-up
+        if let Some(warning) = form.warning.as_ref().filter(|_| form.error.is_none()) {
+            ui.colored_label(ui.visuals().error_fg_color, warning);
+        }
+        let Some(error) = form.error.as_ref() else {
             return;
         };
         let shown = ui.colored_label(ui.visuals().error_fg_color, error);

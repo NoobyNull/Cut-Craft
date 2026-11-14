@@ -36,11 +36,11 @@ mod rng;
 mod sym;
 
 use cut_craft_core::component::{Combine, Component};
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::trace::{Fit, fit};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
-use design::{Settings, Where};
+use design::{Motifs, Settings, Where};
 use field::Field;
 use motif::Item;
 use schemars::JsonSchema;
@@ -48,38 +48,74 @@ use serde::{Deserialize, Serialize};
 
 pub struct Embellish;
 
-/// Where the ornament goes in the shape.
+/// The one look the embellishment has: an ornament inside the shape, or a border round its
+/// edge.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum Place {
-    /// Inside, with no border
-    Fill,
-    /// A border band and bead row round the edge, and ornament along it
-    Border,
-    /// The border and the inside
+pub enum Style {
+    /// A band and bead row round the edge, and inside it a vine with scrolls, flowers, leaf
+    /// fans and small curls together
     #[default]
-    Both,
+    #[schemars(title = "Folk mix")]
+    FolkMix,
+    /// Inside only: a vine down the middle with scrolls curling off it, and small S-curls
+    Scrolls,
+    /// Inside only: rosettes where there is most room, and smaller flowers round them
+    Flowers,
+    /// Round the edge only: a rounded band with a row of beads inside it
+    #[schemars(title = "Band and beads border")]
+    BandBorder,
+    /// Round the edge only: slanted strands laid side by side
+    #[schemars(title = "Rope border")]
+    Rope,
+    /// Round the edge only: oval links seen face on, joined by links seen edge on
+    #[schemars(title = "Chain border")]
+    Chain,
+    /// Round the edge only: two strands twisting round each other
+    #[schemars(title = "Twist border")]
+    Twist,
+    /// Round the edge only: three strands plaited over and under
+    #[schemars(title = "Braid border")]
+    Braid,
+    /// Round the edge only: oval beads with a pair of thin discs between each two
+    #[schemars(title = "Bead and reel border")]
+    BeadAndReel,
+    /// Round the edge only: pairs of laurel leaves along a stem, as in a wreath
+    #[schemars(title = "Laurel leaves border")]
+    Laurel,
+    /// Round the edge only: feathers one after another, each with a quill and barbs
+    #[schemars(title = "Feathers border")]
+    Feathers,
+    /// Round the edge only: V shapes one after another, all pointing the same way
+    #[schemars(title = "Chevrons border")]
+    Chevrons,
 }
 
-/// What runs round the edge.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum BorderStyle {
-    /// A rounded band with a row of beads inside it, and ornament along it
-    #[default]
-    #[schemars(title = "Band and beads")]
-    Band,
-    /// Slanted strands laid side by side
-    Rope,
-    /// Oval links seen face on, joined by links seen edge on
-    Chain,
-    /// Two strands twisting round each other
-    Twist,
-    /// Three strands plaited over and under
-    Braid,
-    /// Oval beads with a pair of thin discs between each two
-    #[schemars(title = "Bead and reel")]
-    BeadAndReel,
+impl Style {
+    /// Where it goes, and what goes inside.
+    fn layout(self) -> (Where, Motifs) {
+        match self {
+            Self::FolkMix => (Where::Both, Motifs::Mix),
+            Self::Scrolls => (Where::Fill, Motifs::Scrolls),
+            Self::Flowers => (Where::Fill, Motifs::Flowers),
+            _ => (Where::Border, Motifs::Nothing),
+        }
+    }
+
+    /// The patterned border's own pattern, for the patterned borders.
+    fn pattern(self) -> Option<border::Style> {
+        Some(match self {
+            Self::Rope => border::Style::Rope,
+            Self::Chain => border::Style::Chain,
+            Self::Twist => border::Style::Twist,
+            Self::Braid => border::Style::Braid,
+            Self::BeadAndReel => border::Style::BeadAndReel,
+            Self::Laurel => border::Style::Laurel,
+            Self::Feathers => border::Style::Feathers,
+            Self::Chevrons => border::Style::Chevrons,
+            _ => return None,
+        })
+    }
 }
 
 /// Which way the carving's pieces go.
@@ -113,72 +149,96 @@ pub enum Make {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct Params {
-    #[schemars(title = "Where", extend("x-widget" = "row"))]
-    pub place: Place,
-    #[schemars(title = "Border", extend("x-hide-when" = {"place": "fill"}))]
-    pub border: BorderStyle,
-    /// How wide the patterned border is
-    #[schemars(title = "Border width", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    /// The one look it has. Folk mix, Scrolls and Flowers fill the shape; the borders run
+    /// round its edge (and round any hole in it)
+    #[schemars(extend("x-section" = true, "x-widget" = "named-icons", "x-icon" = "drawing_forms/embellish_{}.png"))]
+    pub style: Style,
+    /// Fill the whole shape with the pattern: row after row following the outline inward,
+    /// instead of one row round the edge
+    #[schemars(title = "Fill the shape", extend("x-group" = "Pattern", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    pub fill_rows: bool,
+    /// How wide the pattern is. On a shape narrower than this it is made narrower to fit,
+    /// one row down the middle
+    #[schemars(title = "Width", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub border_width: f64,
-    /// How long each repeat of the pattern is, against the width; the count is rounded so the
-    /// pattern meets itself
-    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    /// How long each repeat of the pattern is, against its width; the count is rounded so
+    /// the pattern meets itself
+    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-group" = "Pattern", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub repeat: u32,
     /// How steeply the rope's strands lie
-    #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"border": "rope"}))]
+    #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-group" = "Pattern", "x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"style": "rope"}))]
     pub twist: u32,
-    /// How far in from the edge the patterned border starts
-    #[schemars(title = "Border inset", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    /// How far in from the shape's edge the pattern starts
+    #[schemars(title = "Gap from the edge", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub border_inset: f64,
-    /// Raised rails along both sides of the patterned border
-    #[schemars(title = "Rails", extend("x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    /// Thin raised lines along both sides of the pattern, framing it
+    #[schemars(title = "Edge lines", extend("x-group" = "Pattern", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub rails: bool,
-    /// Low makes bold, plain pieces; high adds bead rows, sunbursts, striped scrolls and
-    /// small curls
-    #[schemars(range(min = 1, max = 10), extend("x-widget" = "slider"))]
+    /// Low makes a few bold, plain pieces; high adds bead rows, sunbursts, striped scrolls
+    /// and small curls
+    #[schemars(title = "Detail", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers", "band_border"]}))]
     pub refinement: u32,
-    /// How many scrolls and small pieces go in: low leaves open ground
-    #[schemars(title = "Number of objects", range(min = 1, max = 10), extend("x-widget" = "slider"))]
+    /// How full the shape gets: low leaves open ground between the pieces
+    #[schemars(title = "How full", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub objects: u32,
     /// How big the scrolls may grow
-    #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-unit" = "%", "x-widget" = "slider"))]
+    #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-group" = "Ornament", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls"]}))]
     pub scroll_size: u32,
     /// How close the pieces sit: the smallest gap between them is 3 mm at 1 and 0.75 mm at
     /// 10. Finish with a ball-nose bit no wider than the gap
-    #[schemars(range(min = 1, max = 10), extend("x-widget" = "slider"))]
+    #[schemars(range(min = 1, max = 10), extend("x-group" = "Fit to your bit", "x-widget" = "slider"))]
     pub tightness: u32,
-    /// Whether the 3D carving's pieces stand up, are hollowed in, or both
-    #[schemars(extend("x-widget" = "row"))]
-    pub direction: Direction,
-    /// How far the carving's highest pieces stand above the material
-    #[schemars(title = "Raise height", extend("x-unit" = "mm", "x-hide-when" = {"direction": "sunk"}), range(min = 0))]
-    pub height: f64,
-    /// How deep the carving's hollowed pieces go into the material
-    #[schemars(title = "Sink depth", extend("x-unit" = "mm", "x-hide-when" = {"direction": "raised"}), range(min = 0))]
-    pub depth: f64,
-    #[schemars(extend("x-widget" = "row"))]
+    /// Outlines to cut with 2D toolpaths, a rounded 3D carving, or both
+    #[schemars(extend("x-group" = "Make", "x-widget" = "row"))]
     pub make: Make,
-    /// Small dots punched into the open ground of the 3D carving
-    #[schemars(title = "Stippled ground")]
-    pub stipple: bool,
-    /// Another seed gives another design with the same settings
-    #[schemars(title = "Design", extend("x-widget" = "seed"))]
+    /// Another number gives another layout with the same settings
+    #[schemars(title = "Layout", extend("x-group" = "Make", "x-widget" = "seed"))]
     pub seed: u32,
     /// Names the new layer the ornament's vectors go on, and its 3D component
+    #[schemars(extend("x-group" = "Make"))]
     pub name: String,
+    /// Whether the 3D carving's pieces stand up, are hollowed in, or both
+    #[schemars(extend("x-group" = "3D carving", "x-widget" = "row", "x-hide-when" = {"make": "vectors"}))]
+    pub direction: Direction,
+    /// How far the carving's raised pieces stand above the material (not used when every
+    /// piece is sunk in)
+    #[schemars(title = "Raise height", extend("x-group" = "3D carving", "x-unit" = "mm", "x-hide-when" = {"make": "vectors"}), range(min = 0))]
+    pub height: f64,
+    /// How deep the carving's hollowed pieces go into the material
+    #[schemars(title = "Sink depth", extend("x-group" = "3D carving", "x-unit" = "mm", "x-show-when" = {"direction": ["sunk", "mixed"]}), range(min = 0))]
+    pub depth: f64,
+    /// Small dots punched into the open ground of the 3D carving
+    #[schemars(title = "Stippled ground", extend("x-group" = "3D carving", "x-hide-when" = {"make": "vectors"}))]
+    pub stipple: bool,
+    /// How the 3D carving joins any 3D already in the job
+    #[schemars(extend("x-group" = "3D carving", "x-hide-when" = {"make": "vectors"}))]
     pub combine: Combine,
+    /// The embellishment being edited: it is made again, in place, from the outlines it keeps
+    #[schemars(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editing: Option<Editing>,
+}
+
+/// Where an embellishment Embellish made lives: its layer of vectors, its 3D component, or
+/// both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Editing {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<LayerId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub component: Option<EntityId>,
 }
 
 impl Default for Params {
     fn default() -> Self {
         Self {
-            place: Place::Both,
-            border: BorderStyle::Band,
+            style: Style::FolkMix,
             border_width: 14.0,
             repeat: 100,
             twist: 45,
             border_inset: 3.0,
             rails: false,
+            fill_rows: false,
             refinement: 6,
             objects: 6,
             scroll_size: 100,
@@ -191,6 +251,7 @@ impl Default for Params {
             seed: 4,
             name: "Embellishment".into(),
             combine: Combine::Add,
+            editing: None,
         }
     }
 }
@@ -203,14 +264,7 @@ impl Params {
 
     /// The patterned border, when one is chosen.
     fn pattern(&self) -> Option<border::Spec> {
-        let style = match self.border {
-            BorderStyle::Band => return None,
-            BorderStyle::Rope => border::Style::Rope,
-            BorderStyle::Chain => border::Style::Chain,
-            BorderStyle::Twist => border::Style::Twist,
-            BorderStyle::Braid => border::Style::Braid,
-            BorderStyle::BeadAndReel => border::Style::BeadAndReel,
-        };
+        let style = self.style.pattern()?;
         Some(border::Spec {
             style,
             width: self.border_width,
@@ -218,21 +272,19 @@ impl Params {
             lay: f64::from(self.twist.clamp(20, 60)).to_radians(),
             inset: self.border_inset.max(0.0),
             rails: self.rails,
+            single: false,
         })
     }
 
-    fn settings(&self, seed: u32) -> Settings {
+    fn settings(&self, seed: u32, gap: f64) -> Settings {
         let unit = |v: u32| f64::from(v.clamp(1, 10) - 1) / 9.0;
         Settings {
-            gap: self.gap(),
+            gap,
             detail: unit(self.refinement),
             density: unit(self.objects),
             scale: f64::from(self.scroll_size.clamp(50, 160)) / 100.0,
-            place: match self.place {
-                Place::Fill => Where::Fill,
-                Place::Border => Where::Border,
-                Place::Both => Where::Both,
-            },
+            place: self.style.layout().0,
+            motifs: self.style.layout().1,
             stipple: self.stipple,
             seed,
             inner_from: 0.0,
@@ -300,11 +352,53 @@ fn regions(rings: &[Vec<Point>]) -> Vec<Region> {
 /// The ornament for one shape, in its field's frame: a patterned border when there is one,
 /// then the ornament inside it, kept clear of it. Also how many of the pieces, from the
 /// start, are the patterned border's.
-fn design(field: &Field, s: Settings, pattern: Option<border::Spec>) -> (Vec<Item>, usize) {
+fn design(
+    field: &Field,
+    s: Settings,
+    pattern: Option<border::Spec>,
+    rows: bool,
+) -> (Vec<Item>, usize) {
     let Some(b) = pattern.filter(|_| s.place != Where::Fill) else {
         return (fill(field, s, &[]), 0);
     };
-    let (mut items, reach) = border::design(field, &b, s.gap);
+    let b = fitted(field, b);
+    let (mut items, mut reach) = border::design(field, &b, s.gap);
+    // more rows inward, each a gap in from the last, while there is room for one
+    if rows && !b.single {
+        // where rows coming in from different edges meet (round a hole), a row that would
+        // run into the rows already laid is left out, and a piece or two that would touch
+        // them is dropped (the rows keep a gap apart, so this only catches real overlaps)
+        let mut occ = occ::Occ::new(field.w, field.h, s.gap * 0.4, |q, _| field.sample(q) > 0.0);
+        occ.mark(&items);
+        for _ in 0..200 {
+            let next = border::Spec {
+                inset: reach + s.gap,
+                ..b
+            };
+            let (loops, r) = border::design_loops(field, &next, s.gap);
+            if loops.iter().all(Vec::is_empty) {
+                break;
+            }
+            for row in loops {
+                let fits: Vec<bool> = row
+                    .iter()
+                    .map(|piece| occ.fits(std::slice::from_ref(piece)))
+                    .collect();
+                let clashes = fits.iter().filter(|f| !**f).count();
+                if clashes * 10 > row.len() {
+                    continue;
+                }
+                let kept: Vec<Item> = row
+                    .into_iter()
+                    .zip(fits)
+                    .filter_map(|(piece, fit)| fit.then_some(piece))
+                    .collect();
+                occ.mark(&kept);
+                items.extend(kept);
+            }
+            reach = r;
+        }
+    }
     let n = items.len();
     if s.place == Where::Border {
         return (items, n);
@@ -317,6 +411,57 @@ fn design(field: &Field, s: Settings, pattern: Option<border::Spec>) -> (Vec<Ite
     let more = fill(field, inside, &items);
     items.extend(more);
     (items, n)
+}
+
+/// `b` fitted to a shape too narrow for it as set: one row down the middle of the band,
+/// as wide as the band allows, its inset smaller. The pattern's repeat shrinks with its
+/// width.
+fn fitted(field: &Field, b: border::Spec) -> border::Spec {
+    let room = half_width(field);
+    if b.inset + b.width <= room * 0.95 {
+        return b;
+    }
+    let inset = b.inset.min(room * 0.1);
+    // the row's middle just off the band's middle, where the two edge lines nearly meet
+    let middle = room * 0.92;
+    border::Spec {
+        inset,
+        width: 2.0 * (middle - inset).max(0.0),
+        rails: false,
+        single: true,
+        ..b
+    }
+}
+
+/// How far in from the edge a line still runs most of the way round the shape: half the
+/// width of a band, the radius of a disc. (Its widest point alone, a band's corner, says
+/// too much.)
+fn half_width(field: &Field) -> f64 {
+    let longest = field
+        .outline
+        .iter()
+        .map(|r| field::loop_len(r))
+        .fold(0.0, f64::max);
+    let steps = 60;
+    (0..steps)
+        .map(|k| field.dmax * f64::from(steps - k) / f64::from(steps))
+        .find(|&d| {
+            let along: f64 = field
+                .rings_longer(d, 0.0)
+                .iter()
+                .map(|r| field::loop_len(r))
+                .sum();
+            along >= longest * 0.5
+        })
+        .unwrap_or(0.0)
+}
+
+/// How wide the shapes are, as told in a message: the widest circle in any.
+fn wide(regions: &[Region]) -> f64 {
+    regions
+        .iter()
+        .map(|r| 2.0 * r.field.dmax)
+        .fold(0.0, f64::max)
 }
 
 /// Which of one shape's pieces a Mixed carving hollows in: the small fillers (dots, beads,
@@ -345,10 +490,123 @@ fn small_ones(items: &[Item], n: usize) -> Vec<bool> {
 }
 
 fn fill(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
+    // scrolls or flowers alone spread over the whole shape: in one mirrored wedge, few fit
+    if matches!(s.motifs, Motifs::Flowers | Motifs::Scrolls) {
+        return free::design(field, s, pre);
+    }
     match sym::detect(field) {
         Some(found) => sym::design(field, found, s, pre),
         None => free::design(field, s, pre),
     }
+}
+
+/// What Embellish keeps with an embellishment: on its component when it has one, else on its
+/// layer.
+fn recipe(p: &Params, paths: &[Path], layer: Option<LayerId>) -> serde_json::Value {
+    let kept = Params {
+        editing: None,
+        ..p.clone()
+    };
+    serde_json::json!({
+        "command": Embellish::ID,
+        "params": kept,
+        "paths": paths,
+        "layer": layer,
+    })
+}
+
+/// One embellishment in the document: its settings, the outlines it was made for and where it
+/// lives.
+struct Kept {
+    params: Params,
+    paths: Vec<Path>,
+    at: Editing,
+}
+
+fn read_recipe(v: &serde_json::Value) -> Option<(Params, Vec<Path>)> {
+    if v.get("command")?.as_str()? != Embellish::ID {
+        return None;
+    }
+    Some((
+        Params::deserialize(&v["params"]).ok()?,
+        Vec::<Path>::deserialize(&v["paths"]).ok()?,
+    ))
+}
+
+/// Every embellishment Embellish made in `doc`.
+fn all_kept(doc: &Document) -> Vec<Kept> {
+    let on_components = doc.components.iter().filter_map(|(&id, part)| {
+        let shape = part.shape.as_ref()?;
+        let (params, paths) = read_recipe(shape)?;
+        let layer = Option::<LayerId>::deserialize(&shape["layer"])
+            .ok()
+            .flatten()
+            .filter(|l| doc.layers.iter().any(|x| x.id == *l));
+        Some(Kept {
+            params,
+            paths,
+            at: Editing {
+                layer,
+                component: Some(id),
+            },
+        })
+    });
+    let on_layers = doc.layers.iter().filter_map(|layer| {
+        let (params, paths) = read_recipe(layer.made.as_ref()?)?;
+        Some(Kept {
+            params,
+            paths,
+            at: Editing {
+                layer: Some(layer.id),
+                component: None,
+            },
+        })
+    });
+    on_components.chain(on_layers).collect()
+}
+
+/// The embellishment the selection picks: its component, any of its pieces, or (with
+/// `by_outlines`) the very outlines it was made for.
+fn picked(doc: &Document, by_outlines: bool) -> Option<Kept> {
+    let kept = all_kept(doc);
+    let by_component = || {
+        kept.iter().position(|k| {
+            k.at.component
+                .is_some_and(|c| doc.selected_components.contains(&c))
+        })
+    };
+    let by_piece = || {
+        let mut layers = doc.selection.iter().map(|&id| doc.layer_of(id));
+        let first = layers.next()?;
+        if !layers.all(|l| l == first) {
+            return None;
+        }
+        kept.iter().position(|k| k.at.layer == Some(first))
+    };
+    let by_outline = || {
+        if !by_outlines {
+            return None;
+        }
+        let (_, closed) = doc.selected_paths(|path| path.closed);
+        if closed.is_empty() {
+            return None;
+        }
+        kept.iter().position(|k| {
+            k.paths.len() == closed.len() && closed.iter().all(|q| k.paths.contains(q))
+        })
+    };
+    let i = if doc.selection.is_empty() {
+        by_component()?
+    } else {
+        by_piece().or_else(by_outline)?
+    };
+    kept.into_iter().nth(i)
+}
+
+/// Whether the selection is an embellishment Embellish made, its component or any of its
+/// pieces: E opens Embellish on it. (Its outline stays its drawing tool's to edit.)
+pub fn edits_selection(doc: &Document) -> bool {
+    picked(doc, false).is_some()
 }
 
 impl Command for Embellish {
@@ -364,6 +622,15 @@ impl Command for Embellish {
         }
     }
 
+    /// On a selected embellishment (its component, a piece of it, or its outline), its own
+    /// settings, so the form edits it rather than adding another.
+    fn initial_params(doc: &Document) -> Params {
+        picked(doc, true).map_or_else(Params::default, |k| Params {
+            editing: Some(k.at),
+            ..k.params
+        })
+    }
+
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.make != Make::Vectors {
             if p.direction != Direction::Sunk {
@@ -376,7 +643,17 @@ impl Command for Embellish {
         if p.pattern().is_some() {
             ensure_positive("border width", p.border_width)?;
         }
-        let (_, shapes) = doc.selected_paths(|path| path.closed);
+        let editing = p.editing.and_then(|at| {
+            all_kept(doc).into_iter().find(|k| {
+                k.at == at
+                    || (at.component.is_some() && k.at.component == at.component)
+                    || (at.component.is_none() && at.layer.is_some() && k.at.layer == at.layer)
+            })
+        });
+        let shapes = match &editing {
+            Some(k) => k.paths.clone(),
+            None => doc.selected_paths(|path| path.closed).1,
+        };
         if shapes.is_empty() {
             return Err(CommandError::Failed(
                 "select a closed vector to embellish: the ornament is designed to fit it".into(),
@@ -390,10 +667,40 @@ impl Command for Embellish {
         let regions = regions(&rings);
         let mut items: Vec<Item> = vec![];
         let mut sunk: Vec<bool> = vec![];
+        // the smallest gap any shape needed
+        let mut gap = p.gap();
         for (k, region) in regions.iter().enumerate() {
             let seed = p.seed.wrapping_add(k as u32 * 7919);
             let offset = region.offset;
-            let (made, n) = design(&region.field, p.settings(seed), p.pattern());
+            // a shape too narrow for the style at the gap asked is still drawn, the gap
+            // halved until it fits: what was asked for is made, too fine to carve in full
+            // (the note says so)
+            let mut g = p.gap();
+            let (made, n) = loop {
+                let (made, n) =
+                    design(&region.field, p.settings(seed, g), p.pattern(), p.fill_rows);
+                // a border alone, its pieces or ornament missing, is not what was asked;
+                // nor are pieces too big for the shape, out over its edge
+                let raised = made
+                    .iter()
+                    .filter(|it| matches!(it, Item::Shape { sink: false, .. }))
+                    .count();
+                let enough = if p.style.layout().0 == Where::Border {
+                    raised > 0
+                } else {
+                    raised > 2
+                };
+                // (the patterned border's own rows, the first `n`, are laid inside it)
+                let inside = made[n..]
+                    .iter()
+                    .flat_map(Item::points)
+                    .all(|q| region.field.sample(q) > region.field.res * 0.5);
+                if (enough && inside) || g < 0.05 {
+                    break (made, n);
+                }
+                g /= 2.0;
+            };
+            gap = gap.min(g);
             sunk.extend(match p.direction {
                 Direction::Raised => vec![false; made.len()],
                 Direction::Sunk => vec![true; made.len()],
@@ -405,27 +712,95 @@ impl Command for Embellish {
             .iter()
             .any(|it| matches!(it, Item::Shape { sink: false, .. }))
         {
-            return Err(CommandError::Failed(
-                "the shape is too small for the ornament. Draw it bigger, or turn Tightness up"
-                    .into(),
-            ));
+            let wide = wide(&regions);
+            return Err(CommandError::Failed(format!(
+                "the shape is only about {wide:.2} mm wide: too small to draw this style in. \
+                 Pick a bigger shape"
+            )));
         }
+        let at = editing.as_ref().map_or(
+            Editing {
+                layer: None,
+                component: None,
+            },
+            |k| k.at,
+        );
         let mut c = Change::builder(doc);
-        if p.make != Make::Carving {
+        // an embellishment edited: its old pieces go, and its layer if it no longer has any
+        if let Some(old) = at.layer {
+            let pieces: Vec<EntityId> = doc
+                .vectors
+                .keys()
+                .copied()
+                .filter(|&id| doc.layer_of(id) == old)
+                .collect();
+            for id in pieces {
+                c.remove(id);
+            }
+            if p.make == Make::Carving {
+                c.remove_layer(old);
+            }
+        }
+        let layer = if p.make == Make::Carving {
+            None
+        } else {
+            let id = match at.layer {
+                Some(old) => old,
+                None => c.add_layer(&p.name),
+            };
+            let mut layer = c
+                .layers()
+                .iter()
+                .find(|l| l.id == id)
+                .cloned()
+                .expect("the layer was just found or added");
+            layer.name.clone_from(&p.name);
+            layer.made = (p.make == Make::Vectors).then(|| recipe(p, &shapes, None));
+            c.replace_layer(layer);
             let group = doc.next_group();
-            let layer = c.add_layer(&p.name);
             for it in &items {
                 for path in outlines(it) {
-                    let id = c.add(path);
-                    c.move_to_layer(id, layer);
-                    c.set_group(id, Some(group));
+                    let piece = c.add(path);
+                    c.move_to_layer(piece, id);
+                    c.set_group(piece, Some(group));
+                }
+            }
+            Some(id)
+        };
+        let old_part = at.component.filter(|id| doc.components.contains_key(id));
+        if p.make == Make::Vectors {
+            if let Some(id) = old_part {
+                c.remove_component(id);
+            }
+        } else {
+            let mut part = carving(p, &regions, &items, &sunk, doc.job.model_cell(), gap);
+            part.shape = Some(recipe(p, &shapes, layer));
+            match old_part {
+                Some(id) => {
+                    let old = &doc.components[&id];
+                    part.level = old.level;
+                    part.group.clone_from(&old.group);
+                    part.visible = old.visible;
+                    part.colour = old.colour;
+                    part.shaping = old.shaping.clone();
+                    c.replace_component(id, part);
+                }
+                None => {
+                    c.add_component(part);
                 }
             }
         }
-        if p.make != Make::Vectors {
-            c.add_component(carving(p, &regions, &items, &sunk, doc.job.model_cell()));
+        let mut change = c.finish();
+        if gap < p.gap() - 1e-9 {
+            let wide = wide(&regions);
+            change.notes.push(format!(
+                "Drawn smaller than it will carve: the shape is about {wide:.1} mm wide, so \
+                 the pieces sit {gap:.2} mm apart, not {asked:.2} mm. A bit wider than \
+                 {gap:.2} mm will lose the fine detail",
+                asked = p.gap(),
+            ));
         }
-        Ok(c.finish())
+        Ok(change)
     }
 }
 
@@ -451,6 +826,7 @@ fn carving(
     items: &[Item],
     sunk: &[bool],
     model_cell: f64,
+    gap: f64,
 ) -> Component {
     let area = regions
         .iter()
@@ -463,7 +839,7 @@ fn carving(
         .reduce(Rect::union)
         .expect("at least one shape");
     let size = area.size();
-    let cell = (p.gap() / 4.0)
+    let cell = (gap / 4.0)
         .min(model_cell)
         .max((size.x * size.y / MOST_CELLS).sqrt());
     let mut part = Component::from_fn(&p.name, p.combine, area, cell, |_| None);
@@ -478,6 +854,7 @@ fn carving(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cut_craft_core::Change;
     use cut_craft_core::testing::{document_with, square};
     use std::f64::consts::TAU;
 
@@ -514,6 +891,165 @@ mod tests {
         let mut after = doc.clone();
         after.apply(&Embellish::run(doc, p).unwrap()).unwrap();
         after
+    }
+
+    fn selecting_components(doc: &Document) -> Document {
+        let mut d = doc.clone();
+        d.selection = cut_craft_core::selection::Selection::default();
+        d.selected_components = d.components.keys().copied().collect();
+        d
+    }
+
+    fn layer_vectors(doc: &Document, layer: cut_craft_core::document::LayerId) -> usize {
+        doc.vectors
+            .keys()
+            .filter(|id| doc.layer_of(**id) == layer)
+            .count()
+    }
+
+    #[test]
+    fn a_selected_embellishment_opens_with_its_own_settings_and_is_remade_in_place() {
+        let doc = document_with(vec![polygon(6, 110.0)]);
+        let p = Params {
+            name: "Lid".into(),
+            style: Style::Scrolls,
+            objects: 3,
+            ..Params::default()
+        };
+        let once = selecting_components(&made(&doc, &p));
+        assert_eq!(
+            Embellish::initial_params(&doc).editing,
+            None,
+            "nothing to edit yet"
+        );
+        let opened = Embellish::initial_params(&once);
+        assert!(
+            opened.editing.is_some(),
+            "the component opens Embellish on itself"
+        );
+        assert_eq!(opened.style, Style::Scrolls);
+        assert_eq!(opened.objects, 3);
+        assert_eq!(opened.name, "Lid");
+        let changed = Params {
+            name: "Top".into(),
+            objects: 9,
+            ..opened
+        };
+        let twice = made(&once, &changed);
+        assert_eq!(twice.layers.len(), once.layers.len(), "the same layer");
+        assert_eq!(twice.components.len(), 1, "remade, not added");
+        let layer = twice.layers.last().unwrap();
+        assert_eq!(layer.name, "Top");
+        let fresh = made(
+            &doc,
+            &Params {
+                editing: None,
+                ..changed.clone()
+            },
+        );
+        assert_eq!(
+            layer_vectors(&twice, layer.id),
+            layer_vectors(&fresh, fresh.layers.last().unwrap().id),
+            "new pieces replace the old"
+        );
+        assert_eq!(twice.components.values().next().unwrap().name, "Top");
+        assert_eq!(
+            Embellish::initial_params(&selecting_components(&twice)).objects,
+            9,
+            "and it remembers the new settings"
+        );
+        // undo brings back the first one exactly
+        let mut undone = twice.clone();
+        undone
+            .apply(&Embellish::run(&once, &changed).unwrap().inverse())
+            .unwrap();
+        assert_eq!(undone.vectors.len(), once.vectors.len());
+        assert_eq!(undone.layers, once.layers);
+    }
+
+    #[test]
+    fn its_pieces_or_the_outline_it_was_made_for_open_it_too() {
+        let shape = polygon(6, 110.0);
+        let doc = document_with(vec![shape.clone()]);
+        let p = Params {
+            objects: 2,
+            ..Params::default()
+        };
+        let after = made(&doc, &p);
+        assert!(
+            Embellish::initial_params(&after).editing.is_some(),
+            "the outline is still selected: Embellish edits its embellishment"
+        );
+        let layer = after.layers.last().unwrap().id;
+        let piece = *after
+            .vectors
+            .keys()
+            .find(|id| after.layer_of(**id) == layer)
+            .unwrap();
+        let mut picked = after.clone();
+        picked.selection = [piece].into();
+        let opened = Embellish::initial_params(&picked);
+        assert!(opened.editing.is_some(), "a piece of it");
+        assert_eq!(opened.objects, 2);
+        // another outline is a new embellishment
+        let mut other = after.clone();
+        other
+            .apply(&Change::swap(&other, [], vec![square(400.0, 0.0, 100.0)]))
+            .unwrap();
+        assert_eq!(Embellish::initial_params(&other).editing, None);
+    }
+
+    #[test]
+    fn vectors_only_keeps_its_settings_on_its_layer_and_can_become_a_carving() {
+        let doc = document_with(vec![polygon(6, 110.0)]);
+        let p = Params {
+            make: Make::Vectors,
+            ..Params::default()
+        };
+        let once = made(&doc, &p);
+        assert!(once.components.is_empty());
+        let opened = Embellish::initial_params(&once);
+        assert!(opened.editing.is_some());
+        let both = made(
+            &once,
+            &Params {
+                make: Make::Both,
+                ..opened
+            },
+        );
+        assert_eq!(both.components.len(), 1, "a carving added to it");
+        assert_eq!(both.layers.len(), once.layers.len());
+        assert!(
+            both.layers.last().unwrap().made.is_none(),
+            "the component keeps the settings now"
+        );
+        let opened = Embellish::initial_params(&selecting_components(&both));
+        let carving = made(
+            &both,
+            &Params {
+                make: Make::Carving,
+                ..opened
+            },
+        );
+        assert_eq!(
+            carving.layers.len(),
+            doc.layers.len(),
+            "its vectors and layer go"
+        );
+        assert_eq!(carving.vectors.len(), doc.vectors.len());
+        assert_eq!(carving.components.len(), 1);
+        let opened = Embellish::initial_params(&selecting_components(&carving));
+        assert_eq!(opened.make, Make::Carving);
+        let back = made(
+            &carving,
+            &Params {
+                make: Make::Vectors,
+                ..opened
+            },
+        );
+        assert!(back.components.is_empty(), "the carving goes");
+        assert_eq!(back.layers.len(), doc.layers.len() + 1);
+        assert!(Embellish::initial_params(&back).editing.is_some());
     }
 
     #[test]
@@ -576,15 +1112,15 @@ mod tests {
         assert!(hi <= 0.0 && (lo + 1.5).abs() < 0.3, "sunk {lo} {hi}");
         let (lo, hi) = range_of(&made(&doc, &with(Direction::Mixed)));
         assert!((hi - 3.0).abs() < 0.15 && lo < -1.0, "mixed {lo} {hi}");
-        for pattern in [BorderStyle::Band, BorderStyle::Rope] {
+        for style in [Style::FolkMix, Style::Scrolls] {
             let p = Params {
-                border: pattern,
+                style,
                 ..with(Direction::Mixed)
             };
             let (pieces, n) = {
                 let rings: Vec<Vec<Point>> = vec![polygon(6, 110.0).flatten(0.05)];
                 let r = regions(&rings);
-                design(&r[0].field, p.settings(4), p.pattern())
+                design(&r[0].field, p.settings(4, p.gap()), p.pattern(), false)
             };
             let small = small_ones(&pieces, n);
             assert!(small[..n].iter().all(|s| !s), "the border stays raised");
@@ -681,9 +1217,9 @@ mod tests {
         let shape = polygon(4, 110.0);
         let doc = document_with(vec![shape]);
         let centre = Point::new(150.0, 150.0);
-        let near_middle = |place| {
+        let near_middle = |style| {
             let p = Params {
-                place,
+                style,
                 make: Make::Vectors,
                 ..Params::default()
             };
@@ -696,25 +1232,27 @@ mod tests {
                 })
                 .count()
         };
-        assert_eq!(near_middle(Place::Border), 0);
-        assert!(near_middle(Place::Both) > 0);
+        assert_eq!(near_middle(Style::BandBorder), 0);
+        assert!(near_middle(Style::FolkMix) > 0);
     }
 
     #[test]
-    fn a_patterned_border_runs_round_the_edge_with_the_ornament_clear_inside_it() {
+    fn a_patterned_border_runs_round_the_edge_alone() {
         let shape = polygon(6, 110.0);
         let doc = document_with(vec![shape.clone()]);
         let centre = Point::new(150.0, 150.0);
         for border in [
-            BorderStyle::Rope,
-            BorderStyle::Chain,
-            BorderStyle::Twist,
-            BorderStyle::Braid,
-            BorderStyle::BeadAndReel,
+            Style::Rope,
+            Style::Chain,
+            Style::Twist,
+            Style::Braid,
+            Style::BeadAndReel,
+            Style::Laurel,
+            Style::Feathers,
+            Style::Chevrons,
         ] {
             let only = Params {
-                place: Place::Border,
-                border,
+                style: border,
                 make: Make::Vectors,
                 ..Params::default()
             };
@@ -726,17 +1264,184 @@ mod tests {
                 let d = v.bounds().center().distance(centre);
                 assert!(d > 65.0 || v.bounds().size().x > 100.0, "{border:?} at {d}");
             }
-            let both = Params {
-                place: Place::Both,
-                ..only
+        }
+    }
+
+    /// The pieces' sizes, longest side, biggest first.
+    fn piece_sizes(doc: &Document, outline: &Path) -> Vec<f64> {
+        let mut sizes: Vec<f64> = doc
+            .vectors
+            .values()
+            .filter(|v| *v != outline)
+            .map(|v| {
+                let s = v.bounds().size();
+                s.x.max(s.y)
+            })
+            .collect();
+        sizes.sort_by(|a, b| b.total_cmp(a));
+        sizes
+    }
+
+    #[test]
+    fn each_style_is_one_kind_of_piece() {
+        for shape in [lopsided(), polygon(6, 110.0)] {
+            let doc = document_with(vec![shape.clone()]);
+            let of = |style| {
+                made(
+                    &doc,
+                    &Params {
+                        style,
+                        make: Make::Vectors,
+                        ..Params::default()
+                    },
+                )
             };
-            let inside = made(&doc, &both)
+            let (mix, scrolls, flowers) =
+                (of(Style::FolkMix), of(Style::Scrolls), of(Style::Flowers));
+            let (m, sc, fl) = (
+                piece_sizes(&mix, &shape),
+                piece_sizes(&scrolls, &shape),
+                piece_sizes(&flowers, &shape),
+            );
+            eprintln!(
+                "mix {:?}\nscrolls {:?}\nflowers {:?}",
+                &m[..8],
+                &sc[..8.min(sc.len())],
+                &fl[..8.min(fl.len())]
+            );
+            assert!(sc.len() > 10 && fl.len() > 10, "{} {}", sc.len(), fl.len());
+            assert!(
+                sc.len() < m.len() && fl.len() < m.len(),
+                "fewer kinds, fewer pieces"
+            );
+            // no border band (the biggest piece of the mix) in either
+            let outline = shape.bounds().size().x;
+            assert!(m[0] > outline * 0.9);
+            assert!(sc[0] < outline * 0.9 && fl[0] < outline * 0.9);
+        }
+    }
+
+    #[test]
+    fn a_patterned_border_can_fill_the_shape_row_after_row() {
+        let shape = polygon(6, 110.0);
+        let doc = document_with(vec![shape.clone()]);
+        let centre = Point::new(150.0, 150.0);
+        for style in [
+            Style::Rope,
+            Style::Chain,
+            Style::BeadAndReel,
+            Style::Laurel,
+            Style::Feathers,
+            Style::Chevrons,
+        ] {
+            let p = |fill_rows| Params {
+                style,
+                fill_rows,
+                make: Make::Vectors,
+                ..Params::default()
+            };
+            let one = made(&doc, &p(false));
+            let rows = made(&doc, &p(true));
+            assert!(
+                rows.vectors.len() > 2 * one.vectors.len(),
+                "{style:?}: {} rows vs {}",
+                rows.vectors.len(),
+                one.vectors.len()
+            );
+            let near_middle = rows
                 .vectors
                 .values()
-                .filter(|v| v.bounds().center().distance(centre) < 60.0)
+                .filter(|v| v.bounds().center().distance(centre) < 40.0)
                 .count();
-            assert!(inside > 5, "{border:?}: ornament inside");
+            assert!(near_middle > 0, "{style:?}: rows reach the middle");
         }
+    }
+
+    /// A band `w` mm wide round a 200 mm square.
+    fn band(w: f64) -> Document {
+        document_with(vec![square(0.0, 0.0, 200.0), square(w, w, 200.0 - 2.0 * w)])
+    }
+
+    #[test]
+    fn a_border_too_wide_for_a_narrow_band_is_made_narrower_to_fit() {
+        let doc = band(12.0);
+        for style in [Style::Rope, Style::Chain, Style::Chevrons, Style::Laurel] {
+            let p = Params {
+                style,
+                border_width: 14.0,
+                make: Make::Vectors,
+                ..Params::default()
+            };
+            let after = match Embellish::run(&doc, &p) {
+                Ok(c) => {
+                    let mut a = doc.clone();
+                    a.apply(&c).unwrap();
+                    a
+                }
+                Err(e) => panic!("{style:?}: {e}"),
+            };
+            let pieces = after.vectors.len() - doc.vectors.len();
+            assert!(pieces > 40, "{style:?}: {pieces}");
+            // every piece stays inside the band
+            for v in after.vectors.values() {
+                let b = v.bounds();
+                let inner = Rect::new(Point::splat(12.0), Point::splat(188.0));
+                let across = b.min.x.max(b.min.y) >= -0.01 && b.max.x.max(b.max.y) <= 200.01;
+                let clear = !(b.min.x > inner.min.x + 0.01
+                    && b.min.y > inner.min.y + 0.01
+                    && b.max.x < inner.max.x - 0.01
+                    && b.max.y < inner.max.y - 0.01);
+                assert!(across && clear, "{style:?}: {b:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn too_narrow_a_shape_is_still_drawn_with_a_note_that_it_is_too_fine_to_carve() {
+        let doc = band(4.0);
+        for style in [Style::Rope, Style::Chain, Style::FolkMix, Style::Laurel] {
+            let p = Params {
+                style,
+                ..Params::default()
+            };
+            let change = Embellish::run(&doc, &p).unwrap_or_else(|e| panic!("{style:?}: {e}"));
+            let mut after = doc.clone();
+            after.apply(&change).unwrap();
+            assert!(
+                after.vectors.len() > doc.vectors.len() + 10,
+                "{style:?}: {}",
+                after.vectors.len() - doc.vectors.len()
+            );
+            let note = change.notes.join(" ");
+            assert!(
+                note.contains("smaller than it will carve"),
+                "{style:?}: {note}"
+            );
+        }
+        // a shape it fits makes no such note
+        let fits = Embellish::run(&band(40.0), &Params::default()).unwrap();
+        assert!(fits.notes.is_empty(), "{:?}", fits.notes);
+    }
+
+    #[test]
+    fn a_tiny_shapes_pieces_are_made_small_enough_to_stay_inside_it() {
+        let doc = document_with(vec![square(10.0, 10.0, 3.0)]);
+        let change = Embellish::run(&doc, &Params::default()).unwrap();
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        // (to the field's half cell: 0.25 mm)
+        let inside = Rect::new(Point::splat(9.75), Point::splat(13.25));
+        for v in after.vectors.values() {
+            for q in v.flatten(0.01) {
+                assert!(inside.contains(q), "{q:?}");
+            }
+        }
+        assert!(
+            change
+                .notes
+                .join(" ")
+                .contains("smaller than it will carve")
+        );
     }
 
     #[test]
@@ -825,6 +1530,65 @@ mod pictures {
         Path::polyline(&pts, true)
     }
 
+    /// The Style list's pictures: each style's vectors on a rounded square, as JSON lists of
+    /// points for `scripts/make_embellish_icons.py`: `EMBELLISH_ICONS=dir cargo nextest run
+    /// -p cmd-embellish style_pictures --run-ignored only`.
+    #[test]
+    #[ignore = "writes the style pictures' outlines"]
+    fn style_pictures() {
+        let out = std::path::PathBuf::from(std::env::var("EMBELLISH_ICONS").unwrap());
+        // a 100 mm square with 16 mm round corners
+        let mut pts = vec![];
+        for (cx, cy, a0) in [
+            (84.0, 16.0, -90.0),
+            (84.0, 84.0, 0.0),
+            (16.0, 84.0, 90.0),
+            (16.0, 16.0, 180.0),
+        ] {
+            for k in 0..=12 {
+                let a = f64::to_radians(a0 + 90.0 * f64::from(k) / 12.0);
+                pts.push(Point::new(cx, cy) + Point::from_angle(a) * 16.0);
+            }
+        }
+        let shape = Path::polyline(&pts, true);
+        let doc = cut_craft_core::testing::document_with(vec![shape.clone()]);
+        for (key, style) in [
+            ("folk_mix", Style::FolkMix),
+            ("scrolls", Style::Scrolls),
+            ("flowers", Style::Flowers),
+            ("band_border", Style::BandBorder),
+            ("rope", Style::Rope),
+            ("chain", Style::Chain),
+            ("twist", Style::Twist),
+            ("braid", Style::Braid),
+            ("bead_and_reel", Style::BeadAndReel),
+            ("laurel", Style::Laurel),
+            ("feathers", Style::Feathers),
+            ("chevrons", Style::Chevrons),
+        ] {
+            let p = Params {
+                style,
+                make: Make::Vectors,
+                border_width: 16.0,
+                tightness: 5,
+                objects: 9,
+                ..Params::default()
+            };
+            let mut after = doc.clone();
+            after.apply(&Embellish::run(&doc, &p).unwrap()).unwrap();
+            let rings: Vec<Vec<[f64; 2]>> = after
+                .vectors
+                .values()
+                .map(|v| v.flatten(0.1).iter().map(|q| [q.x, q.y]).collect())
+                .collect();
+            std::fs::write(
+                out.join(format!("{key}.json")),
+                serde_json::to_string(&rings).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+
     #[test]
     #[ignore = "writes pictures to look at"]
     fn pictures() {
@@ -869,35 +1633,35 @@ mod pictures {
             (
                 "-border",
                 Params {
-                    place: Place::Border,
+                    style: Style::BandBorder,
                     ..Params::default()
                 },
             ),
             (
                 "-rope",
                 Params {
-                    border: BorderStyle::Rope,
+                    style: Style::Rope,
                     ..Params::default()
                 },
             ),
             (
                 "-chain",
                 Params {
-                    border: BorderStyle::Chain,
+                    style: Style::Chain,
                     ..Params::default()
                 },
             ),
             (
                 "-twist",
                 Params {
-                    border: BorderStyle::Twist,
+                    style: Style::Twist,
                     ..Params::default()
                 },
             ),
             (
                 "-braid",
                 Params {
-                    border: BorderStyle::Braid,
+                    style: Style::Braid,
                     rails: true,
                     ..Params::default()
                 },
@@ -905,7 +1669,90 @@ mod pictures {
             (
                 "-bead",
                 Params {
-                    border: BorderStyle::BeadAndReel,
+                    style: Style::BeadAndReel,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-chain-fill",
+                Params {
+                    style: Style::Chain,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-rope-fill",
+                Params {
+                    style: Style::Rope,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-braid-fill",
+                Params {
+                    style: Style::Braid,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-laurel",
+                Params {
+                    style: Style::Laurel,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-feathers",
+                Params {
+                    style: Style::Feathers,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-chevrons",
+                Params {
+                    style: Style::Chevrons,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-laurel-fill",
+                Params {
+                    style: Style::Laurel,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-feathers-fill",
+                Params {
+                    style: Style::Feathers,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-chevrons-fill",
+                Params {
+                    style: Style::Chevrons,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-scrolls",
+                Params {
+                    style: Style::Scrolls,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-flowers",
+                Params {
+                    style: Style::Flowers,
                     ..Params::default()
                 },
             ),
@@ -927,18 +1774,37 @@ mod pictures {
                 "-mixed-rope",
                 Params {
                     direction: Direction::Mixed,
-                    border: BorderStyle::Rope,
+                    style: Style::Rope,
                     ..Params::default()
                 },
             ),
         ];
         let only = std::env::var("EMBELLISH_ONLY").unwrap_or_default();
+        let only_variant = std::env::var("EMBELLISH_VARIANT").ok();
+        let mut shapes: Vec<(String, Vec<Path>)> =
+            shapes.into_iter().map(|(n, p)| (n, vec![p])).collect();
+        // a ring: a round shape with a round hole
+        let circle = |r: f64| {
+            let pts: Vec<Point> = (0..240)
+                .map(|k| {
+                    Point::new(150.0, 150.0) + Point::from_angle(TAU * f64::from(k) / 240.0) * r
+                })
+                .collect();
+            Path::polyline(&pts, true)
+        };
+        shapes.push(("ring".into(), vec![circle(120.0), circle(35.0)]));
         for (name, shape) in &shapes {
             if !only.is_empty() && !name.contains(&only) {
                 continue;
             }
             for (suffix, p) in &variants {
-                let doc = cut_craft_core::testing::document_with(vec![shape.clone()]);
+                if only_variant
+                    .as_ref()
+                    .is_some_and(|v| !v.split(',').any(|v| v == *suffix))
+                {
+                    continue;
+                }
+                let doc = cut_craft_core::testing::document_with(shape.clone());
                 let t = std::time::Instant::now();
                 let change = Embellish::run(&doc, p).unwrap();
                 let ms = t.elapsed().as_millis();

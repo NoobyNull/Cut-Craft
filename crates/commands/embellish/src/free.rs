@@ -3,7 +3,7 @@
 //! branching off it side to side, leaf fans filling the sharp points, flowers in the
 //! roomiest places, then scrolls and small pieces wherever there is room left.
 
-use crate::design::{Gen, Settings, Where};
+use crate::design::{Gen, Motifs, Settings, Where};
 use crate::field::{Field, loop_len, resample_loop, resample_open};
 use crate::motif::{
     Item, Level, Profile, Track, band, circ, curl_path, dir, dot_trio, fan_burst, flower_ring,
@@ -173,7 +173,8 @@ pub fn design(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
     }
     let ws = (g * 1.4).max(dm * 0.05);
     let rcal = (g * 0.9).max(dm * 0.04);
-    if !border_only {
+    let m = s.motifs;
+    if !border_only && m.scrolls() {
         vine(&mut gn, ii, ws, sc, den);
     }
     // sharp points of the outline (its outer rings only)
@@ -244,7 +245,7 @@ pub fn design(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
     }
     peaks.sort_by(|a, b| b.1.total_cmp(&a.1));
     let mut flowers: Vec<(Point, f64)> = vec![];
-    for (p, v) in peaks {
+    for (p, v) in peaks.into_iter().filter(|_| m.flowers()) {
         if flowers.iter().any(|f| f.0.distance(p) < f.1 + v * 0.8) {
             continue;
         }
@@ -261,7 +262,7 @@ pub fn design(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
         }
     }
     // a leaf fan fills each sharp point
-    for tp in tips {
+    for tp in tips.into_iter().filter(|_| m.leaves()) {
         let mut p = tp;
         let mut guard = 0;
         while field.sample(p) < ii + rcal * 1.5 && guard < 400 {
@@ -304,7 +305,11 @@ pub fn design(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
         }
     }
     // scrolls, the biggest that fits first
-    let rounds = (8.0 + 40.0 * den).round() as usize;
+    let rounds = if m.scrolls() {
+        (8.0 + 40.0 * den).round() as usize
+    } else {
+        0
+    };
     for _ in 0..rounds {
         let mut best: Option<(f64, Vec<Item>)> = None;
         for _ in 0..160 {
@@ -348,17 +353,30 @@ pub fn design(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
         }
     }
     // small pieces, sized from the shape
-    let levels: [Level; 3] = [
-        (
-            0.5,
-            300.0,
-            &[(flower_ring, 1.0), (spiral_s, 2.0), (fan_burst, 1.0)],
-            0.0,
-        ),
-        (0.3, 400.0, &[(spiral_s, 2.0), (flower_ring, 1.0)], 0.35),
-        (0.18, 300.0, &[(spiral_s, 1.0), (dot_trio, 1.0)], 0.65),
-    ];
-    for (f, tries, makers, dmin) in levels {
+    let levels: &[Level] = match m {
+        Motifs::Mix => &[
+            (
+                0.5,
+                300.0,
+                &[(flower_ring, 1.0), (spiral_s, 2.0), (fan_burst, 1.0)],
+                0.0,
+            ),
+            (0.3, 400.0, &[(spiral_s, 2.0), (flower_ring, 1.0)], 0.35),
+            (0.18, 300.0, &[(spiral_s, 1.0), (dot_trio, 1.0)], 0.65),
+        ],
+        Motifs::Scrolls => &[
+            (0.5, 300.0, &[(spiral_s, 1.0)], 0.0),
+            (0.3, 400.0, &[(spiral_s, 1.0)], 0.35),
+            (0.18, 300.0, &[(spiral_s, 1.0)], 0.65),
+        ],
+        Motifs::Flowers => &[
+            (0.5, 600.0, &[(flower_ring, 1.0)], 0.0),
+            (0.3, 800.0, &[(flower_ring, 1.0)], 0.0),
+            (0.18, 600.0, &[(flower_ring, 1.0)], 0.35),
+        ],
+        Motifs::Nothing => &[],
+    };
+    for &(f, tries, makers, dmin) in levels {
         if det < dmin {
             continue;
         }
@@ -544,7 +562,7 @@ fn vine(gn: &mut Gen, ii: f64, ws: f64, sc: f64, den: f64) {
                 c.x * e.h.sin() + c.y * e.h.cos(),
             );
         let er = (rho - wv / 2.0 - g) * 0.85;
-        if er > 4.0 * g {
+        if er > 4.0 * g && gn.s.motifs.leaves() {
             let mut its = vec![];
             sunburst(&mut its, x, er, g, dm, 0.0, TAU, 0.8);
             gn.add(its, false);

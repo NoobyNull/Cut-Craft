@@ -70,6 +70,8 @@ impl Command for LayerProperties {
             visible: p.visible,
             locked: p.locked,
             material: p.material.trim().to_owned(),
+            // what made the layer's contents stays with it
+            made: doc.layer(p.layer).and_then(|l| l.made.clone()),
         };
         let mut c = Change::builder(doc);
         // only editable vectors may stay selected
@@ -114,6 +116,7 @@ mod tests {
                 visible: false,
                 locked: true,
                 material: "Oak".into(),
+                made: None,
             }
         );
     }

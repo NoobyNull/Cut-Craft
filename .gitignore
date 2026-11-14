@@ -1,4 +1,5 @@
 target/
+/target-*/
 re/extracted/
 re/re/
 re/courses/

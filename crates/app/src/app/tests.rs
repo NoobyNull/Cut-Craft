@@ -7826,6 +7826,47 @@ fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
 }
 
 #[test]
+fn e_on_an_embellishment_opens_embellish_on_it_and_remakes_it_in_place() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 120.0, 120.0);
+    let mut params = h.app.registry.get("embellish").unwrap().default_params();
+    params["objects"] = 3.into();
+    h.app.apply("embellish", &params).unwrap();
+    assert_eq!(h.app.doc.components.len(), 1);
+    let layers = h.app.doc.layers.len();
+    let id = *h.app.doc.components.keys().next().unwrap();
+    // its component
+    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.app.doc.selected_components = [id].into();
+    assert!(h.app.available("edit_object"));
+    h.frame(vec![key(Key::E)]);
+    let form = h.app.form.as_mut().expect("Embellish opened");
+    assert_eq!(form.id, "embellish");
+    assert_eq!(form.params["objects"], 3);
+    let mut edited = form.params.clone();
+    edited["objects"] = 8.into();
+    h.app.apply_form("embellish", &edited).unwrap();
+    assert_eq!(h.app.doc.components.len(), 1, "remade, not added");
+    assert_eq!(h.app.doc.layers.len(), layers, "on its own layer still");
+    // one of its pieces
+    h.app.form = None;
+    let layer = h.app.doc.layers.last().unwrap().id;
+    let piece = *h
+        .app
+        .doc
+        .vectors
+        .keys()
+        .find(|v| h.app.doc.layer_of(**v) == layer)
+        .unwrap();
+    h.app.doc.selected_components.clear();
+    h.app.doc.selection = [piece].into();
+    h.frame(vec![key(Key::E)]);
+    let form = h.app.form.as_ref().expect("Embellish opened");
+    assert_eq!(form.id, "embellish");
+    assert_eq!(form.params["objects"], 8);
+}
+
+#[test]
 fn e_on_a_shape_component_opens_create_shape_on_it() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 40.0, 40.0);
@@ -12771,4 +12812,31 @@ fn setting_a_shortcut_takes_the_next_button_and_asks_before_taking_anothers() {
             .shortcuts
             .contains_key("zoom_to_drawing")
     );
+}
+
+#[test]
+fn embellish_drawn_finer_than_it_carves_says_so_in_red_at_the_foot_of_its_form() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 3.0, 3.0);
+    h.app.start_command("embellish");
+    let params = h
+        .app
+        .form
+        .as_ref()
+        .expect("Embellish opened")
+        .params
+        .clone();
+    h.app.apply_form("embellish", &params).unwrap();
+    let form = h.app.form.as_ref().unwrap();
+    assert!(form.error.is_none(), "{:?}", form.error);
+    let warning = form.warning.as_deref().unwrap_or_default();
+    assert!(warning.contains("smaller than it will carve"), "{warning}");
+    // a shape it fits: the warning goes
+    h.app.form = None;
+    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.rectangle(30.0, 10.0, 120.0, 120.0);
+    h.app.start_command("embellish");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("embellish", &params).unwrap();
+    assert_eq!(h.app.form.as_ref().unwrap().warning, None);
 }

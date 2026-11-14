@@ -37,6 +37,11 @@ pub struct Layer {
     /// job's (added with the Materials Library)
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub material: String,
+    /// The tool and settings that made what is on this layer, and the outlines it was made
+    /// for, so the tool can open on it again and remake it (added with editable
+    /// embellishments): `{"command": .., "params": .., "paths": ..}`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub made: Option<serde_json::Value>,
 }
 
 impl Layer {
@@ -47,6 +52,7 @@ impl Layer {
             visible: true,
             locked: false,
             material: String::new(),
+            made: None,
         }
     }
 }

@@ -158,11 +158,24 @@ fn mitred_distance(ring: &[Point], at: Point) -> f64 {
     to_line(before, here).max(to_line(here, after))
 }
 
+/// Whether a component's kept settings are Create Shape's: another tool (Embellish) names
+/// itself in them.
+pub fn made_here(kept: &serde_json::Value) -> bool {
+    kept.get("command")
+        .and_then(serde_json::Value::as_str)
+        .is_none_or(|c| c == CreateShape::ID)
+}
+
 /// The outlines the shape rises over: the shape's own when `p` edits one (with its id), else
 /// the selected closed vectors and the first open one (a custom profile).
 fn outlines(doc: &Document, p: &Params) -> (Option<EntityId>, Vec<Path>) {
     let kept = p.replaces.and_then(|id| {
-        let shape = doc.components.get(&id)?.shape.as_ref()?;
+        let shape = doc
+            .components
+            .get(&id)?
+            .shape
+            .as_ref()
+            .filter(|k| made_here(k))?;
         Some((id, Vec::<Path>::deserialize(&shape["paths"]).ok()?))
     });
     if let Some((id, paths)) = kept {
@@ -248,7 +261,12 @@ impl Command for CreateShape {
             .iter()
             .rev()
             .find_map(|&id| {
-                let kept = doc.components.get(&id)?.shape.as_ref()?;
+                let kept = doc
+                    .components
+                    .get(&id)?
+                    .shape
+                    .as_ref()
+                    .filter(|k| made_here(k))?;
                 let p = Params::deserialize(&kept["params"]).ok()?;
                 Some(Params {
                     replaces: Some(id),
