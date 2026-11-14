@@ -55,3 +55,12 @@ Pocket no longer offers trochoidal loops: for a light bite at full depth, pick A
 under Clear Pocket, which follows the pocket's shape and takes the Light Step. Loops stay
 on Profile, for cutting along a line. A pocket made in loops before keeps them, and its
 Cutting window still lets you change it back to straight.
+
+Pocket's Clear Pocket section has two settings for straighter walls. Leave for Edge Pass
+stops the clearing that far short of the walls, so the pass round the edge takes one thin,
+even skim instead of whatever the clearing left (0 clears right up to them). Edge Pass at
+Full Depth goes round the edge once, at the bottom, after all the clearing passes: one
+clean wall with no lines where the passes met. It needs a bit whose flutes reach the full
+depth; with shorter flutes (from the Tool Database) the edge is cut at each pass instead.
+Raster and Adaptive pockets can also leave the edge pass out (Profile Pass: None); offset
+rings always end on the edge.

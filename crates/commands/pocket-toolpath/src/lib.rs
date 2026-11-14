@@ -112,11 +112,25 @@ pub struct Params {
     )]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub raster_angle: f64,
-    /// Whether a pass round the edge cleans up the wall, and when
+    /// Whether a pass round the edge cleans up the wall, and when (adaptive clearing always
+    /// goes round last, if at all; offset rings end on the edge anyway)
     #[serde(default)]
-    #[schemars(extend("x-show-when" = {"strategy": "raster"}))]
+    #[schemars(extend("x-show-when" = {"strategy": ["raster", "adaptive"]}))]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub profile_pass: ProfilePass,
+    /// How much the clearing leaves on the walls for the pass round the edge to take off in
+    /// one thin, even skim, for a straighter, cleaner wall; 0 clears right up to it
+    #[serde(default)]
+    #[schemars(title = "Leave for Edge Pass", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
+    pub edge_allowance: f64,
+    /// Go round the edge once, at the full depth, after all the clearing passes: one clean
+    /// wall with no lines between the passes. Only where the bit's flutes reach that deep;
+    /// otherwise it goes round at each pass
+    #[serde(default)]
+    #[schemars(title = "Edge Pass at Full Depth")]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
+    pub edge_full_depth: bool,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
     #[schemars(skip)]
@@ -172,6 +186,8 @@ impl Default for Params {
             allowance: 0.0,
             raster_angle: 0.0,
             profile_pass: ProfilePass::Last,
+            edge_allowance: 0.0,
+            edge_full_depth: false,
             ways: Ways::One,
             rings: RingOrder::MiddleOut,
             motion: Motion::Straight,
@@ -246,30 +262,39 @@ fn check(p: &Params) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// The selected closed vectors `p` pockets, and where its tool's centre keeps inside them.
+fn pocket_edge(
+    doc: &Document,
+    p: &Params,
+) -> Result<(Vec<cut_craft_core::document::EntityId>, Vec<Path>), CommandError> {
+    let (ids, paths) = doc.selected_paths(|path| path.closed);
+    if ids.is_empty() {
+        return Err(CommandError::Failed(
+            "select the closed vectors to pocket".into(),
+        ));
+    }
+    // a shape inside another is an island the pocket goes round (a ring between two
+    // circles), as in the other toolpaths
+    // ponytail: overlapping shapes go even-odd too, their overlap left uncut
+    let edge = polygon::offset_regions(
+        &polygon::regions(&paths),
+        -(p.tool.diameter / 2.0 + p.allowance),
+        Corners::Round,
+    );
+    if edge.is_empty() {
+        return Err(tool_does_not_fit(&p.tool, None));
+    }
+    Ok((ids, edge))
+}
+
 /// The pocket for `p`'s own tool.
 fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpath, CommandError> {
     {
         check(p)?;
-        let (ids, paths) = doc.selected_paths(|path| path.closed);
-        if ids.is_empty() {
-            return Err(CommandError::Failed(
-                "select the closed vectors to pocket".into(),
-            ));
-        }
-        // a shape inside another is an island the pocket goes round (a ring between two
-        // circles), as in the other toolpaths
-        // ponytail: overlapping shapes go even-odd too, their overlap left uncut
-        let ring = polygon::offset_regions(
-            &polygon::regions(&paths),
-            -(p.tool.diameter / 2.0 + p.allowance),
-            Corners::Round,
-        );
-        if ring.is_empty() {
-            return Err(tool_does_not_fit(&p.tool, None));
-        }
+        let (ids, edge) = pocket_edge(doc, p)?;
         let step = p.tool.stepover * p.tool.diameter;
-        let edge = ring.clone();
-        let rings = rings_in(ring, step);
+        let walls_at = EdgePass::of(p, &edge);
+        let rings = rings_in(walls_at.inner.clone(), step);
         // the same rings from the outline in: turning the same way, they cut conventional
         // where the rings from the middle out cut climb (or the other way about)
         let outline_in: Vec<Path> = rings.iter().rev().cloned().collect();
@@ -285,7 +310,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                 loops.clone_from(&rings); // too narrow for loops: rings
             }
         }
-        let plan = adaptive_plan(p, &edge, &clearing);
+        let plan = adaptive_plan(p, &walls_at.inner, &clearing);
         let safe = doc.job.clearance;
         let entry = entry_for(p, &edge);
         // each path at depth `z`, entering from the level above; `back` runs it the other
@@ -328,7 +353,8 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             let cut = |paths: &[Path]| cut_way(paths, back);
             match (p.motion, p.strategy) {
                 (_, Strategy::Adaptive) => {
-                    moves.extend(adaptive_pass(&plan, &edge, p, (z, above), safe, &entry));
+                    let walls = walls_at.each_pass.then_some(&edge[..]);
+                    moves.extend(adaptive_pass(&plan, walls, p, (z, above), safe, &entry));
                 }
                 (Motion::Trochoidal, _) => {
                     if back && keep_climb && !loops_back.is_empty() {
@@ -341,15 +367,27 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                 }
                 (Motion::Straight, Strategy::Offset) => {
                     let inward = p.rings.inward(pass);
-                    moves.extend(cut_way(if inward { &outline_in } else { &rings }, back));
+                    let mut all = if inward {
+                        outline_in.clone()
+                    } else {
+                        rings.clone()
+                    };
+                    // the skim left for the edge pass, last
+                    if walls_at.each_pass && walls_at.leaves {
+                        all.extend(edge.iter().cloned());
+                    }
+                    moves.extend(cut_way(&all, back));
                 }
                 (Motion::Straight, Strategy::Raster) => {
                     // rows kept one way stay that way on a pass back
-                    let all = raster_run(&edge, step, p, keep_climb);
+                    let all = raster_run(&walls_at, &edge, step, p, keep_climb);
                     moves.extend(cut_any(&all, z, above, back && !keep_climb, true));
                 }
             }
             above = z;
+        }
+        if walls_at.at_full_depth {
+            edge_at_full_depth(&mut moves, &edge, p, above, safe, &entry);
         }
         if p.project_onto_model {
             moves = project_onto_model(doc, &p.tool, &moves)?;
@@ -357,6 +395,78 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         let mut toolpath = made_by::<PocketToolpath>(p, p.name.clone(), p.tool.clone(), ids, moves);
         toolpath.fallbacks = entry.take_fallbacks();
         Ok(toolpath)
+    }
+}
+
+/// Once round `edge` at the bottom, `z`, after `moves` cleared the pocket: from where the
+/// clearing ended, at depth, for one clean wall.
+fn edge_at_full_depth(
+    moves: &mut Vec<Move>,
+    edge: &[Path],
+    p: &Params,
+    z: f64,
+    safe: f64,
+    entry: &Entry,
+) {
+    let from = moves
+        .iter()
+        .rev()
+        .find(|m| m.kind != MoveKind::Rapid)
+        .filter(|m| (m.to.z - z).abs() < 1e-9)
+        .map(|m| m.to);
+    while from.is_some() && moves.last().is_some_and(|m| m.kind == MoveKind::Rapid) {
+        moves.pop();
+    }
+    let rings: Vec<Vec<Point>> = edge.iter().map(|r| oriented(p.direction, r)).collect();
+    moves.extend(walls(&rings, from, z, safe, entry));
+}
+
+/// Where a pocket's clearing stops and when its pass round the edge comes.
+struct EdgePass {
+    /// Where the clearing's tool centre keeps inside: the edge, or less the skim left for
+    /// the edge pass.
+    inner: Vec<Path>,
+    /// Whether `inner` stops short of the edge.
+    leaves: bool,
+    /// Round the edge at each pass depth (with the clearing).
+    each_pass: bool,
+    /// Round the edge once, at the full depth, after all the clearing.
+    at_full_depth: bool,
+}
+
+impl EdgePass {
+    /// For `p`, whose tool centre keeps inside `edge`: offset rings always end on the edge,
+    /// raster and adaptive clearing go round it unless their edge pass is None. Full depth
+    /// only where the bit's flutes reach (or their length is not known); else each pass.
+    fn of(p: &Params, edge: &[Path]) -> Self {
+        let goes_round = p.strategy == Strategy::Offset || p.profile_pass != ProfilePass::None;
+        let loops = p.motion == Motion::Trochoidal && p.strategy != Strategy::Adaptive;
+        if !goes_round || loops {
+            return Self {
+                inner: edge.to_vec(),
+                leaves: false,
+                each_pass: goes_round,
+                at_full_depth: false,
+            };
+        }
+        let reaches = p
+            .tool
+            .known_flute_length()
+            .is_none_or(|flutes| flutes >= p.depth - 1e-9);
+        let at_full_depth = p.edge_full_depth && reaches;
+        let leave = p.edge_allowance.max(0.0);
+        let inner = if leave > 0.0 {
+            polygon::offset_regions_again(edge, -leave)
+        } else {
+            vec![]
+        };
+        let leaves = !inner.is_empty();
+        Self {
+            inner: if leaves { inner } else { edge.to_vec() },
+            leaves,
+            each_pass: !at_full_depth,
+            at_full_depth,
+        }
     }
 }
 
@@ -474,10 +584,10 @@ fn adaptive_plan(
 }
 
 /// One pass depth of an adaptive pocket: `plan` cleared at depth `z` coming down from
-/// `above`, then once round the wall, `edge`.
+/// `above`, then once round the wall, `edge`, when there is one to go round at this depth.
 fn adaptive_pass(
     plan: &[Piece],
-    edge: &[Path],
+    edge: Option<&[Path]>,
     p: &Params,
     (z, above): (f64, f64),
     safe: f64,
@@ -485,6 +595,16 @@ fn adaptive_pass(
 ) -> Vec<Move> {
     let mut moves = adaptive_moves(plan, z, above, safe, entry);
     let from = moves.last().map(|m| m.to);
+    let Some(edge) = edge else {
+        // no pass round the wall (or one at the full depth later): up, clear of it
+        if let Some(at) = from {
+            moves.push(Move {
+                kind: MoveKind::Rapid,
+                to: at.truncate().extend(safe),
+            });
+        }
+        return moves;
+    };
     let rings: Vec<Vec<Point>> = edge.iter().map(|r| oriented(p.direction, r)).collect();
     moves.extend(walls(&rings, from, z, safe, entry));
     moves
@@ -665,11 +785,26 @@ fn trochoidal(edge: &[Path], p: &Params, loops: &Loops, back: bool) -> Vec<Path>
     out
 }
 
-/// A raster pocket's rows and its pass round the edge, in the order they are cut, as one
-/// run so each links on to the next; rows kept climb (or `p`'s direction) with `keep_climb`.
-fn raster_run(edge: &[Path], step: f64, p: &Params, keep_climb: bool) -> Vec<Path> {
+/// A raster pocket's rows (across `walls_at`'s inner region) and its pass round `edge` when
+/// it goes round at each pass, in the order they are cut, as one run so each links on to the
+/// next; rows kept climb (or `p`'s direction) with `keep_climb`.
+fn raster_run(
+    walls_at: &EdgePass,
+    edge: &[Path],
+    step: f64,
+    p: &Params,
+    keep_climb: bool,
+) -> Vec<Path> {
     let climb = p.direction == Direction::Climb;
-    let lines = raster(edge, step, p.raster_angle, keep_climb.then_some(climb));
+    let lines = raster(
+        &walls_at.inner,
+        step,
+        p.raster_angle,
+        keep_climb.then_some(climb),
+    );
+    if !walls_at.each_pass {
+        return lines;
+    }
     match p.profile_pass {
         ProfilePass::First => [edge, &lines].concat(),
         ProfilePass::Last => [lines.as_slice(), edge].concat(),
@@ -1676,6 +1811,111 @@ mod tests {
             .count();
         // a lift at the end of each pass (two passes), none between lines
         assert!(lifts <= 2, "it lifts {lifts} times");
+    }
+
+    /// The nearest any cut at depth `z` comes to the left wall (x = 0) of a square pocket.
+    fn nearest_left(tp: &Toolpath, z: f64) -> f64 {
+        tp.moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut && (m.to.z - z).abs() < 1e-9)
+            .map(|m| m.to.x)
+            .fold(f64::INFINITY, f64::min)
+    }
+
+    #[test]
+    fn the_clearing_leaves_a_skim_for_the_edge_pass_whatever_the_style() {
+        let r = Tool::default().diameter / 2.0;
+        for strategy in [Strategy::Offset, Strategy::Raster, Strategy::Adaptive] {
+            let p = Params {
+                strategy,
+                edge_allowance: 0.5,
+                ..Params::default()
+            };
+            let tp = pocket(40.0, &p).unwrap();
+            // the walls are cut, by the edge pass
+            assert!((nearest_left(&tp, -3.0) - r).abs() < 0.02, "{strategy:?}");
+            // and before it the clearing kept the skim's width off them
+            let last_wall = tp
+                .moves
+                .iter()
+                .rposition(|m| m.kind == MoveKind::Cut && (m.to.x - r).abs() < 0.02)
+                .unwrap();
+            let first_wall = tp
+                .moves
+                .iter()
+                .position(|m| m.kind == MoveKind::Cut && (m.to.x - r).abs() < 0.02)
+                .unwrap();
+            let before: Vec<f64> = tp.moves[..first_wall]
+                .iter()
+                .filter(|m| m.kind == MoveKind::Cut)
+                .map(|m| m.to.x)
+                .collect();
+            assert!(
+                before.iter().all(|&x| x >= r + 0.5 - 0.02),
+                "{strategy:?}: clearing came within {:?} of the wall",
+                before.iter().copied().fold(f64::INFINITY, f64::min)
+            );
+            assert!(last_wall > first_wall, "{strategy:?}");
+        }
+    }
+
+    #[test]
+    fn the_edge_pass_goes_round_once_at_full_depth_when_the_flutes_reach() {
+        let r = Tool::default().diameter / 2.0;
+        for strategy in [Strategy::Offset, Strategy::Raster, Strategy::Adaptive] {
+            let p = Params {
+                strategy,
+                depth: 9.0,
+                edge_allowance: 0.5,
+                edge_full_depth: true,
+                tool: Tool {
+                    flute_length: 12.0,
+                    ..Tool::default()
+                },
+                ..Params::default()
+            };
+            let tp = pocket(40.0, &p).unwrap();
+            for z in [-3.0, -6.0] {
+                assert!(
+                    nearest_left(&tp, z) >= r + 0.5 - 0.02,
+                    "{strategy:?} at {z}"
+                );
+            }
+            assert!((nearest_left(&tp, -9.0) - r).abs() < 0.02, "{strategy:?}");
+            // short flutes: round the edge at each pass instead
+            let short = Params {
+                tool: Tool {
+                    flute_length: 5.0,
+                    ..Tool::default()
+                },
+                ..p.clone()
+            };
+            let tp = pocket(40.0, &short).unwrap();
+            assert!((nearest_left(&tp, -3.0) - r).abs() < 0.02, "{strategy:?}");
+        }
+    }
+
+    #[test]
+    fn adaptive_can_leave_out_the_pass_round_the_edge() {
+        let with = pocket(
+            40.0,
+            &Params {
+                strategy: Strategy::Adaptive,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let without = pocket(
+            40.0,
+            &Params {
+                strategy: Strategy::Adaptive,
+                profile_pass: ProfilePass::None,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let wall = 4.0 * (40.0 - Tool::default().diameter);
+        assert!(cut_length(&with) - cut_length(&without) > 0.9 * wall);
     }
 
     #[test]
