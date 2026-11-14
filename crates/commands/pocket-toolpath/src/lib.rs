@@ -625,7 +625,16 @@ fn adaptive_moves(plan: &[Piece], z: f64, above: f64, safe: f64, entry: &Entry) 
     let at_z = |p: Point| p.extend(z);
     for piece in plan {
         match piece {
-            Piece::Enter(p) => entering = Some(*p),
+            Piece::Enter(p) => {
+                // already down from an earlier start: straight up before going across
+                if let Some(last) = moves.last().map(|m| m.to).filter(|at| at.z < safe) {
+                    moves.push(Move {
+                        kind: MoveKind::Rapid,
+                        to: last.truncate().extend(safe),
+                    });
+                }
+                entering = Some(*p);
+            }
             Piece::Cut(points) if entering.is_some() => {
                 entering = None;
                 let mut down = path_moves(points, false, &[z], above, safe, entry);
@@ -1238,6 +1247,51 @@ mod tests {
         .unwrap();
         let (a, l) = (cut_length(&adaptive), cut_length(&loops));
         assert!(a < l, "adaptive {a:.0} mm, loops {l:.0} mm");
+    }
+
+    #[test]
+    fn adaptive_sweeps_a_narrow_channel_and_only_crosses_at_safe_height() {
+        // two 15 mm wide channels off a 40 mm room: each swept, then the room cleared
+        let p = Point::new;
+        let shape = cut_craft_core::geometry::Path::polyline(
+            &[
+                p(0.0, 0.0),
+                p(40.0, 0.0),
+                p(40.0, 12.0),
+                p(120.0, 12.0),
+                p(120.0, 27.0),
+                p(40.0, 27.0),
+                p(40.0, 40.0),
+                p(27.0, 40.0),
+                p(27.0, 120.0),
+                p(12.0, 120.0),
+                p(12.0, 40.0),
+                p(0.0, 40.0),
+            ],
+            true,
+        );
+        let params = Params {
+            strategy: Strategy::Adaptive,
+            depth: 3.0,
+            ..Params::default()
+        };
+        let tp = made_toolpath::<PocketToolpath>(vec![shape], &params).unwrap();
+        let safe = tp.moves.iter().map(|m| m.to.z).fold(f64::MIN, f64::max);
+        for w in tp.moves.windows(2) {
+            let across = w[0].to.truncate().distance(w[1].to.truncate()) > 1e-9;
+            if w[1].kind == MoveKind::Rapid && across {
+                assert!(
+                    (w[0].to.z - safe).abs() < 1e-9 && (w[1].to.z - safe).abs() < 1e-9,
+                    "a rapid across below safe height: {:?} -> {:?}",
+                    w[0].to,
+                    w[1].to
+                );
+            }
+        }
+        // the channels are cleared: their far ends are reached
+        let r = Tool::default().diameter / 2.0;
+        assert!(nearest_cut(&tp, p(120.0 - r - 1.0, 19.5)) <= r);
+        assert!(nearest_cut(&tp, p(19.5, 120.0 - r - 1.0)) <= r);
     }
 
     #[test]
