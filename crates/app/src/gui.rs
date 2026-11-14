@@ -186,6 +186,12 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "Bring in a drawing made in another program: DXF, SVG or a Vectric job's vectors",
     ),
     (
+        "import_into_shape",
+        "Import Into Selected Shape",
+        "Select a closed shape first (a circle, plaque or heart), then bring in a drawing or \
+         picture sized to fit inside it: scaled, stretched or bent to follow its outline",
+    ),
+    (
         "import_component_3d_model",
         "Import 3D Model",
         "Bring in a 3D model (STL or OBJ) or saved 3D clipart, to size, place and carve",
@@ -370,6 +376,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
             &[
                 "import_vectors_bitmap",
                 "import_vectors",
+                "import_into_shape",
                 "import_component_3d_model",
                 "clipart_library",
                 "import_toolpaths_file",
@@ -921,6 +928,8 @@ impl MenuSystem {
             edit("Delete"),
             MenuItem::separator(),
             MenuItem::with_action("Select Vectors Inside", "select_vectors_inside"),
+            MenuItem::with_action("Import Into This Shape…", "import_into_shape")
+                .enabled(crate::app::shape_to_import_into(doc)),
             MenuItem::submenu("Move to Layer", layers.collect()),
             MenuItem::with_action("Copy to Other Side", "copy_to_other_side")
                 .enabled(doc.job.double_sided.is_some()),

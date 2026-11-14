@@ -156,6 +156,7 @@ impl CutCraftApp {
             menu_at: None,
             guide_props: None,
             tool_changer_window: false,
+            fit_import: None,
             list_height: None,
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
@@ -443,6 +444,7 @@ impl CutCraftApp {
                 self.machine_window = Some(cut_craft_machines::MachineManager::new(&self.machines));
             }
             "tool_changer" => self.tool_changer_window = true,
+            "import_into_shape" => self.import_into_shape(),
             "machine_files" => match self.machines.active() {
                 Some(machine) => {
                     let (name, send_to) = (machine.name.clone(), machine.send_to.clone());

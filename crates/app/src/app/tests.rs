@@ -11628,3 +11628,74 @@ fn suggest_takes_bits_from_my_tools_only() {
         "a read-only catalogue's bit is not suggested: {names:?}"
     );
 }
+
+#[test]
+fn a_drawing_imports_into_the_selected_circle_and_its_window_redoes_it_in_one_undo_step() {
+    use cut_craft_core::geometry::{Path, Point, Rect};
+    let mut h = Harness::new();
+    // a circle of radius 50 at (100, 100), selected
+    let mut c = Change::builder(&h.app.doc);
+    let circle = c.add(Path::circle(Point::new(100.0, 100.0), 50.0));
+    c.select([circle]);
+    h.app.record(Ok(c.finish()), "circle");
+    let before = h.app.history.undo_depth();
+    let svg = std::env::temp_dir().join(format!("cut-craft-into-{}.svg", std::process::id()));
+    std::fs::write(
+        &svg,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10"><rect x="0" y="0" width="20" height="10"/></svg>"#,
+    )
+    .unwrap();
+    h.app.import_into(&svg, circle);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let drawn = |h: &Harness| {
+        h.app
+            .doc
+            .vectors
+            .iter()
+            .filter(|(id, _)| **id != circle)
+            .map(|(_, p)| p.bounds())
+            .reduce(Rect::union)
+            .expect("the drawing came in")
+    };
+    let b = drawn(&h);
+    // inside the circle less the 5 mm margin: its corners within 45 of the middle
+    let corner = b.max - Point::new(100.0, 100.0);
+    assert!((corner.length() - 45.0).abs() < 0.1, "{b:?}");
+    assert!(
+        (b.size().x / b.size().y - 2.0).abs() < 1e-6,
+        "proportions kept"
+    );
+    assert!(
+        h.text_at("Import Into Shape").is_some(),
+        "its window is open"
+    );
+    assert!(h.app.doc.vectors.contains_key(&circle), "the shape is kept");
+    // Stretch redoes it, still one step
+    h.app.fit_import.as_mut().unwrap().way = super::fit_import::Way::Stretch;
+    h.app.place_fit_import();
+    assert!((drawn(&h).size().x / drawn(&h).size().y - 1.0).abs() < 1e-6);
+    assert_eq!(h.app.history.undo_depth(), before + 1);
+    h.app.history.undo(&mut h.app.doc);
+    assert_eq!(h.app.doc.vectors.len(), 1, "one undo takes it out");
+    h.frame(vec![]);
+    assert!(
+        h.app.fit_import.is_none(),
+        "the window closes once the job changed"
+    );
+    let _ = std::fs::remove_file(svg);
+}
+
+#[test]
+fn import_into_selected_shape_with_nothing_selected_says_what_to_pick() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "import_into_shape");
+    assert!(
+        h.app
+            .status
+            .message
+            .starts_with("Select the shape to import into"),
+        "{}",
+        h.app.status.message
+    );
+}

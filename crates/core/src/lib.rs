@@ -15,6 +15,7 @@ pub mod document;
 pub mod drill_bank;
 pub mod entry;
 pub mod file;
+pub mod fit;
 pub mod font;
 mod formats;
 pub mod geometry;
