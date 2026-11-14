@@ -1931,11 +1931,8 @@ impl CutCraftApp {
                 self.pages.open(page);
             }
             // a shape this tool draws, selected as it opens: the form edits that shape
-            if let Some((shape, command, params)) = self.object_to_edit()
-                && interactive
-                && command == id
-            {
-                self.edit_shape(shape, command, params);
+            if let Some((shape, params)) = self.drawn_by_tool(id).filter(|_| interactive) {
+                self.edit_shape(shape, id, params);
             }
         }
     }
@@ -3134,6 +3131,18 @@ impl CutCraftApp {
                     .get(id)
                     .is_some_and(|k| k.shape.is_some())
             })
+    }
+
+    /// The one vector selected, if drawing tool `id` draws shapes like it, with the settings
+    /// that draw it again (a square reads as Draw Rectangle's, or as Draw Polygon's).
+    fn drawn_by_tool(&self, id: &str) -> Option<(EntityId, Value)> {
+        let [shape] = self.doc.selection.iter().copied().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let path = self.doc.vectors.get(&shape)?;
+        let cmd = self.registry.get(id)?;
+        let params = cmd.params_from(path, &cmd.initial_params(&self.doc))?;
+        Some((shape, params))
     }
 
     /// Opens drawing tool `command` on vector `id` with `params`: changing the form redraws

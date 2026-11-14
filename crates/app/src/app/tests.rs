@@ -12236,3 +12236,69 @@ fn toolpath_forms_calculate_and_selection_tools_apply() {
     h.frame(vec![]);
     assert!(h.text_at("Create").is_some());
 }
+
+/// Polygons, stars and ellipses open in their drawing tool as circles and rectangles do, and
+/// a square opens in whichever of Draw Rectangle or Draw Polygon is picked; E picks Draw
+/// Rectangle for it.
+#[test]
+fn polygons_stars_and_ellipses_open_in_their_drawing_tools() {
+    let shapes = [
+        (
+            "draw_polygon",
+            serde_json::json!({ "center": { "x": 40.0, "y": 40.0 }, "radius": 15.0, "sides": 5, "rotation": 10.0 }),
+            "sides",
+            5.0,
+        ),
+        (
+            "draw_star",
+            serde_json::json!({ "center": { "x": 40.0, "y": 40.0 }, "outer_radius": 15.0, "inner_radius": 6.0, "points": 6, "rotation": 0.0 }),
+            "points",
+            6.0,
+        ),
+        (
+            "draw_ellipse",
+            serde_json::json!({ "center": { "x": 40.0, "y": 40.0 }, "width": 30.0, "height": 12.0 }),
+            "height",
+            12.0,
+        ),
+    ];
+    for (id, params, key, want) in shapes {
+        let mut h = Harness::new();
+        h.app.apply(id, &params).unwrap();
+        let shape = *h.app.doc.vectors.keys().next().unwrap();
+        h.app.invoke(&h.ctx, id);
+        h.frame(vec![]);
+        let form = h.app.form.as_ref().unwrap();
+        assert_eq!(form.drawn, Some(shape), "{id} edits the selected shape");
+        assert_eq!(form.params[key].as_f64(), Some(want), "{id}");
+        assert!(h.text_at("Create").is_none(), "{id}");
+        // changed on the form, the same shape changes
+        let form = h.app.form.as_mut().unwrap();
+        form.params["center"]["x"] = Value::from(60.0);
+        form.dirty = true;
+        h.frame(vec![]);
+        assert_eq!(h.app.doc.vectors.len(), 1, "{id}: no second shape");
+        let middle = h.app.doc.vectors.values().next().unwrap().bounds().center();
+        assert!((middle.y - 40.0).abs() < 1.0, "{id}: {middle:?}");
+        // E opens the same tool on it
+        h.app.form = None;
+        assert_eq!(h.app.object_to_edit().map(|(_, c, _)| c), Some(id));
+    }
+    // a square: Draw Polygon reads it as a four-sided polygon, E as the rectangle it is
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    assert_eq!(
+        h.app.object_to_edit().map(|(_, c, _)| c),
+        Some("draw_rectangle")
+    );
+    h.app.invoke(&h.ctx, "draw_polygon");
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(form.drawn.is_some(), "Draw Polygon edits the square");
+    assert_eq!(form.params["sides"].as_u64(), Some(4));
+    assert_eq!(
+        form.params["rotation"].as_f64(),
+        Some(135.0),
+        "a whole angle"
+    );
+}
