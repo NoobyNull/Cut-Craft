@@ -4301,6 +4301,29 @@ impl CutCraftApp {
             .rect
     }
 
+    /// The open form's commit button, its label and hint, if pressing it would do something:
+    /// OK for a new job's setup, else named for what it does ([`commit`]).
+    fn commit_button(&self) -> Option<(&'static str, &'static str)> {
+        let open = self.form.as_ref()?;
+        if open.new_job {
+            return Some(("OK", "Accept these settings and start the job"));
+        }
+        let drawing = self.drawing_tool().is_some();
+        let made = self.drawn_shape().is_some() || self.remade_last().is_some();
+        // opened on an embellishment it made (E): pressing it changes that one
+        let reopened = !made
+            && open.id == <cmd_embellish::Embellish as cut_craft_core::Command>::ID
+            && cmd_embellish::edits_selection(&self.doc);
+        commit::commit(open.id, open.page, drawing, made).map(|c| {
+            let c = if reopened && c == commit::Commit::Create {
+                commit::Commit::Apply
+            } else {
+                c
+            };
+            (c.label(), commit::hint(c, drawing, open.editing.is_some()))
+        })
+    }
+
     /// The open form's buttons: OK and Cancel for a new job's setup; else its commit button
     /// when pressing it would do something (named for what it does, [`commit`]), Close and
     /// Cancel.
@@ -4310,25 +4333,9 @@ impl CutCraftApp {
             return self.import_buttons(ui);
         }
         let new_job = open.new_job;
+        let committing = self.commit_button();
         let drawing = self.drawing_tool().is_some();
         let made = self.drawn_shape().is_some() || self.remade_last().is_some();
-        let committing = if new_job {
-            Some(("OK", "Accept these settings and start the job"))
-        } else {
-            // opened on an embellishment it made (E): pressing it changes that one
-            let reopened = !made
-                && open.id == <cmd_embellish::Embellish as cut_craft_core::Command>::ID
-                && cmd_embellish::edits_selection(&self.doc);
-            commit::commit(open.id, open.page, drawing, made).map(|c| {
-                let c = if reopened && c == commit::Commit::Create {
-                    commit::Commit::Apply
-                } else {
-                    c
-                };
-                let hint = commit::hint(c, drawing, open.editing.is_some());
-                (c.label(), hint)
-            })
-        };
         let close_label = if new_job { "Cancel" } else { "Close" };
         let job_setup = open.id == "job_setup";
         // what the form has done that Cancel would take back
