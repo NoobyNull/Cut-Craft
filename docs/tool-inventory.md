@@ -500,7 +500,10 @@ say "not implemented yet".
     Inset from the edge and optional rails; the ornament inside keeps clear of it.
     One Style list picks a single look: Folk mix (band and beads plus everything inside),
     Scrolls only, Flowers only, or one border alone (Band and beads, Rope, Chain, Twist,
-    Braid, Bead and reel); settings that don't change the chosen style are hidden. Its
+    Braid, Bead and reel, Laurel leaves, Feathers, Chevrons); settings that don't change
+    the chosen style are hidden. Fill the shape repeats a patterned border row after row
+    inward until the shape is full (a row that would run into one from another edge, round
+    a hole, is left out). Its
     component (or, for vectors only, its layer) keeps the settings and the outlines it was
     made for: E on it, or on any of its pieces, reopens Embellish and remakes it in place;
     opening Embellish on an outline that already has one edits that one.

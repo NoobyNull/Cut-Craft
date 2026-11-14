@@ -80,6 +80,15 @@ pub enum Style {
     /// Round the edge only: oval beads with a pair of thin discs between each two
     #[schemars(title = "Bead and reel border")]
     BeadAndReel,
+    /// Round the edge only: pairs of laurel leaves along a stem, as in a wreath
+    #[schemars(title = "Laurel leaves border")]
+    Laurel,
+    /// Round the edge only: feathers one after another, each with a quill and barbs
+    #[schemars(title = "Feathers border")]
+    Feathers,
+    /// Round the edge only: V shapes one after another, all pointing the same way
+    #[schemars(title = "Chevrons border")]
+    Chevrons,
 }
 
 impl Style {
@@ -101,6 +110,9 @@ impl Style {
             Self::Twist => border::Style::Twist,
             Self::Braid => border::Style::Braid,
             Self::BeadAndReel => border::Style::BeadAndReel,
+            Self::Laurel => border::Style::Laurel,
+            Self::Feathers => border::Style::Feathers,
+            Self::Chevrons => border::Style::Chevrons,
             _ => return None,
         })
     }
@@ -141,24 +153,24 @@ pub struct Params {
     /// round its edge (and round any hole in it)
     pub style: Style,
     /// How wide the patterned border is
-    #[schemars(title = "Border width", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Border width", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub border_width: f64,
     /// How long each repeat of the pattern is, against the width; the count is rounded so the
     /// pattern meets itself
-    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub repeat: u32,
     /// How steeply the rope's strands lie
     #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"style": "rope"}))]
     pub twist: u32,
     /// How far in from the edge the patterned border starts
-    #[schemars(title = "Border inset", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Border inset", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub border_inset: f64,
     /// Fill the whole shape with the pattern: row after row following the outline inward,
     /// instead of one row round the edge
-    #[schemars(title = "Fill the shape", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Fill the shape", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub fill_rows: bool,
     /// Raised rails along both sides of the patterned border
-    #[schemars(title = "Rails", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    #[schemars(title = "Rails", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub rails: bool,
     /// Low makes bold, plain pieces; high adds bead rows, sunbursts, striped scrolls and
     /// small curls
@@ -344,9 +356,9 @@ fn design(
     let (mut items, mut reach) = border::design(field, &b, s.gap);
     // more rows inward, each a gap in from the last, while there is room for one
     if rows {
-        // where rows coming in from different edges meet (round a hole), pieces that would
-        // overlap the rows already laid are left out
-        // (the rows already keep a gap apart, so this only needs to catch real overlaps)
+        // where rows coming in from different edges meet (round a hole), a row that would
+        // run into the rows already laid is left out, and a piece or two that would touch
+        // them is dropped (the rows keep a gap apart, so this only catches real overlaps)
         let mut occ = occ::Occ::new(field.w, field.h, s.gap * 0.4, |q, _| field.sample(q) > 0.0);
         occ.mark(&items);
         for _ in 0..200 {
@@ -354,16 +366,26 @@ fn design(
                 inset: reach + s.gap,
                 ..b
             };
-            let (more, r) = border::design(field, &next, s.gap);
-            if more.is_empty() {
+            let (loops, r) = border::design_loops(field, &next, s.gap);
+            if loops.iter().all(Vec::is_empty) {
                 break;
             }
-            for piece in more {
-                let one = std::slice::from_ref(&piece);
-                if occ.fits(one) {
-                    occ.mark(one);
-                    items.push(piece);
+            for row in loops {
+                let fits: Vec<bool> = row
+                    .iter()
+                    .map(|piece| occ.fits(std::slice::from_ref(piece)))
+                    .collect();
+                let clashes = fits.iter().filter(|f| !**f).count();
+                if clashes * 10 > row.len() {
+                    continue;
                 }
+                let kept: Vec<Item> = row
+                    .into_iter()
+                    .zip(fits)
+                    .filter_map(|(piece, fit)| fit.then_some(piece))
+                    .collect();
+                occ.mark(&kept);
+                items.extend(kept);
             }
             reach = r;
         }
@@ -1119,6 +1141,9 @@ mod tests {
             Style::Twist,
             Style::Braid,
             Style::BeadAndReel,
+            Style::Laurel,
+            Style::Feathers,
+            Style::Chevrons,
         ] {
             let only = Params {
                 style: border,
@@ -1195,7 +1220,14 @@ mod tests {
         let shape = polygon(6, 110.0);
         let doc = document_with(vec![shape.clone()]);
         let centre = Point::new(150.0, 150.0);
-        for style in [Style::Rope, Style::Chain, Style::BeadAndReel] {
+        for style in [
+            Style::Rope,
+            Style::Chain,
+            Style::BeadAndReel,
+            Style::Laurel,
+            Style::Feathers,
+            Style::Chevrons,
+        ] {
             let p = |fill_rows| Params {
                 style,
                 fill_rows,
@@ -1409,6 +1441,51 @@ mod pictures {
                 "-braid-fill",
                 Params {
                     style: Style::Braid,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-laurel",
+                Params {
+                    style: Style::Laurel,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-feathers",
+                Params {
+                    style: Style::Feathers,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-chevrons",
+                Params {
+                    style: Style::Chevrons,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-laurel-fill",
+                Params {
+                    style: Style::Laurel,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-feathers-fill",
+                Params {
+                    style: Style::Feathers,
+                    fill_rows: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-chevrons-fill",
+                Params {
+                    style: Style::Chevrons,
                     fill_rows: true,
                     ..Params::default()
                 },

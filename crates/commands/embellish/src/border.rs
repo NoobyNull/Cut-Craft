@@ -1,5 +1,5 @@
 //! Patterned borders that follow the outline: rope, chain, a two-strand twist, a
-//! three-strand braid, and bead and reel. Each runs along a centre line, the outline moved in
+//! three-strand braid, bead and reel, laurel leaves, feathers and chevrons. Each runs along a centre line, the outline moved in
 //! and rounded so the band never folds over itself, with a whole number of repeats so the
 //! pattern meets itself. Pieces are drawn along the line (`s`) and across it (`v`, outward
 //! positive), then laid onto it.
@@ -17,6 +17,9 @@ pub enum Style {
     Twist,
     Braid,
     BeadAndReel,
+    Laurel,
+    Feathers,
+    Chevrons,
 }
 
 /// How the border is drawn, in mm.
@@ -357,21 +360,48 @@ fn bead_and_reel(lp: &Loop, hw: f64, p: f64, g: f64) -> Vec<Item> {
 
 /// The border's pieces on the board, and how far in from the edge it reaches.
 pub fn design(field: &Field, b: &Spec, g: f64) -> (Vec<Item>, f64) {
+    let (loops, reach) = design_loops(field, b, g);
+    (loops.into_iter().flatten().collect(), reach)
+}
+
+/// [`design`], each centre line's pieces apart (a shape with a hole has one round each edge).
+pub fn design_loops(field: &Field, b: &Spec, g: f64) -> (Vec<Vec<Item>>, f64) {
     let hw = b.width / 2.0;
     let rw = (g * 1.1).max(hw * 0.16);
     let rails = if b.rails { rw + g } else { 0.0 };
     let dc = b.inset + rails + hw;
     let p = b.repeat * b.width;
-    let mut items = vec![];
+    let mut loops = vec![];
     for lp in centre_loops(field, dc, hw) {
+        let mut items = vec![];
         let parts = match b.style {
             Style::Rope => rope(&lp, hw, p * 0.5, g, b.lay),
             Style::Chain => chain(&lp, hw, p * 1.4, g),
             Style::Twist => plait(&lp, hw, p * 2.4, g, 2),
             Style::Braid => plait(&lp, hw, p * 3.2, g, 3),
             Style::BeadAndReel => bead_and_reel(&lp, hw, p * 0.9, g),
+            Style::Laurel => laurel(&lp, hw, p * 0.75, g),
+            Style::Feathers => feathers(&lp, hw, p * 2.8, g),
+            Style::Chevrons => chevrons(&lp, hw, p * 0.6, g),
         };
+        let laid = !parts.is_empty();
         items.extend(parts.iter().map(|it| it.map(&|q: Point| lp.at(q.x, q.y))));
+        // the laurel's stem, one band all the way round
+        if b.style == Style::Laurel && laid {
+            let ws = stem_width(hw, g);
+            let n = (lp.len / 0.8).ceil() as usize;
+            let ring = |v: f64| -> Vec<Point> {
+                (0..n)
+                    .map(|i| lp.at(lp.len * i as f64 / n as f64, v))
+                    .collect()
+            };
+            items.push(Item::Shape {
+                rings: vec![ring(-ws / 2.0), ring(ws / 2.0)],
+                h: 0.8,
+                profile: Profile::Round(ws * 0.5),
+                sink: false,
+            });
+        }
         if b.rails {
             let n = (lp.len / 0.8).ceil() as usize;
             for side in [1.0, -1.0] {
@@ -389,8 +419,175 @@ pub fn design(field: &Field, b: &Spec, g: f64) -> (Vec<Item>, f64) {
                 });
             }
         }
+        loops.push(items);
     }
-    (items, dc + hw + rails)
+    (loops, dc + hw + rails)
+}
+
+/// Points along the straight line from `a` to `b`, no further apart than `step` (so the line
+/// bends with the centre line it is laid on).
+fn dense(a: Point, b: Point, step: f64) -> Vec<Point> {
+    let n = (a.distance(b) / step).ceil().max(1.0) as usize;
+    (0..n).map(|i| a.lerp(b, i as f64 / n as f64)).collect()
+}
+
+/// A closed outline through `corners`, with points added along its sides.
+fn dense_ring(corners: &[Point], step: f64) -> Vec<Point> {
+    let n = corners.len();
+    (0..n)
+        .flat_map(|i| dense(corners[i], corners[(i + 1) % n], step))
+        .collect()
+}
+
+/// Chevrons: V shapes pointing along the line, one after another.
+fn chevrons(lp: &Loop, hw: f64, p: f64, g: f64) -> Vec<Item> {
+    let (n, pp) = count(lp.len, p, 3.0);
+    let h = hw * 0.92;
+    let back = h * 0.9;
+    // the arms slant, so the gap between two is the step along the line times the sine
+    let sin = h / back.hypot(h);
+    let t = pp - g / sin;
+    if t < g * 1.2 {
+        return vec![];
+    }
+    let mut out = vec![];
+    for k in 0..n as usize {
+        let c = k as f64 * pp;
+        let corners = [
+            pt(c - back, -h),
+            pt(c, 0.0),
+            pt(c - back, h),
+            pt(c - back - t, h),
+            pt(c - t, 0.0),
+            pt(c - back - t, -h),
+        ];
+        out.push(sh(dense_ring(&corners, 0.6), 1.0));
+    }
+    out
+}
+
+/// The laurel's stem width.
+fn stem_width(hw: f64, g: f64) -> f64 {
+    (g * 1.1).max(hw * 0.16)
+}
+
+/// A leaf from `base` along `ang`, `len` long and `wide` across at its widest, pointed at
+/// both ends and fullest a little past its middle.
+fn leaf(base: Point, ang: f64, len: f64, wide: f64) -> Vec<Point> {
+    let (d, nrm) = (pt(ang.cos(), ang.sin()), pt(-ang.sin(), ang.cos()));
+    let m = 18;
+    let half = |t: f64| wide / 2.0 * (PI * t.powf(0.8)).sin().max(0.0).powf(0.75);
+    let mut ring: Vec<Point> = (0..=m)
+        .map(|i| {
+            let t = f64::from(i) / f64::from(m);
+            base + d * (len * t) + nrm * half(t)
+        })
+        .collect();
+    ring.extend((1..m).rev().map(|i| {
+        let t = f64::from(i) / f64::from(m);
+        base + d * (len * t) - nrm * half(t)
+    }));
+    ring
+}
+
+/// Laurel leaves: pairs of leaves slanting forward from a stem down the middle (the stem is
+/// laid by [`design`]).
+fn laurel(lp: &Loop, hw: f64, p: f64, g: f64) -> Vec<Item> {
+    let (n, pp) = count(lp.len, p, 3.0);
+    let ws = stem_width(hw, g);
+    let ang = 0.62_f64;
+    let v0 = ws / 2.0 + g;
+    let len = (hw * 0.95 - v0) / ang.sin();
+    // two neighbouring leaves lie side by side, the step times the sine apart
+    let wide = (pp * ang.sin() - g).min(len * 0.42);
+    if len < g * 3.0 || wide < g * 1.2 {
+        return vec![];
+    }
+    let mut out = vec![];
+    for k in 0..n as usize {
+        let c = k as f64 * pp;
+        for side in [1.0, -1.0] {
+            let ring = leaf(pt(c, side * v0), side * ang, len, wide);
+            out.push(sh(ring, 0.9));
+        }
+    }
+    out
+}
+
+/// Feathers: one after another along the line, each a quill down its middle with its vanes
+/// cut into slanting barbs either side.
+fn feathers(lp: &Loop, hw: f64, p: f64, g: f64) -> Vec<Item> {
+    let (n, pp) = count(lp.len, p, 2.0);
+    let len = pp - g;
+    let qw = (g * 0.9).max(hw * 0.12);
+    let v0 = qw / 2.0 + g;
+    // the vane's half width at `t` along the feather, 0 at its base and tip
+    let width = |t: f64| {
+        let t = t.clamp(0.0, 1.0);
+        hw * 0.95 * ((PI * t.powf(0.55)).sin().max(0.0)).powf(0.4)
+    };
+    let barb = (g * 2.6).max(hw * 0.35);
+    // barbs slant back from the quill toward the base
+    let slant = 0.9_f64;
+    if hw * 0.9 - v0 < g * 1.5 || len < 6.0 * g {
+        return vec![];
+    }
+    let mut out = vec![];
+    for k in 0..n as usize {
+        let s0 = k as f64 * pp;
+        let at = |t: f64| s0 + t * len;
+        // the quill, from just past the base to near the tip
+        let (q0, q1) = (0.0, 0.94);
+        let m = 30;
+        let quill: Vec<Point> = (0..=m)
+            .map(|i| pt(at(q0 + (q1 - q0) * f64::from(i) / f64::from(m)), -qw / 2.0))
+            .chain(
+                (0..=m)
+                    .rev()
+                    .map(|i| pt(at(q0 + (q1 - q0) * f64::from(i) / f64::from(m)), qw / 2.0)),
+            )
+            .collect();
+        out.push(sh(quill, 1.0));
+        // the vanes: from a tenth of the way along, cut into barbs
+        let t_start = 0.1;
+        let s_start = at(t_start);
+        let s_end = at(1.0);
+        let step = barb + g / slant.sin();
+        let count_b = ((s_end - s_start) / step).floor() as usize;
+        for side in [1.0, -1.0_f64] {
+            for b in 0..count_b {
+                // the barb's two slanting sides, by where they meet the quill
+                let (u0, u1) = (s_start + b as f64 * step, s_start + b as f64 * step + barb);
+                let k = 1.0 / slant.tan();
+                // along a slanting side from the quill out to the vane's edge
+                let side_line = |u: f64| -> Vec<Point> {
+                    let mut pts = vec![];
+                    let mut v = v0;
+                    loop {
+                        let s = u + (v - v0) * k;
+                        let room = width((s - s0) / len);
+                        if v > room || s > s_end {
+                            break;
+                        }
+                        pts.push(pt(s, side * v));
+                        v += 0.4;
+                    }
+                    pts
+                };
+                let (a, mut c) = (side_line(u0), side_line(u1));
+                if a.len() < 2 || c.len() < 2 {
+                    continue;
+                }
+                // out along one side, back along the other: the barb's outer end follows
+                // the vane's edge between them
+                c.reverse();
+                let mut ring = a;
+                ring.extend(c);
+                out.push(sh(ring, 0.85));
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -442,6 +639,9 @@ mod tests {
             Style::Twist,
             Style::Braid,
             Style::BeadAndReel,
+            Style::Laurel,
+            Style::Feathers,
+            Style::Chevrons,
         ] {
             let (items, reach) = design(&field, &spec(style), 1.5);
             assert!(items.len() > 20, "{style:?}: {}", items.len());

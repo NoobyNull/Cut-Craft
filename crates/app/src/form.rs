@@ -1359,7 +1359,10 @@ mod tests {
                 "Chain border",
                 "Twist border",
                 "Braid border",
-                "Bead and reel border"
+                "Bead and reel border",
+                "Laurel leaves border",
+                "Feathers border",
+                "Chevrons border"
             ]
         );
         // each setting only shows for the styles it changes
