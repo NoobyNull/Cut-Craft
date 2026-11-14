@@ -12558,3 +12558,217 @@ fn polygons_stars_and_ellipses_open_in_their_drawing_tools() {
         "a whole angle"
     );
 }
+
+/// A press or a let-go of `button` at `pos`.
+fn mouse(button: PointerButton, pos: Pos2, pressed: bool) -> Event {
+    Event::PointerButton {
+        pos,
+        button,
+        pressed,
+        modifiers: Modifiers::NONE,
+    }
+}
+
+/// A drag with `button` from `from` by `by`, a frame at a time.
+fn drag_with(h: &mut Harness, button: PointerButton, from: Pos2, by: egui::Vec2) {
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.frame(vec![mouse(button, from, true)]);
+    h.frame(vec![Event::PointerMoved(from + by * 0.5)]);
+    h.frame(vec![Event::PointerMoved(from + by)]);
+    h.frame(vec![mouse(button, from + by, false)]);
+    h.frame(vec![]);
+}
+
+/// A sideways scroll of `x` points: the wheel tilted, or Shift and the wheel.
+fn tilt(x: f32) -> Event {
+    Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(x, 0.0),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+        modifiers: Modifiers::NONE,
+    }
+}
+
+/// Where job point `p` shows in the 2D view.
+fn on_screen(h: &Harness, p: Point) -> Pos2 {
+    h.app.view_transform.unwrap().to_screen(p)
+}
+
+#[test]
+fn a_thumb_button_set_to_pan_pans_both_views() {
+    let mut h = Harness::new();
+    let p = Point::new(100.0, 100.0);
+    let from = view_middle(&h);
+    // to start with only the wheel pans: a thumb button drag does nothing
+    let before = on_screen(&h, p);
+    drag_with(&mut h, PointerButton::Extra1, from, vec2(40.0, 10.0));
+    assert!(
+        (on_screen(&h, p) - before).length() < 0.5,
+        "not a pan button yet"
+    );
+    // Mouse Back added to Pan (hold and drag): it pans as the wheel does
+    h.app.add_shortcut(
+        shortcut::PAN_DRAG,
+        shortcut::parse_trigger("Mouse Back").unwrap(),
+    );
+    assert_eq!(
+        h.app.options.controls.shortcuts[shortcut::PAN_DRAG],
+        ["Wheel Click", "Mouse Back"]
+    );
+    let before = on_screen(&h, p);
+    drag_with(&mut h, PointerButton::Extra1, from, vec2(40.0, 10.0));
+    let moved = on_screen(&h, p) - before;
+    assert!((moved - vec2(40.0, 10.0)).length() < 1.0, "{moved:?}");
+    // the wheel still pans
+    let before = on_screen(&h, p);
+    drag_with(&mut h, PointerButton::Middle, from, vec2(-20.0, 0.0));
+    assert!((on_screen(&h, p) - before - vec2(-20.0, 0.0)).length() < 1.0);
+    // and in the 3D view
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    let (orbit, framing) = (h.app.orbit, h.app.framing);
+    let mid = h.app.view_3d_area.expect("the 3D view is drawn").center();
+    drag_with(&mut h, PointerButton::Extra1, mid, vec2(30.0, 0.0));
+    assert!(h.app.framing.pan.x > framing.pan.x + 10.0, "panned");
+    assert_eq!(h.app.orbit, orbit, "not turned");
+}
+
+#[test]
+fn tilting_the_wheel_pans_sideways_unless_set_not_to() {
+    let mut h = Harness::new();
+    let p = Point::new(100.0, 100.0);
+    let at = view_middle(&h);
+    h.frame(vec![Event::PointerMoved(at)]);
+    let (before, scale) = (on_screen(&h, p), h.app.view_transform.unwrap().scale);
+    for _ in 0..20 {
+        h.frame(vec![tilt(-10.0)]);
+    }
+    let moved = on_screen(&h, p) - before;
+    assert!(moved.x < -20.0 && moved.y.abs() < 0.5, "{moved:?}");
+    assert!(
+        (h.app.view_transform.unwrap().scale - scale).abs() < 1e-6,
+        "no zoom"
+    );
+    // the other way round
+    h.app.options.controls.tilt = crate::options::Tilt::PanReversed;
+    let before = on_screen(&h, p);
+    for _ in 0..20 {
+        h.frame(vec![tilt(-10.0)]);
+    }
+    assert!(on_screen(&h, p).x - before.x > 20.0);
+    // or not at all
+    h.app.options.controls.tilt = crate::options::Tilt::Nothing;
+    let before = on_screen(&h, p);
+    for _ in 0..20 {
+        h.frame(vec![tilt(-10.0)]);
+    }
+    assert!((on_screen(&h, p) - before).length() < 0.5);
+    // in the 3D view it pans too
+    h.app.options.controls.tilt = crate::options::Tilt::Pan;
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    let mid = h.app.view_3d_area.expect("the 3D view is drawn").center();
+    h.frame(vec![Event::PointerMoved(mid)]);
+    let framing = h.app.framing;
+    for _ in 0..20 {
+        h.frame(vec![tilt(-10.0)]);
+    }
+    assert!(h.app.framing.pan.x < framing.pan.x - 20.0);
+    assert!((h.app.framing.zoom - framing.zoom).abs() < 1e-6);
+}
+
+#[test]
+fn a_mouse_button_set_as_a_shortcut_runs_its_action() {
+    let mut h = Harness::new();
+    let forward = shortcut::parse_trigger("Mouse Forward").unwrap();
+    h.app.add_shortcut("pan", forward);
+    assert_eq!(h.app.view_tool, None);
+    let at = view_middle(&h);
+    h.frame(vec![mouse(PointerButton::Extra2, at, true)]);
+    h.frame(vec![mouse(PointerButton::Extra2, at, false)]);
+    assert_eq!(h.app.view_tool, Some(ViewTool::Pan), "Pan picked up");
+    // the menus show it
+    assert_eq!(h.app.shortcut_text("pan").as_deref(), Some("Mouse Forward"));
+    // with Ctrl held it is another shortcut, which runs nothing
+    h.app.view_tool = None;
+    h.frame_holding(
+        Modifiers::COMMAND,
+        vec![Event::PointerButton {
+            pos: at,
+            button: PointerButton::Extra2,
+            pressed: true,
+            modifiers: Modifiers::COMMAND,
+        }],
+    );
+    assert_eq!(h.app.view_tool, None);
+}
+
+#[test]
+fn setting_a_shortcut_takes_the_next_button_and_asks_before_taking_anothers() {
+    use super::shortcuts_page::Edit;
+    let mut h = Harness::new();
+    let at = view_middle(&h);
+    h.app.options_window = true;
+    h.app.options_goto = Some(super::shortcuts_page::CATEGORY);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.texts().iter().any(|t| t == "Pan (hold and drag)"),
+        "{:?}",
+        h.texts()
+    );
+    // Add… for Zoom to Drawing, then the thumb button: it is set, and runs nothing yet
+    h.app
+        .apply_shortcut_edit(Edit::Start("zoom_to_drawing".to_owned()));
+    h.frame(vec![mouse(PointerButton::Extra1, at, true)]);
+    h.frame(vec![mouse(PointerButton::Extra1, at, false)]);
+    assert_eq!(h.app.capture, None, "done waiting");
+    let back = shortcut::parse_trigger("Mouse Back").unwrap();
+    assert!(h.app.shortcuts_of("zoom_to_drawing").contains(&back));
+    // the same button for Pan (hold and drag): it asks first
+    h.app
+        .apply_shortcut_edit(Edit::Start(shortcut::PAN_DRAG.to_owned()));
+    h.frame(vec![mouse(PointerButton::Extra1, at, true)]);
+    let asking = h.app.capture.clone().expect("still asking");
+    assert_eq!(asking.clash, Some((back, "zoom_to_drawing".to_owned())));
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.contains("Mouse Back already runs")),
+        "{:?}",
+        h.texts()
+    );
+    h.app.apply_shortcut_edit(Edit::Move);
+    assert!(h.app.shortcuts_of(shortcut::PAN_DRAG).contains(&back));
+    assert!(!h.app.shortcuts_of("zoom_to_drawing").contains(&back));
+    // a key can't pan; Esc stops waiting, changing nothing
+    h.app
+        .apply_shortcut_edit(Edit::Start(shortcut::PAN_DRAG.to_owned()));
+    h.frame(vec![key(Key::K)]);
+    assert!(h.app.capture.as_ref().unwrap().refused.is_some());
+    h.frame(vec![key(Key::Escape)]);
+    assert_eq!(h.app.capture, None);
+    assert!(h.app.options_window, "Esc only stopped the waiting");
+    // a key for an action, then Reset puts its own back
+    h.app
+        .apply_shortcut_edit(Edit::Start("zoom_to_drawing".to_owned()));
+    // (another key: K is still held, so egui reads it again as a repeat)
+    h.frame(vec![key(Key::F8)]);
+    assert_eq!(h.app.capture, None, "F8 runs nothing else");
+    assert!(
+        h.app
+            .shortcuts_of("zoom_to_drawing")
+            .contains(&shortcut::parse_trigger("F8").unwrap())
+    );
+    h.app
+        .apply_shortcut_edit(Edit::Reset("zoom_to_drawing".to_owned()));
+    assert!(
+        !h.app
+            .options
+            .controls
+            .shortcuts
+            .contains_key("zoom_to_drawing")
+    );
+}

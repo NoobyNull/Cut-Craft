@@ -532,6 +532,13 @@ percentages and passes get no letter.
 | Rotate | — | right-drag ("twiddle") **[unk: the component-tree page says left-drag; the two help pages conflict]** |
 | Fit | F / F6 = job limits, Ctrl+F = selection | zoom-to-fit / zoom-to-selection buttons |
 
+**[inf]** Cut Craft adds, on purpose: tilting the wheel left or right (or Shift and the wheel,
+or a sideways touchpad swipe) pans sideways in both views; **Edit ▸ Options ▸ Mouse and
+Shortcuts** can reverse it or turn it off. The buttons that pan when held and dragged are a
+setting too ("Pan (hold and drag)", the wheel click to start with), so a mouse's thumb
+buttons (Back and Forward) can pan as well. The left and right buttons are never offered:
+they pick and open menus everywhere.
+
 ### Selection and transform [obs]
 - Click selects. **Shift+click** toggles an object in or out of the selection.
 - A drag **left→right** selects objects *fully inside* the box. A drag **right→left** selects objects *touching* it.
@@ -597,6 +604,15 @@ percentages and passes get no letter.
 | Ctrl+F (Ctrl+F6) | Zoom selected | PgUp / PgDn (any modifier) | Tile views |
 | = | Single/double-sided view | 1 / 2 | **[unk]** (likely top/bottom side) |
 | Ctrl+F1…F9 | **[unk]** (unnamed command ids 33786–33796) | | |
+
+**[inf]** Cut Craft differs on purpose: every shortcut can be changed in **Edit ▸ Options ▸
+Mouse and Shortcuts** (Help ▸ Keyboard Shortcuts has a Change Shortcuts button to it). Add…
+waits for a key, with Ctrl, Alt or Shift if wanted, or for the wheel click or a thumb button,
+so a tool can run from the mouse. A shortcut another action already has is not taken
+silently: the page names that action and asks whether to move it. Each changed action has a
+Reset, and the page's Reset to defaults puts every shortcut back. Menus and the Keyboard
+Shortcuts list show the shortcuts as set. Saved in options.json as `controls.shortcuts`,
+only for actions changed.
 
 ---
 

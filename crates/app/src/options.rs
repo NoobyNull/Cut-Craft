@@ -268,6 +268,50 @@ impl Rotation {
     }
 }
 
+/// The mouse in the 2D and 3D views, and the shortcuts set in place of Cut Craft's own.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Controls {
+    /// What tilting the mouse wheel left or right does over the 2D and 3D views. Holding
+    /// Shift while turning the wheel, or swiping sideways on a touchpad, does the same
+    #[serde(default)]
+    #[schemars(title = "Tilting the wheel left or right")]
+    pub tilt: Tilt,
+    /// The shortcuts changed from Cut Craft's own, by action, written as the menus write
+    /// them (`Ctrl+K`, `Mouse Back`); an empty list takes an action's shortcuts away. Set on
+    /// this page's shortcut list, below its settings.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[schemars(skip)]
+    pub shortcuts: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// What tilting the mouse wheel sideways does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Tilt {
+    /// Tilting right moves the view to show more to the right, as a web page scrolls
+    #[default]
+    #[schemars(title = "Pans the view sideways")]
+    Pan,
+    /// Tilting right moves the drawing to the right, for those whose wheel feels backwards
+    #[schemars(title = "Pans the other way")]
+    PanReversed,
+    /// Tilting the wheel is ignored by the views
+    #[schemars(title = "Does nothing")]
+    Nothing,
+}
+
+impl Tilt {
+    /// How far the views pan sideways for a sideways scroll of `x` points: nothing, `x`, or
+    /// the other way.
+    pub fn pan(self, x: f32) -> f32 {
+        match self {
+            Self::Pan => x,
+            Self::PanReversed => -x,
+            Self::Nothing => 0.0,
+        }
+    }
+}
+
 /// A 3Dconnexion SpaceMouse turning the 3D view (Linux, through spacenavd).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
@@ -1466,6 +1510,9 @@ pub struct Options {
     #[schemars(extend("x-section" = true))]
     pub appearance: Appearance,
     #[serde(default)]
+    #[schemars(title = "Mouse and Shortcuts", extend("x-section" = true))]
+    pub controls: Controls,
+    #[serde(default)]
     #[schemars(title = "SpaceMouse", extend("x-section" = true))]
     pub space_mouse: SpaceMouse,
     #[serde(default)]
@@ -1620,6 +1667,7 @@ impl Default for Options {
             import: Import::default(),
             appearance: Appearance::default(),
             advanced: Advanced::default(),
+            controls: Controls::default(),
             space_mouse: SpaceMouse::default(),
             updates: Updates::default(),
             bug_reports: BugReports::default(),
@@ -1741,6 +1789,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn tilting_pans_as_set_and_reset_puts_back_cut_crafts_own_shortcuts() {
+        assert!((Tilt::default().pan(-3.0) + 3.0).abs() < f32::EPSILON);
+        assert!((Tilt::PanReversed.pan(-3.0) - 3.0).abs() < f32::EPSILON);
+        assert!(Tilt::Nothing.pan(-3.0).abs() < f32::EPSILON);
+        let mut options = Options::default();
+        options.controls.tilt = Tilt::Nothing;
+        (options.controls.shortcuts).insert("pan".to_owned(), vec!["Mouse Back".to_owned()]);
+        let saved = serde_json::to_string(&options).unwrap();
+        let read: Options = serde_json::from_str(&saved).unwrap();
+        assert_eq!(
+            read.controls, options.controls,
+            "kept from one run to the next"
+        );
+        assert_eq!(options.reset("controls").controls, Controls::default());
+        // options saved before there were any read as the defaults
+        let mut old = serde_json::to_value(Options::default()).unwrap();
+        old.as_object_mut().unwrap().remove("controls");
+        let old: Options = serde_json::from_value(old).unwrap();
+        assert_eq!(old.controls, Controls::default());
+    }
+
+    #[test]
     fn a_mac_starts_following_the_desktops_light_or_dark() {
         use egui::os::OperatingSystem;
         assert_eq!(Theme::for_system(OperatingSystem::Mac), Theme::System);
@@ -1846,6 +1916,7 @@ mod tests {
                 "Confirmation Choices",
                 "Importing and Exporting",
                 "Appearance",
+                "Mouse and Shortcuts",
                 "SpaceMouse",
                 "Updates",
                 "Bug Reports",
