@@ -132,6 +132,26 @@ pub struct Look<'a> {
     /// under Tabs, Edit Loops… under a trochoidal toolpath's cut settings); `None` for
     /// nothing.
     pub group_end: Option<&'a GroupEnd<'a>>,
+    /// The Materials Library, for `x-kind: material` fields; `None` shows them as text.
+    pub materials: Option<&'a cut_craft_core::material_library::MaterialLibrary>,
+}
+
+impl Look<'_> {
+    /// A look without pictures, tools, group ends or the Materials Library.
+    pub fn plain(units: Units, material: cut_craft_core::calc::Values) -> Self {
+        Look {
+            units,
+            picture: &no_picture,
+            material,
+            tool: None,
+            group_end: None,
+            materials: None,
+        }
+    }
+}
+
+fn no_picture(_: &str) -> Option<egui::Image<'static>> {
+    None
 }
 
 /// Millimetres in one of `units`.
@@ -185,6 +205,9 @@ pub enum Kind {
     Group(Vec<Field>),
     /// An `[r, g, b]` array marked `x-kind: colour`.
     Colour,
+    /// A material's name marked `x-kind: material`: a drop-down of the Materials Library
+    /// ([`Look::materials`]) by class, or none.
+    Material,
     /// A list whose items all have this shape.
     List(Box<Kind>),
     /// Anything the form cannot edit yet; shown read-only.
@@ -602,6 +625,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
             changed
         }
         Kind::Choice(options, widget) => choose(ui, options, widget, value, around, look),
+        Kind::Material => pick_material(ui, value, look.materials),
         Kind::Group(inner) => ui.vertical(|ui| show(ui, inner, value, look)).inner,
         Kind::List(item) => ui.vertical(|ui| edit_list(ui, item, value, look)).inner,
         Kind::Colour => {
@@ -1042,6 +1066,54 @@ pub fn next_seed(seed: u32) -> u32 {
     }
 }
 
+/// The Materials Library's materials in a drop-down, class by class and softest first,
+/// with (none) for leaving it unnamed; without the library, the name as text.
+fn pick_material(
+    ui: &mut egui::Ui,
+    value: &mut Value,
+    library: Option<&cut_craft_core::material_library::MaterialLibrary>,
+) -> bool {
+    use cut_craft_core::material_class::MaterialClass;
+    let mut name = value.as_str().unwrap_or_default().to_owned();
+    let Some(library) = library else {
+        let changed = ui.text_edit_singleline(&mut name).changed();
+        if changed {
+            *value = Value::String(name);
+        }
+        return changed;
+    };
+    let shown = if name.is_empty() {
+        NO_MATERIAL
+    } else {
+        name.as_str()
+    };
+    let before = name.clone();
+    egui::ComboBox::from_id_salt(ui.next_auto_id())
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            ui.selectable_value(&mut name, String::new(), NO_MATERIAL);
+            for class in MaterialClass::ALL {
+                let materials = library.in_class(class);
+                if materials.is_empty() {
+                    continue;
+                }
+                ui.separator();
+                ui.weak(class.name());
+                for m in materials {
+                    ui.selectable_value(&mut name, m.name.clone(), &m.name);
+                }
+            }
+        });
+    let changed = name != before;
+    if changed {
+        *value = Value::String(name);
+    }
+    changed
+}
+
+/// How an unnamed material shows in its drop-down.
+pub const NO_MATERIAL: &str = "(none)";
+
 /// A new item of `kind` with nothing set: numbers at their least, the first choice, every
 /// field of an object so.
 fn blank(kind: &Kind) -> Value {
@@ -1049,7 +1121,7 @@ fn blank(kind: &Kind) -> Value {
         Kind::Number { min, .. } => Value::from(min.unwrap_or(0.0).max(0.0)),
         Kind::Seed => Value::from(1),
         Kind::Bool => Value::Bool(false),
-        Kind::Text { .. } => Value::from(""),
+        Kind::Text { .. } | Kind::Material => Value::from(""),
         Kind::Choice(options, _) => options
             .first()
             .map_or(Value::Null, |c| Value::from(c.value.as_str())),
@@ -1176,8 +1248,10 @@ fn kind(root: &Value, property: &Value) -> Kind {
     let s = resolve(root, property);
     // marks may sit on the property or on the shared type it refers to
     let marked = |key: &str| property.get(key).or_else(|| s.get(key));
-    if marked("x-kind").and_then(Value::as_str) == Some("colour") {
-        return Kind::Colour;
+    match marked("x-kind").and_then(Value::as_str) {
+        Some("colour") => return Kind::Colour,
+        Some("material") => return Kind::Material,
+        _ => {}
     }
     if let Some(options) = choices(s) {
         let widget = match marked("x-widget").and_then(Value::as_str) {
@@ -1556,7 +1630,8 @@ mod tests {
 
     /// Numbers with no unit that are measurements of something other than the job's
     /// lengths, each with why it does not change with mm / inches.
-    const UNITLESS_BY_FORM: [(&str, &str, &str); 6] = [
+    const UNITLESS_BY_FORM: [(&str, &str, &str); 7] = [
+        ("arrange_toolpaths", "order", "toolpath ids, not lengths"),
         (
             "sketch_carving_toolpath",
             "line_thickness",
@@ -1622,6 +1697,7 @@ mod tests {
             material: cut_craft_core::calc::Values::default(),
             tool: None,
             group_end: None,
+            materials: None,
         };
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
@@ -1859,6 +1935,11 @@ mod tests {
         assert_eq!(field(&f, "text").kind, Kind::Text { multiline: true });
         let job = fields(&schema("layer_properties"));
         assert_eq!(field(&job, "name").kind, Kind::Text { multiline: false });
+        assert_eq!(field(&job, "material").kind, Kind::Material);
+        assert_eq!(
+            field(&fields(&schema("job_setup")), "material").kind,
+            Kind::Material
+        );
         assert!(
             matches!(&field(&f, "font").kind, Kind::Choice(fonts, Widget::DropDown) if fonts.iter().any(|c| c.value == "Test Boxes")),
             "the font list is the installed fonts"
@@ -2118,6 +2199,7 @@ mod tests {
             material: cut_craft_core::calc::Values::default(),
             tool: None,
             group_end: None,
+            materials: None,
         };
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             egui::CentralPanel::default().show(ui, |ui| show(ui, fields, params, &look));

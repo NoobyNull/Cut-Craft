@@ -3,6 +3,7 @@
 
 pub mod fusion;
 pub mod manager;
+pub mod materials;
 pub mod profile;
 pub mod search;
 pub mod tree;

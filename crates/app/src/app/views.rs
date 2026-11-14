@@ -3221,13 +3221,8 @@ impl CutCraftApp {
                     ui.label(crate::options::WARNING_MORE);
                     ui.separator();
                 }
-                let look = crate::form::Look {
-                    units: self.doc.job.units,
-                    picture: &|_| None,
-                    material: crate::form::material(&self.doc, self.doc.job.units),
-                    tool: None,
-                    group_end: None,
-                };
+                let units = self.doc.job.units;
+                let look = crate::form::Look::plain(units, crate::form::material(&self.doc, units));
                 egui::Panel::bottom("options_reset").show(ui, |ui| {
                     if ui
                         .button("Reset to defaults")
@@ -3469,6 +3464,7 @@ impl CutCraftApp {
                 material: crate::form::material(&self.doc, units),
                 tool: None,
                 group_end: None,
+                materials: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(style) = serde_json::from_value(values)
@@ -3547,6 +3543,7 @@ impl CutCraftApp {
                 material: crate::form::material(&self.doc, units),
                 tool: None,
                 group_end: None,
+                materials: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(style) = serde_json::from_value(values)
@@ -3604,6 +3601,7 @@ impl CutCraftApp {
                 material: crate::form::material(&self.doc, units),
                 tool: None,
                 group_end: None,
+                materials: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(settings) = serde_json::from_value(values)
@@ -3667,6 +3665,7 @@ impl CutCraftApp {
                 material: crate::form::material(&self.doc, units),
                 tool: None,
                 group_end: None,
+                materials: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(options) = serde_json::from_value(values)

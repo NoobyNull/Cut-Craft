@@ -33,6 +33,10 @@ pub struct Layer {
     pub visible: bool,
     /// Locked layers are drawn but cannot be picked or edited.
     pub locked: bool,
+    /// The material its vectors are cut from, from the Materials Library; empty for the
+    /// job's (added with the Materials Library)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
 }
 
 impl Layer {
@@ -42,6 +46,7 @@ impl Layer {
             name: name.to_owned(),
             visible: true,
             locked: false,
+            material: String::new(),
         }
     }
 }
@@ -59,6 +64,10 @@ pub struct Sheet {
     /// document's own.
     #[serde(default, skip_serializing_if = "SheetObjects::is_empty")]
     pub objects: SheetObjects,
+    /// The material the sheet is, from the Materials Library (Job Setup's Material); empty
+    /// when not named (added with the Materials Library)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
 }
 
 /// A sheet's vectors (each with its layer and group), components, pictures and toolpaths,
@@ -123,6 +132,7 @@ impl Sheet {
             job,
             visible: true,
             objects: SheetObjects::default(),
+            material: String::new(),
         }
     }
 }
@@ -649,6 +659,10 @@ pub struct Document {
     /// Points kept on what they were snapped to when drawn (added with constraints).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub constraints: Vec<crate::constraint::Constraint>,
+    /// Material Setup has been shown for this job, so it is not opened by itself again on
+    /// the first use of the Toolpaths page (added with that).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub material_checked: bool,
 }
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
@@ -790,6 +804,7 @@ impl Default for Document {
             toolpath_groups: vec![],
             part_names: BTreeMap::new(),
             constraints: vec![],
+            material_checked: false,
             tiling: None,
             bottom_side: false,
             other_side: SheetObjects::default(),

@@ -132,6 +132,12 @@ pub struct Params {
         extend("x-widget" = "drop-down")
     )]
     pub resolution: Resolution,
+    /// What the material is, from the Materials Library: toolpaths pick their bits' feeds
+    /// and speeds for it (a layer naming its own material overrides it). Left empty, each
+    /// bit's own feeds
+    #[serde(default)]
+    #[schemars(title = "Material", extend("x-kind" = "material"))]
+    pub material: String,
     /// The material's colour in the 3D view
     #[schemars(
         title = "Material Settings",
@@ -198,6 +204,7 @@ impl From<&Job> for Params {
             orientation: rotary.along,
             sides: job.double_sided.unwrap_or_default(),
             resolution: job.resolution,
+            material: String::new(),
             colour: job.colour,
             gaps: RapidGaps {
                 clearance: job.clearance,
@@ -228,7 +235,10 @@ impl Command for JobSetup {
     }
 
     fn initial_params(doc: &Document) -> Params {
-        (&doc.job).into()
+        Params {
+            material: doc.job_material().to_owned(),
+            ..(&doc.job).into()
+        }
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
@@ -288,6 +298,14 @@ impl Command for JobSetup {
             move_everything(doc, &mut c, moved);
         }
         c.set_job(job);
+        let material = p.material.trim();
+        if material != doc.job_material() {
+            let mut sheets = c.sheets().to_vec();
+            if let Some(sheet) = sheets.get_mut(doc.active_sheet) {
+                material.clone_into(&mut sheet.material);
+            }
+            c.set_sheets(sheets, doc.active_sheet);
+        }
         Ok(c.finish())
     }
 }
@@ -321,6 +339,14 @@ mod tests {
     use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath};
 
     cut_craft_core::contract_tests!(JobSetup);
+
+    #[test]
+    fn names_the_active_sheet_s_material_and_shows_it_again() {
+        let mut doc = sample_document();
+        run_on::<JobSetup>(&mut doc, &with(|p| p.material = " Hard Maple ".into()));
+        assert_eq!(doc.job_material(), "Hard Maple");
+        assert_eq!(JobSetup::initial_params(&doc).material, "Hard Maple");
+    }
 
     fn with(change: impl FnOnce(&mut Params)) -> Params {
         let mut p = Params::default();

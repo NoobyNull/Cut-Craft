@@ -238,6 +238,13 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub form: Vec<[f64; 2]>,
+    /// Feeds and speeds for whole material classes, from the class's softest material to
+    /// its hardest: a material in between cuts with data placed by its hardness
+    /// ([`crate::material_library`]); a material's own data comes first (added with the
+    /// Materials Library)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub class_feeds: Vec<crate::material_library::ClassFeeds>,
 }
 
 /// A form tool's edge height at `r` out, between the profile's points (flat past its ends).
@@ -361,7 +368,11 @@ impl Tool {
     /// else the default's values under its name, ready to become its set.
     pub fn cutting(&self, material: &str) -> CuttingData {
         if let Some(set) = self.material_data(material) {
-            return set.clone();
+            // its class's data, as this material's
+            return CuttingData {
+                material: material.to_owned(),
+                ..set.clone()
+            };
         }
         CuttingData {
             material: material.to_owned(),
@@ -430,18 +441,37 @@ impl Tool {
     /// Whether it keeps cutting data for `material` (always, for the default): the
     /// Tool Database greys the tools that do not.
     pub fn has_data_for(&self, material: &str) -> bool {
-        material.is_empty() || self.material_data(material).is_some()
+        // its own: data a material only borrows from its class is not set for it
+        material.is_empty()
+            || self
+                .materials
+                .iter()
+                .any(|m| m.material.eq_ignore_ascii_case(material))
     }
 
-    /// `material`'s own set, matched whatever the case; none for the default.
+    /// Its cutting data for `material`: the material's own, else its class's (data kept for
+    /// the class by name, or for another material in it: a bit's Hardwood data cuts Maple).
     fn material_data(&self, material: &str) -> Option<&CuttingData> {
-        (!material.is_empty())
-            .then(|| {
+        use crate::material_class::MaterialClass;
+        if material.is_empty() {
+            return None;
+        }
+        let own = self
+            .materials
+            .iter()
+            .find(|m| m.material.eq_ignore_ascii_case(material));
+        own.or_else(|| {
+            let class = MaterialClass::of(material)?;
+            let named = self
+                .materials
+                .iter()
+                .find(|m| m.material.eq_ignore_ascii_case(class.name()));
+            named.or_else(|| {
                 self.materials
                     .iter()
-                    .find(|m| m.material.eq_ignore_ascii_case(material))
+                    .find(|m| MaterialClass::of(&m.material) == Some(class))
             })
-            .flatten()
+        })
     }
 
     /// A thread mill's tooth height (H): its size and angle make a triangle, so this
@@ -621,6 +651,7 @@ impl Default for Tool {
             tooth_size: default_tooth_size(),
             tooth_offset: default_tooth_offset(),
             form: vec![],
+            class_feeds: vec![],
         }
     }
 }
@@ -861,6 +892,26 @@ impl ToolDatabase {
             return Some(tool);
         }
         self.get(name).map(|t| t.for_material(&self.material))
+    }
+
+    /// As [`Self::pick`], cutting `material` (the active material when empty) with what
+    /// the bit has for it: its own feeds, else its class's range placed by the material's
+    /// hardness in `library`.
+    pub fn pick_in(
+        &self,
+        name: &str,
+        material: &str,
+        library: &crate::material_library::MaterialLibrary,
+    ) -> Option<Tool> {
+        if self.joined_copy(name).is_some() {
+            return self.pick(name);
+        }
+        let material = if material.is_empty() {
+            self.material.as_str()
+        } else {
+            material
+        };
+        self.get(name).map(|t| t.for_material_in(material, library))
     }
 
     /// The copy `name` was, when it is a copy joined into a bit and no tool has the name now.

@@ -2,9 +2,12 @@
 //! in sized to fit inside that shape. A small window then offers Scale to fit (proportions
 //! kept), Stretch (the shape's proportions) or Morph (bent to follow the outline), and the
 //! margin from the edge; each change redoes the one import step, so Undo takes it all away.
+//! An open vector picked instead is a line to bend the drawing along, like lettering on an
+//! arc: the drawing runs its length, above, on or below it.
 
 use super::CutCraftApp;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_core::bend::{Bend, Side};
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::fit::{FitError, FitMode, Morph, fit_into};
 use cut_craft_core::geometry::{Path, Point, Rect};
@@ -36,36 +39,55 @@ pub(super) struct FitImport {
     raw: Change,
     shape: EntityId,
     pub(super) way: Way,
-    /// Millimetres.
+    /// Which side of an open line the drawing sits on.
+    pub(super) side: Side,
+    /// Millimetres: from a shape's edge, or from each end of a line.
     pub(super) margin: f64,
     /// The revision once the fitted drawing went in; `None` while it is not in the job.
     placed: Option<u64>,
     /// Why the last try did not fit, shown in the window.
     problem: Option<String>,
+    /// What to look out for in the last try (a bend that crumples), shown in the window.
+    caution: Option<String>,
     name: String,
 }
 
-/// The one closed vector selected, which a drawing is fitted into, or what to do instead.
+/// The one vector selected, which a drawing is fitted into (a closed shape) or bent along
+/// (an open line), or what to do instead.
 pub(super) fn chosen_shape(doc: &Document) -> Result<EntityId, &'static str> {
     let picked: Vec<EntityId> = doc.selection.iter().copied().collect();
     match picked[..] {
         [] => Err(
             "Select the shape to import into first (a circle, rectangle or any closed vector), \
-             then choose Import Into Selected Shape",
+             or an open line to bend the drawing along, then choose Import Into Selected Shape",
         ),
-        [id] if doc.vectors.get(&id).is_some_and(|p| p.closed) => Ok(id),
-        [_] => Err(
-            "The selected vector is open: a drawing can only go inside a closed shape. Close \
-             it with Join Vectors, or pick a closed one",
-        ),
-        _ => Err("Select just one shape to import into"),
+        [id] if doc.vectors.contains_key(&id) => Ok(id),
+        [_] => Err("Select a vector to import into: a 3D component cannot hold a drawing"),
+        _ => Err("Select just one shape or line to import into"),
     }
 }
 
-/// The margin a shape starts with: a twentieth of its shorter side.
-pub(super) fn default_margin(shape: &Path) -> f64 {
-    shape.bounds().size().min_element() * MARGIN_SHARE
+/// Whether the one vector selected is an open line, which a drawing is bent along (the
+/// right-click item then reads Import Along This Line…).
+pub(super) fn chosen_is_line(doc: &Document) -> bool {
+    chosen_shape(doc)
+        .ok()
+        .and_then(|id| doc.vectors.get(&id))
+        .is_some_and(|p| !p.closed)
 }
+
+/// The margin a shape starts with: a twentieth of its shorter side. Along an open line the
+/// drawing runs its whole length: no gap at the ends.
+pub(super) fn default_margin(shape: &Path) -> f64 {
+    if shape.closed {
+        shape.bounds().size().min_element() * MARGIN_SHARE
+    } else {
+        0.0
+    }
+}
+
+/// The warning added when a bend crumples the drawing's inside edge.
+const CRUMPLES: &str = "The line bends tighter than the drawing is tall, so the drawing's edge on the inside of the bend folds over itself. Put it on the other side of the line, or use a gentler curve";
 
 /// Every point of what `change` adds, curves flattened finely: for finding its size and
 /// shape. Pictures and 3D components count by their corners.
@@ -123,18 +145,73 @@ fn carried(mut change: Change, t: &DAffine2) -> Change {
     change
 }
 
+/// A reason, as a sentence.
+fn why(e: FitError) -> String {
+    let mut s = e.to_string();
+    if let Some(first) = s.get_mut(0..1) {
+        first.make_ascii_uppercase();
+    }
+    s
+}
+
+/// `raw` bent along the open `line`, `gap` from each end, on its `side`: its width runs the
+/// line's length, proportions kept. Pictures and 3D components cannot bend, so they are
+/// scaled the same and centred where their middle lands.
+fn bent(raw: &Change, line: &Path, gap: f64, side: Side) -> Result<Change, String> {
+    let from = bounds(raw).ok_or_else(|| why(FitError::NoDrawing))?;
+    let along = line.flatten(line.bounds().size().max_element().max(1e-6) / DETAIL);
+    let bend = Bend::new(from, &along, gap, side).map_err(why)?;
+    let step = from.size().max_element() / 400.0;
+    let flat = from.size().max_element() / DETAIL;
+    let solid = |r: Rect| {
+        let middle = bend.point(r.center());
+        let half = r.size() * bend.scale() / 2.0;
+        Rect::new(middle - half, middle + half)
+    };
+    let mut change = raw.clone();
+    for edit in &mut change.edits {
+        match edit {
+            Edit::Add { path, .. } => {
+                let points = bend.polyline(&path.flatten(flat), path.closed, step);
+                if points.len() >= 2 {
+                    *path = Path::polyline(&points, path.closed);
+                }
+            }
+            Edit::AddComponent { component, .. } => {
+                let r = component.extent();
+                let to = solid(r);
+                let t = DAffine2::from_translation(to.center())
+                    * DAffine2::from_scale(cut_craft_core::glam::DVec2::splat(bend.scale()))
+                    * DAffine2::from_translation(-r.center());
+                **component = component.transformed(&t);
+            }
+            Edit::AddBitmap { bitmap, .. } => bitmap.rect = solid(bitmap.rect),
+            _ => {}
+        }
+    }
+    if bend.folds() {
+        change.notes.push(CRUMPLES.to_owned());
+    }
+    Ok(change)
+}
+
 /// `raw` fitted into `shape` the chosen way, `margin` from its edge. Morph bends the
-/// vectors; pictures and 3D components cannot bend, so they are scaled to fit.
-pub(super) fn fitted(raw: &Change, shape: &Path, margin: f64, way: Way) -> Result<Change, String> {
+/// vectors; pictures and 3D components cannot bend, so they are scaled to fit. An open
+/// `shape` is a line: `raw` is bent along it, on its `side`, `margin` from each end.
+pub(super) fn fitted(
+    raw: &Change,
+    shape: &Path,
+    margin: f64,
+    way: Way,
+    side: Side,
+) -> Result<Change, String> {
+    if !shape.closed {
+        let mut change = bent(raw, shape, margin, side)?;
+        change.notes.retain(|n| !n.contains("Set Size"));
+        return Ok(change);
+    }
     let ring = shape.flatten(shape.bounds().size().max_element() / DETAIL);
     let drawing = points(raw);
-    let why = |e: FitError| {
-        let mut s = e.to_string();
-        if let Some(first) = s.get_mut(0..1) {
-            first.make_ascii_uppercase();
-        }
-        s
-    };
     let mode = match way {
         Way::Stretch => FitMode::Stretch,
         Way::Scale | Way::Morph => FitMode::Fit,
@@ -183,9 +260,11 @@ impl FitImport {
             raw,
             shape,
             way: Way::default(),
+            side: Side::default(),
             margin,
             placed: None,
             problem: None,
+            caution: None,
             name,
         }
     }
@@ -249,18 +328,22 @@ impl CutCraftApp {
                 .set_message("The shape to import into is gone: nothing was imported");
             return;
         };
-        match fitted(&fit.raw, &shape, fit.margin, fit.way) {
+        let done = if shape.closed {
+            format!("Imported {} into the selected shape", fit.name)
+        } else {
+            format!("Imported {} along the selected line", fit.name)
+        };
+        match fitted(&fit.raw, &shape, fit.margin, fit.way, fit.side) {
             Ok(change) => {
-                self.record(
-                    Ok(change),
-                    &format!("Imported {} into the selected shape", fit.name),
-                );
+                fit.caution = change.notes.iter().find(|n| *n == CRUMPLES).cloned();
+                self.record(Ok(change), &done);
                 fit.placed = Some(self.history.revision());
                 fit.problem = None;
             }
             Err(why) => {
                 self.status.set_message(&why);
                 fit.problem = Some(why);
+                fit.caution = None;
             }
         }
         self.fit_import = Some(fit);
@@ -280,54 +363,32 @@ impl CutCraftApp {
             return;
         }
         let units = self.doc.job.units;
-        let (mut way, mut margin) = (fit.way, fit.margin);
-        let problem = fit.problem.clone();
+        let (mut way, mut side, mut margin) = (fit.way, fit.side, fit.margin);
+        let (problem, caution) = (fit.problem.clone(), fit.caution.clone());
+        let line = self.doc.vectors.get(&fit.shape).is_some_and(|p| !p.closed);
+        let title = if line {
+            "Import Along Line"
+        } else {
+            "Import Into Shape"
+        };
         let mut open = true;
         let (mut done, mut undo) = (false, false);
-        egui::Window::new("Import Into Shape")
+        egui::Window::new(title)
             .open(&mut open)
             .resizable(false)
             .collapsible(false)
             .show(ctx, |ui| {
-                cut_craft_bug_report::mark(ui, "Import Into Shape");
-                ui.label("How the drawing takes the shape's size:");
-                let ways = [
-                    (
-                        Way::Scale,
-                        "Scale to fit",
-                        "As big as fits inside the shape's outline, its proportions kept: \
-                         nothing is squashed",
-                    ),
-                    (
-                        Way::Stretch,
-                        "Stretch",
-                        "Made as wide and tall as the shape, so it fills it: lettering and \
-                         pictures come out squashed or stretched",
-                    ),
-                    (
-                        Way::Morph,
-                        "Morph to shape",
-                        "Bent so its edges follow the shape's outline all the way round, like \
-                         a picture on a balloon. Curves become many short lines",
-                    ),
-                ];
-                ui.horizontal(|ui| {
-                    for (w, name, help) in ways {
-                        ui.radio_value(&mut way, w, name).on_hover_hint(help);
-                    }
-                });
-                if let Some((_, _, help)) = ways.iter().find(|w| w.0 == way) {
-                    ui.weak(*help);
+                cut_craft_bug_report::mark(ui, title);
+                if line {
+                    along_line_settings(ui, &mut side, &mut margin, units);
+                } else {
+                    into_shape_settings(ui, &mut way, &mut margin, units);
                 }
-                ui.horizontal(|ui| {
-                    ui.label("Margin").on_hover_hint(
-                        "The gap kept between the drawing and the shape's edge, so a cut \
-                         inside the shape does not run into its border. 0 lets it touch",
-                    );
-                    crate::form::length_edit(ui, &mut margin, units, 0.0);
-                });
                 if let Some(why) = &problem {
                     ui.colored_label(ui.visuals().warn_fg_color, why);
+                }
+                if let Some(look_out) = &caution {
+                    ui.colored_label(ui.visuals().warn_fg_color, look_out);
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -355,13 +416,105 @@ impl CutCraftApp {
             return;
         }
         if let Some(fit) = self.fit_import.as_mut()
-            && (fit.way != way || (fit.margin - margin).abs() > f64::EPSILON)
+            && (fit.way != way || fit.side != side || (fit.margin - margin).abs() > f64::EPSILON)
         {
             fit.way = way;
+            fit.side = side;
             fit.margin = margin;
             self.place_fit_import();
         }
     }
+}
+
+/// The window's settings for a drawing going into a closed shape: the way it takes the
+/// shape's size, and the margin from the edge.
+fn into_shape_settings(
+    ui: &mut egui::Ui,
+    way: &mut Way,
+    margin: &mut f64,
+    units: cut_craft_core::document::Units,
+) {
+    ui.label("How the drawing takes the shape's size:");
+    let ways = [
+        (
+            Way::Scale,
+            "Scale to fit",
+            "As big as fits inside the shape's outline, its proportions kept: \
+                         nothing is squashed",
+        ),
+        (
+            Way::Stretch,
+            "Stretch",
+            "Made as wide and tall as the shape, so it fills it: lettering and \
+                         pictures come out squashed or stretched",
+        ),
+        (
+            Way::Morph,
+            "Morph to shape",
+            "Bent so its edges follow the shape's outline all the way round, like \
+                         a picture on a balloon. Curves become many short lines",
+        ),
+    ];
+    ui.horizontal(|ui| {
+        for (w, name, help) in ways {
+            ui.radio_value(way, w, name).on_hover_hint(help);
+        }
+    });
+    if let Some((_, _, help)) = ways.iter().find(|w| w.0 == *way) {
+        ui.weak(*help);
+    }
+    ui.horizontal(|ui| {
+        ui.label("Margin").on_hover_hint(
+            "The gap kept between the drawing and the shape's edge, so a cut \
+                         inside the shape does not run into its border. 0 lets it touch",
+        );
+        crate::form::length_edit(ui, margin, units, 0.0);
+    });
+}
+
+/// The window's settings for a drawing bent along an open line: which side of it the
+/// drawing sits on, and the gap left at each end.
+fn along_line_settings(
+    ui: &mut egui::Ui,
+    side: &mut Side,
+    gap: &mut f64,
+    units: cut_craft_core::document::Units,
+) {
+    ui.label("The drawing is bent to run the line's length, like lettering on an arc.");
+    ui.label("Where it sits:");
+    let sides = [
+        (
+            Side::Above,
+            "Above the line",
+            "The drawing stands on the line, as lettering stands on a ruled line. On an \
+             arch it sits on the outside of the curve",
+        ),
+        (
+            Side::On,
+            "Centred on the line",
+            "The line runs through the middle of the drawing",
+        ),
+        (
+            Side::Below,
+            "Below the line",
+            "The drawing hangs from the line. On an arch it sits on the inside of the curve",
+        ),
+    ];
+    ui.horizontal(|ui| {
+        for (s, name, help) in sides {
+            ui.radio_value(side, s, name).on_hover_hint(help);
+        }
+    });
+    if let Some((_, _, help)) = sides.iter().find(|s| s.0 == *side) {
+        ui.weak(*help);
+    }
+    ui.horizontal(|ui| {
+        ui.label("Gap at each end").on_hover_hint(
+            "How far in from each end of the line the drawing starts and stops. 0 runs it \
+             the line's whole length",
+        );
+        crate::form::length_edit(ui, gap, units, 0.0);
+    });
 }
 
 #[cfg(test)]
@@ -408,8 +561,14 @@ mod tests {
         );
         doc.selection = [ids[0]].into();
         assert_eq!(chosen_shape(&doc), Ok(ids[0]));
+        assert!(!chosen_is_line(&doc));
         doc.selection = [ids[1]].into();
-        assert!(chosen_shape(&doc).unwrap_err().contains("open"));
+        assert_eq!(
+            chosen_shape(&doc),
+            Ok(ids[1]),
+            "an open line, to bend along"
+        );
+        assert!(chosen_is_line(&doc));
         doc.selection = [ids[0], ids[2]].into();
         assert!(chosen_shape(&doc).unwrap_err().contains("just one"));
     }
@@ -432,7 +591,7 @@ mod tests {
     fn a_drawing_comes_in_scaled_into_a_circle_and_stays_selected() {
         let raw = import_of(&[square(Point::new(500.0, 500.0), 4.0)]);
         let shape = Path::circle(Point::new(50.0, 50.0), 50.0);
-        let change = fitted(&raw, &shape, 0.0, Way::Scale).unwrap();
+        let change = fitted(&raw, &shape, 0.0, Way::Scale, Side::Above).unwrap();
         let b = bounds(&change).unwrap();
         assert!((b.size().x - 100.0 / 2f64.sqrt()).abs() < 0.1, "{b:?}");
         assert!(b.center().distance(Point::new(50.0, 50.0)) < 1e-6);
@@ -449,7 +608,7 @@ mod tests {
     fn morph_bends_the_drawings_edges_onto_the_circle() {
         let raw = import_of(&[square(Point::ZERO, 10.0)]);
         let shape = Path::circle(Point::new(0.0, 0.0), 30.0);
-        let change = fitted(&raw, &shape, 0.0, Way::Morph).unwrap();
+        let change = fitted(&raw, &shape, 0.0, Way::Morph, Side::Above).unwrap();
         let Some(Edit::Add { path, .. }) =
             change.edits.iter().find(|e| matches!(e, Edit::Add { .. }))
         else {
@@ -463,6 +622,63 @@ mod tests {
     }
 
     #[test]
+    fn along_an_open_arch_lettering_stands_on_it_and_runs_its_length() {
+        // a 20 by 2 strip on a half circle of radius 50 drawn right to left
+        let raw = import_of(&[Path::polyline(
+            &[
+                Point::ZERO,
+                Point::new(20.0, 0.0),
+                Point::new(20.0, 2.0),
+                Point::new(0.0, 2.0),
+            ],
+            true,
+        )]);
+        let arch: Vec<Point> = (0..=90)
+            .map(|i| {
+                let a = std::f64::consts::PI * f64::from(i) / 90.0;
+                Point::new(a.cos(), a.sin()) * 50.0
+            })
+            .collect();
+        let line = Path::polyline(&arch, false);
+        assert!(
+            default_margin(&line).abs() < 1e-12,
+            "it runs the whole line"
+        );
+        let change = fitted(&raw, &line, 0.0, Way::Scale, Side::Above).unwrap();
+        let Some(Edit::Add { path, .. }) =
+            change.edits.iter().find(|e| matches!(e, Edit::Add { .. }))
+        else {
+            panic!("a vector");
+        };
+        let points = path.flatten(0.01);
+        // the strip grows 157 / 20 times: its height is about 15.7, outside the arch
+        let scale = std::f64::consts::PI * 50.0 / 20.0;
+        for p in &points {
+            let r = p.length();
+            assert!(
+                r > 49.9 && r < 50.0 + 2.0 * scale + 0.1,
+                "{p} sits on the arch"
+            );
+        }
+        assert!(points.iter().any(|p| (p.length() - 50.0).abs() < 0.05));
+        assert!(
+            points
+                .iter()
+                .any(|p| p.distance(Point::new(-50.0, 0.0)) < 0.05)
+        );
+        assert!(
+            points
+                .iter()
+                .any(|p| p.distance(Point::new(50.0, 0.0)) < 0.05)
+        );
+        assert!(change.notes.is_empty(), "no crumpling outside an arch");
+        // a square inside the arch is far taller (157) than the bend (50) allows: a warning
+        let square = import_of(&[square(Point::ZERO, 10.0)]);
+        let below = fitted(&square, &line, 0.0, Way::Scale, Side::Below).unwrap();
+        assert!(below.notes.iter().any(|n| n.contains("folds over itself")));
+    }
+
+    #[test]
     fn a_unit_guess_note_goes_once_the_drawing_is_resized() {
         let mut raw = import_of(&[square(Point::ZERO, 10.0)]);
         raw.notes = vec![
@@ -470,7 +686,7 @@ mod tests {
             "Left out: 2 texts".into(),
         ];
         let shape = Path::circle(Point::ZERO, 30.0);
-        let change = fitted(&raw, &shape, 0.0, Way::Scale).unwrap();
+        let change = fitted(&raw, &shape, 0.0, Way::Scale, Side::Above).unwrap();
         assert_eq!(change.notes, vec!["Left out: 2 texts".to_owned()]);
     }
 }

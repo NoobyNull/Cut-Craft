@@ -45,6 +45,8 @@ pub enum Outcome {
     Import,
     /// Pick where to save these tools.
     Export(ToolDatabase),
+    /// Open the Materials Library (the edits so far kept, as Apply).
+    MaterialsLibrary,
     /// Keep the edited database, close the window and cut with this tool (by name): the
     /// window was opened from a toolpath form's Select….
     Select(String),
@@ -77,6 +79,11 @@ pub struct Manager {
     /// shown in place of OK.
     pub selecting: bool,
     index: crate::search::SearchIndex,
+    /// The Materials Library: its materials are offered as the active material, and a
+    /// bit's feeds for their class are placed by their hardness.
+    pub library: cut_craft_core::material_library::MaterialLibrary,
+    /// What a button inside the window asked for this frame (Materials Library…).
+    pending: Option<Outcome>,
     /// The picked tool and the maker ▸ type group it had last drawn: while its group is
     /// still that one, the group follows its maker and type.
     followed: Option<(usize, String)>,
@@ -243,6 +250,8 @@ impl Manager {
             search: String::new(),
             selecting: false,
             index: crate::search::SearchIndex::default(),
+            library: cut_craft_core::material_library::MaterialLibrary::starter(),
+            pending: None,
             followed: None,
         }
     }
@@ -427,6 +436,9 @@ impl Manager {
         if !open {
             outcome = Some(Outcome::Cancel);
         }
+        if let Some(asked) = self.pending.take() {
+            outcome = outcome.or(Some(asked));
+        }
         outcome
     }
 
@@ -567,7 +579,7 @@ impl Manager {
                 let label = ui.selectable_label(picked, name);
                 if unset {
                     label.clone().on_hover_hint(format!(
-                        "No cutting data for {}: it cuts with its default data",
+                        "No cutting data for {}: it cuts with its class's or its default data",
                         self.draft.material
                     ));
                 }
@@ -748,6 +760,7 @@ impl Manager {
                     (&groups, name_formats),
                     (look, loaded),
                     &material,
+                    Some(&self.library),
                 );
                 let name = self.draft.tools[i].name.clone();
                 let mut chosen = None;
@@ -788,7 +801,39 @@ impl Manager {
                     for m in &self.draft.materials {
                         ui.selectable_value(active, m.clone(), m);
                     }
+                    // the library's, by class: picking one and changing the feeds shown
+                    // gives the bit feeds of its own for it
+                    for class in cut_craft_core::material_class::MaterialClass::ALL {
+                        let listed = self.library.in_class(class);
+                        let new: Vec<_> = listed
+                            .iter()
+                            .filter(|m| {
+                                !self
+                                    .draft
+                                    .materials
+                                    .iter()
+                                    .any(|d| d.eq_ignore_ascii_case(&m.name))
+                            })
+                            .collect();
+                        if new.is_empty() {
+                            continue;
+                        }
+                        ui.separator();
+                        ui.weak(class.name());
+                        for m in new {
+                            ui.selectable_value(active, m.name.clone(), &m.name);
+                        }
+                    }
                 });
+            if ui
+                .button("Materials Library…")
+                .on_hover_hint(
+                    "The materials by class and hardness, and each one's bits with their feeds",
+                )
+                .clicked()
+            {
+                self.pending = Some(Outcome::MaterialsLibrary);
+            }
             ui.add(egui::TextEdit::singleline(&mut self.new_material).hint_text("New material"));
             let typed = !self.new_material.trim().is_empty();
             if ui
@@ -847,6 +892,7 @@ impl Manager {
                 (&groups, &mut formats),
                 (look, None),
                 &material,
+                Some(&self.library),
             );
         });
         if copy {
@@ -969,7 +1015,7 @@ pub(crate) fn length(ui: &mut egui::Ui, value: &mut f64, units: Units) -> bool {
 }
 
 /// A rate (mm/min) shown in the tool's rate units; whether it changed.
-fn rate(ui: &mut egui::Ui, value: &mut f64, units: RateUnits) -> bool {
+pub(crate) fn rate(ui: &mut egui::Ui, value: &mut f64, units: RateUnits) -> bool {
     number(ui, value, units.mm_per_min(), units.label())
 }
 
@@ -1009,6 +1055,7 @@ fn tool_details(
     (groups, formats): (&[String], &mut BTreeMap<String, String>),
     (look, loaded): (&Look, Option<(&str, usize)>),
     material: &str,
+    library: Option<&cut_craft_core::material_library::MaterialLibrary>,
 ) {
     // the drawing in a card of its own right of Tool Info, so it does not push the cutting
     // data down; under it when the window is too narrow for both
@@ -1044,10 +1091,14 @@ fn tool_details(
         ));
     }
     copy_settings_from(ui, tool, material);
-    let mut shown = tool.for_material(material);
+    let mut shown = match library {
+        Some(library) => tool.for_material_in(material, library),
+        None => tool.for_material(material),
+    };
+    let before = shown.cutting("");
     section(ui, "Cutting Parameters", |ui| cutting(ui, &mut shown));
     section(ui, "Feeds and Speeds", |ui| feeds(ui, &mut shown));
-    keep_cutting(tool, &shown, material);
+    keep_cutting(tool, &shown, material, &before);
     tool.renamed(material);
 }
 
@@ -1078,14 +1129,15 @@ fn copy_settings_from(ui: &mut egui::Ui, tool: &mut Tool, material: &str) {
 
 /// Keeps what was edited in `shown` (the tool as it cuts `material`) as the tool's data for
 /// that material, or its default for none; rate units are the tool's whatever the material.
-fn keep_cutting(tool: &mut Tool, shown: &Tool, material: &str) {
+fn keep_cutting(tool: &mut Tool, shown: &Tool, material: &str, before: &CuttingData) {
     tool.rate_units = shown.rate_units;
-    let edited = CuttingData {
-        material: material.to_owned(),
-        ..shown.cutting("")
-    };
-    if edited != tool.cutting(material) {
-        tool.set_cutting(edited);
+    // only a change made here becomes the material's own data: data shown from its class
+    // or the default stays borrowed while it is only looked at
+    if shown.cutting("") != *before {
+        tool.set_cutting(CuttingData {
+            material: material.to_owned(),
+            ..shown.cutting("")
+        });
     }
 }
 
@@ -1347,7 +1399,7 @@ fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
 }
 
 /// A stepover (a fraction of the diameter) shown as a percentage; whether it changed.
-fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
+pub(crate) fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
     let mut percent = *fraction * 100.0;
     let changed = ui
         .add(
@@ -1628,11 +1680,12 @@ mod tests {
     fn edits_shown_for_a_material_become_its_data_and_leave_the_default() {
         let mut tool = Tool::default();
         let mut shown = tool.for_material("Oak");
-        keep_cutting(&mut tool, &shown, "Oak");
+        let before = shown.cutting("");
+        keep_cutting(&mut tool, &shown, "Oak", &before);
         assert!(tool.materials.is_empty(), "nothing changed, nothing kept");
         shown.feed_rate = 600.0;
         shown.rate_units = RateUnits::InchPerMin;
-        keep_cutting(&mut tool, &shown, "Oak");
+        keep_cutting(&mut tool, &shown, "Oak", &before);
         assert!((tool.cutting("Oak").feed_rate - 600.0).abs() < 1e-9);
         assert!((tool.feed_rate - 1000.0).abs() < 1e-9, "the default stays");
         assert_eq!(
@@ -1641,8 +1694,9 @@ mod tests {
             "units are the tool's"
         );
         let mut default = tool.for_material("");
+        let before = default.cutting("");
         default.plunge_rate = 50.0;
-        keep_cutting(&mut tool, &default, "");
+        keep_cutting(&mut tool, &default, "", &before);
         assert!((tool.plunge_rate - 50.0).abs() < 1e-9);
         assert_eq!(tool.materials.len(), 1);
     }

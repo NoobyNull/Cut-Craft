@@ -159,9 +159,9 @@ impl Icons {
     }
 }
 
-/// Folders of dialog pictures, found only by their path: a picture never stands in for a
-/// command that happens to share its name.
-const PICTURE_FOLDERS: [&str; 3] = ["drawing_forms", "import", "tool_database"];
+/// Folders of dialog pictures and tip illustrations, found only by their path: a picture
+/// never stands in for a command that happens to share its name (`tips/undo.png` for Undo).
+const PICTURE_FOLDERS: [&str; 4] = ["drawing_forms", "import", "tool_database", "tips"];
 
 /// The command id a button icon (an SVG or PNG outside the picture folders) stands in for: its
 /// file stem.
@@ -330,6 +330,16 @@ mod tests {
         );
         assert_eq!(icons.find("import/notes.txt", ""), None);
         assert!(icons.find("import/link.png", "").is_some(), "PNG icons too");
+    }
+
+    #[test]
+    fn a_tip_illustration_never_stands_in_for_a_command() {
+        let dir = icon_dir("tips");
+        fs::create_dir_all(dir.join("tips")).unwrap();
+        fs::write(dir.join("tips/undo.png"), "").unwrap();
+        let icons = Icons::load(&dir);
+        assert_eq!(icons.find("", "undo"), None, "not the Undo button's icon");
+        assert_eq!(icons.find("tips/undo.png", ""), Some("tips/undo.png"));
     }
 
     #[test]

@@ -422,6 +422,9 @@ pub(super) struct SaveForm {
 
 /// What the checks before cutting found in Save Toolpaths' plan, kept while the plan, the
 /// job and the machine stay as they were.
+/// What the Analyse sub-tab's checks were run on.
+type Analysed = (u64, usize, Vec<EntityId>);
+
 #[derive(Clone, Debug)]
 pub(super) struct SaveChecks {
     plan: Vec<Vec<EntityId>>,
@@ -1007,9 +1010,15 @@ struct CutCraftApp {
     toolpath_subtab: usize,
     /// The Toolpaths sub-tab shown as a section to unfold next frame, as `design_unfold`.
     toolpath_unfold: Option<&'static str>,
-    /// How many toolpaths the job had when the Toolpaths page last looked: one more opens
-    /// the List sub-tab, so a toolpath just made is seen there.
-    toolpaths_seen: usize,
+    /// The toolpaths Ctrl-clicked in the list besides `selected_toolpath`, to group, move
+    /// or drag together.
+    more_toolpaths: std::collections::BTreeSet<EntityId>,
+    /// Whether the first click on the Toolpaths page of a job that has not had Material
+    /// Setup opens it (tests leave it off).
+    ask_material: bool,
+    /// The Toolpath List's height as its divider was last dragged; None for its share of
+    /// the page.
+    list_height: Option<f32>,
     /// Each tool's first step, once asked for (see [`guide::first_step`]).
     first_steps: std::cell::RefCell<std::collections::HashMap<String, Option<String>>>,
     view: View,
@@ -1090,6 +1099,12 @@ struct CutCraftApp {
     tools_path: Option<std::path::PathBuf>,
     /// The open Tool Database window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
+    /// The Materials Library: materials by class and hardness.
+    materials: cut_craft_core::material_library::MaterialLibrary,
+    /// Where `materials` is saved; `None` keeps it in memory.
+    materials_path: Option<std::path::PathBuf>,
+    /// The open Materials Library window.
+    materials_window: Option<cut_craft_tool_database::materials::MaterialsWindow>,
     /// What the open Select Tool picks for: a tool in one of the form's lists, or a tool
     /// changer holder; `None` picks the form's own tool.
     picking: Option<PickFor>,
@@ -1183,6 +1198,9 @@ struct CutCraftApp {
     machine_files: Option<send::MachineFiles>,
     /// The checks shown in Save Toolpaths' form.
     save_checks: Option<SaveChecks>,
+    /// The Analyse sub-tab's checks before cutting, kept until the job, the machine or the
+    /// toolpaths shown change: (revision, machine, toolpaths) and what was found.
+    analysed: Option<(Analysed, Vec<cut_craft_core::preflight::Finding>)>,
     /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
     snap_window: bool,
     /// Gadgets ▸ Job Setup Sheet Editor is open.
@@ -1585,6 +1603,7 @@ fn summary_table(
         material: cut_craft_core::calc::Values::default(),
         tool: None,
         group_end: None,
+        materials: None,
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
         summary.rapid = values["rapid_rate"]
@@ -1985,6 +2004,8 @@ enum PickFor {
     Listed(ToolList, ListSlot),
     /// The active machine's tool changer holder (counted from 1).
     Holder(usize),
+    /// The Materials Library's Add Tool: the bit gets feeds for its material or class.
+    Material,
 }
 
 /// A form's clearing bits (`clearance_tools`): off, the form's tool cuts it all; on, bigger
@@ -2679,6 +2700,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
                 return Ok(Box::new(app));
             }
             app.load_tools();
+            app.load_materials();
             app.load_machines();
             app.load_options();
             app.words_path = files::config_dir().map(|d| d.join("words.txt"));
@@ -2727,8 +2749,14 @@ fn wrap_for(
     })
 }
 
-/// Whether one closed vector is selected, for a drawing to be imported into (the 2D view's
-/// right-click Import Into This Shape…).
+/// Whether one vector is selected, for a drawing to be imported into (the 2D view's
+/// right-click Import Into This Shape…) or, an open one, bent along.
 pub fn shape_to_import_into(doc: &cut_craft_core::document::Document) -> bool {
     fit_import::chosen_shape(doc).is_ok()
+}
+
+/// Whether the one vector selected is an open line, for the right-click item to read
+/// Import Along This Line….
+pub fn line_to_import_along(doc: &cut_craft_core::document::Document) -> bool {
+    fit_import::chosen_is_line(doc)
 }

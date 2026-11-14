@@ -94,7 +94,7 @@ pub const DESIGN_SUBTABS: &[SubTab] = &[
 /// last tool groups off the bottom (`re/SPEC.md`, Toolpaths sub-tabs).
 pub const TOOLPATH_SUBTABS: &[SubTab] = &[
     SubTab {
-        name: "Make",
+        name: "Create",
         hint: "Pick how to cut: each button makes a toolpath from the vectors or model you \
                selected",
         groups: &[
@@ -104,23 +104,25 @@ pub const TOOLPATH_SUBTABS: &[SubTab] = &[
             "Edges and Inlays",
             "3D Toolpaths",
             "Laser",
-            "From a Template",
+            "From Other Toolpaths",
+            "Templates",
         ],
     },
     SubTab {
-        name: "List",
-        hint: "Every toolpath in the job, in the order they cut: pick, reorder, group, edit, \
-               copy or save them as a template",
-        groups: &["Reuse Toolpaths"],
-    },
-    SubTab {
         name: "Preview",
-        hint: "Watch the toolpaths cut the material, and check them before saving",
-        groups: &["Check"],
+        hint: "Watch the toolpaths cut the material",
+        groups: &[],
     },
     SubTab {
-        name: "Save",
-        hint: "Write the file your machine runs, and the sheets and labels that go with it",
+        name: "Analyse",
+        hint: "Check the toolpaths before cutting: what would stop or spoil the cut, what is \
+               out of date, and how long each takes",
+        groups: &["Reports"],
+    },
+    SubTab {
+        name: "Output",
+        hint: "Write the file your machine runs or send it there, and the sheets and labels \
+               that go with it",
         groups: &["Save for the Machine", "Paperwork for the Job", "Big Jobs"],
     },
 ];
@@ -251,7 +253,8 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "import_into_shape",
         "Import Into Selected Shape",
         "Select a closed shape first (a circle, plaque or heart), then bring in a drawing or \
-         picture sized to fit inside it: scaled, stretched or bent to follow its outline",
+         picture sized to fit inside it: scaled, stretched or bent to follow its outline. \
+         Select an open line instead to bend the drawing along it, like lettering on an arc",
     ),
     (
         "import_component_3d_model",
@@ -709,20 +712,22 @@ fn toolpath_groups() -> Vec<ToolGroup> {
             "Laser",
             &["laser_cut_fill_toolpath", "laser_picture_toolpath"],
         ),
-        group("From a Template", &["load_template"]),
-        // List: what is done with toolpaths already made
+        // new toolpaths from those already made, and templates to reuse them in other jobs
         group(
-            "Reuse Toolpaths",
+            "From Other Toolpaths",
+            &["array_copy_toolpath", "merged_toolpath"],
+        ),
+        group(
+            "Templates",
             &[
-                "array_copy_toolpath",
-                "merged_toolpath",
+                "load_template",
                 "save_selected_toolpath_as_template",
                 "save_all_visible_toolpaths_as_template",
             ],
         ),
-        // Preview
-        group("Check", &["toolpath_summary"]),
-        // Save: the Save tab draws this one as its big button
+        // Analyse
+        group("Reports", &["toolpath_summary"]),
+        // Output: the Output tab draws this one as its big button
         group("Save for the Machine", &["save_toolpaths"]),
         group(
             "Paperwork for the Job",
@@ -1041,8 +1046,15 @@ impl MenuSystem {
             edit("Delete"),
             MenuItem::separator(),
             MenuItem::with_action("Select Vectors Inside", "select_vectors_inside"),
-            MenuItem::with_action("Import Into This Shape…", "import_into_shape")
-                .enabled(crate::app::shape_to_import_into(doc)),
+            MenuItem::with_action(
+                if crate::app::line_to_import_along(doc) {
+                    "Import Along This Line…"
+                } else {
+                    "Import Into This Shape…"
+                },
+                "import_into_shape",
+            )
+            .enabled(crate::app::shape_to_import_into(doc)),
             MenuItem::submenu("Move to Layer", layers.collect()),
             MenuItem::with_action("Copy to Other Side", "copy_to_other_side")
                 .enabled(doc.job.double_sided.is_some()),
@@ -2463,7 +2475,7 @@ mod tests {
         let names: Vec<&str> = super::TOOLPATH_SUBTABS.iter().map(|t| t.name).collect();
         assert_eq!(
             names,
-            ["Make", "List", "Preview", "Save"],
+            ["Create", "Preview", "Analyse", "Output"],
             "in the order a job goes"
         );
     }
@@ -2532,22 +2544,25 @@ mod tests {
         let tab = |name: &str| super::TOOLPATH_SUBTABS.iter().position(|t| t.name == name);
         assert_eq!(
             toolbar.toolpath_subtab_of("profile_toolpath", 0),
-            tab("Make")
+            tab("Create")
         );
         assert_eq!(
             toolbar.toolpath_subtab_of("3d_roughing_toolpath", 3),
-            tab("Make")
+            tab("Create")
         );
         assert_eq!(
             toolbar.toolpath_subtab_of("merged_toolpath", 0),
-            tab("List")
+            tab("Create")
         );
         assert_eq!(
             toolbar.toolpath_subtab_of("toolpath_summary", 0),
-            tab("Preview")
+            tab("Analyse")
         );
-        assert_eq!(toolbar.toolpath_subtab_of("save_toolpaths", 0), tab("Save"));
-        assert_eq!(toolbar.toolpath_subtab_of("part_labels", 0), tab("Save"));
+        assert_eq!(
+            toolbar.toolpath_subtab_of("save_toolpaths", 0),
+            tab("Output")
+        );
+        assert_eq!(toolbar.toolpath_subtab_of("part_labels", 0), tab("Output"));
         assert_eq!(
             toolbar.toolpath_subtab_of("tool_database", 0),
             None,
@@ -2559,25 +2574,25 @@ mod tests {
     #[test]
     fn toolpath_sub_tabs_move_out_of_the_row_apart_from_the_design_pages() {
         let none: Vec<String> = vec![];
-        let list = super::TOOLPATHS
+        let save = super::TOOLPATHS
             .placed(
                 &none,
-                &format!("{}List:section", super::TOOLPATH_SUBTAB_PLACE),
+                &format!("{}Output:section", super::TOOLPATH_SUBTAB_PLACE),
             )
             .expect("a toolpaths action");
-        assert_eq!(list, ["List"]);
-        assert_eq!(super::TOOLPATHS.layout(&list), (vec![0, 2, 3], vec![1]));
+        assert_eq!(save, ["Output"]);
+        assert_eq!(super::TOOLPATHS.layout(&save), (vec![0, 1, 2], vec![3]));
         assert_eq!(
-            super::TOOLPATHS.open(1, &list),
+            super::TOOLPATHS.open(3, &save),
             Some(0),
-            "List is not in the row"
+            "Save is not in the row"
         );
         // each page's actions are its own
         assert!(
             super::DESIGN
                 .placed(
                     &none,
-                    &format!("{}List:section", super::TOOLPATH_SUBTAB_PLACE)
+                    &format!("{}Output:section", super::TOOLPATH_SUBTAB_PLACE)
                 )
                 .is_none()
         );
@@ -2586,7 +2601,7 @@ mod tests {
                 .placed(&none, &format!("{}Model:section", super::SUBTAB_PLACE))
                 .is_none()
         );
-        let menu = super::TOOLPATHS.menu("Preview", &list);
+        let menu = super::TOOLPATHS.menu("Preview", &save);
         assert!(menu[0].action.starts_with(super::TOOLPATH_SUBTAB_PLACE));
     }
 
@@ -2748,7 +2763,7 @@ mod menu_tests {
         for group in super::toolpath_groups() {
             if [
                 "Job and Tools",
-                "Check",
+                "Reports",
                 "Save for the Machine",
                 "Paperwork for the Job",
                 "Big Jobs",
