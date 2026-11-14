@@ -121,14 +121,16 @@ impl<A: 'static> Busy<A> {
         let elapsed = self.started.elapsed();
         let fraction = self.progress.fraction();
         let stage = self.progress.stage();
+        let note = self.progress.note();
         let mut cancel = false;
         egui::Modal::new(egui::Id::unique("busy_job")).show(ctx, |ui| {
             cut_craft_bug_report::mark(ui, "Progress window");
             ui.set_width(ui.spacing().interact_size.x * 8.0);
             ui.heading(format!("{}…", self.what));
-            if !stage.is_empty() {
-                ui.label(&stage);
-            }
+            // what it is doing and its word on that, each in room of its own that never
+            // grows or shrinks, so the window holds still as the steps change
+            fixed_lines(ui, egui::RichText::new(stage), 2);
+            fixed_lines(ui, egui::RichText::new(note).weak().small(), 2);
             match fraction {
                 Some(f) => {
                     #[expect(clippy::cast_possible_truncation, reason = "a bar's fill")]
@@ -159,6 +161,35 @@ impl<A: 'static> Busy<A> {
         ctx.request_repaint_after(Duration::from_millis(100));
         cancel
     }
+}
+
+/// `text` wrapped in room `lines` lines high across the window, whatever it says (blank
+/// included): longer is cut short with "…".
+fn fixed_lines(ui: &mut egui::Ui, text: egui::RichText, lines: usize) {
+    let width = ui.available_width();
+    #[expect(clippy::cast_precision_loss, reason = "a few lines")]
+    let height = ui.text_style_height(&egui::TextStyle::Body) * lines as f32;
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, height),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
+            ui.set_min_size(egui::vec2(width, height));
+            ui.set_max_size(egui::vec2(width, height));
+            let wrapping = egui::text::TextWrapping {
+                max_width: width,
+                max_rows: lines,
+                ..Default::default()
+            };
+            let galley = egui::WidgetText::from(text).into_galley_impl(
+                ui.ctx(),
+                ui.style(),
+                wrapping,
+                egui::FontSelection::Default,
+                egui::Align::Min,
+            );
+            ui.label(galley);
+        },
+    );
 }
 
 /// What a person is told when a job panicked, from what the panic said.
@@ -330,6 +361,54 @@ mod tests {
         );
         assert!(texts.iter().any(|t| t == "25%"), "{texts:?}");
         assert!(texts.iter().any(|t| t == "Cancel"), "{texts:?}");
+        go.send(()).unwrap();
+    }
+
+    #[test]
+    fn the_window_holds_still_whatever_the_step_says() {
+        let ctx = egui::Context::default();
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let (said, heard) = std::sync::mpsc::channel::<()>();
+        let busy: Busy<State> = Busy::start(
+            "Calculating Pocket",
+            Some(&ctx),
+            move || {
+                progress::report(0.1);
+                wait.recv().ok();
+                progress::stage("Adaptive: clearing the wider areas, a long way round");
+                progress::note(&"Some areas take longer than others. ".repeat(10));
+                said.send(()).ok();
+                wait.recv().ok();
+                1
+            },
+            keep,
+        );
+        while busy.progress.fraction().is_none() {
+            std::thread::yield_now();
+        }
+        // where the Cancel button's word is drawn
+        let cancel_at = |ctx: &egui::Context| {
+            let mut at = None;
+            for _ in 0..2 {
+                let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| {
+                    busy.window(ui.ctx());
+                });
+                frame.textures_delta.clear();
+                for shape in frame.shapes {
+                    if let egui::epaint::Shape::Text(t) = shape.shape
+                        && t.galley.text() == "Cancel"
+                    {
+                        at = Some(t.pos);
+                    }
+                }
+            }
+            at.expect("a Cancel button")
+        };
+        let before = cancel_at(&ctx);
+        go.send(()).unwrap();
+        heard.recv().unwrap();
+        let after = cancel_at(&ctx);
+        assert_eq!(before, after, "the window moved when the step changed");
         go.send(()).unwrap();
     }
 

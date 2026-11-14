@@ -65,6 +65,11 @@ round fronts post as arcs instead of many short lines. The rest of the pocket, i
 each channel's ends and corners, is cleared the usual adaptive way. A tip narrower than
 the bit can't be reached by it: clear it with a smaller bit or a V-bit.
 
+Adaptive works out every step the bit takes, so a big pocket can take a little while to
+calculate. The progress window says which step it is on (finding the narrow channels,
+sweeping each one, clearing the wider areas) and how far it has got; big open areas take
+longer than the rest. Cancel stops it and leaves the toolpath as it was.
+
 Pocket's Clear Pocket section has two settings for straighter walls. Leave for Edge Pass
 stops the clearing that far short of the walls, so the pass round the edge takes one thin,
 even skim instead of whatever the clearing left (0 clears right up to them). Edge Pass at

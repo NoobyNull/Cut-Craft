@@ -311,6 +311,8 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             }
         }
         let plan = adaptive_plan(p, &walls_at.inner, &clearing);
+        // a long adaptive clearing stops where it got to: nothing more to make
+        cut_craft_core::progress::stop_if_cancelled()?;
         let safe = doc.job.clearance;
         let entry = entry_for(p, &edge);
         // each path at depth `z`, entering from the level above; `back` runs it the other

@@ -48,15 +48,27 @@ pub fn sweeps(c: &Clearing) -> (Vec<Piece>, Vec<Path>) {
         .filter(|r| r.closed)
         .map(cut_points)
         .collect();
-    for line in centre_lines(c.region, (radius / 4.0).max(0.1)) {
-        for run in runs(&line.points, &line.radii, radius, step) {
-            // short of each end: the adaptive takes the end and its corners, which a loop
-            // the channel's size can't reach into without biting hard
-            if let Some(sweep) = sweep(&run, &walls, step, c.climb, END * radius) {
-                cleared.extend(sweep.swept(radius));
-                pieces.push(Piece::Enter(sweep.start));
-                pieces.push(Piece::Cut(sweep.points));
-            }
+    let all: Vec<Vec<(Point, f64)>> = centre_lines(c.region, (radius / 4.0).max(0.1))
+        .iter()
+        .flat_map(|line| runs(&line.points, &line.radii, radius, step))
+        .collect();
+    for (n, run) in all.iter().enumerate() {
+        if crate::progress::cancelled() {
+            break;
+        }
+        crate::progress::stage(&format!(
+            "Adaptive: sweeping narrow channel {} of {}",
+            n + 1,
+            all.len()
+        ));
+        crate::progress::note(super::LONGER);
+        crate::progress::report_steps(n, all.len());
+        // short of each end: the adaptive takes the end and its corners, which a loop the
+        // channel's size can't reach into without biting hard
+        if let Some(sweep) = sweep(run, &walls, step, c.climb, END * radius) {
+            cleared.extend(sweep.swept(radius));
+            pieces.push(Piece::Enter(sweep.start));
+            pieces.push(Piece::Cut(sweep.points));
         }
     }
     // one outline round what all the loops cleared: overlapping circles would read as holes

@@ -25,6 +25,8 @@ struct Shared {
     /// Whether anything reported a fraction: until then the bar only says it is busy.
     reported: AtomicBool,
     stage: Mutex<String>,
+    /// A word on the step beyond what it is (that it may take a while, say).
+    note: Mutex<String>,
     cancelled: AtomicBool,
 }
 
@@ -44,6 +46,11 @@ impl Progress {
     /// What the job says it is doing now (empty until it says).
     pub fn stage(&self) -> String {
         self.0.stage.lock().map_or_default(|s| s.clone())
+    }
+
+    /// The job's word on the step it is on (empty unless it said one).
+    pub fn note(&self) -> String {
+        self.0.note.lock().map_or_default(|s| s.clone())
     }
 
     /// Asks the job to stop: [`cancelled`] says so on its thread from now on.
@@ -78,6 +85,10 @@ impl Progress {
         if let Ok(mut s) = self.0.stage.lock() {
             stage.clone_into(&mut s);
         }
+        // a new step: the last one's word is over
+        if let Ok(mut n) = self.0.note.lock() {
+            n.clear();
+        }
     }
 }
 
@@ -106,6 +117,16 @@ impl Drop for Restore {
 
 fn current() -> Option<Span> {
     CURRENT.with(|c| c.borrow().clone())
+}
+
+/// A word on the step the work is on, under what it is: that some of it takes longer
+/// than the rest, say. A new [`stage`] clears it.
+pub fn note(text: &str) {
+    if let Some(span) = current()
+        && let Ok(mut n) = span.progress.0.note.lock()
+    {
+        text.clone_into(&mut n);
+    }
 }
 
 /// `fraction` (0 to 1) of the work running now is done.
