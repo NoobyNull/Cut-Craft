@@ -115,6 +115,7 @@ pub struct Params {
     pub scale_to_exact_height: bool,
     /// The highest point of the shape, with Scale to exact height
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/height_only.png"))]
     pub height: f64,
     /// What the new component is called in the component tree
     pub name: String,

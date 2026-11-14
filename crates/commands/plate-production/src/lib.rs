@@ -82,21 +82,27 @@ impl Separator {
 pub struct Layout {
     /// Space left clear along the material's top edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "T", "x-diagram" = "diagrams/plate_layout.png"))]
     pub top_margin: f64,
     /// Space left clear along the material's bottom edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "B"))]
     pub bottom_margin: f64,
     /// Space left clear along the material's left edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "L"))]
     pub left_margin: f64,
     /// Space left clear along the material's right edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "R"))]
     pub right_margin: f64,
     /// Between plates side by side
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "X"))]
     pub spacing_x: f64,
     /// Between plates one above another
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "Y"))]
     pub spacing_y: f64,
 }
 

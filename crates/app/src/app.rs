@@ -8,6 +8,7 @@ mod depth;
 mod draw3d;
 mod entry;
 mod first_run;
+mod fit_import;
 mod guide;
 mod help;
 #[cfg(test)]
@@ -25,8 +26,10 @@ mod surfacing;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod tips;
 mod title_bar;
 mod trace_window;
+mod units_ask;
 mod updates;
 mod views;
 
@@ -266,7 +269,8 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 102] = [
+const BUILT_INS: [&str; 105] = [
+    "import_into_shape",
     "try_sample_project",
     "machine_files",
     "first_run_setup",
@@ -328,6 +332,8 @@ const BUILT_INS: [&str; 102] = [
     "increment_and_save",
     "open_application_data_folder",
     "keyboard_shortcuts",
+    "help_contents",
+    "did_you_know",
     "third_party_licenses",
     "about_cut_craft",
     "check_for_updates",
@@ -997,6 +1003,13 @@ struct CutCraftApp {
     /// The Design sub-tab shown as a section to unfold next frame: a tool on it was picked
     /// from a menu, a shortcut or Find Tool.
     design_unfold: Option<&'static str>,
+    /// The Toolpaths page's open sub-tab (see [`gui::TOOLPATH_SUBTABS`]).
+    toolpath_subtab: usize,
+    /// The Toolpaths sub-tab shown as a section to unfold next frame, as `design_unfold`.
+    toolpath_unfold: Option<&'static str>,
+    /// How many toolpaths the job had when the Toolpaths page last looked: one more opens
+    /// the List sub-tab, so a toolpath just made is seen there.
+    toolpaths_seen: usize,
     /// Each tool's first step, once asked for (see [`guide::first_step`]).
     first_steps: std::cell::RefCell<std::collections::HashMap<String, Option<String>>>,
     view: View,
@@ -1082,6 +1095,8 @@ struct CutCraftApp {
     picking: Option<PickFor>,
     /// A Calculate waiting on the deeper-than-the-material warning.
     deep_cut: Option<depth::DeepCut>,
+    /// An import waiting on which units its drawing is in.
+    units_ask: Option<units_ask::UnitsAsk>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.
@@ -1124,6 +1139,14 @@ struct CutCraftApp {
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.
     help_cache: egui_commonmark::CommonMarkCache,
+    /// What is typed in the Help window's search box.
+    help_search: String,
+    /// Every help page as (topic, title, Markdown), made the first time help is searched.
+    help_index: Vec<(&'static str, String, String)>,
+    /// The Did You Know? window, open on this tip.
+    tip: Option<usize>,
+    /// The Did You Know? window's rendered tips.
+    tips_cache: egui_commonmark::CommonMarkCache,
     /// Sketch Carving's green areas, with the form settings, revision and selection they
     /// were found for.
     sketch_areas: Option<SketchAreas>,
@@ -1150,8 +1173,8 @@ struct CutCraftApp {
     guide_props: Option<GuideProps>,
     /// Machine ▸ Tool Changer…: the active machine's holders loaded from the tools.
     tool_changer_window: bool,
-    /// The Toolpath List's height as its divider was last dragged; None for half the page.
-    list_height: Option<f32>,
+    /// Import Into Selected Shape's drawing and its window, while it is open.
+    fit_import: Option<fit_import::FitImport>,
     /// Measure / Inspect's last result, shown in its form while the tool is on.
     measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.
@@ -1470,6 +1493,58 @@ fn acceleration_tick(
     .on_disabled_hover_text(&tip);
 }
 
+/// The Toolpath Summary's own settings: the rapid rate and the time scale factor.
+fn summary_fields() -> [crate::form::Field; 2] {
+    [
+        crate::form::Field {
+            key: "rapid_rate".into(),
+            label: "Rapid rate".into(),
+            help: Some("The machine's G0 speed".into()),
+            kind: crate::form::Kind::Number {
+                unit: None,
+                min: Some(0.001),
+                max: None,
+                integer: false,
+                steps: vec![],
+                slider: false,
+                percent_when: None,
+            },
+            section: false,
+            icon: None,
+            when: None,
+            enabled: None,
+            group: None,
+            tab: None,
+            dim: None,
+            diagram: None,
+        },
+        crate::form::Field {
+            key: "scale_factor".into(),
+            label: "Scale factor".into(),
+            help: Some(
+                "Multiplies every time, for a machine slower than its programmed feeds".into(),
+            ),
+            kind: crate::form::Kind::Number {
+                unit: None,
+                min: Some(0.1),
+                max: None,
+                integer: false,
+                steps: vec![],
+                slider: false,
+                percent_when: None,
+            },
+            section: false,
+            icon: None,
+            when: None,
+            enabled: None,
+            group: None,
+            tab: None,
+            dim: None,
+            diagram: None,
+        },
+    ]
+}
+
 fn summary_table(
     ui: &mut egui::Ui,
     rows: &[SummaryRow],
@@ -1498,50 +1573,7 @@ fn summary_table(
     ui.separator();
     ui.weak("Time estimates based on the tools' feed rates");
     let per = summary.units.mm_per_min();
-    let fields = [
-        crate::form::Field {
-            key: "rapid_rate".into(),
-            label: "Rapid rate".into(),
-            help: Some("The machine's G0 speed".into()),
-            kind: crate::form::Kind::Number {
-                unit: None,
-                min: Some(0.001),
-                max: None,
-                integer: false,
-                steps: vec![],
-                slider: false,
-                percent_when: None,
-            },
-            section: false,
-            icon: None,
-            when: None,
-            enabled: None,
-            group: None,
-            tab: None,
-        },
-        crate::form::Field {
-            key: "scale_factor".into(),
-            label: "Scale factor".into(),
-            help: Some(
-                "Multiplies every time, for a machine slower than its programmed feeds".into(),
-            ),
-            kind: crate::form::Kind::Number {
-                unit: None,
-                min: Some(0.1),
-                max: None,
-                integer: false,
-                steps: vec![],
-                slider: false,
-                percent_when: None,
-            },
-            section: false,
-            icon: None,
-            when: None,
-            enabled: None,
-            group: None,
-            tab: None,
-        },
-    ];
+    let fields = summary_fields();
     let mut values = serde_json::json!({
         "rapid_rate": summary.rapid / per,
         "scale_factor": summary.scale,
@@ -1831,11 +1863,18 @@ enum ToolAsk {
     Edit,
 }
 
+/// What a drag knife form says of its tool, in place of a bit's size and pass: a knife
+/// has no flutes; it presses into the top by a share of its spring travel.
+pub(crate) const KNIFE_LINE: &str = "Drag knife: zero Z with the blade tip touching the \
+                                     material. It presses in by the Pressure, a share of the \
+                                     Spring Travel, so no flute length is needed";
+
 /// A toolpath form's tool, kept short: its name (with its tool changer holder), its size and
 /// pass in one line, Select… to pick it in the Tool Database (where the tool changer's
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
 fn tool_picker(
     ui: &mut egui::Ui,
+    id: &str,
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
@@ -1855,7 +1894,11 @@ fn tool_picker(
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
             ui.strong(held_name(current, slots));
-            ui.label(tool_line(tool, passes, units));
+            if id == cut_craft_core::drag_knife::STRATEGY {
+                ui.label(KNIFE_LINE);
+            } else {
+                ui.label(tool_line(tool, passes, units));
+            }
             if surfacing::wants_surfacing_bit(top, tool) {
                 ui.weak(surfacing::NOT_A_SURFACING_BIT);
             }
@@ -2682,4 +2725,10 @@ fn wrap_for(
             if shift.is_finite() { shift } else { 0.0 }
         },
     })
+}
+
+/// Whether one closed vector is selected, for a drawing to be imported into (the 2D view's
+/// right-click Import Into This Shape…).
+pub fn shape_to_import_into(doc: &cut_craft_core::document::Document) -> bool {
+    fit_import::chosen_shape(doc).is_ok()
 }

@@ -42,10 +42,12 @@ pub struct Params {
     /// Below the material surface where carving starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_sketch.png"))]
     pub start_depth: f64,
     /// Below the start depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D"))]
     pub cut_depth: f64,
     /// How far the sketch lines reach
     #[schemars(extend("x-group" = "Boundary"))]

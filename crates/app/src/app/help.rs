@@ -10,23 +10,80 @@ const DESIGN: &str = include_str!("../../help/design.md");
 const TOOLPATHS: &str = include_str!("../../help/toolpaths.md");
 
 impl CutCraftApp {
-    /// The Help window on `topic`: a `help:` link clicked goes to its page.
+    /// The Help window on `topic`: a `help:` link clicked goes to its page. The search box
+    /// along its top lists every page whose name or words match, in place of the page.
     pub(super) fn help_window(&mut self, ctx: &egui::Context, topic: &'static str) {
         let topics = self.help_topics();
-        let markdown = self.help_markdown(topic);
         for t in &topics {
             self.help_cache.add_link_hook(format!("help:{t}"));
         }
-        let (mut open, cache) = (true, &mut self.help_cache);
+        let query = self.help_search.trim().to_owned();
+        let found = if query.is_empty() {
+            vec![]
+        } else {
+            self.help_search_results(&query)
+        };
+        let markdown = if query.is_empty() {
+            self.help_markdown(topic)
+        } else {
+            String::new()
+        };
+        let mut picked = None;
+        let (mut open, cache, search) = (true, &mut self.help_cache, &mut self.help_search);
         let (id, size) = (egui::Id::unique("help"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Cut Craft Help", size, &mut open, |ui| {
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(search)
+                        .hint_text("🔍 Search help: a tool, a setting or a word")
+                        .desired_width(ui.available_width() * 0.6),
+                );
+                if !search.is_empty() && ui.button("Clear").clicked() {
+                    search.clear();
+                }
+                if ui.button("Contents").clicked() {
+                    picked = Some("contents");
+                }
+                if ui.button("Did You Know?").clicked() {
+                    picked = Some("tips");
+                }
+            });
+            ui.separator();
             egui::ScrollArea::vertical().id_salt(topic).show(ui, |ui| {
-                CommonMarkViewer::new().show(ui, cache, &markdown);
+                if query.is_empty() {
+                    CommonMarkViewer::new().show(ui, cache, &markdown);
+                    return;
+                }
+                if found.is_empty() {
+                    ui.label(format!(
+                        "Nothing in the help matches \"{query}\". Try fewer or shorter words, \
+                         such as \"pocket\" or \"tabs\"."
+                    ));
+                    return;
+                }
+                ui.weak(match found.len() {
+                    1 => "1 page found".to_owned(),
+                    n => format!("{n} pages found"),
+                });
+                for (t, title, line) in &found {
+                    if ui.link(egui::RichText::new(title).strong()).clicked() {
+                        picked = Some(*t);
+                    }
+                    if !line.is_empty() {
+                        ui.weak(line);
+                    }
+                    ui.add_space(ui.spacing().item_spacing.y);
+                }
             });
         });
-        let clicked = topics
-            .into_iter()
-            .find(|t| self.help_cache.get_link_hook(&format!("help:{t}")) == Some(true));
+        let clicked = picked.or_else(|| {
+            topics
+                .into_iter()
+                .find(|t| self.help_cache.get_link_hook(&format!("help:{t}")) == Some(true))
+        });
+        if picked.is_some() {
+            self.help_search.clear();
+        }
         self.info = match (open, clicked) {
             (false, _) => None,
             (true, Some(t)) => Some(Info::Help(t)),
@@ -34,9 +91,36 @@ impl CutCraftApp {
         };
     }
 
-    /// Every help page: Contents, the two tool pages, and each of their tools.
+    /// The pages matching every word of `query` (any case), as (topic, title, the first
+    /// line that matches): those with a word in their title first, then in Help's own order.
+    pub(super) fn help_search_results(
+        &mut self,
+        query: &str,
+    ) -> Vec<(&'static str, String, String)> {
+        if self.help_index.is_empty() {
+            self.help_index = self
+                .help_topics()
+                .into_iter()
+                .map(|t| (t, self.help_title(t), self.help_markdown(t)))
+                .collect();
+        }
+        search(&self.help_index, query)
+    }
+
+    /// A help page's name, as its search result shows it.
+    fn help_title(&self, topic: &str) -> String {
+        match topic {
+            "contents" => "Help Contents".into(),
+            "design" => "Design page".into(),
+            "toolpaths" => "Toolpaths page".into(),
+            "tips" => "Did You Know?".into(),
+            id => self.tool_label(id),
+        }
+    }
+
+    /// Every help page: Contents, the two tool pages, the tips, and each of the tools.
     pub(super) fn help_topics(&self) -> Vec<&'static str> {
-        let mut topics = vec!["contents", "design", "toolpaths"];
+        let mut topics = vec!["contents", "design", "toolpaths", "tips"];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
         }
@@ -67,6 +151,7 @@ impl CutCraftApp {
             "contents" => CONTENTS.to_owned(),
             "design" => tools_page(Page::Design, DESIGN),
             "toolpaths" => tools_page(Page::Toolpaths, TOOLPATHS),
+            "tips" => super::tips::markdown(),
             id => {
                 let (page, name) = match self.page_of(id) {
                     Page::Design => ("design", "Design"),
@@ -106,6 +191,60 @@ impl CutCraftApp {
     }
 }
 
+/// The pages of `index` (topic, title, Markdown) matching every word of `query`, any case,
+/// with the first line holding one: title matches first, otherwise in the index's order.
+fn search(
+    index: &[(&'static str, String, String)],
+    query: &str,
+) -> Vec<(&'static str, String, String)> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    if words.is_empty() {
+        return vec![];
+    }
+    let mut found: Vec<(bool, &'static str, String, String)> = index
+        .iter()
+        .filter_map(|(topic, title, md)| {
+            let (title_lc, md_lc) = (title.to_lowercase(), md.to_lowercase());
+            let all = words
+                .iter()
+                .all(|w| title_lc.contains(w.as_str()) || md_lc.contains(w.as_str()));
+            if !all {
+                return None;
+            }
+            let in_title = words.iter().any(|w| title_lc.contains(w.as_str()));
+            let line = md
+                .lines()
+                .filter(|l| !l.starts_with('[') && !l.starts_with('#'))
+                .find(|l| {
+                    let l = l.to_lowercase();
+                    words.iter().any(|w| l.contains(w.as_str()))
+                })
+                .map_or_else(String::new, plain_line);
+            Some((in_title, *topic, title.clone(), line))
+        })
+        .collect();
+    // stable: within each kind, Help's own order
+    found.sort_by_key(|(in_title, ..)| !in_title);
+    found
+        .into_iter()
+        .map(|(_, t, title, line)| (t, title, line))
+        .collect()
+}
+
+/// A Markdown line as plain words: no list dash, bold stars or link targets.
+fn plain_line(line: &str) -> String {
+    let mut out = String::new();
+    let mut rest = line.trim().trim_start_matches("- ");
+    while let Some(open) = rest.find("](") {
+        out.push_str(&rest[..open]);
+        rest = rest[open + 2..]
+            .split_once(')')
+            .map_or("", |(_, after)| after);
+    }
+    out.push_str(rest);
+    out.replace(['*', '[', '`'], "")
+}
+
 /// The command whose form tool `id` opens: itself, or the one a flyout variant or a Create
 /// Shape icon or Edit Text opens with its own settings.
 fn form_of(id: &str) -> &str {
@@ -114,5 +253,60 @@ fn form_of(id: &str) -> &str {
         None if id.starts_with("create_shape_") => "create_shape",
         None if id == "edit_text" => "draw_text",
         None => id,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{plain_line, search};
+
+    fn index() -> Vec<(&'static str, String, String)> {
+        vec![
+            (
+                "profile",
+                "Profile Toolpath".into(),
+                "# Profile\n\nCuts along a line.\n- **Tabs**: hold the part in place".into(),
+            ),
+            (
+                "pocket",
+                "Pocket Toolpath".into(),
+                "Clears the inside of a shape, leaving tabs out".into(),
+            ),
+            ("tabs", "Add Tabs".into(), "Little bridges".into()),
+        ]
+    }
+
+    #[test]
+    fn every_word_must_match_in_the_name_or_the_words() {
+        let found: Vec<_> = search(&index(), "TOOLPATH tabs")
+            .into_iter()
+            .map(|(t, ..)| t)
+            .collect();
+        assert_eq!(found, ["profile", "pocket"]);
+        assert_eq!(search(&index(), "spoilboard"), vec![]);
+        assert_eq!(
+            search(&index(), "   "),
+            vec![],
+            "nothing typed, nothing found"
+        );
+    }
+
+    #[test]
+    fn names_that_match_come_first() {
+        let found: Vec<_> = search(&index(), "tabs")
+            .into_iter()
+            .map(|(t, ..)| t)
+            .collect();
+        assert_eq!(found, ["tabs", "profile", "pocket"]);
+    }
+
+    #[test]
+    fn a_result_shows_its_matching_line_as_plain_words() {
+        let found = search(&index(), "hold");
+        assert_eq!(found[0].2, "Tabs: hold the part in place");
+        assert_eq!(
+            plain_line("- [Design](help:design): the page down the left"),
+            "Design: the page down the left"
+        );
     }
 }

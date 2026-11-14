@@ -64,6 +64,8 @@ impl CutCraftApp {
         self.advance_playback(ctx);
         // a slow job's progress, over everything else
         self.busy_window(ctx);
+        // an import that doesn't say its units, waiting to be told
+        self.units_question(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
         if !self.tracing() {
@@ -295,6 +297,10 @@ impl CutCraftApp {
         .join("\n")
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "every window and panel, in drawing order"
+    )]
     pub(super) fn draw_window(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         self.icons.preload(ctx, self.options.general.preload_icons);
@@ -348,9 +354,10 @@ impl CutCraftApp {
         self.tool_search(ctx);
         self.guide_window(ctx);
         self.tool_changer_window(ctx);
+        self.fit_import_window(ctx);
         self.updates_window(ctx);
         self.addons.window(ctx);
-        self.first_run_window(ctx);
+        self.welcome_windows(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));

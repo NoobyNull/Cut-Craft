@@ -43,13 +43,16 @@ pub enum Direction {
 #[expect(clippy::struct_excessive_bools, reason = "the tick boxes of the form")]
 pub struct Params {
     /// The cut-out tool: the least gap left between parts
-    #[schemars(title = "Tool dia. (D)", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "Tool diameter", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "Dia", "x-diagram" = "diagrams/nest_gaps.png"))]
     pub tool_diameter: f64,
     /// Added to the tool diameter between parts, and to the border
-    #[schemars(title = "Clearance (C)", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "Clearance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "G"))]
     pub clearance: f64,
     /// Room left clear round the edge of the material
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "G2"))]
     pub border_gap: f64,
     /// Turn parts a quarter turn where that fits better
     #[schemars(title = "Rotate parts to find best fit")]

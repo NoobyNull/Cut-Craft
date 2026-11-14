@@ -3,7 +3,7 @@
 #   scripts/build-icons                         the drawings; the model pictures stay as they are
 #   scripts/build-icons HAND.stl STATUE.stl     the model pictures too, rendered from those models
 # Needs python3 with numpy, ImageMagick (`magick`), and rsvg-convert or the cairosvg module.
-# Toolbar icons are 128 px, dialog pictures 256 px.
+# Toolbar icons are 128 px, dialog pictures 256 px, measurement pictures 448 x 224 px.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 icons=$here/../assets/icons
@@ -19,15 +19,17 @@ find . -name '*.svg' | sort | while read -r svg; do
     name=${svg#./}
     name=${name%.svg}
     [[ $models == *" $name "* ]] && continue
+    # the measurement pictures are 2:1, drawn 448 px wide; the rest square
     case $name in
-        drawing_forms/* | import/* | tool_database/* | job_setup/*) size=256 ;;
-        *) size=128 ;;
+        diagrams/*) width=448 height=224 ;;
+        drawing_forms/* | import/* | tool_database/* | job_setup/*) width=256 height=256 ;;
+        *) width=128 height=128 ;;
     esac
     mkdir -p "$icons/$(dirname "$name")"
     if command -v rsvg-convert >/dev/null; then
-        rsvg-convert -w "$size" -h "$size" "$svg" -o "$icons/$name.png"
+        rsvg-convert -w "$width" -h "$height" "$svg" -o "$icons/$name.png"
     else
-        python3 -I -c 'import sys, cairosvg; cairosvg.svg2png(url=sys.argv[1], write_to=sys.argv[2], output_width=int(sys.argv[3]), output_height=int(sys.argv[3]))' "$svg" "$icons/$name.png" "$size"
+        python3 -I -c 'import sys, cairosvg; cairosvg.svg2png(url=sys.argv[1], write_to=sys.argv[2], output_width=int(sys.argv[3]), output_height=int(sys.argv[4]))' "$svg" "$icons/$name.png" "$width" "$height"
     fi
 done
 if [[ $# -eq 2 ]]; then

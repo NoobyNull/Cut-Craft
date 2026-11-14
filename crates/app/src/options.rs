@@ -626,6 +626,19 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Fold tool groups into one button")]
     pub fold_tool_groups: bool,
+    /// Open a short Did You Know? tip each time Cut Craft starts, a different one each
+    /// time. Help ▸ Did You Know? shows them whenever you like
+    #[serde(default = "on")]
+    #[schemars(title = "Show a tip when Cut Craft starts")]
+    pub show_tips_at_startup: bool,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if"
+)]
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 fn autosave_seconds() -> u32 {
@@ -1400,6 +1413,10 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[schemars(skip)]
     pub first_run_done: bool,
+    /// The Did You Know? tip shown at the next start, so each start shows another.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    #[schemars(skip)]
+    pub next_tip: usize,
     /// The favourite tools of the Design and Toolpaths tabs, and whether each shows only
     /// them (right-click the tab).
     #[serde(default)]
@@ -1410,6 +1427,10 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub design_sections: Vec<String>,
+    /// The Toolpaths sub-tabs shown as sections of their own, as `design_sections`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub toolpath_sections: Vec<String>,
     /// The tool each toolbox flyout shows: the one picked from it last.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
@@ -1497,6 +1518,7 @@ impl Default for Options {
                 autosave_seconds: autosave_seconds(),
                 flyout_hold_seconds: flyout_hold_seconds(),
                 fold_tool_groups: false,
+                show_tips_at_startup: true,
             },
             confirmations: Confirmations::default(),
             snapping: cut_craft_core::snap::SnapOptions::default(),
@@ -1511,8 +1533,10 @@ impl Default for Options {
             bug_reports: BugReports::default(),
             default_job: None,
             first_run_done: false,
+            next_tip: 0,
             favourites: Favourites::default(),
             design_sections: vec![],
+            toolpath_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
         }
     }

@@ -29,10 +29,12 @@ pub struct Params {
     /// Below the material surface where the prism's top is (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_prism.png"))]
     pub start_depth: f64,
     /// Of the prism's base below the start depth; too shallow and the top is cut flat
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D"))]
     pub prism_depth: f64,
     /// Instead, use the least depth that brings the widest shape to a point
     #[schemars(extend("x-group" = "Cutting Depths"))]

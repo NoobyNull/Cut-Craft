@@ -12,9 +12,11 @@ pub mod compute;
 pub mod constraint;
 pub mod csv;
 pub mod document;
+pub mod drag_knife;
 pub mod drill_bank;
 pub mod entry;
 pub mod file;
+pub mod fit;
 pub mod font;
 mod formats;
 pub mod geometry;
@@ -42,6 +44,7 @@ pub mod spell;
 pub mod testing;
 pub mod texture_area;
 pub mod tiling;
+pub mod tool_copies;
 pub mod tool_names;
 pub mod toolpath;
 pub mod trace;
@@ -49,7 +52,7 @@ pub mod vfont;
 
 pub use glam;
 
-pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Sequence, Step};
+pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Sequence, Step, UnitGuess};
 pub use command::{
     Command, CommandError, Drag, DynCommand, EMPTY_MODEL, Interactive, Meta, NoParams, Registry,
     SELECT_FIRST, ensure_named, ensure_positive, existing, existing_layer, gone, sentence,

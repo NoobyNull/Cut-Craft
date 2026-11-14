@@ -33,12 +33,14 @@ pub struct Params {
         range(min = 0),
         extend("x-unit" = "mm", "x-percent-when" = {"percent": "true"})
     )]
+    #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/size_wh.png"))]
     pub width: f64,
     /// Ignored when keeping proportions
     #[schemars(
         range(min = 0),
         extend("x-unit" = "mm", "x-percent-when" = {"percent": "true"})
     )]
+    #[schemars(extend("x-dim" = "H"))]
     pub height: f64,
     /// Width and height are percentages of the present size, not millimetres
     #[serde(default)]

@@ -245,6 +245,7 @@ impl CutCraftApp {
         if wanted(&self.options, &self.machines) {
             self.open_first_run();
         }
+        self.tip_at_startup();
     }
 
     /// Help ▸ Run First-Time Setup Again, or the first run: the questions shown.

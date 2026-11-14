@@ -101,6 +101,7 @@ pub struct Params {
         extend("x-unit" = "mm", "x-group" = "Cutting Depths"),
         range(min = 0)
     )]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_profile.png"))]
     pub depth: f64,
     /// Down to the bottom of the material: the cut depth is the material's thickness in Job
     /// Setup, and follows it if the thickness changes. Kept for toolpaths made with it; the

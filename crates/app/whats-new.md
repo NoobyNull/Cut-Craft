@@ -1,5 +1,5 @@
-- New Surfacing Toolpath for flattening spoilboards, slabs and material
-- Entry modes for Profile and Pocket: helix, zig-zag, ramp or straight down, set in one Entry window
-- Checks before cutting: V-bits reach as deep as their V, and V-Carve no longer warns of cutting air by mistake
-- Preview jumps and scrubbing apply at once, and the carving stays sharp while it plays
-- DXF files without units come in at a sensible size, and post-processor windows fill their height
+- Toolpaths page split into Make, List, Preview and Save; tool forms show measurement pictures with callout letters
+- Import a drawing to fit inside a selected shape; a DXF without units asks which it is, then zooms to it
+- Help Contents opens again, with search and Did You Know? tips; the 3D view shows the material from the start
+- Each bit has one shape, listed once per material; drag knives cut at zero depth on a flat surface
+- Keyhole single or double entry, and V-bit chamfers can't go deeper than the bit's V
