@@ -3920,7 +3920,7 @@ pub(super) fn immediate_output(
             .on_hover_hint(
                 "Save the toolpath calculated last through the post, keeping the form open",
             )
-            .on_disabled_hover_text("Apply first: there is no quick engrave toolpath yet")
+            .on_disabled_hover_text("Calculate first: there is no quick engrave toolpath yet")
             .clicked();
     });
     save

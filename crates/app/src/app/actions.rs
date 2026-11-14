@@ -8,7 +8,7 @@ use super::{
     PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS, SECTION_PICTURE_ROWS,
     SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen, Session,
     Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
-    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
+    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, commit, dialog_size, egui,
     file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
     message_dialog, on_the_desktop, page_width, rest_section, selector_section, shortcut,
     show_page, side_tabs, side_tabs_width, summary_table, template_dialog, texture_dialog,
@@ -1874,6 +1874,7 @@ impl CutCraftApp {
             return;
         };
         let page = self.page_of(cmd.id());
+        let (id, interactive) = (cmd.id(), cmd.interactive());
         let (meta, fields, mut params) = (
             cmd.meta(),
             form::fields(&cmd.schema()),
@@ -1934,6 +1935,10 @@ impl CutCraftApp {
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
                 self.pages.open(page);
+            }
+            // a shape this tool draws, selected as it opens: the form edits that shape
+            if let Some((shape, params)) = self.drawn_by_tool(id).filter(|_| interactive) {
+                self.edit_shape(shape, id, params);
             }
         }
     }
@@ -3134,6 +3139,18 @@ impl CutCraftApp {
             })
     }
 
+    /// The one vector selected, if drawing tool `id` draws shapes like it, with the settings
+    /// that draw it again (a square reads as Draw Rectangle's, or as Draw Polygon's).
+    fn drawn_by_tool(&self, id: &str) -> Option<(EntityId, Value)> {
+        let [shape] = self.doc.selection.iter().copied().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let path = self.doc.vectors.get(&shape)?;
+        let cmd = self.registry.get(id)?;
+        let params = cmd.params_from(path, &cmd.initial_params(&self.doc))?;
+        Some((shape, params))
+    }
+
     /// Opens drawing tool `command` on vector `id` with `params`: changing the form redraws
     /// that shape rather than drawing another (E, or Shift-click).
     pub(super) fn edit_shape(&mut self, id: EntityId, command: &'static str, params: Value) {
@@ -4161,23 +4178,31 @@ impl CutCraftApp {
             .rect
     }
 
-    /// The open form's buttons: OK and Cancel for a new job's setup, else Apply and Close.
+    /// The open form's buttons: OK and Cancel for a new job's setup; else its commit button
+    /// when pressing it would do something (named for what it does, [`commit`]), Close and
+    /// Cancel.
     pub(super) fn form_buttons(&mut self, ui: &mut egui::Ui) {
         let Some(open) = &self.form else { return };
         if open.id == "orientate_3d_model" {
             return self.import_buttons(ui);
         }
         let new_job = open.new_job;
-        let (apply_label, close_label) = if new_job {
-            ("OK", "Cancel")
+        let drawing = self.drawing_tool().is_some();
+        let made = self.drawn_shape().is_some() || self.remade_last().is_some();
+        let committing = if new_job {
+            Some(("OK", "Accept these settings and start the job"))
         } else {
-            ("Apply", "Close")
+            commit::commit(open.id, open.page, drawing, made).map(|c| {
+                let hint = commit::hint(c, drawing, open.editing.is_some());
+                (c.label(), hint)
+            })
         };
+        let close_label = if new_job { "Cancel" } else { "Close" };
         let job_setup = open.id == "job_setup";
         // what the form has done that Cancel would take back
         let done = self.history.undo_depth() > open.undo_from;
         let (mut apply, mut close, mut default, mut cancel) = (false, false, false, false);
-        let (mut save, mut load) = (false, false);
+        let (mut save, mut load, mut new_shape) = (false, false, false);
         if open.page == Page::Toolpaths {
             ui.horizontal(|ui| {
                 save = ui
@@ -4190,22 +4215,27 @@ impl CutCraftApp {
                     .clicked();
             });
         }
+        if committing.is_none() {
+            new_shape = live_row(ui, open.id, drawing, made);
+        }
         ui.horizontal(|ui| {
-            apply = ui.button(apply_label).clicked();
+            if let Some((label, hint)) = committing {
+                apply = ui.button(label).on_hover_hint(hint).clicked();
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 close = ui
                     .button(close_label)
                     .on_hover_hint(if new_job {
                         "Leave the job as it was"
                     } else {
-                        "Close, keeping what was applied"
+                        "Close, keeping what is there"
                     })
                     .clicked();
                 if !new_job {
                     cancel = ui
                         .add_enabled(done, egui::Button::new("Cancel"))
                         .on_hover_hint("Undo what this tool did since it opened, and close it")
-                        .on_disabled_hover_text("Nothing applied to take back")
+                        .on_disabled_hover_text("Nothing done yet to take back")
                         .clicked();
                 }
                 if job_setup {
@@ -4216,6 +4246,12 @@ impl CutCraftApp {
                 }
             });
         });
+        if new_shape {
+            if let Some(form) = self.form.as_mut() {
+                (form.drawn, form.applied) = (None, None);
+            }
+            return;
+        }
         if default {
             self.job_setup_default();
             return;
@@ -5586,4 +5622,19 @@ fn page_key(page: Page) -> &'static str {
         Page::Design => "design",
         Page::Toolpaths => "toolpaths",
     }
+}
+
+/// A form with no commit button: why there is none, and on a drawing tool whose shape follows
+/// the form, New Shape to let it go and type another; whether New Shape was pressed.
+fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
+    ui.horizontal_wrapped(|ui| {
+        ui.weak(commit::live_note(id, drawing));
+        drawing
+            && made
+            && ui
+                .button("New Shape")
+                .on_hover_hint("Leave this shape as it is, to type the numbers for another")
+                .clicked()
+    })
+    .inner
 }

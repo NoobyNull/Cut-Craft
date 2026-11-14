@@ -166,6 +166,24 @@ impl Path {
                 })
     }
 
+    /// A closed shape of straight lines: its corners, each once, from the start; `None` for
+    /// an open path or one with a curve.
+    pub fn corners(&self) -> Option<Vec<Point>> {
+        if !self.closed || self.segments.is_empty() {
+            return None;
+        }
+        let mut corners = vec![self.start];
+        for s in &self.segments {
+            let Segment::Line { to } = *s else {
+                return None;
+            };
+            corners.push(to);
+        }
+        // the last line returns to the start
+        corners.pop();
+        Some(corners)
+    }
+
     pub fn circle(center: Point, radius: f64) -> Self {
         let right = center + DVec2::X * radius;
         let left = center - DVec2::X * radius;

@@ -18,7 +18,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 /// The most pixels the preview traces: a bigger picture is previewed from a copy this size
-/// (Apply traces the whole of it).
+/// (Trace uses the whole of it).
 pub(super) const PREVIEW_PIXELS: usize = 1_000_000;
 
 /// How long settings must stay unchanged before a live preview traces again, so a dragged
@@ -468,7 +468,7 @@ impl CutCraftApp {
                 }
                 ui.horizontal(|ui| {
                     if ui
-                        .button("Apply")
+                        .button("Trace")
                         .on_hover_hint("Trace the whole picture into the job with these settings")
                         .clicked()
                     {
@@ -1041,7 +1041,7 @@ fn details(ui: &mut egui::Ui, view: &TraceView) {
         }
     }
     if view.picture.as_ref().is_some_and(|p| p.scale > 1.0) {
-        ui.weak("Big picture: previewed from a smaller copy. Apply traces all of it");
+        ui.weak("Big picture: previewed from a smaller copy. Trace uses the whole picture");
     }
 }
 
