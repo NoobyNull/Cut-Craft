@@ -2,7 +2,7 @@
 //! sloping down or up away from them. A V-bit cuts the slope with its side; a ball nose
 //! approximates it with a series of fine cuts.
 
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, Units};
 use cut_craft_core::entry::{Ways, contour_ways};
 use cut_craft_core::geometry::{Path, winding};
 use cut_craft_core::polygon::{self, Corners};
@@ -52,7 +52,8 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_chamfer.png"))]
     pub start_depth: f64,
-    /// Across the chamfer
+    /// Across the chamfer. With a V-bit the chamfer must stay within its V: start depth plus
+    /// chamfer depth (from the top surface) no deeper than the V is tall
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Chamfer"))]
     #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/chamfer_shape.png"))]
@@ -130,6 +131,57 @@ impl Params {
         self.width / self.slope_angle().tan()
     }
 
+    /// How far below the material's top surface the chamfer goes: the start depth, the
+    /// chamfer's height, and for a V-bit the overcut, which moves its point lower.
+    pub fn deepest(&self) -> f64 {
+        let over = if self.tool.shape == ToolShape::VBit {
+            self.overcut / self.slope_angle().tan()
+        } else {
+            0.0
+        };
+        self.start_depth + self.cut_depth() + over
+    }
+
+    /// Why a V-bit can't cut this chamfer, with how to fix it: deeper than its V (measured
+    /// from the top surface), the straight shank above the V would cut a wall, not a slope.
+    /// `None` when it fits, or the tool is not a V-bit.
+    fn beyond_the_v(&self, units: Units) -> Option<String> {
+        if self.tool.shape != ToolShape::VBit {
+            return None;
+        }
+        let v = self.tool.cutting_length()?;
+        let deepest = self.deepest();
+        if deepest <= v + 1e-6 {
+            return None;
+        }
+        let tool = &self.tool.name;
+        let why = format!(
+            "This chamfer cuts {} deep from the top surface, but the V of {tool} is only {} \
+             deep: past that its straight shank cuts a wall, not a slope.",
+            units.length(deepest, 1),
+            units.length(v, 2)
+        );
+        // the widest chamfer that fits what the start depth and overcut leave of the V
+        let room = v - (deepest - self.cut_depth());
+        let fix = if room * self.slope_angle().tan() > 1e-3 {
+            let mut fix = format!(
+                "Set the Width to {} or less, or pick a wider V-bit",
+                floored(units, room * self.slope_angle().tan())
+            );
+            if self.start_depth > 0.0 || self.overcut > 0.0 {
+                fix.push_str(", or lower the Start Depth or Overcut");
+            }
+            fix
+        } else {
+            format!(
+                "The Start Depth and Overcut alone use up the whole V: lower them so together \
+                 they stay under {}, or pick a wider V-bit",
+                floored(units, v)
+            )
+        };
+        Some(format!("{why} {fix}."))
+    }
+
     /// The tool tip's runs, each (how far out from the vector towards the chamfer side, z),
     /// shallowest first.
     fn tips(&self) -> Vec<(f64, f64)> {
@@ -174,6 +226,15 @@ impl Params {
     }
 }
 
+/// `mm` as `units` shows a length, rounded down so a value typed from it still fits.
+fn floored(units: Units, mm: f64) -> String {
+    let step = match units {
+        Units::Mm => 0.01,
+        Units::Inch => 0.002_54,
+    };
+    units.length((mm / step + 1e-6).floor() * step, 2)
+}
+
 impl Command for ChamferToolpath {
     const ID: &'static str = "chamfer_toolpath";
     type Params = Params;
@@ -205,6 +266,9 @@ impl Command for ChamferToolpath {
             return Err(CommandError::InvalidParams(
                 "set start depth and overcut to 0 or more".into(),
             ));
+        }
+        if let Some(why) = p.beyond_the_v(doc.job.units) {
+            return Err(CommandError::InvalidParams(why));
         }
         let (ids, paths) = doc.selected_paths(|path| path.closed);
         if ids.is_empty() {
@@ -349,6 +413,77 @@ mod tests {
         let z = surface(&chamfer(&p));
         assert!((z(18.5) + 1.5).abs() < 0.4, "{}", z(18.5));
         assert!(z(20.5).abs() < 0.1, "{}", z(20.5));
+    }
+
+    #[test]
+    fn the_chamfer_depth_is_measured_from_the_top_surface() {
+        // 90° V-bit: 3 wide is 3 deep, from 2 below the surface, 1 overcut is 1 more
+        let p = Params {
+            start_depth: 2.0,
+            overcut: 1.0,
+            ..Params::default()
+        };
+        assert!((p.deepest() - 6.0).abs() < 1e-9, "{}", p.deepest());
+    }
+
+    #[test]
+    fn a_chamfer_deeper_than_the_v_is_refused_with_how_to_fix_it() {
+        // the starter 90° V-bit is 12.7 across: its V is 6.35 deep
+        let p = Params {
+            width: 7.0,
+            ..Params::default()
+        };
+        let why = made_toolpath::<ChamferToolpath>(vec![square(20.0, 20.0, 40.0)], &p).unwrap_err();
+        assert!(why.contains("7.0 mm deep"), "{why}");
+        assert!(why.contains("only 6.35 mm"), "the V's depth: {why}");
+        assert!(
+            why.contains("Width to 6.35 mm"),
+            "the widest that fits: {why}"
+        );
+        assert!(why.contains("wider V-bit"), "{why}");
+    }
+
+    #[test]
+    fn the_start_depth_and_overcut_count_towards_the_v() {
+        let p = Params {
+            start_depth: 4.0,
+            ..Params::default()
+        };
+        let why = made_toolpath::<ChamferToolpath>(vec![square(20.0, 20.0, 40.0)], &p).unwrap_err();
+        assert!(why.contains("Width to 2.35 mm"), "{why}");
+        // so deep nothing fits: the start depth itself must come up
+        let p = Params {
+            start_depth: 6.0,
+            overcut: 1.0,
+            ..Params::default()
+        };
+        let why = made_toolpath::<ChamferToolpath>(vec![square(20.0, 20.0, 40.0)], &p).unwrap_err();
+        assert!(why.contains("Start Depth"), "{why}");
+        assert!(!why.contains("Width to"), "no width fits: {why}");
+    }
+
+    #[test]
+    fn a_chamfer_using_the_whole_v_is_allowed() {
+        let p = Params {
+            width: 6.35,
+            ..Params::default()
+        };
+        assert!(made_toolpath::<ChamferToolpath>(vec![square(20.0, 20.0, 40.0)], &p).is_ok());
+    }
+
+    #[test]
+    fn a_ball_nose_is_not_held_to_a_v() {
+        let ball = ToolDatabase::starter()
+            .tools
+            .into_iter()
+            .find(|t| t.shape == ToolShape::BallNose)
+            .unwrap();
+        let p = Params {
+            tool: ball,
+            width: 8.0,
+            ..Params::default()
+        };
+        assert!(made_toolpath::<ChamferToolpath>(vec![square(20.0, 20.0, 60.0)], &p).is_ok());
     }
 
     #[test]

@@ -24,8 +24,13 @@ pub(super) fn side(id: &str, params: &Value) -> Option<Side> {
     }
 }
 
-/// How deep a form cuts, where its settings say outright.
-pub(super) fn depth(params: &Value) -> Option<f64> {
+/// How deep form `id` cuts from the top surface, where its settings say: outright, or for a
+/// Chamfer worked out from its start depth, width, bit and overcut.
+pub(super) fn depth(id: &str, params: &Value) -> Option<f64> {
+    if id == "chamfer_toolpath" {
+        let p: cmd_chamfer_toolpath::Params = serde_json::from_value(params.clone()).ok()?;
+        return Some(p.deepest()).filter(|d| d.is_finite() && *d > 0.0);
+    }
     ["depth", "cut_depth"]
         .iter()
         .find_map(|k| params[k].as_f64())
@@ -77,7 +82,7 @@ impl super::CutCraftApp {
         };
         reach::form_line(
             &tool,
-            depth(&form.params),
+            depth(form.id, &form.params),
             missed.as_ref(),
             self.doc.job.units,
         )

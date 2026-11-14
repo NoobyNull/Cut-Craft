@@ -12107,3 +12107,29 @@ fn the_uncut_material_follows_job_setup_and_the_model_sits_on_it() {
 fn job_corner(h: &Harness) -> cut_craft_core::geometry::Point {
     h.app.doc.job.area().min
 }
+
+#[test]
+fn the_chamfer_form_says_when_it_goes_deeper_than_the_v() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.click(h.at(10.0, 30.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "chamfer_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("90° V-Bit");
+    h.frame(vec![]);
+    // 3 wide with a 90° V-bit is 3 deep: well inside its 6.35 mm V
+    let line = h.app.form_reach().expect("a reach line under the tool");
+    assert!(
+        matches!(line, cut_craft_core::reach::Line::Reaches(_)),
+        "{line:?}"
+    );
+    // from 5 below the surface it is 8 deep, past the V
+    h.app.form.as_mut().unwrap().params["start_depth"] = 5.0.into();
+    h.frame(vec![]);
+    let line = h.app.form_reach().expect("a reach line");
+    assert!(
+        matches!(line, cut_craft_core::reach::Line::Short(_)),
+        "{line:?}"
+    );
+    assert!(line.text().contains("the cut is 8.0 mm"), "{line:?}");
+}
