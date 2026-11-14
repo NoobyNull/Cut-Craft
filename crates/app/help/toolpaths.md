@@ -57,12 +57,13 @@ on Profile, for cutting along a line. A pocket made in loops before keeps them, 
 Cutting window still lets you change it back to straight.
 
 Adaptive sweeps a narrow channel (up to about four bit widths wide) in one trip from end to
-end: round loops that reach from wall to wall, each a Light Step further along than the
-last, shrinking where the channel narrows. The bit goes down once per channel and never
-leaves it, and because each loop is a true circle the post writes it as a few arcs instead
-of many short lines (a long ½" slot with a ¼" bit posts as about 1,400 lines instead of
-10,000). The bit travels a little further, since half of each loop is in air. The rest of
-the pocket, including each channel's ends and corners, is cleared the usual adaptive way.
+end, in D-shaped loops: the round front of each cuts from wall to wall, a Light Step further
+along than the last, keeping the bit in the wood at the same light bite, then it comes
+straight back across (through what the loops before cut, without lifting) to the next.
+The loops shrink where the channel narrows. The bit goes down once per channel, and the
+round fronts post as arcs instead of many short lines. The rest of the pocket, including
+each channel's ends and corners, is cleared the usual adaptive way. A tip narrower than
+the bit can't be reached by it: clear it with a smaller bit or a V-bit.
 
 Pocket's Clear Pocket section has two settings for straighter walls. Leave for Edge Pass
 stops the clearing that far short of the walls, so the pass round the edge takes one thin,

@@ -996,7 +996,7 @@ mod tests {
     }
 
     #[test]
-    fn the_sweeps_loops_are_circles_turning_the_cut_direction() {
+    fn the_sweeps_loops_reach_wall_to_wall_turning_the_cut_direction() {
         let p = Point::new;
         let slot = Path::polyline(
             &[p(0.0, 0.0), p(80.0, 0.0), p(80.0, 12.0), p(0.0, 12.0)],
@@ -1012,13 +1012,24 @@ mod tests {
             let Some(Piece::Cut(sweep)) = pieces.get(1) else {
                 panic!("no sweep");
             };
-            // the slot's middle line is y = 6, its loops 3 mm round it: every point of a loop
-            // (after the spiral out) is 3 mm from its middle, a point on that line
+            // the slot's middle line is y = 6, its loops reach 3 mm either side of it: wall to
+            // wall, never past
             let loops: Vec<&Point> = sweep.iter().filter(|q| q.x > 20.0 && q.x < 60.0).collect();
             assert!(loops.len() > 100);
             for q in &loops {
                 assert!((q.y - 6.0).abs() <= 3.0 + 1e-6, "{q} off the loops");
             }
+            // D-shaped: straight back across, shorter than a whole circle each loop
+            let along: f64 = sweep
+                .windows(2)
+                .filter(|w| w[0].x > 20.0 && w[1].x < 60.0)
+                .map(|w| w[0].distance(w[1]))
+                .sum();
+            let circles = 40.0 / BITE * TAU * 3.0;
+            assert!(
+                along < 0.92 * circles,
+                "{along} mm against {circles} in circles"
+            );
             // turning anticlockwise to climb: z of each turn's cross product is positive
             let turning: f64 = sweep
                 .windows(3)

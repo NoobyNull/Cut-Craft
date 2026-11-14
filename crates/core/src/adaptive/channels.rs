@@ -11,7 +11,7 @@ use crate::geometry::polyline_distance;
 use crate::geometry::{Path, Point};
 use crate::medial::centre_lines;
 use crate::toolpath::cut_points;
-use std::f64::consts::TAU;
+use std::f64::consts::{FRAC_PI_2, PI, TAU};
 
 /// The widest channel swept: the tool centre's room either side of the centre line, in bit
 /// radii (3: a channel four bits wide). Wider areas are cleared adaptively.
@@ -24,6 +24,11 @@ const STEEPEST: f64 = 0.4;
 /// How far short of each end of a channel the sweep stops, in bit radii: the adaptive
 /// clears the end and its corners, coming at them from the swept channel.
 const END: f64 = 1.5;
+
+/// The round corners of a loop's way back, as a share of the loop's size: the loop is a D,
+/// its corners rounded this much so the machine needn't stop dead at each wall. The
+/// smaller, the shorter the way back through air, but the tighter the bit turns.
+const BACK: f64 = 0.15;
 
 /// Points round each loop.
 const LOOP_POINTS: usize = 48;
@@ -107,13 +112,55 @@ struct Sweep {
 impl Sweep {
     /// What the sweep clears: each loop's circle grown by the bit.
     fn swept(&self, radius: f64) -> Vec<Path> {
-        // a little under: what is left the adaptive takes
+        // a little under (about a cell of the adaptive's grid): what is left it takes, and
+        // never takes for gone what is still there
         let grow = radius - 0.02;
-        self.loops
-            .iter()
+        // the spiral's circle, then the bit's width along the loops
+        let mut swept: Vec<Path> = self
+            .loops
+            .first()
             .map(|&(c, r)| Path::circle(c, r + grow))
-            .collect()
+            .into_iter()
+            .collect();
+        swept.extend(crate::polygon::stroke(
+            &[Path::polyline(&self.points, false)],
+            grow,
+        ));
+        swept
     }
+}
+
+/// One loop round `centre`, from the wall at `centre + r * side` and back to it, shaped
+/// like a D: the front half a true circle that cuts from wall to wall, then straight back
+/// across with small round corners, so the way back through air (cut by the loops before)
+/// is as short as it can be, without lifting. `turn`: 1 anticlockwise.
+fn one_loop(centre: Point, r: f64, side: Point, turn: f64) -> Vec<Point> {
+    let half = LOOP_POINTS / 2;
+    let a0 = side.to_angle();
+    let mut points: Vec<Point> = (1..=half)
+        .map(|k| {
+            #[expect(clippy::cast_precision_loss)]
+            let a = a0 + turn * PI * k as f64 / half as f64;
+            centre + r * Point::from_angle(a)
+        })
+        .collect();
+    let f = BACK * r;
+    let other = -side;
+    let corner = LOOP_POINTS / 8;
+    // round from the far wall to heading back across, then round onto this wall again
+    for (middle, from) in [
+        (other, other),
+        (side, Point::from_angle(a0 + turn * PI * 1.5)),
+    ] {
+        let c = centre + (r - f) * middle;
+        let start = from.to_angle();
+        for k in 1..=corner {
+            #[expect(clippy::cast_precision_loss)]
+            let a = start + turn * FRAC_PI_2 * k as f64 / corner as f64;
+            points.push(c + f * Point::from_angle(a));
+        }
+    }
+    points
 }
 
 /// The loops along `run`: from its start, down in the middle and out in a spiral a step
@@ -178,6 +225,12 @@ fn sweep(
         let a = start_angle + turn * TAU * turns * (f - 1.0);
         points.push(first + room * f * Point::from_angle(a));
     }
+    // and once round at full size, so the spiral leaves a whole circle cleared behind it
+    for k in 1..=LOOP_POINTS {
+        #[expect(clippy::cast_precision_loss)]
+        let a = start_angle + turn * TAU * k as f64 / LOOP_POINTS as f64;
+        points.push(first + room * Point::from_angle(a));
+    }
     loops.push((first, room));
     // a loop a step along, as big as the channel lets it be over that step; where the
     // channel widens, a shorter step, so the loop's front reaches no more than a step past
@@ -201,12 +254,7 @@ fn sweep(
         last = r;
         let begin = centre + r * side(along);
         points.push(begin);
-        let a0 = side(along).to_angle();
-        for k in 1..=LOOP_POINTS {
-            #[expect(clippy::cast_precision_loss)]
-            let a = a0 + turn * TAU * k as f64 / LOOP_POINTS as f64;
-            points.push(centre + r * Point::from_angle(a));
-        }
+        points.extend(one_loop(centre, r, side(along), turn));
         loops.push((centre, r));
     }
     Some(Sweep {
