@@ -11,6 +11,8 @@
 //! same for every depth of a straight-walled cut. Our own code: the idea is the general one
 //! (hold the engagement near a target), no other program's code was used.
 
+mod channels;
+
 use crate::geometry::{Path, Point};
 use crate::polygon::{self, Corners};
 use crate::toolpath::cut_points;
@@ -51,12 +53,25 @@ pub fn engagement_for(bite: f64, radius: f64) -> f64 {
 }
 
 /// The pieces that clear `c`: empty when there is nothing to clear.
+///
+/// Narrow channels are swept first, in loops wall to wall along them ([`channels`]); the
+/// rest is cleared with the bit steering to hold its bite.
 pub fn clear(c: &Clearing) -> Vec<Piece> {
-    let Some(mut work) = Work::new(c) else {
-        return vec![];
-    };
-    work.run();
-    work.pieces
+    let (mut pieces, swept) = channels::sweeps(c);
+    let cleared: Vec<Path> = c.cleared.iter().cloned().chain(swept).collect();
+    if let Some(mut work) = Work::new(&Clearing {
+        cleared: &cleared,
+        ..*c
+    }) {
+        // on from where the sweeps ended, through what they cleared
+        let at = pieces.iter().rev().find_map(|p| match p {
+            Piece::Cut(points) => points.last().copied(),
+            _ => None,
+        });
+        work.run(at);
+        pieces.extend(work.pieces);
+    }
+    pieces
 }
 
 /// Most cells the material grid has: bigger areas get coarser cells.
@@ -392,10 +407,11 @@ impl Work {
         Point::from_angle(by).rotate(heading)
     }
 
-    fn run(&mut self) {
+    /// Clears what is left, from `at` (where the bit is, at depth in cleared space) or, with
+    /// no place, from a new start.
+    fn run(&mut self, mut at: Option<Point>) {
         // ponytail: a cap on the work, should the clearing ever fail to make progress
         let most = self.grid.len() * 4;
-        let mut at: Option<Point> = None;
         for _ in 0..most {
             let start = match at.and_then(|p| self.next_from(p)) {
                 Some(start) => Some(start),
@@ -940,6 +956,87 @@ mod tests {
         );
         let region = centre_region(&[slot]);
         check("slot", &region, &clear(&clearing(&region)));
+    }
+
+    #[test]
+    fn a_narrow_channel_is_swept_end_to_end_in_loops_from_wall_to_wall() {
+        let p = Point::new;
+        // 20 mm wide narrowing to 12 over 100 mm: the bit's centre has 7 to 3 mm either side
+        let taper = Path::polyline(
+            &[p(0.0, 0.0), p(100.0, 4.0), p(100.0, 16.0), p(0.0, 20.0)],
+            true,
+        );
+        let region = centre_region(&[taper]);
+        let pieces = clear(&clearing(&region));
+        check("taper", &region, &pieces);
+        // one cut runs nearly the whole length, without a link or a lift
+        let Some(Piece::Cut(sweep)) = pieces.get(1) else {
+            panic!("no sweep first: {:?}", pieces.first());
+        };
+        let (lo, hi) = sweep.iter().fold((f64::MAX, f64::MIN), |(lo, hi), q| {
+            (lo.min(q.x), hi.max(q.x))
+        });
+        assert!(hi - lo > 80.0, "the sweep runs {lo}..{hi}");
+        // its loops touch both walls: wider where the channel is
+        let across = |x: f64| {
+            let near: Vec<f64> = sweep
+                .iter()
+                .filter(|q| (q.x - x).abs() < 1.0)
+                .map(|q| q.y)
+                .collect();
+            near.iter().copied().fold(f64::MIN, f64::max)
+                - near.iter().copied().fold(f64::MAX, f64::min)
+        };
+        assert!(
+            across(15.0) > 2.0 * 6.0,
+            "{} across near the wide end",
+            across(15.0)
+        );
+        assert!(across(85.0) < across(15.0), "loops shrink where it narrows");
+    }
+
+    #[test]
+    fn the_sweeps_loops_reach_wall_to_wall_turning_the_cut_direction() {
+        let p = Point::new;
+        let slot = Path::polyline(
+            &[p(0.0, 0.0), p(80.0, 0.0), p(80.0, 12.0), p(0.0, 12.0)],
+            true,
+        );
+        let region = centre_region(&[slot]);
+        for climb in [true, false] {
+            let c = Clearing {
+                climb,
+                ..clearing(&region)
+            };
+            let pieces = clear(&c);
+            let Some(Piece::Cut(sweep)) = pieces.get(1) else {
+                panic!("no sweep");
+            };
+            // the slot's middle line is y = 6, its loops reach 3 mm either side of it: wall to
+            // wall, never past
+            let loops: Vec<&Point> = sweep.iter().filter(|q| q.x > 20.0 && q.x < 60.0).collect();
+            assert!(loops.len() > 100);
+            for q in &loops {
+                assert!((q.y - 6.0).abs() <= 3.0 + 1e-6, "{q} off the loops");
+            }
+            // D-shaped: straight back across, shorter than a whole circle each loop
+            let along: f64 = sweep
+                .windows(2)
+                .filter(|w| w[0].x > 20.0 && w[1].x < 60.0)
+                .map(|w| w[0].distance(w[1]))
+                .sum();
+            let circles = 40.0 / BITE * TAU * 3.0;
+            assert!(
+                along < 0.92 * circles,
+                "{along} mm against {circles} in circles"
+            );
+            // turning anticlockwise to climb: z of each turn's cross product is positive
+            let turning: f64 = sweep
+                .windows(3)
+                .map(|w| (w[1] - w[0]).perp_dot(w[2] - w[1]))
+                .sum();
+            assert_eq!(turning > 0.0, climb, "climb {climb} turns {turning}");
+        }
     }
 
     #[test]

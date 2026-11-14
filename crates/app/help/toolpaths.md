@@ -55,3 +55,21 @@ Pocket no longer offers trochoidal loops: for a light bite at full depth, pick A
 under Clear Pocket, which follows the pocket's shape and takes the Light Step. Loops stay
 on Profile, for cutting along a line. A pocket made in loops before keeps them, and its
 Cutting window still lets you change it back to straight.
+
+Adaptive sweeps a narrow channel (up to about four bit widths wide) in one trip from end to
+end, in D-shaped loops: the round front of each cuts from wall to wall, a Light Step further
+along than the last, keeping the bit in the wood at the same light bite, then it comes
+straight back across (through what the loops before cut, without lifting) to the next.
+The loops shrink where the channel narrows. The bit goes down once per channel, and the
+round fronts post as arcs instead of many short lines. The rest of the pocket, including
+each channel's ends and corners, is cleared the usual adaptive way. A tip narrower than
+the bit can't be reached by it: clear it with a smaller bit or a V-bit.
+
+Pocket's Clear Pocket section has two settings for straighter walls. Leave for Edge Pass
+stops the clearing that far short of the walls, so the pass round the edge takes one thin,
+even skim instead of whatever the clearing left (0 clears right up to them). Edge Pass at
+Full Depth goes round the edge once, at the bottom, after all the clearing passes: one
+clean wall with no lines where the passes met. It needs a bit whose flutes reach the full
+depth; with shorter flutes (from the Tool Database) the edge is cut at each pass instead.
+Raster and Adaptive pockets can also leave the edge pass out (Profile Pass: None); offset
+rings always end on the edge.
