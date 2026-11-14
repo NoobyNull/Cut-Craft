@@ -12073,15 +12073,52 @@ fn every_tip_says_something_and_its_more_is_a_help_page() {
         if let Some(t) = tip.topic {
             assert!(topics.contains(&t), "{t} is not a help page");
         }
-        // a picture of its own, or the logo ("") where no icon fits
-        let picture = tip.picture;
-        assert!(
-            picture.is_empty() || icon_set().contains(picture),
-            "{picture} is not an icon"
-        );
     }
     let page = h.app.help_markdown("tips");
     assert!(page.contains(super::tips::TIPS[0].text));
+}
+
+#[test]
+fn every_tip_has_an_illustration_of_its_own() {
+    let icons = icon_set();
+    let mut seen = std::collections::HashSet::new();
+    for tip in super::tips::TIPS {
+        let picture = tip.picture;
+        assert!(
+            picture.starts_with("tips/")
+                && std::path::Path::new(picture)
+                    .extension()
+                    .is_some_and(|e| e == "png"),
+            "{picture}: a drawn illustration from assets/icons/tips, not a tool's icon"
+        );
+        assert!(icons.contains(picture), "{picture} is not drawn");
+        assert!(seen.insert(picture), "{picture} illustrates two tips");
+    }
+    let unused: Vec<_> = icons
+        .iter()
+        .filter(|k| k.starts_with("tips/") && !seen.contains(k.as_str()))
+        .collect();
+    assert!(unused.is_empty(), "illustrations no tip shows: {unused:?}");
+}
+
+#[test]
+fn the_tips_window_shows_the_illustration_above_the_words() {
+    let mut h = Harness::at_start();
+    h.choose(help_menu, &["Did You Know?..."]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let starting = |start: &str| {
+        h.shapes.iter().find_map(|clipped| match &clipped.shape {
+            egui::Shape::Text(t) if t.galley.text().starts_with(start) => Some(t.pos),
+            _ => None,
+        })
+    };
+    let words = starting("New to Cut Craft?").expect("the first tip's words");
+    let tip = starting("Tip 1 of").expect("the count");
+    assert!(
+        words.y - tip.y > 6.0 * 18.0,
+        "room for the picture between the count and the words: {tip:?} {words:?}"
+    );
 }
 
 #[test]
