@@ -4151,6 +4151,8 @@ fn the_design_tab_opens_the_sub_tab_a_tool_run_elsewhere_lives_on() {
 #[test]
 fn a_design_sub_tab_can_have_a_section_of_its_own() {
     let mut h = Harness::new();
+    // tall enough for the buttons at their full size and what comes under them
+    h.window = vec2(1280.0, 1600.0);
     h.app.pages.set_pinned(Page::Design, true);
     h.app.pages.open(Page::Design);
     h.frame(vec![]);
@@ -4304,6 +4306,8 @@ fn a_form_opens_saying_what_to_select_until_something_is() {
 #[test]
 fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
     let mut h = Harness::new();
+    // tall enough for the buttons at their full size and what comes under them
+    h.window = vec2(1280.0, 1600.0);
     h.app.pages.set_pinned(Page::Design, true);
     h.frame(vec![]);
     h.frame(vec![]);
@@ -12844,4 +12848,57 @@ fn embellish_drawn_finer_than_it_carves_says_so_in_red_at_the_foot_of_its_form()
     let params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply_form("embellish", &params).unwrap();
     assert_eq!(h.app.form.as_ref().unwrap().warning, None);
+}
+
+/// A tool page that settles, with icons drawn and the app's own look at 100% text: the Edit
+/// tab, in a window where its Join and Close box just fits six buttons across.
+fn edit_tab_with_icons() -> Harness {
+    let mut h = Harness::new();
+    egui_extras::install_image_loaders(&h.ctx);
+    h.window = vec2(1700.0, 800.0);
+    readable(&h.ctx, 1.0);
+    h.app.design_subtab = gui::DESIGN_SUBTABS
+        .iter()
+        .position(|t| t.name == "Edit")
+        .expect("an Edit tab");
+    for _ in 0..4 {
+        h.frame(vec![]);
+    }
+    h
+}
+
+#[test]
+fn hovering_a_tool_button_never_rewraps_the_page() {
+    // a hovered button's border is drawn a fraction of a point thicker: when that tipped a
+    // full row's last button onto the next row, the pointer left it, it came back, and the
+    // page jumped between the two layouts for as long as the pointer stayed
+    let mut h = edit_tab_with_icons();
+    let top = h
+        .text_at("Join and Close")
+        .expect("the Join and Close box")
+        .y;
+    let bottom = h.text_at("Transform Objects").expect("its heading").y;
+    let page = h.app.page_rects[0].expect("the Design page");
+    let settled = |h: &Harness| (h.text_at("Combine Shapes"), h.text_at("Transform Objects"));
+    let still = settled(&h);
+    let mut y = top;
+    while y < bottom {
+        let mut x = page.left();
+        while x < page.right() {
+            let at = Pos2::new(x, y);
+            for frame in 0..5 {
+                h.frame(vec![Event::PointerMoved(at)]);
+                // the first frame may still show the button the pointer left
+                if frame > 0 {
+                    assert_eq!(
+                        settled(&h),
+                        still,
+                        "the page moved with the pointer at {at:?}"
+                    );
+                }
+            }
+            x += 12.0;
+        }
+        y += 12.0;
+    }
 }
