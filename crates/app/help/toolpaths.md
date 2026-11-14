@@ -33,3 +33,25 @@ ends are kept the same distance from its centre to well within 0.005 mm, once ro
 the places the post prints, inch posts included: controllers such as GRBL stop the job
 (error 33, invalid arc target) when they are not. Pick a post without arcs (GRBL Straight,
 say) only if your controller cannot cut arcs.
+
+Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
+window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the
+job, so the job cuts the same on any computer, whatever that computer's own defaults are;
+Use as My Default makes new jobs start with them, and Reset to My Defaults puts this job
+back. Light Step is how wide a bite Adaptive clearing takes and how far each trochoidal
+loop moves on, as a share of the bit's diameter: the same share gives every bit the same
+gentle bite (10% keeps about 37° of the edge in the wood at once; 5 to 15% suits most
+work). The window draws the bite, the loops at your bit's size, and the rows. On the Way
+Back chooses Keep climb (every raster row cuts climb, the tool coming back through the row
+it just cut, and loops on a pass back keep turning the same way, so they cut climb too) or
+Alternate (rows back and forth, climb then conventional, and loops turning the other way
+on a pass back: quicker, with a rougher wall). Changing them is an edit you can undo, and
+marks the toolpaths they shape as needing to be calculated again.
+
+A raster pocket's rows step over to the next along the wall without lifting, so the tool
+goes down into the material once per pass instead of at the start of every row.
+
+Pocket no longer offers trochoidal loops: for a light bite at full depth, pick Adaptive
+under Clear Pocket, which follows the pocket's shape and takes the Light Step. Loops stay
+on Profile, for cutting along a line. A pocket made in loops before keeps them, and its
+Cutting window still lets you change it back to straight.

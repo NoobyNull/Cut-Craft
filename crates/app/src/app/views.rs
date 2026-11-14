@@ -349,6 +349,7 @@ impl CutCraftApp {
         self.snap_options_window(ctx);
         self.job_sheet_window(ctx);
         self.part_labels_window(ctx);
+        self.clearing_window(ctx);
         self.stl_window(ctx);
         self.options_window(ctx);
         self.settings_3d_window(ctx);
@@ -3631,6 +3632,102 @@ impl CutCraftApp {
             self.open_part_labels();
         }
         self.part_labels_window = open;
+    }
+
+    /// Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Cutting window): the job's
+    /// light step, loops and way back, with pictures. A change is an edit of the job, so it
+    /// can be undone and marks the toolpaths it shapes out of date; Use as My Default keeps
+    /// it for new jobs, Reset to My Defaults takes that back.
+    pub(super) fn clearing_window(&mut self, ctx: &egui::Context) {
+        let asked = super::cutting::clearing_window_id();
+        if ctx
+            .data_mut(|d| d.remove_temp::<bool>(asked))
+            .unwrap_or(false)
+        {
+            self.clearing_window = true;
+        }
+        if !self.clearing_window {
+            return;
+        }
+        let mut open = true;
+        // the open form's bit, else a common 1/4" one, for the sizes and pictures
+        let diameter = self
+            .form
+            .as_ref()
+            .and_then(|f| f.params["tool"]["diameter"].as_f64())
+            .filter(|d| *d > 0.0)
+            .unwrap_or(6.35);
+        let units = self.doc.job.units;
+        let mut clearing = self.doc.job.clearing;
+        let mine = self.options.default_job.map_or_default(|j| j.clearing);
+        let (mut keep, mut reset) = (false, false);
+        let id = egui::Id::unique("clearing_settings");
+        cut_craft_bug_report::dialog(
+            ctx,
+            id,
+            "Clearing Settings",
+            dialog_size(ctx),
+            &mut open,
+            |ui| {
+                ui.label(
+                "How the light-cut clearing styles cut, for this whole job: saved with it, so it \
+                 cuts the same on any computer.",
+            );
+                // where they are seen without scrolling
+                ui.horizontal(|ui| {
+                    keep = ui
+                        .add_enabled(clearing != mine, egui::Button::new("Use as My Default"))
+                        .on_hover_hint("New jobs start with these settings")
+                        .clicked();
+                    reset = ui
+                        .add_enabled(clearing != mine, egui::Button::new("Reset to My Defaults"))
+                        .on_hover_hint("Back to the settings new jobs start with")
+                        .clicked();
+                });
+                ui.separator();
+                super::cutting::clearing_settings(ui, &mut clearing, diameter, units);
+            },
+        );
+        if keep {
+            self.options
+                .default_job
+                .get_or_insert_with(cut_craft_core::document::Job::default)
+                .clearing = clearing;
+            self.save_options();
+        }
+        if reset {
+            clearing = mine;
+        }
+        // shown as a slider is dragged, made one edit when it is let go
+        let dragging = ctx.input(|i| i.pointer.any_down()) && !reset;
+        if clearing != self.doc.job.clearing {
+            if dragging {
+                self.clearing_before.get_or_insert(self.doc.job.clearing);
+                self.doc.job.clearing = clearing;
+            } else {
+                self.set_clearing(clearing);
+            }
+        }
+        if !dragging && let Some(before) = self.clearing_before.take() {
+            let now = std::mem::replace(&mut self.doc.job.clearing, before);
+            self.set_clearing(now);
+        }
+        self.clearing_window = open;
+    }
+
+    /// The job's Clearing Settings become `clearing`, as an edit that can be undone.
+    pub(super) fn set_clearing(&mut self, clearing: cut_craft_core::entry::ClearingSettings) {
+        if clearing == self.doc.job.clearing {
+            return;
+        }
+        let mut job = self.doc.job;
+        job.clearing = clearing;
+        let mut c = cut_craft_core::Change::builder(&self.doc);
+        c.set_job(job);
+        let change = c.finish();
+        if let Err(e) = self.history.apply(&mut self.doc, change) {
+            self.status.set_message(&e.to_string());
+        }
     }
 
     /// Export as STL: how the model is triangulated (kept with the options), Triangulate to

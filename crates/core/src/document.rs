@@ -447,6 +447,10 @@ pub struct Job {
     /// Home / Start Position; unset, X0 Y0 at the clearance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub home: Option<Home>,
+    /// How adaptive and trochoidal clearing cut, and raster rows coming back (Clearing
+    /// Settings; added with them, older jobs get the defaults)
+    #[serde(default)]
+    pub clearing: crate::entry::ClearingSettings,
 }
 
 fn default_clearance() -> f64 {
@@ -567,6 +571,7 @@ impl Default for Job {
             model_position: ModelPosition::default(),
             plunge: None,
             home: None,
+            clearing: crate::entry::ClearingSettings::default(),
         }
     }
 }
