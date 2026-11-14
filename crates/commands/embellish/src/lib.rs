@@ -151,60 +151,67 @@ pub enum Make {
 pub struct Params {
     /// The one look it has. Folk mix, Scrolls and Flowers fill the shape; the borders run
     /// round its edge (and round any hole in it)
+    #[schemars(extend("x-section" = true, "x-widget" = "named-icons", "x-icon" = "drawing_forms/embellish_{}.png"))]
     pub style: Style,
-    /// How wide the patterned border is
-    #[schemars(title = "Border width", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
-    pub border_width: f64,
-    /// How long each repeat of the pattern is, against the width; the count is rounded so the
-    /// pattern meets itself
-    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
-    pub repeat: u32,
-    /// How steeply the rope's strands lie
-    #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"style": "rope"}))]
-    pub twist: u32,
-    /// How far in from the edge the patterned border starts
-    #[schemars(title = "Border inset", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
-    pub border_inset: f64,
     /// Fill the whole shape with the pattern: row after row following the outline inward,
     /// instead of one row round the edge
-    #[schemars(title = "Fill the shape", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    #[schemars(title = "Fill the shape", extend("x-group" = "Pattern", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub fill_rows: bool,
-    /// Raised rails along both sides of the patterned border
-    #[schemars(title = "Rails", extend("x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    /// How wide the pattern is. On a shape narrower than this it is made narrower to fit,
+    /// one row down the middle
+    #[schemars(title = "Width", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    pub border_width: f64,
+    /// How long each repeat of the pattern is, against its width; the count is rounded so
+    /// the pattern meets itself
+    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-group" = "Pattern", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    pub repeat: u32,
+    /// How steeply the rope's strands lie
+    #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-group" = "Pattern", "x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"style": "rope"}))]
+    pub twist: u32,
+    /// How far in from the shape's edge the pattern starts
+    #[schemars(title = "Gap from the edge", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    pub border_inset: f64,
+    /// Thin raised lines along both sides of the pattern, framing it
+    #[schemars(title = "Edge lines", extend("x-group" = "Pattern", "x-show-when" = {"style": ["rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
     pub rails: bool,
-    /// Low makes bold, plain pieces; high adds bead rows, sunbursts, striped scrolls and
-    /// small curls
-    #[schemars(range(min = 1, max = 10), extend("x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers", "band_border"]}))]
+    /// Low makes a few bold, plain pieces; high adds bead rows, sunbursts, striped scrolls
+    /// and small curls
+    #[schemars(title = "Detail", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers", "band_border"]}))]
     pub refinement: u32,
     /// How full the shape gets: low leaves open ground between the pieces
-    #[schemars(title = "How full", range(min = 1, max = 10), extend("x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
+    #[schemars(title = "How full", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub objects: u32,
     /// How big the scrolls may grow
-    #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls"]}))]
+    #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-group" = "Ornament", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls"]}))]
     pub scroll_size: u32,
     /// How close the pieces sit: the smallest gap between them is 3 mm at 1 and 0.75 mm at
     /// 10. Finish with a ball-nose bit no wider than the gap
-    #[schemars(range(min = 1, max = 10), extend("x-widget" = "slider"))]
+    #[schemars(range(min = 1, max = 10), extend("x-group" = "Fit to your bit", "x-widget" = "slider"))]
     pub tightness: u32,
-    /// Whether the 3D carving's pieces stand up, are hollowed in, or both
-    #[schemars(extend("x-widget" = "row"))]
-    pub direction: Direction,
-    /// How far the carving's highest pieces stand above the material
-    #[schemars(title = "Raise height", extend("x-unit" = "mm", "x-hide-when" = {"direction": "sunk"}), range(min = 0))]
-    pub height: f64,
-    /// How deep the carving's hollowed pieces go into the material
-    #[schemars(title = "Sink depth", extend("x-unit" = "mm", "x-hide-when" = {"direction": "raised"}), range(min = 0))]
-    pub depth: f64,
-    #[schemars(extend("x-widget" = "row"))]
+    /// Outlines to cut with 2D toolpaths, a rounded 3D carving, or both
+    #[schemars(extend("x-group" = "Make", "x-widget" = "row"))]
     pub make: Make,
-    /// Small dots punched into the open ground of the 3D carving
-    #[schemars(title = "Stippled ground")]
-    pub stipple: bool,
-    /// Another seed gives another design with the same settings
-    #[schemars(title = "Design", extend("x-widget" = "seed"))]
+    /// Another number gives another layout with the same settings
+    #[schemars(title = "Layout", extend("x-group" = "Make", "x-widget" = "seed"))]
     pub seed: u32,
     /// Names the new layer the ornament's vectors go on, and its 3D component
+    #[schemars(extend("x-group" = "Make"))]
     pub name: String,
+    /// Whether the 3D carving's pieces stand up, are hollowed in, or both
+    #[schemars(extend("x-group" = "3D carving", "x-widget" = "row", "x-hide-when" = {"make": "vectors"}))]
+    pub direction: Direction,
+    /// How far the carving's raised pieces stand above the material (not used when every
+    /// piece is sunk in)
+    #[schemars(title = "Raise height", extend("x-group" = "3D carving", "x-unit" = "mm", "x-hide-when" = {"make": "vectors"}), range(min = 0))]
+    pub height: f64,
+    /// How deep the carving's hollowed pieces go into the material
+    #[schemars(title = "Sink depth", extend("x-group" = "3D carving", "x-unit" = "mm", "x-show-when" = {"direction": ["sunk", "mixed"]}), range(min = 0))]
+    pub depth: f64,
+    /// Small dots punched into the open ground of the 3D carving
+    #[schemars(title = "Stippled ground", extend("x-group" = "3D carving", "x-hide-when" = {"make": "vectors"}))]
+    pub stipple: bool,
+    /// How the 3D carving joins any 3D already in the job
+    #[schemars(extend("x-group" = "3D carving", "x-hide-when" = {"make": "vectors"}))]
     pub combine: Combine,
     /// The embellishment being edited: it is made again, in place, from the outlines it keeps
     #[schemars(skip)]
@@ -265,6 +272,7 @@ impl Params {
             lay: f64::from(self.twist.clamp(20, 60)).to_radians(),
             inset: self.border_inset.max(0.0),
             rails: self.rails,
+            single: false,
         })
     }
 
@@ -353,9 +361,10 @@ fn design(
     let Some(b) = pattern.filter(|_| s.place != Where::Fill) else {
         return (fill(field, s, &[]), 0);
     };
+    let b = fitted(field, b);
     let (mut items, mut reach) = border::design(field, &b, s.gap);
     // more rows inward, each a gap in from the last, while there is room for one
-    if rows {
+    if rows && !b.single {
         // where rows coming in from different edges meet (round a hole), a row that would
         // run into the rows already laid is left out, and a piece or two that would touch
         // them is dropped (the rows keep a gap apart, so this only catches real overlaps)
@@ -404,6 +413,49 @@ fn design(
     (items, n)
 }
 
+/// `b` fitted to a shape too narrow for it as set: one row down the middle of the band,
+/// as wide as the band allows, its inset smaller. The pattern's repeat shrinks with its
+/// width.
+fn fitted(field: &Field, b: border::Spec) -> border::Spec {
+    let room = half_width(field);
+    if b.inset + b.width <= room * 0.95 {
+        return b;
+    }
+    let inset = b.inset.min(room * 0.1);
+    // the row's middle just off the band's middle, where the two edge lines nearly meet
+    let middle = room * 0.92;
+    border::Spec {
+        inset,
+        width: 2.0 * (middle - inset).max(0.0),
+        rails: false,
+        single: true,
+        ..b
+    }
+}
+
+/// How far in from the edge a line still runs most of the way round the shape: half the
+/// width of a band, the radius of a disc. (Its widest point alone, a band's corner, says
+/// too much.)
+fn half_width(field: &Field) -> f64 {
+    let longest = field
+        .outline
+        .iter()
+        .map(|r| field::loop_len(r))
+        .fold(0.0, f64::max);
+    let steps = 60;
+    (0..steps)
+        .map(|k| field.dmax * f64::from(steps - k) / f64::from(steps))
+        .find(|&d| {
+            let along: f64 = field
+                .rings_longer(d, 0.0)
+                .iter()
+                .map(|r| field::loop_len(r))
+                .sum();
+            along >= longest * 0.5
+        })
+        .unwrap_or(0.0)
+}
+
 /// Which of one shape's pieces a Mixed carving hollows in: the small fillers (dots, beads,
 /// buds), less than half the size of its big pieces; never the patterned border's first `n`.
 fn small_ones(items: &[Item], n: usize) -> Vec<bool> {
@@ -430,6 +482,10 @@ fn small_ones(items: &[Item], n: usize) -> Vec<bool> {
 }
 
 fn fill(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
+    // scrolls or flowers alone spread over the whole shape: in one mirrored wedge, few fit
+    if matches!(s.motifs, Motifs::Flowers | Motifs::Scrolls) {
+        return free::design(field, s, pre);
+    }
     match sym::detect(field) {
         Some(found) => sym::design(field, found, s, pre),
         None => free::design(field, s, pre),
@@ -618,10 +674,18 @@ impl Command for Embellish {
             .iter()
             .any(|it| matches!(it, Item::Shape { sink: false, .. }))
         {
-            return Err(CommandError::Failed(
-                "the shape is too small for the ornament. Draw it bigger, or turn Tightness up, or pick another style"
-                    .into(),
-            ));
+            let wide = 2.0
+                * regions
+                    .iter()
+                    .map(|r| half_width(&r.field))
+                    .fold(0.0, f64::max);
+            return Err(CommandError::Failed(format!(
+                "nothing fits: the shape is only about {wide:.1} mm wide, too \
+                 narrow for this style with a {gap:.2} mm smallest gap between pieces. Pick a \
+                 wider shape, turn Tightness up for a smaller gap, or try Chevrons or Laurel \
+                 leaves, which fit the narrowest bands",
+                gap = p.gap(),
+            )));
         }
         let at = editing.as_ref().map_or(
             Editing {
@@ -1210,8 +1274,8 @@ mod tests {
             );
             // no border band (the biggest piece of the mix) in either
             let outline = shape.bounds().size().x;
-            assert!(m[0] > outline * 0.8);
-            assert!(sc[0] < outline * 0.8 && fl[0] < outline * 0.8);
+            assert!(m[0] > outline * 0.9);
+            assert!(sc[0] < outline * 0.9 && fl[0] < outline * 0.9);
         }
     }
 
@@ -1249,6 +1313,57 @@ mod tests {
                 .count();
             assert!(near_middle > 0, "{style:?}: rows reach the middle");
         }
+    }
+
+    /// A band `w` mm wide round a 200 mm square.
+    fn band(w: f64) -> Document {
+        document_with(vec![square(0.0, 0.0, 200.0), square(w, w, 200.0 - 2.0 * w)])
+    }
+
+    #[test]
+    fn a_border_too_wide_for_a_narrow_band_is_made_narrower_to_fit() {
+        let doc = band(12.0);
+        for style in [Style::Rope, Style::Chain, Style::Chevrons, Style::Laurel] {
+            let p = Params {
+                style,
+                border_width: 14.0,
+                make: Make::Vectors,
+                ..Params::default()
+            };
+            let after = match Embellish::run(&doc, &p) {
+                Ok(c) => {
+                    let mut a = doc.clone();
+                    a.apply(&c).unwrap();
+                    a
+                }
+                Err(e) => panic!("{style:?}: {e}"),
+            };
+            let pieces = after.vectors.len() - doc.vectors.len();
+            assert!(pieces > 40, "{style:?}: {pieces}");
+            // every piece stays inside the band
+            for v in after.vectors.values() {
+                let b = v.bounds();
+                let inner = Rect::new(Point::splat(12.0), Point::splat(188.0));
+                let across = b.min.x.max(b.min.y) >= -0.01 && b.max.x.max(b.max.y) <= 200.01;
+                let clear = !(b.min.x > inner.min.x + 0.01
+                    && b.min.y > inner.min.y + 0.01
+                    && b.max.x < inner.max.x - 0.01
+                    && b.max.y < inner.max.y - 0.01);
+                assert!(across && clear, "{style:?}: {b:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn too_narrow_a_shape_says_how_wide_it_is_and_what_to_change() {
+        let doc = band(1.5);
+        let p = Params {
+            style: Style::Rope,
+            ..Params::default()
+        };
+        let err = Embellish::run(&doc, &p).unwrap_err().to_string();
+        assert!(err.contains("mm wide"), "{err}");
+        assert!(err.contains("Tightness"), "{err}");
     }
 
     #[test]
@@ -1335,6 +1450,65 @@ mod pictures {
             }
         }
         Path::polyline(&pts, true)
+    }
+
+    /// The Style list's pictures: each style's vectors on a rounded square, as JSON lists of
+    /// points for `scripts/make_embellish_icons.py`: `EMBELLISH_ICONS=dir cargo nextest run
+    /// -p cmd-embellish style_pictures --run-ignored only`.
+    #[test]
+    #[ignore = "writes the style pictures' outlines"]
+    fn style_pictures() {
+        let out = std::path::PathBuf::from(std::env::var("EMBELLISH_ICONS").unwrap());
+        // a 100 mm square with 16 mm round corners
+        let mut pts = vec![];
+        for (cx, cy, a0) in [
+            (84.0, 16.0, -90.0),
+            (84.0, 84.0, 0.0),
+            (16.0, 84.0, 90.0),
+            (16.0, 16.0, 180.0),
+        ] {
+            for k in 0..=12 {
+                let a = f64::to_radians(a0 + 90.0 * f64::from(k) / 12.0);
+                pts.push(Point::new(cx, cy) + Point::from_angle(a) * 16.0);
+            }
+        }
+        let shape = Path::polyline(&pts, true);
+        let doc = cut_craft_core::testing::document_with(vec![shape.clone()]);
+        for (key, style) in [
+            ("folk_mix", Style::FolkMix),
+            ("scrolls", Style::Scrolls),
+            ("flowers", Style::Flowers),
+            ("band_border", Style::BandBorder),
+            ("rope", Style::Rope),
+            ("chain", Style::Chain),
+            ("twist", Style::Twist),
+            ("braid", Style::Braid),
+            ("bead_and_reel", Style::BeadAndReel),
+            ("laurel", Style::Laurel),
+            ("feathers", Style::Feathers),
+            ("chevrons", Style::Chevrons),
+        ] {
+            let p = Params {
+                style,
+                make: Make::Vectors,
+                border_width: 16.0,
+                tightness: 5,
+                objects: 9,
+                ..Params::default()
+            };
+            let mut after = doc.clone();
+            after.apply(&Embellish::run(&doc, &p).unwrap()).unwrap();
+            let rings: Vec<Vec<[f64; 2]>> = after
+                .vectors
+                .values()
+                .map(|v| v.flatten(0.1).iter().map(|q| [q.x, q.y]).collect())
+                .collect();
+            std::fs::write(
+                out.join(format!("{key}.json")),
+                serde_json::to_string(&rings).unwrap(),
+            )
+            .unwrap();
+        }
     }
 
     #[test]

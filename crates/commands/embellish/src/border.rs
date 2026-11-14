@@ -35,6 +35,8 @@ pub struct Spec {
     pub inset: f64,
     /// Raised rails along both its sides.
     pub rails: bool,
+    /// One row only, down the middle of a narrow band, rather than one along each edge.
+    pub single: bool,
 }
 
 /// A centre line round the shape.
@@ -372,7 +374,13 @@ pub fn design_loops(field: &Field, b: &Spec, g: f64) -> (Vec<Vec<Item>>, f64) {
     let dc = b.inset + rails + hw;
     let p = b.repeat * b.width;
     let mut loops = vec![];
-    for lp in centre_loops(field, dc, hw) {
+    let mut lines = centre_loops(field, dc, hw);
+    if b.single {
+        // the two lines either side of the band's middle: the longer one alone
+        lines.sort_by(|a, c| c.len.total_cmp(&a.len));
+        lines.truncate(1);
+    }
+    for lp in lines {
         let mut items = vec![];
         let parts = match b.style {
             Style::Rope => rope(&lp, hw, p * 0.5, g, b.lay),
@@ -612,6 +620,7 @@ mod tests {
             lay: 45_f64.to_radians(),
             inset: 3.0,
             rails: true,
+            single: false,
         }
     }
 

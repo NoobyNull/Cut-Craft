@@ -713,7 +713,18 @@ fn icon_row(
                 .as_deref()
                 .map_or_else(|| o.label.clone(), |h| format!("{}: {h}", o.label));
             let response = if named {
+                // a picture with its name under it is a block egui cannot measure before
+                // laying it out, so it never wraps by itself: start a new row when it would
+                // not fit
+                // (measured to what can be seen: the panel may be laid out wider than it shows)
+                let room = ui
+                    .available_width()
+                    .min(ui.clip_rect().max.x - ui.cursor().min.x);
+                if room < edge.x + ui.spacing().button_padding.x * 2.0 {
+                    ui.end_row();
+                }
                 ui.vertical(|ui| {
+                    ui.set_max_width(edge.x + ui.spacing().button_padding.x * 2.0);
                     let r = ui.add(button).on_hover_hint(&hover);
                     ui.small(&o.label);
                     r
