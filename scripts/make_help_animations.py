@@ -89,7 +89,7 @@ def stepover_frames():
         points += [(a[0] + (b[0] - a[0]) * t / n, a[1] + (b[1] - a[1]) * t / n) for t in range(1, n + 1)]
 
     frames = []
-    for k in range(0, len(points), 2):
+    for k in range(0, len(points), 3):
         frames.append(stepover_frame(points[: k + 1], (left, top, right, bottom), r, rows, step, False))
     last = stepover_frame(points, (left, top, right, bottom), r, rows, step, True)
     return frames, last
@@ -125,8 +125,8 @@ def stepover_frame(done, pocket, r, rows, step, measured):
     return img.resize((W, H), Image.LANCZOS)
 
 
-def save_gif(path, frames, hold, ms=60, hold_ms=3200):
-    frames = [f.convert("P", palette=Image.ADAPTIVE, colors=64) for f in frames + [hold]]
+def save_gif(path, frames, hold, ms=80, hold_ms=3200):
+    frames = [f.convert("P", palette=Image.ADAPTIVE, colors=32) for f in frames + [hold]]
     durations = [ms] * (len(frames) - 1) + [hold_ms]
     frames[0].save(path, save_all=True, append_images=frames[1:], duration=durations, loop=0, optimize=True)
     print(path)

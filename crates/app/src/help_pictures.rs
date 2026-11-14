@@ -21,8 +21,12 @@ const HOLD_SECONDS: f64 = 0.8;
 const HOLD_3D_SECONDS: f64 = 4.0;
 /// The part of the window a step picture shows, points: centred on what is ringed.
 const CROP: [f32; 2] = [1120.0, 700.0];
+/// A step picture's width as saved, pixels: the crop made smaller.
+const STEP_WIDTH: u32 = 800;
+/// Colours in a saved step picture: enough for the app's flat colours and its wood.
+const STEP_COLOURS: usize = 64;
 /// The GIF's width, pixels; its frames are the step pictures made smaller.
-const GIF_WIDTH: u32 = 720;
+const GIF_WIDTH: u32 = 600;
 /// How long the GIF shows each step, hundredths of a second.
 const GIF_STEP_CS: u16 = 260;
 /// The ring's colour: the icons' orange accent.
@@ -265,7 +269,8 @@ impl HelpShots {
         let folder = self.dir.join(tour.tool);
         let path = folder.join(format!("step-{}.png", self.step + 1));
         let saved = std::fs::create_dir_all(&folder)
-            .and_then(|()| picture.save(&path).map_err(std::io::Error::other));
+            .and_then(|()| small_png(&picture).map_err(std::io::Error::other))
+            .and_then(|png| std::fs::write(&path, png));
         match saved {
             Ok(()) => println!("{}", path.display()),
             Err(e) => eprintln!("{}: {e}", path.display()),
@@ -332,6 +337,40 @@ pub fn steps_markdown(tour: &Tour) -> String {
         );
     }
     md
+}
+
+/// `picture` made [`STEP_WIDTH`] wide and saved as a PNG of [`STEP_COLOURS`] colours: about a
+/// quarter the size of a full-colour one, and as sharp to read.
+fn small_png(picture: &image::RgbaImage) -> Result<Vec<u8>, String> {
+    let height = (STEP_WIDTH * picture.height() / picture.width().max(1)).max(1);
+    let small = image::imageops::resize(
+        picture,
+        STEP_WIDTH,
+        height,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let quant = color_quant::NeuQuant::new(10, STEP_COLOURS, small.as_raw());
+    let indices: Vec<u8> = small
+        .pixels()
+        .map(|p| u8::try_from(quant.index_of(&p.0)).unwrap_or(0))
+        .collect();
+    let palette: Vec<u8> = quant
+        .color_map_rgba()
+        .chunks(4)
+        .flat_map(|c| [c[0], c[1], c[2]])
+        .collect();
+    let mut out = vec![];
+    let mut encoder = png::Encoder::new(&mut out, small.width(), small.height());
+    encoder.set_color(png::ColorType::Indexed);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.set_palette(palette);
+    encoder.set_compression(png::Compression::High);
+    let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
+    writer
+        .write_image_data(&indices)
+        .map_err(|e| e.to_string())?;
+    writer.finish().map_err(|e| e.to_string())?;
+    Ok(out)
 }
 
 /// Where `mark` is on screen, if it can be found.
@@ -485,6 +524,34 @@ mod tests {
         assert!(
             md.contains(&format!("   ![Step 2](pictures/{tool}/step-2.png)")),
             "{md}"
+        );
+    }
+
+    #[test]
+    fn a_saved_step_is_small_and_reads_back_at_its_width() {
+        // a window-like picture: flat panels, a gradient and a ring
+        let picture = image::RgbaImage::from_fn(1120, 700, |x, y| {
+            let shade = u8::try_from((x + y) % 256).unwrap_or(0);
+            if (x / 40 + y / 40) % 7 == 0 {
+                image::Rgba([242, 120, 32, 255])
+            } else if x > 800 {
+                image::Rgba([248, 248, 248, 255])
+            } else {
+                image::Rgba([shade, shade, 200, 255])
+            }
+        });
+        let png = small_png(&picture).expect("saved");
+        let back = image::load_from_memory(&png).expect("a PNG");
+        assert_eq!((back.width(), back.height()), (STEP_WIDTH, 500));
+        let mut full = std::io::Cursor::new(vec![]);
+        picture
+            .write_to(&mut full, image::ImageFormat::Png)
+            .expect("full colour");
+        assert!(
+            png.len() * 2 < full.get_ref().len(),
+            "{} vs {}",
+            png.len(),
+            full.get_ref().len()
         );
     }
 
