@@ -181,6 +181,10 @@ pub struct Params {
     /// How full the shape gets: low leaves open ground between the pieces
     #[schemars(title = "How full", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub objects: u32,
+    /// On an open line, how wide a band of ornament runs along it (a closed shape is filled
+    /// whole)
+    #[schemars(title = "Width on a line", range(min = 0), extend("x-group" = "Ornament", "x-unit" = "mm", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers", "band_border"]}))]
+    pub line_width: f64,
     /// How big the scrolls may grow
     #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-group" = "Ornament", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls"]}))]
     pub scroll_size: u32,
@@ -242,6 +246,7 @@ impl Default for Params {
             refinement: 6,
             objects: 6,
             scroll_size: 100,
+            line_width: 40.0,
             tightness: 7,
             direction: Direction::Raised,
             height: 3.0,
@@ -298,10 +303,14 @@ const MARGIN: f64 = 6.0;
 /// The most cells the carving may have; a bigger area gets coarser cells.
 const MOST_CELLS: f64 = 4_000_000.0;
 
-/// One shape to embellish: an outline and the holes in it, and where its field sits.
+/// One shape to embellish: an outline and the holes in it, and where its field sits. For an
+/// open line, its field is the band round it; with a patterned border, `line` is the line
+/// itself (in the field's frame), the pattern running along it, and with an ornament it is
+/// empty.
 struct Region {
     field: Field,
     offset: Point,
+    line: Option<Vec<Point>>,
 }
 
 /// The selected outlines grouped into shapes: each outer outline with the holes directly
@@ -344,7 +353,53 @@ fn regions(rings: &[Vec<Point>]) -> Vec<Region> {
         out.push(Region {
             field: Field::new(local, size.x, size.y),
             offset,
+            line: None,
         });
+    }
+    out
+}
+
+/// The rings of the band within `half` of the open line `line`, with round ends.
+fn band_rings(line: &Path, half: f64) -> Vec<Vec<Point>> {
+    cut_craft_core::polygon::stroke(std::slice::from_ref(line), half)
+        .iter()
+        .map(|b| b.flatten(cut_craft_core::polygon::TOLERANCE))
+        .filter(|r| r.len() >= 3)
+        .collect()
+}
+
+/// The shapes to embellish for the open lines `lines`: with a patterned border, the pattern
+/// along each line; with an ornament, a band `line_width` wide round each, filled as a shape.
+fn line_regions(lines: &[Path], p: &Params) -> Vec<Region> {
+    let mut out = vec![];
+    for line in lines {
+        match p.pattern() {
+            Some(spec) => {
+                let points = line.flatten(cut_craft_core::polygon::TOLERANCE);
+                if points.len() < 2 {
+                    continue;
+                }
+                let rings = band_rings(line, spec.half_band(p.gap()) + 1.0);
+                // the band's outline and any holes in it (where the line crosses itself)
+                // as one region
+                let Some(mut region) = regions(&rings)
+                    .into_iter()
+                    .max_by(|a, b| (a.field.w * a.field.h).total_cmp(&(b.field.w * b.field.h)))
+                else {
+                    continue;
+                };
+                region.line = Some(points.into_iter().map(|q| q - region.offset).collect());
+                out.push(region);
+            }
+            None => out.extend(
+                regions(&band_rings(line, p.line_width.max(0.0) / 2.0))
+                    .into_iter()
+                    .map(|r| Region {
+                        line: Some(vec![]),
+                        ..r
+                    }),
+            ),
+        }
     }
     out
 }
@@ -587,12 +642,12 @@ fn picked(doc: &Document, by_outlines: bool) -> Option<Kept> {
         if !by_outlines {
             return None;
         }
-        let (_, closed) = doc.selected_paths(|path| path.closed);
-        if closed.is_empty() {
+        let (_, chosen) = doc.selected_paths(|_| true);
+        if chosen.is_empty() {
             return None;
         }
         kept.iter().position(|k| {
-            k.paths.len() == closed.len() && closed.iter().all(|q| k.paths.contains(q))
+            k.paths.len() == chosen.len() && chosen.iter().all(|q| k.paths.contains(q))
         })
     };
     let i = if doc.selection.is_empty() {
@@ -643,6 +698,10 @@ impl Command for Embellish {
         if p.pattern().is_some() {
             ensure_positive("border width", p.border_width)?;
         }
+        let selected = doc.selected_paths(|_| true).1;
+        if p.pattern().is_none() && selected.iter().any(|s| !s.closed) {
+            ensure_positive("width on a line", p.line_width)?;
+        }
         let editing = p.editing.and_then(|at| {
             all_kept(doc).into_iter().find(|k| {
                 k.at == at
@@ -652,19 +711,24 @@ impl Command for Embellish {
         });
         let shapes = match &editing {
             Some(k) => k.paths.clone(),
-            None => doc.selected_paths(|path| path.closed).1,
+            None => selected,
         };
         if shapes.is_empty() {
             return Err(CommandError::Failed(
-                "select a closed vector to embellish: the ornament is designed to fit it".into(),
+                "select a vector to embellish: a closed shape gets the ornament designed to \
+                 fit it, an open line gets it along the line"
+                    .into(),
             ));
         }
         let rings: Vec<Vec<Point>> = shapes
             .iter()
+            .filter(|s| s.closed)
             .map(|s| s.flatten(cut_craft_core::polygon::TOLERANCE))
             .filter(|r| r.len() >= 3)
             .collect();
-        let regions = regions(&rings);
+        let lines: Vec<Path> = shapes.iter().filter(|s| !s.closed).cloned().collect();
+        let mut regions = regions(&rings);
+        regions.extend(line_regions(&lines, p));
         let mut items: Vec<Item> = vec![];
         let mut sunk: Vec<bool> = vec![];
         // the smallest gap any shape needed
@@ -677,8 +741,23 @@ impl Command for Embellish {
             // (the note says so)
             let mut g = p.gap();
             let (made, n) = loop {
-                let (made, n) =
-                    design(&region.field, p.settings(seed, g), p.pattern(), p.fill_rows);
+                let (made, n) = match (&region.line, p.pattern()) {
+                    (Some(line), Some(spec)) => {
+                        let made = border::along(line, &spec, g);
+                        let n = made.len();
+                        (made, n)
+                    }
+                    // a band round an open line: the folk mix runs along it, with no
+                    // border round the band's own edge eating its room
+                    (Some(_), None) if p.style == Style::FolkMix => {
+                        let s = Settings {
+                            place: Where::Fill,
+                            ..p.settings(seed, g)
+                        };
+                        design(&region.field, s, None, false)
+                    }
+                    _ => design(&region.field, p.settings(seed, g), p.pattern(), p.fill_rows),
+                };
                 // a border alone, its pieces or ornament missing, is not what was asked;
                 // nor are pieces too big for the shape, out over its edge
                 let raised = made
@@ -1455,9 +1534,157 @@ mod tests {
     }
 
     #[test]
-    fn needs_a_closed_vector() {
+    fn needs_a_vector() {
         let err = Embellish::run(&Document::default(), &Params::default()).unwrap_err();
-        assert!(err.to_string().contains("closed vector"), "{err}");
+        assert!(
+            err.to_string().to_lowercase().contains("select a vector"),
+            "{err}"
+        );
+    }
+
+    /// An open S-curve from (20, 100) to (320, 100).
+    fn wave() -> Path {
+        let pts: Vec<Point> = (0..=150)
+            .map(|i| {
+                let x = f64::from(i) * 2.0;
+                Point::new(20.0 + x, 100.0 + 30.0 * (x / 300.0 * TAU).sin())
+            })
+            .collect();
+        Path::polyline(&pts, false)
+    }
+
+    fn pieces_of(after: &Document, line: &Path) -> Vec<Path> {
+        after
+            .vectors
+            .values()
+            .filter(|v| *v != line)
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn every_patterned_style_runs_along_an_open_line_from_end_to_end() {
+        let line = wave();
+        let flat = line.flatten(0.05);
+        let doc = document_with(vec![line.clone()]);
+        for style in [
+            Style::Rope,
+            Style::Chain,
+            Style::Twist,
+            Style::Braid,
+            Style::BeadAndReel,
+            Style::Laurel,
+            Style::Feathers,
+            Style::Chevrons,
+        ] {
+            let p = Params {
+                style,
+                make: Make::Vectors,
+                ..Params::default()
+            };
+            let after = made(&doc, &p);
+            let pieces = pieces_of(&after, &line);
+            assert!(pieces.len() > 8, "{style:?}: {}", pieces.len());
+            let (mut first, mut last) = (f64::INFINITY, f64::INFINITY);
+            for v in &pieces {
+                for q in v.flatten(0.1) {
+                    let d = cut_craft_core::geometry::polyline_distance(&flat, q);
+                    assert!(
+                        d < p.border_width / 2.0 + 0.6,
+                        "{style:?}: {d} off the line"
+                    );
+                    first = first.min(q.distance(flat[0]));
+                    last = last.min(q.distance(*flat.last().unwrap()));
+                }
+            }
+            assert!(
+                first < 20.0 && last < 20.0,
+                "{style:?}: ends {first} {last}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_ornament_styles_fill_a_band_along_an_open_line_as_wide_as_set() {
+        let line = wave();
+        let flat = line.flatten(0.05);
+        let doc = document_with(vec![line.clone()]);
+        for style in [
+            Style::FolkMix,
+            Style::Scrolls,
+            Style::Flowers,
+            Style::BandBorder,
+        ] {
+            let p = Params {
+                style,
+                line_width: 36.0,
+                make: Make::Vectors,
+                ..Params::default()
+            };
+            let after = made(&doc, &p);
+            let pieces = pieces_of(&after, &line);
+            assert!(pieces.len() > 6, "{style:?}: {}", pieces.len());
+            let mut widest: f64 = 0.0;
+            for v in &pieces {
+                for q in v.flatten(0.1) {
+                    let d = cut_craft_core::geometry::polyline_distance(&flat, q);
+                    widest = widest.max(d);
+                    assert!(d < 18.0 + 0.6, "{style:?}: {d} off the line");
+                }
+            }
+            assert!(widest > 9.0, "{style:?}: the band is used, out to {widest}");
+        }
+    }
+
+    #[test]
+    fn an_open_lines_carving_lies_along_it_and_selecting_the_line_reopens_it() {
+        let line = wave();
+        let doc = document_with(vec![line.clone()]);
+        let p = Params {
+            style: Style::Rope,
+            objects: 3,
+            ..Params::default()
+        };
+        let after = made(&doc, &p);
+        assert_eq!(after.components.len(), 1);
+        let part = after.components.values().next().unwrap();
+        let top = part
+            .heights
+            .iter()
+            .copied()
+            .filter(|h| !h.is_nan())
+            .fold(0.0, f64::max);
+        assert!((top - p.height).abs() < 0.4, "highest {top}");
+        // the line is still selected: Embellish opens on its embellishment
+        let opened = Embellish::initial_params(&after);
+        assert!(opened.editing.is_some());
+        assert_eq!(opened.style, Style::Rope);
+        let again = made(
+            &after,
+            &Params {
+                style: Style::Chain,
+                ..opened
+            },
+        );
+        assert_eq!(again.components.len(), 1, "remade, not added");
+        assert_eq!(again.layers.len(), after.layers.len());
+    }
+
+    #[test]
+    fn a_closed_shape_and_an_open_line_are_embellished_together() {
+        let line = wave();
+        let shape = square(400.0, 0.0, 200.0);
+        let doc = document_with(vec![line.clone(), shape.clone()]);
+        let p = Params {
+            style: Style::Laurel,
+            make: Make::Vectors,
+            ..Params::default()
+        };
+        let after = made(&doc, &p);
+        let pieces = pieces_of(&after, &line);
+        let on_line = pieces.iter().filter(|v| v.bounds().max.x < 360.0).count();
+        let in_square = pieces.iter().filter(|v| v.bounds().min.x > 395.0).count();
+        assert!(on_line > 8 && in_square > 8, "{on_line} {in_square}");
     }
 }
 
@@ -1586,6 +1813,47 @@ mod pictures {
                 serde_json::to_string(&rings).unwrap(),
             )
             .unwrap();
+        }
+    }
+
+    /// Every style along an open S-curve, as 3D carvings: `EMBELLISH_OUT=dir cargo nextest
+    /// run -p cmd-embellish line_pictures --run-ignored only`.
+    #[test]
+    #[ignore = "writes pictures to look at"]
+    fn line_pictures() {
+        let out = std::path::PathBuf::from(std::env::var("EMBELLISH_OUT").unwrap());
+        let pts: Vec<Point> = (0..=150)
+            .map(|i| {
+                let x = f64::from(i) * 2.0;
+                Point::new(20.0 + x, 100.0 + 40.0 * (x / 300.0 * TAU).sin())
+            })
+            .collect();
+        let line = Path::polyline(&pts, false);
+        let doc = cut_craft_core::testing::document_with(vec![line]);
+        for (key, style) in [
+            ("folk_mix", Style::FolkMix),
+            ("scrolls", Style::Scrolls),
+            ("flowers", Style::Flowers),
+            ("band_border", Style::BandBorder),
+            ("rope", Style::Rope),
+            ("chain", Style::Chain),
+            ("twist", Style::Twist),
+            ("braid", Style::Braid),
+            ("bead_and_reel", Style::BeadAndReel),
+            ("laurel", Style::Laurel),
+            ("feathers", Style::Feathers),
+            ("chevrons", Style::Chevrons),
+        ] {
+            let p = Params {
+                style,
+                make: Make::Carving,
+                border_width: 20.0,
+                ..Params::default()
+            };
+            let mut after = doc.clone();
+            after.apply(&Embellish::run(&doc, &p).unwrap()).unwrap();
+            let part = after.components.values().next().unwrap();
+            shade(part, &out.join(format!("line-{key}.png")));
         }
     }
 

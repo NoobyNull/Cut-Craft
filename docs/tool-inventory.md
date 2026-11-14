@@ -510,6 +510,12 @@ say "not implemented yet".
     Direction sets which way the 3D carving goes: Raised (Raise height), Sunk in (Sink
     depth, an incised carving) or Mixed (the border and bigger pieces raised, the small
     fillers hollowed in), each distance set on its own.
+    On an open vector the embellishment runs along the line instead: a patterned border
+    style is laid from one end to the other (whole repeats, centred, the line's sharp bends
+    rounded so the band never folds), its Width set as for a border; Folk mix, Scrolls,
+    Flowers and Band and beads fill a band Width on a line wide round it (Folk mix as a
+    vine along the line with scrolls off it, no band round the edge). Closed shapes and open
+    lines can be selected together; selecting the line again reopens its embellishment.
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.
