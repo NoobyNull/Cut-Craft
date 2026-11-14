@@ -12050,3 +12050,60 @@ fn every_tip_says_something_and_its_more_is_a_help_page() {
     let page = h.app.help_markdown("tips");
     assert!(page.contains(super::tips::TIPS[0].text));
 }
+
+#[test]
+fn a_new_job_shows_its_uncut_material_in_the_3d_view() {
+    let mut h = Harness::new();
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    assert!(
+        !h.texts().iter().any(|t| t.contains("Nothing in 3D yet")),
+        "no empty view to fill first"
+    );
+    assert!(h.app.view_3d_area.is_some(), "the 3D view is drawn");
+    assert!(h.app.showing_uncut_material());
+    let job = h.app.doc.job;
+    let block = h.app.surface_3d().expect("the material").into_owned();
+    assert!(
+        block.heights.iter().all(|&z| z == 0.0),
+        "uncut: its whole top at the material's top"
+    );
+    assert_eq!(block.bottom, -job.thickness, "as thick as Job Setup says");
+    assert_eq!(block.origin, job.area().min);
+    let across = f64::from(u32::try_from(block.columns).unwrap()) * block.cell;
+    assert!(
+        (across - job.width).abs() <= block.cell,
+        "as wide as the job"
+    );
+}
+
+#[test]
+fn the_uncut_material_follows_job_setup_and_the_model_sits_on_it() {
+    let mut h = Harness::new();
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.app.doc.job.thickness = 30.0;
+    let block = h.app.surface_3d().unwrap().into_owned();
+    assert_eq!(block.bottom, -30.0, "a new thickness is shown at once");
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let shape = h.app.registry.get("create_shape").unwrap().default_params();
+    h.app.apply("create_shape", &shape).unwrap();
+    h.frame(vec![]);
+    assert!(!h.app.showing_uncut_material(), "there is a model now");
+    assert!(h.app.model_on_material());
+    let model = h.app.surface_3d().unwrap().into_owned();
+    assert!(model.heights.iter().any(|&z| z > 0.0), "the model");
+    let off = model
+        .at(cut_craft_core::geometry::Point::new(
+            job_corner(&h).x + 1.0,
+            job_corner(&h).y + 1.0,
+        ))
+        .unwrap();
+    assert_eq!(off, 0.0, "round the model, the material's uncut top");
+    assert!(model.heights.iter().all(|z| !z.is_nan()), "the whole block");
+    assert_eq!(model.bottom, -30.0);
+}
+
+fn job_corner(h: &Harness) -> cut_craft_core::geometry::Point {
+    h.app.doc.job.area().min
+}
