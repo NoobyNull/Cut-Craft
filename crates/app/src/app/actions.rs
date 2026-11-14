@@ -4315,7 +4315,16 @@ impl CutCraftApp {
         let committing = if new_job {
             Some(("OK", "Accept these settings and start the job"))
         } else {
+            // opened on an embellishment it made (E): pressing it changes that one
+            let reopened = !made
+                && open.id == <cmd_embellish::Embellish as cut_craft_core::Command>::ID
+                && cmd_embellish::edits_selection(&self.doc);
             commit::commit(open.id, open.page, drawing, made).map(|c| {
+                let c = if reopened && c == commit::Commit::Create {
+                    commit::Commit::Apply
+                } else {
+                    c
+                };
                 let hint = commit::hint(c, drawing, open.editing.is_some());
                 (c.label(), hint)
             })

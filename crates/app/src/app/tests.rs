@@ -7844,6 +7844,11 @@ fn e_on_an_embellishment_opens_embellish_on_it_and_remakes_it_in_place() {
     assert_eq!(form.id, "embellish");
     assert_eq!(form.params["objects"], 3);
     let mut edited = form.params.clone();
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Apply").is_some() && h.text_at("Create").is_none(),
+        "it changes the one it opened on"
+    );
     edited["objects"] = 8.into();
     h.app.apply_form("embellish", &edited).unwrap();
     assert_eq!(h.app.doc.components.len(), 1, "remade, not added");
