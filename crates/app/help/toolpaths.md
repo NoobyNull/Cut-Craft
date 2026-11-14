@@ -24,3 +24,12 @@ to 1/2" for others) and says so under the controls. The Vectors button above the
 remembered next time. Turn off Animate Preview (the
 Toolpaths menu, Toolpath Drawing) to cut the whole preview at once, with a progress window
 you can Cancel (or press Esc).
+
+When you save toolpaths, the post processor writes them as G-code for your machine. A post
+with arcs (the Cut Craft GRBL Arcs, Mach3 Arcs and FluidNC ATC Arcs posts) turns runs of
+short lines that follow a curve into single G2 (clockwise) and G3 (anticlockwise) arc
+moves, so the file is smaller and the machine keeps its speed round curves. Each arc's two
+ends are kept the same distance from its centre to well within 0.005 mm, once rounded to
+the places the post prints, inch posts included: controllers such as GRBL stop the job
+(error 33, invalid arc target) when they are not. Pick a post without arcs (GRBL Straight,
+say) only if your controller cannot cut arcs.
