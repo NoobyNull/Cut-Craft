@@ -134,6 +134,20 @@ pub struct Look<'a> {
     pub group_end: Option<&'a GroupEnd<'a>>,
     /// The Materials Library, for `x-kind: material` fields; `None` shows them as text.
     pub materials: Option<&'a cut_craft_core::material_library::MaterialLibrary>,
+    /// Draws a Sequence's samples and makes up a random one; `None` shows the box alone.
+    pub pattern: Option<PatternMaker<'a>>,
+}
+
+/// A sample's outlines: rings of points, along x and across y.
+pub type SampleRings = Vec<Vec<[f64; 2]>>;
+
+/// What the pattern maker under a Sequence box needs from its command.
+pub struct PatternMaker<'a> {
+    /// A sample's outlines, along x and across y, for the form's settings and one entry
+    /// (`2`, `R1/4`…).
+    pub sample: &'a dyn Fn(&Value, &str) -> SampleRings,
+    /// A Sequence made up from a number.
+    pub random: &'a dyn Fn(u32) -> String,
 }
 
 impl Look<'_> {
@@ -146,6 +160,7 @@ impl Look<'_> {
             tool: None,
             group_end: None,
             materials: None,
+            pattern: None,
         }
     }
 }
@@ -196,6 +211,9 @@ pub enum Kind {
     /// A pattern's seed (`x-widget: seed`): its number, and a New variation button that picks
     /// another.
     Seed,
+    /// A pattern's Sequence (`x-widget: sequence`): its entries typed in, and the pattern
+    /// maker's sample buttons that add them ([`Look::pattern`]).
+    Sequence,
     /// A string; `multiline` (`x-widget: multiline`) is a box of several lines.
     Text {
         multiline: bool,
@@ -463,6 +481,8 @@ fn grid(
                             picture: Some(t), ..
                         },
                     ) if t.replace("{}", "").contains('{') => params.clone(),
+                    // the pattern maker draws its samples with the form's settings
+                    Kind::Sequence => params.clone(),
                     // a length that turns into a percentage reads the tick beside it
                     Kind::Number {
                         percent_when: Some(w),
@@ -470,11 +490,15 @@ fn grid(
                     } => serde_json::json!({ &w.key: params[&w.key] }),
                     _ => Value::Null,
                 };
-                changed |= ui
-                    .add_enabled_ui(enabled, |ui| {
-                        edit(ui, &f.kind, &mut params[&f.key], &around, look)
-                    })
-                    .inner;
+                let edited = ui.add_enabled_ui(enabled, |ui| {
+                    edit(ui, &f.kind, &mut params[&f.key], &around, look)
+                });
+                if let Some(help) = &f.help
+                    && edited.response.contains_pointer()
+                {
+                    note_help(ui.ctx(), help);
+                }
+                changed |= edited.inner;
                 ui.end_row();
             }
         });
@@ -483,8 +507,32 @@ fn grid(
 
 fn hover(label: egui::Response, help: Option<&String>) {
     if let Some(help) = help {
+        if label.contains_pointer() {
+            note_help(&label.ctx, help);
+        }
         label.on_hover_hint(help);
     }
+}
+
+fn help_id() -> egui::Id {
+    egui::Id::unique("form_pointed_at_help")
+}
+
+/// Keeps what the setting under the pointer does, for a form that shows it in a box of its
+/// own ([`pointed_at_help`]).
+pub fn note_help(ctx: &egui::Context, help: &str) {
+    ctx.data_mut(|d| d.insert_temp(help_id(), help.to_owned()));
+}
+
+/// Forgets the setting last pointed at: a form calls it before drawing its settings, so the
+/// box shows nothing once the pointer is off them.
+pub fn forget_help(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.remove::<String>(help_id()));
+}
+
+/// What the setting under the pointer does, as the form last drew it.
+pub fn pointed_at_help(ctx: &egui::Context) -> Option<String> {
+    ctx.data(|d| d.get_temp::<String>(help_id()))
 }
 
 /// A number box for a length kept in millimetres, shown and typed in `units` (`15 mm` reads
@@ -603,6 +651,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
             changed
         }
         Kind::Seed => seed(ui, value),
+        Kind::Sequence => sequence(ui, value, around, look),
         Kind::Bool => {
             let mut b = value.as_bool().unwrap_or_default();
             let changed = ui.checkbox(&mut b, "").changed();
@@ -762,6 +811,9 @@ fn icon_row(
             } else {
                 ui.add(button).on_hover_hint(&hover)
             };
+            if response.contains_pointer() {
+                note_help(ui.ctx(), &hover);
+            }
             if response.clicked() {
                 picked = Some(o.value.clone());
             }
@@ -1045,6 +1097,255 @@ fn seed(ui: &mut egui::Ui, value: &mut Value) -> bool {
     changed
 }
 
+/// The turns the pattern maker offers: 180° split this many ways (0 for none).
+const TURNS: [u16; 8] = [0, 2, 3, 4, 6, 8, 12, 24];
+
+fn turn_name(div: u16) -> String {
+    if div == 0 {
+        "None".to_owned()
+    } else {
+        format!("/{div}  ({}°)", 180.0 / f64::from(div))
+    }
+}
+
+/// What each sample digit does, for its button's hint.
+const SAMPLES: [&str; 5] = [
+    "A space: no repeat here",
+    "The repeat as designed",
+    "Flipped top to bottom, across the line",
+    "Turned back to front, along the line",
+    "Flipped and turned back to front",
+];
+
+/// What the pattern maker adds with each sample: the other way (R), a turn (/n), a
+/// random size (S) and a random lean (T).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AddWith {
+    pub rev: bool,
+    pub div: u16,
+    pub size: bool,
+    pub lean: bool,
+}
+
+/// The entry a sample button adds: S and T for a random size and lean, R for the other
+/// way, the digit, /n for its turn.
+pub fn entry_text(code: u8, with: AddWith) -> String {
+    if code == 0 {
+        return "0".to_owned();
+    }
+    let AddWith {
+        rev,
+        div,
+        size,
+        lean,
+    } = with;
+    let mut e = String::new();
+    if size {
+        e.push('S');
+    }
+    if lean {
+        e.push('T');
+    }
+    if rev {
+        e.push('R');
+    }
+    e.push(char::from(b'0' + code));
+    if div > 0 {
+        e = format!("{e}/{div}");
+    }
+    e
+}
+
+/// A Sequence's entries: split at commas and spaces once any has an R or a turn, else one
+/// digit each.
+pub fn entries(text: &str) -> Vec<String> {
+    if text.contains([
+        ',', ' ', 'R', 'r', '/', 'S', 's', 'O', 'o', 'T', 't', '(', ')',
+    ]) {
+        text.split([',', ' '])
+            .filter(|e| !e.is_empty())
+            .map(String::from)
+            .collect()
+    } else {
+        text.chars().map(String::from).collect()
+    }
+}
+
+/// `list` written back: plain digits run together, else split by commas.
+pub fn join_entries(list: &[String]) -> String {
+    let plain = list.iter().all(|e| e.len() == 1);
+    list.join(if plain { "" } else { "," })
+}
+
+/// The Sequence box, and under it the pattern maker: a turn to add with, a sample button for
+/// each digit drawn with the form's settings, Undo, Clear and Random.
+fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -> bool {
+    let mut text = value.as_str().unwrap_or_default().to_owned();
+    let changed = ui
+        .vertical(|ui| {
+            let mut changed = ui
+                .add(
+                    egui::TextEdit::singleline(&mut text)
+                        .hint_text("Empty: 1 over and over")
+                        .desired_width(ui.available_width().min(260.0)),
+                )
+                .changed();
+            let Some(maker) = &look.pattern else {
+                return changed;
+            };
+            let id = ui.scope_id().with("pattern_maker");
+            let mut with: AddWith = ui.data(|d| d.get_temp(id)).unwrap_or_default();
+            ui.horizontal(|ui| {
+                ui.label("Turn")
+                    .on_hover_hint("Added samples are turned by this much");
+                egui::ComboBox::from_id_salt(id.with("turn"))
+                    .selected_text(turn_name(with.div))
+                    .show_ui(ui, |ui| {
+                        for d in TURNS {
+                            ui.selectable_value(&mut with.div, d, turn_name(d));
+                        }
+                    });
+                ui.checkbox(&mut with.rev, "Other way (R)")
+                    .on_hover_hint("Turn the other way; with no turn, back to front");
+            });
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut with.size, "Random size (S)")
+                    .on_hover_hint("Each time this entry comes round it is a different size");
+                ui.checkbox(&mut with.lean, "Random lean (T)")
+                    .on_hover_hint("Each time this entry comes round it leans a different way");
+            });
+            ui.horizontal_wrapped(|ui| {
+                for code in 0..=4u8 {
+                    let entry = entry_text(code, with);
+                    let hint = format!("Add {entry}: {}", SAMPLES[usize::from(code)]);
+                    if sample_button(ui, maker, params, &entry, code)
+                        .on_hover_hint(hint)
+                        .clicked()
+                    {
+                        let mut list = entries(&text);
+                        list.push(entry);
+                        text = join_entries(&list);
+                        changed = true;
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                if ui
+                    .button("Undo")
+                    .on_hover_hint("Take off the last entry")
+                    .clicked()
+                {
+                    let mut list = entries(&text);
+                    list.pop();
+                    text = join_entries(&list);
+                    changed = true;
+                }
+                if ui
+                    .button("Clear")
+                    .on_hover_hint("Empty the sequence: 1 over and over")
+                    .clicked()
+                {
+                    text.clear();
+                    changed = true;
+                }
+                if ui
+                    .button("Random")
+                    .on_hover_hint("Make up a sequence that repeats")
+                    .clicked()
+                {
+                    let frame = ui.ctx().cumulative_frame_nr() % u64::from(u32::MAX);
+                    let seed = u32::try_from(frame).unwrap_or(7);
+                    text = (maker.random)(seed);
+                    changed = true;
+                }
+            });
+            ui.data_mut(|d| d.insert_temp(id, with));
+            changed
+        })
+        .inner;
+    if changed {
+        *value = Value::String(text);
+    }
+    changed
+}
+
+/// The pieces a sample draws, kept while the form's settings stay the same.
+type Outlines = std::sync::Arc<SampleRings>;
+
+/// A button with a picture of the pattern drawn as `entry`, its digit under it.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "millimetres scaled to a picture a few dozen points across"
+)]
+fn sample_button(
+    ui: &mut egui::Ui,
+    maker: &PatternMaker,
+    params: &Value,
+    entry: &str,
+    code: u8,
+) -> egui::Response {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    params.to_string().hash(&mut h);
+    entry.hash(&mut h);
+    let key = h.finish();
+    let slot = egui::Id::unique(("pattern_sample", code));
+    let rings: Outlines = match ui.data(|d| d.get_temp::<(u64, Outlines)>(slot)) {
+        Some((k, rings)) if k == key => rings,
+        _ => {
+            let rings = Outlines::new((maker.sample)(params, entry));
+            ui.data_mut(|d| d.insert_temp(slot, (key, rings.clone())));
+            rings
+        }
+    };
+    let size = egui::vec2(72.0, 52.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let visuals = ui.style().interact(&response);
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 4.0, visuals.bg_fill);
+    painter.rect_stroke(rect, 4.0, visuals.bg_stroke, egui::StrokeKind::Inside);
+    let label_h = 14.0;
+    let pic = egui::Rect::from_min_max(
+        rect.min + egui::vec2(4.0, 4.0),
+        rect.max - egui::vec2(4.0, 4.0 + label_h),
+    );
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for q in rings.iter().flatten() {
+        for i in 0..2 {
+            lo[i] = lo[i].min(q[i]);
+            hi[i] = hi[i].max(q[i]);
+        }
+    }
+    if lo[0] < hi[0] {
+        let span = [(hi[0] - lo[0]).max(1e-6), (hi[1] - lo[1]).max(1e-6)];
+        let k = (f64::from(pic.width()) / span[0]).min(f64::from(pic.height()) / span[1]);
+        let c = pic.center();
+        let mid = [f64::midpoint(lo[0], hi[0]), f64::midpoint(lo[1], hi[1])];
+        let stroke = egui::Stroke::new(1.0, visuals.fg_stroke.color);
+        for ring in rings.iter() {
+            let pts: Vec<egui::Pos2> = ring
+                .iter()
+                .map(|q| {
+                    egui::pos2(
+                        c.x + ((q[0] - mid[0]) * k) as f32,
+                        // across the line is up the picture
+                        c.y - ((q[1] - mid[1]) * k) as f32,
+                    )
+                })
+                .collect();
+            painter.add(egui::Shape::closed_line(pts, stroke));
+        }
+    }
+    painter.text(
+        egui::pos2(rect.center().x, rect.max.y - 2.0),
+        egui::Align2::CENTER_BOTTOM,
+        entry,
+        egui::FontId::proportional(12.0),
+        visuals.text_color(),
+    );
+    response
+}
+
 /// A slider along `range` for a number with no length unit (a percentage, a 1 to 10
 /// setting).
 fn slide(
@@ -1158,7 +1459,7 @@ fn blank(kind: &Kind) -> Value {
         Kind::Number { min, .. } => Value::from(min.unwrap_or(0.0).max(0.0)),
         Kind::Seed => Value::from(1),
         Kind::Bool => Value::Bool(false),
-        Kind::Text { .. } | Kind::Material => Value::from(""),
+        Kind::Text { .. } | Kind::Material | Kind::Sequence => Value::from(""),
         Kind::Choice(options, _) => options
             .first()
             .map_or(Value::Null, |c| Value::from(c.value.as_str())),
@@ -1324,6 +1625,9 @@ fn kind(root: &Value, property: &Value) -> Kind {
             percent_when: marked("x-percent-when").and_then(|rule| When::from_rule(rule, true)),
         },
         Some("boolean") => Kind::Bool,
+        Some("string") if marked("x-widget").and_then(Value::as_str) == Some("sequence") => {
+            Kind::Sequence
+        }
         Some("string") => Kind::Text {
             multiline: marked("x-widget").and_then(Value::as_str) == Some("multiline"),
         },
@@ -1481,11 +1785,14 @@ mod tests {
         let (rope, chain, mix) = (style("rope"), style("chain"), style("folk_mix"));
         let (scrolls, flowers) = (style("scrolls"), style("flowers"));
         let shown = |key, params| field(&f, key).when.as_ref().is_none_or(|w| w.shown(params));
-        assert!(shown("border_width", &rope) && !shown("border_width", &mix));
+        assert!(shown("border_width", &rope) && shown("border_width", &mix));
         assert!(shown("twist", &rope) && !shown("twist", &chain));
-        assert!(shown("scroll_size", &scrolls) && !shown("scroll_size", &flowers));
-        assert!(shown("objects", &flowers) && !shown("objects", &chain));
-        for key in ["refinement", "objects", "tightness"] {
+        assert!(shown("scroll_size", &scrolls) && !shown("scroll_size", &chain));
+        assert!(shown("flowers", &flowers) && !shown("flowers", &scrolls));
+        let twist = style("twist");
+        assert!(shown("sequence", &mix) && shown("sequence", &rope) && !shown("sequence", &twist));
+        assert_eq!(field(&f, "sequence").kind, Kind::Sequence);
+        for key in ["refinement", "tightness"] {
             assert_eq!(
                 field(&f, key).kind,
                 Kind::Number {
@@ -1500,7 +1807,6 @@ mod tests {
                 "{key}"
             );
         }
-        assert_eq!(field(&f, "objects").label, "How full");
         assert!(matches!(
             field(&f, "height").kind,
             Kind::Number { slider: false, .. }
@@ -1753,6 +2059,7 @@ mod tests {
             tool: None,
             group_end: None,
             materials: None,
+            pattern: None,
         };
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
@@ -2255,6 +2562,7 @@ mod tests {
             tool: None,
             group_end: None,
             materials: None,
+            pattern: None,
         };
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             egui::CentralPanel::default().show(ui, |ui| show(ui, fields, params, &look));
@@ -2544,4 +2852,46 @@ fn every_way_of_cutting_has_a_picture_for_each_choice() {
         icon_path(&path("outside"), &"climb".into()),
         "toolpaths/cut_climb_outside.png"
     );
+}
+
+#[cfg(test)]
+mod sequence_tests {
+    use super::*;
+
+    #[test]
+    fn the_pattern_maker_adds_entries_and_takes_the_last_off() {
+        assert_eq!(entries("1102"), ["1", "1", "0", "2"]);
+        assert_eq!(entries("1,R1/4, S2"), ["1", "R1/4", "S2"]);
+        assert_eq!(join_entries(&entries("1102")), "1102");
+        let mut list = entries("12");
+        list.push(entry_text(
+            1,
+            AddWith {
+                div: 4,
+                rev: true,
+                ..AddWith::default()
+            },
+        ));
+        assert_eq!(join_entries(&list), "1,2,R1/4");
+        let with = AddWith {
+            size: true,
+            lean: true,
+            ..AddWith::default()
+        };
+        assert_eq!(entry_text(3, with), "ST3");
+        assert_eq!(entry_text(0, with), "0", "a space is only a space");
+        let mut list = entries("1,2,R1/4");
+        list.pop();
+        assert_eq!(join_entries(&list), "12");
+    }
+
+    #[test]
+    fn a_sequence_field_is_the_pattern_maker() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": { "sequence": { "type": "string", "x-widget": "sequence" } }
+        });
+        let fields = fields(&schema);
+        assert_eq!(fields[0].kind, Kind::Sequence);
+    }
 }

@@ -4595,6 +4595,24 @@ impl CutCraftApp {
             return;
         };
         if FIXED_TEXT_FORMS.contains(&form.id) {
+            // what the setting under the pointer does, in a box of its own under the
+            // settings, always the same size
+            let rows = ui.text_style_height(&egui::TextStyle::Body) * HELP_BOX_ROWS;
+            let said = form::pointed_at_help(ui.ctx());
+            ui.group(|ui| {
+                crate::form::fixed_area(
+                    ui,
+                    egui::vec2(ui.available_width(), rows),
+                    |ui| match said {
+                        Some(help) => {
+                            ui.label(help);
+                        }
+                        None => {
+                            ui.weak("Point at a setting to see what it does.");
+                        }
+                    },
+                );
+            });
             // a fixed place for the red text, shown or not, so the settings above never
             // jump as it comes and goes
             let rows = ui.text_style_height(&egui::TextStyle::Body) * WARNING_ROWS;
@@ -4700,8 +4718,7 @@ impl CutCraftApp {
                 selector_section(ui, params, &layers, units);
             }
         };
-        let bed = self.machines.active().map(|m| [m.width, m.height]);
-        let stock = form_stock(&self.doc, units, bed.unwrap_or_default());
+        let stock = form_stock(&self.doc, units, bed(&self.machines));
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
         };
@@ -4712,6 +4729,7 @@ impl CutCraftApp {
             tool: Some(&tool),
             group_end: Some(&group_end),
             materials: Some(&self.materials),
+            pattern: Some(pattern_maker()),
         };
         let icon = |path: &str| self.icons.find(path, "").map(|p| self.icons.image(p));
         // Trace Bitmap's settings are in its trace window, beside the preview
@@ -5569,6 +5587,8 @@ fn show_form(
     job: &cut_craft_core::document::Job,
     icon: &dyn Fn(&str) -> Option<egui::Image<'static>>,
 ) -> bool {
+    // what the pointer was on last frame; the fields note it again this frame
+    form::forget_help(ui.ctx());
     let changed = form::show(ui, &open.fields, &mut open.params, look);
     changed | align_in_material(ui, open, job, icon) | update_undercuts(ui, open)
 }
@@ -5865,6 +5885,9 @@ const FIXED_TEXT_FORMS: &[&str] = &["embellish"];
 /// Lines kept for a fixed form's Next line.
 const NEXT_LINE_ROWS: f32 = 2.0;
 
+/// Lines kept for what the setting under the pointer does.
+const HELP_BOX_ROWS: f32 = 4.0;
+
 /// Lines kept for a fixed form's red text at its foot.
 const WARNING_ROWS: f32 = 3.0;
 
@@ -5888,4 +5911,24 @@ fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
                 .clicked()
     })
     .inner
+}
+
+/// Embellish's samples and random sequences, for the pattern maker under its Sequence box.
+fn pattern_maker() -> form::PatternMaker<'static> {
+    form::PatternMaker {
+        sample: &embellish_sample,
+        random: &cmd_embellish::random_sequence,
+    }
+}
+
+fn embellish_sample(params: &Value, entry: &str) -> form::SampleRings {
+    cmd_embellish::sample(params, entry)
+        .into_iter()
+        .map(|ring| ring.into_iter().map(|q| [q.x, q.y]).collect())
+        .collect()
+}
+
+/// The active machine's bed, width and height (none without a machine).
+fn bed(machines: &cut_craft_machines::Machines) -> [f64; 2] {
+    machines.active().map_or_default(|m| [m.width, m.height])
 }

@@ -519,6 +519,18 @@ say "not implemented yet".
     Flowers and Band and beads fill a band Width on a line wide round it (Folk mix as a
     vine along the line with scrolls off it, no band round the edge). Closed shapes and open
     lines can be selected together; selecting the line again reopens its embellishment.
+    Sequence (Matthew 2026-11-14) says how each repeat is drawn in turn: 0 a space, 1 as
+    designed, 2 flipped across the line, 3 back to front, 4 both; /n turns a repeat by
+    180° ÷ n, R (before or after) turns it the other way (back to front with no turn), S a
+    random size, T (or O) a random lean, and S or T before brackets reach every entry in
+    them, as ST(1,2). Entries are split by commas; plain digits need none. It starts again
+    when it runs out with nothing added between, and empty is 1 over and over (12 makes the
+    vine wave up and down; a closed line gets a whole number of turns of it). The pattern
+    maker under the box draws a sample of the chosen style for each digit with the chosen
+    turn, R, S and T, adds it on a click, and has Undo, Clear and Random. Random size and
+    Random rotation tick boxes vary every repeat; Layout picks the pieces' shape (scroll
+    curl, petals, leaf fan), the same in every repeat, 1 as designed. Not for Twist and
+    Braid, which have no separate repeats.
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.

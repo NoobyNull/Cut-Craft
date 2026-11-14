@@ -10986,7 +10986,7 @@ fn embellishs_style_names_have_a_fixed_place_and_none_says_border() {
     // the settings start at the same height whatever the Next line or the style says
     let top = |h: &mut Harness| {
         h.frame(vec![]);
-        h.text_at("Fit to your bit").unwrap().y
+        h.text_at("Repeat length").unwrap().y
     };
     let with_shape = top(&mut h);
     h.app.doc.selection = cut_craft_core::selection::Selection::default();
@@ -12932,4 +12932,52 @@ fn embellish_drawn_finer_than_it_carves_says_so_in_red_at_the_foot_of_its_form()
     let params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply_form("embellish", &params).unwrap();
     assert_eq!(h.app.form.as_ref().unwrap().warning, None);
+}
+
+#[test]
+fn embellishs_pattern_maker_adds_samples_to_the_sequence() {
+    let mut h = Harness::new();
+    // tall enough that the whole form shows without scrolling
+    h.window = vec2(1280.0, 2400.0);
+    h.rectangle(10.0, 10.0, 160.0, 120.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.app.invoke(&h.ctx, "embellish");
+    let mut params = h.app.registry.get("embellish").unwrap().default_params();
+    params["style"] = "chevrons".into();
+    h.app.form.as_mut().unwrap().params = params;
+    for _ in 0..4 {
+        h.frame(vec![]);
+    }
+    let sequence = |h: &Harness| h.app.form.as_ref().unwrap().params["sequence"].clone();
+    // the samples sit under the Random size tick, each named by the entry it adds
+    let below = h.text_at("Random size (S)").expect("the pattern maker");
+    let sample = |h: &Harness, name: &str| {
+        h.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text() == name && t.pos.y > below.y => {
+                    Some(t.pos + t.galley.size() / 2.0)
+                }
+                _ => None,
+            })
+            .min_by(|a, b| a.distance(below).total_cmp(&b.distance(below)))
+    };
+    for name in ["2", "1", "0"] {
+        let at = sample(&h, name).expect("a sample button");
+        h.click(at, Modifiers::NONE);
+        h.frame(vec![]);
+    }
+    assert_eq!(sequence(&h), "210");
+    let at = h.text_at("Undo").expect("Undo");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(sequence(&h), "21");
+    let at = h.text_at("Random").expect("Random");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_ne!(sequence(&h), "");
+    let at = h.text_at("Clear").expect("Clear");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(sequence(&h), "");
 }

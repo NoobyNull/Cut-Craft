@@ -6,7 +6,9 @@
 //! it row after row inward from the edge. An open line has the style run along it, end to
 //! end. Reverse runs a pattern the other way along its line; Reset puts every setting back
 //! to its default and makes it again as new; Apply makes changes to one already made (select
-//! it, or press E on it, to open it again). Every piece keeps the smallest gap from the
+//! it, or press E on it, to open it again). The Sequence says how each repeat is drawn in
+//! turn (a space, flipped, back to front, turned, a random size or lean), typed or added
+//! with the pattern maker's sample buttons under it. Every piece keeps the smallest gap from the
 //! others, so the finishing bit can carve between them. The pieces come out as vectors, as a
 //! 3D component, or both.
 
@@ -36,7 +38,9 @@ mod motif;
 mod occ;
 mod relief;
 mod rng;
+mod seq;
 mod sym;
+mod vine;
 
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::{Document, EntityId, LayerId};
@@ -97,15 +101,16 @@ pub enum Style {
 impl Style {
     /// Where it goes, and what goes inside.
     fn layout(self) -> (Where, Motifs) {
-        match self {
-            Self::FolkMix => (Where::Both, Motifs::Mix),
-            Self::Scrolls => (Where::Fill, Motifs::Scrolls),
-            Self::Flowers => (Where::Fill, Motifs::Flowers),
-            _ => (Where::Border, Motifs::Nothing),
-        }
+        // every style is a pattern now, filling a shape row after row
+        let _ = self;
+        (Where::Border, Motifs::Nothing)
     }
 
     /// The patterned border's own pattern, for the patterned borders.
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "every style is a pattern for now; the shape-aware designs take none"
+    )]
     fn pattern(self) -> Option<border::Style> {
         Some(match self {
             Self::Rope => border::Style::Rope,
@@ -117,7 +122,9 @@ impl Style {
             Self::Feathers => border::Style::Feathers,
             Self::Chevrons => border::Style::Chevrons,
             Self::BandBorder => border::Style::BandBeads,
-            _ => return None,
+            Self::FolkMix => border::Style::Vine(vine::Kind::FolkMix),
+            Self::Scrolls => border::Style::Vine(vine::Kind::Scrolls),
+            Self::Flowers => border::Style::Vine(vine::Kind::Flowers),
         })
     }
 }
@@ -152,6 +159,7 @@ pub enum Make {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[expect(clippy::struct_excessive_bools, reason = "a form's tick boxes")]
 pub struct Params {
     /// The one look it has. A closed shape is filled with it; an open line has it run
     /// along the line
@@ -159,39 +167,70 @@ pub struct Params {
     pub style: Style,
     /// How wide one row of the pattern is. A closed shape is filled row after row inward; on
     /// a shape narrower than this it is made narrower to fit, one row down the middle
-    #[schemars(title = "Width", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    #[schemars(title = "Width", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm"))]
     pub border_width: f64,
     /// How long each repeat of the pattern is, against its width; the count is rounded so
     /// the pattern meets itself
-    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-group" = "Pattern", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-group" = "Pattern", "x-unit" = "%", "x-widget" = "slider"))]
     pub repeat: u32,
-    /// Run the pattern the other way along its line: chevrons, feathers and leaves point
-    /// back, and the rope and plaits twist the other way
-    #[schemars(extend("x-group" = "Pattern", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    /// Run the pattern the other way along its line: chevrons, feathers, leaves and scrolls
+    /// point back, and the rope and plaits twist the other way
+    #[schemars(extend("x-group" = "Pattern"))]
     pub reverse: bool,
     /// How steeply the rope's strands lie
     #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-group" = "Pattern", "x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"style": "rope"}))]
     pub twist: u32,
     /// How far in from the shape's edge the pattern starts
-    #[schemars(title = "Gap from the edge", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    #[schemars(title = "Gap from the edge", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm"))]
     pub border_inset: f64,
+    /// How each repeat is drawn, in turn: 0 a space, 1 as designed, 2 flipped top to
+    /// bottom, 3 back to front, 4 both. /n turns it by 180° ÷ n (1/4 is 45°), R turns it the
+    /// other way, S gives it a random size and T a random lean; S or T before brackets
+    /// reaches all inside, as ST(1,2). Split entries with commas. It starts again when it
+    /// runs out, nothing added between. Empty is 1 over and over; 12 makes the vine wave.
+    /// The buttons under it add each sample
+    #[schemars(extend("x-group" = "Sequence", "x-widget" = "sequence", "x-hide-when" = {"style": ["twist", "braid"]}))]
+    pub sequence: String,
     /// Thin raised lines along both sides of the pattern, framing it
-    #[schemars(title = "Edge lines", extend("x-group" = "Pattern", "x-show-when" = {"style": ["band_border", "rope", "chain", "twist", "braid", "bead_and_reel", "laurel", "feathers", "chevrons"]}))]
+    #[schemars(title = "Edge lines", extend("x-group" = "Pattern"))]
     pub rails: bool,
-    /// Low makes a few bold, plain pieces; high adds bead rows, sunbursts, striped scrolls
-    /// and small curls
+    /// The wavy stem down the middle that the other pieces grow from
+    #[schemars(extend("x-group" = "Include", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
+    pub vine: bool,
+    /// Scrolls curling off the vine, one side then the other
+    #[schemars(extend("x-group" = "Include", "x-show-when" = {"style": ["folk_mix", "scrolls"]}))]
+    pub scrolls: bool,
+    /// Flowers: the main pieces for Flowers, small ones beside the scrolls for Folk mix
+    #[schemars(extend("x-group" = "Include", "x-show-when" = {"style": ["folk_mix", "flowers"]}))]
+    pub flowers: bool,
+    /// Pairs of leaves in the vine's bends (for Folk mix, where a flower does not fit)
+    #[schemars(extend("x-group" = "Include", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
+    pub leaves: bool,
+    /// A dot where the vine crosses the middle, top then bottom
+    #[schemars(extend("x-group" = "Include", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
+    pub dots: bool,
+    /// Low makes plain pieces; high adds eyes and bead rows to the scrolls and makes the
+    /// flowers rosettes
     #[schemars(title = "Detail", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub refinement: u32,
-    /// How full the shape gets: low leaves open ground between the pieces
-    #[schemars(title = "How full", range(min = 1, max = 10), extend("x-group" = "Ornament", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
-    pub objects: u32,
-    /// On an open line, how wide a band of ornament runs along it (a closed shape is filled
-    /// whole)
-    #[schemars(title = "Width on a line", range(min = 0), extend("x-group" = "Ornament", "x-unit" = "mm", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
-    pub line_width: f64,
-    /// How big the scrolls may grow
-    #[schemars(title = "Scroll size", range(min = 50, max = 160), extend("x-group" = "Ornament", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls"]}))]
+    /// How much of its place each scroll, flower or leaf fills: low leaves more open ground
+    #[schemars(title = "Piece size", range(min = 50, max = 160), extend("x-group" = "Ornament", "x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
     pub scroll_size: u32,
+    /// Each piece turns to follow the line it sits on; off, they all stay upright and only
+    /// move along it
+    #[schemars(title = "Turn with the line", extend("x-group" = "Ornament", "x-show-when" = {"style": ["folk_mix", "scrolls", "flowers"]}))]
+    pub turn_with_line: bool,
+    /// Each repeat a different size, from the Layout number (off: every repeat the same
+    /// size)
+    #[schemars(extend("x-group" = "Sequence", "x-hide-when" = {"style": ["twist", "braid"]}))]
+    pub random_size: bool,
+    /// Each repeat leaning a different way, up to 45° either side, from the Layout number
+    /// (off: every repeat turned only as the Sequence says)
+    #[schemars(extend("x-group" = "Sequence", "x-hide-when" = {"style": ["twist", "braid"]}))]
+    pub random_rotation: bool,
+    /// No longer used: the patterns repeat evenly
+    #[schemars(skip)]
+    pub objects: u32,
     /// How close the pieces sit: the smallest gap between them is 3 mm at 1 and 0.75 mm at
     /// 10. Finish with a ball-nose bit no wider than the gap
     #[schemars(range(min = 1, max = 10), extend("x-group" = "Fit to your bit", "x-widget" = "slider"))]
@@ -199,8 +238,10 @@ pub struct Params {
     /// Outlines to cut with 2D toolpaths, a rounded 3D carving, or both
     #[schemars(extend("x-group" = "Make", "x-widget" = "row"))]
     pub make: Make,
-    /// Another number gives another layout with the same settings
-    #[schemars(title = "Layout", extend("x-group" = "Make", "x-widget" = "seed"))]
+    /// Picks the shape of the pieces: how tight the scrolls curl, the flowers' petals, how
+    /// wide the leaves fan, the same in every repeat; with Random size or Random rotation,
+    /// also how the repeats differ. 1 is the pattern as designed
+    #[schemars(title = "Layout", extend("x-group" = "Sequence", "x-widget" = "seed", "x-hide-when" = {"style": ["twist", "braid"]}))]
     pub seed: u32,
     /// Names the new layer the ornament's vectors go on, and its 3D component
     #[schemars(extend("x-group" = "Make"))]
@@ -241,16 +282,24 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             style: Style::FolkMix,
-            border_width: 14.0,
+            border_width: 30.0,
             repeat: 100,
             twist: 45,
             border_inset: 3.0,
             rails: false,
+            sequence: String::new(),
             reverse: false,
             refinement: 6,
             objects: 6,
             scroll_size: 100,
-            line_width: 40.0,
+            vine: true,
+            scrolls: true,
+            flowers: true,
+            leaves: true,
+            dots: true,
+            turn_with_line: true,
+            random_size: false,
+            random_rotation: false,
             tightness: 7,
             direction: Direction::Raised,
             height: 3.0,
@@ -283,6 +332,24 @@ impl Params {
             rails: self.rails,
             single: false,
             reverse: self.reverse,
+            vine: border::VineSpec {
+                parts: vine::Parts {
+                    vine: self.vine,
+                    scrolls: self.scrolls,
+                    flowers: self.flowers,
+                    leaves: self.leaves,
+                    dots: self.dots,
+                },
+                detail: f64::from(self.refinement.clamp(1, 10) - 1) / 9.0,
+                fill: f64::from(self.scroll_size.clamp(50, 160) - 50) / 110.0,
+            },
+            upright: !self.turn_with_line,
+            sequence: seq::Seq::parse(&self.sequence),
+            vary: border::Vary {
+                size: self.random_size,
+                turn: self.random_rotation,
+                seed: self.seed,
+            },
         })
     }
 
@@ -374,7 +441,7 @@ fn band_rings(line: &Path, half: f64) -> Vec<Vec<Point>> {
 }
 
 /// The shapes to embellish for the open lines `lines`: with a patterned border, the pattern
-/// along each line; with an ornament, a band `line_width` wide round each, filled as a shape.
+/// along each line; otherwise a band the pattern's width round each, filled as a shape.
 fn line_regions(lines: &[Path], p: &Params) -> Vec<Region> {
     let mut out = vec![];
     for line in lines {
@@ -397,7 +464,7 @@ fn line_regions(lines: &[Path], p: &Params) -> Vec<Region> {
                 out.push(region);
             }
             None => out.extend(
-                regions(&band_rings(line, p.line_width.max(0.0) / 2.0))
+                regions(&band_rings(line, p.border_width.max(0.0) / 2.0))
                     .into_iter()
                     .map(|r| Region {
                         line: Some(vec![]),
@@ -415,7 +482,7 @@ fn line_regions(lines: &[Path], p: &Params) -> Vec<Region> {
 fn design(
     field: &Field,
     s: Settings,
-    pattern: Option<border::Spec>,
+    pattern: Option<&border::Spec>,
     rows: bool,
 ) -> (Vec<Item>, usize) {
     let Some(b) = pattern.filter(|_| s.place != Where::Fill) else {
@@ -476,10 +543,10 @@ fn design(
 /// `b` fitted to a shape too narrow for it as set: one row down the middle of the band,
 /// as wide as the band allows, its inset smaller. The pattern's repeat shrinks with its
 /// width.
-fn fitted(field: &Field, b: border::Spec) -> border::Spec {
+fn fitted(field: &Field, b: &border::Spec) -> border::Spec {
     let room = half_width(field);
     if b.inset + b.width <= room * 0.95 {
-        return b;
+        return *b;
     }
     let inset = b.inset.min(room * 0.1);
     // the row's middle just off the band's middle, where the two edge lines nearly meet
@@ -489,7 +556,7 @@ fn fitted(field: &Field, b: border::Spec) -> border::Spec {
         width: 2.0 * (middle - inset).max(0.0),
         rails: false,
         single: true,
-        ..b
+        ..*b
     }
 }
 
@@ -514,6 +581,38 @@ fn half_width(field: &Field) -> f64 {
             along >= longest * 0.5
         })
         .unwrap_or(0.0)
+}
+
+/// The pattern along one line across the middle of a shape too small for a row round it:
+/// the longer way across its box, as wide as its widest point allows.
+fn across_the_middle(field: &Field, spec: &border::Spec, g: f64) -> Option<Vec<Item>> {
+    let half = field.dmax * 0.5;
+    if half <= 0.0 {
+        return None;
+    }
+    let (w, h) = (field.w, field.h);
+    let line: Vec<Point> = (0..=200)
+        .map(|i| {
+            let t = f64::from(i) / 200.0;
+            if w >= h {
+                Point::new(w * t, h / 2.0)
+            } else {
+                Point::new(w / 2.0, h * t)
+            }
+        })
+        .filter(|&q| field.sample(q) >= half)
+        .collect();
+    if line.len() < 2 {
+        return None;
+    }
+    let spec = border::Spec {
+        width: 2.0 * half,
+        inset: 0.0,
+        rails: false,
+        ..*spec
+    };
+    let made = border::along(&line, &spec, g);
+    (!made.is_empty()).then_some(made)
 }
 
 /// How wide the shapes are, as told in a message: the widest circle in any.
@@ -663,6 +762,44 @@ fn picked(doc: &Document, by_outlines: bool) -> Option<Kept> {
     kept.into_iter().nth(i)
 }
 
+/// A short run of the chosen pattern with every repeat drawn as the Sequence `entry` says
+/// (`2`, `R1/4`…), for the pattern maker's sample buttons: the pieces' outlines, along x
+/// and across y, mm. Nothing for a space or a style with no repeats to turn.
+pub fn sample(params: &serde_json::Value, entry: &str) -> Vec<Vec<Point>> {
+    let Ok(p) = serde_json::from_value::<Params>(params.clone()) else {
+        return vec![];
+    };
+    let Some(mut spec) = p.pattern() else {
+        return vec![];
+    };
+    let width = 20.0;
+    spec.width = width;
+    spec.rails = false;
+    spec.inset = 0.0;
+    spec.sequence = seq::Seq::parse(entry);
+    // two of the vine's half-waves, or about three of a border's repeats
+    let len = match spec.style {
+        border::Style::Vine(_) => 2.0 * spec.repeat * width,
+        _ => 3.0 * width,
+    };
+    let line: Vec<Point> = (0..=20)
+        .map(|i| Point::new(len * f64::from(i) / 20.0, 0.0))
+        .collect();
+    border::along(&line, &spec, 0.6)
+        .iter()
+        .flat_map(|it| match it {
+            Item::Shape { rings, .. } => rings.clone(),
+            Item::Line { points, .. } => vec![points.clone()],
+        })
+        .collect()
+}
+
+/// A Sequence made up from `seed`: a short run of entries repeated, so it still reads as a
+/// pattern.
+pub fn random_sequence(seed: u32) -> String {
+    seq::random(seed)
+}
+
 /// Whether the selection is an embellishment Embellish made, its component or any of its
 /// pieces: E opens Embellish on it. (Its outline stays its drawing tool's to edit.)
 pub fn edits_selection(doc: &Document) -> bool {
@@ -704,9 +841,6 @@ impl Command for Embellish {
             ensure_positive("pattern width", p.border_width)?;
         }
         let selected = doc.selected_paths(|_| true).1;
-        if p.pattern().is_none() && selected.iter().any(|s| !s.closed) {
-            ensure_positive("width on a line", p.line_width)?;
-        }
         let editing = p.editing.and_then(|at| {
             all_kept(doc).into_iter().find(|k| {
                 k.at == at
@@ -745,7 +879,7 @@ impl Command for Embellish {
             // halved until it fits: what was asked for is made, too fine to carve in full
             // (the note says so)
             let mut g = p.gap();
-            let (made, n) = loop {
+            let (made, _n) = loop {
                 let (made, n) = match (&region.line, p.pattern()) {
                     (Some(line), Some(spec)) => {
                         let made = border::along(line, &spec, g);
@@ -761,7 +895,12 @@ impl Command for Embellish {
                         };
                         design(&region.field, s, None, false)
                     }
-                    _ => design(&region.field, p.settings(seed, g), p.pattern(), true),
+                    _ => design(
+                        &region.field,
+                        p.settings(seed, g),
+                        p.pattern().as_ref(),
+                        true,
+                    ),
                 };
                 // a border alone, its pieces or ornament missing, is not what was asked;
                 // nor are pieces too big for the shape, out over its edge
@@ -779,6 +918,15 @@ impl Command for Embellish {
                     .iter()
                     .flat_map(Item::points)
                     .all(|q| region.field.sample(q) > region.field.res * 0.5);
+                // too small for even one row round it: one row across its middle
+                if raised == 0
+                    && g < 0.05
+                    && let Some(spec) = p.pattern()
+                    && let Some(made) = across_the_middle(&region.field, &spec, g)
+                {
+                    let n = made.len();
+                    break (made, n);
+                }
                 if (enough && inside) || g < 0.05 {
                     break (made, n);
                 }
@@ -788,7 +936,7 @@ impl Command for Embellish {
             sunk.extend(match p.direction {
                 Direction::Raised => vec![false; made.len()],
                 Direction::Sunk => vec![true; made.len()],
-                Direction::Mixed => small_ones(&made, n),
+                Direction::Mixed => small_ones(&made, 0),
             });
             items.extend(made.iter().map(|it| it.map(&|q| q + offset)));
         }
@@ -937,6 +1085,48 @@ fn carving(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_samples_show_each_way_round_and_turned_ones_stay_in_the_band() {
+        let params = |style: Style| {
+            serde_json::to_value(Params {
+                style,
+                ..Params::default()
+            })
+            .unwrap()
+        };
+        let spread = |rings: &[Vec<Point>]| {
+            rings
+                .iter()
+                .flatten()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| {
+                    (lo.min(q.y), hi.max(q.y))
+                })
+        };
+        for style in [Style::Chevrons, Style::FolkMix, Style::Feathers] {
+            let p = params(style);
+            // a space is empty (the vine runs straight through it)
+            let (lo, hi) = spread(&sample(&p, "0"));
+            assert!(hi - lo < 4.0 || lo > hi, "{style:?}: a space is empty");
+            let one = sample(&p, "1");
+            let two = sample(&p, "2");
+            assert!(!one.is_empty() && !two.is_empty(), "{style:?}");
+            assert_ne!(one, two, "{style:?}: 2 differs from 1");
+            let (lo, hi) = spread(&sample(&p, "1/4"));
+            assert!(
+                lo >= -10.0 - 1e-6 && hi <= 10.0 + 1e-6,
+                "{style:?}: {lo} {hi}"
+            );
+        }
+        assert!(
+            !sample(&params(Style::Twist), "1").is_empty(),
+            "a plait draws whole"
+        );
+        assert!(matches!(
+            sample(&serde_json::json!("nonsense"), "1").as_slice(),
+            []
+        ));
+    }
+
     use super::*;
     use cut_craft_core::Change;
     use cut_craft_core::testing::{document_with, square};
@@ -1199,15 +1389,21 @@ mod tests {
         for style in [Style::FolkMix, Style::Scrolls] {
             let p = Params {
                 style,
+                sequence: "12".into(),
                 ..with(Direction::Mixed)
             };
             let (pieces, n) = {
                 let rings: Vec<Vec<Point>> = vec![polygon(6, 110.0).flatten(0.05)];
                 let r = regions(&rings);
-                design(&r[0].field, p.settings(4, p.gap()), p.pattern(), false)
+                design(
+                    &r[0].field,
+                    p.settings(4, p.gap()),
+                    p.pattern().as_ref(),
+                    false,
+                )
             };
-            let small = small_ones(&pieces, n);
-            assert!(small[..n].iter().all(|s| !s), "the border stays raised");
+            let _ = n;
+            let small = small_ones(&pieces, 0);
             let raised = small
                 .iter()
                 .zip(&pieces)
@@ -1236,7 +1432,7 @@ mod tests {
             let doc = document_with(vec![shape.clone()]);
             let after = made(&doc, &Params::default());
             let new: Vec<&Path> = after.vectors.values().filter(|v| **v != shape).collect();
-            assert!(new.len() > 40, "{} pieces", new.len());
+            assert!(new.len() > 20, "{} pieces", new.len());
             let bounds = shape.bounds();
             for v in &new {
                 let b = v.bounds();
@@ -1274,26 +1470,41 @@ mod tests {
             v
         };
         assert_eq!(shapes(&made(&doc, &p)), shapes(&made(&doc, &p)));
+        // another number, another shape of piece (each repeat the same, see the vine's tests)
         let other = Params {
             seed: 5,
             ..p.clone()
         };
         assert_ne!(shapes(&made(&doc, &p)), shapes(&made(&doc, &other)));
+        let random = |seed| Params {
+            seed,
+            random_size: true,
+            ..p.clone()
+        };
+        assert_eq!(
+            shapes(&made(&doc, &random(4))),
+            shapes(&made(&doc, &random(4)))
+        );
+        assert_ne!(
+            shapes(&made(&doc, &random(4))),
+            shapes(&made(&doc, &random(5)))
+        );
     }
 
     #[test]
-    fn more_objects_and_refinement_make_more_pieces() {
+    fn unticked_pieces_are_left_out() {
         let doc = document_with(vec![lopsided()]);
-        let count = |objects, refinement| {
+        let count = |dots, leaves| {
             let p = Params {
-                objects,
-                refinement,
+                dots,
+                leaves,
                 make: Make::Vectors,
                 ..Params::default()
             };
             made(&doc, &p).vectors.len()
         };
-        assert!(count(10, 10) > count(1, 1));
+        assert!(count(true, true) > count(false, true));
+        assert!(count(false, true) > count(false, false));
     }
 
     #[test]
@@ -1317,60 +1528,6 @@ mod tests {
                 .count()
         };
         assert!(near_middle(Style::FolkMix) > 0);
-    }
-
-    /// The pieces' sizes, longest side, biggest first.
-    fn piece_sizes(doc: &Document, outline: &Path) -> Vec<f64> {
-        let mut sizes: Vec<f64> = doc
-            .vectors
-            .values()
-            .filter(|v| *v != outline)
-            .map(|v| {
-                let s = v.bounds().size();
-                s.x.max(s.y)
-            })
-            .collect();
-        sizes.sort_by(|a, b| b.total_cmp(a));
-        sizes
-    }
-
-    #[test]
-    fn each_style_is_one_kind_of_piece() {
-        for shape in [lopsided(), polygon(6, 110.0)] {
-            let doc = document_with(vec![shape.clone()]);
-            let of = |style| {
-                made(
-                    &doc,
-                    &Params {
-                        style,
-                        make: Make::Vectors,
-                        ..Params::default()
-                    },
-                )
-            };
-            let (mix, scrolls, flowers) =
-                (of(Style::FolkMix), of(Style::Scrolls), of(Style::Flowers));
-            let (m, sc, fl) = (
-                piece_sizes(&mix, &shape),
-                piece_sizes(&scrolls, &shape),
-                piece_sizes(&flowers, &shape),
-            );
-            eprintln!(
-                "mix {:?}\nscrolls {:?}\nflowers {:?}",
-                &m[..8],
-                &sc[..8.min(sc.len())],
-                &fl[..8.min(fl.len())]
-            );
-            assert!(sc.len() > 10 && fl.len() > 10, "{} {}", sc.len(), fl.len());
-            assert!(
-                sc.len() < m.len() && fl.len() < m.len(),
-                "fewer kinds, fewer pieces"
-            );
-            // no border band (the biggest piece of the mix) in either
-            let outline = shape.bounds().size().x;
-            assert!(m[0] > outline * 0.9);
-            assert!(sc[0] < outline * 0.9 && fl[0] < outline * 0.9);
-        }
     }
 
     #[test]
@@ -1423,7 +1580,7 @@ mod tests {
         for style in [Style::Rope, Style::Chain, Style::Chevrons, Style::Laurel] {
             let p = Params {
                 style,
-                border_width: 14.0,
+                border_width: 30.0,
                 make: Make::Vectors,
                 ..Params::default()
             };
@@ -1544,6 +1701,10 @@ mod tests {
         let flat = line.flatten(0.05);
         let doc = document_with(vec![line.clone()]);
         for style in [
+            Style::FolkMix,
+            Style::Scrolls,
+            Style::Flowers,
+            Style::BandBorder,
             Style::Rope,
             Style::Chain,
             Style::Twist,
@@ -1577,33 +1738,6 @@ mod tests {
                 first < 20.0 && last < 20.0,
                 "{style:?}: ends {first} {last}"
             );
-        }
-    }
-
-    #[test]
-    fn the_ornament_styles_fill_a_band_along_an_open_line_as_wide_as_set() {
-        let line = wave();
-        let flat = line.flatten(0.05);
-        let doc = document_with(vec![line.clone()]);
-        for style in [Style::FolkMix, Style::Scrolls, Style::Flowers] {
-            let p = Params {
-                style,
-                line_width: 36.0,
-                make: Make::Vectors,
-                ..Params::default()
-            };
-            let after = made(&doc, &p);
-            let pieces = pieces_of(&after, &line);
-            assert!(pieces.len() > 6, "{style:?}: {}", pieces.len());
-            let mut widest: f64 = 0.0;
-            for v in &pieces {
-                for q in v.flatten(0.1) {
-                    let d = cut_craft_core::geometry::polyline_distance(&flat, q);
-                    widest = widest.max(d);
-                    assert!(d < 18.0 + 0.6, "{style:?}: {d} off the line");
-                }
-            }
-            assert!(widest > 9.0, "{style:?}: the band is used, out to {widest}");
         }
     }
 
@@ -1818,13 +1952,50 @@ mod pictures {
             let p = Params {
                 style,
                 make: Make::Carving,
-                border_width: 20.0,
+                border_width: 30.0,
                 ..Params::default()
             };
             let mut after = doc.clone();
             after.apply(&Embellish::run(&doc, &p).unwrap()).unwrap();
             let part = after.components.values().next().unwrap();
             shade(part, &out.join(format!("line-{key}.png")));
+            let shape = cut_craft_core::testing::square(0.0, 0.0, 160.0);
+            let boxed = cut_craft_core::testing::document_with(vec![shape]);
+            let mut after = boxed.clone();
+            after.apply(&Embellish::run(&boxed, &p).unwrap()).unwrap();
+            let part = after.components.values().next().unwrap();
+            shade(part, &out.join(format!("square-{key}.png")));
+        }
+    }
+
+    #[test]
+    #[ignore = "writes pictures to look at"]
+    fn sequence_pictures() {
+        let out = std::path::PathBuf::from(std::env::var("EMBELLISH_OUT").unwrap());
+        let pts: Vec<Point> = (0..=100)
+            .map(|i| Point::new(10.0 + f64::from(i) * 3.0, 50.0))
+            .collect();
+        let doc = cut_craft_core::testing::document_with(vec![Path::polyline(&pts, false)]);
+        for (key, style, sequence) in [
+            ("chevrons-111000222", Style::Chevrons, "111000222"),
+            ("chevrons-turns", Style::Chevrons, "1,1/4,R1/4,2,2/4,R2/4"),
+            ("feathers-1234", Style::Feathers, "1234"),
+            ("folk-12", Style::FolkMix, "12"),
+            ("folk-1", Style::FolkMix, ""),
+            ("folk-1120", Style::FolkMix, "1120"),
+            ("laurel-st", Style::Laurel, "ST(1,2),1,0"),
+        ] {
+            let p = Params {
+                style,
+                make: Make::Carving,
+                border_width: 30.0,
+                sequence: sequence.into(),
+                ..Params::default()
+            };
+            let mut after = doc.clone();
+            after.apply(&Embellish::run(&doc, &p).unwrap()).unwrap();
+            let part = after.components.values().next().unwrap();
+            shade(part, &out.join(format!("sequence-{key}.png")));
         }
     }
 

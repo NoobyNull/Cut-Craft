@@ -1630,6 +1630,7 @@ fn summary_table(
         tool: None,
         group_end: None,
         materials: None,
+        pattern: None,
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
         summary.rapid = values["rapid_rate"]
