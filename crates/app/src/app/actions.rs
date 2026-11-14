@@ -4468,8 +4468,7 @@ impl CutCraftApp {
             open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
         }
         open.dirty |= listed.get();
-        let id = open.id;
-        self.form_extras(ui, id);
+        self.form_extras(ui, form_id);
         if let Some(ask) = asked.get() {
             let name = self
                 .form

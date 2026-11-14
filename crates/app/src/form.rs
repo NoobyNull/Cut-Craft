@@ -2198,6 +2198,7 @@ mod tests {
             material: cut_craft_core::calc::Values::default(),
             tool: None,
             group_end: None,
+            materials: None,
         };
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             egui::CentralPanel::default().show(ui, |ui| show(ui, fields, params, &look));
