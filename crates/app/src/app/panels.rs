@@ -3529,17 +3529,13 @@ impl CutCraftApp {
         }
     }
 
-    /// The Toolpaths page: the job and its tools, then the sub-tabs Make, List, Preview and
-    /// Save, as the Design page has its own; or any form opened from them.
+    /// The Toolpaths page: the job and its tools and the sub-tabs Make, Preview and Save
+    /// held at the top, the open sub-tab scrolling under them, and the toolpath list always
+    /// in its own bottom part, a strip over it dragging it taller or shorter; or any form
+    /// opened from them.
     pub(super) fn toolpaths_page(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpaths page");
         self.page_header(ui, Page::Toolpaths, "Toolpaths");
-        // a toolpath just made shows in the list, where it can be checked and previewed
-        let count = self.doc.toolpaths.len();
-        if count > self.toolpaths_seen {
-            self.open_subtab(Page::Toolpaths, TOOLPATH_LIST_TAB);
-        }
-        self.toolpaths_seen = count;
         if self
             .form
             .as_ref()
@@ -3548,24 +3544,118 @@ impl CutCraftApp {
             self.form_panel(ui);
             return;
         }
-        egui::ScrollArea::vertical()
-            .id_salt("toolpaths page")
-            .auto_shrink(false)
-            .show(ui, |ui| {
-                if self.options.favourites.of(Page::Toolpaths).1 {
-                    // favourites name every tool, whatever sub-tab it is on
-                    let groups = self.toolbar.toolpath_groups.clone();
-                    self.tools_or_favourites(ui, &groups, Page::Toolpaths);
-                    self.tip_contents(ui);
-                } else {
-                    cut_craft_bug_report::mark(ui, "Toolpaths sub-tabs");
-                    self.subtabs(ui, Page::Toolpaths);
-                }
-            });
+        // a job's material is set up before its first toolpath: the first press anywhere on
+        // the page opens Material Setup, once per job, with what Job Setup chose filled in
+        let page = ui.max_rect();
+        let pressed = ui.input(|i| {
+            i.pointer.primary_pressed()
+                && i.pointer.interact_pos().is_some_and(|p| page.contains(p))
+        });
+        if pressed && self.ask_material && !self.doc.material_checked {
+            self.doc.material_checked = true;
+            self.invoke(ui.ctx(), "material_setup");
+            return;
+        }
+        let row = ui.spacing().interact_size.y;
+        let room = ui.available_height();
+        let strip = ui.spacing().item_spacing.y * 2.0;
+        let list = self
+            .list_height
+            .unwrap_or(room * LIST_SHARE)
+            .clamp(row * 4.0, (room - row * 8.0).max(row * 4.0));
+        let width = ui.available_width();
+        ui.allocate_ui(egui::vec2(width, room - list - strip), |ui| {
+            ui.set_min_height(room - list - strip);
+            cut_craft_bug_report::mark(ui, "Toolpaths sub-tabs");
+            let open = self.subtab_head(ui, Page::Toolpaths);
+            egui::ScrollArea::vertical()
+                .id_salt("toolpaths page")
+                .auto_shrink(false)
+                .show(ui, |ui| self.subtab_body(ui, Page::Toolpaths, open));
+        });
+        let (rect, divider) = ui.allocate_exact_size(egui::vec2(width, strip), egui::Sense::drag());
+        if divider.dragged() {
+            self.list_height = Some(list - divider.drag_delta().y);
+        }
+        if divider.hovered() || divider.dragged() {
+            ui.set_cursor_icon(egui::CursorIcon::ResizeVertical);
+        }
+        let line = if divider.hovered() || divider.dragged() {
+            ui.visuals().widgets.active.bg_stroke
+        } else {
+            ui.visuals().widgets.noninteractive.bg_stroke
+        };
+        ui.painter().hline(rect.x_range(), rect.center().y, line);
+        self.toolpath_list_body(ui, false);
     }
 
-    /// What Toolpaths sub-tab `i` shows: Make's strategies with the hovered one's tip, the
-    /// toolpath list, the previews, or the Save button and the paperwork.
+    /// The Analyse sub-tab: the checks Save Toolpaths makes before cutting, run on the shown
+    /// toolpaths in the order they cut, each with how to put it right; then any toolpath
+    /// out of date, with the button that brings them all up to date.
+    fn analyse(&mut self, ui: &mut egui::Ui) {
+        step_heading(ui, 3, "Analyse: check before cutting");
+        let shown: Vec<EntityId> = self
+            .doc
+            .toolpaths
+            .iter()
+            .filter(|(_, t)| t.visible)
+            .map(|(&id, _)| id)
+            .collect();
+        if shown.is_empty() {
+            ui.weak("Make a toolpath (or tick one in the list) to check it here");
+            return;
+        }
+        let key = (self.history.revision(), self.machines.active, shown.clone());
+        if self.analysed.as_ref().is_none_or(|(k, _)| *k != key) {
+            let found = self.preflight(&[shown], crate::files::ToolChanges::SeparateFiles);
+            self.analysed = Some((key, found));
+        }
+        let found = self
+            .analysed
+            .as_ref()
+            .map_or_else(Vec::new, |(_, f)| f.clone());
+        ui.strong("Checks before cutting");
+        if found.is_empty() {
+            ui.label("✔ Nothing found that would stop or spoil the cut");
+        }
+        for f in &found {
+            let (colour, kind) = match f.severity {
+                cut_craft_core::preflight::Severity::Error => {
+                    (ui.visuals().error_fg_color, "Must fix")
+                }
+                cut_craft_core::preflight::Severity::Warning => {
+                    (ui.visuals().warn_fg_color, "Check")
+                }
+            };
+            ui.colored_label(colour, format!("{kind}: {}", f.message));
+        }
+        let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
+        ui.add_space(ui.spacing().item_spacing.y);
+        ui.strong("Out of date");
+        if stale == 0 {
+            ui.label("✔ Every toolpath matches what it was made from");
+        } else {
+            ui.colored_label(
+                ui.visuals().warn_fg_color,
+                format!(
+                    "⚠ {stale} toolpath{} changed since {} made: recalculate before cutting",
+                    if stale == 1 { "" } else { "s" },
+                    if stale == 1 { "it was" } else { "they were" },
+                ),
+            );
+            let id = "recalculate_all_toolpaths";
+            if ui
+                .add_enabled(self.available(id), egui::Button::new(self.tool_label(id)))
+                .clicked()
+            {
+                self.invoke(ui.ctx(), id);
+            }
+        }
+    }
+
+    /// What Toolpaths sub-tab `i` shows: Make's strategies (or the favourites, when the page
+    /// shows only those) with the hovered one's tip, the previews, or the Save button and
+    /// the paperwork.
     pub(super) fn toolpath_subtab(&mut self, ui: &mut egui::Ui, i: usize) {
         let Some(tab) = gui::TOOLPATH_SUBTABS.get(i) else {
             return;
@@ -3575,92 +3665,215 @@ impl CutCraftApp {
             .into_iter()
             .partition(|g| g.tools.contains(&"save_toolpaths"));
         match tab.name {
-            "Make" => {
-                step_heading(ui, 1, "Make a toolpath: pick how to cut");
-                self.tool_groups(ui, &rest, Page::Toolpaths);
+            "Create" => {
+                step_heading(ui, 1, "Create a toolpath: pick how to cut");
+                // favourites stand in for the strategies only: the list, previews and
+                // saving stay where they are
+                let all = self.toolbar.toolpath_groups.clone();
+                if self.options.favourites.of(Page::Toolpaths).1 {
+                    self.tools_or_favourites(ui, &all, Page::Toolpaths);
+                } else {
+                    self.tool_groups(ui, &rest, Page::Toolpaths);
+                }
                 // the hovered tool's guidance under the icons, scrolling with them
                 self.tip_contents(ui);
-            }
-            "List" => {
-                self.toolpath_list_body(ui, Some(false), "toolpath list rows");
-                ui.add_space(ui.spacing().item_spacing.y);
-                self.tool_groups(ui, &rest, Page::Toolpaths);
             }
             "Preview" => {
                 self.preview_buttons(ui, true, true);
                 ui.add_space(ui.spacing().item_spacing.y);
                 self.tool_groups(ui, &rest, Page::Toolpaths);
-                // which ones a preview shows: the ticks and the selection, at hand
-                self.toolpath_list_body(ui, None, "toolpath preview rows");
             }
-            "Save" => {
+            "Analyse" => {
+                self.analyse(ui);
+                ui.add_space(ui.spacing().item_spacing.y);
+                self.tool_groups(ui, &rest, Page::Toolpaths);
+            }
+            "Output" => {
                 if !save.is_empty() {
                     self.save_button(ui, true);
                 }
+                if ui
+                    .add_enabled(
+                        self.available("machine_files"),
+                        egui::Button::new(self.tool_label("machine_files")),
+                    )
+                    .on_hover_hint(gui::about("machine_files").unwrap_or_default())
+                    .on_disabled_hover_text(
+                        "Give the machine a folder or web address to send to in Machine \
+                         Configuration first",
+                    )
+                    .clicked()
+                {
+                    self.invoke(ui.ctx(), "machine_files");
+                }
+                ui.add_space(ui.spacing().item_spacing.y);
                 self.tool_groups(ui, &rest, Page::Toolpaths);
             }
             _ => self.tool_groups(ui, &rest, Page::Toolpaths),
         }
     }
 
-    /// The Toolpath List: its buttons, then each toolpath, the selected one highlighted and
-    /// a right-click on one opening its menu.
-    /// The up and down arrows over the toolpath list: the selected toolpath moves through the
-    /// cut order and stays selected.
-    fn toolpath_order_arrows(&mut self, ui: &mut egui::Ui) {
-        let mut moved = None;
-        let mut new_group = false;
-        let mut delete = false;
+    /// The buttons over the toolpath list's rows that arrange it: the picked toolpaths or
+    /// group up or down the cut order (a group with all its toolpaths), delete, put the
+    /// picked toolpaths in a new group, take them (or the picked group) out of it, or make an
+    /// empty group for the next toolpaths made.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "two rows of labelled buttons and what each does"
+    )]
+    fn toolpath_arrange_buttons(&mut self, ui: &mut egui::Ui) {
+        use crate::toolpath_order as order;
+        let listed = order::listed(&self.doc);
+        let picked = self.picked_toolpaths();
+        let group = self.selected_group.clone();
+        let moved = |up: bool| match (&group, picked.as_slice()) {
+            (Some(name), _) => order::moved_group(&listed, name, up),
+            (None, [id]) => order::moved_toolpath(&listed, *id, up),
+            _ => None,
+        };
+        let (up, down) = (moved(true), moved(false));
+        let in_group = picked.iter().any(|id| {
+            self.doc
+                .toolpaths
+                .get(id)
+                .is_some_and(|t| t.group.is_some())
+        });
+        let mut clicked = None;
         ui.horizontal_wrapped(|ui| {
-            use cmd_reorder_toolpath::{Direction, neighbour};
-            for (direction, arrow, tip) in [
-                (Direction::Up, "Move Up", "Move Toolpath Up (cut it sooner)"),
-                (
-                    Direction::Down,
-                    "Move Down",
-                    "Move Toolpath Down (cut it later)",
-                ),
-            ] {
-                let can = self
-                    .selected_toolpath
-                    .is_some_and(|id| neighbour(&self.doc, id, direction).is_some());
+            let mut button = |ui: &mut egui::Ui, can: bool, label: &'static str, tip: &str| {
                 if ui
-                    .add_enabled(can, egui::Button::new(arrow))
+                    .add_enabled(can, egui::Button::new(label))
                     .on_hover_hint(tip)
                     .clicked()
                 {
-                    moved = Some(direction);
+                    clicked = Some(label);
+                }
+            };
+            button(
+                ui,
+                up.is_some(),
+                "Move Up",
+                "Cut the picked toolpath, or the picked group with all its toolpaths, sooner",
+            );
+            button(
+                ui,
+                down.is_some(),
+                "Move Down",
+                "Cut the picked toolpath, or the picked group with all its toolpaths, later",
+            );
+            button(
+                ui,
+                picked.len() == 1 && self.available("delete_toolpath"),
+                "Delete",
+                "Delete Toolpath: take the picked toolpath out of the job",
+            );
+        });
+        ui.horizontal_wrapped(|ui| {
+            let mut button = |ui: &mut egui::Ui, can: bool, label: &'static str, tip: &str| {
+                if ui
+                    .add_enabled(can, egui::Button::new(label))
+                    .on_hover_hint(tip)
+                    .clicked()
+                {
+                    clicked = Some(label);
+                }
+            };
+            button(
+                ui,
+                !picked.is_empty(),
+                "Group",
+                "Put the picked toolpaths (Ctrl-click to pick several) in a new group, which \
+                 cuts them one after another and moves them together",
+            );
+            button(
+                ui,
+                in_group || group.is_some(),
+                "Ungroup",
+                "Take the picked toolpaths out of their group, or take the picked group \
+                 apart, keeping its toolpaths",
+            );
+            button(
+                ui,
+                true,
+                "New Group",
+                "Create Empty Group: toolpaths made while it is picked join it; drag \
+                 toolpaths onto its name to put them in it",
+            );
+        });
+        match clicked {
+            Some("Move Up") => self.arrange(up, &[]),
+            Some("Move Down") => self.arrange(down, &[]),
+            Some("Delete") => self.invoke(ui.ctx(), "delete_toolpath"),
+            Some("Group") => {
+                let name = self.doc.next_toolpath_group_name();
+                let to = order::grouped(&listed, &picked, &name);
+                let groups: Vec<_> = picked.iter().map(|&id| (id, name.clone())).collect();
+                self.arrange(Some(to), &groups);
+                self.selected_group = None;
+            }
+            Some("Ungroup") => {
+                if let Some(name) = group {
+                    let params = serde_json::json!({ "group": name, "delete_toolpaths": false });
+                    if let Err(e) = self.apply("ungroup_toolpaths", &params) {
+                        self.status.set_message(&e);
+                    }
+                    self.selected_group = None;
+                } else {
+                    let to = order::ungrouped(&listed, &picked);
+                    let groups: Vec<_> = picked.iter().map(|&id| (id, String::new())).collect();
+                    self.arrange(Some(to), &groups);
                 }
             }
-            let can_delete = self.selected_toolpath.is_some() && self.available("delete_toolpath");
-            delete = ui
-                .add_enabled(can_delete, egui::Button::new("Delete"))
-                .on_hover_hint("Delete Toolpath: take the selected toolpath out of the job")
-                .clicked();
-            new_group = ui
-                .button("New Group")
-                .on_hover_hint("Create Empty Group: toolpaths made while it is picked join it")
-                .clicked();
+            Some("New Group") => {
+                let params = serde_json::json!({
+                    "toolpaths": [],
+                    "group": self.doc.next_toolpath_group_name(),
+                });
+                if let Err(e) = self.apply("group_toolpaths", &params) {
+                    self.status.set_message(&e);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The toolpaths picked in the list, in cut order: the selected one and any Ctrl-clicked
+    /// with it.
+    pub(super) fn picked_toolpaths(&self) -> Vec<EntityId> {
+        self.doc
+            .toolpaths
+            .keys()
+            .copied()
+            .filter(|id| self.selected_toolpath == Some(*id) || self.more_toolpaths.contains(id))
+            .collect()
+    }
+
+    /// Puts the toolpaths in cut order `to` (none: nothing to do), `groups` saying which
+    /// toolpath goes in which group (empty: none), as one step to undo; the picked toolpaths
+    /// stay picked in their new places.
+    fn arrange(&mut self, to: Option<Vec<EntityId>>, groups: &[(EntityId, String)]) {
+        let Some(to) = to else { return };
+        let slots: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
+        let place = |id: EntityId| to.iter().position(|&t| t == id).map(|i| slots[i]);
+        let params = serde_json::json!({
+            "order": to,
+            "groups": groups
+                .iter()
+                .map(|(id, g)| (id.0.to_string(), serde_json::json!(g)))
+                .collect::<serde_json::Map<_, _>>(),
         });
-        if delete {
-            self.invoke(ui.ctx(), "delete_toolpath");
-        }
-        if new_group {
-            let params = serde_json::json!({
-                "toolpaths": [],
-                "group": self.doc.next_toolpath_group_name(),
-            });
-            if let Err(e) = self.apply("group_toolpaths", &params) {
-                self.status.set_message(&e);
+        let selected = self.selected_toolpath.and_then(place);
+        let more = self
+            .more_toolpaths
+            .iter()
+            .filter_map(|&id| place(id))
+            .collect();
+        match self.apply("arrange_toolpaths", &params) {
+            Ok(()) => {
+                self.selected_toolpath = selected;
+                self.more_toolpaths = more;
             }
-        }
-        if let (Some(direction), Some(id)) = (moved, self.selected_toolpath) {
-            let to = cmd_reorder_toolpath::neighbour(&self.doc, id, direction);
-            let params = serde_json::json!({ "toolpath": id, "direction": direction });
-            match self.apply("reorder_toolpath", &params) {
-                Ok(()) => self.selected_toolpath = to,
-                Err(e) => self.status.set_message(&e),
-            }
+            Err(e) => self.status.set_message(&e),
         }
     }
 
@@ -3694,35 +3907,19 @@ impl CutCraftApp {
         }
     }
 
-    /// The toolpath list's rows: each group, its toolpaths under it (named with it), then
-    /// the toolpaths in no group; and each toolpath's place in the cut order.
-    fn toolpath_rows(&self) -> (Vec<(Option<EntityId>, String)>, Places) {
-        let mut rows = vec![];
-        for group in self.doc.toolpath_groups_in_use() {
-            rows.push((None, group.clone()));
-            let members = self.doc.toolpaths_in_group(&group);
-            rows.extend(members.into_iter().map(|id| (Some(id), group.clone())));
-        }
-        let ungrouped = self.doc.toolpaths.iter().filter(|(_, t)| t.group.is_none());
-        rows.extend(ungrouped.map(|(&id, _)| (Some(id), String::new())));
-        let places = self
-            .doc
-            .toolpaths
-            .keys()
-            .enumerate()
-            .map(|(n, &id)| (id, n))
-            .collect();
-        (rows, places)
-    }
-
     /// A group's row in the toolpath list: a click picks it (again: unpicks), a right-click
     /// picks it and opens its menu. Whether it was picked, and the menu action chosen.
-    fn group_row(&self, ui: &mut egui::Ui, group: &str) -> (Option<bool>, Option<String>) {
+    fn group_row(
+        &self,
+        ui: &mut egui::Ui,
+        group: &str,
+    ) -> (Option<bool>, Option<String>, egui::Response) {
         let picked = self.selected_group.as_deref() == Some(group);
         let name = egui::RichText::new(group).strong();
-        let label = ui
-            .selectable_label(picked, name)
-            .on_hover_hint("A toolpath group: toolpaths made while it is picked join it");
+        let label = ui.selectable_label(picked, name).on_hover_hint(
+            "A toolpath group: its toolpaths cut one after another. Toolpaths made while it \
+                 is picked join it, and so do toolpaths dragged onto its name",
+        );
         let pick = if label.clicked() {
             Some(!picked)
         } else if label.secondary_clicked() {
@@ -3730,7 +3927,8 @@ impl CutCraftApp {
         } else {
             None
         };
-        (pick, self.popup(&label, || gui::toolpath_group_menu(group)))
+        let action = self.popup(&label, || gui::toolpath_group_menu(group));
+        (pick, action, label)
     }
 
     /// The toolpath list, with what comes after making toolpaths pinned under it, so it never
@@ -3740,89 +3938,167 @@ impl CutCraftApp {
         egui::Panel::bottom("toolpath_next_steps").show(ui, |ui| {
             self.preview_and_save(ui, steps);
         });
-        self.toolpath_list_body(ui, Some(true), "toolpath rows");
+        self.toolpath_list_body(ui, true);
     }
 
-    /// The toolpath list itself: with `controls` its heading, buttons (the template ones
-    /// too when `Some(true)`) and order arrows over the rows, else the rows alone under a
-    /// small heading. `salt` keeps each list's scrolling apart when two show at once.
-    pub(super) fn toolpath_list_body(
-        &mut self,
-        ui: &mut egui::Ui,
-        controls: Option<bool>,
-        salt: &str,
-    ) {
+    /// The toolpath list itself: its heading, buttons (the template ones too with
+    /// `templates`) and the buttons arranging it, then the rows in the order they cut, each
+    /// group's heading over its toolpaths. A click picks a toolpath, Ctrl-click picks several;
+    /// a toolpath dragged onto another goes just before it, in its group, and dragged onto a
+    /// group's name goes in at its end.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the list's rows, picking, dragging and menus"
+    )]
+    pub(super) fn toolpath_list_body(&mut self, ui: &mut egui::Ui, templates: bool) {
+        use crate::toolpath_order::{self as order, Row, Target};
         cut_craft_bug_report::mark(ui, "Toolpath list");
-        if let Some(templates) = controls {
-            ui.strong("Toolpath List");
-            self.toolpath_list_buttons(ui, templates);
-        } else {
-            ui.strong("Toolpaths: tick the ones to show");
-        }
+        ui.strong("Toolpath List");
+        self.toolpath_list_buttons(ui, templates);
+        self.toolpath_arrange_buttons(ui);
         if self.doc.toolpaths.is_empty() {
             ui.weak("No toolpaths yet: each one you make is listed here");
-        }
-        if controls.is_some() {
-            self.toolpath_order_arrows(ui);
         }
         let mut chosen = None;
         let mut shown = None;
         let mut edit = None;
         let mut coloured = None;
-        let (rows, places) = self.toolpath_rows();
+        let mut dropped = None;
+        let listed = order::listed(&self.doc);
+        let rows = order::rows(&listed, &self.doc.toolpath_groups);
+        let places: Places = self
+            .doc
+            .toolpaths
+            .keys()
+            .enumerate()
+            .map(|(n, &id)| (id, n))
+            .collect();
         let mut group_picked = None;
+        let mut clicked = None;
+        let ctrl = ui.input(|i| i.modifiers.command || i.modifiers.shift);
+        let dragging = egui::DragAndDrop::has_payload_of_type::<Vec<EntityId>>(ui.ctx());
         // each toolpath's colour in the preview, when the machined areas take them
         let swatches = self.doc.job.machined_area == MachinedArea::ToolpathColor;
-        let row = ui.spacing().interact_size.y;
+        let picked = self.picked_toolpaths();
         egui::ScrollArea::vertical()
-            .id_salt(salt)
-            .max_height(row * LIST_ROWS)
+            .id_salt("toolpath rows")
+            .auto_shrink([false, true])
             .show(ui, |ui| {
-                for (id, group) in &rows {
-                    let Some(id) = *id else {
-                        let (picked, action) = self.group_row(ui, group);
-                        if let Some(on) = picked {
-                            group_picked = Some((group.clone(), on));
+                for row in &rows {
+                    let (response, target) = match row {
+                        Row::Group(group) => {
+                            let (pick, action, label) = self.group_row(ui, group);
+                            if let Some(on) = pick {
+                                group_picked = Some((group.clone(), on));
+                            }
+                            if action.is_some() {
+                                chosen = action;
+                            }
+                            (label, Target::Into(group.clone()))
                         }
-                        if action.is_some() {
-                            chosen = action;
+                        Row::Toolpath(id, in_group) => {
+                            let id = *id;
+                            let toolpath = &self.doc.toolpaths[&id];
+                            let selected = picked.contains(&id);
+                            let swatch = swatches.then_some((places[&id], self.doc.job.colour));
+                            let (label, ticked, rgb) =
+                                toolpath_row(ui, toolpath, selected, swatch, *in_group);
+                            let label = label.interact(egui::Sense::drag());
+                            if let Some(visible) = ticked {
+                                shown = Some((id, visible));
+                            }
+                            if let Some(rgb) = rgb {
+                                coloured = Some((id, rgb));
+                            }
+                            if label.drag_started() {
+                                // the picked ones go together when this is one of them
+                                let moving = if picked.contains(&id) {
+                                    picked.clone()
+                                } else {
+                                    vec![id]
+                                };
+                                egui::DragAndDrop::set_payload(ui.ctx(), moving);
+                            }
+                            if label.clicked() {
+                                clicked = Some((id, selected));
+                            }
+                            // a double-click opens the toolpath's form
+                            if label.double_clicked() {
+                                edit = Some(id);
+                            }
+                            // The toolpath menu acts on the row right-clicked, so it selects it
+                            if label.secondary_clicked() {
+                                self.selected_toolpath = Some(id);
+                                self.more_toolpaths.clear();
+                                self.selected_group = None;
+                            }
+                            if let Some(action) =
+                                self.popup(&label, || gui::toolpath_menu(&self.doc, id, toolpath))
+                            {
+                                chosen = Some(action);
+                            }
+                            (label, Target::Before(id))
                         }
-                        continue;
                     };
-                    let toolpath = &self.doc.toolpaths[&id];
-                    let selected = self.selected_toolpath == Some(id);
-                    let swatch = swatches.then_some((places[&id], self.doc.job.colour));
-                    let (label, ticked, rgb) =
-                        toolpath_row(ui, toolpath, selected, swatch, !group.is_empty());
-                    if let Some(visible) = ticked {
-                        shown = Some((id, visible));
+                    if dragging && response.dnd_hover_payload::<Vec<EntityId>>().is_some() {
+                        // where it would go: a line over the row, or round the group's name
+                        let rect = response.rect;
+                        let stroke = ui.visuals().selection.stroke;
+                        if matches!(target, Target::Into(_)) {
+                            ui.painter()
+                                .rect_stroke(rect, 2.0, stroke, egui::StrokeKind::Outside);
+                        } else {
+                            ui.painter().hline(rect.x_range(), rect.top(), stroke);
+                        }
                     }
-                    if let Some(rgb) = rgb {
-                        coloured = Some((id, rgb));
+                    if let Some(moving) = response.dnd_release_payload::<Vec<EntityId>>() {
+                        dropped = Some((moving.to_vec(), target));
                     }
-                    if label.clicked() {
-                        self.selected_toolpath = if selected { None } else { Some(id) };
-                        self.selected_group = None;
-                    }
-                    // a double-click opens the toolpath's form
-                    if label.double_clicked() {
-                        edit = Some(id);
-                    }
-                    // The toolpath menu acts on the row right-clicked, so it selects it
-                    if label.secondary_clicked() {
-                        self.selected_toolpath = Some(id);
-                        self.selected_group = None;
-                    }
-                    if let Some(action) =
-                        self.popup(&label, || gui::toolpath_menu(&self.doc, id, toolpath))
-                    {
-                        chosen = Some(action);
+                }
+                if dragging {
+                    // room under the rows: dropped there, a toolpath goes last, in no group
+                    let end = ui.add(
+                        egui::Label::new(
+                            egui::RichText::new("Drop here to cut it last, in no group").weak(),
+                        )
+                        .selectable(false),
+                    );
+                    if let Some(moving) = end.dnd_release_payload::<Vec<EntityId>>() {
+                        dropped = Some((moving.to_vec(), Target::End));
                     }
                 }
             });
+        if let Some((id, selected)) = clicked {
+            if ctrl {
+                // Ctrl-click: one more picked, or one less
+                if self.selected_toolpath.is_none() {
+                    self.selected_toolpath = Some(id);
+                } else if self.selected_toolpath == Some(id) {
+                    self.selected_toolpath = self.more_toolpaths.pop_first();
+                } else if !self.more_toolpaths.remove(&id) {
+                    self.more_toolpaths.insert(id);
+                }
+            } else {
+                self.selected_toolpath = if selected && picked.len() == 1 {
+                    None
+                } else {
+                    Some(id)
+                };
+                self.more_toolpaths.clear();
+            }
+            self.selected_group = None;
+        }
         if let Some((group, on)) = group_picked {
             self.selected_group = on.then_some(group);
             self.selected_toolpath = None;
+            self.more_toolpaths.clear();
+        }
+        if let Some((moving, target)) = dropped
+            && let Some((to, group)) = order::dropped(&listed, &moving, &target)
+        {
+            let group = group.unwrap_or_default();
+            let groups: Vec<_> = moving.iter().map(|&id| (id, group.clone())).collect();
+            self.arrange(Some(to), &groups);
         }
         if let Some((id, visible)) = shown
             && let Some(t) = self.doc.toolpaths.get(&id)
@@ -3835,6 +4111,7 @@ impl CutCraftApp {
         self.list_properties(shown, coloured);
         if let Some(id) = edit {
             self.selected_toolpath = Some(id);
+            self.more_toolpaths.clear();
             self.invoke(ui.ctx(), "edit_toolpath");
         }
         if let Some(action) = chosen {
@@ -3913,7 +4190,7 @@ impl CutCraftApp {
     /// when there is nothing to save. `steps` numbers its heading 3.
     fn save_button(&mut self, ui: &mut egui::Ui, steps: bool) {
         if steps {
-            step_heading(ui, 3, "Save: the file your machine runs");
+            step_heading(ui, 4, "Output: the file your machine runs");
         } else {
             ui.strong("Save: the file your machine runs");
         }
@@ -4347,11 +4624,8 @@ pub(super) const SAVE_FOR_MACHINE: &str = "Save Toolpaths for the Machine…";
 /// Under it while there is nothing to save.
 pub(super) const SAVE_NEEDS: &str = "Make a toolpath first, then save it here";
 
-/// The Toolpaths sub-tab the toolpath list is on, in [`gui::TOOLPATH_SUBTABS`].
-const TOOLPATH_LIST_TAB: usize = 1;
-
-/// How many rows the toolpath list shows before it scrolls.
-const LIST_ROWS: f32 = 14.0;
+/// The share of the Toolpaths page the toolpath list takes until its divider is dragged.
+const LIST_SHARE: f32 = 0.4;
 
 /// The toolpath list's actions in its More… menu (Recalculate All only while none is out of
 /// date, when it is a button of its own).

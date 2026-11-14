@@ -659,6 +659,10 @@ pub struct Document {
     /// Points kept on what they were snapped to when drawn (added with constraints).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub constraints: Vec<crate::constraint::Constraint>,
+    /// Material Setup has been shown for this job, so it is not opened by itself again on
+    /// the first use of the Toolpaths page (added with that).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub material_checked: bool,
 }
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
@@ -800,6 +804,7 @@ impl Default for Document {
             toolpath_groups: vec![],
             part_names: BTreeMap::new(),
             constraints: vec![],
+            material_checked: false,
             tiling: None,
             bottom_side: false,
             other_side: SheetObjects::default(),

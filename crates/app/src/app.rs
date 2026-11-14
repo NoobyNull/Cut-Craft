@@ -422,6 +422,9 @@ pub(super) struct SaveForm {
 
 /// What the checks before cutting found in Save Toolpaths' plan, kept while the plan, the
 /// job and the machine stay as they were.
+/// What the Analyse sub-tab's checks were run on.
+type Analysed = (u64, usize, Vec<EntityId>);
+
 #[derive(Clone, Debug)]
 pub(super) struct SaveChecks {
     plan: Vec<Vec<EntityId>>,
@@ -1007,9 +1010,15 @@ struct CutCraftApp {
     toolpath_subtab: usize,
     /// The Toolpaths sub-tab shown as a section to unfold next frame, as `design_unfold`.
     toolpath_unfold: Option<&'static str>,
-    /// How many toolpaths the job had when the Toolpaths page last looked: one more opens
-    /// the List sub-tab, so a toolpath just made is seen there.
-    toolpaths_seen: usize,
+    /// The toolpaths Ctrl-clicked in the list besides `selected_toolpath`, to group, move
+    /// or drag together.
+    more_toolpaths: std::collections::BTreeSet<EntityId>,
+    /// Whether the first click on the Toolpaths page of a job that has not had Material
+    /// Setup opens it (tests leave it off).
+    ask_material: bool,
+    /// The Toolpath List's height as its divider was last dragged; None for its share of
+    /// the page.
+    list_height: Option<f32>,
     /// Each tool's first step, once asked for (see [`guide::first_step`]).
     first_steps: std::cell::RefCell<std::collections::HashMap<String, Option<String>>>,
     view: View,
@@ -1189,6 +1198,9 @@ struct CutCraftApp {
     machine_files: Option<send::MachineFiles>,
     /// The checks shown in Save Toolpaths' form.
     save_checks: Option<SaveChecks>,
+    /// The Analyse sub-tab's checks before cutting, kept until the job, the machine or the
+    /// toolpaths shown change: (revision, machine, toolpaths) and what was found.
+    analysed: Option<(Analysed, Vec<cut_craft_core::preflight::Finding>)>,
     /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
     snap_window: bool,
     /// Gadgets ▸ Job Setup Sheet Editor is open.

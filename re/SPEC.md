@@ -52,7 +52,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 - **ViewCube** in the 3D view. Drag it to orbit, click a face to animate to that view, double-click a face to go to the opposite side.
 - **Help prompts:** an on-screen panel that follows the active tool, with a `?` on every form linking to its help topic.
 - **[unk]** Status bar contents: no evidence found yet.
-- **Deliberate differences, for novices (Cut Craft):** every tool form keeps its Apply / Close (OK / Cancel) buttons and the red reason a calculation failed pinned at the foot of its panel, with only the settings scrolling above them, so the next step and the error are never out of sight on a long form such as Profile's. The Toolpaths panel numbers the job's three stages on its sub-tabs (see *Toolpaths sub-tabs*): **1 Make a toolpath** over the strategies, **2 Preview** (Preview All Toolpaths and Reset Preview, Recalculate All too while a toolpath is out of date, then every other preview and recalculation as a button of its own, with no More… menu) and **3 Save**, one wide labelled **Save Toolpaths for the Machine…** button, greyed with "Make a toolpath first" while the list is empty. The Ribbon and Rail layouts keep the older arrangement: Preview and Save pinned under the toolpath list, the other previews in a More… menu. Aspire puts the list under large preview and recalculate buttons and Save Toolpaths among small unlabelled icons.
+- **Deliberate differences, for novices (Cut Craft):** every tool form keeps its Apply / Close (OK / Cancel) buttons and the red reason a calculation failed pinned at the foot of its panel, with only the settings scrolling above them, so the next step and the error are never out of sight on a long form such as Profile's. The Toolpaths panel numbers the job's stages on its sub-tabs (see *Toolpaths sub-tabs*): **1 Create a toolpath** over the strategies, **2 Preview** (Preview All Toolpaths and Reset Preview, Recalculate All too while a toolpath is out of date, then every other preview and recalculation as a button of its own, with no More… menu), **3 Analyse** (the checks before cutting) and **4 Output**, one wide labelled **Save Toolpaths for the Machine…** button, greyed with "Make a toolpath first" while the list is empty. The Ribbon and Rail layouts keep the older arrangement: Preview and Save pinned under the toolpath list, the other previews in a More… menu. Aspire puts the list under large preview and recalculate buttons and Save Toolpaths among small unlabelled icons.
 
 ### Startup sequence [obs] (help: how-to-get-started, create-a-new-file, Job Setup Single; trial screenshots)
 - **Start page, no job open:** the left panel holds *Startup Tasks*: Create a new file, New file from template, Open an existing file. Below them is *Recently opened files*, a rolling list of the last 4 jobs, empty on a first run. The rest of the panel is vendor links (tutorial videos, online resources, social media, clipart shop), which are out of scope. The centre shows the product splash. There are no Drawing or Toolpaths panels, and no 2D/3D view.
@@ -212,24 +212,35 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   Its Own Section: a section sits under the tab row, folds up by its heading, and is always
   shown, so tools used together (say Create and Model) need no switching. The choice is kept
   in the options file (`design_sections`); every sub-tab is in the row to start with.
-- **Toolpaths sub-tabs** (Cut Craft's own choice, not Aspire's; Matthew 2026-11-13) [inf]:
-  Aspire's Toolpaths page runs Material, the toolpath operations, templates, the toolpath list
-  and preview/save down one page, the list taking the lower part. Cut Craft's Toolpaths page
-  follows the Design page's rules instead: the same width, **Job and Tools** (Material Setup,
-  Materials, Tool Database, Keep-Out Zones) always at the top, then four sub-tabs in the order
-  a job goes: **Make** (Cut Out and Clear; Holes; Carve and Engrave; Edges and Inlays; 3D
-  Toolpaths; Laser; From a Template), **List** (the toolpath list with Edit, Show/Hide, Move
-  Up/Down, Delete and New Group, then Reuse Toolpaths: Array Copy, Merged and the two Save as
-  Template buttons), **Preview** (every preview button, Toolpath Summary, and the toolpaths
-  with their ticks to choose what shows) and **Save** (Save Toolpaths for the Machine…, then
-  Paperwork for the Job: job sheet, labels, cut list; and Big Jobs: Toolpath Tiling). Each
-  tab gets the page's whole height, where the old page gave the list half and pushed Laser,
-  Templates and Output off the bottom. Making a toolpath opens List, so it is seen at once;
-  List reads **List ⚠** while any toolpath is out of date, from whichever tab is open. A right-click on a sub-tab
-  moves it out of the row into a section of its own, as on the Design page (kept in the
-  options as `toolpath_sections`), so List can stay in sight under Make. The groups regroup
-  the old Toolpath Operations, Toolpath Templates and Output by what a cut is for; no tool was
-  added or dropped. `TOOLPATH_SUBTABS` in `crates/app/src/gui.rs`.
+- **Toolpaths sub-tabs** (Cut Craft's own choice, not Aspire's; Matthew 2026-11-13, reworked
+  2026-11-14) [inf]: Aspire's Toolpaths page runs Material, the toolpath operations,
+  templates, the toolpath list and preview/save down one page. Cut Craft's Toolpaths page
+  follows the Design page's rules: the same width, **Job and Tools** (Material Setup,
+  Materials, Tool Database, Keep-Out Zones) and the tab row held at the top, four sub-tabs in
+  the order a job goes, and the **toolpath list always under them** in its own part of the
+  page (a strip over it drags it taller or shorter), so the toolpaths are never behind a tab:
+  **Create** (Cut Out and Clear; Holes; Carve and Engrave; Edges and Inlays; 3D Toolpaths;
+  Laser; From Other Toolpaths: Array Copy, Merged; Templates), **Preview** (every preview and
+  recalculation as a button of its own), **Analyse** (Save Toolpaths' checks before cutting
+  run live on the shown toolpaths, each with its fix; how many are out of date, with
+  Recalculate All; Toolpath Summary) and **Output** (Save Toolpaths for the Machine…, Machine
+  Files, Paperwork for the Job, Big Jobs: Toolpath Tiling). Only the open sub-tab scrolls, so
+  the tabs are always there to go back with. With Favourites only on, the favourites stand in
+  for Create's strategies; the tabs and the list stay. A right-click on a sub-tab moves it
+  into a section of its own, as on the Design page (`toolpath_sections`).
+  The list shows the toolpaths **in the order they cut** (Aspire and the first Cut Craft list
+  put groups first, whatever the cut order), each group's heading over its toolpaths, which
+  cut one after another. Over the rows: Move Up / Move Down (a toolpath in a group moves
+  inside it; one in no group steps past a whole group; a picked group moves with all its
+  toolpaths), Delete, **Group** (the picked toolpaths, Ctrl-click to pick several, into a new
+  group where the first of them cut), Ungroup (the picked toolpaths out, each just after its
+  old group, or the picked group taken apart) and New Group. A toolpath dragged onto another
+  goes just before it and into its group; onto a group's name, in at its end; under the rows,
+  last and in no group. Each of these is one step to undo (`arrange_toolpaths`). Material
+  Setup opens by itself on the first click on the Toolpaths page of a job that has not had it
+  (once per job, kept in the job file), with what Job Setup chose filled in.
+  `TOOLPATH_SUBTABS` in `crates/app/src/gui.rs`, the order rules in
+  `crates/app/src/toolpath_order.rs`.
 - **Every tool has a button** (Cut Craft's own rule, Matthew 2026-11-10) [inf]: tools that
   were only in a menu got a button where Aspire's help puts its icon, the left (Design) page
   for what changes the shape to cut and the right (Toolpaths) page for how it is cut and
