@@ -1033,13 +1033,6 @@ DIAGRAMS[dg + "depth_chamfer.svg"] = lambda: [
     pl([(X0, BOT), (X0, TOP), (58, TOP), (58, 24), (74, 40), (74, BOT)], WOODD, 2, WOOD, closed=True),
     rect(70, 0, 8, 24, 1, INK, 2, "#d2d7df"), path("M58,24 H90 L74,40 Z", INK, 2, "#b4bcc8"),
     dim_right(TOP, 24, "D", x=99, reach=91)]
-# the drag knife in a sheet: the blade down at the cut depth D, and (dashed) lifted to the
-# swivel depth D2 to turn
-DIAGRAMS[dg + "depth_drag_knife.svg"] = lambda: [
-    rect(X0, TOP + 8, X1 - X0, 16, 0, WOODD, 2, WOOD), line(X0, TOP + 24, X1, TOP + 24, INK, 2.5),
-    rect(40, 0, 8, 12, 1, INK, 2, "#d2d7df"), path("M42,12 H46 L45,32 L42,31 Z", INK, 2, "#b4bcc8"),
-    path("M66,6 H70 L69,26 L66,25 Z", INK, 2, "none", "2 2"), arrow(76, 22, 76, 10, INK, 2, 4),
-    dim_right(TOP + 8, 32, "D", reach=48), dim_left(TOP + 8, 26, "D2", reach=66)]
 # the drag knife on its spring: the blade's tip zeroed on the surface, then pressed in by a
 # share of the spring's travel T: P while cutting, the lighter P2 (dashed) to swivel
 def spring(x, y0, y1, w=4, n=5):

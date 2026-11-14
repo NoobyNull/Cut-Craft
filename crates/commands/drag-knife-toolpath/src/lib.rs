@@ -39,6 +39,7 @@ pub struct Params {
     #[serde(default = "pressure")]
     #[schemars(extend("x-unit" = "%", "x-dim" = "P"), range(min = 0, max = 100))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-diagram" = "diagrams/drag_knife_pressure.png"))]
     pub pressure: f64,
     /// How hard it presses while it turns at a corner, as a share of the spring travel: less
     /// than the cutting pressure, so the blade can swivel
