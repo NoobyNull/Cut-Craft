@@ -1090,6 +1090,12 @@ struct CutCraftApp {
     tools_path: Option<std::path::PathBuf>,
     /// The open Tool Database window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
+    /// The Materials Library: materials by class and hardness.
+    materials: cut_craft_core::material_library::MaterialLibrary,
+    /// Where `materials` is saved; `None` keeps it in memory.
+    materials_path: Option<std::path::PathBuf>,
+    /// The open Materials Library window.
+    materials_window: Option<cut_craft_tool_database::materials::MaterialsWindow>,
     /// What the open Select Tool picks for: a tool in one of the form's lists, or a tool
     /// changer holder; `None` picks the form's own tool.
     picking: Option<PickFor>,
@@ -1585,6 +1591,7 @@ fn summary_table(
         material: cut_craft_core::calc::Values::default(),
         tool: None,
         group_end: None,
+        materials: None,
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
         summary.rapid = values["rapid_rate"]
@@ -1985,6 +1992,8 @@ enum PickFor {
     Listed(ToolList, ListSlot),
     /// The active machine's tool changer holder (counted from 1).
     Holder(usize),
+    /// The Materials Library's Add Tool: the bit gets feeds for its material or class.
+    Material,
 }
 
 /// A form's clearing bits (`clearance_tools`): off, the form's tool cuts it all; on, bigger
@@ -2679,6 +2688,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
                 return Ok(Box::new(app));
             }
             app.load_tools();
+            app.load_materials();
             app.load_machines();
             app.load_options();
             app.words_path = files::config_dir().map(|d| d.join("words.txt"));

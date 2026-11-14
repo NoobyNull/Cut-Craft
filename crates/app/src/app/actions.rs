@@ -101,6 +101,9 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
+            materials: cut_craft_core::material_library::MaterialLibrary::starter(),
+            materials_path: None,
+            materials_window: None,
             picking: None,
             deep_cut: None,
             units_ask: None,
@@ -4457,6 +4460,7 @@ impl CutCraftApp {
             material: form::material(&self.doc, units),
             tool: Some(&tool),
             group_end: Some(&group_end),
+            materials: Some(&self.materials),
         };
         let icon = |path: &str| self.icons.find(path, "").map(|p| self.icons.image(p));
         // Trace Bitmap's settings are in its trace window, beside the preview
@@ -4464,8 +4468,7 @@ impl CutCraftApp {
             open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
         }
         open.dirty |= listed.get();
-        let id = open.id;
-        self.form_extras(ui, id);
+        self.form_extras(ui, form_id);
         if let Some(ask) = asked.get() {
             let name = self
                 .form
@@ -4517,7 +4520,7 @@ impl CutCraftApp {
         self.tools
             .my_tools()
             .map(|tool| cmd_pocket_toolpath::Candidate {
-                tool: self.tools.pick(&tool.name).unwrap_or_else(|| tool.clone()),
+                tool: self.pick_tool(&tool.name).unwrap_or_else(|| tool.clone()),
                 loaded: slots
                     .iter()
                     .any(|s| s.as_deref() == Some(tool.name.as_str())),
@@ -4876,6 +4879,22 @@ impl CutCraftApp {
         }
     }
 
+    /// Reads the user's Materials Library (the starter list when there is none); a broken
+    /// one is reported, kept on disk and not saved over.
+    pub(super) fn load_materials(&mut self) {
+        self.materials_path = files::materials_path();
+        if let Some(path) = &self.materials_path {
+            match files::load_materials(path) {
+                Ok(lib) => self.materials = lib,
+                Err(e) => {
+                    self.status
+                        .set_message(&format!("{e}; material changes will not be saved"));
+                    self.materials_path = None;
+                }
+            }
+        }
+    }
+
     /// Reads the user's tool database; a broken one is reported and left untouched on disk.
     pub(super) fn load_tools(&mut self) {
         self.tools_path = files::tool_database_path();
@@ -4906,9 +4925,19 @@ impl CutCraftApp {
         }
     }
 
-    /// Copies a database tool, cutting the active material, into the open form.
+    /// A database tool as a toolpath over the selected vectors cuts with it: for the hardest
+    /// material they are on (their layers', else Job Setup's), else the active material.
+    pub(super) fn pick_tool(&self, name: &str) -> Option<cut_craft_core::toolpath::Tool> {
+        let material = self
+            .doc
+            .cutting_material(self.doc.selection.iter().copied(), &self.materials);
+        self.tools.pick_in(name, &material, &self.materials)
+    }
+
+    /// Copies a database tool, cutting the material under the selection, into the open form.
     pub(super) fn choose_tool(&mut self, name: &str) {
-        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name)) {
+        let picked = self.pick_tool(name);
+        if let (Some(form), Some(tool)) = (&mut self.form, picked) {
             form.params["tool"] = serde_json::to_value(tool).expect("tools serialize");
         }
     }
@@ -4916,6 +4945,7 @@ impl CutCraftApp {
     /// The Tool Database window, `manager`, with the active machine's tool changer, its
     /// tools loaded with the tools.
     pub(super) fn open_tool_manager(&mut self, mut manager: cut_craft_tool_database::Manager) {
+        manager.library = self.materials.clone();
         manager.changer = self
             .machines
             .active()
@@ -4944,7 +4974,8 @@ impl CutCraftApp {
     pub(super) fn selected_tool(&mut self, name: &str) {
         match self.picking.take() {
             Some(super::PickFor::Listed(which, at)) => {
-                if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name)) {
+                let picked = self.pick_tool(name);
+                if let (Some(form), Some(tool)) = (&mut self.form, picked) {
                     super::put_listed(&mut form.params, which, at, &tool);
                 }
             }
@@ -4954,6 +4985,8 @@ impl CutCraftApp {
                 }
                 self.tool_changer_changed();
             }
+            // handled by the Materials Library window
+            Some(super::PickFor::Material) => {}
             None => self.choose_tool(name),
         }
     }
@@ -4981,6 +5014,9 @@ impl CutCraftApp {
             }
         }
         // the form's lists of tools too, with what the database has for them now
+        let material = self
+            .doc
+            .cutting_material(self.doc.selection.iter().copied(), &self.materials);
         let Some(form) = &mut self.form else { return };
         for at in ["/clearance_tools", "/tools", "/rest/after"] {
             let Some(list) = form.params.pointer_mut(at).and_then(Value::as_array_mut) else {
@@ -4988,7 +5024,7 @@ impl CutCraftApp {
             };
             for item in list {
                 let name = item["name"].as_str().unwrap_or_default().to_owned();
-                if let Some(tool) = self.tools.pick(&name) {
+                if let Some(tool) = self.tools.pick_in(&name, &material, &self.materials) {
                     *item = serde_json::to_value(tool).expect("tools serialize");
                 }
             }

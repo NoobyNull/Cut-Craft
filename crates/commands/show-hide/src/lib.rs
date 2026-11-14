@@ -101,6 +101,7 @@ fn set_visible(
                     name: l.name.clone(),
                     visible,
                     locked: l.locked,
+                    material: l.material.clone(),
                 },
             )
         }

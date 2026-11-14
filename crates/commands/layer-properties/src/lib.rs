@@ -1,4 +1,5 @@
-//! Layer Properties: changes a layer's name, and whether it is shown or locked against changes.
+//! Layer Properties: changes a layer's name, whether it is shown or locked against changes,
+//! and the material its vectors are cut from.
 
 use cut_craft_core::document::{Document, Layer, LayerId};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing_layer};
@@ -17,6 +18,11 @@ pub struct Params {
     pub visible: bool,
     /// Locked vectors are drawn but cannot be selected or edited.
     pub locked: bool,
+    /// What this layer's vectors are cut from, from the Materials Library; a toolpath
+    /// over several layers cuts with the hardest. Left empty, the job's material
+    #[serde(default)]
+    #[schemars(extend("x-kind" = "material"))]
+    pub material: String,
 }
 
 impl Default for Params {
@@ -32,6 +38,7 @@ impl From<Layer> for Params {
             name: l.name,
             visible: l.visible,
             locked: l.locked,
+            material: l.material,
         }
     }
 }
@@ -62,6 +69,7 @@ impl Command for LayerProperties {
             name: ensure_named(&p.name)?,
             visible: p.visible,
             locked: p.locked,
+            material: p.material.trim().to_owned(),
         };
         let mut c = Change::builder(doc);
         // only editable vectors may stay selected
@@ -91,6 +99,7 @@ mod tests {
             name: "Top".into(),
             visible: false,
             locked: true,
+            material: "Oak".into(),
         }
     }
 
@@ -103,7 +112,8 @@ mod tests {
                 id: LayerId(1),
                 name: "Top".into(),
                 visible: false,
-                locked: true
+                locked: true,
+                material: "Oak".into(),
             }
         );
     }
