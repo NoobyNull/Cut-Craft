@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/app", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/updater", "crates/machines", "crates/depth-addon", "crates/content-pack", "crates/packs/*", "crates/commands/*", "crates/formats/*"]
+members = ["crates/app", "crates/help", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/updater", "crates/machines", "crates/depth-addon", "crates/content-pack", "crates/packs/*", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
 version = "0.6.9"
@@ -9,6 +9,7 @@ license-file = "LICENSE"
 
 [workspace.dependencies]
 cut-craft-core = { path = "crates/core" }
+cut-craft-help = { path = "crates/help" }
 base64 = "0.21"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }

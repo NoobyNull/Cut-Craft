@@ -1,3 +1,8 @@
+---
+reviewed: 2026-11-14
+see-also:
+---
+
 # Toolpaths
 
 The Toolpaths page, down the right, turns the selected vectors and the 3D model into

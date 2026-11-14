@@ -5,9 +5,10 @@ use super::{CutCraftApp, Info, Page, dialog_size, egui, form, gui};
 use egui_commonmark::CommonMarkViewer;
 use std::fmt::Write as _;
 
-const CONTENTS: &str = include_str!("../../help/contents.md");
-const DESIGN: &str = include_str!("../../help/design.md");
-const TOOLPATHS: &str = include_str!("../../help/toolpaths.md");
+/// The words of help page `id` from the help crate, without its header: empty when it has none.
+fn written(id: &str) -> &'static str {
+    cut_craft_help::page(id).map_or("", |p| p.body)
+}
 
 impl CutCraftApp {
     /// The Help window on `topic`: a `help:` link clicked goes to its page. The search box
@@ -148,9 +149,9 @@ impl CutCraftApp {
             md
         };
         match topic {
-            "contents" => CONTENTS.to_owned(),
-            "design" => tools_page(Page::Design, DESIGN),
-            "toolpaths" => tools_page(Page::Toolpaths, TOOLPATHS),
+            "contents" => written("contents").to_owned(),
+            "design" => tools_page(Page::Design, written("design")),
+            "toolpaths" => tools_page(Page::Toolpaths, written("toolpaths")),
             "tips" => super::tips::markdown(),
             id => {
                 let (page, name) = match self.page_of(id) {
@@ -163,8 +164,19 @@ impl CutCraftApp {
                     "[Contents](help:contents) ▸ [{name}](help:{page})\n\n# {}\n\n{about}\n\n",
                     self.tool_label(id)
                 );
+                let steps = written(id);
+                if !steps.trim().is_empty() {
+                    let _ = write!(md, "{}\n\n", steps.trim_end());
+                }
+                if !fields.is_empty() {
+                    md.push_str("## Settings\n\n");
+                }
                 for (label, help) in fields {
                     let _ = writeln!(md, "- **{label}**: {help}");
+                }
+                let related = cut_craft_help::related_markdown(id, |t| self.help_title(t));
+                if !related.is_empty() {
+                    let _ = write!(md, "\n{related}");
                 }
                 md
             }

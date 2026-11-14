@@ -1,0 +1,40 @@
+#!/bin/bash
+# Tests for scripts/help-touched: scripts/test-help-touched (CI runs it on each pull request).
+set -uo pipefail
+cd "$(dirname "$0")"
+failed=0
+expect() { # expect pass|fail "why" path...
+  local want=$1 why=$2 got
+  shift 2
+  if printf '%s\n' "$@" | ./help-touched --files >/dev/null 2>&1; then got=pass; else got=fail; fi
+  if [[ $got != "$want" ]]; then
+    echo "FAIL: $why: got $got, want $want"
+    failed=1
+  fi
+}
+
+expect pass "nothing changed" ""
+expect pass "docs only" README.md docs/tool-inventory.md
+expect fail "a tool changed alone" crates/commands/pocket-toolpath/src/lib.rs
+expect pass "a tool and its page" crates/commands/pocket-toolpath/src/lib.rs \
+  crates/help/pages/tools/pocket_toolpath.md
+expect fail "a tool and another tool's page" crates/commands/pocket-toolpath/src/lib.rs \
+  crates/help/pages/tools/profile_toolpath.md
+expect fail "a crate of several tools needs every page" crates/commands/draw-text/src/lib.rs \
+  crates/help/pages/tools/draw_text.md
+expect pass "tests only" crates/commands/pocket-toolpath/src/tests.rs \
+  crates/commands/pocket-toolpath/tests/cut.rs crates/app/src/app/tests.rs
+expect pass "Cargo and build files" crates/commands/pocket-toolpath/Cargo.toml crates/app/build.rs
+expect fail "app code with no page" crates/app/src/app/help.rs
+expect pass "app code and some page" crates/app/src/app/help.rs crates/help/pages/contents.md
+expect pass "the help crate itself" crates/help/src/lib.rs
+expect pass "a removed command" crates/commands/no-such-tool/src/lib.rs
+
+ids=$(grep -oP "const ID: &'static str = \"\K[^\"]+" ../crates/commands/draw-text/src/lib.rs)
+pages=()
+for id in $ids; do pages+=("crates/help/pages/tools/$id.md"); done
+expect pass "a crate of several tools with every page" crates/commands/draw-text/src/lib.rs \
+  "${pages[@]}"
+
+if ((failed)); then exit 1; fi
+echo "help-touched: all tests pass"

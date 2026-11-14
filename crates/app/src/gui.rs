@@ -759,6 +759,12 @@ mod abouts {
     include!(concat!(env!("OUT_DIR"), "/abouts.rs"));
 }
 
+/// Every command a crate under `crates/commands` makes, by id.
+#[cfg(test)]
+pub fn command_ids() -> impl Iterator<Item = &'static str> {
+    abouts::ABOUTS.iter().map(|(id, _)| *id)
+}
+
 /// What command `id` does (its crate's first sentence), for its tooltip and the status bar.
 pub fn about(id: &str) -> Option<&'static str> {
     // the hints first: a crate holding several commands says one thing for all of them

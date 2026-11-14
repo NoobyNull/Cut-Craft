@@ -12,6 +12,7 @@ cut-craft-vtdb = { path = "../vtdb" }
 cut-craft-tool-database = { path = "../tool-database" }
 cut-craft-bug-report = { path = "../bug-report" }
 # Help ▸ Check for Updates
+cut-craft-help.workspace = true
 cut-craft-updater = { path = "../updater" }
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
