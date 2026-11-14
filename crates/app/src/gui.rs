@@ -2308,6 +2308,7 @@ impl MenuSystem {
                     "Help",
                     vec![
                         i("Help Contents"),
+                        MenuItem::with_action("Did You Know?...", "did_you_know"),
                         i("Keyboard Shortcuts"),
                         i("Third Party Licenses"),
                         sub(
