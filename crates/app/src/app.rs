@@ -3,6 +3,7 @@
 
 mod actions;
 mod background;
+mod commit;
 mod cutting;
 mod depth;
 mod draw3d;
@@ -1604,7 +1605,8 @@ fn summary_table(
     ui.separator();
     ui.label(format!("Notes for {}", picked.name));
     ui.add(egui::TextEdit::multiline(&mut summary.notes).desired_rows(3));
-    ui.button("Apply")
+    ui.button("Save Notes")
+        .on_hover_hint("Keep these notes with the toolpath")
         .clicked()
         .then(|| (picked.id, summary.notes.clone()))
 }

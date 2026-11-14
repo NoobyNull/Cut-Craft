@@ -297,7 +297,7 @@ fn the_rail_layout_lists_a_groups_tools_by_name() {
         h.text_at("Draw Circle").is_some(),
         "the form in the inspector"
     );
-    assert!(h.text_at("Apply").is_some());
+    assert!(h.text_at("Create").is_some());
 }
 
 #[test]
@@ -7617,7 +7617,10 @@ fn the_toolpath_summary_keeps_notes_per_toolpath_and_shows_the_rapid_rate_in_its
     assert_eq!(h.app.summary.picked, Some(id));
     h.app.summary.notes = "Use the 1/4 in downcut".into();
     h.frame(vec![]);
-    let apply = *h.texts_at("Apply").last().expect("the notes have Apply");
+    let apply = *h
+        .texts_at("Save Notes")
+        .last()
+        .expect("the notes have Save Notes");
     h.click(apply, Modifiers::NONE);
     assert_eq!(
         h.app.doc.toolpaths[&id].summary_notes(),
@@ -10372,7 +10375,7 @@ fn a_cut_deeper_than_the_material_asks_first() {
     let mut h = profile_form();
     let thickness = h.app.doc.job.thickness;
     let calculate = |h: &mut Harness| {
-        let apply = h.text_at("Apply").or_else(|| h.text_at("Calculate"));
+        let apply = h.text_at("Calculate");
         h.click(apply.expect("the form's button"), Modifiers::NONE);
         h.frame(vec![]);
         h.frame(vec![]);
@@ -10417,8 +10420,8 @@ fn a_cut_deeper_than_the_material_asks_first() {
 #[test]
 fn a_long_forms_apply_button_and_error_stay_in_sight() {
     let mut h = profile_form();
-    let apply = h.text_at("Apply").expect("Apply");
-    assert!(apply.y < 800.0, "Apply is in the window: {apply:?}");
+    let apply = h.text_at("Calculate").expect("Calculate");
+    assert!(apply.y < 800.0, "Calculate is in the window: {apply:?}");
     assert!(
         h.text_at("Add ramps to toolpath").is_none(),
         "the form runs on out of sight, under the pinned buttons"
@@ -10429,7 +10432,7 @@ fn a_long_forms_apply_button_and_error_stay_in_sight() {
     let error = h
         .text_at("select the vectors to profile")
         .expect("the error");
-    let apply = h.text_at("Apply").unwrap();
+    let apply = h.text_at("Calculate").unwrap();
     assert!(
         error.y < apply.y && error.y > 600.0,
         "{error:?} over {apply:?}"
@@ -10439,7 +10442,7 @@ fn a_long_forms_apply_button_and_error_stay_in_sight() {
 /// Wheels the form under `over` down until `text` sits clear of the buttons pinned at its
 /// foot, and gives where it is.
 fn scroll_above_foot(h: &mut Harness, over: Pos2, text: &str) -> Pos2 {
-    let apply = h.text_at("Apply").expect("the form's buttons");
+    let apply = h.text_at("Close").expect("the form's buttons");
     for _ in 0..40 {
         if let Some(at) = h.text_at(text).filter(|at| at.y < apply.y - 80.0) {
             return at;
@@ -12132,4 +12135,104 @@ fn the_chamfer_form_says_when_it_goes_deeper_than_the_v() {
         "{line:?}"
     );
     assert!(line.text().contains("the cut is 8.0 mm"), "{line:?}");
+}
+
+/// A drawing tool's form offers Create until its shape is drawn; then the shape follows the
+/// form, so there is nothing to press, and New Shape lets it go to type another.
+#[test]
+fn a_drawing_tools_form_creates_until_its_shape_is_drawn() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    assert!(h.text_at("Create").is_some(), "Create, with nothing drawn");
+    assert!(h.text_at("Apply").is_none());
+    let (from, to) = (h.at(100.0, 100.0), h.at(140.0, 100.0));
+    h.drag(from, to);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    assert!(h.text_at("Create").is_none(), "drawn: it follows the form");
+    assert!(h.text_at("Apply").is_none());
+    assert!(h.text_at("Close").is_some() && h.text_at("Cancel").is_some());
+    assert!(
+        h.text_at(commit::live_note("draw_circle", true)).is_some(),
+        "says why there is no button"
+    );
+    let new = h.text_at("New Shape").expect("a way to type another");
+    h.click(new, Modifiers::NONE);
+    h.frame(vec![]);
+    let create = h.text_at("Create").expect("Create again");
+    h.click(create, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.doc.vectors.len(),
+        2,
+        "a second circle, the first kept"
+    );
+}
+
+/// A circle selected as Draw Circle opens is loaded into the form, and changing the form
+/// changes that circle: no second circle, no button to press.
+#[test]
+fn a_selected_shape_opens_in_its_drawing_tool_and_follows_the_form() {
+    let mut h = Harness::new();
+    let circle = serde_json::json!({ "center": { "x": 50.0, "y": 50.0 }, "radius": 10.0 });
+    h.app.apply("draw_circle", &circle).unwrap();
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    assert!(h.app.doc.selection.contains(&id));
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.drawn, Some(id), "the form edits the selected circle");
+    assert_eq!(form.params["radius"].as_f64(), Some(10.0));
+    assert!(h.text_at("Create").is_none() && h.text_at("Apply").is_none());
+    let form = h.app.form.as_mut().unwrap();
+    form.params["radius"] = Value::from(20.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.vectors.len(), 1, "the same circle, not another");
+    let width = h.app.doc.vectors.values().next().unwrap().bounds().size().x;
+    assert!((width - 40.0).abs() < 1e-6, "{width}");
+    // a rectangle is not Draw Circle's: it opens on new settings
+    h.app.invoke(&h.ctx, "undo");
+    h.app.form = None;
+    h.app.doc.selection.clear();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().unwrap().drawn, None);
+}
+
+/// Tools used only on the canvas have nothing to press: Vector Trim's Apply used to trim
+/// at 0,0.
+#[test]
+fn canvas_only_tools_have_no_commit_button() {
+    let mut h = Harness::new();
+    h.rectangle(-10.0, -10.0, 20.0, 20.0);
+    let before = h.app.doc.vectors.len();
+    for id in ["interactive_vector_trim", "draw_freehand"] {
+        h.app.invoke(&h.ctx, id);
+        h.frame(vec![]);
+        for label in ["Apply", "Create", "Calculate"] {
+            assert!(h.text_at(label).is_none(), "{id}: {label}");
+        }
+        assert!(h.text_at("Close").is_some(), "{id}");
+        assert!(h.text_at(commit::live_note(id, true)).is_some(), "{id}");
+        h.app.form = None;
+    }
+    assert_eq!(h.app.doc.vectors.len(), before, "nothing trimmed or drawn");
+}
+
+#[test]
+fn toolpath_forms_calculate_and_selection_tools_apply() {
+    let mut h = profile_form();
+    assert!(h.text_at("Calculate").is_some());
+    assert!(h.text_at("Apply").is_none());
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "offset_vectors");
+    h.frame(vec![]);
+    assert!(h.text_at("Apply").is_some());
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "circular_copy");
+    h.frame(vec![]);
+    assert!(h.text_at("Create").is_some());
 }
