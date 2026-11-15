@@ -1086,7 +1086,9 @@ impl PostManager {
                     let picked = self.picked.clone();
                     let select = ui
                         .add_enabled(picked.is_some(), egui::Button::new("Select"))
-                        .on_hover_hint("Use it with the active machine");
+                        .on_hover_hint(
+                            "Make it the post the active machine saves toolpaths through",
+                        );
                     if select.clicked()
                         && let Some(name) = picked
                     {

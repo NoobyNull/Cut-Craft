@@ -13470,3 +13470,26 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_the_jobs_toolpaths_too() {
             .any(|t| t.tool.name == "6 mm End Mill")
     );
 }
+
+#[test]
+fn selecting_a_post_makes_it_the_one_the_machine_saves_through() {
+    let mut h = Harness::new();
+    h.app.machines.add();
+    let first = cut_craft_post::Post::parse(cut_craft_post::BUILT_IN[0].1)
+        .unwrap()
+        .name;
+    let second = cut_craft_post::Post::parse(cut_craft_post::BUILT_IN[1].1)
+        .unwrap()
+        .name;
+    h.app.machines.active_mut().unwrap().posts = vec![first.clone()];
+    h.app
+        .post_outcome(cut_craft_machines::PostOutcome::Select(second.clone()));
+    let machine = h.app.machines.active().unwrap();
+    assert_eq!(machine.post(), Some(second.as_str()));
+    assert!(machine.posts.contains(&first), "the others stay listed");
+    assert!(
+        h.app.status.message.contains("now saves through"),
+        "{}",
+        h.app.status.message
+    );
+}

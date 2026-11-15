@@ -2005,7 +2005,9 @@ impl CutCraftApp {
                 if !machine.posts.contains(&name) {
                     machine.posts.push(name.clone());
                 }
-                let done = format!("{} can save through {name}", machine.name);
+                // the post picked is the one toolpaths save through from now on
+                machine.default_post = Some(name.clone());
+                let done = format!("{} now saves through {name}", machine.name);
                 if self.machine_window.is_some() {
                     self.status
                         .set_message(&format!("{done} once Machine Configuration is applied"));
