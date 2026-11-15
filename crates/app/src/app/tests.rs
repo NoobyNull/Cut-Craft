@@ -2510,6 +2510,31 @@ fn right_clicking_a_guide_or_a_node_opens_its_own_menu() {
 }
 
 #[test]
+fn right_clicking_a_vector_picks_it_unless_it_is_already_selected() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.rectangle(100.0, 10.0, 40.0, 40.0);
+    let ids: Vec<_> = h.app.doc.vectors.keys().copied().collect();
+    h.app.doc.selection = [ids[0]].into();
+    // on the edge of the other one: it is picked, so the menu's Delete acts on it
+    h.right_click(h.at(100.0, 30.0));
+    assert_eq!(h.app.doc.selection, [ids[1]].into());
+    let delete = h.text_at("Delete").expect("the menu is open");
+    h.click(delete, Modifiers::NONE);
+    assert!(h.app.doc.vectors.contains_key(&ids[0]), "the other stays");
+    assert!(
+        !h.app.doc.vectors.contains_key(&ids[1]),
+        "the one clicked goes"
+    );
+    // on one of several selected: the selection is kept
+    h.rectangle(200.0, 10.0, 40.0, 40.0);
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    let all = h.app.doc.selection.clone();
+    h.right_click(h.at(200.0, 30.0));
+    assert_eq!(h.app.doc.selection, all);
+}
+
+#[test]
 fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);

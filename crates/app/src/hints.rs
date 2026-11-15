@@ -133,7 +133,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "select",
-        "Select: puts away the tool in hand, so clicking picks objects, Shift-click adds to the pick and dragging draws a box round them",
+        "Select: puts away the tool in hand, so clicking picks objects, Shift-click adds to the pick, dragging draws a box round them, and right-clicking an object picks it and opens its menu",
     ),
     (
         "transform",

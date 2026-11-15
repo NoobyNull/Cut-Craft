@@ -2694,6 +2694,15 @@ impl CutCraftApp {
         let pressed = self.menu_at;
         let guide =
             pressed.and_then(|at| self.doc.guides.iter().position(|g| g.distance(at) <= reach));
+        // the menu acts on what was right-clicked: a vector not yet selected is picked
+        // first (with its group), one already selected keeps the selection as it is
+        if canvas.response().secondary_clicked()
+            && guide.is_none()
+            && let Some(id) = pressed.and_then(|at| self.doc.pick(at, reach))
+            && !self.doc.selection.contains(&id)
+        {
+            self.select([id], false);
+        }
         let node_target = pressed
             .filter(|_| self.view_tool == Some(ViewTool::NodeEdit))
             .and_then(|at| self.node_target(at, reach));
