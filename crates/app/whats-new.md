@@ -1,4 +1,4 @@
-- Embellish: pick one style, fill with borders, new Laurel, Feathers and Chevrons, and press E to edit one
-- Set shortcuts to keys or mouse buttons in Options
-- Each form's button says what it does (Create, Calculate or Apply) and hides when changes show live
-- The 2D grid stands out from the sheet in the dark theme
+- Adaptive sweeps narrow channels end to end in D-shaped loops, and works about 15 times faster with each step shown
+- Clearing Settings (light step, Keep climb or Alternate) are saved in the job, with pictures
+- Pocket can leave a thin skim for one clean edge pass, at full depth when the flutes reach
+- Raster rows step over along the wall instead of lifting; inch arc posts no longer trip GRBL error 33

@@ -5,7 +5,7 @@
 
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
-use cut_craft_core::entry::{Loops, Turn, trochoid};
+use cut_craft_core::entry::{ClearingSettings, Loops, Turn, WayBack, trochoid};
 use cut_craft_core::geometry::Point;
 use eframe::egui::{self, Pos2, Vec2, pos2, vec2};
 use serde_json::Value;
@@ -46,10 +46,12 @@ struct Cutting {
     raster: bool,
     /// An adaptive pocket: a steady bite, spiralling out, then once round the wall
     adaptive: bool,
+    /// Raster rows and loops keep climb on a pass back (the job's Clearing Settings)
+    keep_climb: bool,
 }
 
 impl Cutting {
-    fn read(params: &Value) -> Self {
+    fn read(params: &Value, clearing: &ClearingSettings) -> Self {
         let text = |key: &str| params[key].as_str().unwrap_or_default().to_owned();
         let pocket = params.get("rings").is_some();
         let raster = pocket && text("strategy") == "raster";
@@ -64,10 +66,11 @@ impl Cutting {
             climb: text("direction") != "conventional",
             both: text("ways") == "both",
             trochoidal: text("motion") == "trochoidal" && !adaptive,
-            loops: serde_json::from_value(params["loops"].clone()).unwrap_or_default(),
+            loops: clearing.loops,
             rings: (pocket && !raster && !adaptive).then(|| text("rings")),
             raster,
             adaptive,
+            keep_climb: clearing.keeps_climb(),
         }
     }
 
@@ -120,17 +123,42 @@ impl Cutting {
                 ),
             ];
         }
+        if self.raster {
+            return vec![if self.keep_climb {
+                format!(
+                    "Every row cuts {}: the tool comes back through the row it just cut, then \
+                     steps over along the wall without lifting",
+                    cut(self.climb)
+                )
+            } else {
+                "Rows go back and forth, stepping over along the wall without lifting: \
+                 one row cuts climb, the next conventional"
+                    .to_owned()
+            }];
+        }
         let mut lines = vec![format!(
             "Pass 1: {}, {} {round}",
             cut(self.climb),
             way(self.clockwise())
         )];
-        if self.both {
+        if self.both && self.trochoidal && self.keep_climb {
+            lines.push(format!(
+                "Pass 2: back the other way, {}, its loops still turning the same way; and so on",
+                way(!self.clockwise())
+            ));
+        } else if self.both {
             lines.push(format!(
                 "Pass 2: back the other way, {}, {}; and so on",
                 cut(!self.climb),
                 way(!self.clockwise())
             ));
+        }
+        if self.raster {
+            lines.push(
+                "Rows go back and forth, stepping over along the wall without lifting: \
+                 one row cuts climb, the next conventional"
+                    .to_owned(),
+            );
         }
         if let Some(rings) = &self.rings
             && !self.trochoidal
@@ -165,6 +193,7 @@ pub(super) fn group_end(
     group: &str,
     params: &mut Value,
     units: cut_craft_core::document::Units,
+    clearing: &ClearingSettings,
 ) -> bool {
     if group == crate::form::WHICH_SIDE {
         ui.label(side_said(params["side"].as_str().unwrap_or_default()));
@@ -182,9 +211,9 @@ pub(super) fn group_end(
     let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     let row = ui.spacing().interact_size.y;
     ui.horizontal(|ui| {
-        combination(ui, &Cutting::read(params), row * SMALL_ROWS);
+        combination(ui, &Cutting::read(params, clearing), row * SMALL_ROWS);
         ui.vertical(|ui| {
-            let cutting = Cutting::read(params);
+            let cutting = Cutting::read(params, clearing);
             ui.label(cutting.headline());
             for line in cutting.told() {
                 ui.small(line);
@@ -205,7 +234,7 @@ pub(super) fn group_end(
             .open(&mut open)
             .resizable(false)
             .collapsible(false)
-            .show(ui.ctx(), |ui| window(ui, params, diameter, units));
+            .show(ui.ctx(), |ui| window(ui, params, diameter, units, clearing));
     }
     ui.data_mut(|d| d.insert_temp(id, open));
     before != *params
@@ -230,15 +259,17 @@ pub(super) fn side_said(side: &str) -> &'static str {
     }
 }
 
-/// The window's inside: the choices, the picture, then the loops when trochoidal.
+/// The window's inside: the choices, the picture, then the job's Clearing Settings, with the
+/// button that opens them, for the styles they shape.
 fn window(
     ui: &mut egui::Ui,
     params: &mut Value,
     diameter: f64,
     units: cut_craft_core::document::Units,
+    clearing: &ClearingSettings,
 ) {
     choices(ui, params);
-    let cutting = Cutting::read(params);
+    let cutting = Cutting::read(params, clearing);
     let row = ui.spacing().interact_size.y;
     ui.horizontal(|ui| {
         combination(ui, &cutting, row * LARGE_ROWS);
@@ -248,13 +279,225 @@ fn window(
             }
         });
     });
-    if cutting.trochoidal {
+    if cutting.trochoidal || cutting.adaptive || cutting.raster {
         ui.separator();
-        let mut loops = cutting.loops;
-        loops_editor(ui, &mut loops, diameter, units);
-        if loops != cutting.loops {
-            params["loops"] = serde_json::to_value(loops).expect("loops serialise");
+        ui.label(clearing_said(clearing, diameter, units));
+        if ui
+            .button("Clearing Settings…")
+            .on_hover_hint(
+                "For the whole job: the light step, the loops, and whether rows and loops \
+                 keep climb on the way back",
+            )
+            .clicked()
+        {
+            ui.data_mut(|d| d.insert_temp(clearing_window_id(), true));
         }
+    }
+}
+
+/// Set (in the context's data) to ask the app to open Clearing Settings.
+pub(super) fn clearing_window_id() -> egui::Id {
+    egui::Id::unique("clearing_settings_open")
+}
+
+/// The job's Clearing Settings in a line, for a `diameter` bit, in the job's `units`.
+fn clearing_said(
+    clearing: &ClearingSettings,
+    diameter: f64,
+    units: cut_craft_core::document::Units,
+) -> String {
+    let way_back = match clearing.way_back {
+        WayBack::KeepClimb => "keeps climb on the way back",
+        WayBack::Alternate => "alternates climb and conventional",
+    };
+    format!(
+        "This job: light step {}% ({} with this bit), {way_back}",
+        clearing.loops.step,
+        units.length(clearing.light_bite(diameter), 2)
+    )
+}
+
+/// How much of a bit's edge, in degrees, is in the material when it takes a side bite of
+/// `step` percent of its diameter.
+fn engagement(step: f64) -> f64 {
+    (1.0 - 2.0 * (step / 100.0).clamp(0.0, 1.0))
+        .acos()
+        .to_degrees()
+}
+
+/// Clearing Settings' inside: the light step with a picture of the bite, the loops with a
+/// strip of them, and the way back with a picture of rows, each with a line or two saying
+/// what it does in a space that keeps its size. Edits `clearing`.
+pub(super) fn clearing_settings(
+    ui: &mut egui::Ui,
+    clearing: &mut ClearingSettings,
+    diameter: f64,
+    units: cut_craft_core::document::Units,
+) {
+    let row = ui.spacing().interact_size.y;
+    let explain = |ui: &mut egui::Ui, text: String| {
+        ui.add_sized(
+            [row * 22.0, row * 2.6],
+            egui::Label::new(egui::RichText::new(text).weak()).wrap(),
+        );
+    };
+    ui.heading("Light Step");
+    slider(ui, &mut clearing.loops.step, 1.0..=50.0, true);
+    ui.horizontal(|ui| {
+        bite_picture(ui, clearing.loops.step);
+        ui.vertical(|ui| {
+            explain(
+                ui,
+                format!(
+                    "{}% of the bit: {} with a {} bit, about {:.0}° of its edge in the wood at \
+                     a time. Adaptive clearing takes this bite; trochoidal loops move on this \
+                     far. 5 to 15% suits most work.",
+                    clearing.loops.step,
+                    units.length(clearing.light_bite(diameter), 2),
+                    units.length(diameter, 2),
+                    engagement(clearing.loops.step)
+                ),
+            );
+        });
+    });
+    ui.separator();
+    ui.heading("Trochoidal Loops");
+    egui::Grid::new("clearing_loops")
+        .num_columns(2)
+        .show(ui, |ui| {
+            ui.label("Loop Width")
+                .on_hover_hint("How wide each loop is, of the tool's diameter");
+            slider(ui, &mut clearing.loops.width, 10.0..=400.0, false);
+            ui.end_row();
+            ui.label("Loops Turn");
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut clearing.loops.turn,
+                    Turn::Anticlockwise,
+                    "Anticlockwise",
+                )
+                .on_hover_hint("Each loop cuts climb");
+                ui.radio_value(&mut clearing.loops.turn, Turn::Clockwise, "Clockwise")
+                    .on_hover_hint("Each loop cuts conventional");
+            });
+            ui.end_row();
+        });
+    let (radius, advance) = clearing.loops.sized(diameter);
+    ui.weak(loops_said(radius, advance, diameter, units));
+    loops_strip(
+        ui,
+        radius,
+        advance,
+        diameter,
+        clearing.loops.turn == Turn::Anticlockwise,
+    );
+    ui.separator();
+    ui.heading("On the Way Back");
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut clearing.way_back, WayBack::KeepClimb, "Keep climb")
+            .on_hover_hint("Every cut climb: a cleaner wall, a little longer");
+        ui.radio_value(&mut clearing.way_back, WayBack::Alternate, "Alternate")
+            .on_hover_hint("Back and forth, climb then conventional: quicker");
+    });
+    ui.horizontal(|ui| {
+        way_back_picture(ui, clearing.way_back);
+        explain(
+            ui,
+            match clearing.way_back {
+                WayBack::KeepClimb => {
+                    "Every raster row cuts climb: the tool comes back through the row it just \
+                     cut. Loops on a pass back keep turning the same way, so they cut climb \
+                     too. Gentler on the bit and the wall."
+                }
+                WayBack::Alternate => {
+                    "Raster rows go back and forth, one climb, the next conventional, and loops \
+                     on a pass back turn the other way. Quicker, but the wall is a little \
+                     rougher."
+                }
+            }
+            .to_owned(),
+        );
+    });
+}
+
+/// A bit (seen from above) taking a side bite `step` percent of its diameter out of the
+/// material's edge, the part of its edge in the material drawn thick, heading up the wall.
+fn bite_picture(ui: &mut egui::Ui, step: f64) {
+    let row = ui.spacing().interact_size.y;
+    let (rect, _) = ui.allocate_exact_size(vec2(row * 7.0, row * 6.0), egui::Sense::hover());
+    let visuals = ui.visuals().clone();
+    let painter = ui.painter_at(rect);
+    let r = rect.height() * 0.32;
+    #[expect(clippy::cast_possible_truncation, reason = "a place on the screen")]
+    let bite = (2.0 * f64::from(r) * (step / 100.0).clamp(0.0, 1.0)) as f32;
+    // the uncut material to the right of the wall, cut away to the left
+    let wall = rect.center().x + r * 0.2;
+    painter.rect_filled(rect, 0.0, visuals.extreme_bg_color);
+    painter.rect_filled(
+        egui::Rect::from_min_max(pos2(wall, rect.top()), rect.max),
+        0.0,
+        visuals.widgets.inactive.weak_bg_fill,
+    );
+    let centre = pos2(wall - r + bite, rect.center().y);
+    let edge = egui::Stroke::new(row / 14.0, visuals.text_color());
+    painter.circle_stroke(centre, r, edge);
+    // the edge in the material, from where it meets the wall round the right
+    let reach = ((wall - centre.x) / r).clamp(-1.0, 1.0).acos();
+    let arc: Vec<Pos2> = (0..=24u8)
+        .map(|i| {
+            let a = -reach + 2.0 * reach * f32::from(i) / 24.0;
+            centre + vec2(a.cos(), a.sin()) * r
+        })
+        .collect();
+    painter.add(egui::Shape::line(
+        arc,
+        egui::Stroke::new(row / 5.0, visuals.warn_fg_color),
+    ));
+    painter.arrow(
+        centre + vec2(0.0, r * 0.4),
+        vec2(0.0, -r * 0.8),
+        visuals.widgets.noninteractive.fg_stroke,
+    );
+}
+
+/// Four rows of a raster pocket, cut as `way_back` says: solid where the tool cuts, dashed
+/// where it comes back through a row it has cut.
+fn way_back_picture(ui: &mut egui::Ui, way_back: WayBack) {
+    let row = ui.spacing().interact_size.y;
+    let (rect, _) = ui.allocate_exact_size(vec2(row * 9.0, row * 6.0), egui::Sense::hover());
+    let visuals = ui.visuals().clone();
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 0.0, visuals.extreme_bg_color);
+    let cut = egui::Stroke::new(row / 10.0, visuals.selection.stroke.color);
+    let back = egui::Stroke::new(row / 16.0, visuals.weak_text_color());
+    let (left, right) = (rect.left() + row, rect.right() - row);
+    let rows = 4u8;
+    let gap = (rect.height() - 2.0 * row) / f32::from(rows - 1);
+    let y = |i: u8| rect.bottom() - row - gap * f32::from(i);
+    for i in 0..rows {
+        let (from, to) = match way_back {
+            WayBack::KeepClimb => (right, left),
+            WayBack::Alternate if i % 2 == 0 => (right, left),
+            WayBack::Alternate => (left, right),
+        };
+        painter.arrow(pos2(from, y(i)), vec2(to - from, 0.0), cut);
+        if i + 1 == rows {
+            break;
+        }
+        // to the next row: back through this one first, then over along the wall
+        let over_at = match way_back {
+            WayBack::KeepClimb => {
+                painter.add(egui::Shape::dashed_line(
+                    &[pos2(left, y(i) + row / 5.0), pos2(right, y(i) + row / 5.0)],
+                    back,
+                    row / 3.0,
+                    row / 5.0,
+                ));
+                right
+            }
+            WayBack::Alternate => to,
+        };
+        painter.line_segment([pos2(over_at, y(i)), pos2(over_at, y(i + 1))], cut);
     }
 }
 
@@ -320,25 +563,35 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
                 ],
             );
         }
-        choose(
-            ui,
-            params,
-            "motion",
-            "Motion",
-            &[
-                (
-                    "straight",
-                    "Straight",
-                    "Along the path, the cutter's whole side cutting",
-                ),
-                (
-                    "trochoidal",
-                    "Trochoidal",
-                    "In small loops, a sliver of the edge cutting",
-                ),
-            ],
-        );
+        // loops are for cutting along a line; a pocket clears with a light bite by Adaptive
+        // (only a pocket made in loops before keeps the choice, to change it back)
+        if params.get("side").is_some() || params["motion"] == "trochoidal" {
+            choose(
+                ui,
+                params,
+                "motion",
+                "Motion",
+                &[
+                    (
+                        "straight",
+                        "Straight",
+                        "Along the path, the cutter's whole side cutting",
+                    ),
+                    (
+                        "trochoidal",
+                        "Trochoidal",
+                        "In small loops, a sliver of the edge cutting",
+                    ),
+                ],
+            );
+        }
     });
+    if params.get("rings").is_some() && params["strategy"] != "adaptive" {
+        ui.weak(
+            "For a light bite at full depth, pick Adaptive under Clear Pocket: it does what \
+             trochoidal loops did, following the pocket's shape.",
+        );
+    }
 }
 
 /// A row of radio buttons for `params[key]`.
@@ -555,42 +808,6 @@ fn loops_said(
     )
 }
 
-/// The loops' settings over a strip of them at the cutter's size.
-fn loops_editor(
-    ui: &mut egui::Ui,
-    loops: &mut Loops,
-    diameter: f64,
-    units: cut_craft_core::document::Units,
-) {
-    egui::Grid::new("loops").num_columns(2).show(ui, |ui| {
-        ui.label("Loop Width")
-            .on_hover_hint("How wide each loop is, of the tool's diameter");
-        slider(ui, &mut loops.width, 10.0..=400.0, false);
-        ui.end_row();
-        ui.label("Loop Step")
-            .on_hover_hint("How far each loop moves on from the last, of the tool's diameter");
-        slider(ui, &mut loops.step, 1.0..=100.0, true);
-        ui.end_row();
-        ui.label("Loops Turn");
-        ui.horizontal(|ui| {
-            ui.radio_value(&mut loops.turn, Turn::Anticlockwise, "Anticlockwise")
-                .on_hover_hint("Each loop cuts climb");
-            ui.radio_value(&mut loops.turn, Turn::Clockwise, "Clockwise")
-                .on_hover_hint("Each loop cuts conventional");
-        });
-        ui.end_row();
-    });
-    let (radius, advance) = loops.sized(diameter);
-    ui.weak(loops_said(radius, advance, diameter, units));
-    loops_strip(
-        ui,
-        radius,
-        advance,
-        diameter,
-        loops.turn == Turn::Anticlockwise,
-    );
-}
-
 /// The path (a line), the loops along it, and the cutter at the last loop's start, to scale,
 /// the way on shown by an arrow.
 fn loops_strip(ui: &mut egui::Ui, radius: f64, advance: f64, diameter: f64, anticlockwise: bool) {
@@ -662,7 +879,7 @@ mod tests {
     use super::*;
 
     fn told(params: &Value) -> Vec<String> {
-        Cutting::read(params).told()
+        Cutting::read(params, &ClearingSettings::default()).told()
     }
 
     #[test]
@@ -684,7 +901,7 @@ mod tests {
             "rings": "middle_out", "strategy": "adaptive", "direction": "climb",
             "motion": "trochoidal", "ways": "both"
         });
-        let cutting = Cutting::read(&params);
+        let cutting = Cutting::read(&params, &ClearingSettings::default());
         assert!(cutting.adaptive && !cutting.trochoidal && cutting.rings.is_none());
         assert!(cutting.headline().contains("thin, steady bite"));
         let lines = cutting.told();
@@ -695,7 +912,7 @@ mod tests {
 
     #[test]
     fn the_cutting_is_said_in_plain_words_first() {
-        let said = |params: Value| Cutting::read(&params).headline();
+        let said = |params: Value| Cutting::read(&params, &ClearingSettings::default()).headline();
         assert_eq!(
             said(serde_json::json!({ "side": "outside", "direction": "climb" })),
             "Cuts round the outside of each shape, going clockwise"

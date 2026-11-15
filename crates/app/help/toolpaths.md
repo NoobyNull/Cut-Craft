@@ -24,3 +24,63 @@ to 1/2" for others) and says so under the controls. The Vectors button above the
 remembered next time. Turn off Animate Preview (the
 Toolpaths menu, Toolpath Drawing) to cut the whole preview at once, with a progress window
 you can Cancel (or press Esc).
+
+When you save toolpaths, the post processor writes them as G-code for your machine. A post
+with arcs (the Cut Craft GRBL Arcs, Mach3 Arcs and FluidNC ATC Arcs posts) turns runs of
+short lines that follow a curve into single G2 (clockwise) and G3 (anticlockwise) arc
+moves, so the file is smaller and the machine keeps its speed round curves. Each arc's two
+ends are kept the same distance from its centre to well within 0.005 mm, once rounded to
+the places the post prints, inch posts included: controllers such as GRBL stop the job
+(error 33, invalid arc target) when they are not. Pick a post without arcs (GRBL Straight,
+say) only if your controller cannot cut arcs.
+
+Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
+window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the
+job, so the job cuts the same on any computer, whatever that computer's own defaults are;
+Use as My Default makes new jobs start with them, and Reset to My Defaults puts this job
+back. Light Step is how wide a bite Adaptive clearing takes and how far each trochoidal
+loop moves on, as a share of the bit's diameter: the same share gives every bit the same
+gentle bite B (10% keeps about 37° of the edge in the wood at once; 5 to 15% suits most
+work). The window draws the bite, the loops at your bit's size, and the rows. On the Way
+Back chooses Keep climb (every raster row cuts climb, the tool coming back through the row
+it just cut, and loops on a pass back keep turning the same way, so they cut climb too) or
+Alternate (rows back and forth, climb then conventional, and loops turning the other way
+on a pass back: quicker, with a rougher wall). Changing them is an edit you can undo, and
+marks the toolpaths they shape as needing to be calculated again.
+
+![Light Step: the bit (Dia across) bites B into the wall as it goes along; B is the Light Step's share of Dia](bytes://icons/diagrams/light_step.png)
+
+A raster pocket's rows step over to the next along the wall without lifting, so the tool
+goes down into the material once per pass instead of at the start of every row.
+
+Pocket no longer offers trochoidal loops: for a light bite at full depth, pick Adaptive
+under Clear Pocket, which follows the pocket's shape and takes the Light Step. Loops stay
+on Profile, for cutting along a line. A pocket made in loops before keeps them, and its
+Cutting window still lets you change it back to straight.
+
+Adaptive sweeps a narrow channel (up to about four bit widths wide) in one trip from end to
+end, in D-shaped loops: the round front of each cuts from wall to wall, a Light Step further
+along than the last, keeping the bit in the wood at the same light bite, then it comes
+straight back across (through what the loops before cut, without lifting) to the next.
+The loops shrink where the channel narrows. The bit goes down once per channel, and the
+round fronts post as arcs instead of many short lines. The rest of the pocket, including
+each channel's ends and corners, is cleared the usual adaptive way. A tip narrower than
+the bit can't be reached by it: clear it with a smaller bit or a V-bit.
+
+![A narrow channel from above: down in the middle, out in a spiral, then D-shaped loops a Light Step apart from wall to wall](bytes://icons/diagrams/adaptive_channel.png)
+
+Adaptive works out every step the bit takes, so a big pocket can take a little while to
+calculate. The progress window says which step it is on (finding the narrow channels,
+sweeping each one, clearing the wider areas) and how far it has got; big open areas take
+longer than the rest. Cancel stops it and leaves the toolpath as it was.
+
+![Leave for Edge Pass: the clearing stops A short of the wall, then the bit goes round once at the full depth D and skims A off](bytes://icons/diagrams/edge_pass.png)
+
+Pocket's Clear Pocket section has two settings for straighter walls. Leave for Edge Pass
+(A in the picture) stops the clearing that far short of the walls, so the pass round the edge takes one thin,
+even skim instead of whatever the clearing left (0 clears right up to them). Edge Pass at
+Full Depth goes round the edge once, at the bottom, after all the clearing passes: one
+clean wall with no lines where the passes met. It needs a bit whose flutes reach the full
+depth; with shorter flutes (from the Tool Database) the edge is cut at each pass instead.
+Raster and Adaptive pockets can also leave the edge pass out (Profile Pass: None); offset
+rings always end on the edge.

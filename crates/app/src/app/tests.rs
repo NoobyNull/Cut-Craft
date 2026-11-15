@@ -8872,21 +8872,83 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     for (choice, key, value) in [
         ("Both directions", "ways", "both"),
         ("From the outline in", "rings", "outline_in"),
-        ("Trochoidal", "motion", "trochoidal"),
     ] {
         h.click(h.text_at(choice).expect(choice), Modifiers::NONE);
         h.frame(vec![]);
         assert_eq!(params(&h)[key], value, "{choice}");
     }
-    // trochoidal: the loops' settings appear, their turn set apart
-    h.frame(vec![]);
-    h.click(h.text_at("Clockwise").expect("the loops"), Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(params(&h)["loops"]["turn"], "clockwise");
-    assert!(
-        h.text_at("In loops turning clockwise: each loop cuts conventional")
-            .is_some()
+    // a pocket clears with a light bite by Adaptive, not in loops
+    assert!(h.text_at("Trochoidal").is_none());
+    h.app.form.as_mut().unwrap().params["strategy"] = "adaptive".into();
+    // adaptive: the job's Clearing Settings, a button away, set its bite and the loops
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    h.click(
+        h.text_at("Clearing Settings…").expect("the button"),
+        Modifiers::NONE,
     );
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(h.app.clearing_window);
+    h.click(h.text_at("Clockwise").expect("the loops"), Modifiers::NONE);
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert_eq!(
+        h.app.doc.job.clearing.loops.turn,
+        cut_craft_core::entry::Turn::Clockwise
+    );
+}
+
+#[test]
+fn clearing_settings_are_the_jobs_an_edit_that_undoes_and_marks_toolpaths_out_of_date() {
+    use cut_craft_core::entry::WayBack;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "clearing_settings");
+    let frames = |h: &mut Harness| {
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+    };
+    frames(&mut h);
+    assert!(h.text_at("Light Step").is_some() && h.text_at("On the Way Back").is_some());
+    h.click(
+        h.text_at("Alternate").expect("the way back"),
+        Modifiers::NONE,
+    );
+    frames(&mut h);
+    assert_eq!(h.app.doc.job.clearing.way_back, WayBack::Alternate);
+    // kept as the default for new jobs, then undone in this one
+    h.click(
+        h.text_at("Use as My Default").expect("the button"),
+        Modifiers::NONE,
+    );
+    frames(&mut h);
+    let default = |h: &Harness| h.app.options.default_job.map(|j| j.clearing.way_back);
+    assert_eq!(default(&h), Some(WayBack::Alternate));
+    h.app.invoke(&h.ctx, "undo");
+    frames(&mut h);
+    assert_eq!(h.app.doc.job.clearing.way_back, WayBack::KeepClimb);
+    // an adaptive pocket, then the job back to the default: the pocket is out of date
+    let mut params = h
+        .app
+        .registry
+        .get("pocket_toolpath")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    params["strategy"] = "adaptive".into();
+    h.app.apply("pocket_toolpath", &params).unwrap();
+    frames(&mut h);
+    h.click(
+        h.text_at("Reset to My Defaults").expect("the button"),
+        Modifiers::NONE,
+    );
+    frames(&mut h);
+    assert_eq!(h.app.doc.job.clearing.way_back, WayBack::Alternate);
+    assert!(h.app.doc.toolpaths.values().all(|t| t.stale), "out of date");
 }
 
 /// The middles of the corner arrows the last frame drew on flyout buttons.
@@ -12867,6 +12929,19 @@ fn edit_tab_with_icons() -> Harness {
     h
 }
 
+/// Where the Design page's tip box starts: the first text on the page under the Transform
+/// Objects heading, as its buttons are pictures.
+fn tip_box_top(h: &Harness, page: Rect) -> Option<i32> {
+    let heading = h.text_at("Transform Objects")?.y;
+    let tops = h.shapes.iter().filter_map(|clipped| match &clipped.shape {
+        egui::Shape::Text(t) if page.contains(t.pos) && t.pos.y > heading + 5.0 => Some(t.pos.y),
+        _ => None,
+    });
+    // whole points: the tip's own first line moves nothing
+    #[expect(clippy::cast_possible_truncation, reason = "a screen position")]
+    tops.reduce(f32::min).map(|y| y.round() as i32)
+}
+
 #[test]
 fn hovering_a_tool_button_never_rewraps_the_page() {
     // a hovered button's border is drawn a fraction of a point thicker: when that tipped a
@@ -12877,9 +12952,17 @@ fn hovering_a_tool_button_never_rewraps_the_page() {
         .text_at("Join and Close")
         .expect("the Join and Close box")
         .y;
-    let bottom = h.text_at("Transform Objects").expect("its heading").y;
+    // down to the Transform Objects row too, the last on the tab
+    let bottom = h.text_at("Transform Objects").expect("its heading").y + 70.0;
     let page = h.app.page_rects[0].expect("the Design page");
-    let settled = |h: &Harness| (h.text_at("Combine Shapes"), h.text_at("Transform Objects"));
+    // the tip box's top edge, under the last row of buttons, moves if any row rewraps
+    let settled = |h: &Harness| {
+        (
+            h.text_at("Combine Shapes"),
+            h.text_at("Transform Objects"),
+            tip_box_top(h, page),
+        )
+    };
     let still = settled(&h);
     let mut y = top;
     while y < bottom {
@@ -12901,4 +12984,58 @@ fn hovering_a_tool_button_never_rewraps_the_page() {
         }
         y += 12.0;
     }
+}
+
+#[test]
+fn every_picture_in_the_help_is_in_the_icon_set() {
+    let known = icon_set();
+    let h = Harness::new();
+    let mut pictures = vec![];
+    for topic in h.app.help_topics() {
+        let md = h.app.help_markdown(topic);
+        let mut at = md.as_str();
+        while let Some(i) = at.find("](bytes://icons/") {
+            let after = &at[i + "](bytes://icons/".len()..];
+            let end = after.find(')').expect("a picture's link ends");
+            pictures.push(after[..end].to_owned());
+            at = &after[end..];
+        }
+    }
+    for p in &pictures {
+        assert!(
+            known.contains(p),
+            "{p} is not in assets/icons: run scripts/build-icons"
+        );
+    }
+    // the clearing pictures: the light step's bite, the edge pass, a channel's loops
+    for p in [
+        "diagrams/light_step.png",
+        "diagrams/edge_pass.png",
+        "diagrams/adaptive_channel.png",
+    ] {
+        assert!(pictures.iter().any(|q| q == p), "the help shows {p}");
+    }
+}
+
+#[test]
+fn the_pockets_clearing_settings_have_their_picture() {
+    fn find<'a>(fields: &'a [form::Field], key: &str) -> Option<&'a form::Field> {
+        fields.iter().find_map(|f| {
+            if f.key == key {
+                return Some(f);
+            }
+            match &f.kind {
+                form::Kind::Group(inner) => find(inner, key),
+                _ => None,
+            }
+        })
+    }
+    let pocket = commands::registry()
+        .get("pocket_toolpath")
+        .expect("pocket")
+        .schema();
+    let fields = form::fields(&pocket);
+    let edge = find(&fields, "edge_allowance").expect("Leave for Edge Pass");
+    assert_eq!(edge.diagram.as_deref(), Some("diagrams/edge_pass.png"));
+    assert_eq!(edge.dim.as_deref(), Some("A"));
 }

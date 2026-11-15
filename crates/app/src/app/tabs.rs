@@ -27,6 +27,8 @@ pub(super) struct Stock {
     pub units: Units,
     /// The active machine's bed size, mm (0 when not known), for flattening the spoilboard.
     pub bed: [f64; 2],
+    /// The job's Clearing Settings, said in the Cutting window.
+    pub clearing: cut_craft_core::entry::ClearingSettings,
 }
 
 /// How close to the material's bottom a cut must reach to count as right through, mm.
@@ -151,7 +153,7 @@ pub(super) fn group_end(
             ui.data_mut(|d| d.insert_temp(window_id(), true));
         }
     }
-    changed |= super::cutting::group_end(ui, group, params, stock.units);
+    changed |= super::cutting::group_end(ui, group, params, stock.units, &stock.clearing);
     changed |= super::entry::group_end(ui, group, params, stock.units);
     changed | super::surfacing::group_end(ui, group, params, stock)
 }

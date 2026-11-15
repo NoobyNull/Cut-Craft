@@ -157,6 +157,8 @@ impl CutCraftApp {
             snap_window: false,
             job_sheet_window: false,
             part_labels_window: false,
+            clearing_window: false,
+            clearing_before: None,
             stl_window: false,
             stl_result: None,
             layers_on_sheet: false,
@@ -580,6 +582,7 @@ impl CutCraftApp {
             }
             "job_sheet_editor" => self.job_sheet_window = true,
             "part_labels" => self.part_labels_window = true,
+            "clearing_settings" => self.clearing_window = true,
             "create_job_sheet" => self.create_job_sheet(),
             "print_job_sheet" => self.print_job_sheet(),
             "edit_object" => {
@@ -5724,6 +5727,7 @@ fn form_stock(
             .any(|id| doc.vectors.get(id).is_some_and(|v| v.closed)),
         units,
         bed,
+        clearing: doc.job.clearing,
     }
 }
 

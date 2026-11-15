@@ -1189,6 +1189,68 @@ DIAGRAMS[dg + "height_base.svg"] = lambda: [
     line(18, 48, 28, 48, ACC, 2, GUIDE), label("H2", 4, 40)]
 
 
+
+# ---- the clearing pictures (Clear Pocket's edge pass, and the help's Clearing pages) -----
+# the clearing stops A short of the wall (dashed, where the wall ends up), then the bit goes
+# round once at the full depth and skims A off in one even cut: drawn on the left, still to
+# come on the right
+DIAGRAMS[dg + "edge_pass.svg"] = lambda: [
+    section([(X0, TOP), (30, TOP), (30, 34), (74, 34), (74, TOP), (X1, TOP)]),
+    rect(74, TOP, 8, 34 - TOP, 0, ACC, 2, "#f7d3a8"), bit("end_mill", 35, 0, 34, 5),
+    line(74, 3, 74, TOP - 1, ACC, 2, GUIDE), line(82, 3, 82, TOP - 1, ACC, 2, GUIDE),
+    darrow(74, 5, 82, 5, ACC, 2, 3), label("A", 85, 1), dim_right(TOP, 34, "D", reach=X1)]
+
+
+def light_step():
+    """The bit from above taking a bite B of its diameter out of the wall as it goes along."""
+    r, wall, b = 18, 62, 7
+    cx, cy = wall - r + b, 30
+    h = math.sqrt(r * r - (r - b) ** 2)
+    return [rect(wall, 12, 104 - wall, 40, 0, WOODD, 2, WOOD),
+            path(f"M{wall},{cy - h:.2f} A{r},{r} 0 0 1 {wall},{cy + h:.2f} Z", ACC, 2, "#f7d3a8"),
+            circ(cx, cy, r, INK, 2.5), dot(cx, cy, 2, GREY), arrow(cx, cy + 8, cx, cy - 10, TP, 2, 4),
+            line(wall, 4, wall, cy - h - 1, ACC, 2, GUIDE), line(cx + r, 4, cx + r, cy - r - 1, ACC, 2, GUIDE),
+            darrow(wall, 6, cx + r, 6, ACC, 2, 2.5), label("B", cx + r + 4, 2),
+            darrow(cx - r, 52, cx + r, 52, ACC, 2, 3), label("Dia", cx - r - 20, 47)]
+
+
+DIAGRAMS[dg + "light_step.svg"] = light_step
+
+
+def channel_loops():
+    """A narrow channel from above, swept in one trip: down in the middle, out in a spiral,
+    then D-shaped loops a light step apart, each a half circle from wall to wall and straight
+    back, the bit (grey) on one of them."""
+    top, bottom, x0, x1 = 12, 44, 8, 104
+    cy, bit_r = (top + bottom) / 2, 5
+    room = (bottom - top) / 2 - bit_r
+    pts = [(24, cy)]
+    turns, n = 3, 24
+    for k in range(1, turns * n + 1):
+        f = k / (turns * n)
+        a = math.pi / 2 + 2 * math.pi * turns * (f - 1)
+        pts.append((24 + room * f * math.cos(a), cy + room * f * math.sin(a)))
+    x, step, back = 24, 6, 0.15 * room
+    while x + step <= 92:
+        x += step
+        pts.append((x, cy + room))
+        # the front half: from this wall round to the far one
+        pts += [(x + room * math.cos(math.pi / 2 - math.pi * k / 16),
+                 cy + room * math.sin(math.pi / 2 - math.pi * k / 16)) for k in range(1, 17)]
+        # straight back across, round corners at each wall
+        c1 = (x - 0 + 0, cy - room + back)
+        pts += [(c1[0] - back * math.sin(math.pi / 2 * k / 4), c1[1] - back * math.cos(math.pi / 2 * k / 4))
+                for k in range(1, 5)]
+        c2 = (x, cy + room - back)
+        pts += [(c2[0] - back * math.cos(math.pi / 2 * k / 4), c2[1] + back * math.sin(math.pi / 2 * k / 4))
+                for k in range(1, 5)]
+    return [rect(x0, 2, x1 - x0, top - 2, 0, WOODD, 2, WOOD), rect(x0, bottom, x1 - x0, 54 - bottom, 0, WOODD, 2, WOOD),
+            pl([(round(px, 2), round(py, 2)) for px, py in pts], TP, 1.5),
+            circ(66, cy + room, bit_r, GREY, 2), arrow(70, 6, 100, 6, ACC, 2, 4)]
+
+
+DIAGRAMS[dg + "adaptive_channel.svg"] = channel_loops
+
 # ---- the Did You Know? tips' illustrations -----------------------------------------------
 # The same 112 x 56 as the measurement pictures and the same parts (the ink, the orange on
 # what the tip is about, green toolpaths, wood), but a little scene each: what the tip says,
