@@ -45,7 +45,8 @@ pub fn help() -> String {
     format!(
         "{}\n\nUsage: cut-craft [OPTION | FILE]\n\n  \
          (nothing)            open Cut Craft\n  \
-         FILE                 open Cut Craft with FILE (a job opens, a drawing is imported)\n  \
+         FILE                 open Cut Craft with FILE (a job opens; a drawing is imported\n  \
+                              into a new job, made with Job Setup)\n  \
          -V, --version        print the version and stop\n  \
          -h, --help           print this and stop\n  \
          --screenshots [DIR]  save the README's pictures in DIR (docs/screenshots)\n",

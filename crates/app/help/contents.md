@@ -53,8 +53,9 @@ A number field takes a sum as well as a number, worked out when it is entered:
   already there, it asks before replacing it. The same goes for exports, templates and
   other saved files.
 - Opening a file with Cut Craft from your file manager (**Open With**, or dragging it onto
-  Cut Craft's icon) starts Cut Craft with it: a job opens, a drawing or picture is
-  imported into the open job, just as when you drop it on the window.
+  Cut Craft's icon) starts Cut Craft with it. A job opens. A drawing or picture starts a
+  new job: set up the material in **Job Setup**, and **OK** makes the job and imports the
+  file into it (**Cancel** goes back to the start page without it).
 - A job that will not open says why. **Damaged** means the file was cut short or broken,
   often by a copy or cloud sync that did not finish: open a backup or an earlier copy.
   **Saved by a newer version** means Cut Craft needs updating first (**Help ▸ Check for

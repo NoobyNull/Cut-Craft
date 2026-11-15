@@ -13870,3 +13870,47 @@ fn a_file_named_on_the_command_line_opens_at_startup() {
     assert_eq!(h.app.screen, Screen::Start);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn a_drawing_named_on_the_command_line_goes_through_job_setup_into_a_new_job() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-argv-svg-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let svg = dir.join("square.svg");
+    std::fs::write(
+        &svg,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="20mm" viewBox="0 0 20 20"><rect x="0" y="0" width="20" height="20"/></svg>"#,
+    )
+    .unwrap();
+    let mut h = Harness::at_start();
+    h.app.open_given(Some(&svg));
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.screen,
+        Screen::NewJob,
+        "Job Setup for the job to hold it"
+    );
+    assert!(
+        h.app.status.message.contains("square.svg"),
+        "{}",
+        h.app.status.message
+    );
+    h.app.job_setup_ok();
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.app.screen, Screen::Job);
+    assert!(!h.app.doc.vectors.is_empty(), "the drawing came in");
+    // Cancel in Job Setup: back to the start page, nothing imported later
+    let mut h = Harness::at_start();
+    h.app.open_given(Some(&svg));
+    h.app.job_setup_cancel();
+    assert_eq!(h.app.screen, Screen::Start);
+    h.app.invoke(&h.ctx, "new");
+    h.frame(vec![]);
+    h.app.job_setup_ok();
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    assert!(h.app.doc.vectors.is_empty(), "the cancelled file stays out");
+    std::fs::remove_dir_all(&dir).unwrap();
+}

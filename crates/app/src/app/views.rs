@@ -20,6 +20,13 @@ use cut_craft_core::snap::Snap;
 /// Where a crash log is kept when the person chose not to send crash logs.
 const LAST_CRASH: &str = "last-crash.log";
 
+/// The extensions of the files that, dropped or opened with Cut Craft, open as a job.
+const DROPPED_JOBS: [&str; 3] = [
+    JOB_EXTENSION,
+    OLD_JOB_EXTENSION,
+    cut_craft_core::file::TEMPLATE_EXTENSION,
+];
+
 /// How far beyond the selection's corners its rotation handles sit, in pick reaches.
 const ROTATE_OUT: f64 = 2.5;
 
@@ -182,19 +189,25 @@ impl CutCraftApp {
         }
     }
 
+    /// Whether dropping `path` imports it into the job (it is not a job, a post-processor or
+    /// a tool database).
+    pub(super) fn drop_imports(path: &std::path::Path) -> bool {
+        let ext = path
+            .extension()
+            .map_or_default(|e| e.to_string_lossy().to_lowercase());
+        !(DROPPED_JOBS.contains(&ext.as_str())
+            || ext == "pp"
+            || (files::TOOL_FILE_EXTENSIONS.contains(&ext.as_str()) && ext != "json"))
+    }
+
     /// One dropped file: a job opens; a post-processor installs; a tool database's tools are
     /// added; anything else is imported into the open job.
     pub(super) fn drop_file(&mut self, path: &std::path::Path) {
         let ext = path
             .extension()
             .map_or_default(|e| e.to_string_lossy().to_lowercase());
-        let job = [
-            JOB_EXTENSION,
-            OLD_JOB_EXTENSION,
-            cut_craft_core::file::TEMPLATE_EXTENSION,
-        ];
         match ext.as_str() {
-            e if job.contains(&e) => {
+            e if DROPPED_JOBS.contains(&e) => {
                 if self.confirm_discard() {
                     self.open_path(path);
                 }

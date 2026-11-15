@@ -1386,6 +1386,9 @@ struct CutCraftApp {
     /// Files from the Library waiting to be added, one after another, each with the level
     /// Add to Level puts it on.
     import_queue: std::collections::VecDeque<(std::path::PathBuf, Option<crate::clipart::ToLevel>)>,
+    /// A drawing or picture Cut Craft was started with (Open With) while no job was open:
+    /// imported once Job Setup's OK has made the job to hold it.
+    import_after_setup: Option<std::path::PathBuf>,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
     recent_path: Option<std::path::PathBuf>,
     /// Where unsaved work is copied (as often as Options says) for the next run to recover;

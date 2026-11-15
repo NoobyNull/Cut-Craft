@@ -235,6 +235,7 @@ impl CutCraftApp {
             split: None,
             clipart: crate::clipart::Clipart::default(),
             import_queue: std::collections::VecDeque::new(),
+            import_after_setup: None,
             recent_path: None,
             recovery_path: None,
             recovery_lock: None,
@@ -2393,10 +2394,24 @@ impl CutCraftApp {
     }
 
     /// A file named on the command line (Open With, or dragged onto the launcher), handled
-    /// as if dropped on the window: a job opens, a drawing is imported, and so on.
+    /// much as if dropped on the window: a job opens; a drawing or picture is imported into
+    /// the open job or, with none open (the start page), into a new one once Job Setup's OK
+    /// has made it.
     pub(super) fn open_given(&mut self, path: Option<&std::path::Path>) {
-        if let Some(path) = path {
+        let Some(path) = path else {
+            return;
+        };
+        if self.screen == Screen::Job || !Self::drop_imports(path) {
             self.drop_file(path);
+            return;
+        }
+        self.file_action("new");
+        if self.screen == Screen::NewJob {
+            self.import_after_setup = Some(path.to_owned());
+            self.status.set_message(&format!(
+                "Set up the material, then OK makes the job and imports {} into it",
+                file_name(path)
+            ));
         }
     }
 
@@ -2512,6 +2527,9 @@ impl CutCraftApp {
                 self.screen = Screen::Job;
                 self.status.set_message("New job created");
                 "Select".clone_into(&mut self.status.current_tool);
+                if let Some(path) = self.import_after_setup.take() {
+                    self.import_file(&path);
+                }
             }
             Err(e) => {
                 form.error = Some(e);
@@ -2521,6 +2539,7 @@ impl CutCraftApp {
     }
 
     pub(super) fn job_setup_cancel(&mut self) {
+        self.import_after_setup = None;
         self.reset_job();
         "Select".clone_into(&mut self.status.current_tool);
         self.screen = Screen::Start;
