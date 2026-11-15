@@ -41,7 +41,21 @@ fn jobs_from_a_newer_version_are_refused_with_a_reason() {
     assert_eq!(err, LoadError::NewerVersion(99));
     assert_eq!(
         err.to_string(),
-        "this job was saved by a newer version (format 99; this build reads up to 1)"
+        "this job was saved by a newer version of Cut Craft (format 99; this build reads up \
+         to 1). Update Cut Craft (Help ▸ Check for Updates) to open it"
+    );
+}
+
+#[test]
+fn a_job_cut_short_is_damaged_not_another_kind_of_file() {
+    let whole = save_job(&sample_document());
+    let cut_short = &whole[..whole.len() / 2];
+    let err = load_job(cut_short).unwrap_err();
+    assert!(matches!(err, LoadError::Damaged(_)), "{err:?}");
+    let told = err.to_string();
+    assert!(
+        told.contains("damaged") && told.contains("backup"),
+        "says what to do: {told}"
     );
 }
 

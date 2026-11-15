@@ -72,10 +72,15 @@ impl fmt::Display for LoadError {
             Self::NewerVersion(v) => {
                 write!(
                     f,
-                    "this job was saved by a newer version (format {v}; this build reads up to {VERSION})"
+                    "this job was saved by a newer version of Cut Craft (format {v}; this build \
+                     reads up to {VERSION}). Update Cut Craft (Help ▸ Check for Updates) to open it"
                 )
             }
-            Self::Damaged(why) => write!(f, "the job file is damaged: {why}"),
+            Self::Damaged(why) => write!(
+                f,
+                "the job file is damaged ({why}). It may have been cut short while being copied \
+                 or synced: open a backup or an earlier copy of it if you have one"
+            ),
         }
     }
 }
@@ -111,8 +116,24 @@ pub fn save_job(doc: &Document) -> Vec<u8> {
     .expect("documents always serialize")
 }
 
+/// Whether `bytes` start like a job file: JSON naming the job format near its start, even
+/// if what follows is cut short or broken.
+fn looks_like_a_job(bytes: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(&bytes[..bytes.len().min(256)]);
+    text.trim_start().starts_with('{')
+        && [FORMAT, OLD_FORMAT]
+            .iter()
+            .any(|f| text.contains(&format!("\"{f}\"")))
+}
+
 pub fn load_job(bytes: &[u8]) -> Result<Document, LoadError> {
-    let header: Header = serde_json::from_slice(bytes).map_err(|_| LoadError::NotAJob)?;
+    let header: Header = serde_json::from_slice(bytes).map_err(|e| {
+        if looks_like_a_job(bytes) {
+            LoadError::Damaged(e.to_string())
+        } else {
+            LoadError::NotAJob
+        }
+    })?;
     if header.format != FORMAT && header.format != OLD_FORMAT {
         return Err(LoadError::NotAJob);
     }
