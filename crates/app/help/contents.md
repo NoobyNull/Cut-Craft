@@ -52,6 +52,9 @@ A number field takes a sum as well as a number, worked out when it is entered:
   `plaque v1.2.ccjob`. When Cut Craft adds the extension for you and a file of that name is
   already there, it asks before replacing it. The same goes for exports, templates and
   other saved files.
+- Unsaved work is copied for recovery every 30 seconds (Edit ▸ Options ▸ General). If
+  Cut Craft closes without saving, it opens that work again next time it starts. Each open
+  window keeps its own copy: a second Cut Craft window does not take the first one's work.
 
 ## Updates
 

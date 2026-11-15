@@ -1391,6 +1391,9 @@ struct CutCraftApp {
     /// Where unsaved work is copied (as often as Options says) for the next run to recover;
     /// `None` keeps no copy (tests).
     recovery_path: Option<std::path::PathBuf>,
+    /// Held while this run lasts: marks `recovery_path` as this window's, so another window
+    /// does not take it for a crash's.
+    recovery_lock: Option<std::fs::File>,
     /// The history revision and input time (seconds) of the last recovery copy.
     autosaved: (u64, f64),
     /// A recovery copy being written.
@@ -2782,8 +2785,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.addons = crate::addons::Addons::new(crate::depth::addons_dir());
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
-            app.recovery_path = files::config_dir().map(|d| d.join("recovery.ccjob"));
-            app.open_recovery();
+            app.start_recovery();
             // a crash last time: offer its crash log as a report
             if let Some(crash) =
                 files::config_dir().and_then(|d| cut_craft_bug_report::logs::take_crash(&d))

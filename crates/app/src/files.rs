@@ -286,6 +286,62 @@ pub fn replaces_unasked(dialog: &Path, named: &Path) -> bool {
     dialog != named && named.exists()
 }
 
+/// This run's own recovery copy in `dir`, `recovery-<run>.ccjob`, and the lock that marks
+/// it as in use for as long as the returned file is kept open: another window started
+/// meanwhile leaves it alone. Lock files of runs that have ended, with no copy left, are
+/// tidied away.
+pub fn claim_recovery(dir: &Path, run: &str) -> Option<(PathBuf, std::fs::File)> {
+    std::fs::create_dir_all(dir).ok()?;
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        let stale = path.extension().is_some_and(|e| e == "lock")
+            && is_recovery(&path)
+            && !path.with_extension("ccjob").exists()
+            && !recovery_in_use(&path);
+        if stale {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    let lock = std::fs::File::create(dir.join(format!("recovery-{run}.lock"))).ok()?;
+    lock.try_lock().ok()?;
+    let own = dir.join(format!("recovery-{run}.ccjob"));
+    if own.exists() {
+        // an ended run that had the same number left it: kept aside to be recovered
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis());
+        let _ = std::fs::rename(&own, dir.join(format!("recovery-{run}-{stamp}.ccjob")));
+    }
+    Some((own, lock))
+}
+
+/// Whether `path` is named like a recovery copy or its lock (`recovery…`).
+fn is_recovery(path: &Path) -> bool {
+    path.file_stem()
+        .is_some_and(|s| s.to_string_lossy().starts_with("recovery"))
+}
+
+/// Whether the run a recovery lock file belongs to is still running (it holds the lock).
+fn recovery_in_use(lock: &Path) -> bool {
+    let Ok(file) = std::fs::File::open(lock) else {
+        return false;
+    };
+    matches!(file.try_lock(), Err(std::fs::TryLockError::WouldBlock))
+}
+
+/// A recovery copy in `dir` left by a run that ended without saving or closing its job (a
+/// crash), the newest first; not `own`, and not one a window still running keeps. A copy
+/// with no lock (an older version's `recovery.ccjob`) counts as left behind.
+pub fn orphaned_recovery(dir: &Path, own: &Path) -> Option<PathBuf> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p != own && p.extension().is_some_and(|e| e == "ccjob") && is_recovery(p))
+        .filter(|p| !recovery_in_use(&p.with_extension("lock")))
+        .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
 /// The G-code files an earlier save to `path` left in its folder: `path` itself and the
 /// numbered, tiled and sided files [`save_files`] writes beside it (`sign_1_Profile.nc`,
 /// `sign_tile2.nc`, `sign_Top.nc`), with the same extension. Other files are left out.

@@ -38,7 +38,7 @@ moves them again.
 
 | Value | Location | Cause and effect | Proposed setting and default |
 |---|---|---|---|
-| `AUTOSAVE_SECONDS` = 30 | `app/src/app.rs:378` | How often unsaved work is copied to `recovery.ccjob` for crash recovery. Lower = less lost work, more disk writes. | General ▸ **Save a recovery copy every** 30 s (10 to 600) |
+| `AUTOSAVE_SECONDS` = 30 | `app/src/app.rs:378` | How often unsaved work is copied to `recovery-<process>.ccjob` (one per open window) for crash recovery. Lower = less lost work, more disk writes. | General ▸ **Save a recovery copy every** 30 s (10 to 600) |
 | `TEXT_SCALE` = 1.15, `LINE_SCALE` = 1.5 | `app/src/app.rs:441-443` | Size of all text and controls, and line thickness. Already marked "fixed until Options has a text size". Big help on high-DPI or for poor eyesight. | Appearance ▸ **Text size** 115% (80 to 200%); line thickness follows it |
 | `UI_FONTS` list | `app/src/app.rs:446` | The first installed font of Noto Sans, Open Sans, DejaVu Sans, Segoe UI, Arial is used. **Platform-specific**: Linux usually gets Noto/DejaVu, Windows gets Segoe UI. | Appearance ▸ **Interface font** (Automatic, or any of the list that is installed). Low priority |
 | `flyout::HOLD_SECONDS` = 0.4 | `app/src/flyout.rs:14` | How long you hold a toolbox button before its flyout opens instead of running the tool. Slower hands may open tools by accident. | General ▸ **Hold to open a tool group** 0.4 s (0.2 to 1.5) |

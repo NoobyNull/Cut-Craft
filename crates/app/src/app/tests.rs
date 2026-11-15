@@ -5736,22 +5736,9 @@ fn deleting_the_selected_toolpath_is_undoable() {
 }
 
 #[test]
-fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
-    let dir = std::env::temp_dir().join(format!("cut-craft-recovery-{}", std::process::id()));
+fn a_longer_recovery_interval_in_the_options_waits_longer() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-later-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let recovery = dir.join("recovery.ccjob");
-    let autosaved = |h: &mut Harness| {
-        h.app.recovery_path = Some(recovery.clone());
-        h.rectangle(10.0, 10.0, 20.0, 20.0);
-        h.frame(vec![]);
-        assert!(!recovery.exists(), "not at once");
-        h.time += AUTOSAVE_SECONDS;
-        h.frame(vec![]);
-        let writing = h.app.autosave.take().expect("a copy is being written");
-        writing.join().unwrap().unwrap();
-        assert!(recovery.exists());
-    };
-    // a longer interval in the options waits longer
     let mut h = Harness::new();
     h.app.options.general.autosave_seconds = 120;
     h.app.recovery_path = Some(dir.join("later.ccjob"));
@@ -5769,19 +5756,57 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
         .join()
         .unwrap()
         .unwrap();
-    let _ = std::fs::remove_file(dir.join("later.ccjob"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-recovery-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // each run (window) keeps a copy of its own, named for it
+    let copy = |run: &str| dir.join(format!("recovery-{run}.ccjob"));
+    let autosaved = |h: &mut Harness, run: &str| {
+        h.app.claim_recovery(&dir, run);
+        assert_eq!(h.app.recovery_path, Some(copy(run)));
+        h.rectangle(10.0, 10.0, 20.0, 20.0);
+        h.frame(vec![]);
+        assert!(!copy(run).exists(), "not at once");
+        h.time += AUTOSAVE_SECONDS;
+        h.frame(vec![]);
+        let writing = h.app.autosave.take().expect("a copy is being written");
+        writing.join().unwrap().unwrap();
+        assert!(copy(run).exists());
+    };
     // closing the job on purpose leaves nothing to recover
     let mut h = Harness::new();
-    autosaved(&mut h);
+    autosaved(&mut h, "1");
     h.app.session.discard_changes(&h.app.history);
     h.app.invoke(&h.ctx, "close");
-    assert!(!recovery.exists());
-    // a run that ends badly leaves the copy, and the next run opens it
-    let mut h = Harness::new();
-    autosaved(&mut h);
+    assert!(!copy("1").exists());
     drop(h);
+    // a second window still running leaves the first one's live work alone
+    let mut first = Harness::new();
+    autosaved(&mut first, "2");
+    let mut second = Harness::at_start();
+    second.app.claim_recovery(&dir, "3");
+    assert!(
+        !second.app.open_recovery(),
+        "another window's work is not a crash"
+    );
+    assert_eq!(second.app.screen, Screen::Start);
+    second.app.invoke(&second.ctx, "new");
+    second.app.job_setup_ok();
+    second.app.invoke(&second.ctx, "close");
+    assert!(
+        copy("2").exists(),
+        "closing the second keeps the first one's copy"
+    );
+    // a run that ends badly leaves the copy, and the next run opens it
+    drop(first);
+    drop(second);
     let mut next = Harness::at_start();
-    next.app.recovery_path = Some(recovery.clone());
+    next.app.claim_recovery(&dir, "4");
     assert!(next.app.open_recovery());
     assert_eq!(next.app.screen, Screen::Job);
     assert_eq!(next.app.doc.vectors.len(), 1);
@@ -5790,15 +5815,45 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
         "unsaved until saved"
     );
     assert!(next.app.status.message.contains("Recovered"));
-    // opening it keeps the copy, so a second crash before any edit still has it
-    assert!(recovery.exists(), "kept until saved or closed");
-    let mut again = Harness::at_start();
-    again.app.recovery_path = Some(recovery.clone());
-    assert!(again.app.open_recovery(), "still there for the run after");
-    drop(again);
-    next.app.save_to(&dir.join("kept.ccjob"));
-    assert!(!recovery.exists(), "saved: nothing to recover");
-    assert!(!next.app.open_recovery());
+    // opening it keeps the work, now as this run's copy, so a second crash before any edit
+    // still has it
+    assert!(!copy("2").exists());
+    assert!(copy("4").exists(), "kept until saved or closed");
+    let mut other = Harness::at_start();
+    other.app.claim_recovery(&dir, "5");
+    assert!(
+        !other.app.open_recovery(),
+        "not while the run that has it is open"
+    );
+    drop(next);
+    assert!(other.app.open_recovery(), "still there for the run after");
+    other.app.save_to(&dir.join("kept.ccjob"));
+    assert!(
+        !copy("4").exists() && !copy("5").exists(),
+        "saved: nothing to recover"
+    );
+    assert!(!other.app.open_recovery());
+    // a copy left by a version that kept one for every window is recovered too
+    drop(other);
+    std::fs::write(
+        dir.join("recovery.ccjob"),
+        std::fs::read(dir.join("kept.ccjob")).unwrap(),
+    )
+    .unwrap();
+    let mut updated = Harness::at_start();
+    updated.app.claim_recovery(&dir, "6");
+    assert!(updated.app.open_recovery());
+    assert!(!dir.join("recovery.ccjob").exists());
+    drop(updated);
+    // a crashed run whose number a new run is given still has its copy recovered
+    let mut crashed = Harness::new();
+    autosaved(&mut crashed, "7");
+    drop(crashed);
+    let mut same = Harness::at_start();
+    same.app.claim_recovery(&dir, "7");
+    assert!(same.app.open_recovery());
+    assert_eq!(same.app.doc.vectors.len(), 1);
+    drop(same);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

@@ -233,6 +233,7 @@ impl CutCraftApp {
             import_queue: std::collections::VecDeque::new(),
             recent_path: None,
             recovery_path: None,
+            recovery_lock: None,
             autosaved: (0, 0.0),
             autosave: None,
             title: String::new(),
@@ -2376,24 +2377,51 @@ impl CutCraftApp {
         self.autosaved.0 = self.history.revision();
     }
 
+    /// At startup: this window's recovery copy claimed in the settings folder, and a crashed
+    /// run's work opened if one left any.
+    pub(super) fn start_recovery(&mut self) {
+        if let Some(dir) = files::config_dir() {
+            self.claim_recovery(&dir, &std::process::id().to_string());
+        }
+        self.open_recovery();
+    }
+
+    /// This window's own recovery copy, in `dir`, named for `run` (the process), and locked
+    /// for as long as the window is open.
+    pub(super) fn claim_recovery(&mut self, dir: &std::path::Path, run: &str) {
+        (self.recovery_path, self.recovery_lock) = files::claim_recovery(dir, run).unzip();
+    }
+
     /// The recovery copy a run that ended badly left, opened as an unsaved job; whether
-    /// there was one. It stays until the job is saved or closed.
+    /// there was one. Another window's copy, still running, is left alone. The work becomes
+    /// this window's copy, kept until the job is saved or closed.
     pub(super) fn open_recovery(&mut self) -> bool {
-        let Some(path) = self.recovery_path.clone() else {
+        let Some(own) = self.recovery_path.clone() else {
             return false;
         };
-        let Some((bytes, doc)) = std::fs::read(&path).ok().and_then(|bytes| {
+        let Some(left) = own
+            .parent()
+            .and_then(|dir| files::orphaned_recovery(dir, &own))
+        else {
+            return false;
+        };
+        let Some((bytes, doc)) = std::fs::read(&left).ok().and_then(|bytes| {
             let doc = cut_craft_core::file::load_job(&bytes).ok()?;
             Some((bytes, doc))
         }) else {
             return false;
         };
         self.reset_job();
-        // reset_job lets go of the copy; put it back, so the work is still there if this
-        // run ends badly too before anything is changed (autosave writes it again then)
-        if let Err(e) = cut_craft_core::file::write_atomic(&path, &bytes) {
-            self.status
-                .set_message(&format!("could not keep the recovery copy: {e}"));
+        // kept as this run's copy, so the work is still there if this run ends badly too
+        // before anything is changed (autosave writes it again then)
+        match cut_craft_core::file::write_atomic(&own, &bytes) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&left);
+                let _ = std::fs::remove_file(left.with_extension("lock"));
+            }
+            Err(e) => self
+                .status
+                .set_message(&format!("could not keep the recovery copy: {e}")),
         }
         self.doc = doc;
         self.session = Session::unsaved();
