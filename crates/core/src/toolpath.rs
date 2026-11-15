@@ -196,6 +196,11 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub passes: Vec<f64>,
+    /// The cut depth the passes set by hand were set for (0 when not known, as in jobs made
+    /// before it was kept): a deeper cut later goes on below it at the pass depth
+    #[serde(default, skip_serializing_if = "is_nothing")]
+    #[schemars(skip)]
+    pub passes_for: f64,
     /// How thick the last pass is (Edit Passes' Last Pass Thickness), the passes above it
     /// even at the pass depth; 0 for all passes even
     #[serde(default, skip_serializing_if = "is_nothing")]
@@ -489,7 +494,7 @@ impl Tool {
     }
 
     /// Its passes (negative z) down to `depth`: those set by hand that are above it (none of
-    /// them: one pass), or even
+    /// them: one pass), going on at the pass depth below the depth they were set for, or even
     /// ones at the pass depth over all but a set last pass, then `depth` itself.
     pub fn pass_depths(&self, depth: f64) -> Vec<f64> {
         let mut set: Vec<f64> = self
@@ -501,6 +506,21 @@ impl Tool {
         if !self.passes.is_empty() {
             set.sort_by(f64::total_cmp);
             set.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+            // set for a shallower cut, they stop where that cut did: the rest goes on at the
+            // pass depth, so making the cut deeper later never ends in one heavy pass
+            let set_for = self.passes_for;
+            if set_for > 0.0 && depth > set_for + 1e-6 && self.pass_depth > 0.0 {
+                if set.last().is_none_or(|&d| d < set_for - 1e-6) {
+                    set.push(set_for);
+                }
+                let below = set_for;
+                let rest = pass_depths(depth - below, self.pass_depth);
+                return set
+                    .iter()
+                    .map(|d| -d)
+                    .chain(rest.into_iter().map(|z| z - below))
+                    .collect();
+            }
             return set.iter().map(|d| -d).chain([-depth]).collect();
         }
         if self.last_pass > 0.0 && self.last_pass < depth {
@@ -642,6 +662,7 @@ impl Default for Tool {
             flutes: default_flutes(),
             number: 0,
             passes: vec![],
+            passes_for: 0.0,
             last_pass: 0.0,
             group: String::new(),
             notes: String::new(),
@@ -1346,6 +1367,39 @@ fn nothing_beyond_the_reach_below_a_height_is_that_low() {
         v.reach_below(1.0) < 1.0,
         "a shallow V-carve touches little: {}",
         v.reach_below(1.0)
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn passes_set_by_hand_never_leave_a_step_deeper_than_the_pass_depth() {
+    let tool = Tool {
+        pass_depth: 3.0,
+        passes: vec![2.0, 4.0, 6.0],
+        passes_for: 6.0,
+        ..Tool::default()
+    };
+    // as set, down to the depth they were set for
+    assert_eq!(tool.pass_depths(6.0), [-2.0, -4.0, -6.0]);
+    // the cut made deeper later: what is left below them goes in pass-depth steps, not
+    // one 12 mm pass
+    let deeper = tool.pass_depths(18.0);
+    assert_eq!(&deeper[..3], [-2.0, -4.0, -6.0]);
+    assert_eq!(*deeper.last().unwrap(), -18.0);
+    let steps: Vec<f64> = deeper.windows(2).map(|w| w[0] - w[1]).collect();
+    assert!(steps.iter().all(|&s| s <= 3.0 + 1e-9), "{deeper:?}");
+    // one hand-set pass at 0.5 over an 8 mm V-carve fill
+    let shallow = Tool {
+        pass_depth: 2.0,
+        passes: vec![0.5],
+        passes_for: 1.0,
+        ..Tool::default()
+    };
+    let fill = shallow.pass_depths(8.0);
+    assert_eq!(fill[0], -0.5);
+    assert!(
+        fill.windows(2).all(|w| w[0] - w[1] <= 2.0 + 1e-9),
+        "{fill:?}"
     );
 }
 

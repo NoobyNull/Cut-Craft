@@ -41,6 +41,8 @@ pub(super) fn edit_passes(ui: &mut egui::Ui, params: &mut Value, units: Units) -
     ui.data_mut(|d| d.insert_temp(id, open));
     let changed = before != (tool.passes.clone(), tool.last_pass);
     if changed {
+        // so a deeper cut later goes on below them at the pass depth
+        tool.passes_for = if tool.passes.is_empty() { 0.0 } else { depth };
         params["tool"] = serde_json::to_value(&tool).expect("a tool serialises");
     }
     changed
