@@ -8314,6 +8314,27 @@ fn escape_lets_a_picked_open_end_go_and_keeps_join_open_ends_open() {
 }
 
 #[test]
+fn a_copy_pasted_on_its_original_shows_its_common_lines_in_red() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let red = |h: &mut Harness| {
+        h.frame(vec![]);
+        let colour = egui::epaint::ColorMode::Solid(h.ctx.global_style().visuals.error_fg_color);
+        h.shapes
+            .iter()
+            .filter(|c| matches!(&c.shape, egui::Shape::Path(p) if p.stroke.color == colour))
+            .count()
+    };
+    let before = red(&mut h);
+    h.app.invoke(&h.ctx, "copy");
+    h.app.invoke(&h.ctx, "paste");
+    // pasted in place, on top of the original: each of both rectangles' four sides
+    assert_eq!(red(&mut h), before + 8);
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(red(&mut h), before, "gone with the copy");
+}
+
+#[test]
 fn show_open_vector_ends_is_a_view_menu_switch() {
     let mut h = Harness::new();
     assert!(!h.app.display.open_ends, "off to start with");

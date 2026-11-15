@@ -73,6 +73,13 @@ pub(super) const TIPS: &[Tip] = &[
          **View ▸ Show Open Vector Ends** marks the gaps, and **Edit ▸ Join Open Ends** closes \
          them.",
     ),
+    tip(
+        "tips/common_lines.png",
+        "Lines drawn in **red** are common lines: two vectors on the same layer lying exactly \
+         on top of each other, as Paste or a copy that lands on its original leaves them. A \
+         profile would cut that line twice, so delete or move the extra copy.",
+        "design",
+    ),
     plain(
         "tips/tool_database.png",
         "Picking a bit from the **Tool Database** fills in its speeds, feeds and depth per pass \
