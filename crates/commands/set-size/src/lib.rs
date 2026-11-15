@@ -19,7 +19,8 @@ pub enum Mode {
     /// The whole selection, as one group
     #[default]
     ScaleSelection,
-    /// Each selected item on its own, as if it alone were selected
+    /// Each selected item on its own, as if it alone were selected. A group, like a word of
+    /// text, is one item, and so is a shape with the holes and shapes drawn inside it
     ScaleItemsIndividually,
 }
 
@@ -119,8 +120,9 @@ impl Command for SetSize {
                 * DAffine2::from_translation(-a)
         };
         if p.mode == Mode::ScaleItemsIndividually {
-            // each item about its own anchor; one without area stays as it is
-            return Change::transform_selected(doc, |b| {
+            // each item (a group, or an outline with what lies inside it) about its own
+            // anchor; one without area stays as it is
+            return Change::transform_items(doc, &doc.selected_items(true), |b| {
                 scale(b.size()).map_or(DAffine2::IDENTITY, |by| about(b, by))
             });
         }
@@ -178,6 +180,41 @@ mod tests {
         let after = doc.selection_bounds().unwrap();
         assert!((after.size().x - 2.0 * before.size().x).abs() < 1e-9);
         assert!(after.center().distance(before.center()) < 1e-9);
+    }
+
+    #[test]
+    fn items_one_by_one_keep_their_holes_and_groups_whole() {
+        use cut_craft_core::testing::{document_with, square};
+        // a 20 mm square with a 10 mm hole, and a grouped two-letter word 25 mm wide
+        let mut doc = document_with(vec![
+            square(0.0, 0.0, 20.0),
+            square(5.0, 5.0, 10.0),
+            square(100.0, 0.0, 10.0),
+            square(115.0, 0.0, 10.0),
+        ]);
+        let ids: Vec<_> = doc.vectors.keys().copied().collect();
+        doc.vector_groups.insert(ids[2], 3);
+        doc.vector_groups.insert(ids[3], 3);
+        doc.selection = ids.iter().copied().collect();
+        let p = Params {
+            mode: Mode::ScaleItemsIndividually,
+            width: 50.0,
+            height: 50.0,
+            anchor: Anchor::BottomLeft,
+            ..Params::default()
+        };
+        doc.apply(&SetSize::run(&doc, &p).unwrap()).unwrap();
+        let width = |i: usize| doc.vectors[&ids[i]].bounds().size().x;
+        assert!((width(0) - 50.0).abs() < 1e-9, "the part is 50 wide");
+        assert!((width(1) - 25.0).abs() < 1e-9, "its hole grows with it");
+        assert!(
+            (width(2) - 20.0).abs() < 1e-9,
+            "a letter grows with its word"
+        );
+        let word = doc.vectors[&ids[2]]
+            .bounds()
+            .union(doc.vectors[&ids[3]].bounds());
+        assert!((word.size().x - 50.0).abs() < 1e-9, "the word is 50 wide");
     }
 
     #[test]
