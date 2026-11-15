@@ -37,7 +37,9 @@ say) only if your controller cannot cut arcs.
 Saving again where an earlier save left G-code (the file itself, or the numbered, tile and
 side files saved beside it) asks first. Replace deletes all of them, so an old file for a
 toolpath you have since removed is not left to run by mistake. Archive moves them into a
-dated folder under Archive beside them, then adds the new ones. Tick Do this every time to
+dated folder under Archive beside them (a second one saved in the same second gets its own
+folder), then adds the new ones. If the new files cannot be saved (a toolpath crossing a
+keep-out zone, say), the earlier ones are put back as they were. Tick Do this every time to
 stop being asked; Edit ▸ Options ▸ Confirmations ▸ G-code from an earlier save changes it.
 A name typed with a dot of its own (sign v1.5) keeps it: the file is sign v1.5.nc.
 

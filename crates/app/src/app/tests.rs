@@ -13352,6 +13352,54 @@ fn machine_files_asks_before_uploading_over_a_file_already_on_the_machine() {
 }
 
 #[test]
+fn a_save_that_fails_after_replace_or_archive_leaves_the_earlier_files_where_they_were() {
+    use crate::files::{SaveMode, ToolChanges};
+    use crate::options::EarlierGcode;
+    use cut_craft_core::keep_out::KeepOutZone;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    // a clamp put down over the first rectangle after its toolpath was made
+    let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
+    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
+    let dir = std::env::temp_dir().join(format!("cut-craft-resave-fail-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let form = SaveForm {
+        mode: SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: ToolChanges::ToolChanger,
+        job_sheet: false,
+    };
+    let post = h.app.form_post(&form).unwrap();
+    let path = dir.join("sign.nc");
+    let numbered = dir.join("sign_3_Old-Vcarve.nc");
+    for file in [&path, &numbered] {
+        std::fs::write(file, "old").unwrap();
+    }
+    for choice in [EarlierGcode::Replace, EarlierGcode::Archive] {
+        h.app
+            .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+        h.app.answer_earlier(Some(choice), false);
+        let message = h.app.status.message.clone();
+        assert!(message.contains("keep-out zone"), "{message}");
+        assert!(message.contains("earlier files were left"), "{message}");
+        for file in [&path, &numbered] {
+            assert_eq!(std::fs::read_to_string(file).unwrap(), "old", "{choice:?}");
+        }
+        let left: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| !name.starts_with("Archive"))
+            .collect();
+        assert_eq!(left.len(), 2, "nothing else left behind: {left:?}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
     use crate::files::{SaveMode, ToolChanges};
     use crate::options::EarlierGcode;
@@ -13410,7 +13458,7 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
         "{}",
         h.app.status.message
     );
-    std::thread::sleep(std::time::Duration::from_millis(1100));
+    // a second archive in the same second gets a folder of its own
     h.app
         .save_over_earlier(&form, post, path.clone(), String::new());
     assert!(h.app.earlier_ask.is_none(), "not asked once remembered");

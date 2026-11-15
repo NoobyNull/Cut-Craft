@@ -1305,7 +1305,8 @@ impl CutCraftApp {
     ) {
         let earlier = files::earlier_save(&path);
         if earlier.is_empty() {
-            return self.finish_save(form, &post, &path, &told, "");
+            self.finish_save(form, &post, &path, &told, "");
+            return;
         }
         match self.options.confirmations.earlier_gcode {
             crate::options::EarlierGcode::Ask => {
@@ -1349,7 +1350,10 @@ impl CutCraftApp {
         );
     }
 
-    /// Replaces (deletes) or archives `earlier`, then saves.
+    /// Replaces (deletes) or archives `earlier`, then saves. They are moved aside first
+    /// (into the archive, or a hidden folder for Replace) so the new files never mix with
+    /// them, and put back if the new files cannot be written: a failed save never leaves
+    /// the user with no G-code at all.
     fn save_with(
         &mut self,
         choice: crate::options::EarlierGcode,
@@ -1360,32 +1364,45 @@ impl CutCraftApp {
         earlier: &[std::path::PathBuf],
     ) {
         use crate::options::EarlierGcode;
-        let done = if choice == EarlierGcode::Archive {
-            let when = chrono::Local::now().naive_local();
-            match files::archive(earlier, path, when) {
-                Ok(folder) => format!("; the earlier files are in {}", folder.display()),
-                Err(e) => {
-                    return self
-                        .status
-                        .set_message(&format!("Not saved: could not archive {e}"));
-                }
-            }
+        let archiving = choice == EarlierGcode::Archive;
+        let moved = if archiving {
+            files::archive(earlier, path, chrono::Local::now().naive_local())
         } else {
-            for file in earlier {
-                if let Err(e) = std::fs::remove_file(file) {
-                    return self.status.set_message(&format!(
-                        "Not saved: could not replace {}: {e}",
-                        file.display()
-                    ));
-                }
+            files::set_aside(earlier, path)
+        };
+        let folder = match moved {
+            Ok(folder) => folder,
+            Err(e) => {
+                let doing = if archiving { "archive" } else { "replace" };
+                return self
+                    .status
+                    .set_message(&format!("Not saved: could not {doing} {e}"));
             }
+        };
+        let done = if archiving {
+            format!("; the earlier files are in {}", folder.display())
+        } else {
             String::new()
         };
-        self.finish_save(form, post, path, told, &done);
+        if self.finish_save(form, post, path, told, &done) {
+            if !archiving {
+                let _ = std::fs::remove_dir_all(&folder);
+            }
+            return;
+        }
+        let kept = match files::put_back(earlier, &folder, path) {
+            Ok(()) => "; the earlier files were left as they were".to_owned(),
+            Err(e) => format!(
+                "; the earlier files are in {} (could not put back {e})",
+                folder.display()
+            ),
+        };
+        let message = format!("{}{kept}", self.status.message);
+        self.status.set_message(&message);
     }
 
     /// Writes the files (and the job sheet) and says what was saved, then `after` and
-    /// `told`.
+    /// `told`; whether the G-code files were written.
     fn finish_save(
         &mut self,
         form: &SaveForm,
@@ -1393,24 +1410,29 @@ impl CutCraftApp {
         path: &std::path::Path,
         told: &str,
         after: &str,
-    ) {
+    ) -> bool {
         let (_, name) = self.project();
-        let result = self
-            .write_toolpath_files(form, post, path)
-            .and_then(|written| {
-                let done = Self::saved_message(&written, path);
-                if form.job_sheet {
-                    let folder = path.parent().unwrap_or(std::path::Path::new("."));
-                    let outputs = (written.iter())
-                        .map(|p| (file_name(p), p.is_file()))
-                        .collect();
-                    let sheet = self.job_sheet_with(outputs, folder, &name)?;
-                    return Ok(format!("{done}, with the job sheet {sheet}"));
-                }
-                Ok(done)
-            });
+        let written = match self.write_toolpath_files(form, post, path) {
+            Ok(written) => written,
+            Err(e) => {
+                self.status.set_message(&e);
+                return false;
+            }
+        };
+        let done = Self::saved_message(&written, path);
+        let result = if form.job_sheet {
+            let folder = path.parent().unwrap_or(std::path::Path::new("."));
+            let outputs = (written.iter())
+                .map(|p| (file_name(p), p.is_file()))
+                .collect();
+            self.job_sheet_with(outputs, folder, &name)
+                .map(|sheet| format!("{done}, with the job sheet {sheet}"))
+        } else {
+            Ok(done)
+        };
         self.status
             .set_message(&result.map_or_else(|e| e, |done| format!("{done}{after}{told}")));
+        true
     }
 
     /// Save Toolpaths' post and the checks before cutting, asked about when they find

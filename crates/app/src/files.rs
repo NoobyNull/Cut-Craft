@@ -317,7 +317,8 @@ pub fn earlier_save(path: &Path) -> Vec<PathBuf> {
 }
 
 /// Moves `files` (an earlier save to `path`) into a new folder beside `path`,
-/// `Archive/<its stem> <when>`; that folder.
+/// `Archive/<its stem> <when>` (with ` (2)`, ` (3)`… added when one of that name is
+/// already there, so two archives in the same second never mix); that folder.
 pub fn archive(
     files: &[PathBuf],
     path: &Path,
@@ -325,17 +326,84 @@ pub fn archive(
 ) -> Result<PathBuf, String> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-    let folder = dir
-        .join("Archive")
-        .join(format!("{stem} {}", when.format("%Y-%m-%d %H%M%S")));
-    std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    for file in files {
-        let to = folder.join(file.file_name().unwrap_or_default());
-        std::fs::rename(file, &to)
-            .or_else(|_| std::fs::copy(file, &to).and_then(|_| std::fs::remove_file(file)))
-            .map_err(|e| format!("{}: {e}", file.display()))?;
-    }
+    let base = format!("{stem} {}", when.format("%Y-%m-%d %H%M%S"));
+    let folder = new_folder(&dir.join("Archive"), &base)?;
+    move_into(files, &folder)?;
     Ok(folder)
+}
+
+/// Moves `files` (an earlier save to `path`) into a new hidden folder beside `path`, kept
+/// until the new save is written: then [`std::fs::remove_dir_all`] it, or
+/// [`put_back`] them if the save fails. That folder.
+pub fn set_aside(files: &[PathBuf], path: &Path) -> Result<PathBuf, String> {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let folder = new_folder(dir, &format!(".{stem} replacing"))?;
+    move_into(files, &folder)?;
+    Ok(folder)
+}
+
+/// Puts `files` (moved into `folder` by [`archive`] or [`set_aside`]) back where they
+/// were, over anything a failed save left in their place, after taking away the other
+/// files that save wrote beside `path`; then removes `folder` when it is empty.
+pub fn put_back(files: &[PathBuf], folder: &Path, path: &Path) -> Result<(), String> {
+    for partial in earlier_save(path) {
+        if !files.contains(&partial) {
+            let _ = std::fs::remove_file(partial);
+        }
+    }
+    for file in files {
+        let from = folder.join(file.file_name().unwrap_or_default());
+        if from.exists() {
+            move_file(&from, file).map_err(|e| format!("{}: {e}", from.display()))?;
+        }
+    }
+    let _ = std::fs::remove_dir(folder);
+    Ok(())
+}
+
+/// A new, empty folder `<parent>/<name>`, or `<name> (2)`, `<name> (3)`… when taken.
+fn new_folder(parent: &Path, name: &str) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    for n in 1u32.. {
+        let folder = if n == 1 {
+            parent.join(name)
+        } else {
+            parent.join(format!("{name} ({n})"))
+        };
+        match std::fs::create_dir(&folder) {
+            Ok(()) => return Ok(folder),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(format!("{}: {e}", folder.display())),
+        }
+    }
+    Err(format!("{}: no free name", parent.display()))
+}
+
+/// Moves each of `files` into `folder`; if one cannot be moved, those already moved go
+/// back and the folder is removed.
+fn move_into(files: &[PathBuf], folder: &Path) -> Result<(), String> {
+    for (n, file) in files.iter().enumerate() {
+        let to = folder.join(file.file_name().unwrap_or_default());
+        if let Err(e) = move_file(file, &to) {
+            for back in &files[..n] {
+                let _ = move_file(&folder.join(back.file_name().unwrap_or_default()), back);
+            }
+            let _ = std::fs::remove_dir(folder);
+            return Err(format!("{}: {e}", file.display()));
+        }
+    }
+    Ok(())
+}
+
+fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::rename(from, to)
+        .or_else(|_| std::fs::copy(from, to).and_then(|_| std::fs::remove_file(from)))
 }
 
 pub use cut_craft_core::file::config_dir;
@@ -756,6 +824,21 @@ mod tests {
         assert_eq!(
             super::earlier_save(&dir.join("sign.nc")),
             Vec::<std::path::PathBuf>::new()
+        );
+        // archived again in the same second: a folder of its own, the first one kept
+        std::fs::write(&path, "second").unwrap();
+        let again = super::archive(&super::earlier_save(&path), &path, when).unwrap();
+        assert_eq!(
+            again,
+            dir.join("Archive").join("sign 2026-11-15 075422 (2)")
+        );
+        assert_eq!(
+            std::fs::read_to_string(folder.join("sign.nc")).unwrap(),
+            "G0"
+        );
+        assert_eq!(
+            std::fs::read_to_string(again.join("sign.nc")).unwrap(),
+            "second"
         );
         let _ = std::fs::remove_dir_all(dir);
     }
