@@ -1136,8 +1136,9 @@ impl CutCraftApp {
         }
     }
 
-    /// A click adds the next point (on the first, it closes the polyline; on the last, it
-    /// swaps curves and straight lines); a drag adds one with a smooth span.
+    /// A click adds the next point (on the first, it closes the polyline; on the last, as
+    /// the second click of a double-click, it finishes it open); a drag adds one with a
+    /// smooth span.
     fn polyline_gesture(&mut self, gesture: Option<Gesture>, reach: f64) {
         match gesture {
             Some(Gesture::Click { at, .. }) => {
@@ -1156,7 +1157,11 @@ impl CutCraftApp {
                 if near(first) {
                     self.finish_polyline(true);
                 } else if near(self.polyline.points.last()) {
-                    self.polyline.toggle_curves();
+                    // a double-click ends the polyline open there (S swaps to curves);
+                    // on a lone first point there is nothing to finish yet
+                    if self.polyline.points.len() >= 2 || self.polyline.extends.is_some() {
+                        self.finish_polyline(false);
+                    }
                 } else {
                     self.polyline.click(at);
                 }
@@ -2167,7 +2172,7 @@ impl CutCraftApp {
             ),
             "draw_polyline" => Some(
                 "Click the next point (drag for a curved span); click the first point to close it, \
-                 or right-click, Space or Escape to finish it open; Backspace takes a point back; \
+                 or double-click, right-click, Space or Escape to finish it open; Backspace takes a point back; \
                  or type the next one (20, x,y or 90A 20L) and press Enter"
                     .into(),
             ),

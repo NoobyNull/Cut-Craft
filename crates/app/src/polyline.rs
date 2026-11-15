@@ -3,8 +3,8 @@
 //! curves and straight lines, Backspace takes the last point back, and typed values place
 //! the next point (a length along the pointer's direction, `x,y`, or `angle A length L`).
 //! The app finishes it (Space, unless a point is being typed, when the space goes into it;
-//! Tab to close, Esc, or a click on the first point) into the
-//! command's params.
+//! a double-click on the last point; Tab to close, Esc, or a click on the first point) into
+//! the command's params.
 
 use cut_craft_core::geometry::{Path, Point, Segment};
 

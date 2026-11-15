@@ -8040,6 +8040,23 @@ fn a_space_typed_between_a_polylines_angle_and_length_does_not_finish_it() {
 }
 
 #[test]
+fn double_clicking_a_polylines_last_point_finishes_it_there() {
+    let mut h = Harness::new();
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.geometry_snapping = false;
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    let (a, b) = (h.at(10.0, 10.0), h.at(60.0, 10.0));
+    h.click(a, Modifiers::NONE);
+    h.double_click(b);
+    assert!(h.app.polyline.is_empty(), "finished");
+    assert!(!h.app.polyline.curved, "still straight lines");
+    let path = h.app.doc.vectors.values().last().expect("drawn");
+    assert!(!path.closed);
+    assert_eq!(path.segments.len(), 1);
+}
+
+#[test]
 fn edit_polyline_from_an_end_node_draws_on_and_extends_the_same_vector() {
     use cut_craft_core::nodes::NodeAt;
     use cut_craft_core::params::Xy;
