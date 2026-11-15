@@ -41,6 +41,14 @@ A number field takes a sum as well as a number, worked out when it is entered:
 - **E** edits the selected shape (or Create Shape component) in the tool that made it. Once a Create Shape component has been sculpted, smoothed, embossed or cut back with Replace Below or Reset, it is kept as you left it: E no longer remakes it from its settings, so your hand work is never thrown away
 - Help ▸ Keyboard Shortcuts lists the rest.
 
+## Saving and opening jobs
+
+- When you open, start or close a job while the one you have open has unsaved changes,
+  Cut Craft asks whether to save them first. If you answer that you don't want to save,
+  then cancel the file picker (or the file will not open), nothing is lost: your job stays
+  open with its unsaved changes, still marked with **\*** in the title and still kept for
+  recovery.
+
 ## Updates
 
 Cut Craft asks GitHub about once a day, when it starts, whether there is a new version, and

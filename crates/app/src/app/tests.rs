@@ -13722,3 +13722,29 @@ fn selecting_a_post_that_does_not_suit_the_open_job_says_which_post_it_saves_thr
         h.app.status.message
     );
 }
+
+#[test]
+fn answering_dont_save_keeps_the_job_unsaved_until_something_replaces_it() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    assert!(h.app.session.is_dirty(&h.app.history));
+    // No at "Save changes?", then the file picker cancelled (or the file would not open):
+    // the job is still there and still unsaved, so it is asked about again and kept safe
+    assert!(h.app.discard_answered(&rfd::MessageDialogResult::No));
+    assert!(
+        h.app.session.is_dirty(&h.app.history),
+        "backing out after No must not mark the work saved"
+    );
+    assert!(
+        h.app
+            .session
+            .title("Cut Craft", &h.app.history)
+            .contains('*')
+    );
+    assert!(!h.app.discard_answered(&rfd::MessageDialogResult::Cancel));
+    assert!(h.app.session.is_dirty(&h.app.history));
+    // a file that will not open leaves the job unsaved too
+    let missing = std::env::temp_dir().join("cut-craft-no-such-job.ccjob");
+    h.app.open_path(&missing);
+    assert!(h.app.session.is_dirty(&h.app.history));
+}

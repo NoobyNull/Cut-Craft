@@ -2510,6 +2510,14 @@ impl CutCraftApp {
             ))
             .set_buttons(rfd::MessageButtons::YesNoCancel)
             .show();
+        self.discard_answered(&answer)
+    }
+
+    /// What the answer at "Save changes?" means: true when the job may be replaced. No only
+    /// lets the work go: the job stays marked unsaved until something actually replaces it,
+    /// so backing out afterwards (a cancelled file picker, a file that will not open) loses
+    /// nothing and is asked about again.
+    pub(super) fn discard_answered(&mut self, answer: &rfd::MessageDialogResult) -> bool {
         match answer {
             rfd::MessageDialogResult::Yes => {
                 match self
@@ -2523,11 +2531,7 @@ impl CutCraftApp {
                 }
                 !self.session.is_dirty(&self.history)
             }
-            rfd::MessageDialogResult::No => {
-                // asked once: a repeated close request must not ask again
-                self.session.discard_changes(&self.history);
-                true
-            }
+            rfd::MessageDialogResult::No => true,
             _ => false,
         }
     }
