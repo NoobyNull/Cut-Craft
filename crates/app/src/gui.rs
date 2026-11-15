@@ -242,7 +242,8 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "import_vectors_bitmap",
         "Import Vectors or Picture",
         "Bring in a drawing (DXF, SVG or a Vectric job's vectors) or a picture (PNG, JPG, \
-         BMP, GIF or TIFF) to trace, carve round or draw over",
+         BMP, GIF or TIFF) to trace, carve round or draw over. An SVG sized in pixels is \
+         read at 96 pixels per inch, and a note says the size it came in at",
     ),
     (
         "import_vectors",
