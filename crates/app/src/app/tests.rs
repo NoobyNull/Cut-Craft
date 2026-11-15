@@ -13325,3 +13325,28 @@ fn a_machines_file_that_cannot_be_read_is_said_kept_aside_and_never_saved_over()
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn machine_files_asks_before_uploading_over_a_file_already_on_the_machine() {
+    let card = std::env::temp_dir().join(format!("cut-craft-replace-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&card);
+    std::fs::create_dir_all(&card).unwrap();
+    let local = card.with_extension("sign.nc");
+    std::fs::write(&local, "G0 X1").unwrap();
+    let name = crate::app::file_name(&local);
+    std::fs::write(card.join(&name), "G0 X0").unwrap();
+    let store = Box::new(cut_craft_machines::send::Folder::new(&card));
+    let mut files = super::send::MachineFiles::new("Router", store, false);
+    let asked = std::cell::RefCell::new(vec![]);
+    files.upload_asking(std::slice::from_ref(&local), &|names: &[String]| {
+        asked.borrow_mut().extend_from_slice(names);
+        false
+    });
+    assert_eq!(*asked.borrow(), std::slice::from_ref(&name));
+    assert_eq!(std::fs::read_to_string(card.join(&name)).unwrap(), "G0 X0");
+    assert!(files.message.is_err(), "{:?}", files.message);
+    files.upload_asking(std::slice::from_ref(&local), &|_: &[String]| true);
+    assert_eq!(std::fs::read_to_string(card.join(&name)).unwrap(), "G0 X1");
+    let _ = std::fs::remove_dir_all(card);
+    let _ = std::fs::remove_file(local);
+}
