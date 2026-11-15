@@ -495,6 +495,21 @@ fn a_drawn_circle_snaps_its_edge_square_onto_a_side() {
 }
 
 #[test]
+fn a_click_that_draws_nothing_does_not_tie_a_typed_in_circle_to_its_snap() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    // a plain click on the rectangle's corner: a circle needs a drag, so nothing is drawn
+    h.click(h.at(30.0, 20.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    let circle = serde_json::json!({ "center": { "x": 200.0, "y": 150.0 }, "radius": 20.0 });
+    h.app.apply("draw_circle", &circle).unwrap();
+    assert_eq!(h.app.doc.vectors.len(), 2);
+    assert_eq!(h.app.doc.constraints, [], "not tied to the far corner");
+}
+
+#[test]
 fn a_polyline_click_snaps_to_an_end_marked_and_named_under_a_crosshair() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);

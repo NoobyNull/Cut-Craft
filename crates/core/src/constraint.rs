@@ -12,7 +12,7 @@
 
 use crate::change::{Change, Edit};
 use crate::document::{Document, EntityId};
-use crate::geometry::{Path, Point, Rect, Segment};
+use crate::geometry::{Path, Point, Rect, Segment, polyline_distance};
 use crate::nodes::{move_node, nodes};
 use crate::snap::{SnapKind, material_points, span_mid, touch_and_square};
 use glam::DAffine2;
@@ -435,7 +435,8 @@ pub fn keeping(doc: &Document, change: Change) -> Change {
 /// Constraints for a vector just made from a drawing, from where its points snapped:
 /// `snaps` are the snapped points with what they snapped to. A drawn line's nodes stretch
 /// to stay on their snaps (`stretch`); any other shape is moved whole, by the first of its
-/// points that snapped.
+/// points that snapped. Only snaps on the shape count: one left from a click that drew
+/// nothing is not tied to a shape typed in somewhere else.
 pub fn pins(
     path: &Path,
     vector: EntityId,
@@ -461,7 +462,7 @@ pub fn pins(
             // one snap for each node: the last placed there wins
             out.retain(|c| c.pin != pin);
             out.push(Constraint { vector, pin, to });
-        } else if out.is_empty() && !to.needs_line() {
+        } else if out.is_empty() && !to.needs_line() && lies_on(path, at) {
             let offset = at - path.bounds().center();
             out.push(Constraint {
                 vector,
@@ -471,6 +472,14 @@ pub fn pins(
         }
     }
     out
+}
+
+/// Whether `at` is a point of `path`'s: on its outline or at its middle (a circle drawn
+/// from a snapped centre). A snap from a click that drew nothing lies elsewhere.
+fn lies_on(path: &Path, at: Point) -> bool {
+    const NEAR: f64 = 1e-3;
+    path.bounds().center().distance(at) <= NEAR
+        || polyline_distance(&path.flatten(NEAR / 10.0), at) <= NEAR
 }
 
 /// `existing` with `made` added: a point snapped again is kept on its new snap only, and
@@ -914,6 +923,26 @@ mod tests {
             ..old
         };
         assert_eq!(merged(&[old, other], vec![new]), [other, new]);
+    }
+
+    #[test]
+    fn a_shape_is_only_tied_to_snaps_on_it() {
+        let circle = Path::circle(p(50.0, 50.0), 10.0);
+        let to = Anchor::Material { corner: 0 };
+        // a click that drew nothing, far from the circle typed in later: no tie
+        assert_eq!(pins(&circle, EntityId(1), &[(p(0.0, 0.0), to)], false), []);
+        // its centre, a point on its edge: tied
+        for at in [
+            p(50.0, 50.0),
+            p(60.0, 50.0),
+            p(50.0 + 50.0_f64.sqrt(), 50.0 + 50.0_f64.sqrt()),
+        ] {
+            assert_eq!(
+                pins(&circle, EntityId(1), &[(at, to)], false).len(),
+                1,
+                "{at:?}"
+            );
+        }
     }
 
     #[test]
