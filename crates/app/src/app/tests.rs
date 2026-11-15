@@ -13288,3 +13288,32 @@ fn the_tool_changer_is_offered_only_for_a_machine_with_one_and_warned_about_with
     assert!(h.app.has_tool_changer());
     assert!(!warned(&h, ToolChanges::ToolChanger));
 }
+
+#[test]
+fn a_machines_file_that_cannot_be_read_is_said_kept_aside_and_never_saved_over() {
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-bad-machines-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("machines.json");
+    let broken = b"{\"machines\": [{\"width\": \"wide\"}]}";
+    std::fs::write(&path, broken).unwrap();
+    h.app.load_machines_at(&path);
+    assert_eq!(h.app.machines.machines, vec![]);
+    let said = h.app.status.message.clone();
+    assert!(said.contains("could not be read"), "{said}");
+    assert!(said.contains("machines.json.bad"), "{said}");
+    assert_eq!(
+        std::fs::read(dir.join("machines.json.bad")).unwrap(),
+        broken
+    );
+    // a machine added now is not saved over the file
+    h.app.machines.add();
+    h.app.machines_changed("Machine added");
+    assert_eq!(std::fs::read(&path).unwrap(), broken);
+    assert!(
+        h.app.status.message.contains("not saved"),
+        "{}",
+        h.app.status.message
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

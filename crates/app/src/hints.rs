@@ -522,7 +522,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "machine_configuration",
-        "Machine Configuration: your machine's size, its post processor and the folder its files go to",
+        "Machine Configuration: your machine's size, its post processor and the folder its files go to. If the saved machines can't be read at start, a copy is kept as machines.json.bad and they are never saved over",
     ),
     (
         "add_machine",

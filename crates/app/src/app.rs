@@ -1105,6 +1105,8 @@ struct CutCraftApp {
     machines: cut_craft_machines::Machines,
     /// Where `machines` is kept; `None` keeps them in memory (tests).
     machines_path: Option<std::path::PathBuf>,
+    /// The machines file could not be read at start: it is never saved over this run.
+    machines_unsaved: bool,
     /// Cut Craft's posts and the user's custom ones.
     posts: cut_craft_machines::Library,
     /// The open Machine Configuration Management and Post-Processor Management windows.

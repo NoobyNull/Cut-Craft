@@ -96,6 +96,7 @@ impl CutCraftApp {
             addons: crate::addons::Addons::new(None),
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
+            machines_unsaved: false,
             posts: cut_craft_machines::Library::new(None),
             machine_window: None,
             first_run: None,
@@ -1704,12 +1705,37 @@ impl CutCraftApp {
     /// Reads the machines and finds the custom posts, kept in the config folder.
     pub(super) fn load_machines(&mut self) {
         let dir = files::config_dir();
-        self.machines_path = dir.as_ref().map(|d| d.join("machines.json"));
-        if let Some(path) = &self.machines_path {
-            self.machines = cut_craft_machines::Machines::load(path);
+        if let Some(path) = dir.as_ref().map(|d| d.join("machines.json")) {
+            self.load_machines_at(&path);
         }
-
         self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
+    }
+
+    /// Reads the machines kept at `path`. One that cannot be read is said, copied aside to
+    /// `machines.json.bad`, and never saved over this run: machine changes are not saved
+    /// until it is put right or moved away and Cut Craft is started again.
+    pub(super) fn load_machines_at(&mut self, path: &std::path::Path) {
+        match cut_craft_machines::Machines::load(path) {
+            Ok(machines) => {
+                self.machines = machines;
+                self.machines_path = Some(path.to_owned());
+            }
+            Err(e) => {
+                log::warn!("machines not read: {e}");
+                let aside = path.with_extension("json.bad");
+                let kept = match std::fs::copy(path, &aside) {
+                    Ok(_) => format!("a copy is kept as {}", aside.display()),
+                    Err(_) => "it is left as it is".to_owned(),
+                };
+                self.status.set_message(&format!(
+                    "Your machines could not be read ({e}); {kept}. Machine changes will not \
+                     be saved until it is fixed or moved away and Cut Craft is restarted"
+                ));
+                self.machines = cut_craft_machines::Machines::default();
+                self.machines_path = None;
+                self.machines_unsaved = true;
+            }
+        }
     }
 
     /// The active machine's tool changer was loaded differently: the machines are saved,
@@ -1725,6 +1751,13 @@ impl CutCraftApp {
 
     /// Writes the machines, if they have a file, and reports `done` or the failure.
     pub(super) fn machines_changed(&mut self, done: &str) {
+        if self.machines_unsaved {
+            self.status.set_message(&format!(
+                "{done}, but not saved: the machines file could not be read when Cut Craft \
+                 started, so it is not saved over"
+            ));
+            return;
+        }
         let result = self
             .machines_path
             .as_deref()
