@@ -7944,6 +7944,30 @@ fn a_polyline_is_drawn_point_by_point_with_curves_and_its_keys() {
 }
 
 #[test]
+fn a_space_typed_between_a_polylines_angle_and_length_does_not_finish_it() {
+    let mut h = Harness::new();
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.geometry_snapping = false;
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    let at = h.at(10.0, 10.0);
+    h.click(at, Modifiers::NONE);
+    // "90A 2L": the Space comes as a key and as typed text
+    h.frame(vec![Event::Text("90A".into())]);
+    h.frame(vec![key(Key::Space), Event::Text(" ".into())]);
+    h.frame(vec![Event::Text("2L".into())]);
+    assert_eq!(h.app.polyline.points.len(), 1, "still drawing");
+    h.frame(vec![key(Key::Enter)]);
+    assert_eq!(h.app.polyline.points.len(), 2, "{}", h.app.status.message);
+    // with nothing typed, Space still finishes it
+    let at = h.at(40.0, 10.0);
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![key(Key::Space), Event::Text(" ".into())]);
+    assert!(h.app.polyline.is_empty(), "finished");
+    assert_eq!(h.app.doc.vectors.len(), 1);
+}
+
+#[test]
 fn edit_polyline_from_an_end_node_draws_on_and_extends_the_same_vector() {
     use cut_craft_core::nodes::NodeAt;
     use cut_craft_core::params::Xy;

@@ -989,8 +989,9 @@ impl CutCraftApp {
 
     /// Draw Line / Polyline's keys while it is the tool: S swaps curves and straight lines;
     /// with a polyline begun, Backspace takes back a point (or a typed character), Tab
-    /// closes it, Space finishes it and starts another, Esc finishes it (and closes the
-    /// form), and numbers typed then Enter place the next point.
+    /// closes it, Space finishes it and starts another (unless a point is being typed),
+    /// Esc finishes it (and closes the form), and numbers typed then Enter place the next
+    /// point.
     pub(super) fn polyline_keys(&mut self, ctx: &egui::Context) {
         use egui::{Key, Modifiers};
         if self.drawing_tool() != Some("draw_polyline") {
@@ -1032,10 +1033,14 @@ impl CutCraftApp {
                 })
                 .collect()
         });
-        let typed: String = typed
+        let mut typed: String = typed
             .chars()
             .filter(|c| c.is_ascii_digit() || ".,-aAlL ".contains(*c))
             .collect();
+        // a space only goes between what is typed ("90A 2L"); on its own it finishes
+        if self.polyline.typed.is_empty() {
+            typed = typed.trim_start().to_owned();
+        }
         if !typed.is_empty() {
             for k in [Key::A, Key::L, Key::Comma, Key::Period, Key::Minus]
                 .into_iter()
@@ -1073,7 +1078,8 @@ impl CutCraftApp {
             self.finish_polyline(true);
             self.polyline.tabbed = true;
         }
-        if key(Key::Space) {
+        // while a point is being typed, Space is part of it, not the end of the polyline
+        if key(Key::Space) && self.polyline.typed.is_empty() {
             self.finish_polyline(false);
         }
         // Escape is left for the shortcuts, which then close the form
@@ -2105,7 +2111,8 @@ impl CutCraftApp {
             ),
             "draw_polyline" => Some(
                 "Click the next point (drag for a curved span); click the first point to close it, \
-                 or right-click, Space or Escape to finish it open; Backspace takes a point back"
+                 or right-click, Space or Escape to finish it open; Backspace takes a point back; \
+                 or type the next one (20, x,y or 90A 20L) and press Enter"
                     .into(),
             ),
             "draw_rectangle" => drag("Draw Rectangle: drag from one corner to the opposite one"),
