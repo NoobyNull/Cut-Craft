@@ -2893,6 +2893,46 @@ fn the_3d_view_shows_the_model_until_there_is_a_preview() {
 }
 
 #[test]
+fn reshaping_a_made_shape_by_hand_stops_it_being_remade_from_its_settings() {
+    // sculpting or embossing a Create Shape dome and then pressing E would rebuild it from
+    // its outline and throw the work away: once its heights are edited, it is just a model
+    for tool in [
+        "emboss",
+        "smooth_selected_components",
+        "replace_below",
+        "sculpt",
+    ] {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        let shape = h.app.registry.get("create_shape").unwrap().default_params();
+        h.app.apply("create_shape", &shape).unwrap();
+        let id = *h.app.doc.components.keys().next().unwrap();
+        h.app.doc.selection.clear();
+        h.app.doc.selected_components = [id].into_iter().collect();
+        assert_eq!(
+            h.app.made_to_edit(),
+            Some("create_shape"),
+            "{tool}: made here"
+        );
+        let mut params = h.app.registry.get(tool).unwrap().default_params();
+        if tool == "sculpt" {
+            params["points"] = serde_json::json!([{ "x": 30.0, "y": 30.0 }]);
+        }
+        if tool == "replace_below" {
+            params["below"] = 0.5.into();
+        }
+        h.app.apply(tool, &params).unwrap();
+        assert!(
+            h.app.doc.components.values().all(|k| k.shape.is_none()),
+            "{tool} leaves a model, not a recipe to remake"
+        );
+        let ids: Vec<_> = h.app.doc.components.keys().copied().collect();
+        h.app.doc.selected_components = ids.into_iter().collect();
+        assert_eq!(h.app.made_to_edit(), None, "{tool}: E no longer remakes it");
+    }
+}
+
+#[test]
 fn a_double_click_in_the_3d_view_picks_the_component_under_it() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::domed();
