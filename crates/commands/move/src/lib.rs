@@ -30,9 +30,10 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Relative rotated", extend("x-show-when" = {"relative": true}))]
     pub rotated: bool,
-    /// The angle the offset is turned by, anticlockwise from the X axis
+    /// The angle the offset is turned by, anticlockwise from the X axis; shown with Relative
+    /// and Relative rotated ticked
     #[serde(default)]
-    #[schemars(extend("x-unit" = "deg", "x-show-when" = {"rotated": true}))]
+    #[schemars(extend("x-unit" = "deg", "x-show-when" = {"relative": true, "rotated": true}))]
     pub angle: f64,
 }
 
