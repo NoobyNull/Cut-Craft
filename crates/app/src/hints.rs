@@ -141,7 +141,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "node_edit",
-        "Node Edit: shows the points (nodes) a vector is made of, to drag them, or right-click to add, delete or change them",
+        "Node Edit: shows the points (nodes) a vector is made of, to drag them, or right-click to add, delete or change them; picked nodes are let go when you pick another vector, undo or leave Node Edit",
     ),
     (
         "measure_inspect",

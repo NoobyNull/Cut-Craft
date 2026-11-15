@@ -3762,6 +3762,26 @@ impl CutCraftApp {
         minutes * s.scale
     }
 
+    /// Lets go of picked nodes that no longer stand for a node to move: all of them once
+    /// Node Edit is put away, and any whose vector is no longer selected or has no node
+    /// where it was picked any more (after an undo, redo or delete).
+    pub(super) fn prune_picked_nodes(&mut self) {
+        if self.picked_nodes.is_empty() {
+            return;
+        }
+        if self.view_tool != Some(super::ViewTool::NodeEdit) {
+            self.picked_nodes.clear();
+            return;
+        }
+        let doc = &self.doc;
+        self.picked_nodes.retain(|n| {
+            doc.selection.contains(&n.vector)
+                && doc.vectors.get(&n.vector).is_some_and(|path| {
+                    cut_craft_core::nodes::node_near(path, n.at.into(), n.reach.max(1e-3)).is_some()
+                })
+        });
+    }
+
     /// Moves the picked nodes by `by`; across a mirror line (H: up and down through the
     /// selection's middle; V: across it) the nodes on the far side move the other way, so
     /// mirrored pairs stay mirrored.
@@ -3850,6 +3870,7 @@ impl CutCraftApp {
             return;
         }
         // node editing with nodes picked: the arrows move those, mirrored across the lines
+        self.prune_picked_nodes();
         if self.view_tool == Some(super::ViewTool::NodeEdit) && !self.picked_nodes.is_empty() {
             self.nudge_nodes(by);
             return;

@@ -62,6 +62,8 @@ impl CutCraftApp {
         self.note_stale();
         // a job opened or made, or another machine chosen: the machine's zones on it
         self.sync_machine_keep_out();
+        // nodes picked on a vector since unselected, undone or put away are let go
+        self.prune_picked_nodes();
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);

@@ -8949,6 +8949,39 @@ fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
 }
 
 #[test]
+fn picked_nodes_are_let_go_when_the_selection_changes_or_an_undo_moves_them() {
+    use cut_craft_core::geometry::Rect as JobRect;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    let first = *h.app.doc.vectors.keys().next().unwrap();
+    h.rectangle(100.0, 10.0, 20.0, 20.0);
+    let second = *h.app.doc.vectors.keys().last().unwrap();
+    h.app.doc.selection = [first].into();
+    h.app.invoke(&h.ctx, "node_edit");
+    let top = JobRect::new(Point::new(5.0, 25.0), Point::new(35.0, 35.0));
+    h.app.picked_nodes = h.app.nodes_in(top);
+    assert_eq!(h.app.picked_nodes.len(), 2);
+    // another vector picked: the arrows move it, not the first one's nodes
+    h.app.doc.selection = [second].into();
+    let before = h.app.doc.vectors[&first].clone();
+    h.frame(vec![key(Key::ArrowLeft)]);
+    assert_eq!(h.app.doc.vectors[&first], before, "the first one stays");
+    assert!(h.app.picked_nodes.is_empty());
+    // picked again, nudged, then undone: the picks are where no node is any more
+    h.app.doc.selection = [first].into();
+    h.app.picked_nodes = h.app.nodes_in(top);
+    h.frame(vec![key(Key::ArrowLeft)]);
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    assert!(h.app.picked_nodes.is_empty(), "{:?}", h.app.picked_nodes);
+    // and leaving node editing lets them go
+    h.app.picked_nodes = h.app.nodes_in(top);
+    h.app.invoke(&h.ctx, "node_edit");
+    h.frame(vec![]);
+    assert!(h.app.picked_nodes.is_empty());
+}
+
+#[test]
 fn the_summary_allows_for_the_active_machines_acceleration_when_asked() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
