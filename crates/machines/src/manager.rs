@@ -926,7 +926,8 @@ fn buttons(ui: &mut egui::Ui, can_keep: bool) -> Option<MachineOutcome> {
 pub enum PostOutcome {
     /// Pick a `.pp` file to install.
     Install,
-    /// Use this post with the active machine.
+    /// Make this post the active machine's default, used for the jobs it suits (flat, or
+    /// rotary wrapping its side).
     Select(String),
     /// Show the custom posts' folder.
     OpenFolder(PathBuf),
@@ -1091,7 +1092,7 @@ impl PostManager {
                     let select = ui
                         .add_enabled(picked.is_some(), egui::Button::new("Select"))
                         .on_hover_hint(
-                            "Make it the post the active machine saves toolpaths through",
+                            "Make it the post the active machine saves toolpaths through, for the jobs it suits: a flat post for flat jobs, a wrapping one for rotary jobs",
                         );
                     if select.clicked()
                         && let Some(name) = picked

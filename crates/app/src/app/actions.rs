@@ -2038,6 +2038,15 @@ impl CutCraftApp {
                 }
             }
             PostOutcome::Select(name) => {
+                let wraps = self.doc.job.rotary.map(|r| match r.along {
+                    cut_craft_core::document::Along::X => "Y",
+                    cut_craft_core::document::Along::Y => "X",
+                });
+                let picked = self
+                    .posts
+                    .load(&name)
+                    .ok()
+                    .map(|p| p.wraps().map(str::to_owned));
                 // into Machine Configuration's edits when it is open, else the machines
                 let machines = match &mut self.machine_window {
                     Some(window) => &mut window.draft,
@@ -2052,7 +2061,34 @@ impl CutCraftApp {
                 }
                 // the post picked is the one toolpaths save through from now on
                 machine.default_post = Some(name.clone());
-                let done = format!("{} now saves through {name}", machine.name);
+                let mut done = format!("{} now saves through {name}", machine.name);
+                // the default is used only for jobs it suits (flat, or wrapping the same
+                // side): a job it does not suit saves through the machine's first that does
+                if let Some(picked) = picked.filter(|p| p.as_deref() != wraps) {
+                    let kind = match &picked {
+                        None => "flat jobs".to_owned(),
+                        Some(axis) => format!("rotary jobs wrapping {axis} onto A"),
+                    };
+                    let job = if wraps.is_some() {
+                        "this job wraps round"
+                    } else {
+                        "this job is flat"
+                    };
+                    let used = (machine.posts.iter())
+                        .find(|n| self.posts.load(n).is_ok_and(|p| p.wraps() == wraps));
+                    done = match used {
+                        Some(used) => format!(
+                            "{} now saves {kind} through {name}; {job}, so it saves through \
+                             {used}",
+                            machine.name
+                        ),
+                        None => format!(
+                            "{} now saves {kind} through {name}; {job}, and none of its posts \
+                             suits it: add one in Machine Configuration",
+                            machine.name
+                        ),
+                    };
+                }
                 if self.machine_window.is_some() {
                     self.status
                         .set_message(&format!("{done} once Machine Configuration is applied"));

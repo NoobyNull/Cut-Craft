@@ -13528,7 +13528,10 @@ fn selecting_a_post_makes_it_the_one_the_machine_saves_through() {
     let first = cut_craft_post::Post::parse(cut_craft_post::BUILT_IN[0].1)
         .unwrap()
         .name;
-    let second = cut_craft_post::Post::parse(cut_craft_post::BUILT_IN[1].1)
+    // another flat post, so it suits this flat job
+    let second = (cut_craft_post::BUILT_IN.iter())
+        .map(|(_, text)| cut_craft_post::Post::parse(text).unwrap())
+        .find(|p| p.wraps().is_none() && p.name != first)
         .unwrap()
         .name;
     h.app.machines.active_mut().unwrap().posts = vec![first.clone()];
@@ -13536,6 +13539,8 @@ fn selecting_a_post_makes_it_the_one_the_machine_saves_through() {
         .post_outcome(cut_craft_machines::PostOutcome::Select(second.clone()));
     let machine = h.app.machines.active().unwrap();
     assert_eq!(machine.post(), Some(second.as_str()));
+    assert_eq!(h.app.output_post().unwrap().name, second, "what Save uses");
+    let machine = h.app.machines.active().unwrap();
     assert!(machine.posts.contains(&first), "the others stay listed");
     assert!(
         h.app.status.message.contains("now saves through"),
@@ -13665,4 +13670,55 @@ fn a_drill_shows_as_drill_only_in_the_tool_database_and_can_be_changed_there() {
     h.click(tick, Modifiers::NONE);
     h.frame(vec![]);
     assert!(!h.app.tool_manager.as_ref().unwrap().draft.tools[at].drill_only);
+}
+
+#[test]
+fn selecting_a_post_that_does_not_suit_the_open_job_says_which_post_it_saves_through() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.machines.add();
+    let entries = h.app.posts.entries();
+    let load = |name: &str| h.app.posts.load(name).unwrap();
+    let flat = (entries.iter())
+        .find(|e| load(&e.name).wraps().is_none())
+        .unwrap()
+        .name
+        .clone();
+    let round = (entries.iter())
+        .find(|e| load(&e.name).wraps() == Some("Y"))
+        .unwrap()
+        .name
+        .clone();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.rotary = true;
+    machine.posts = vec![round.clone()];
+    // a rotary job: a flat post picked is the default for flat jobs only
+    h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
+    h.app
+        .post_outcome(cut_craft_machines::PostOutcome::Select(flat.clone()));
+    let message = h.app.status.message.clone();
+    assert_eq!(h.app.output_post().unwrap().name, round);
+    assert!(
+        message.contains(&format!("saves flat jobs through {flat}")),
+        "{message}"
+    );
+    assert!(
+        message.contains(&format!(
+            "this job wraps round, so it saves through {round}"
+        )),
+        "{message}"
+    );
+    // a flat job: the picked one is used, and said plainly
+    h.app.doc.job = Job::default();
+    h.app
+        .post_outcome(cut_craft_machines::PostOutcome::Select(flat.clone()));
+    assert_eq!(h.app.output_post().unwrap().name, flat);
+    assert!(
+        h.app
+            .status
+            .message
+            .contains(&format!("now saves through {flat}")),
+        "{}",
+        h.app.status.message
+    );
 }
