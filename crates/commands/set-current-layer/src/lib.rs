@@ -10,7 +10,8 @@ pub struct SetCurrentLayer;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// New vectors go on this layer.
+    /// New vectors go on this layer. A shape remade from others (Weld, Trim, Join and the
+    /// like) stays on the layer the originals were on.
     pub layer: LayerId,
 }
 

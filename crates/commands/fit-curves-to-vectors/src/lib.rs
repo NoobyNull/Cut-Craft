@@ -1,5 +1,6 @@
 //! Fit Curves to Vectors: the selected vectors redrawn as circular arcs, Béziers or straight
-//! lines within a tolerance, replacing them or added beside them on the current layer.
+//! lines within a tolerance, replacing them on their own layer or added beside them on the
+//! current layer.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::trace::{self, Fit};

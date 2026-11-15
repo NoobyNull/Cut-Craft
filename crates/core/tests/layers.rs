@@ -130,3 +130,32 @@ fn locked_vectors_are_shown_but_hidden_ones_are_not() {
         assert_eq!(doc.shown(id), shown);
     }
 }
+
+#[test]
+fn an_edit_result_stays_on_its_originals_layer_and_untouched_vectors_stay_put() {
+    let mut doc = Document::default();
+    let first = doc.current_layer;
+    let a = add(&mut doc, 0.0);
+    let b = add(&mut doc, 20.0);
+    let mut c = Change::builder(&doc);
+    let second = c.add_layer("Other");
+    c.set_current_layer(second);
+    doc.apply(&c.finish()).unwrap();
+    // `a` is replaced by a new shape; `b` comes back unchanged, as Join gives back loose ends
+    let unchanged = doc.vectors[&b].clone();
+    let change = Change::swap(&doc, [a, b], vec![square(0.0, 0.0, 5.0), unchanged]);
+    doc.apply(&change).unwrap();
+    assert!(
+        doc.vectors.contains_key(&b),
+        "an unchanged vector keeps its id"
+    );
+    let made: Vec<EntityId> = doc.vectors.keys().copied().filter(|id| *id != b).collect();
+    assert_eq!(made.len(), 1);
+    assert_eq!(
+        doc.layer_of(made[0]),
+        first,
+        "the result stays on the original's layer"
+    );
+    assert_eq!(doc.layer_of(b), first);
+    assert!(doc.selection.contains(&b) && doc.selection.contains(&made[0]));
+}

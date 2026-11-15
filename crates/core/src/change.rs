@@ -594,17 +594,40 @@ impl Change {
     }
 
     /// Replaces `remove` with `add`, selecting what was added: the shape of every boolean,
-    /// offset or join result.
+    /// offset or join result. The results go on the layer of the first original removed (the
+    /// current layer when nothing is), and a result identical to an original just keeps it.
     pub fn swap(
         doc: &Document,
         remove: impl IntoIterator<Item = EntityId>,
         add: Vec<Path>,
     ) -> Self {
         let mut c = Self::builder(doc);
-        for id in remove {
+        let mut removing: Vec<EntityId> = remove.into_iter().collect();
+        let layer = removing.first().map(|&id| doc.layer_of(id));
+        // a result the same as an original keeps the original, its id, layer and group
+        let ids: Vec<Option<EntityId>> = add
+            .iter()
+            .map(|p| {
+                let at = removing.iter().position(|id| doc.vectors[id] == *p)?;
+                Some(removing.remove(at))
+            })
+            .collect();
+        for id in removing {
             c.remove(id);
         }
-        let ids: Vec<EntityId> = add.into_iter().map(|p| c.add(p)).collect();
+        let ids: Vec<EntityId> = add
+            .into_iter()
+            .zip(ids)
+            .map(|(p, kept)| {
+                kept.unwrap_or_else(|| {
+                    let id = c.add(p);
+                    if let Some(layer) = layer {
+                        c.move_to_layer(id, layer);
+                    }
+                    id
+                })
+            })
+            .collect();
         c.select(ids);
         c.finish()
     }
