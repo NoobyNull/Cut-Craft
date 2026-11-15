@@ -13471,8 +13471,10 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
 fn a_tool_renamed_in_the_tool_database_is_renamed_in_the_jobs_toolpaths_too() {
     let mut h = Harness::new();
     two_tools(&mut h);
-    h.app
-        .rename_toolpath_tools(&[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())]);
+    h.app.rename_toolpath_tools(
+        &[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())],
+        "Tool database saved",
+    );
     let names: Vec<(String, String)> = h
         .app
         .doc
@@ -13563,4 +13565,52 @@ fn machine_configuration_s_install_offline_package_adds_to_the_machines_being_ed
         h.app.status.message
     );
     let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn a_tool_renamed_in_the_tool_database_is_renamed_in_other_saved_jobs_when_they_open() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-renamed-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    // another job, saved before the bit was renamed
+    let other = dir.join("other.ccjob");
+    h.app.save_to(&other);
+    // renamed in the Tool Database window, then OK
+    h.app.invoke(&h.ctx, "tool_database");
+    h.frame(vec![]);
+    let manager = h.app.tool_manager.as_mut().unwrap();
+    let at = manager.draft.index_of("6 mm End Mill").unwrap();
+    manager.draft.tools[at].name = "Spiral 6".into();
+    manager.note_rename("6 mm End Mill", "Spiral 6");
+    h.frame(vec![]);
+    let ok = *h.texts_at("OK").last().expect("the window has OK");
+    h.click(ok, Modifiers::NONE);
+    h.frame(vec![]);
+    let names = |h: &Harness| -> Vec<String> {
+        (h.app.doc.toolpaths.values())
+            .map(|t| t.tool.name.clone())
+            .collect()
+    };
+    assert!(
+        names(&h).contains(&"Spiral 6".to_owned()),
+        "{:?}",
+        names(&h)
+    );
+    // the other job takes the new name when it opens, so its changer slot is found
+    assert!(h.app.open_path(&other));
+    assert!(
+        names(&h).contains(&"Spiral 6".to_owned()),
+        "{:?}",
+        names(&h)
+    );
+    assert!(!names(&h).contains(&"6 mm End Mill".to_owned()));
+    // a new bit given the old name is not mistaken for the renamed one
+    let mut new = h.app.tools.get("Spiral 6").unwrap().clone();
+    new.name = "6 mm End Mill".into();
+    h.app.tools.tools.push(new);
+    assert!(h.app.open_path(&other));
+    assert!(names(&h).contains(&"6 mm End Mill".to_owned()));
+    let _ = std::fs::remove_dir_all(dir);
 }

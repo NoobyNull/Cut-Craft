@@ -122,6 +122,9 @@ impl CutCraftApp {
             Outcome::Apply | Outcome::Ok | Outcome::Select(_) => {
                 self.tools = manager.draft.clone();
                 let renamed = manager.take_renamed();
+                for (from, to) in &renamed {
+                    self.tools.note_renamed(from, to);
+                }
                 let mut changer = manager.changer.clone();
                 // the Tool Changer window's Select…: the tool goes in that holder
                 if let (Outcome::Select(name), Some(super::PickFor::Holder(slot)), Some(c)) =
@@ -136,7 +139,7 @@ impl CutCraftApp {
                     self.tool_manager = None;
                 }
                 self.tools_changed("Tool database saved");
-                self.rename_toolpath_tools(&renamed);
+                self.rename_toolpath_tools(&renamed, "Tool database saved");
                 self.refresh_form_tool();
                 if let Outcome::Select(name) = &outcome {
                     let picking = self.picking;

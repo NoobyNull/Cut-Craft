@@ -2242,6 +2242,15 @@ impl CutCraftApp {
                 if self.doc.notes.starts_with('.') {
                     self.start_command("notes");
                 }
+                // a job saved before one of its bits was renamed takes the new name
+                let renamed: Vec<(String, String)> = (self.doc.toolpaths.values())
+                    .filter_map(|t| {
+                        let now = self.tools.renamed_now(&t.tool)?;
+                        Some((t.tool.name.clone(), now.to_owned()))
+                    })
+                    .collect();
+                let opened = format!("Opened {}", super::file_name(path));
+                self.rename_toolpath_tools(&renamed, &opened);
                 true
             }
             Err(e) => {
@@ -5314,7 +5323,8 @@ impl CutCraftApp {
     /// Tools renamed in the Tool Database, (old name, new name): the job's toolpaths that
     /// cut with them take the new name too (one undoable step), so the file still finds the
     /// tool changer slot the tool is loaded in under its new name. Nothing is recalculated.
-    pub(super) fn rename_toolpath_tools(&mut self, renamed: &[(String, String)]) {
+    /// The status bar says so after `done`.
+    pub(super) fn rename_toolpath_tools(&mut self, renamed: &[(String, String)], done: &str) {
         let mut change = Change::builder(&self.doc);
         let mut count = 0;
         for (&id, toolpath) in &self.doc.toolpaths {
@@ -5335,7 +5345,7 @@ impl CutCraftApp {
         let what = if count == 1 { "toolpath" } else { "toolpaths" };
         self.record(
             Ok(change.finish()),
-            &format!("Tool database saved; {count} {what} use the renamed tool's new name"),
+            &format!("{done}; {count} {what} use the renamed tool's new name"),
         );
     }
 

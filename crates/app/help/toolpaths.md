@@ -52,6 +52,9 @@ then moves across to the next cut. You set Z zero for the new bit during the pau
 the machine never travels sideways at the height the bit was left at.
 If the next toolpath uses the same bit at another spindle speed (another material, say),
 the file sets the new speed there, without stopping, so each toolpath cuts at its own rpm.
+A bit renamed in the Tool Database keeps its tool changer slot: this job's toolpaths take
+the new name at once, and a job saved before the rename takes it when it opens (Undo puts
+the old name back), so the file still gives the bit its slot's tool number.
 
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the
