@@ -186,7 +186,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "save_as",
-        "Save As: saves the job under a new name or in another folder",
+        "Save As: saves the job under a new name or in another folder, starting from its own name and folder",
     ),
     (
         "save_as_template",

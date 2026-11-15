@@ -13816,3 +13816,20 @@ fn save_changes_names_just_the_file_and_its_buttons_say_what_they_do() {
     assert!(h.app.discard_answered(&custom(super::actions::DONT_SAVE)));
     assert!(!h.app.discard_answered(&custom("Cancel")));
 }
+
+#[test]
+fn save_as_suggests_the_jobs_own_name_in_its_own_folder() {
+    let mut h = Harness::new();
+    assert_eq!(
+        h.app.save_as_suggestion(),
+        (None, "untitled.ccjob".to_owned())
+    );
+    h.app.session.path = Some(std::path::PathBuf::from("/jobs/garden sign.ccjob"));
+    assert_eq!(
+        h.app.save_as_suggestion(),
+        (
+            Some(std::path::PathBuf::from("/jobs")),
+            "garden sign.ccjob".to_owned()
+        )
+    );
+}

@@ -994,15 +994,7 @@ impl CutCraftApp {
                 Some(path) => self.save_to(&path),
                 None => self.file_action("save_as"),
             },
-            "save_as" => {
-                if let Some(path) = job_dialog()
-                    .set_file_name(format!("untitled.{JOB_EXTENSION}"))
-                    .save_file()
-                    && let Some(path) = saving_path(&path, &[JOB_EXTENSION])
-                {
-                    self.save_to(&path);
-                }
-            }
+            "save_as" => self.save_as(),
             "import_vectors_bitmap" | "import_component_3d_model" => {
                 let mut dialog = file_dialog();
                 let models = id == "import_component_3d_model";
@@ -2547,6 +2539,39 @@ impl CutCraftApp {
             ))
             .show();
         self.discard_answered(&answer)
+    }
+
+    /// File ▸ Save As: the job saved under the name and folder the person picks.
+    fn save_as(&mut self) {
+        let (folder, name) = self.save_as_suggestion();
+        let dialog = job_dialog().set_file_name(name);
+        let dialog = match folder {
+            Some(folder) => dialog.set_directory(folder),
+            None => dialog,
+        };
+        if let Some(path) = dialog.save_file()
+            && let Some(path) = saving_path(&path, &[JOB_EXTENSION])
+        {
+            self.save_to(&path);
+        }
+    }
+
+    /// Where Save As starts: the job's own folder and name when it has a file, else
+    /// `untitled.ccjob` wherever file dialogs open.
+    pub(super) fn save_as_suggestion(&self) -> (Option<std::path::PathBuf>, String) {
+        let Some(path) = &self.session.path else {
+            return (None, format!("untitled.{JOB_EXTENSION}"));
+        };
+        let name = path.file_stem().map_or_else(
+            || "untitled".to_owned(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        (
+            path.parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .map(std::path::Path::to_owned),
+            format!("{name}.{JOB_EXTENSION}"),
+        )
     }
 
     /// The question asked before unsaved work is replaced: the job's file name alone.
