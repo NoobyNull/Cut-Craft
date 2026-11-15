@@ -554,15 +554,23 @@ fn file_uri(path: &Path) -> String {
 }
 
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
-/// other gets `_1`, and it keeps counting past names that `exists` says are taken.
+/// other gets `_1`, and it keeps counting past names that `exists` says are taken. Only a
+/// short number counts up: a year (`Smith-2024`) or a date (`order_20241115`) on the end of
+/// the name is part of it, so it gets `_1` after it.
 pub fn incremented(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
     let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("untitled");
+    let counter = |digits: &str| {
+        digits
+            .parse::<u64>()
+            .ok()
+            .filter(|n| digits.len() <= 4 && !(1900..=2099).contains(n))
+    };
     let (base, mut n) = match stem.rfind(['_', '-']) {
-        Some(at) if stem[at + 1..].parse::<u64>().is_ok() => {
-            (&stem[..=at], stem[at + 1..].parse::<u64>().unwrap_or(0))
+        Some(at) if counter(&stem[at + 1..]).is_some() => {
+            (&stem[..=at], counter(&stem[at + 1..]).unwrap_or(0))
         }
         _ => (stem, 0),
     };
@@ -844,6 +852,24 @@ mod increment_tests {
         assert_eq!(
             incremented(Path::new("/j/sign_1.ccjob"), taken),
             PathBuf::from("/j/sign_3.ccjob")
+        );
+    }
+
+    #[test]
+    fn increment_leaves_a_year_or_date_on_the_end_of_the_name_alone() {
+        let none = |_: &Path| false;
+        assert_eq!(
+            incremented(Path::new("/j/Smith-2024.ccjob"), none),
+            PathBuf::from("/j/Smith-2024_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/order_20241115.ccjob"), none),
+            PathBuf::from("/j/order_20241115_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/sign_999.ccjob"), none),
+            PathBuf::from("/j/sign_1000.ccjob"),
+            "a counter it made itself keeps counting"
         );
     }
 }
