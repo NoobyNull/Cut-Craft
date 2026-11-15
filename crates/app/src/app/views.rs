@@ -1416,6 +1416,22 @@ impl CutCraftApp {
             placing_tabs,
             joining_ends,
         } = modes;
+        // selecting or transforming, a slow click or one the hand shifted a pixel or two is
+        // a click, not a move or a resize (a third of the reach is about three pixels)
+        let gesture = match gesture {
+            Some(Gesture::Dropped { drag, shift })
+                if matches!(self.view_tool, None | Some(ViewTool::Transform))
+                    && self.drawing_tool().is_none()
+                    && !tracing
+                    && drag.start.distance(drag.end) < reach / 3.0 =>
+            {
+                Some(Gesture::Click {
+                    at: drag.start,
+                    shift,
+                })
+            }
+            gesture => gesture,
+        };
         match (gesture, self.view_tool, self.drawing_tool()) {
             (Some(Gesture::Dropped { drag, .. }), Some(ViewTool::ZoomBox), _) => {
                 self.zoom_box(ui, area, drag);

@@ -2637,6 +2637,31 @@ fn dragging_the_move_cross_with_shift_keeps_to_one_axis_in_select_mode() {
 }
 
 #[test]
+fn a_slow_click_with_a_little_jitter_on_a_selected_vector_does_not_move_it() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    h.app.doc.selection = [id].into();
+    h.frame(vec![]);
+    let (before, steps) = (h.app.doc.vectors.clone(), h.app.history.undo_depth());
+    // held past a click's time, and the hand shifts a pixel: on a side's handle, and
+    // inside the selection
+    for (x, y) in [(10.0, 30.0), (20.0, 40.0)] {
+        let at = h.at(x, y);
+        h.frame(vec![Event::PointerMoved(at)]);
+        h.press(at, true, Modifiers::NONE);
+        for _ in 0..8 {
+            h.frame(vec![]);
+        }
+        h.frame(vec![Event::PointerMoved(at + vec2(1.0, 1.0))]);
+        h.press(at + vec2(1.0, 1.0), false, Modifiers::NONE);
+        h.frame(vec![]);
+        assert_eq!(h.app.doc.vectors, before, "not moved from {x}, {y}");
+    }
+    assert_eq!(h.app.history.undo_depth(), steps, "no Moved step");
+}
+
+#[test]
 fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
