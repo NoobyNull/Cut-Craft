@@ -1838,7 +1838,9 @@ impl CutCraftApp {
             )
         };
         match grab {
-            Grab::Vector(id) => vec![self.doc.vectors[&id].clone()],
+            Grab::Vector(id) => (self.doc.group_members(id).iter())
+                .filter_map(|m| self.doc.vectors.get(m).cloned())
+                .collect(),
             Grab::Component(id) => vec![boxed(self.doc.components[&id].extent())],
             Grab::Selection => {
                 let vectors = self
@@ -1904,10 +1906,11 @@ impl CutCraftApp {
                 .window(Rect::new(drag.start, drag.end), drag.end.x < drag.start.x);
             return self.select(ids, shift);
         };
-        // a vector or model not yet picked is picked, on its own, as it is dragged
+        // a vector or model not yet picked is picked, on its own (a vector with its
+        // group, as a click picks it), as it is dragged
         match grab {
             Grab::Vector(id) => {
-                self.doc.selection = [id].into();
+                self.select([id], false);
                 self.doc.selected_components.clear();
             }
             Grab::Component(id) => {

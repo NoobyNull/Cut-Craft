@@ -1,4 +1,5 @@
-//! Group: the selected vectors become one group, picked and moved together. Groups do not
+//! Group: the selected vectors become one group, picked and moved together (dragging any
+//! one of them, picked or not, moves the whole group). Groups do not
 //! hold groups yet: text grouped with something else becomes curves (Group says so in red
 //! under the tools), and a part's name moves to the new group.
 

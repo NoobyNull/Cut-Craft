@@ -2535,6 +2535,35 @@ fn right_clicking_a_vector_picks_it_unless_it_is_already_selected() {
 }
 
 #[test]
+fn dragging_an_unselected_grouped_vector_moves_its_whole_group() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.rectangle(100.0, 10.0, 40.0, 40.0);
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.app.invoke(&h.ctx, "group");
+    h.app.doc.selection.clear();
+    h.frame(vec![]);
+    let lefts = |h: &Harness| -> Vec<f64> {
+        h.app
+            .doc
+            .vectors
+            .values()
+            .map(|v| v.bounds().min.x)
+            .collect()
+    };
+    let before = lefts(&h);
+    let member = *h.app.doc.vectors.keys().next().unwrap();
+    let outlines = h.app.grabbed_outlines(super::Grab::Vector(member));
+    assert_eq!(outlines.len(), 2, "the drag shows the whole group moving");
+    h.drag(h.at(10.0, 30.0), h.at(30.0, 30.0));
+    let after = lefts(&h);
+    assert_eq!(h.app.doc.selection.len(), 2, "the whole group is picked");
+    for (b, a) in before.iter().zip(&after) {
+        assert!((a - b - 20.0).abs() < 1.0, "{before:?} -> {after:?}");
+    }
+}
+
+#[test]
 fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
