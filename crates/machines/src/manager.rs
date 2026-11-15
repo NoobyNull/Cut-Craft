@@ -1265,6 +1265,62 @@ mod tests {
     }
 
     #[test]
+    fn install_offline_package_is_a_button_that_asks_for_a_package() {
+        let ctx = egui::Context::default();
+        let library = Library::new(None);
+        let look = Look { picture: &|_| None };
+        let mut manager = MachineManager::adding(&Machines::default());
+        let label = "Install Offline Package: add the machines in a package file you downloaded";
+        let mut at = None;
+        let mut asked = vec![];
+        for n in 0..8 {
+            let events = match (n, at) {
+                (4, Some(pos)) => vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                (5, Some(pos)) => vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                _ => vec![],
+            };
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1200.0, 1000.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_pass(input, |ctx| {
+                asked.extend(manager.show(ctx, &library, &look));
+            });
+            output.textures_delta.clear();
+            at = at.or_else(|| {
+                output
+                    .shapes
+                    .iter()
+                    .find_map(|clipped| match &clipped.shape {
+                        egui::Shape::Text(t) if t.galley.text() == label => {
+                            Some(t.pos + t.galley.size() / 2.0)
+                        }
+                        _ => None,
+                    })
+            });
+        }
+        assert!(at.is_some(), "the button is drawn");
+        assert_eq!(asked, vec![MachineOutcome::InstallPackage]);
+    }
+
+    #[test]
     fn the_windows_draw_with_and_without_machines() {
         let ctx = egui::Context::default();
         let library = Library::new(None);
