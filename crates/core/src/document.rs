@@ -393,7 +393,8 @@ pub struct Home {
     /// Where the tool starts and ends, up the job
     #[schemars(title = "Y", extend("x-unit" = "mm"))]
     pub y: f64,
-    /// How high above the material it waits
+    /// How high above the material it waits. Left at the clearance, it follows Clearance
+    /// (Z1) when that is changed, so the start and end moves never travel lower
     #[schemars(title = "Z Gap above Material", extend("x-unit" = "mm"), range(min = 0))]
     pub z: f64,
 }
