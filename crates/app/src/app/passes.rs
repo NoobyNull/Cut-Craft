@@ -14,8 +14,7 @@ use serde_json::Value;
 /// The Edit Passes… button under a form's tool, and its window while open. Whether the
 /// passes changed.
 pub(super) fn edit_passes(ui: &mut egui::Ui, params: &mut Value, units: Units) -> bool {
-    // ponytail: forms whose depth is `depth`; the V-carve and 3D forms keep theirs elsewhere
-    let Some(depth) = params["depth"].as_f64().filter(|d| *d > 0.0) else {
+    let Some(depth) = cut_depth(params) else {
         return false;
     };
     let Ok(mut tool) = serde_json::from_value::<Tool>(params["tool"].clone()) else {
@@ -46,6 +45,16 @@ pub(super) fn edit_passes(ui: &mut egui::Ui, params: &mut Value, units: Units) -
         params["tool"] = serde_json::to_value(&tool).expect("a tool serialises");
     }
     changed
+}
+
+/// The depth a form cuts to, which Edit Passes splits: its `depth`. None where there is no
+/// one depth: V-Carve's Fill works each shape's depth out from its width (its `depth` is
+/// the Groove depth of the other carves, hidden), and the 3D forms keep theirs elsewhere.
+pub(super) fn cut_depth(params: &Value) -> Option<f64> {
+    if params["place"] == "fill" {
+        return None;
+    }
+    params["depth"].as_f64().filter(|d| *d > 0.0)
 }
 
 /// The window's inside: the picture of the passes beside the ways to set them.

@@ -8771,6 +8771,30 @@ fn tools_loaded_in_the_tool_changer_window_take_their_slot_numbers() {
 }
 
 #[test]
+fn v_carve_fill_has_no_edit_passes_for_a_depth_it_does_not_cut() {
+    // Fill works its depth out from each shape's width: the hidden Groove depth is not it
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "vcarve_engrave_toolpath");
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.app.form.as_ref().unwrap().params["place"], "fill");
+    assert!(
+        h.text_at("Edit Passes…").is_none(),
+        "no passes window for Fill"
+    );
+    h.app.form.as_mut().unwrap().params["place"] = "inside".into();
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(
+        h.text_at("Edit Passes…").is_some(),
+        "a groove has its depth"
+    );
+}
+
+#[test]
 fn edit_passes_shows_each_pass_and_a_click_adds_one() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
