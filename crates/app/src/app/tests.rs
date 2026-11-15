@@ -913,6 +913,42 @@ fn the_measure_tool_shows_its_results_in_a_form() {
 }
 
 #[test]
+fn measure_snaps_both_ends_to_vector_corners() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 30.0, 40.0);
+    h.app.options.snapping.smart_snapping = false;
+    h.app.invoke(&h.ctx, "measure_inspect");
+    h.frame(vec![]);
+    let near = 2.0 / f64::from(h.app.view_transform.unwrap().scale);
+    // two pixels off each corner, the reading is corner to corner
+    h.drag(
+        h.at(10.0 + near, 10.0 - near),
+        h.at(40.0 - near, 50.0 + near),
+    );
+    assert!(
+        h.app.status.message.starts_with("Distance 50.000 mm"),
+        "{}",
+        h.app.status.message
+    );
+    // Shift places the ends freely
+    let (from, to) = (
+        h.at(10.0 + near, 10.0 - near),
+        h.at(40.0 - near, 50.0 + near),
+    );
+    let shift = Modifiers::SHIFT;
+    h.frame_holding(shift, vec![Event::PointerMoved(from)]);
+    h.press(from, true, shift);
+    h.frame_holding(shift, vec![Event::PointerMoved(from.lerp(to, 0.5))]);
+    h.frame_holding(shift, vec![Event::PointerMoved(to)]);
+    h.press(to, false, shift);
+    assert!(
+        !h.app.status.message.starts_with("Distance 50.000 mm"),
+        "{}",
+        h.app.status.message
+    );
+}
+
+#[test]
 fn times_read_as_hours_minutes_and_seconds() {
     assert_eq!(hms(0.0), "0:00:00");
     assert_eq!(hms(61.5), "1:01:30");

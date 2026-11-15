@@ -145,7 +145,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "measure_inspect",
-        "Measure: drag between two points to read the distance and angle between them, or click an object to see its size",
+        "Measure: drag between two points to read the distance and angle between them (both ends snap to ends, middles and centres as drawing does; hold Shift to place them freely), or click an object to see its size",
     ),
     (
         "pan",

@@ -3051,7 +3051,9 @@ impl CutCraftApp {
         scale: f32,
         pointer: Option<Point>,
     ) -> (Option<Gesture>, Option<Snap>, Vec<Snap>) {
-        let snapping = self.drawing_tool().is_some() || self.view_tool == Some(ViewTool::NodeEdit);
+        // drawing, node editing and measuring snap (Measure reads from one snap to another)
+        let snapping = self.drawing_tool().is_some()
+            || matches!(self.view_tool, Some(ViewTool::NodeEdit | ViewTool::Measure));
         if !snapping || ui.input(|i| i.modifiers.shift) {
             return (gesture, None, vec![]);
         }
@@ -3271,10 +3273,11 @@ impl CutCraftApp {
     /// so what is made from them keeps them there. A polyline gathers its points' snaps
     /// from its first click; anything else keeps those of its last click or drag.
     pub(super) fn place_on_snaps(&mut self, gesture: Option<Gesture>, placed: &[Snap]) {
+        // a measurement makes nothing to keep on its snaps
         let placing = matches!(
             gesture,
             Some(Gesture::Click { .. } | Gesture::Dropped { .. })
-        );
+        ) && self.view_tool != Some(ViewTool::Measure);
         if !placing {
             return;
         }
