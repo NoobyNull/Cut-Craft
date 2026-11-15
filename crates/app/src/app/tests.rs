@@ -2040,6 +2040,58 @@ fn hiding_or_locking_a_layer_keeps_its_material() {
 }
 
 #[test]
+fn a_layer_used_on_another_sheet_is_never_deleted_from_under_it() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::two_sheets();
+    h.app
+        .apply("add_layer", &serde_json::json!({ "name": "Engraving" }))
+        .unwrap();
+    let engraving = h.app.doc.layers.last().unwrap().id;
+    let first = h.app.doc.layers[0].id;
+    // on Sheet 2, draw on Engraving, then go back to Sheet 1, where it is empty
+    h.app
+        .apply("activate_sheet", &serde_json::json!({ "sheet": 1 }))
+        .unwrap();
+    h.app
+        .apply(
+            "set_current_layer",
+            &serde_json::json!({ "layer": engraving }),
+        )
+        .unwrap();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app
+        .apply("set_current_layer", &serde_json::json!({ "layer": first }))
+        .unwrap();
+    h.app
+        .apply("activate_sheet", &serde_json::json!({ "sheet": 0 }))
+        .unwrap();
+    // Delete ▸ Empty leaves it: it isn't empty on Sheet 2
+    let empty = serde_json::json!({ "items": "layers", "item": 0, "which": "empty" });
+    let _ = h.app.apply("delete_items", &empty);
+    assert!(h.app.doc.layer(engraving).is_some(), "kept for Sheet 2");
+    // Delete Layer says where its work is, rather than lose it
+    let refused = h
+        .app
+        .apply("delete_layer", &serde_json::json!({ "layer": engraving }))
+        .unwrap_err();
+    assert!(refused.contains("Sheet 2"), "{refused}");
+    // Merge Visible brings Sheet 2's vectors onto the layer merged into
+    h.app
+        .apply(
+            "merge_visible_layers",
+            &serde_json::json!({ "layer": first }),
+        )
+        .unwrap();
+    assert!(h.app.doc.layer(engraving).is_none());
+    h.app
+        .apply("activate_sheet", &serde_json::json!({ "sheet": 1 }))
+        .expect("Sheet 2 still opens");
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    assert_eq!(h.app.doc.layer_of(id), first);
+}
+
+#[test]
 fn choosing_a_layer_makes_it_current_without_an_undo_step() {
     let mut h = Harness::new();
     h.app
