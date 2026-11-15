@@ -561,23 +561,26 @@ fn file_uri(path: &Path) -> String {
 
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
 /// other gets `_1`, and it keeps counting past names that `exists` says are taken. Only a
-/// short number counts up: a year (`Smith-2024`) or a date (`order_20241115`) on the end of
-/// the name is part of it, so it gets `_1` after it.
+/// short number counts up: a year (`Smith-2024`) or a date (`order_20241115`,
+/// `order_2024-11-15`, `15-11-2024`) on the end of the name is part of it, so it gets `_1`
+/// after it.
 pub fn incremented(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
     let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("untitled");
-    let counter = |digits: &str| {
-        digits
+    let counter = |at: usize| {
+        let digits = &stem[at + 1..];
+        let n = digits
             .parse::<u64>()
             .ok()
-            .filter(|n| digits.len() <= 4 && !(1900..=2099).contains(n))
+            .filter(|n| digits.len() <= 4 && !(1900..=2099).contains(n))?;
+        let sep = stem[at..].chars().next()?;
+        (!ends_with_year_and_month(&stem[..at], sep) || digits.len() > 2 || !(1..=31).contains(&n))
+            .then_some(n)
     };
     let (base, mut n) = match stem.rfind(['_', '-']) {
-        Some(at) if counter(&stem[at + 1..]).is_some() => {
-            (&stem[..=at], counter(&stem[at + 1..]).unwrap_or(0))
-        }
+        Some(at) if counter(at).is_some() => (&stem[..=at], counter(at).unwrap_or(0)),
         _ => (stem, 0),
     };
     let base = if n == 0 && !base.ends_with(['_', '-']) {
@@ -595,6 +598,26 @@ pub fn incremented(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
             return next;
         }
     }
+}
+
+/// Whether `text` ends with a year, `sep` and a month (`order_2024-11` with `-`), so that a
+/// day after it is the end of a date, not a counter.
+fn ends_with_year_and_month(text: &str, sep: char) -> bool {
+    let Some((before, month)) = text.rsplit_once(sep) else {
+        return false;
+    };
+    let (front, year) = before
+        .len()
+        .checked_sub(4)
+        .and_then(|at| before.split_at_checked(at))
+        .unwrap_or(("", ""));
+    (1..=2).contains(&month.len())
+        && month.parse::<u8>().is_ok_and(|m| (1..=12).contains(&m))
+        && year.len() == 4
+        && year
+            .parse::<u16>()
+            .is_ok_and(|y| (1900..=2099).contains(&y))
+        && !front.ends_with(|c: char| c.is_ascii_digit())
 }
 
 pub fn tool_database_path() -> Option<PathBuf> {
@@ -871,6 +894,29 @@ mod increment_tests {
         assert_eq!(
             incremented(Path::new("/j/order_20241115.ccjob"), none),
             PathBuf::from("/j/order_20241115_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/order_2024-11-15.ccjob"), none),
+            PathBuf::from("/j/order_2024-11-15_1.ccjob"),
+            "a date written with dashes"
+        );
+        assert_eq!(
+            incremented(Path::new("/j/Smith 2024_11_05.ccjob"), none),
+            PathBuf::from("/j/Smith 2024_11_05_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/order_15-11-2024.ccjob"), none),
+            PathBuf::from("/j/order_15-11-2024_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/order_2024-11-15_1.ccjob"), none),
+            PathBuf::from("/j/order_2024-11-15_2.ccjob"),
+            "the counter after a date keeps counting"
+        );
+        assert_eq!(
+            incremented(Path::new("/j/Smith_2024_1.ccjob"), none),
+            PathBuf::from("/j/Smith_2024_2.ccjob"),
+            "a counter after a year keeps counting"
         );
         assert_eq!(
             incremented(Path::new("/j/sign_999.ccjob"), none),

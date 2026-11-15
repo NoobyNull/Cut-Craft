@@ -194,7 +194,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "increment_and_save",
-        "Increment and Save: saves the job as a new copy with the next number on its name (sign_1, sign_2), keeping the earlier versions. A year or date on the end of the name stays as it is (Smith-2024 becomes Smith-2024_1)",
+        "Increment and Save: saves the job as a new copy with the next number on its name (sign_1, sign_2), keeping the earlier versions. A year or date on the end of the name stays as it is (Smith-2024 becomes Smith-2024_1, order_2024-11-15 becomes order_2024-11-15_1)",
     ),
     (
         "recent_files",
