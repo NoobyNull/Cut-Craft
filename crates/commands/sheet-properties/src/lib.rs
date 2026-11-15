@@ -1,5 +1,6 @@
-//! Sheet Properties: a sheet's name. Its size and setup are the job's while it is active
-//! (Job Setup). Only the active sheet is drawn, so there is no Show or Hide for a sheet.
+//! Sheet Properties: renames a sheet, the name shown for it in the Sheets list. Its size
+//! and setup are the job's while it is active (Job Setup). Only the active sheet is drawn,
+//! so there is no Show or Hide for a sheet.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
