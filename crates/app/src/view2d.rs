@@ -901,24 +901,39 @@ fn component_texture(
     texture
 }
 
-/// `bitmap`'s texture: uploaded once, and kept while the bitmap is the same size.
+/// `bitmap`'s texture: uploaded once, and again whenever its pixels change (Edit Picture,
+/// Undo, another job's picture under the same id). One is kept for each picture.
 fn bitmap_texture(
     ctx: &egui::Context,
     id: EntityId,
     bitmap: &cut_craft_core::bitmap::Bitmap,
 ) -> egui::TextureHandle {
-    let key = egui::Id::unique(("bitmap", id.0, bitmap.columns, bitmap.rows));
-    ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
-        .unwrap_or_else(|| {
-            let image = egui::ColorImage::from_gray([bitmap.columns, bitmap.rows], &bitmap.grey);
-            let texture = ctx.load_texture(
-                format!("bitmap {}", id.0),
-                fitting(ctx, image),
-                egui::TextureOptions::LINEAR,
-            );
-            ctx.data_mut(|d| d.insert_temp(key, texture.clone()));
-            texture
-        })
+    let key = egui::Id::unique(("bitmap", id.0));
+    let stamp = pixels_stamp(bitmap);
+    if let Some((kept, texture)) = ctx.data_mut(|d| d.get_temp::<(u64, egui::TextureHandle)>(key))
+        && kept == stamp
+    {
+        return texture;
+    }
+    let image = egui::ColorImage::from_gray([bitmap.columns, bitmap.rows], &bitmap.grey);
+    let texture = ctx.load_texture(
+        format!("bitmap {}", id.0),
+        fitting(ctx, image),
+        egui::TextureOptions::LINEAR,
+    );
+    ctx.data_mut(|d| d.insert_temp(key, (stamp, texture.clone())));
+    texture
+}
+
+/// What tells one picture's pixels from another's, cheaply enough for every frame: its size,
+/// where its grey levels are held (an edit makes new ones) and a sample of them.
+fn pixels_stamp(bitmap: &cut_craft_core::bitmap::Bitmap) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (bitmap.columns, bitmap.rows, bitmap.grey.len()).hash(&mut h);
+    bitmap.grey.as_ptr().hash(&mut h);
+    bitmap.grey.iter().step_by(251).for_each(|v| v.hash(&mut h));
+    h.finish()
 }
 
 /// `image` shrunk, if it must be, to at most `side` pixels each way (the graphics card's
@@ -1128,6 +1143,28 @@ mod tests {
 
     use super::*;
     use eframe::egui::{pos2, vec2};
+
+    #[test]
+    fn a_picture_edited_or_swapped_at_the_same_size_is_drawn_afresh() {
+        let ctx = egui::Context::default();
+        let picture = |grey: u8| cut_craft_core::bitmap::Bitmap {
+            name: "photo".into(),
+            columns: 40,
+            rows: 30,
+            grey: vec![grey; 40 * 30],
+            rect: cut_craft_core::geometry::Rect::new(Point::new(0.0, 0.0), Point::new(4.0, 3.0)),
+            depth: vec![],
+            rgb: vec![],
+        };
+        let (dark, light) = (picture(20), picture(230));
+        let first = bitmap_texture(&ctx, EntityId(1), &dark);
+        assert_eq!(bitmap_texture(&ctx, EntityId(1), &dark).id(), first.id());
+        // Edit Picture keeps the id and the size: its new pixels are shown
+        let edited = bitmap_texture(&ctx, EntityId(1), &light);
+        assert_ne!(edited.id(), first.id());
+        // and a picture back at its old pixels (Undo) is shown as they were
+        assert_ne!(bitmap_texture(&ctx, EntityId(1), &dark).id(), edited.id());
+    }
 
     /// Points of `runs` all told.
     fn points(runs: &[Vec<Pos2>]) -> usize {
