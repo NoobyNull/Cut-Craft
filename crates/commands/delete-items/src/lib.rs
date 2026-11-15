@@ -1,5 +1,6 @@
 //! Delete Items: the right-click delete family (This, Visible, Invisible, Empty, All) for
-//! layers, toolpaths or components, built from each kind's delete command.
+//! layers, toolpaths or components, built from each kind's delete command. A job needs a
+//! layer, so when every layer would go the current one is kept, and the form says so.
 
 use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::params::Items;
@@ -61,7 +62,7 @@ impl Command for DeleteItems {
                 .map(|&(id, _)| id)
                 .collect()
         };
-        let targets = match p.which {
+        let mut targets = match p.which {
             Which::This if items.iter().any(|&(id, _)| id == p.item) => vec![p.item],
             Which::This => {
                 return Err(cut_craft_core::gone(p.items.one()));
@@ -84,8 +85,26 @@ impl Command for DeleteItems {
                 ));
             }
         };
+        // a job needs a layer: when every one was picked, the current one stays
+        let mut kept = None;
+        if p.items == Items::Layers
+            && !targets.is_empty()
+            && doc
+                .layers
+                .iter()
+                .all(|l| targets.contains(&u64::from(l.id.0)))
+        {
+            let current = u64::from(doc.current_layer.0);
+            let keep = if targets.contains(&current) {
+                current
+            } else {
+                targets[targets.len() - 1]
+            };
+            targets.retain(|&id| id != keep);
+            kept = doc.layers.iter().find(|l| u64::from(l.id.0) == keep);
+        }
         // cascade: each item deleted by its kind's delete command
-        Change::chain_over(doc, &targets, |d, &id| match p.items {
+        let mut change = Change::chain_over(doc, &targets, |d, &id| match p.items {
             Items::Layers => cmd_delete_layer::DeleteLayer::run(
                 d,
                 &cmd_delete_layer::Params {
@@ -107,7 +126,14 @@ impl Command for DeleteItems {
             Items::Levels => {
                 cmd_delete_level::DeleteLevel::run(d, &cmd_delete_level::Params { level: id })
             }
-        })
+        })?;
+        if let Some(layer) = kept {
+            change.notes.push(format!(
+                "Kept '{}', with what is on it: a job needs at least one layer",
+                layer.name
+            ));
+        }
+        Ok(change)
     }
 }
 
@@ -149,12 +175,31 @@ mod tests {
         let mut doc = two_layers();
         delete(&mut doc, Items::Layers, 0, Which::Empty);
         assert_eq!(ids(&doc, Items::Layers), [1], "layer 2 had nothing on it");
-        let why = after_err::<DeleteItems>(&Params {
-            items: Items::Layers,
-            item: 0,
-            which: Which::All,
-        });
-        assert!(why.contains("at least one layer"), "{why}");
+        // every layer chosen: the current one is kept, and the form says why
+        for which in [Which::All, Which::Visible] {
+            let doc = two_layers();
+            let change = DeleteItems::run(
+                &doc,
+                &Params {
+                    items: Items::Layers,
+                    item: 0,
+                    which,
+                },
+            )
+            .unwrap();
+            let mut after = doc.clone();
+            after.apply(&change).unwrap();
+            assert_eq!(ids(&after, Items::Layers), [1], "{which:?}");
+            let notes = change.notes.join("\n");
+            assert!(notes.contains("Kept 'Layer 1'"), "{notes}");
+            assert!(notes.contains("needs at least one layer"), "{notes}");
+        }
+        // a new job with nothing drawn: every layer is empty
+        let mut doc = two_layers();
+        doc.vectors.clear();
+        doc.selection = cut_craft_core::selection::Selection::new();
+        delete(&mut doc, Items::Layers, 0, Which::Empty);
+        assert_eq!(ids(&doc, Items::Layers), [1]);
     }
 
     #[test]
