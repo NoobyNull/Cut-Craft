@@ -361,7 +361,7 @@ impl CutCraftApp {
     ) {
         let full = ui.available_width();
         let spacing = ui.spacing().item_spacing;
-        let button = edge + 2.0 * ui.spacing().button_padding.x;
+        let button = tool_cell_size(ui.spacing(), edge).x;
         let margin = TOOL_BOX_MARGIN;
         let caption_font = egui::TextStyle::Small.resolve(ui.style());
         let caption_color = ui.visuals().weak_text_color();
@@ -427,19 +427,28 @@ impl CutCraftApp {
                             } else if boxed_row {
                                 ui.add_space(caption_height + spacing.y);
                             }
-                            ui.horizontal_wrapped(|ui| {
-                                for &id in &cluster.tools {
-                                    let response = self.tool_button(ui, id, edge);
-                                    if response.clicked() {
-                                        *clicked = Some(id);
+                            // rows cut by count, never by where the buttons end: a
+                            // hovered button is a fraction wider (see `flyout::per_row`)
+                            let across = crate::flyout::per_row(
+                                width - 2.0 * margin - 2.0,
+                                button,
+                                spacing.x,
+                            );
+                            for tools in cluster.tools.chunks(across) {
+                                ui.horizontal(|ui| {
+                                    for &id in tools {
+                                        let response = self.tool_button(ui, id, edge);
+                                        if response.clicked() {
+                                            *clicked = Some(id);
+                                        }
+                                        if let Some(action) =
+                                            self.tool_menu_on(&response, page, id, false, false)
+                                        {
+                                            *chosen = Some(action);
+                                        }
                                     }
-                                    if let Some(action) =
-                                        self.tool_menu_on(&response, page, id, false, false)
-                                    {
-                                        *chosen = Some(action);
-                                    }
-                                }
-                            });
+                                });
+                            }
                         });
                     });
                 }
@@ -454,7 +463,8 @@ impl CutCraftApp {
         let button = self
             .icon_button(explicit, id, &label, edge)
             .selected(self.status.current_tool == label);
-        let response = ui.add_enabled(self.available(id), button);
+        let available = self.available(id);
+        let response = tool_cell(ui, edge, |ui| ui.add_enabled(available, button));
         self.with_guidance(response, id)
             .on_disabled_hover_text(format!("{label}: not implemented yet"))
     }
@@ -489,11 +499,10 @@ impl CutCraftApp {
         let any_available = button.members.iter().any(|m| self.available(m));
         // the tip names the tools the flyout holds too, so they are found without opening it
         let tip = self.tool_tip(id, &tooltip(&about, &others));
-        let response = ui.add_enabled(
-            any_available,
-            self.icon_button(explicit, id, &label, edge)
-                .selected(in_hand),
-        );
+        let face = self
+            .icon_button(explicit, id, &label, edge)
+            .selected(in_hand);
+        let response = tool_cell(ui, edge, |ui| ui.add_enabled(any_available, face));
         super::guide::hover(&response, &tip);
         let response = response
             .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
@@ -4741,4 +4750,28 @@ fn picked_message(picking: Option<super::PickFor>, name: &str) -> String {
         Some(super::PickFor::Listed(super::ToolList::Tools, _) | super::PickFor::Material)
         | None => format!("Cutting with {name}"),
     }
+}
+
+/// The room a tool button `edge` across takes in a row, whatever state it is in.
+pub(super) fn tool_cell_size(spacing: &egui::style::Spacing, edge: f32) -> egui::Vec2 {
+    let pad = spacing.button_padding;
+    egui::vec2(
+        edge + 2.0 * pad.x,
+        (edge + 2.0 * pad.y).max(spacing.interact_size.y),
+    )
+}
+
+/// Draws a tool button with `add` in a cell of exactly [`tool_cell_size`], so the row around
+/// it never moves. A hovered or pressed button is drawn a fraction of a point bigger (its
+/// border thickens by the theme's line scale, which egui's whole-point margins don't take
+/// back); laid out as it is drawn, that grew the row under the pointer, sent a full row's
+/// last button to the next row, and the page jumped between two layouts while it was hovered.
+fn tool_cell<R>(ui: &mut egui::Ui, edge: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let (_, rect) = ui.allocate_space(tool_cell_size(ui.spacing(), edge));
+    let mut cell = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    add(&mut cell)
 }

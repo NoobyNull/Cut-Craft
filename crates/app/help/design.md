@@ -7,3 +7,7 @@ and press **Create**. Once drawn, the shape changes as you change the form, so t
 nothing more to press; **New Shape** leaves it as it is to type another. Tools that change
 what is selected say **Apply**, toolpaths say **Calculate**. **Close** (or Esc) puts the
 tool away, keeping what is there; **Cancel** takes back what the tool did.
+
+Hover over a tool's button to see what it does, and what to do next, in the box under the
+buttons. The buttons stay where they are while you hover; tools that do one job different
+ways sit together in a box named for that job.
