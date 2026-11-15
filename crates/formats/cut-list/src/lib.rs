@@ -9,7 +9,8 @@
 //! - [`ImportCutList`] (File ▸ Import ▸ Import Cut List) reads a CSV cut list (part name,
 //!   length, width, quantity, and a material that picks the layer) and draws each part as a
 //!   named rectangle, ready for Nest Parts. Sizes are in the unit after the Length and Width
-//!   headings (`Length (in)`), else the job's, and a note says which.
+//!   headings (`Length (in)`), else the job's, and a note says which, for each column when
+//!   they differ.
 
 use cut_craft_core::document::{Document, EntityId, LayerId, Units};
 use cut_craft_core::geometry::{Path, Point, Rect};
@@ -356,7 +357,28 @@ fn scales(head: &[String], headed: bool, units: Units) -> ((f64, f64), String) {
         (Some(l), Some(w)) if l.1 == w.1 => {
             format!("Sizes read in {}, as the list's headings say.", l.1)
         }
-        _ => "Sizes read in the units the list's headings say.".to_owned(),
+        (Some(l), Some(w)) => format!(
+            "Lengths read in {} and widths in {}, as the list's headings say.",
+            l.1, w.1
+        ),
+        // one heading names a unit and the other does not: the other falls back to the job's
+        (Some(one), None) | (None, Some(one)) if one.1 == job.1 => format!(
+            "Sizes read in {}: one heading says so, and the other, naming no unit, takes the \
+             job's units.",
+            job.1
+        ),
+        (Some(l), None) => format!(
+            "Lengths read in {} as their heading says, but widths in {}, the job's units, as \
+             the Width heading names none. If the widths are in {} too, write the unit after \
+             the Width heading.",
+            l.1, job.1, l.1
+        ),
+        (None, Some(w)) => format!(
+            "Widths read in {} as their heading says, but lengths in {}, the job's units, as \
+             the Length heading names none. If the lengths are in {} too, write the unit \
+             after the Length heading.",
+            w.1, job.1, w.1
+        ),
     };
     (
         (length_unit.unwrap_or(job).0, width_unit.unwrap_or(job).0),
@@ -651,6 +673,33 @@ mod tests {
         assert!(
             notes.contains("inches") && notes.contains("headings"),
             "{notes}"
+        );
+    }
+
+    #[test]
+    fn a_unit_on_only_one_heading_or_two_different_units_are_each_named() {
+        // only Length says: widths fall back to the job's units, and the note says so
+        let (e, note) = read_noting("Name,Length (in),Width\nTop,24,300\n", Units::Mm).unwrap();
+        assert!((e[0].length - 609.6).abs() < 1e-9 && (e[0].width - 300.0).abs() < 1e-9);
+        assert!(
+            note.contains("Lengths read in inches")
+                && note.contains("widths in millimetres, the job's units")
+                && note.contains("Width heading"),
+            "{note}"
+        );
+        let (_, note) = read_noting("Name,Length,Width (mm)\nTop,24,300\n", Units::Inch).unwrap();
+        assert!(
+            note.contains("Widths read in millimetres")
+                && note.contains("lengths in inches, the job's units")
+                && note.contains("Length heading"),
+            "{note}"
+        );
+        // two different units, each as its heading says
+        let (_, note) =
+            read_noting("Name,Length (in),Width (mm)\nTop,24,300\n", Units::Mm).unwrap();
+        assert!(
+            note.contains("Lengths read in inches and widths in millimetres"),
+            "{note}"
         );
     }
 
