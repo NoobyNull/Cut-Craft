@@ -3174,11 +3174,12 @@ impl CutCraftApp {
         let orange = egui::Color32::from_rgb(240, 130, 0);
         let painter = ui.painter_at(canvas.area);
         let hover = canvas.cursor();
+        let picked_snap = self.picked_snap();
         for (i, at, kind) in self.doc.constraint_marks() {
             if !self.doc.shown(self.doc.constraints[i].vector) {
                 continue;
             }
-            let picked = self.picked_constraint == Some(i);
+            let picked = picked_snap == Some(i);
             let hovered = hover.is_some_and(|p| p.distance(at) <= reach);
             let colour = if picked { orange } else { blue };
             let screen = canvas.transform.to_screen(at);
@@ -3204,12 +3205,27 @@ impl CutCraftApp {
                     ui.ctx(),
                     &format!(
                         "This point stays on the {} it was snapped to, even when that moves. \
-                         Click the mark and press Delete to let it move freely.",
+                         Click the mark (which picks its shape too) and press Delete to let \
+                         it move freely.",
                         kind.label().to_lowercase()
                     ),
                 );
             }
         }
+    }
+
+    /// The picked snap mark (an index into the job's constraints), while it still is: the
+    /// selection, the tool and the job as they were when it was picked, and its point
+    /// still kept.
+    pub(super) fn picked_snap(&self) -> Option<usize> {
+        let picked = self.picked_constraint.as_ref()?;
+        if picked.selection != self.doc.selection
+            || picked.tool != self.view_tool
+            || picked.depth != self.history.undo_depth()
+        {
+            return None;
+        }
+        self.doc.constraints.iter().position(|c| *c == picked.snap)
     }
 
     /// The snap mark (a point kept on its snap) within `reach` of `at`, nearest first.
@@ -3227,13 +3243,12 @@ impl CutCraftApp {
     /// Delete with a snap mark picked: that point is let go, so it moves freely. False when
     /// none is picked.
     pub(super) fn release_picked_snap(&mut self) -> bool {
-        let Some(i) = self.picked_constraint.take() else {
+        let Some(i) = self.picked_snap() else {
+            self.picked_constraint = None;
             return false;
         };
+        self.picked_constraint = None;
         let mut kept = self.doc.constraints.clone();
-        if i >= kept.len() {
-            return false;
-        }
         let gone = kept.remove(i);
         let mut c = Change::builder(&self.doc);
         c.set_constraints(kept);
@@ -4092,10 +4107,18 @@ impl CutCraftApp {
         shift: bool,
         tolerance: f64,
     ) {
-        // a snap mark: picked, for Delete to let its point go
-        self.picked_constraint = self.kept_snap_at(at, tolerance);
-        if let Some(i) = self.picked_constraint {
-            let kind = self.doc.constraints[i].to.kind();
+        // a snap mark: picked, with its vector, for Delete to let its point go
+        self.picked_constraint = None;
+        if let Some(i) = self.kept_snap_at(at, tolerance) {
+            let snap = self.doc.constraints[i];
+            self.select([snap.vector], shift);
+            self.picked_constraint = Some(super::PickedSnap {
+                snap,
+                selection: self.doc.selection.clone(),
+                tool: self.view_tool,
+                depth: self.history.undo_depth(),
+            });
+            let kind = snap.to.kind();
             self.status.set_message(&format!(
                 "Snap picked: this point is kept on the {}. Press Delete to let it go.",
                 kind.label().to_lowercase()

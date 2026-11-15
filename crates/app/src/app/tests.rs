@@ -575,7 +575,7 @@ fn a_line_drawn_to_a_snapped_corner_stays_on_it_until_its_mark_is_deleted() {
     // its mark picked and deleted: the line stays, the snap goes
     h.frame(vec![]);
     h.click(h.at(35.0, 25.0), Modifiers::NONE);
-    assert_eq!(h.app.picked_constraint, Some(0));
+    assert_eq!(h.app.picked_snap(), Some(0));
     h.app.invoke(&h.ctx, "delete");
     assert_eq!(h.app.doc.constraints, []);
     assert_eq!(h.app.doc.vectors.len(), 2, "nothing deleted");
@@ -586,6 +586,40 @@ fn a_line_drawn_to_a_snapped_corner_stays_on_it_until_its_mark_is_deleted() {
         Point::new(35.0, 25.0),
         "free now: it stays where it was"
     );
+}
+
+#[test]
+fn a_picked_snap_mark_is_let_go_when_the_selection_changes() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    let scale = f64::from(h.app.view_transform.unwrap().scale);
+    let near = 2.0 / scale;
+    h.click(h.at(60.0, 60.0), Modifiers::SHIFT);
+    h.click(h.at(30.0 + near, 20.0 - near), Modifiers::NONE);
+    h.app.finish_polyline(false);
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "select");
+    h.app.doc.selection.clear();
+    h.frame(vec![]);
+    let line = *h.app.doc.vectors.keys().last().unwrap();
+    h.click(h.at(30.0, 20.0), Modifiers::NONE);
+    assert_eq!(h.app.picked_snap(), Some(0));
+    assert!(
+        h.app.doc.selection.contains(&line),
+        "the mark's vector is picked too"
+    );
+    // everything picked another way: Delete deletes, not lets the snap go
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.frame(vec![]);
+    assert_eq!(h.app.picked_snap(), None);
+    h.app.invoke(&h.ctx, "delete");
+    assert!(h.app.doc.vectors.is_empty(), "{}", h.app.status.message);
+    // undone: still nothing picked
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    assert_eq!(h.app.picked_snap(), None);
 }
 
 #[test]

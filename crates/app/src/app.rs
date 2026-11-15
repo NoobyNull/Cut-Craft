@@ -839,6 +839,17 @@ enum Screen {
     Job,
 }
 
+/// A snap mark picked in the 2D view, and what was picked and done when it was: once the
+/// selection, the tool or the job changes, it is no longer picked.
+#[derive(Clone, Debug)]
+struct PickedSnap {
+    snap: cut_craft_core::constraint::Constraint,
+    selection: cut_craft_core::selection::Selection,
+    tool: Option<ViewTool>,
+    /// The undo history's depth: an edit, undo or redo since lets it go
+    depth: usize,
+}
+
 /// A 2D view tool that takes the left button from drawing and selecting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ViewTool {
@@ -1307,9 +1318,8 @@ struct CutCraftApp {
         cut_craft_core::geometry::Point,
         cut_craft_core::constraint::Anchor,
     )>,
-    /// The snap mark picked in the 2D view (an index into the job's constraints): Delete
-    /// lets that point go.
-    picked_constraint: Option<usize>,
+    /// The snap mark picked in the 2D view: Delete lets that point go.
+    picked_constraint: Option<PickedSnap>,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
     /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,
