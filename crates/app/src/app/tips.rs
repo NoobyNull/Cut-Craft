@@ -159,7 +159,8 @@ pub(super) const TIPS: &[Tip] = &[
     plain(
         "tips/recovery_copy.png",
         "Cut Craft keeps a recovery copy of unsaved work every 30 seconds. If the power goes \
-         off, your work can be opened again. **Edit ▸ Options ▸ General** sets how often.",
+         off, your work opens again next time, and the copy is kept until you save or close \
+         it. **Edit ▸ Options ▸ General** sets how often.",
     ),
     plain(
         "tips/trace_bitmap.png",

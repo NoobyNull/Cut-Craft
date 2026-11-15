@@ -5690,6 +5690,12 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
         "unsaved until saved"
     );
     assert!(next.app.status.message.contains("Recovered"));
+    // opening it keeps the copy, so a second crash before any edit still has it
+    assert!(recovery.exists(), "kept until saved or closed");
+    let mut again = Harness::at_start();
+    again.app.recovery_path = Some(recovery.clone());
+    assert!(again.app.open_recovery(), "still there for the run after");
+    drop(again);
     next.app.save_to(&dir.join("kept.ccjob"));
     assert!(!recovery.exists(), "saved: nothing to recover");
     assert!(!next.app.open_recovery());

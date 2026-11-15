@@ -2123,15 +2123,22 @@ impl CutCraftApp {
     /// The recovery copy a run that ended badly left, opened as an unsaved job; whether
     /// there was one. It stays until the job is saved or closed.
     pub(super) fn open_recovery(&mut self) -> bool {
-        let Some(doc) = self
-            .recovery_path
-            .as_ref()
-            .and_then(|p| std::fs::read(p).ok())
-            .and_then(|bytes| cut_craft_core::file::load_job(&bytes).ok())
-        else {
+        let Some(path) = self.recovery_path.clone() else {
+            return false;
+        };
+        let Some((bytes, doc)) = std::fs::read(&path).ok().and_then(|bytes| {
+            let doc = cut_craft_core::file::load_job(&bytes).ok()?;
+            Some((bytes, doc))
+        }) else {
             return false;
         };
         self.reset_job();
+        // reset_job lets go of the copy; put it back, so the work is still there if this
+        // run ends badly too before anything is changed (autosave writes it again then)
+        if let Err(e) = cut_craft_core::file::write_atomic(&path, &bytes) {
+            self.status
+                .set_message(&format!("could not keep the recovery copy: {e}"));
+        }
         self.doc = doc;
         self.session = Session::unsaved();
         self.screen = Screen::Job;
