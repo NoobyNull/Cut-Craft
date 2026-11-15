@@ -4124,6 +4124,26 @@ fn a_recent_file_that_has_gone_is_dropped() {
     assert!(h.app.status.message.contains("cut-craft-gone.ccjob"));
 }
 
+#[test]
+fn a_recent_file_that_is_there_but_will_not_open_stays_listed() {
+    let path =
+        std::env::temp_dir().join(format!("cut-craft-cut-short-{}.ccjob", std::process::id()));
+    // cut short, as by a cloud sync still going
+    let whole = cut_craft_core::file::save_job(&Document::default());
+    std::fs::write(&path, &whole[..whole.len() / 2]).unwrap();
+    let mut h = Harness::at_start();
+    h.app.recent = vec![path.clone()];
+    h.app.invoke(&h.ctx, "open_recent:0");
+    assert_eq!(h.app.screen, Screen::Start);
+    assert!(
+        h.app.status.message.contains("damaged"),
+        "{}",
+        h.app.status.message
+    );
+    assert_eq!(h.app.recent, vec![path.clone()], "kept to try again later");
+    std::fs::remove_file(&path).unwrap();
+}
+
 /// The middle of the 2D view on screen.
 fn view_middle(h: &Harness) -> Pos2 {
     h.app

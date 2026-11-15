@@ -2301,7 +2301,9 @@ impl CutCraftApp {
             }
             Err(e) => {
                 self.status.set_message(&e);
-                if self.recent.iter().any(|p| p == path) {
+                // only a file that has gone leaves Recent Files: a damaged one (perhaps a
+                // sync still going) or one needing a newer Cut Craft stays to try again
+                if !path.exists() && self.recent.iter().any(|p| p == path) {
                     self.recent.retain(|p| p != path);
                     self.save_recent();
                 }

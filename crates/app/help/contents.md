@@ -59,7 +59,8 @@ A number field takes a sum as well as a number, worked out when it is entered:
 - A job that will not open says why. **Damaged** means the file was cut short or broken,
   often by a copy or cloud sync that did not finish: open a backup or an earlier copy.
   **Saved by a newer version** means Cut Craft needs updating first (**Help ▸ Check for
-  Updates**). If a newer version's job does open, but has settings this version does not
+  Updates**). Either way the job stays in **Recent Files**, ready to try again; only a
+  file that is no longer there is taken off the list. If a newer version's job does open, but has settings this version does not
   know, a warning names them: saving it here leaves them out, so update first to keep them.
 - Unsaved work is copied for recovery every 30 seconds (Edit ▸ Options ▸ General). If
   Cut Craft closes without saving, it opens that work again next time it starts. Each open
