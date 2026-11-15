@@ -45,15 +45,15 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "center_horizontally",
-        "Center Horizontally: moves the selected objects sideways so their centres line up on one vertical line",
+        "Center Horizontally: moves the selected objects sideways so their centres line up on one vertical line. A group, like a word of text, moves as one piece",
     ),
     (
         "center_vertically",
-        "Center Vertically: moves the selected objects up or down so their centres line up on one horizontal line",
+        "Center Vertically: moves the selected objects up or down so their centres line up on one horizontal line. A group, like a word of text, moves as one piece",
     ),
     (
         "center",
-        "Center: moves the selected objects so their centres all sit on one point, the middle of the selection",
+        "Center: moves the selected objects so their centres all sit on one point, the middle of the selection. A group, like a word of text, moves as one piece",
     ),
     (
         "center_horizontally_in_material",
@@ -329,11 +329,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "run:space_horizontally:{\"order\":\"left_to_right\",\"inside_last_vector\":false}",
-        "Space Left to Right: spreads the selected objects evenly across, in the order you picked them from the left",
+        "Space Left to Right: spreads the selected objects evenly across, in the order you picked them from the left. A group, like a word of text, counts as one object",
     ),
     (
         "run:space_horizontally:{\"order\":\"right_to_left\",\"inside_last_vector\":false}",
-        "Space Right to Left: spreads the selected objects evenly across, in the order you picked them from the right",
+        "Space Right to Left: spreads the selected objects evenly across, in the order you picked them from the right. A group, like a word of text, counts as one object",
     ),
     (
         "run:space_horizontally:{\"order\":\"as_placed\",\"inside_last_vector\":true}",

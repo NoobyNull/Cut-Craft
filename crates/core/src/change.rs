@@ -406,11 +406,22 @@ impl Change {
         c.finish()
     }
 
-    /// Transforms each selected path and component by `f(its bounds)`; the shared core of
-    /// move, scale, rotate, mirror and align. Nothing selected is an error; identity
+    /// Transforms each selected item (a lone path, or a group's selected paths together) and
+    /// component by `f(its bounds)`; the shared core of move, scale, rotate, mirror and align. Nothing selected is an error; identity
     /// transforms make no edit.
     pub fn transform_selected(
         doc: &Document,
+        f: impl Fn(Rect) -> DAffine2,
+    ) -> Result<Self, CommandError> {
+        Self::transform_items(doc, &doc.selected_items(false), f)
+    }
+
+    /// [`Self::transform_selected`] with the selected vectors taken as `items` (see
+    /// [`Document::selected_items`]): every member of an item gets the one transform
+    /// worked out from the whole item's bounds.
+    pub fn transform_items(
+        doc: &Document,
+        items: &[Vec<EntityId>],
         f: impl Fn(Rect) -> DAffine2,
     ) -> Result<Self, CommandError> {
         let components: Vec<_> = doc
@@ -423,11 +434,19 @@ impl Change {
             return Err(CommandError::NothingSelected);
         }
         let mut c = Self::builder(doc);
-        for &id in &doc.selection {
-            let path = &doc.vectors[&id];
-            let t = f(path.bounds());
+        for item in items {
+            let Some(bounds) = item
+                .iter()
+                .map(|id| doc.vectors[id].bounds())
+                .reduce(Rect::union)
+            else {
+                continue;
+            };
+            let t = f(bounds);
             if t != DAffine2::IDENTITY {
-                c.replace(id, path.transformed(&t));
+                for id in item {
+                    c.replace(*id, doc.vectors[id].transformed(&t));
+                }
             }
         }
         for id in components {
@@ -458,10 +477,7 @@ impl Change {
         })
     }
 
-    /// Spaces the selected paths evenly along x (`vertical` false) or y: the first and last
-    /// stay put and the others move so the gaps between their extents are equal, keeping
-    /// their order and their other coordinate.
-    /// Spaces the selected objects evenly along x (or y when `vertical`) in `sequence`: the
+    /// Spaces the selected objects (a group counts as one) evenly along x (or y when `vertical`) in `sequence`: the
     /// outermost stay put; or with `inside_last`, the last one picked stays and the others
     /// are spread inside it, the same gap at its edges as between them.
     pub fn space_selected(
@@ -477,12 +493,18 @@ impl Change {
                 (r.min.x, r.max.x)
             }
         };
-        let mut items: Vec<(EntityId, f64, f64)> = doc
-            .selection
-            .iter()
-            .map(|&id| {
-                let (lo, hi) = along(doc.vectors[&id].bounds());
-                (id, lo, hi)
+        // a group spaces as one object
+        let mut items: Vec<(Vec<EntityId>, f64, f64)> = doc
+            .selected_items(false)
+            .into_iter()
+            .map(|item| {
+                let bounds = item
+                    .iter()
+                    .map(|id| doc.vectors[id].bounds())
+                    .reduce(Rect::union)
+                    .expect("an item has a member");
+                let (lo, hi) = along(bounds);
+                (item, lo, hi)
             })
             .collect();
         let frame = if inside_last { items.pop() } else { None };
@@ -514,7 +536,7 @@ impl Change {
             None => ((end - start - sizes) / (items.len() - 1) as f64, start),
         };
         let mut c = Self::builder(doc);
-        for &(id, lo, hi) in &items {
+        for (item, lo, hi) in &items {
             let by = at - lo;
             if by.abs() > 1e-12 {
                 let shift = if vertical {
@@ -522,10 +544,12 @@ impl Change {
                 } else {
                     Point::new(by, 0.0)
                 };
-                c.replace(
-                    id,
-                    doc.vectors[&id].transformed(&DAffine2::from_translation(shift)),
-                );
+                for &id in item {
+                    c.replace(
+                        id,
+                        doc.vectors[&id].transformed(&DAffine2::from_translation(shift)),
+                    );
+                }
             }
             at += hi - lo + gap;
         }

@@ -205,3 +205,94 @@ mod components {
         );
     }
 }
+
+/// A 100-wide plaque and the two-letter word "II" grouped as text, all selected.
+fn plaque_and_grouped_word() -> Document {
+    let mut doc = Document::default();
+    let mut c = Change::builder(&doc);
+    let plaque = c.add(Path::polyline(
+        &[
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            Point::new(100.0, 40.0),
+            Point::new(0.0, 40.0),
+        ],
+        true,
+    ));
+    let bar = |x: f64| {
+        Path::polyline(
+            &[
+                Point::new(x, 10.0),
+                Point::new(x + 2.0, 10.0),
+                Point::new(x + 2.0, 30.0),
+                Point::new(x, 30.0),
+            ],
+            true,
+        )
+    };
+    let a = c.add(bar(0.0));
+    let b = c.add(bar(10.0));
+    c.set_group(a, Some(7));
+    c.set_group(b, Some(7));
+    c.select([plaque, a, b]);
+    doc.apply(&c.finish()).unwrap();
+    doc
+}
+
+#[test]
+fn centring_moves_a_group_as_one_piece() {
+    let mut doc = plaque_and_grouped_word();
+    let change = Change::align_selected(&doc, |item, sel| {
+        Point::new(sel.center().x - item.center().x, 0.0)
+    })
+    .unwrap();
+    doc.apply(&change).unwrap();
+    let a = doc.vectors[&EntityId(2)].bounds();
+    let b = doc.vectors[&EntityId(3)].bounds();
+    assert!(
+        (b.min.x - a.min.x - 10.0).abs() < 1e-9,
+        "letters kept apart: {a:?} {b:?}"
+    );
+    assert!((a.min.x - 44.0).abs() < 1e-9, "the word is centred: {a:?}");
+}
+
+#[test]
+fn spacing_spaces_whole_groups() {
+    let mut doc = Document::default();
+    let mut c = Change::builder(&doc);
+    let mut ids = Vec::new();
+    // three two-letter words, each a group
+    for (n, x) in [0.0, 30.0, 100.0].into_iter().enumerate() {
+        for dx in [0.0, 5.0] {
+            let id = c.add(Path::polyline(
+                &[
+                    Point::new(x + dx, 0.0),
+                    Point::new(x + dx + 2.0, 0.0),
+                    Point::new(x + dx + 2.0, 5.0),
+                ],
+                true,
+            ));
+            c.set_group(id, Some(n as u64 + 1));
+            ids.push(id);
+        }
+    }
+    c.select(ids.clone());
+    doc.apply(&c.finish()).unwrap();
+    let change =
+        Change::space_selected(&doc, false, cut_craft_core::Sequence::ByPosition, false).unwrap();
+    doc.apply(&change).unwrap();
+    let x = |i: usize| doc.vectors[&ids[i]].bounds().min.x;
+    assert!(
+        (x(1) - x(0) - 5.0).abs() < 1e-9,
+        "the first word holds together"
+    );
+    assert!(
+        (x(3) - x(2) - 5.0).abs() < 1e-9,
+        "the middle word holds together"
+    );
+    assert!(
+        (x(2) - 50.0).abs() < 1e-9,
+        "the middle word is spaced evenly: {}",
+        x(2)
+    );
+}
