@@ -435,19 +435,30 @@ pub(super) struct SaveForm {
     job_sheet: bool,
 }
 
-/// What the checks before cutting found in Save Toolpaths' plan, kept while the plan, the
-/// job and the machine stay as they were.
-/// What the Analyse sub-tab's checks were run on.
-type Analysed = (u64, usize, Vec<EntityId>);
-
+/// The checks before cutting for a plan of toolpaths, on the job and machine as they were;
+/// `found` is `None` while they run off the window's thread, or once they were cancelled.
 #[derive(Clone, Debug)]
 pub(super) struct SaveChecks {
     plan: Vec<Vec<EntityId>>,
     changes: files::ToolChanges,
     revision: u64,
     machine: usize,
-    found: Vec<cut_craft_core::preflight::Finding>,
+    found: Option<Vec<cut_craft_core::preflight::Finding>>,
 }
+
+impl SaveChecks {
+    /// Whether these are the checks for `other`'s plan, job and machine.
+    fn same(&self, other: &Self) -> bool {
+        (&self.plan, self.changes, self.revision, self.machine)
+            == (&other.plan, other.changes, other.revision, other.machine)
+    }
+}
+
+/// How many plans' checks before cutting are kept.
+const KEPT_CHECKS: usize = 2;
+
+/// What the progress window says while the checks before cutting run.
+const CHECKING: &str = "Checking the toolpaths before cutting";
 
 /// Toolpath Summary's settings: the rapid rate (mm/min) and the units it is shown in, the
 /// scale factor, and the toolpath picked to write notes for, with the notes being written.
@@ -1214,11 +1225,8 @@ struct CutCraftApp {
     save_form: Option<SaveForm>,
     /// Machine ▸ Machine Files, while it is open.
     machine_files: Option<send::MachineFiles>,
-    /// The checks shown in Save Toolpaths' form.
-    save_checks: Option<SaveChecks>,
-    /// The Analyse sub-tab's checks before cutting, kept until the job, the machine or the
-    /// toolpaths shown change: (revision, machine, toolpaths) and what was found.
-    analysed: Option<(Analysed, Vec<cut_craft_core::preflight::Finding>)>,
+    /// The checks before cutting shown in Save Toolpaths' form and the Analyse tab.
+    save_checks: Vec<SaveChecks>,
     /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
     snap_window: bool,
     /// Gadgets ▸ Job Setup Sheet Editor is open.

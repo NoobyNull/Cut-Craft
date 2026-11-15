@@ -9892,13 +9892,15 @@ fn save_toolpaths_shows_what_must_be_fixed_and_will_not_save_until_it_is() {
         .join("\n");
     assert!(shown.contains("Checks before cutting"), "{shown}");
     assert!(shown.contains("Must fix: The toolpaths cover"), "{shown}");
-    let checked = h.app.save_checks.as_ref().unwrap().revision;
+    let checked = h.app.save_checks.clone();
+    assert_eq!(checked.len(), 1);
     h.frame(vec![]);
     assert_eq!(
-        h.app.save_checks.as_ref().unwrap().revision,
-        checked,
-        "the checks are kept between frames"
+        h.app.save_checks.len(),
+        1,
+        "the checks are kept between frames, not run again"
     );
+    assert!(h.app.save_checks[0].same(&checked[0]));
 }
 
 #[test]
@@ -12408,6 +12410,105 @@ fn the_toolpath_list_stays_under_every_toolpaths_tab() {
         h.text_at("✔ Every toolpath matches what it was made from")
             .is_some()
     );
+}
+
+/// The Analyse tab with a profile toolpath to check, the Toolpaths page pinned open.
+fn analysing() -> Harness {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.toolpath_subtab = gui::TOOLPATH_SUBTABS
+        .iter()
+        .position(|t| t.name == "Analyse")
+        .unwrap();
+    h
+}
+
+#[test]
+fn analyse_checks_off_the_window_thread_so_the_window_keeps_drawing() {
+    // Matthew's lock-up (v0.6.10): Analyse ran the checks before cutting on a 3D finish of
+    // 12.7 million moves inside the frame, and the window (and with the card busy, his
+    // desktop) froze for over ten minutes. They now run with their progress over the window.
+    let mut h = analysing();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.frame(vec![]);
+    let running = h.app.checking();
+    let done = h.app.save_checks.first().is_some_and(|c| c.found.is_some());
+    assert!(running || done, "started");
+    if running {
+        assert!(
+            h.text_at("Checking the toolpaths: a big 3D toolpath takes a little while")
+                .is_some(),
+            "says it is checking"
+        );
+    }
+    let until = std::time::Instant::now() + std::time::Duration::from_mins(1);
+    while h.app.checking() && std::time::Instant::now() < until {
+        h.frame(vec![]);
+    }
+    h.frame(vec![]);
+    assert!(!h.app.checking(), "finished");
+    assert!(h.app.save_checks[0].found.is_some(), "kept");
+    assert!(
+        h.text_at("✔ Every toolpath matches what it was made from")
+            .is_some(),
+        "the rest of the tab is shown once checked"
+    );
+    h.frame(vec![]);
+    assert!(!h.app.checking(), "not run again while nothing changes");
+}
+
+#[test]
+fn cancelled_checks_say_so_and_check_again_runs_them() {
+    let mut h = analysing();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // as Cancel leaves them: the plan known, nothing found yet, nothing running
+    h.app.save_checks[0].found = None;
+    h.frame(vec![]);
+    assert!(
+        h.text_at("The checks were cancelled, so nothing has been checked yet")
+            .is_some()
+    );
+    assert!(h.app.busy.is_none(), "not started again by itself");
+    h.click(h.text_at("Check Again").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.save_checks[0].found.is_some(), "checked again");
+    assert!(h.text_at("Check Again").is_none());
+}
+
+#[test]
+fn save_toolpaths_waits_for_cancelled_checks_rather_than_saving_unchecked() {
+    let mut h = analysing();
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::SeparateFiles,
+        job_sheet: false,
+    };
+    let post = h.app.form_post(&form).unwrap();
+    // the form's checks, as Cancel leaves them
+    h.app.save_checks = vec![super::SaveChecks {
+        plan: h.app.plan(&form, &post).unwrap(),
+        changes: form.changes,
+        revision: h.app.history.revision(),
+        machine: h.app.machines.active,
+        found: None,
+    }];
+    assert!(h.app.ready_to_save(&form).is_none(), "not saved unchecked");
+    assert!(
+        h.app.status.message.contains("were cancelled"),
+        "{}",
+        h.app.status.message
+    );
+    assert_eq!(h.app.save_checks.len(), 1, "not started again by itself");
 }
 
 #[test]

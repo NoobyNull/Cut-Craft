@@ -29,7 +29,8 @@ struct Params {
     // drop every cell centre, not the points given; an untapered end mill
     centres: u32,
     flat_end: u32,
-    pad0: u32,
+    // the first item this dispatch works on: a big job is dispatched a share at a time
+    first: u32,
     pad1: u32,
 }
 
@@ -55,7 +56,7 @@ const NONE: f32 = 1.0e30;
 const SHRINK: f32 = 0.6180339887498949;
 
 fn item(gid: vec3<u32>, n: vec3<u32>) -> u32 {
-    return gid.y * (n.x * 64u) + gid.x;
+    return P.first + gid.y * (n.x * 64u) + gid.x;
 }
 
 fn centre(column: u32, row: u32) -> vec2<f32> {
