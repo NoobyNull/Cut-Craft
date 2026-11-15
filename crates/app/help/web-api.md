@@ -14,15 +14,24 @@ saves files for your machine, it does not drive it.
 
 1. Open **Edit ▸ Options ▸ Web API**.
 2. Tick **Turn on the Web API**.
-3. Press **Copy** beside the access token, and give it to the program that will call
-   Cut Craft. Every call must send it.
 
-![The Web API page in Options, switched on, with the token and a command to try](bytes://help/web-api-options.png)
+That is all for programs on this computer: they need no password.
 
-- **Allow other computers on my network** also answers other computers, not only this one.
-  Calls are not encrypted, so only use it on a home or workshop network you trust. On
-  Windows, the first time, Windows asks whether to let Cut Craft through its firewall: allow
-  it on private networks only.
+![The Web API page in Options, switched on, with a command to try](bytes://help/web-api-options.png)
+
+## Letting other computers in
+
+Tick **Allow other computers on my network** to let another computer (a workshop PC, a
+laptop) drive Cut Craft. Then every call, from any computer, must send the **access token**:
+
+1. Press **Copy** beside the access token.
+2. Give it to the program that will call Cut Craft, on the other computer.
+
+![The Web API page with other computers allowed, showing the access token](bytes://help/web-api-network.png)
+
+- Calls are not encrypted, so only allow other computers on a home or workshop network you
+  trust. On Windows, the first time, Windows asks whether to let Cut Craft through its
+  firewall: allow it on private networks only.
 - **Port** is the number programs call, as in `http://localhost:7340`. Pick another if a
   different program already uses it.
 - **Make New Token** stops the old token working, for example if someone you did not mean
@@ -43,14 +52,15 @@ fix that (most often by picking another port), then press **Try Again** in Optio
 
 ## Trying it
 
-**Copy Command** under **Try it** copies a command, with your token in it, to paste in a
-terminal (on Windows, in PowerShell use `curl.exe`). Cut Craft answers with its version and
+**Copy Command** under **Try it** copies a command (with your token in it, when other
+computers are allowed) to paste in a terminal (on Windows, in PowerShell use `curl.exe`). Cut Craft answers with its version and
 what it is doing.
 
 ## The calls
 
-Every call starts `http://localhost:7340/api/v1/` and sends the header
-`Authorization: Bearer <token>`. Calls that send settings use POST with
+Every call starts `http://localhost:7340/api/v1/` (from another computer, this computer's
+address in place of `localhost`). While other computers are allowed, every call also sends
+the header `Authorization: Bearer <token>`. Calls that send settings use POST with
 `Content-Type: application/json`. Lengths are in the job's units unless a call says
 `"units": "mm"` or `"in"`.
 

@@ -17,6 +17,10 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
         include_bytes!("../../help/pictures/web-api-options.png"),
     ),
     (
+        "web-api-network.png",
+        include_bytes!("../../help/pictures/web-api-network.png"),
+    ),
+    (
         "web-api-running.png",
         include_bytes!("../../help/pictures/web-api-running.png"),
     ),

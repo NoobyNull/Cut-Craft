@@ -320,9 +320,7 @@ impl CutCraftApp {
     /// What was pressed below Options ▸ Web API's settings, done.
     pub(super) fn web_api_pressed(&mut self, pressed: Pressed) {
         match pressed {
-            Pressed::Copied => self
-                .status
-                .set_message("Copied, with your Web API token in it"),
+            Pressed::Copied => self.status.set_message("Copied"),
             Pressed::NewToken => self.new_web_api_token(),
             Pressed::TryAgain => self.retry_web_api(),
         }
@@ -366,44 +364,51 @@ pub(super) fn options_section(
         }
     }
     let token = &settings.token;
-    if token.is_empty() {
-        return pressed;
-    }
+    let needs_token = settings.allow_network && !token.is_empty();
     ui.add_space(ui.spacing().item_spacing.y);
-    ui.strong("Access token");
-    ui.label(
-        "Every call sends this, so only programs you give it to can drive Cut Craft. Keep it \
-         private, like a password.",
-    );
-    ui.horizontal(|ui| {
-        ui.monospace(format!("{}…", token.chars().take(8).collect::<String>()));
-        if ui
-            .button("Copy")
-            .on_hover_hint("Copy the whole token, to paste into your script")
-            .clicked()
-        {
-            ui.ctx().copy_text(token.clone());
-            pressed = Some(Pressed::Copied);
-        }
-        if ui
-            .button("Make New Token")
-            .on_hover_hint(
-                "Stop the old token working, for example if someone you did not mean to have \
+    if needs_token {
+        ui.strong("Access token");
+        ui.label(
+            "Other computers can reach Cut Craft, so every call must send this. Give it only to \
+             programs you trust, and keep it private, like a password.",
+        );
+    } else {
+        ui.label(
+            "Programs on this computer need no token. Tick Allow other computers on my network \
+             and every call will need an access token, shown here.",
+        );
+    }
+    if needs_token {
+        ui.horizontal(|ui| {
+            ui.monospace(format!("{}…", token.chars().take(8).collect::<String>()));
+            if ui
+                .button("Copy")
+                .on_hover_hint("Copy the whole token, to paste into your script")
+                .clicked()
+            {
+                ui.ctx().copy_text(token.clone());
+                pressed = Some(Pressed::Copied);
+            }
+            if ui
+                .button("Make New Token")
+                .on_hover_hint(
+                    "Stop the old token working, for example if someone you did not mean to have \
                  it does",
-            )
-            .clicked()
-        {
-            pressed = Some(Pressed::NewToken);
-        }
-    });
+                )
+                .clicked()
+            {
+                pressed = Some(Pressed::NewToken);
+            }
+        });
+    }
     ui.add_space(ui.spacing().item_spacing.y);
     ui.strong("Try it");
     ui.label("Paste this in a terminal: Cut Craft answers with its version and what it is doing.");
-    let example = example_call(settings.port);
+    let example = example_call(settings.port, needs_token);
     ui.add(egui::Label::new(egui::RichText::new(&example).monospace()).wrap());
     if ui
         .button("Copy Command")
-        .on_hover_hint("Copy this command with your token in it, to paste in a terminal")
+        .on_hover_hint("Copy this command, to paste in a terminal")
         .clicked()
     {
         ui.ctx().copy_text(example.replace("<token>", token));
@@ -413,10 +418,15 @@ pub(super) fn options_section(
     pressed
 }
 
-/// A first call to try, with `<token>` where the token goes.
-pub(super) fn example_call(port: u16) -> String {
+/// A first call to try: with `<token>` where the token goes when calls need one.
+pub(super) fn example_call(port: u16, token: bool) -> String {
+    let auth = if token {
+        "-H \"Authorization: Bearer <token>\" "
+    } else {
+        ""
+    };
     format!(
-        "curl -H \"Authorization: Bearer <token>\" http://localhost:{port}{}status",
+        "curl {auth}http://localhost:{port}{}status",
         cut_craft_web_api::PREFIX
     )
 }

@@ -1240,13 +1240,15 @@ impl Default for Updates {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct WebApi {
     /// Let programs on this computer drive Cut Craft: select vectors, run tools, press any
-    /// button. Every call needs the access token below. The status bar shows WEB API Running
-    /// in green while it is listening, or in red if it could not start and why
+    /// button. Calls from this computer need nothing more; other computers need the access
+    /// token. The status bar shows WEB API Running in green while it is listening, or in red if
+    /// it could not start and why
     #[serde(default)]
     #[schemars(title = "Turn on the Web API")]
     pub enabled: bool,
     /// Also answer other computers on your network, not only this one (listens on 0.0.0.0).
-    /// Calls travel unencrypted, so only use this on a home or workshop network you trust
+    /// Every call then needs the access token shown below. Calls travel unencrypted, so only
+    /// use this on a home or workshop network you trust
     #[serde(default)]
     #[schemars(title = "Allow other computers on my network")]
     pub allow_network: bool,
@@ -1255,7 +1257,8 @@ pub struct WebApi {
     #[serde(default = "web_api_port")]
     #[schemars(title = "Port", range(min = 1024, max = 65535))]
     pub port: u16,
-    /// The access token every call must send; made the first time the Web API is switched on.
+    /// The access token calls must send while other computers are allowed; made the first
+    /// time the Web API is switched on.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     #[schemars(skip)]
     pub token: String,
@@ -1282,7 +1285,8 @@ impl WebApi {
         self.enabled.then(|| cut_craft_web_api::Settings {
             allow_network: self.allow_network,
             port: self.port,
-            token: Some(self.token.clone()),
+            // this computer's own programs need no token; open to the network, every call does
+            token: self.allow_network.then(|| self.token.clone()),
         })
     }
 }

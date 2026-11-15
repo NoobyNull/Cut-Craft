@@ -29,16 +29,27 @@ fn call(
     path: &str,
     body: Option<Value>,
 ) -> (u16, Value) {
-    let token = h.app.options.web_api.token.clone();
+    let token = Some(h.app.options.web_api.token.clone());
+    call_with(h, at, token, method, path, body)
+}
+
+/// [`call`] sending `token`, or no token at all.
+fn call_with(
+    h: &mut Harness,
+    at: SocketAddr,
+    token: Option<String>,
+    method: &str,
+    path: &str,
+    body: Option<Value>,
+) -> (u16, Value) {
+    let auth = token.map_or_else(String::new, |t| format!("Authorization: Bearer {t}\r\n"));
     let body = body.map(|b| b.to_string());
     let path = format!("{}{path}", cut_craft_web_api::PREFIX);
     let method = method.to_owned();
     let client = std::thread::spawn(move || {
         let mut s = TcpStream::connect(at).unwrap();
-        let mut request = format!(
-            "{method} {path} HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {token}\r\n\
-             Connection: close\r\n"
-        );
+        let mut request =
+            format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\n{auth}Connection: close\r\n");
         if let Some(body) = &body {
             let _ = write!(
                 request,
@@ -274,7 +285,33 @@ fn the_web_api_has_a_help_page_with_its_pictures_linked_from_contents() {
 #[test]
 fn the_example_call_is_the_status_call_on_the_chosen_port() {
     assert_eq!(
-        super::super::web_api::example_call(8123),
+        super::super::web_api::example_call(8123, false),
+        "curl http://localhost:8123/api/v1/status"
+    );
+    assert_eq!(
+        super::super::web_api::example_call(8123, true),
         "curl -H \"Authorization: Bearer <token>\" http://localhost:8123/api/v1/status"
     );
+}
+
+#[test]
+fn this_computer_needs_no_token_but_open_to_the_network_every_call_does() {
+    let (mut h, at) = switched_on();
+    let (status, _) = call_with(&mut h, at, None, "GET", "status", None);
+    assert_eq!(status, 200, "a program on this computer needs no token");
+    // other computers allowed: it listens on every network, and wants the token
+    h.app.options.web_api.allow_network = true;
+    h.app.options.web_api.port = at.port();
+    h.frame(vec![]);
+    let State::Running(open) = h.app.web_api_state().clone() else {
+        panic!("{:?}", h.app.web_api_state());
+    };
+    assert!(open.ip().is_unspecified(), "{open}");
+    let here = SocketAddr::from(([127, 0, 0, 1], open.port()));
+    let (status, e) = call_with(&mut h, here, None, "GET", "status", None);
+    assert_eq!(status, 401, "{e}");
+    let (status, _) = call_with(&mut h, here, Some("wrong".into()), "GET", "status", None);
+    assert_eq!(status, 401);
+    let (status, _) = call(&mut h, here, "GET", "status", None);
+    assert_eq!(status, 200);
 }
