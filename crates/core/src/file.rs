@@ -144,3 +144,21 @@ pub fn load_job(bytes: &[u8]) -> Result<Document, LoadError> {
         serde_json::from_slice(bytes).map_err(|e| LoadError::Damaged(e.to_string()))?;
     Ok(loaded.document)
 }
+
+/// [`load_job`], with the settings in the file this build does not know (a newer version
+/// added them), by their place in the document (`job.glitter`). They are not kept: saving
+/// the job from this build leaves them out.
+pub fn load_job_noting(bytes: &[u8]) -> Result<(Document, Vec<String>), LoadError> {
+    let doc = load_job(bytes)?;
+    let mut unknown = Vec::new();
+    let mut reader = serde_json::Deserializer::from_slice(bytes);
+    let _ = serde_ignored::deserialize(&mut reader, |path| {
+        let path = path.to_string();
+        // the document's own settings, not the file's header
+        if let Some(inside) = path.strip_prefix("document.") {
+            unknown.push(inside.to_owned());
+        }
+    })
+    .map(|loaded: Loaded| loaded.document);
+    Ok((doc, unknown))
+}

@@ -2,7 +2,7 @@
 //! tests run them without dialogs.
 
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::file::{load_job, save_job, write_atomic};
+use cut_craft_core::file::{load_job_noting, save_job, write_atomic};
 use cut_craft_core::toolpath::ToolDatabase;
 use cut_craft_core::{Change, History, Registry};
 use cut_craft_post::Post;
@@ -14,6 +14,9 @@ pub struct Session {
     pub path: Option<PathBuf>,
     /// History revision at the last save or open.
     saved: u64,
+    /// Settings in the opened file that this version does not know (a newer one added
+    /// them): saving from here leaves them out.
+    pub newer_settings: Vec<String>,
 }
 
 impl Session {
@@ -42,6 +45,7 @@ impl Session {
         Self {
             path: None,
             saved: u64::MAX,
+            newer_settings: vec![],
         }
     }
 
@@ -56,8 +60,10 @@ impl Session {
     /// The opened job with a fresh history; the session now points at it.
     pub fn open(&mut self, path: &Path) -> Result<(Document, History), String> {
         let bytes = read(path)?;
-        let doc = load_job(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        let (doc, newer_settings) =
+            load_job_noting(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
         let history = History::default();
+        self.newer_settings = newer_settings;
         self.path = Some(path.to_owned());
         self.saved = history.revision();
         Ok((doc, history))

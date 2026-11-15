@@ -2284,7 +2284,17 @@ impl CutCraftApp {
                         Some((t.tool.name.clone(), now.to_owned()))
                     })
                     .collect();
-                let opened = format!("Opened {}", super::file_name(path));
+                let mut opened = format!("Opened {}", super::file_name(path));
+                if !self.session.newer_settings.is_empty() {
+                    opened = format!(
+                        "{opened}. Warning: it was saved by a newer version of Cut Craft, and \
+                         this one does not know some of its settings ({}): saving it here \
+                         leaves them out. Update Cut Craft (Help ▸ Check for Updates) to keep \
+                         them",
+                        self.session.newer_settings.join(", ")
+                    );
+                }
+                self.status.set_message(&opened);
                 self.rename_toolpath_tools(&renamed, &opened);
                 true
             }

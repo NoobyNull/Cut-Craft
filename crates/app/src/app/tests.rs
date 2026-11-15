@@ -13833,3 +13833,23 @@ fn save_as_suggests_the_jobs_own_name_in_its_own_folder() {
         )
     );
 }
+
+#[test]
+fn opening_a_job_from_a_newer_version_warns_which_settings_this_one_will_leave_out() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-newer-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("newer.ccjob");
+    let mut json: serde_json::Value =
+        serde_json::from_slice(&cut_craft_core::file::save_job(&Document::default())).unwrap();
+    json["document"]["hologram"] = serde_json::json!(true);
+    std::fs::write(&path, serde_json::to_vec(&json).unwrap()).unwrap();
+    let mut h = Harness::at_start();
+    assert!(h.app.open_path(&path));
+    assert_eq!(h.app.screen, Screen::Job);
+    let told = &h.app.status.message;
+    assert!(
+        told.contains("Warning") && told.contains("newer version") && told.contains("hologram"),
+        "{told}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}

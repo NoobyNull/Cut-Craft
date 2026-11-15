@@ -88,3 +88,20 @@ fn an_atomic_write_replaces_the_file_whole_and_leaves_no_temp_behind() {
     assert_eq!(std::fs::read(&path).unwrap(), b"second");
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn settings_a_newer_version_added_are_named_rather_than_dropped_silently() {
+    use cut_craft_core::file::load_job_noting;
+    let mut json: serde_json::Value =
+        serde_json::from_slice(&save_job(&sample_document())).unwrap();
+    json["document"]["hologram"] = serde_json::json!(true);
+    json["document"]["job"]["glitter"] = serde_json::json!(3);
+    let (doc, unknown) = load_job_noting(&serde_json::to_vec(&json).unwrap()).unwrap();
+    assert_eq!(doc, sample_document());
+    assert_eq!(unknown, ["job.glitter", "hologram"]);
+    let (_, unknown) = load_job_noting(&save_job(&sample_document())).unwrap();
+    assert!(
+        unknown.is_empty(),
+        "its own files know every setting: {unknown:?}"
+    );
+}
