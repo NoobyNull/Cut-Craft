@@ -1422,10 +1422,16 @@ impl CutCraftApp {
         }
     }
 
+    /// The active machine has a tool changer (slots in Machine Configuration); with no
+    /// machine set up there is none.
+    pub(super) fn has_tool_changer(&self) -> bool {
+        self.machines.active().is_some_and(|m| !m.slots.is_empty())
+    }
+
     /// How tools are changed unless the form says otherwise: by the tool changer when the
     /// active machine has one, else a file for each tool.
     pub(super) fn default_changes(&self) -> files::ToolChanges {
-        if self.machines.active().is_some_and(|m| !m.slots.is_empty()) {
+        if self.has_tool_changer() {
             files::ToolChanges::ToolChanger
         } else {
             files::ToolChanges::SeparateFiles
@@ -1440,7 +1446,7 @@ impl CutCraftApp {
             Some(name) => self.posts.load(name),
             None => self.output_post(),
         }?;
-        let changer = self.machines.active().is_some_and(|m| !m.slots.is_empty());
+        let changer = self.has_tool_changer();
         Ok(match form.changes {
             files::ToolChanges::Pause => post.with_pauses(),
             // changed by hand between files: no tool changer call (M6) for the first tool
@@ -1520,7 +1526,19 @@ impl CutCraftApp {
         if changes != files::ToolChanges::ToolChanger {
             limits.slots.clear();
         }
-        cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits)
+        let mut found = cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits);
+        if changes == files::ToolChanges::ToolChanger && !self.has_tool_changer() {
+            found.push(cut_craft_core::preflight::Finding {
+                severity: cut_craft_core::preflight::Severity::Warning,
+                message: "Tool changer (ATC) is chosen, but the machine has no tool changer \
+                          set up: the file changes tools with M6, which a machine without \
+                          one stops on or ignores, cutting on with the wrong bit. Choose \
+                          Separate file for each tool, or add the tool changer's slots in \
+                          Machine Configuration"
+                    .into(),
+            });
+        }
+        found
     }
 
     /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when

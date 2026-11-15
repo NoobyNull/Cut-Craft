@@ -13264,3 +13264,27 @@ fn the_pockets_clearing_settings_have_their_picture() {
     assert_eq!(edge.diagram.as_deref(), Some("diagrams/edge_pass.png"));
     assert_eq!(edge.dim.as_deref(), Some("A"));
 }
+
+#[test]
+fn the_tool_changer_is_offered_only_for_a_machine_with_one_and_warned_about_without() {
+    use crate::files::ToolChanges;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
+    // no machine set up: no tool changer to offer, and choosing it anyway warns in red
+    assert!(!h.app.has_tool_changer());
+    let warned = |h: &Harness, changes| {
+        h.app
+            .preflight(&plan, changes)
+            .iter()
+            .any(|f| f.message.contains("no tool changer"))
+    };
+    assert!(warned(&h, ToolChanges::ToolChanger));
+    assert!(!warned(&h, ToolChanges::SeparateFiles));
+    h.app.machines.add();
+    assert!(!h.app.has_tool_changer());
+    assert!(warned(&h, ToolChanges::ToolChanger));
+    h.app.machines.active_mut().unwrap().set_slot_count(4);
+    assert!(h.app.has_tool_changer());
+    assert!(!warned(&h, ToolChanges::ToolChanger));
+}

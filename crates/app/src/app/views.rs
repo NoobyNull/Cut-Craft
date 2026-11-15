@@ -3357,7 +3357,7 @@ impl CutCraftApp {
             }),
             _ => None,
         };
-        let changer = self.machines.active().is_none_or(|m| !m.slots.is_empty());
+        let changer = self.has_tool_changer();
         let found = match &plan {
             Ok(plan) => self.save_checks(plan, form.changes).to_vec(),
             Err(_) => vec![],
@@ -4117,7 +4117,8 @@ fn tool_changes_section(ui: &mut egui::Ui, changes: &mut files::ToolChanges, has
         ui.radio_value(changes, ToolChanges::ToolChanger, "Tool changer (ATC)")
             .on_hover_hint("One file; the machine's tool changer changes the tools")
             .on_disabled_hover_text(
-                "This machine has no tool changer: add its slots in Machine Configuration",
+                "No tool changer is set up: pick or add your machine, and give it the tool \
+                 changer's slots in Machine Configuration",
             );
     });
     ui.radio_value(
