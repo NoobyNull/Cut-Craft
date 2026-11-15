@@ -29,6 +29,8 @@ pub(super) struct Stock {
     pub bed: [f64; 2],
     /// The job's Clearing Settings, said in the Cutting window.
     pub clearing: cut_craft_core::entry::ClearingSettings,
+    /// With tabs placed by hand, how many of the shapes cut out got no tab.
+    pub untabbed: usize,
 }
 
 /// How close to the material's bottom a cut must reach to count as right through, mm.
@@ -48,6 +50,16 @@ pub(super) fn cuts_loose(params: &serde_json::Value, stock: Stock) -> bool {
     let through = stock.thickness > 0.0 && depth + THROUGH >= stock.thickness;
     let closed = side != "on" || stock.closed;
     through && closed && !cut_craft_core::checks::held_by_tabs(params)
+}
+
+/// Whether a Profile Toolpath form's `params` cut right through `stock`.
+fn through(params: &serde_json::Value, stock: Stock) -> bool {
+    let depth = if params["through"] == true {
+        stock.thickness
+    } else {
+        params["depth"].as_f64().unwrap_or_default()
+    };
+    stock.thickness > 0.0 && depth + THROUGH >= stock.thickness
 }
 
 /// The words over Add Tabs when a profile would cut its piece loose.
@@ -131,6 +143,27 @@ pub(super) fn group_end(
         changed = true;
     }
     if group == "Tabs" {
+        if stock.untabbed > 0 && !cuts_loose(params, stock) && through(params, stock) {
+            ui.colored_label(
+                ui.visuals().warn_fg_color,
+                format!(
+                    "{} of the shapes this cuts out {} no tab, so {} loose. Each tab \
+                     you click goes on the shape nearest it: click on {} in Edit Tabs.",
+                    stock.untabbed,
+                    if stock.untabbed == 1 { "has" } else { "have" },
+                    if stock.untabbed == 1 {
+                        "it comes"
+                    } else {
+                        "they come"
+                    },
+                    if stock.untabbed == 1 {
+                        "it"
+                    } else {
+                        "each one"
+                    },
+                ),
+            );
+        }
         if cuts_loose(params, stock) {
             ui.colored_label(ui.visuals().warn_fg_color, LOOSE);
             if ui

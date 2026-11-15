@@ -4657,7 +4657,7 @@ impl CutCraftApp {
             }
         };
         let bed = self.machines.active().map(|m| [m.width, m.height]);
-        let stock = form_stock(&self.doc, units, bed.unwrap_or_default());
+        let stock = form_stock(&self.doc, &open.params, units, bed.unwrap_or_default());
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
         };
@@ -5719,13 +5719,15 @@ pub(super) const CLIP_HOW: &str = "Keep-out zones (red outlines, such as clamps)
     instead: Toolpaths ▸ Keep-Out Zones… for the job's, Machine Configuration for the \
     machine's.";
 
-/// The material a profile's tabs are judged against: how thick, and whether a closed shape
-/// is selected.
+/// The material a profile's tabs are judged against: how thick, whether a closed shape
+/// is selected, and how many shapes the form's hand-placed tabs leave out.
 fn form_stock(
     doc: &cut_craft_core::document::Document,
+    params: &Value,
     units: cut_craft_core::document::Units,
     bed: [f64; 2],
 ) -> super::tabs::Stock {
+    let selected: Vec<_> = doc.selection.iter().copied().collect();
     super::tabs::Stock {
         thickness: doc.job.thickness,
         closed: doc
@@ -5735,6 +5737,7 @@ fn form_stock(
         units,
         bed,
         clearing: doc.job.clearing,
+        untabbed: cut_craft_core::checks::shapes_without_placed_tabs(doc, &selected, params),
     }
 }
 
