@@ -2481,6 +2481,35 @@ fn right_clicking_the_view_opens_the_selection_menu() {
 }
 
 #[test]
+fn right_clicking_a_guide_or_a_node_opens_its_own_menu() {
+    let mut h = Harness::new();
+    h.app.doc.guides = vec![cut_craft_core::document::Guide::vertical(150.0)];
+    h.frame(vec![]);
+    h.right_click(h.at(150.0, 120.0));
+    assert!(
+        h.text_at("Delete Guide").is_some(),
+        "the guide's menu opens"
+    );
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "node_edit");
+    h.frame(vec![]);
+    h.right_click(h.at(30.0, 20.0));
+    assert!(h.text_at("Delete Point").is_some(), "the node's menu opens");
+    // a guide inserted from the menu goes where it opened, not the middle of the job
+    let mut h = Harness::new();
+    h.right_click(h.at(70.0, 40.0));
+    let insert = h.text_at("Guidelines").expect("the selection menu is open");
+    h.click(insert, Modifiers::NONE);
+    let vertical = h
+        .text_at("Insert Vertical Guide")
+        .expect("its submenu is open");
+    h.click(vertical, Modifiers::NONE);
+    let guide = h.app.doc.guides.last().expect("a guide is inserted");
+    assert!((guide.at - 70.0).abs() < 1.0, "{guide:?}");
+}
+
+#[test]
 fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);

@@ -2682,13 +2682,16 @@ impl CutCraftApp {
             self.finish_polyline(false);
             return;
         }
-        let pressed = ui
-            .input(|i| i.pointer.press_origin())
-            .map(|q| canvas.transform.to_job(q));
-        // where the menu opened, for guides inserted from it
+        // where the menu opened: kept while it stays open, since egui forgets the press
+        // once the button is up, and used for what it was opened on and for guides
+        // inserted from it
         if canvas.response().secondary_clicked() {
-            self.menu_at = pressed;
+            self.menu_at = canvas
+                .response()
+                .interact_pointer_pos()
+                .map(|q| canvas.transform.to_job(q));
         }
+        let pressed = self.menu_at;
         let guide =
             pressed.and_then(|at| self.doc.guides.iter().position(|g| g.distance(at) <= reach));
         let node_target = pressed
