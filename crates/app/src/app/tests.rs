@@ -2022,6 +2022,24 @@ fn hiding_a_layer_from_the_panel_is_undoable_and_stops_picking() {
 }
 
 #[test]
+fn hiding_or_locking_a_layer_keeps_its_material() {
+    let mut h = Harness::new();
+    let mut layer = cmd_layer_properties::Params::from(h.app.doc.layers[0].clone());
+    layer.material = "Oak".into();
+    h.app
+        .apply("layer_properties", &serde_json::to_value(&layer).unwrap())
+        .unwrap();
+    h.app.layer_action(&h.ctx, LayerId(1), "toggle_visible");
+    h.app.layer_action(&h.ctx, LayerId(1), "toggle_locked");
+    let l = &h.app.doc.layers[0];
+    assert!(!l.visible && l.locked);
+    assert_eq!(
+        l.material, "Oak",
+        "the eye and lock leave the material alone"
+    );
+}
+
+#[test]
 fn choosing_a_layer_makes_it_current_without_an_undo_step() {
     let mut h = Harness::new();
     h.app

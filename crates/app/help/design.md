@@ -8,6 +8,10 @@ nothing more to press; **New Shape** leaves it as it is to type another. Tools t
 what is selected say **Apply**, toolpaths say **Calculate**. **Close** (or Esc) puts the
 tool away, keeping what is there; **Cancel** takes back what the tool did.
 
+On the **Layers** tab, the eye shows or hides a layer and the padlock locks it against
+changes. Neither touches anything else about the layer: its name and its material (set
+with right-click ▸ Rename, which toolpaths use to pick feeds and speeds) stay as they are.
+
 Hover over a tool's button to see what it does, and what to do next, in the box under the
 buttons. The buttons stay where they are while you hover; tools that do one job different
 ways sit together in a box named for that job.
