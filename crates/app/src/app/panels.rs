@@ -4266,6 +4266,10 @@ impl CutCraftApp {
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
                     .on_hover_hint("Cut Craft's version (Help ▸ About)");
                 ui.separator();
+                // the Web API's state, once it is switched on, in a slot of its own width
+                if self.web_api_indicator(ui) {
+                    ui.separator();
+                }
                 if self.screen == Screen::Job {
                     // the job's units, and the one-click way to swap them
                     let (unit, other) = match self.doc.job.units {
