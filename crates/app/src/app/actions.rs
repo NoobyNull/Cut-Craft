@@ -110,6 +110,7 @@ impl CutCraftApp {
             picking: None,
             deep_cut: None,
             units_ask: None,
+            earlier_ask: None,
             shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
@@ -1289,11 +1290,115 @@ impl CutCraftApp {
         let Some(path) = dialog.save_file() else {
             return;
         };
-        let path = path.with_extension(&extension);
+        let path = files::with_extension_added(&path, &extension);
+        self.save_over_earlier(form, post, path, told);
+    }
+
+    /// Save Toolpaths' Save once the file is named: straight on when no earlier save left
+    /// G-code there, else as Options say (Replace or Archive), or held for the question.
+    pub(super) fn save_over_earlier(
+        &mut self,
+        form: &SaveForm,
+        post: cut_craft_post::Post,
+        path: std::path::PathBuf,
+        told: String,
+    ) {
+        let earlier = files::earlier_save(&path);
+        if earlier.is_empty() {
+            return self.finish_save(form, &post, &path, &told, "");
+        }
+        match self.options.confirmations.earlier_gcode {
+            crate::options::EarlierGcode::Ask => {
+                self.earlier_ask = Some(super::EarlierAsk {
+                    form: form.clone(),
+                    post,
+                    path,
+                    told,
+                    earlier,
+                    remember: false,
+                });
+            }
+            choice => self.save_with(choice, form, &post, &path, &told, &earlier),
+        }
+    }
+
+    /// The answer to the earlier-save question: `None` saves nothing. `remember` keeps the
+    /// answer as the default (Edit ▸ Options ▸ Confirmations).
+    pub(super) fn answer_earlier(
+        &mut self,
+        choice: Option<crate::options::EarlierGcode>,
+        remember: bool,
+    ) {
+        let Some(ask) = self.earlier_ask.take() else {
+            return;
+        };
+        let Some(choice) = choice else {
+            return self.status.set_message("Toolpaths not saved");
+        };
+        if remember {
+            self.options.confirmations.earlier_gcode = choice;
+            self.save_options();
+        }
+        self.save_with(
+            choice,
+            &ask.form,
+            &ask.post,
+            &ask.path,
+            &ask.told,
+            &ask.earlier,
+        );
+    }
+
+    /// Replaces (deletes) or archives `earlier`, then saves.
+    fn save_with(
+        &mut self,
+        choice: crate::options::EarlierGcode,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+        told: &str,
+        earlier: &[std::path::PathBuf],
+    ) {
+        use crate::options::EarlierGcode;
+        let done = if choice == EarlierGcode::Archive {
+            let when = chrono::Local::now().naive_local();
+            match files::archive(earlier, path, when) {
+                Ok(folder) => format!("; the earlier files are in {}", folder.display()),
+                Err(e) => {
+                    return self
+                        .status
+                        .set_message(&format!("Not saved: could not archive {e}"));
+                }
+            }
+        } else {
+            for file in earlier {
+                if let Err(e) = std::fs::remove_file(file) {
+                    return self.status.set_message(&format!(
+                        "Not saved: could not replace {}: {e}",
+                        file.display()
+                    ));
+                }
+            }
+            String::new()
+        };
+        self.finish_save(form, post, path, told, &done);
+    }
+
+    /// Writes the files (and the job sheet) and says what was saved, then `after` and
+    /// `told`.
+    fn finish_save(
+        &mut self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+        told: &str,
+        after: &str,
+    ) {
+        let (_, name) = self.project();
         let result = self
-            .write_toolpath_files(form, &post, &path)
+            .write_toolpath_files(form, post, path)
             .and_then(|written| {
-                let done = Self::saved_message(&written, &path);
+                let done = Self::saved_message(&written, path);
                 if form.job_sheet {
                     let folder = path.parent().unwrap_or(std::path::Path::new("."));
                     let outputs = (written.iter())
@@ -1305,7 +1410,7 @@ impl CutCraftApp {
                 Ok(done)
             });
         self.status
-            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{after}{told}")));
     }
 
     /// Save Toolpaths' post and the checks before cutting, asked about when they find

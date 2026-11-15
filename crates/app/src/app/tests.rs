@@ -13350,3 +13350,71 @@ fn machine_files_asks_before_uploading_over_a_file_already_on_the_machine() {
     let _ = std::fs::remove_dir_all(card);
     let _ = std::fs::remove_file(local);
 }
+
+#[test]
+fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
+    use crate::files::{SaveMode, ToolChanges};
+    use crate::options::EarlierGcode;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let dir = std::env::temp_dir().join(format!("cut-craft-resave-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let form = SaveForm {
+        mode: SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: ToolChanges::ToolChanger,
+        job_sheet: false,
+    };
+    let post = h.app.form_post(&form).unwrap();
+    let path = dir.join("sign.nc");
+    let stale = dir.join("sign_3_Old-Vcarve.nc");
+    let mine = dir.join("sign notes.nc");
+    for file in [&path, &stale, &mine] {
+        std::fs::write(file, "old").unwrap();
+    }
+    // asked first: nothing is written until it is answered
+    h.app
+        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    assert!(h.app.earlier_ask.is_some());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "old");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Replace the earlier G-code?").is_some());
+    // Cancel keeps them
+    h.app.answer_earlier(None, false);
+    assert_eq!(std::fs::read_to_string(&stale).unwrap(), "old");
+    // Replace: the new file, and no older numbered one left to run by mistake
+    h.app
+        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    h.app.answer_earlier(Some(EarlierGcode::Replace), false);
+    assert!(std::fs::read_to_string(&path).unwrap().contains("G0"));
+    assert!(!stale.exists());
+    assert!(mine.exists(), "a file of the user's own is left alone");
+    assert_eq!(h.app.options.confirmations.earlier_gcode, EarlierGcode::Ask);
+    // Archive, remembered: the earlier file moved aside, and not asked next time
+    h.app
+        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    h.app.answer_earlier(Some(EarlierGcode::Archive), true);
+    assert_eq!(
+        h.app.options.confirmations.earlier_gcode,
+        EarlierGcode::Archive
+    );
+    let archived =
+        |dir: &std::path::Path| std::fs::read_dir(dir.join("Archive")).map_or(0, Iterator::count);
+    assert_eq!(archived(&dir), 1, "{}", h.app.status.message);
+    assert!(
+        h.app.status.message.contains("Archive"),
+        "{}",
+        h.app.status.message
+    );
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    h.app
+        .save_over_earlier(&form, post, path.clone(), String::new());
+    assert!(h.app.earlier_ask.is_none(), "not asked once remembered");
+    assert_eq!(archived(&dir), 2);
+    assert!(path.exists());
+    let _ = std::fs::remove_dir_all(dir);
+}

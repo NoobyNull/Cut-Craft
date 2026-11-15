@@ -34,6 +34,13 @@ the places the post prints, inch posts included: controllers such as GRBL stop t
 (error 33, invalid arc target) when they are not. Pick a post without arcs (GRBL Straight,
 say) only if your controller cannot cut arcs.
 
+Saving again where an earlier save left G-code (the file itself, or the numbered, tile and
+side files saved beside it) asks first. Replace deletes all of them, so an old file for a
+toolpath you have since removed is not left to run by mistake. Archive moves them into a
+dated folder under Archive beside them, then adds the new ones. Tick Do this every time to
+stop being asked; Edit ▸ Options ▸ Confirmations ▸ G-code from an earlier save changes it.
+A name typed with a dot of its own (sign v1.5) keeps it: the file is sign v1.5.nc.
+
 When one file changes tools (a pause to change the bit by hand, or a tool changer), the
 first move after the change lifts the new bit straight up to the safe height, and only
 then moves across to the next cut. You set Z zero for the new bit during the pause, so

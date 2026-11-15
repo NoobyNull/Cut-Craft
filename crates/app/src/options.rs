@@ -571,6 +571,12 @@ pub struct Confirmations {
     #[serde(default = "ask_to_recalculate")]
     #[schemars(title = "Ask to recalculate out-of-date toolpaths")]
     pub ask_to_recalculate: bool,
+    /// Saving toolpaths where an earlier save of the same name left G-code: ask, replace it
+    /// (the older numbered files go too, so none is left to run by mistake), or archive it
+    /// (moved into a dated folder under Archive beside it) and add the new files
+    #[serde(default)]
+    #[schemars(title = "G-code from an earlier save")]
+    pub earlier_gcode: EarlierGcode,
 }
 
 impl Default for Confirmations {
@@ -582,6 +588,7 @@ impl Default for Confirmations {
             cutting_checks: CuttingChecks::default(),
             material_left: material_left(),
             ask_to_recalculate: ask_to_recalculate(),
+            earlier_gcode: EarlierGcode::default(),
         }
     }
 }
@@ -599,6 +606,18 @@ impl Confirmations {
     pub fn left(&self) -> f64 {
         self.material_left.clamp(0.0, 10.0)
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EarlierGcode {
+    /// Ask each time: Replace or Archive
+    #[default]
+    Ask,
+    /// Replace the earlier files
+    Replace,
+    /// Move the earlier files into a dated folder under Archive, then add the new ones
+    Archive,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

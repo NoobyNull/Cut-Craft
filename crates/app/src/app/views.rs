@@ -66,6 +66,8 @@ impl CutCraftApp {
         self.busy_window(ctx);
         // an import that doesn't say its units, waiting to be told
         self.units_question(ctx);
+        // a save that would replace G-code from an earlier save: Replace or Archive?
+        self.earlier_question(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
         if !self.tracing() {
@@ -3303,6 +3305,68 @@ impl CutCraftApp {
     }
 
     /// Options changed in the Options window: what they change, done, and kept.
+    /// Save Toolpaths' question when the files would replace G-code from an earlier save:
+    /// Replace, Archive (kept aside) or Cancel, with the answer kept as the default if asked.
+    fn earlier_question(&mut self, ctx: &egui::Context) {
+        use crate::options::EarlierGcode;
+        const SHOWN: usize = 8;
+        let Some(ask) = self.earlier_ask.as_mut() else {
+            return;
+        };
+        let mut answer: Option<Option<EarlierGcode>> = None;
+        egui::Modal::new(egui::Id::unique("earlier_gcode")).show(ctx, |ui| {
+            ui.set_width(ui.spacing().interact_size.x * 11.0);
+            ui.heading("Replace the earlier G-code?");
+            ui.label("These files from an earlier save are where the new ones go:");
+            for file in ask.earlier.iter().take(SHOWN) {
+                ui.label(format!("• {}", super::file_name(file)));
+            }
+            if ask.earlier.len() > SHOWN {
+                ui.label(format!("and {} more", ask.earlier.len() - SHOWN));
+            }
+            ui.add_space(ui.spacing().item_spacing.y);
+            ui.checkbox(&mut ask.remember, "Do this every time")
+                .on_hover_hint(
+                    "Keep this answer and stop asking. Edit ▸ Options ▸ Confirmations ▸ G-code \
+                     from an earlier save changes it",
+                );
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui
+                    .button("Replace")
+                    .on_hover_hint(
+                        "Delete the earlier files, older numbered ones too, and save the new \
+                         ones: nothing old is left to run by mistake",
+                    )
+                    .clicked()
+                {
+                    answer = Some(Some(EarlierGcode::Replace));
+                }
+                if ui
+                    .button("Archive")
+                    .on_hover_hint(
+                        "Move the earlier files into a dated folder under Archive beside \
+                         them, then save the new ones",
+                    )
+                    .clicked()
+                {
+                    answer = Some(Some(EarlierGcode::Archive));
+                }
+                if ui
+                    .button("Cancel")
+                    .on_hover_hint("Save nothing and leave the earlier files as they are")
+                    .clicked()
+                {
+                    answer = Some(None);
+                }
+            });
+        });
+        if let Some(choice) = answer {
+            let remember = ask.remember;
+            self.answer_earlier(choice, remember);
+        }
+    }
+
     fn options_changed(&mut self, ctx: &egui::Context, options: crate::options::Options) {
         options.apply_to(&mut self.display);
         ctx.set_theme(options.appearance.theme.preference());

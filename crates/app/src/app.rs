@@ -417,6 +417,20 @@ enum Info {
 #[derive(Clone, Debug)]
 pub(super) struct BeforePreview(Option<Material>);
 
+/// A save held while the user chooses what happens to an earlier save's G-code.
+pub(super) struct EarlierAsk {
+    form: SaveForm,
+    post: cut_craft_post::Post,
+    /// Where the files go, as named.
+    path: std::path::PathBuf,
+    /// What the checks before cutting add to the saved message.
+    told: String,
+    /// The earlier save's files there.
+    earlier: Vec<std::path::PathBuf>,
+    /// Keep the answer as the default.
+    remember: bool,
+}
+
 /// Save Toolpaths' choices (Save Toolpaths form), while its window is open.
 #[derive(Clone, Debug)]
 pub(super) struct SaveForm {
@@ -1132,6 +1146,8 @@ struct CutCraftApp {
     deep_cut: Option<depth::DeepCut>,
     /// An import waiting on which units its drawing is in.
     units_ask: Option<units_ask::UnitsAsk>,
+    /// Save Toolpaths held for the question about G-code an earlier save left there.
+    earlier_ask: Option<EarlierAsk>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.

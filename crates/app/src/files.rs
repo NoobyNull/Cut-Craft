@@ -252,6 +252,92 @@ pub fn save_files(
         .collect()
 }
 
+/// `path` with `extension` on the end, unless its name already ends with it: a name typed
+/// with a dot of its own (`sign v1.5`) keeps it (`sign v1.5.nc`).
+pub fn with_extension_added(path: &Path, extension: &str) -> PathBuf {
+    if path
+        .extension()
+        .is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case(extension))
+    {
+        return path.to_owned();
+    }
+    let mut name = path.as_os_str().to_owned();
+    name.push(format!(".{extension}"));
+    PathBuf::from(name)
+}
+
+/// The G-code files an earlier save to `path` left in its folder: `path` itself and the
+/// numbered, tiled and sided files [`save_files`] writes beside it (`sign_1_Profile.nc`,
+/// `sign_tile2.nc`, `sign_Top.nc`), with the same extension. Other files are left out.
+pub fn earlier_save(path: &Path) -> Vec<PathBuf> {
+    let (Some(dir), Some(stem), Some(extension)) = (
+        path.parent(),
+        path.file_stem().map(|s| s.to_string_lossy().into_owned()),
+        path.extension().map(|e| e.to_string_lossy().into_owned()),
+    ) else {
+        return vec![];
+    };
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let ours = |name: &str| {
+        let Some(rest) = name
+            .strip_suffix(&format!(".{extension}"))
+            .and_then(|n| n.strip_prefix(stem.as_str()))
+        else {
+            return false;
+        };
+        if rest.is_empty() {
+            return true;
+        }
+        let Some(rest) = rest.strip_prefix('_') else {
+            return false;
+        };
+        let mut words = rest.split('_');
+        let first = words.next().unwrap_or_default();
+        let digits = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit());
+        (digits(first) && words.next().is_some())
+            || first.strip_prefix("tile").is_some_and(digits)
+            || first == "Top"
+            || first == "Bottom"
+    };
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return vec![];
+    };
+    let mut found: Vec<PathBuf> = read
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| ours(&e.file_name().to_string_lossy()))
+        .map(|e| e.path())
+        .collect();
+    found.sort();
+    found
+}
+
+/// Moves `files` (an earlier save to `path`) into a new folder beside `path`,
+/// `Archive/<its stem> <when>`; that folder.
+pub fn archive(
+    files: &[PathBuf],
+    path: &Path,
+    when: chrono::NaiveDateTime,
+) -> Result<PathBuf, String> {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let folder = dir
+        .join("Archive")
+        .join(format!("{stem} {}", when.format("%Y-%m-%d %H%M%S")));
+    std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+    for file in files {
+        let to = folder.join(file.file_name().unwrap_or_default());
+        std::fs::rename(file, &to)
+            .or_else(|_| std::fs::copy(file, &to).and_then(|_| std::fs::remove_file(file)))
+            .map_err(|e| format!("{}: {e}", file.display()))?;
+    }
+    Ok(folder)
+}
+
 pub use cut_craft_core::file::config_dir;
 
 /// Opens `path` (a folder, or a file such as a PDF to print) with the platform's own
@@ -620,6 +706,69 @@ mod increment_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_earlier_save_is_the_file_and_the_numbered_tiled_and_sided_ones_beside_it() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-earlier-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ours = [
+            "sign.nc",
+            "sign_1_Profile.nc",
+            "sign_3_Old-Vcarve.nc",
+            "sign_tile2.nc",
+            "sign_Top.nc",
+            "sign_2_Pocket_Bottom_tile1.nc",
+        ];
+        let others = [
+            "sign_2024.nc",
+            "signs.nc",
+            "sign_1_Profile.tap",
+            "sign v2.nc",
+            "sign_notes.nc",
+        ];
+        for name in ours.iter().chain(&others) {
+            std::fs::write(dir.join(name), "G0").unwrap();
+        }
+        let mut found: Vec<String> = super::earlier_save(&dir.join("sign.nc"))
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        found.sort();
+        let mut want: Vec<String> = ours.iter().map(|s| (*s).to_owned()).collect();
+        want.sort();
+        assert_eq!(found, want);
+        // archived: moved into a dated folder under Archive, the others left
+        let when = chrono::NaiveDate::from_ymd_opt(2026, 11, 15)
+            .and_then(|d| d.and_hms_opt(7, 54, 22))
+            .unwrap();
+        let path = dir.join("sign.nc");
+        let folder = super::archive(&super::earlier_save(&path), &path, when).unwrap();
+        assert_eq!(folder, dir.join("Archive").join("sign 2026-11-15 075422"));
+        for name in ours {
+            assert!(
+                !dir.join(name).exists() && folder.join(name).exists(),
+                "{name}"
+            );
+        }
+        for name in others {
+            assert!(dir.join(name).exists(), "{name}");
+        }
+        assert_eq!(
+            super::earlier_save(&dir.join("sign.nc")),
+            Vec::<std::path::PathBuf>::new()
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_extension_goes_on_the_end_of_a_typed_name_with_a_dot() {
+        let added = |typed: &str| super::with_extension_added(std::path::Path::new(typed), "nc");
+        assert_eq!(added("sign v1.5"), std::path::Path::new("sign v1.5.nc"));
+        assert_eq!(added("sign.nc"), std::path::Path::new("sign.nc"));
+        assert_eq!(added("sign.NC"), std::path::Path::new("sign.NC"));
+        assert_eq!(added("sign"), std::path::Path::new("sign.nc"));
+    }
+
     #[test]
     fn form_settings_load_back_into_the_same_form_only() {
         let saved = serde_json::json!({ "max_cut_depth": 2.5, "gone": 1 });
