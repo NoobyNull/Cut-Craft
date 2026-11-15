@@ -1323,7 +1323,10 @@ impl CutCraftApp {
             {
                 self.transform_overlay(ui, drag, reach)
             }
-            (Some(Gesture::Dragging(drag)), _, None) => self.select_drag_overlay(drag, reach),
+            (Some(Gesture::Dragging(drag)), _, None) => {
+                let axis = ui.input(|i| i.modifiers.shift) || drag.constrain;
+                self.select_drag_overlay(drag, axis, reach)
+            }
             _ => Overlay::None,
         };
         self.paint_2d(ui, &canvas, &overlay);
@@ -1867,7 +1870,7 @@ impl CutCraftApp {
 
     /// A select-mode drag in progress: what it moves, followed by the pointer, else the
     /// selection window.
-    pub(super) fn select_drag_overlay(&self, drag: Drag, reach: f64) -> Overlay {
+    pub(super) fn select_drag_overlay(&self, drag: Drag, axis: bool, reach: f64) -> Overlay {
         let Some(grab) = self.grabbed(drag.start, reach) else {
             return Overlay::Window {
                 start: drag.start,
@@ -1875,7 +1878,9 @@ impl CutCraftApp {
                 crossing: drag.end.x < drag.start.x,
             };
         };
-        let by = cut_craft_core::glam::DAffine2::from_translation(drag.end - drag.start);
+        let by = cut_craft_core::glam::DAffine2::from_translation(
+            self.select_move_by(drag, axis, reach),
+        );
         let models: Vec<EntityId> = match grab {
             Grab::Vector(_) => vec![],
             Grab::Component(id) => vec![id],
@@ -1905,6 +1910,21 @@ impl CutCraftApp {
 
     /// A select-mode drag let go: what it took hold of moves (as one undo)
     /// select tool does; a drag from empty space selects by window.
+    /// How far a Select-mode drag moves what it grabbed: from the move cross in the
+    /// selection's middle with Shift or Ctrl held (`axis`), along one axis only, as its
+    /// hint says; anywhere else, where it was dragged.
+    fn select_move_by(&self, drag: Drag, axis: bool, reach: f64) -> Point {
+        let mut by = drag.end - drag.start;
+        if axis && self.handle_at(drag.start, reach) == Some(Handle::Move) {
+            if by.x.abs() > by.y.abs() {
+                by.y = 0.0;
+            } else {
+                by.x = 0.0;
+            }
+        }
+        by
+    }
+
     pub(super) fn select_drop(&mut self, drag: Drag, shift: bool, reach: f64) {
         let Some(grab) = self.grabbed(drag.start, reach) else {
             let ids = self
@@ -1925,7 +1945,7 @@ impl CutCraftApp {
             }
             Grab::Selection => {}
         }
-        let by = drag.end - drag.start;
+        let by = self.select_move_by(drag, shift || drag.constrain, reach);
         let params =
             serde_json::json!({ "relative": true, "x": by.x, "y": by.y, "anchor": "bottom_left" });
         if let Err(e) = self.apply("move", &params) {
