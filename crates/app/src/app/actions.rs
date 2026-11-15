@@ -5772,6 +5772,7 @@ impl CutCraftApp {
                     .collect();
                 self.clipboard_from = super::Copied {
                     layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
+                    job: self.job_epoch,
                     texts: records_of(&groups, &doc.texts),
                     names: records_of(&groups, &doc.part_names),
                     groups,
@@ -5802,7 +5803,13 @@ impl CutCraftApp {
                 } else {
                     self.clipboard.iter().map(|p| c.add(p.clone())).collect()
                 };
-                for (&id, layer) in ids.iter().zip(&from.layers) {
+                // on the layer it came from in this job; in another, on the current layer
+                let layers = if from.job == self.job_epoch {
+                    from.layers.as_slice()
+                } else {
+                    &[]
+                };
+                for (&id, layer) in ids.iter().zip(layers) {
                     if self.doc.layer(*layer).is_some() {
                         c.move_to_layer(id, *layer);
                     }

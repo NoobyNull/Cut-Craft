@@ -61,6 +61,32 @@ fn pasted_text_is_a_word_of_its_own_on_its_layer_and_still_text() {
 }
 
 #[test]
+fn pasted_into_another_job_lands_on_its_current_layer() {
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    let other = c.add_layer("Letters");
+    let id = c.add(Path::circle(Point::ZERO, 2.0));
+    c.move_to_layer(id, other);
+    c.select([id]);
+    h.app.doc.apply(&c.finish()).unwrap();
+    h.frame(vec![Event::Copy]);
+    // another job, with its own unrelated layer under the same number
+    h.app.reset_job();
+    let mut c = Change::builder(&h.app.doc);
+    let hidden = c.add_layer("Hidden");
+    h.app.doc.apply(&c.finish()).unwrap();
+    assert_eq!(hidden, other, "the new job's layer took the same number");
+    h.frame(vec![Event::Paste(h.copied.clone())]);
+    let pasted: Vec<EntityId> = h.app.doc.selection.iter().copied().collect();
+    assert_eq!(pasted.len(), 1);
+    assert_ne!(
+        h.app.doc.layer_of(pasted[0]),
+        hidden,
+        "another job's layer numbers mean nothing here"
+    );
+}
+
+#[test]
 fn a_model_past_the_preview_limit_is_drawn_as_its_surface_with_only_undercuts_over_it() {
     let mut h = Harness::new();
     h.app.options.import.preview_faces = 1000;

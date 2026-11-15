@@ -281,7 +281,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "paste",
-        "Paste: adds the objects on the clipboard to the job exactly where they were copied from, on their own layer; a copied group or word of text pastes as a group of its own, still text (a dimension stays a dimension). Lines lying on top of their original show red",
+        "Paste: adds the objects on the clipboard to the job exactly where they were copied from, on their own layer (in another job, on the current layer); a copied group or word of text pastes as a group of its own, still text (a dimension stays a dimension). Lines lying on top of their original show red",
     ),
     (
         "paste_in_place",

@@ -85,6 +85,8 @@ struct FineKey {
 struct Copied {
     groups: Vec<Option<u64>>,
     layers: Vec<LayerId>,
+    /// The job they were copied from (`job_epoch`): layer numbers mean nothing in another.
+    job: u64,
     texts: std::collections::BTreeMap<u64, Value>,
     names: std::collections::BTreeMap<u64, String>,
 }
