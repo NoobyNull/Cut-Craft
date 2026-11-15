@@ -1759,6 +1759,32 @@ fn message_dialog() -> rfd::MessageDialog {
     }
 }
 
+/// Where a save dialog's answer is saved: the name typed with one of `extensions` on its end
+/// (a dot in the name stays), or `None` when that adds the extension, a file of that name is
+/// there already and the user does not want it replaced (the dialog only asked about the
+/// name typed).
+fn saving_path(dialog: &std::path::Path, extensions: &[&str]) -> Option<std::path::PathBuf> {
+    let named = files::named_for_saving(dialog, extensions);
+    if !files::replaces_unasked(dialog, &named) {
+        return Some(named);
+    }
+    let answer = message_dialog()
+        .set_title(APP_NAME)
+        .set_level(rfd::MessageLevel::Warning)
+        .set_description(format!(
+            "{} already exists. Replace it?",
+            named.file_name().map_or_default(|n| n.to_string_lossy())
+        ))
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            "Replace".into(),
+            "Cancel".into(),
+        ))
+        .show();
+    let replace = matches!(&answer, rfd::MessageDialogResult::Custom(c) if c == "Replace")
+        || answer == rfd::MessageDialogResult::Ok;
+    replace.then_some(named)
+}
+
 /// Cut Craft's window, kept up to date each frame: the system's dialogs open as its own,
 /// kept above it and brought forward with it, rather than as windows of their own.
 static DIALOG_PARENT: std::sync::Mutex<Option<std::sync::Arc<dyn Window>>> =

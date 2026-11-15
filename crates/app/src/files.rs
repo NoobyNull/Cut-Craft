@@ -266,6 +266,26 @@ pub fn with_extension_added(path: &Path, extension: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// A name from a save dialog with one of `extensions` on its end: kept as it is when it
+/// already ends with one of them, else the first is added, so a name typed with a dot of
+/// its own (`plaque v1.2`) keeps it (`plaque v1.2.ccjob`) rather than losing what follows.
+pub fn named_for_saving(path: &Path, extensions: &[&str]) -> PathBuf {
+    let has = path.extension().is_some_and(|e| {
+        let e = e.to_string_lossy();
+        extensions.iter().any(|x| e.eq_ignore_ascii_case(x))
+    });
+    match extensions.first() {
+        Some(first) if !has => with_extension_added(path, first),
+        _ => path.to_owned(),
+    }
+}
+
+/// Whether saving to `named` would replace a file the save dialog never asked about: the
+/// extension was added to the name typed (`dialog`) and a file of that name is there already.
+pub fn replaces_unasked(dialog: &Path, named: &Path) -> bool {
+    dialog != named && named.exists()
+}
+
 /// The G-code files an earlier save to `path` left in its folder: `path` itself and the
 /// numbered, tiled and sided files [`save_files`] writes beside it (`sign_1_Profile.nc`,
 /// `sign_tile2.nc`, `sign_Top.nc`), with the same extension. Other files are left out.
@@ -850,6 +870,39 @@ mod tests {
         assert_eq!(added("sign.nc"), std::path::Path::new("sign.nc"));
         assert_eq!(added("sign.NC"), std::path::Path::new("sign.NC"));
         assert_eq!(added("sign"), std::path::Path::new("sign.nc"));
+    }
+
+    #[test]
+    fn a_saved_name_keeps_its_dots_and_asks_before_replacing_a_file_it_was_not_given() {
+        let named =
+            |typed: &str| super::named_for_saving(std::path::Path::new(typed), &["ccjob", "ajob"]);
+        assert_eq!(
+            named("Sign 2.5in walnut"),
+            std::path::Path::new("Sign 2.5in walnut.ccjob")
+        );
+        assert_eq!(
+            named("plaque v1.2"),
+            std::path::Path::new("plaque v1.2.ccjob")
+        );
+        assert_eq!(named("old.ajob"), std::path::Path::new("old.ajob"));
+        assert_eq!(named("sign.CCJOB"), std::path::Path::new("sign.CCJOB"));
+        let dir = std::env::temp_dir().join(format!("cut-craft-named-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("sign.ccjob"), "kept").unwrap();
+        // the dialog asked about the name typed, not the one the extension made
+        assert!(super::replaces_unasked(
+            &dir.join("sign"),
+            &dir.join("sign.ccjob")
+        ));
+        assert!(!super::replaces_unasked(
+            &dir.join("sign.ccjob"),
+            &dir.join("sign.ccjob")
+        ));
+        assert!(!super::replaces_unasked(
+            &dir.join("new"),
+            &dir.join("new.ccjob")
+        ));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

@@ -48,6 +48,10 @@ A number field takes a sum as well as a number, worked out when it is entered:
   then cancel the file picker (or the file will not open), nothing is lost: your job stays
   open with its unsaved changes, still marked with **\*** in the title and still kept for
   recovery.
+- A name you type with a dot in it keeps all of it: `plaque v1.2` saves as
+  `plaque v1.2.ccjob`. When Cut Craft adds the extension for you and a file of that name is
+  already there, it asks before replacing it. The same goes for exports, templates and
+  other saved files.
 
 ## Updates
 

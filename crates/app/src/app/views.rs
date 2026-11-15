@@ -7,8 +7,8 @@ use super::{
     OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
     Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
     ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
-    inspected, inspected_rows, measured, measured_rows, page_width, paint_focus_ring, show_page,
-    view2d,
+    inspected, inspected_rows, measured, measured_rows, page_width, paint_focus_ring, saving_path,
+    show_page, view2d,
 };
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
@@ -3855,10 +3855,13 @@ impl CutCraftApp {
     }
 
     fn save_stl(&mut self, triangles: &[[cut_craft_core::glam::DVec3; 3]]) {
-        let Some(path) = file_dialog().add_filter("STL", &["stl"]).save_file() else {
+        let Some(path) = file_dialog()
+            .add_filter("STL", &["stl"])
+            .save_file()
+            .and_then(|path| saving_path(&path, &["stl"]))
+        else {
             return;
         };
-        let path = path.with_extension("stl");
         let result = std::fs::write(&path, fmt_export_as_stl::binary_stl(triangles));
         self.status.set_message(&result.map_or_else(
             |e| format!("{}: {e}", path.display()),

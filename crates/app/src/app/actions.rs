@@ -10,9 +10,9 @@ use super::{
     Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
     VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, commit, dialog_size, egui,
     file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, page_width, rest_section, selector_section, shortcut,
-    show_page, side_tabs, side_tabs_width, summary_table, template_dialog, texture_dialog,
-    tool_picker, toolpath_template_dialog, view3d,
+    message_dialog, on_the_desktop, page_width, rest_section, saving_path, selector_section,
+    shortcut, show_page, side_tabs, side_tabs_width, summary_table, template_dialog,
+    texture_dialog, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -846,7 +846,8 @@ impl CutCraftApp {
         if let Some(path) = brush_dialog()
             .set_file_name(format!("{name}.ccclip"))
             .save_file()
-            && let Err(e) = self.save_brush_to(id, &path.with_extension("ccclip"))
+            && let Some(path) = saving_path(&path, &["ccclip"])
+            && let Err(e) = self.save_brush_to(id, &path)
         {
             self.status.set_message(&e);
         }
@@ -992,8 +993,9 @@ impl CutCraftApp {
                 if let Some(path) = job_dialog()
                     .set_file_name(format!("untitled.{JOB_EXTENSION}"))
                     .save_file()
+                    && let Some(path) = saving_path(&path, &[JOB_EXTENSION])
                 {
-                    self.save_to(&path.with_extension(JOB_EXTENSION));
+                    self.save_to(&path);
                 }
             }
             "import_vectors_bitmap" | "import_component_3d_model" => {
@@ -1068,8 +1070,8 @@ impl CutCraftApp {
                 if let Some(path) = template_dialog()
                     .set_file_name(format!("template.{TEMPLATE}"))
                     .save_file()
+                    && let Some(path) = saving_path(&path, &[TEMPLATE])
                 {
-                    let path = path.with_extension(TEMPLATE);
                     match cut_craft_core::file::write_atomic(
                         &path,
                         &cut_craft_core::file::save_job(&self.doc),
@@ -1097,8 +1099,8 @@ impl CutCraftApp {
                 if let Some(path) = toolpath_template_dialog()
                     .set_file_name(format!("toolpaths.{}", files::TOOLPATH_TEMPLATE_EXTENSION))
                     .save_file()
+                    && let Some(path) = saving_path(&path, &[files::TOOLPATH_TEMPLATE_EXTENSION])
                 {
-                    let path = path.with_extension(files::TOOLPATH_TEMPLATE_EXTENSION);
                     let template = files::toolpath_template(&self.doc, &ids);
                     let message = match cut_craft_core::file::write_atomic(&path, &template) {
                         Ok(()) => format!("Saved toolpath template {}", path.display()),
@@ -2487,8 +2489,9 @@ impl CutCraftApp {
             return;
         };
         let dialog = file_dialog().add_filter(format.label, format.extensions);
-        if let Some(path) = dialog.save_file() {
-            let path = path.with_extension(format.extensions[0]);
+        if let Some(path) = dialog.save_file()
+            && let Some(path) = saving_path(&path, format.extensions)
+        {
             let result = files::export(&self.registry, id, &self.doc, &path);
             self.status.set_message(
                 &result.map_or_else(|e| e, |()| format!("Exported {}", path.display())),
@@ -2520,13 +2523,13 @@ impl CutCraftApp {
     pub(super) fn discard_answered(&mut self, answer: &rfd::MessageDialogResult) -> bool {
         match answer {
             rfd::MessageDialogResult::Yes => {
-                match self
-                    .session
-                    .path
-                    .clone()
-                    .or_else(|| job_dialog().save_file())
-                {
-                    Some(path) => self.save_to(&path.with_extension(JOB_EXTENSION)),
+                let path = self.session.path.clone().or_else(|| {
+                    job_dialog()
+                        .save_file()
+                        .and_then(|path| saving_path(&path, &[JOB_EXTENSION]))
+                });
+                match path {
+                    Some(path) => self.save_to(&path),
                     None => return false,
                 }
                 !self.session.is_dirty(&self.history)
@@ -2856,9 +2859,10 @@ impl CutCraftApp {
                             .find(|(_, f)| {
                                 ext.as_deref().is_some_and(|x| f.extensions.contains(&x))
                             })
-                            .map_or(("export_dxf", path.with_extension("dxf")), |(id, _)| {
-                                (*id, path.clone())
-                            });
+                            .map_or(
+                                ("export_dxf", files::named_for_saving(&path, &["dxf"])),
+                                |(id, _)| (*id, path.clone()),
+                            );
                         files::export(&self.registry, id, &self.doc, &path).map(|()| {
                             self.status
                                 .set_message(&format!("Exported {}", path.display()));
@@ -4695,10 +4699,11 @@ impl CutCraftApp {
             let Some(path) = dialog
                 .set_file_name(format!("{}.{}", form.label, files::FORM_SETTINGS_EXTENSION))
                 .save_file()
+                .and_then(|path| saving_path(&path, &[files::FORM_SETTINGS_EXTENSION]))
             else {
                 return;
             };
-            self.save_form_settings(&path.with_extension(files::FORM_SETTINGS_EXTENSION));
+            self.save_form_settings(&path);
         } else if let Some(path) = dialog.pick_file() {
             self.load_form_settings(&path);
         }
@@ -5075,7 +5080,7 @@ impl CutCraftApp {
             texture_dialog()
                 .set_file_name(format!("texture.{extension}"))
                 .save_file()
-                .map(|path| path.with_extension(extension))
+                .and_then(|path| saving_path(&path, &[extension]))
         } else {
             texture_dialog().pick_file()
         };
