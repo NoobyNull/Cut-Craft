@@ -13803,3 +13803,16 @@ fn answering_dont_save_keeps_the_job_unsaved_until_something_replaces_it() {
     h.app.open_path(&missing);
     assert!(h.app.session.is_dirty(&h.app.history));
 }
+
+#[test]
+fn save_changes_names_just_the_file_and_its_buttons_say_what_they_do() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    assert_eq!(h.app.save_changes_question(), "Save changes to Untitled?");
+    h.app.session.path = Some(std::path::PathBuf::from("/jobs/sign.ccjob"));
+    assert_eq!(h.app.save_changes_question(), "Save changes to sign.ccjob?");
+    // Don't Save lets the work go; Cancel keeps it
+    let custom = |c: &str| rfd::MessageDialogResult::Custom(c.to_owned());
+    assert!(h.app.discard_answered(&custom(super::actions::DONT_SAVE)));
+    assert!(!h.app.discard_answered(&custom("Cancel")));
+}

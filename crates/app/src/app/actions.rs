@@ -17,6 +17,10 @@ use super::{
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
 
+/// The buttons of "Save changes?": what each does, rather than Yes and No.
+pub(super) const SAVE: &str = "Save";
+pub(super) const DONT_SAVE: &str = "Don't Save";
+
 impl CutCraftApp {
     #[expect(
         clippy::too_many_lines,
@@ -2535,13 +2539,28 @@ impl CutCraftApp {
         }
         let answer = message_dialog()
             .set_title(APP_NAME)
-            .set_description(format!(
-                "Save changes to {}?",
-                self.session.title(APP_NAME, &self.history)
+            .set_description(self.save_changes_question())
+            .set_buttons(rfd::MessageButtons::YesNoCancelCustom(
+                SAVE.into(),
+                DONT_SAVE.into(),
+                "Cancel".into(),
             ))
-            .set_buttons(rfd::MessageButtons::YesNoCancel)
             .show();
         self.discard_answered(&answer)
+    }
+
+    /// The question asked before unsaved work is replaced: the job's file name alone.
+    pub(super) fn save_changes_question(&self) -> String {
+        let name = self
+            .session
+            .path
+            .as_deref()
+            .and_then(std::path::Path::file_name)
+            .map_or_else(
+                || "Untitled".to_owned(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+        format!("Save changes to {name}?")
     }
 
     /// What the answer at "Save changes?" means: true when the job may be replaced. No only
@@ -2549,6 +2568,11 @@ impl CutCraftApp {
     /// so backing out afterwards (a cancelled file picker, a file that will not open) loses
     /// nothing and is asked about again.
     pub(super) fn discard_answered(&mut self, answer: &rfd::MessageDialogResult) -> bool {
+        let answer = match answer {
+            rfd::MessageDialogResult::Custom(c) if c == SAVE => &rfd::MessageDialogResult::Yes,
+            rfd::MessageDialogResult::Custom(c) if c == DONT_SAVE => &rfd::MessageDialogResult::No,
+            other => other,
+        };
         match answer {
             rfd::MessageDialogResult::Yes => {
                 let path = self.session.path.clone().or_else(|| {
