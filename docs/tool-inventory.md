@@ -252,8 +252,8 @@ say "not implemented yet".
   dropped; a model goes through Orientate 3D Model already placed and levelled. Click picks
   a tile, Ctrl+click adds or removes one, Shift+click picks a range. Right-click (on what is
   picked): Add to Project (several are added one after another, each model's form in
-  turn), Add to Level (one of the job's levels, or a New Level each, named after the
-  file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
+  turn), Add to Level (3D clipart only; one of the job's levels, or a New Level each,
+  named after the file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
   answering `org.freedesktop.FileManager1`, else its folder opened), Add Tag / Remove Tag
   (kept in the config folder's `library-tags.json`, never in the files), Delete from Disk
   (asks first, naming the files; a model's picture goes with it; not to the bin). A Show
