@@ -100,6 +100,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Ungroup onto Current Layer: takes the selected groups apart and moves their vectors onto the layer you are working on",
     ),
     (
+        "merge_visible_layers",
+        "Merge Visible: moves the vectors of every shown, unlocked layer onto this one. This layer is shown and unlocked so the merged work can be edited; locked layers are left as they are",
+    ),
+    (
         "group_toolpaths",
         "Group Toolpaths: puts the selected toolpaths together in a folder in the toolpath list, to keep a long list tidy",
     ),

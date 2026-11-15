@@ -1,7 +1,7 @@
 //! Merge Visible Layers (a layer's pop-up menu): every vector on a visible layer moves onto
 //! this layer, and the other visible layers, then empty, are removed. Hidden layers stay, and
-//! so do locked ones, their vectors with them. A hidden layer merged into is shown, so the
-//! work stays in sight. What was left out, and layers cut from another material, are said in
+//! so do locked ones, their vectors with them. A hidden layer merged into is shown, and a
+//! locked one unlocked, so the work stays in sight and editable. What was left out, and layers cut from another material, are said in
 //! red.
 
 use cut_craft_core::document::{Document, LayerId};
@@ -61,8 +61,18 @@ impl Command for MergeVisibleLayers {
                 "'{}' was hidden, so it is shown now with the merged vectors on it",
                 target.name
             ));
+        }
+        if target.locked {
+            c.note(format!(
+                "'{}' was locked, so it is unlocked now and the merged vectors can be \
+                 picked and edited. Lock it again with its padlock if you want",
+                target.name
+            ));
+        }
+        if !target.visible || target.locked {
             c.replace_layer(cut_craft_core::document::Layer {
                 visible: true,
+                locked: false,
                 ..target.clone()
             });
         }
@@ -186,5 +196,21 @@ mod tests {
         assert!(notes.contains("locked"), "{notes}");
         assert!(notes.contains("was hidden"), "{notes}");
         assert!(notes.contains("Walnut"), "{notes}");
+    }
+
+    #[test]
+    fn a_locked_target_is_unlocked_with_a_warning_so_the_merged_work_stays_editable() {
+        let mut doc = two_layers();
+        let target = doc.layers[0].id;
+        layer(&mut doc, target).locked = true;
+        let change = MergeVisibleLayers::run(&doc, &Params { layer: target }).unwrap();
+        doc.apply(&change).unwrap();
+        assert!(
+            !doc.layer(target).unwrap().locked,
+            "the merged work can be edited"
+        );
+        assert!(doc.vectors.keys().all(|&v| doc.layer_of(v) == target));
+        let notes = change.notes.join("\n");
+        assert!(notes.contains("was locked"), "{notes}");
     }
 }
