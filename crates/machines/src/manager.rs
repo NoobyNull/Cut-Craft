@@ -105,6 +105,8 @@ pub enum MachineOutcome {
     PickFolder(FolderFor),
     /// Open Machine Files on the machine being edited.
     ManageFiles,
+    /// Install Offline Package: pick a machine package file and add its machines here.
+    InstallPackage,
 }
 
 /// Which of a machine's folders is being picked.
@@ -147,11 +149,11 @@ impl MachineManager {
         look: &Look,
     ) -> Option<MachineOutcome> {
         let mut open = true;
-        let mut outcome = None;
+        let (mut outcome, mut row) = (None, None);
         let (id, title) = (machine_window(), "Machine Configuration Management");
         cut_craft_bug_report::dialog(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
             cut_craft_bug_report::mark(ui, "Machine Configuration Management");
-            self.machine_row(ui, look);
+            row = self.machine_row(ui, look);
             ui.separator();
             let names_clash = self.draft.names_clash();
             let Some(machine) = self.draft.active_mut() else {
@@ -190,12 +192,13 @@ impl MachineManager {
         if !open {
             outcome = Some(MachineOutcome::Cancel);
         }
-        outcome
+        outcome.or(row)
     }
 
-    /// The machine drop-down with Add / Duplicate / Delete, and the online ones Cut Craft
-    /// has no service for.
-    fn machine_row(&mut self, ui: &mut egui::Ui, look: &Look) {
+    /// The machine drop-down with Add / Duplicate / Delete and Install Offline Package;
+    /// what was asked for.
+    fn machine_row(&mut self, ui: &mut egui::Ui, look: &Look) -> Option<MachineOutcome> {
+        let mut asked = None;
         ui.label("Machine Configuration");
         ui.horizontal(|ui| {
             let shown = self
@@ -228,16 +231,17 @@ impl MachineManager {
                 self.draft.delete();
                 self.picked = None;
             }
-            // ponytail: machine packages come from a vendor's online service, which Cut Craft
-            // has none of; machines are made by hand
-            icon_button(
+            if icon_button(
                 ui,
                 look,
                 "common/open.png",
-                "Install Offline Package (needs an online machine service)",
-                false,
-            );
+                "Install Offline Package: add the machines in a package file you downloaded",
+                true,
+            ) {
+                asked = Some(MachineOutcome::InstallPackage);
+            }
         });
+        asked
     }
 }
 

@@ -13493,3 +13493,26 @@ fn selecting_a_post_makes_it_the_one_the_machine_saves_through() {
         h.app.status.message
     );
 }
+
+#[test]
+fn machine_configuration_s_install_offline_package_adds_to_the_machines_being_edited() {
+    let mut h = Harness::new();
+    let file = std::env::temp_dir().join(format!("cut-craft-package-{}.json", std::process::id()));
+    let mut package = cut_craft_machines::Machines::default();
+    package.add();
+    package.machines[0].name = "Packaged Router".into();
+    package.save(&file).unwrap();
+    h.app.invoke(&h.ctx, "machine_configuration");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Machine Configuration Management").is_some());
+    h.app.machine_outcome_install(&file);
+    let draft = &h.app.machine_window.as_ref().unwrap().draft;
+    assert!(draft.machines.iter().any(|m| m.name == "Packaged Router"));
+    assert!(
+        h.app.status.message.contains("Installed 1"),
+        "{}",
+        h.app.status.message
+    );
+    let _ = std::fs::remove_file(file);
+}

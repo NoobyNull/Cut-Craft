@@ -1874,24 +1874,41 @@ impl CutCraftApp {
     /// Install Offline Package: the machines in a package file (`machines/` in the repository)
     /// that are not here already by name.
     pub(super) fn install_package(&mut self, path: &std::path::Path) {
+        let Some(package) = self.read_package(path) else {
+            return;
+        };
+        let (added, here) = self.machines.install(package);
+        self.machines_changed(&installed_machines(added, here));
+    }
+
+    /// Machine Configuration's Install Offline Package: the package's machines added to the
+    /// machines being edited, kept with Apply or OK like any other edit there.
+    pub(super) fn machine_outcome_install(&mut self, path: &std::path::Path) {
+        let Some(package) = self.read_package(path) else {
+            return;
+        };
+        let Some(window) = self.machine_window.as_mut() else {
+            return self.install_package(path);
+        };
+        let (added, here) = window.draft.install(package);
+        let done = installed_machines(added, here);
+        self.status
+            .set_message(&format!("{done}; Apply or OK keeps them"));
+    }
+
+    /// The machine package at `path`, read; `None` with the status bar saying why not.
+    fn read_package(&mut self, path: &std::path::Path) -> Option<cut_craft_machines::Machines> {
         let package = std::fs::read(path)
             .map_err(|e| e.to_string())
             .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
-        let package: cut_craft_machines::Machines = match package {
-            Ok(package) => package,
+        match package {
+            Ok(package) => Some(package),
             Err(e) => {
-                return self
-                    .status
+                self.status
                     .set_message(&format!("{}: not a machine package ({e})", path.display()));
+                None
             }
-        };
-        let (added, here) = self.machines.install(package);
-        let here = if here > 0 {
-            format!(", {here} already here")
-        } else {
-            String::new()
-        };
-        self.machines_changed(&format!("Installed {added} machines{here}"));
+        }
     }
 
     /// Install Post-Processor: copied into the custom posts. A machine with no posts yet (or
@@ -1966,6 +1983,12 @@ impl CutCraftApp {
                             }
                             cut_craft_machines::FolderFor::Machine => machine.send_to.folder = kept,
                         }
+                    }
+                }
+                MachineOutcome::InstallPackage => {
+                    let dialog = file_dialog().add_filter("Machine package", &["json"]);
+                    if let Some(path) = dialog.pick_file() {
+                        self.machine_outcome_install(&path);
                     }
                 }
                 MachineOutcome::ManageFiles => {
@@ -6017,4 +6040,14 @@ fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
                 .clicked()
     })
     .inner
+}
+
+/// What Install Offline Package did: `added` machines, `here` already here by name.
+fn installed_machines(added: usize, here: usize) -> String {
+    let here = if here > 0 {
+        format!(", {here} already here")
+    } else {
+        String::new()
+    };
+    format!("Installed {added} machines{here}")
 }
