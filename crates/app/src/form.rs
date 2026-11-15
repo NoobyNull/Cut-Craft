@@ -80,12 +80,14 @@ impl When {
 
     fn from_rule(rule: &Value, show: bool) -> Option<Self> {
         let (key, values) = rule.as_object()?.iter().next()?;
+        // a tick box's rule may be written as a bool or as "true" / "false"
+        let text = |v: &Value| match v {
+            Value::Bool(ticked) => Some(ticked.to_string()),
+            v => v.as_str().map(String::from),
+        };
         let values = match values {
-            Value::Array(list) => list
-                .iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect(),
-            one => vec![one.as_str()?.to_owned()],
+            Value::Array(list) => list.iter().filter_map(text).collect(),
+            one => vec![text(one)?],
         };
         Some(Self {
             key: key.clone(),
@@ -2372,6 +2374,35 @@ mod tests {
             }
         }
         assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    #[test]
+    fn settings_that_do_nothing_in_the_current_mode_are_hidden() {
+        let shown = |id: &str, key: &str, params: Value| {
+            let f = fields(&schema(id));
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&params))
+        };
+        let count = serde_json::json!({ "spacing": "count" });
+        let distance = serde_json::json!({ "spacing": "distance" });
+        assert!(shown("copy_along_vectors", "copies", count.clone()));
+        assert!(!shown("copy_along_vectors", "copies", distance.clone()));
+        for key in ["distance", "force_even_spacing"] {
+            assert!(shown("copy_along_vectors", key, distance.clone()), "{key}");
+            assert!(!shown("copy_along_vectors", key, count.clone()), "{key}");
+        }
+        let relative = |r: bool| serde_json::json!({ "relative": r, "rotated": true });
+        assert!(!shown("move", "anchor", relative(true)));
+        assert!(shown("move", "anchor", relative(false)));
+        assert!(
+            !shown("move", "rotated", relative(false)),
+            "a tick box rule as a bool"
+        );
+        let sharp = |k: bool| serde_json::json!({ "keep_sharp_corners": k });
+        assert!(shown("fit_curves_to_vectors", "max_angle", sharp(true)));
+        assert!(!shown("fit_curves_to_vectors", "max_angle", sharp(false)));
     }
 
     #[test]

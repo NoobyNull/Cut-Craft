@@ -36,6 +36,7 @@ pub struct Params {
     pub keep_sharp_corners: bool,
     /// With Keep Sharp Corners ticked: corners turning more than this stay sharp
     #[schemars(title = "Max. angle", extend("x-unit" = "deg"), range(min = 0, max = 180))]
+    #[schemars(extend("x-show-when" = {"keep_sharp_corners": "true"}))]
     pub max_angle: f64,
     /// Delete the originals; otherwise the fitted vectors are added beside them
     pub replace_selected_vectors: bool,
