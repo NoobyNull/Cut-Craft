@@ -229,6 +229,22 @@ fn a_taken_port_says_so_and_how_to_fix_it() {
 }
 
 #[test]
+fn a_taken_port_is_named_however_the_system_words_it() {
+    let windows = std::io::Error::new(
+        std::io::ErrorKind::AddrInUse,
+        "Only one usage of each socket address (protocol/network address/port) is normally \
+         permitted. (os error 10048)",
+    );
+    let at = SocketAddr::from(([127, 0, 0, 1], 7340));
+    assert_eq!(
+        could_not_listen(at, &windows),
+        "Port 7340 is in use by another program. Pick another port in Options ▸ Web API."
+    );
+    let other = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+    assert!(could_not_listen(at, &other).starts_with("The Web API could not listen"));
+}
+
+#[test]
 fn it_listens_on_this_computer_unless_other_computers_are_allowed() {
     let mut s = settings(None);
     s.port = DEFAULT_PORT;

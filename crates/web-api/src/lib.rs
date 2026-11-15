@@ -194,8 +194,8 @@ fn listen(address: SocketAddr) -> Result<tiny_http::Server, String> {
         match tiny_http::Server::http(address) {
             Ok(http) => return Ok(http),
             Err(e) => {
-                let in_use = e.to_string().to_lowercase().contains("in use");
-                if !in_use || address.port() == 0 || since.elapsed() >= PORT_FREED_WITHIN {
+                if !port_in_use(&*e) || address.port() == 0 || since.elapsed() >= PORT_FREED_WITHIN
+                {
                     return Err(could_not_listen(address, &*e));
                 }
                 std::thread::sleep(Duration::from_millis(50));
@@ -205,9 +205,9 @@ fn listen(address: SocketAddr) -> Result<tiny_http::Server, String> {
 }
 
 /// Why the server could not listen at `address`, worded for the status bar.
-fn could_not_listen(address: SocketAddr, why: &dyn std::error::Error) -> String {
+fn could_not_listen(address: SocketAddr, why: &(dyn std::error::Error + 'static)) -> String {
     let text = why.to_string();
-    if text.to_lowercase().contains("in use") {
+    if port_in_use(why) {
         format!(
             "Port {} is in use by another program. Pick another port in Options ▸ Web API.",
             address.port()
@@ -218,6 +218,14 @@ fn could_not_listen(address: SocketAddr, why: &dyn std::error::Error) -> String 
              Options ▸ Web API."
         )
     }
+}
+
+/// Whether `why` says another program has the port. Each system words it its own way
+/// (Windows: "Only one usage of each socket address..."), so the kind of error is read.
+fn port_in_use(why: &(dyn std::error::Error + 'static)) -> bool {
+    why.downcast_ref::<std::io::Error>()
+        .is_some_and(|e| e.kind() == std::io::ErrorKind::AddrInUse)
+        || why.to_string().to_lowercase().contains("in use")
 }
 
 /// A new random access token: 48 hex characters.
