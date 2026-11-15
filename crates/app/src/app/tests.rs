@@ -2696,6 +2696,67 @@ fn a_slow_click_with_a_little_jitter_on_a_selected_vector_does_not_move_it() {
 }
 
 #[test]
+fn escape_during_a_2d_drag_cancels_it_and_the_release_does_nothing() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    let before = h.app.doc.vectors.clone();
+    let escaped = |h: &mut Harness, from: (f64, f64), to: (f64, f64)| {
+        let (from, to) = (h.at(from.0, from.1), h.at(to.0, to.1));
+        h.frame(vec![Event::PointerMoved(from)]);
+        h.press(from, true, Modifiers::NONE);
+        h.frame(vec![Event::PointerMoved(from.lerp(to, 0.5))]);
+        h.frame(vec![Event::PointerMoved(to)]);
+        h.frame(vec![key(Key::Escape)]);
+        h.press(to, false, Modifiers::NONE);
+        h.frame(vec![]);
+    };
+    // Select mode: a move from inside the selection, and a scale from its corner
+    for (from, to) in [((20.0, 40.0), (80.0, 60.0)), ((50.0, 50.0), (90.0, 90.0))] {
+        h.app.doc.selection = [id].into();
+        h.frame(vec![]);
+        escaped(&mut h, from, to);
+        assert_eq!(h.app.doc.vectors, before, "nothing changed");
+    }
+    // Transform mode: a scale from the corner
+    h.app.doc.selection = [id].into();
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    escaped(&mut h, (50.0, 50.0), (90.0, 90.0));
+    assert_eq!(h.app.doc.vectors, before, "not scaled, nor moved");
+    // a drawing tool: no rectangle drawn
+    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.frame(vec![]);
+    escaped(&mut h, (100.0, 100.0), (150.0, 150.0));
+    assert_eq!(h.app.doc.vectors, before, "nothing drawn");
+    // a guide pulled out of the ruler: none is made, now or at the next drag's end
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "select");
+    h.frame(vec![]);
+    let area = h.app.view_area.unwrap();
+    let ruler = h.ctx.global_style().spacing.interact_size.y / 2.0;
+    let top_ruler = egui::pos2(area.center().x, area.min.y + ruler);
+    let to = h.at(100.0, 80.0);
+    h.frame(vec![Event::PointerMoved(top_ruler)]);
+    h.press(top_ruler, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(top_ruler.lerp(to, 0.5))]);
+    h.frame(vec![Event::PointerMoved(to)]);
+    h.frame(vec![key(Key::Escape)]);
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.doc.guides.is_empty(), "no guide");
+    h.app.doc.selection.clear();
+    h.click(h.at(10.0, 30.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.selection, [id].into(), "a click picks again");
+    h.drag(h.at(200.0, 200.0), h.at(250.0, 250.0));
+    assert!(
+        h.app.doc.guides.is_empty(),
+        "nor later: {:?}",
+        h.app.doc.guides
+    );
+}
+
+#[test]
 fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);

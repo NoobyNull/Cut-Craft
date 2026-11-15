@@ -1616,6 +1616,11 @@ impl CutCraftApp {
             }
             return false;
         };
+        // Escape (egui lets go of the drag) or the drag otherwise lost: no guide
+        if !canvas.response().dragged() && !canvas.drag_stopped() {
+            self.guide_drag = None;
+            return false;
+        }
         let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) else {
             return true;
         };
