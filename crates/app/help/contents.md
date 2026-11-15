@@ -52,6 +52,9 @@ A number field takes a sum as well as a number, worked out when it is entered:
   `plaque v1.2.ccjob`. When Cut Craft adds the extension for you and a file of that name is
   already there, it asks before replacing it. The same goes for exports, templates and
   other saved files.
+- Opening a file with Cut Craft from your file manager (**Open With**, or dragging it onto
+  Cut Craft's icon) starts Cut Craft with it: a job opens, a drawing or picture is
+  imported into the open job, just as when you drop it on the window.
 - A job that will not open says why. **Damaged** means the file was cut short or broken,
   often by a copy or cloud sync that did not finish: open a backup or an earlier copy.
   **Saved by a newer version** means Cut Craft needs updating first (**Help ▸ Check for

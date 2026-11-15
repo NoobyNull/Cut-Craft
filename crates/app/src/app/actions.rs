@@ -2392,6 +2392,14 @@ impl CutCraftApp {
         self.open_recovery();
     }
 
+    /// A file named on the command line (Open With, or dragged onto the launcher), handled
+    /// as if dropped on the window: a job opens, a drawing is imported, and so on.
+    pub(super) fn open_given(&mut self, path: Option<&std::path::Path>) {
+        if let Some(path) = path {
+            self.drop_file(path);
+        }
+    }
+
     /// This window's own recovery copy, in `dir`, named for `run` (the process), and locked
     /// for as long as the window is open.
     pub(super) fn claim_recovery(&mut self, dir: &std::path::Path, run: &str) {

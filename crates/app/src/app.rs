@@ -2686,8 +2686,9 @@ fn window_frame(builder: egui::ViewportBuilder, system_title_bar: bool) -> egui:
 }
 
 /// Opens the main window and runs until it is closed; with `shots`, takes the README's
-/// pictures into that folder instead and quits ([`screenshots`]).
-pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
+/// pictures into that folder instead and quits ([`screenshots`]). `open` is a file named on
+/// the command line, opened once the window is up.
+pub fn run(title: &str, shots: Option<std::path::PathBuf>, open: Option<&std::path::Path>) {
     // winit 0.29 delivered dropped files only on X11; 0.30 should on Wayland too, but until that
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
@@ -2786,6 +2787,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
             app.start_recovery();
+            app.open_given(open);
             // a crash last time: offer its crash log as a report
             if let Some(crash) =
                 files::config_dir().and_then(|d| cut_craft_bug_report::logs::take_crash(&d))

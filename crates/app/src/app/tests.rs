@@ -13853,3 +13853,20 @@ fn opening_a_job_from_a_newer_version_warns_which_settings_this_one_will_leave_o
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn a_file_named_on_the_command_line_opens_at_startup() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-argv-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("sign.ccjob");
+    std::fs::write(&path, cut_craft_core::file::save_job(&Document::default())).unwrap();
+    let mut h = Harness::at_start();
+    h.app.open_given(Some(&path));
+    assert_eq!(h.app.screen, Screen::Job);
+    assert_eq!(h.app.session.path.as_deref(), Some(path.as_path()));
+    // nothing named: the start page as before
+    let mut h = Harness::at_start();
+    h.app.open_given(None);
+    assert_eq!(h.app.screen, Screen::Start);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
