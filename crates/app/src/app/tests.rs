@@ -13871,6 +13871,13 @@ fn opening_a_job_from_a_newer_version_warns_which_settings_this_one_will_leave_o
         told.contains("Warning") && told.contains("newer version") && told.contains("hologram"),
         "{told}"
     );
+    // saving says again, as it happens, what was left out
+    h.app.save_to(&dir.join("here.ccjob"));
+    let told = &h.app.status.message;
+    assert!(
+        told.starts_with("Saved") && told.contains("Warning") && told.contains("hologram"),
+        "{told}"
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

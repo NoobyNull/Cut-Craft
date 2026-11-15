@@ -2223,8 +2223,17 @@ impl CutCraftApp {
         }
         match self.session.save(&self.doc, &self.history, path) {
             Ok(()) => {
-                self.status
-                    .set_message(&format!("Saved {}", path.display()));
+                let mut saved = format!("Saved {}", path.display());
+                // said again as it happens: the opening warning is long gone by now
+                if !self.session.newer_settings.is_empty() {
+                    saved = format!(
+                        "{saved}. Warning: settings this version of Cut Craft does not know \
+                         were left out ({}). Update Cut Craft (Help ▸ Check for Updates) and \
+                         open the original to keep them",
+                        self.session.newer_settings.join(", ")
+                    );
+                }
+                self.status.set_message(&saved);
                 self.remember(path);
                 self.clear_recovery();
             }

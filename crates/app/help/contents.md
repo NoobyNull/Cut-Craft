@@ -62,6 +62,7 @@ A number field takes a sum as well as a number, worked out when it is entered:
   Updates**). Either way the job stays in **Recent Files**, ready to try again; only a
   file that is no longer there is taken off the list. If a newer version's job does open, but has settings this version does not
   know, a warning names them: saving it here leaves them out, so update first to keep them.
+  Each save (Save, Save As, Increment and Save) gives the warning again.
 - Unsaved work is copied for recovery every 30 seconds (Edit ▸ Options ▸ General). If
   Cut Craft closes without saving, it opens that work again next time it starts. Each open
   window keeps its own copy: a second Cut Craft window does not take the first one's work.
