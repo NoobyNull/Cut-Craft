@@ -353,7 +353,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "guides_visible",
-        "Guides Visible: shows or hides the guide lines you dragged out of the rulers; right-click a guide for its properties, to lock it or to delete it",
+        "Guides Visible: shows or hides the guide lines you dragged out of the rulers; drag a guide where no shape lies on it to move it, or right-click it for its properties, to lock it or to delete it",
     ),
     (
         "lock_all_existing_guides",

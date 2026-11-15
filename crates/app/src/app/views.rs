@@ -1555,24 +1555,44 @@ impl CutCraftApp {
 
     /// Guides: dragged out of a ruler (top: across, left: up and down), dragged along when
     /// unlocked, and dragged back onto a ruler to delete them. True while one is dragged.
+    /// The unlocked guide a Select-mode drag from `at` takes: only where no vector, selection
+    /// or handle is, so a shape lying on a guide is dragged rather than the guide.
+    fn guide_to_drag(&self, at: Point, reach: f64) -> Option<usize> {
+        let selecting = self.view_tool.is_none() && self.drawing_tool().is_none();
+        let other = || {
+            self.handle_at(at, reach).is_some()
+                || matches!(
+                    self.grabbed(at, reach),
+                    Some(Grab::Selection | Grab::Vector(_))
+                )
+        };
+        (selecting && !other())
+            .then(|| (self.doc.guides.iter()).position(|g| !g.locked && g.distance(at) <= reach))
+            .flatten()
+    }
+
     pub(super) fn guide_gesture(&mut self, ui: &egui::Ui, canvas: &Canvas, reach: f64) -> bool {
         if canvas.drag_started()
             && let Some(origin) = ui.input(|i| i.pointer.press_origin())
         {
             let at = canvas.transform.to_job(origin);
-            let selecting = self.view_tool.is_none() && self.drawing_tool().is_none();
             self.guide_drag = match canvas.ruler_at(ui, origin) {
                 Some(vertical) => Some((vertical, None)),
-                None if selecting => self
-                    .doc
-                    .guides
-                    .iter()
-                    .position(|g| !g.locked && g.distance(at) <= reach)
+                None => self
+                    .guide_to_drag(at, reach)
                     .map(|i| (self.doc.guides[i].vertical, Some(i))),
-                None => None,
             };
         }
         let Some((vertical, index)) = self.guide_drag else {
+            // resting on a guide a drag would take: a cursor that says it moves
+            if let Some(i) = canvas.cursor().and_then(|at| self.guide_to_drag(at, reach)) {
+                let g = self.doc.guides[i];
+                ui.ctx().set_cursor_icon(match (g.tilted(), g.vertical) {
+                    (true, _) => egui::CursorIcon::Move,
+                    (false, true) => egui::CursorIcon::ResizeColumn,
+                    (false, false) => egui::CursorIcon::ResizeRow,
+                });
+            }
             return false;
         };
         let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) else {

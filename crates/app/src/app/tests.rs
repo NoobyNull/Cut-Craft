@@ -1889,6 +1889,33 @@ fn guides_come_out_of_the_rulers_move_and_go_back_in() {
 }
 
 #[test]
+fn a_drag_from_a_vector_lying_on_a_guide_moves_the_vector_not_the_guide() {
+    let mut h = Harness::new();
+    h.rectangle(100.0, 10.0, 40.0, 40.0);
+    h.app.doc.selection.clear();
+    h.app.doc.guides = vec![cut_craft_core::document::Guide::vertical(100.0)];
+    h.frame(vec![]);
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    // from the rectangle's left side, which lies on the guide
+    h.drag(h.at(100.0, 30.0), h.at(120.0, 30.0));
+    assert!(
+        (h.app.doc.guides[0].at - 100.0).abs() < 1e-9,
+        "the guide stays"
+    );
+    let b = h.app.doc.vectors[&id].bounds();
+    assert!((b.min.x - 120.0).abs() < 1.0, "the rectangle moved: {b:?}");
+    // away from anything else, the guide is still dragged
+    h.app.doc.selection.clear();
+    h.frame(vec![]);
+    h.drag(h.at(100.0, 150.0), h.at(80.0, 150.0));
+    assert!(
+        (h.app.doc.guides[0].at - 80.0).abs() < 1.0,
+        "{:?}",
+        h.app.doc.guides
+    );
+}
+
+#[test]
 fn transform_mode_scales_by_a_corner_and_rotates_after_a_second_click() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);
