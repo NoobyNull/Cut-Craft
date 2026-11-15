@@ -1796,6 +1796,36 @@ fn set_size_with_link_xy_works_out_the_other_box_from_the_one_typed() {
     );
 }
 
+#[test]
+fn set_size_items_one_by_one_with_link_xy_goes_by_the_box_typed() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 20.0);
+    h.rectangle(100.0, 10.0, 10.0, 40.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.app.invoke(&h.ctx, "set_size");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["mode"] = "scale_items_individually".into();
+    form.params["height"] = 30.0.into();
+    h.frame(vec![]);
+    let params = &h.app.form.as_ref().unwrap().params;
+    assert_eq!(
+        params["by_height"].as_bool(),
+        Some(true),
+        "sized by the height"
+    );
+    assert_eq!(params["height"].as_f64(), Some(30.0));
+    h.app.form.as_mut().unwrap().params["width"] = 12.0.into();
+    h.frame(vec![]);
+    let params = &h.app.form.as_ref().unwrap().params;
+    assert_eq!(
+        params["by_height"].as_bool(),
+        Some(false),
+        "now by the width"
+    );
+    assert_eq!(params["width"].as_f64(), Some(12.0));
+}
+
 fn cut_min_x(app: &CutCraftApp) -> f64 {
     cut_craft_core::testing::cut_bounds(app.doc.toolpaths.values().next().unwrap())
         .min

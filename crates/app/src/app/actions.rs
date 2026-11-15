@@ -5306,7 +5306,9 @@ impl CutCraftApp {
     }
 
     /// Set Size with Link XY: the box typed in sets the other, keeping the selection's
-    /// proportions (in Percent, the same share), so the form always shows the size it makes.
+    /// proportions (in Percent, the same share), so the form always shows the size it makes,
+    /// and sizes go by it. Items one by one each keep their own proportions, so there the
+    /// other box (in millimetres) is left as it is.
     fn link_set_size(&mut self) {
         let size = self
             .doc
@@ -5320,14 +5322,26 @@ impl CutCraftApp {
             return;
         };
         let seen = form.shown_size.map(|s| (s[0], s[1]));
+        let same = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(1.0);
+        let linked = p["keep_proportions"].as_bool() == Some(true);
+        if linked && let Some((sw, sh)) = seen {
+            // the box typed last is the one sizes go by
+            if same(w, sw) && !same(h, sh) {
+                p["by_height"] = true.into();
+            } else if !same(w, sw) {
+                p["by_height"] = false.into();
+            }
+        }
+        let items = p["mode"].as_str() == Some("scale_items_individually");
         let ratio = if p["percent"].as_bool() == Some(true) {
             Some(1.0)
+        } else if items {
+            None
         } else {
             size.filter(|s| s.x > 0.0 && s.y > 0.0).map(|s| s.y / s.x)
         };
-        if let Some(ratio) = ratio.filter(|_| p["keep_proportions"].as_bool() == Some(true)) {
-            let same = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(1.0);
-            let height_typed = seen.is_some_and(|(sw, sh)| same(w, sw) && !same(h, sh));
+        if let Some(ratio) = ratio.filter(|_| linked) {
+            let height_typed = p["by_height"].as_bool() == Some(true);
             if height_typed {
                 w = h / ratio;
                 p["width"] = w.into();
