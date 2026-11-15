@@ -1,7 +1,9 @@
 //! Dimensions: a length, horizontal or vertical dimension between two points, an angle at a
 //! corner or an arc's radius or diameter, as vectors: extension lines, a dimension line with
 //! arrow heads, and the measurement in a font, grouped. The group keeps the dimension's
-//! settings, so Shift-clicking it with the form open edits it.
+//! settings, so Shift-clicking it with the form open edits it. A pasted dimension keeps them;
+//! a copy moved elsewhere (Array Copy, Copy Along Vectors) is plain grouped curves, since it
+//! no longer sits on what was measured.
 
 use cut_craft_core::document::{Document, Units};
 use cut_craft_core::font::{self, Align};

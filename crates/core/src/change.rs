@@ -1136,8 +1136,12 @@ fn shift_of(t: &DAffine2) -> Option<Point> {
 }
 
 /// Text settings `text` for its letters moved by `by`: its anchor, and the curve it was laid
-/// on, go with them.
-fn shifted_text(text: &serde_json::Value, by: Point) -> serde_json::Value {
+/// on, go with them. `None` for another tool's settings moved anywhere (a dimension's name
+/// their tool under `command`): they point at what was measured, which the copy is not at.
+fn shifted_text(text: &serde_json::Value, by: Point) -> Option<serde_json::Value> {
+    if text.get("command").is_some() && by != Point::ZERO {
+        return None;
+    }
     let mut text = text.clone();
     if let (Some(x), Some(y)) = (text["anchor"]["x"].as_f64(), text["anchor"]["y"].as_f64()) {
         text["anchor"] = serde_json::json!({ "x": x + by.x, "y": y + by.y });
@@ -1147,7 +1151,7 @@ fn shifted_text(text: &serde_json::Value, by: Point) -> serde_json::Value {
         let moved = curve.transformed(&DAffine2::from_translation(by));
         text["on_curve"]["curve"] = serde_json::to_value(moved).expect("paths serialise");
     }
-    text
+    Some(text)
 }
 
 /// `id` as a change has left it (`pending`, where `None` is removed), else as in `doc`.
@@ -1260,7 +1264,8 @@ impl ChangeBuilder<'_> {
 
     /// Adds `paths`, each with the group it had where it came from (`None`: none). Each of
     /// those groups becomes one new group here, with its part name from `names` and, when the
-    /// copy is only moved (by `shift`), its text settings from `texts`, moved with it.
+    /// copy is only moved (by `shift`), its text settings from `texts`, moved with it. A
+    /// dimension's copy is plain curves unless it lies on the original (Paste).
     pub fn add_regrouped(
         &mut self,
         paths: Vec<(Path, Option<u64>)>,
@@ -1280,7 +1285,7 @@ impl ChangeBuilder<'_> {
                 }
                 let g = self.next_group();
                 new_groups.insert(old, g);
-                let text = shift.and_then(|by| Some(shifted_text(texts.get(&old)?, by)));
+                let text = shift.and_then(|by| shifted_text(texts.get(&old)?, by));
                 if let Some(text) = text {
                     self.set_text(g, Some(text));
                 }

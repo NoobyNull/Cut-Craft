@@ -341,3 +341,37 @@ fn a_mirrored_copy_of_text_is_grouped_curves() {
         "mirrored letters cannot be edited as text"
     );
 }
+
+#[test]
+fn a_moved_copy_of_a_dimension_is_grouped_curves() {
+    let mut doc = plaque_and_grouped_word();
+    doc.texts.insert(
+        7,
+        serde_json::json!({"command": "dimensions", "from": {"x": 0.0, "y": 0.0}, "to": {"x": 50.0, "y": 0.0}}),
+    );
+    let word = [EntityId(2), EntityId(3)];
+    let shift = [DAffine2::from_translation(Point::new(0.0, 50.0))];
+    doc.apply(&Change::copy_vectors(&doc, &word, &shift))
+        .unwrap();
+    let copy = doc.vector_groups[&EntityId(4)];
+    assert_ne!(copy, 7, "the copy is a group of its own");
+    assert!(
+        !doc.texts.contains_key(&copy),
+        "a dimension's settings point at what it measured, so its copy does not take them"
+    );
+}
+
+#[test]
+fn a_dimension_copied_onto_itself_is_still_a_dimension() {
+    let mut doc = plaque_and_grouped_word();
+    let record = serde_json::json!({"command": "dimensions", "from": {"x": 0.0, "y": 0.0}});
+    doc.texts.insert(7, record.clone());
+    let word = [EntityId(2), EntityId(3)];
+    doc.apply(&Change::copy_vectors(&doc, &word, &[DAffine2::IDENTITY]))
+        .unwrap();
+    let copy = doc.vector_groups[&EntityId(4)];
+    assert_eq!(
+        doc.texts[&copy], record,
+        "a pasted dimension can still be edited"
+    );
+}
