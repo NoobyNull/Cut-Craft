@@ -981,7 +981,8 @@ struct OpenForm {
     /// What Suggest last found for the form's clearing bits, shown under them.
     suggested: Option<String>,
     /// Orientate 3D Model's Model Size (X, Y, Z) as last shown, and the sizes the user typed
-    /// (with the ratio locked, only the latest): the rest follow the model as it turns.
+    /// (with the ratio locked, only the latest): the rest follow the model as it turns. Set
+    /// Size's width and height as last shown, to tell which one was typed in.
     shown_size: Option<[f64; 3]>,
     typed_size: [Option<f64>; 3],
     /// Orientate 3D Model's model as placed, each triangle with whether a cutter from above

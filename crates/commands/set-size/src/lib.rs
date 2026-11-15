@@ -36,7 +36,8 @@ pub struct Params {
     )]
     #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/size_wh.png"))]
     pub width: f64,
-    /// Ignored when keeping proportions
+    /// The height, or with Percent, the share of the present height. With Link XY, typing
+    /// it works out the width to match
     #[schemars(
         range(min = 0),
         extend("x-unit" = "mm", "x-percent-when" = {"percent": "true"})
@@ -46,7 +47,8 @@ pub struct Params {
     /// Width and height are percentages of the present size, not millimetres
     #[serde(default)]
     pub percent: bool,
-    /// Change the width and the height is worked out, so the shape is not stretched
+    /// Type the width or the height and the other is worked out, so the shape is not
+    /// stretched
     #[schemars(title = "Link XY")]
     pub keep_proportions: bool,
     /// Point of the selection that stays put

@@ -5269,6 +5269,40 @@ impl CutCraftApp {
             .map_err(|e| format!("the form's settings do not read: {e}"))
     }
 
+    /// Set Size with Link XY: the box typed in sets the other, keeping the selection's
+    /// proportions (in Percent, the same share), so the form always shows the size it makes.
+    fn link_set_size(&mut self) {
+        let size = self
+            .doc
+            .selection_bounds()
+            .map(cut_craft_core::geometry::Rect::size);
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "set_size") else {
+            return;
+        };
+        let p = &mut form.params;
+        let (Some(mut w), Some(mut h)) = (p["width"].as_f64(), p["height"].as_f64()) else {
+            return;
+        };
+        let seen = form.shown_size.map(|s| (s[0], s[1]));
+        let ratio = if p["percent"].as_bool() == Some(true) {
+            Some(1.0)
+        } else {
+            size.filter(|s| s.x > 0.0 && s.y > 0.0).map(|s| s.y / s.x)
+        };
+        if let Some(ratio) = ratio.filter(|_| p["keep_proportions"].as_bool() == Some(true)) {
+            let same = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(1.0);
+            let height_typed = seen.is_some_and(|(sw, sh)| same(w, sw) && !same(h, sh));
+            if height_typed {
+                w = h / ratio;
+                p["width"] = w.into();
+            } else if !same(h, w * ratio) {
+                h = w * ratio;
+                p["height"] = h.into();
+            }
+        }
+        form.shown_size = Some([w, h, 0.0]);
+    }
+
     /// What some forms have under their fields: Texture Toolpath's Load / Save Texture, and
     /// Quick Engrave's Immediate Output.
     fn form_extras(&mut self, ui: &mut egui::Ui, id: &str) {
@@ -5279,6 +5313,7 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
+            "set_size" => self.link_set_size(),
             "relief_from_photo" => {
                 self.depth_section(ui);
                 self.bit_note(ui);
