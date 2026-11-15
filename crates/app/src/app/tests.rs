@@ -599,6 +599,17 @@ fn a_rectangle_drawn_from_a_snapped_corner_moves_whole_with_it() {
     assert!((after.size() - before.size()).length() < 1e-9, "same size");
     let moved = after.min - before.min;
     assert!(moved.distance(Point::new(-4.0, 3.0)) < 1e-9, "{moved:?}");
+    // moved on its own, it goes where it is put and lets go of the corner
+    h.app.doc.selection = [second].into();
+    let params =
+        serde_json::json!({ "relative": true, "x": 50.0, "y": 0.0, "anchor": "bottom_left" });
+    h.app.apply("move", &params).unwrap();
+    let put = h.app.doc.vectors[&second].bounds();
+    assert!(
+        (put.min.x - after.min.x - 50.0).abs() < 1e-9,
+        "not sprung back"
+    );
+    assert_eq!(h.app.doc.constraints, []);
 }
 
 #[test]

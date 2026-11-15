@@ -134,7 +134,8 @@ pub(super) const TIPS: &[Tip] = &[
     plain(
         "tips/snapping.png",
         "Drawing snaps to the grid, guides and the ends and middles of lines. **F4** chooses \
-         what it snaps to, and holding **Shift** while you draw turns snapping off.",
+         what it snaps to, and holding **Shift** while you draw turns snapping off. A shape \
+         stays on what it snapped to until you move it on its own.",
     ),
     plain(
         "tips/undo.png",

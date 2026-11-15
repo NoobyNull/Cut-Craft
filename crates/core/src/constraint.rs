@@ -1,8 +1,10 @@
 //! Snaps that stay: a point placed on a snap (the end or middle of a line, the centre of a
 //! circle, where a line touches a curve or meets it square on, a corner of the material)
 //! is kept there. When the thing it snapped to moves or changes, the point follows; when the
-//! shape it is part of is moved on its own, the point is put back on its snap. The person
-//! frees a point by picking its snap mark and pressing Delete.
+//! shape it is part of is reshaped on its own, the point is put back on its snap. A shape
+//! the person moves whole on its own (drag, Move, arrow keys) goes where it is put and lets
+//! go of its snaps. The person also frees a point by picking its snap mark and pressing
+//! Delete.
 //!
 //! Every change goes through [`keeping`] before it is applied (see
 //! [`History::apply`](crate::History::apply)): it adds the edits that keep each constraint,
@@ -165,6 +167,19 @@ fn place(
     }
 }
 
+/// Whether `after` is `before` slid somewhere else, unchanged in shape.
+fn translated(before: &Path, after: &Path) -> bool {
+    let by = after.start - before.start;
+    let (was, now) = (nodes(before), nodes(after));
+    by.length() > TOLERANCE
+        && before.segments.len() == after.segments.len()
+        && was.len() == now.len()
+        && was
+            .iter()
+            .zip(&now)
+            .all(|(a, b)| (*a + by).distance(*b) <= 1e-6)
+}
+
 /// `path` with `pin` moved to `to`.
 fn moved(path: &Path, pin: Pin, to: Point) -> Path {
     match pin {
@@ -288,6 +303,38 @@ impl After {
         }
     }
 
+    /// Lets go of the snaps of a shape the person moved whole on its own (a drag, Move,
+    /// the arrow keys, Align): it goes where it was put rather than springing back. A snap
+    /// still on its anchor after the move (the shape moved with what it snapped to) stays.
+    fn drop_moved(&mut self, change: &Change, made: &[Constraint], notes: &mut Vec<String>) {
+        let moved: BTreeSet<EntityId> = change
+            .edits
+            .iter()
+            .filter_map(|e| match e {
+                Edit::Replace { id, before, after } if translated(before, after) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        if moved.is_empty() {
+            return;
+        }
+        let (vectors, material) = (&self.vectors, self.material);
+        let count = self.constraints.len();
+        self.constraints.retain(|c| {
+            made.contains(c)
+                || !moved.contains(&c.vector)
+                || c.at(vectors).is_some_and(|now| {
+                    place(c, vectors, material, now).is_some_and(|to| to.distance(now) <= 1e-6)
+                })
+        });
+        if self.constraints.len() < count {
+            notes.push(
+                "The moved shape let go of the snap it was drawn from; snap it again to tie it"
+                    .to_owned(),
+            );
+        }
+    }
+
     /// Puts every constraint stirred by the change (or new in it) back on its anchor, over
     /// a few passes for points that follow points; lets go, with a note, of those that
     /// cannot be kept.
@@ -353,6 +400,7 @@ pub fn keeping(doc: &Document, change: Change) -> Change {
     let start = after.vectors.clone();
     let mut notes = vec![];
     after.drop_lost(doc, &mut notes);
+    after.drop_moved(&change, &made, &mut notes);
     after.solve(&made, &mut notes);
     let mut out = change;
     let mut put_back = false;
@@ -514,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    fn a_line_moved_on_its_own_keeps_its_snapped_end_where_it_was() {
+    fn a_line_moved_on_its_own_moves_freely_and_lets_go_of_its_snap() {
         let mut doc = document_with(vec![
             square(10.0, 10.0, 20.0),
             Path::polyline(&[p(0.0, 0.0), p(30.0, 30.0)], false),
@@ -534,19 +582,79 @@ mod tests {
                 to,
             }],
         );
+        move_by(&mut doc, &mut h, line, p(-5.0, 0.0));
+        assert_eq!(
+            nodes(&doc.vectors[&line]),
+            [p(-5.0, 0.0), p(25.0, 30.0)],
+            "moved whole, not stretched"
+        );
+        assert_eq!(doc.constraints, [], "its snap let go");
+        // the square moving no longer drags it
+        move_by(&mut doc, &mut h, sq, p(5.0, 5.0));
+        assert_eq!(nodes(&doc.vectors[&line]), [p(-5.0, 0.0), p(25.0, 30.0)]);
+        // undo brings the tie back with the line
+        h.undo(&mut doc);
+        h.undo(&mut doc);
+        assert_eq!(doc.constraints.len(), 1);
+    }
+
+    #[test]
+    fn a_shape_drawn_from_the_material_corner_moves_where_it_is_put() {
+        let mut doc = document_with(vec![square(0.0, 0.0, 20.0)]);
+        let [sq] = ids(&doc)[..] else { panic!() };
+        let mut h = History::default();
+        constrain(
+            &mut doc,
+            &mut h,
+            vec![Constraint {
+                vector: sq,
+                pin: Pin::Whole {
+                    offset: p(-10.0, -10.0),
+                },
+                to: Anchor::Material { corner: 0 },
+            }],
+        );
+        move_by(&mut doc, &mut h, sq, p(30.0, 40.0));
+        assert_eq!(
+            doc.vectors[&sq].bounds().min,
+            p(30.0, 40.0),
+            "not sprung back"
+        );
+        assert_eq!(doc.constraints, []);
+    }
+
+    #[test]
+    fn a_shape_moved_with_what_it_snapped_to_keeps_its_snap() {
+        let mut doc = document_with(vec![
+            square(10.0, 10.0, 20.0),
+            Path::polyline(&[p(0.0, 0.0), p(30.0, 30.0)], false),
+        ]);
+        let [sq, line] = ids(&doc)[..] else { panic!() };
+        let mut h = History::default();
+        let to = Anchor::End {
+            vector: sq,
+            node: 2,
+        };
+        constrain(
+            &mut doc,
+            &mut h,
+            vec![Constraint {
+                vector: line,
+                pin: Pin::Node { node: 1 },
+                to,
+            }],
+        );
+        let by = DAffine2::from_translation(p(3.0, 4.0));
         let mut b = Change::builder(&doc);
-        b.replace(
-            line,
-            doc.vectors[&line].transformed(&DAffine2::from_translation(p(-5.0, 0.0))),
-        );
-        let change = keeping(&doc, b.finish());
-        assert!(
-            change.notes.iter().any(|n| n.contains("Delete")),
-            "{:?}",
-            change.notes
-        );
+        b.replace(sq, doc.vectors[&sq].transformed(&by));
+        b.replace(line, doc.vectors[&line].transformed(&by));
+        let change = b.finish();
         h.apply(&mut doc, change).unwrap();
-        assert_eq!(nodes(&doc.vectors[&line]), [p(-5.0, 0.0), p(30.0, 30.0)]);
+        assert_eq!(
+            doc.constraints.len(),
+            1,
+            "still on the corner, so still kept"
+        );
     }
 
     #[test]
