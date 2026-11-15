@@ -30,6 +30,37 @@ fn cut_copy_and_paste_vectors() {
 }
 
 #[test]
+fn pasted_text_is_a_word_of_its_own_on_its_layer_and_still_text() {
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    let other = c.add_layer("Letters");
+    let ids: Vec<EntityId> = [0.0, 10.0]
+        .into_iter()
+        .map(|x| c.add(Path::circle(Point::new(x, 0.0), 2.0)))
+        .collect();
+    for &id in &ids {
+        c.set_group(id, Some(5));
+        c.move_to_layer(id, other);
+    }
+    c.set_text(5, Some(serde_json::json!({"text": "oo"})));
+    c.select(ids.clone());
+    h.app.doc.apply(&c.finish()).unwrap();
+    h.frame(vec![Event::Copy]);
+    // through the system clipboard, as Ctrl+V brings it back
+    h.frame(vec![Event::Paste(h.copied.clone())]);
+    let pasted: Vec<EntityId> = h.app.doc.selection.iter().copied().collect();
+    assert_eq!(pasted.len(), 2);
+    let group = h.app.doc.vector_groups.get(&pasted[0]).copied();
+    assert!(
+        group.is_some() && group != Some(5),
+        "the copy is a group of its own"
+    );
+    assert_eq!(h.app.doc.vector_groups.get(&pasted[1]).copied(), group);
+    assert_eq!(h.app.doc.texts[&group.unwrap()]["text"], "oo");
+    assert_eq!(h.app.doc.layer_of(pasted[0]), other);
+}
+
+#[test]
 fn a_model_past_the_preview_limit_is_drawn_as_its_surface_with_only_undercuts_over_it() {
     let mut h = Harness::new();
     h.app.options.import.preview_faces = 1000;

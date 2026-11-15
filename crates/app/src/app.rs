@@ -78,6 +78,17 @@ struct FineKey {
     importing: bool,
 }
 
+/// What the vectors on the clipboard belonged to where they were copied, so a pasted word is
+/// still a word: by clipboard position, each one's group and layer, and the groups' text
+/// settings and part names.
+#[derive(Default)]
+struct Copied {
+    groups: Vec<Option<u64>>,
+    layers: Vec<LayerId>,
+    texts: std::collections::BTreeMap<u64, Value>,
+    names: std::collections::BTreeMap<u64, String>,
+}
+
 /// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id.
 fn preview_mark(id: EntityId) -> u32 {
     u32::try_from(id.0).unwrap_or(u32::MAX)
@@ -1166,6 +1177,8 @@ struct CutCraftApp {
     shots: Option<screenshots::Shots>,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
+    /// What the copied vectors were part of: groups, layers, text and part names.
+    clipboard_from: Copied,
     clipboard_components: Vec<cut_craft_core::component::Component>,
     /// Where the 3D view's picture was fitted last frame, for picking.
     fit_3d: Option<egui::Rect>,

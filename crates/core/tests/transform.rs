@@ -296,3 +296,48 @@ fn spacing_spaces_whole_groups() {
         x(2)
     );
 }
+
+#[test]
+fn copies_of_a_group_are_groups_of_their_own_and_moved_text_stays_text() {
+    let mut doc = plaque_and_grouped_word();
+    doc.texts.insert(
+        7,
+        serde_json::json!({"text": "II", "anchor": {"x": 0.0, "y": 10.0}}),
+    );
+    doc.part_names.insert(7, "Word".into());
+    let word = [EntityId(2), EntityId(3)];
+    let shifts = [
+        DAffine2::from_translation(Point::new(0.0, 50.0)),
+        DAffine2::from_translation(Point::new(0.0, 100.0)),
+    ];
+    doc.apply(&Change::copy_vectors(&doc, &word, &shifts))
+        .unwrap();
+    let copies: Vec<EntityId> = doc.vectors.keys().copied().filter(|id| id.0 > 3).collect();
+    assert_eq!(copies.len(), 4);
+    let groups: Vec<u64> = copies.iter().map(|id| doc.vector_groups[id]).collect();
+    assert_eq!(groups[0], groups[1], "the first copy is one group");
+    assert_eq!(groups[2], groups[3], "so is the second");
+    assert!(
+        groups[0] != groups[2] && groups[0] != 7,
+        "each copy its own group"
+    );
+    let text = &doc.texts[&groups[2]];
+    assert_eq!(text["anchor"]["y"], 110.0, "the text moved with its copy");
+    assert_eq!(doc.part_names[&groups[0]], "Word");
+}
+
+#[test]
+fn a_mirrored_copy_of_text_is_grouped_curves() {
+    let mut doc = plaque_and_grouped_word();
+    doc.texts.insert(7, serde_json::json!({"text": "II"}));
+    let word = [EntityId(2), EntityId(3)];
+    let flip = DAffine2::from_scale(Point::new(-1.0, 1.0));
+    doc.apply(&Change::copy_vectors(&doc, &word, &[flip]))
+        .unwrap();
+    let g = doc.vector_groups[&EntityId(4)];
+    assert_eq!(doc.vector_groups[&EntityId(5)], g);
+    assert!(
+        !doc.texts.contains_key(&g),
+        "mirrored letters cannot be edited as text"
+    );
+}

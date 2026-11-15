@@ -567,8 +567,8 @@ impl Change {
     pub fn copy_selected_grouped(doc: &Document, transforms: &[DAffine2]) -> Self {
         let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
         let mut c = Self::builder(doc);
-        let all = c.copies(doc, &originals, transforms);
-        let group = doc.next_group();
+        let all = c.copies_grouped(doc, &originals, transforms, false);
+        let group = c.next_group();
         for &id in &all {
             c.set_group(id, Some(group));
         }
@@ -1130,6 +1130,26 @@ fn insert_new<T>(
     Ok(())
 }
 
+/// How far `t` moves things, when all it does is move them.
+fn shift_of(t: &DAffine2) -> Option<Point> {
+    (t.matrix2 == glam::DMat2::IDENTITY).then_some(t.translation)
+}
+
+/// Text settings `text` for its letters moved by `by`: its anchor, and the curve it was laid
+/// on, go with them.
+fn shifted_text(text: &serde_json::Value, by: Point) -> serde_json::Value {
+    let mut text = text.clone();
+    if let (Some(x), Some(y)) = (text["anchor"]["x"].as_f64(), text["anchor"]["y"].as_f64()) {
+        text["anchor"] = serde_json::json!({ "x": x + by.x, "y": y + by.y });
+    }
+    let curve = text.get("on_curve").and_then(|o| o.get("curve"));
+    if let Some(curve) = curve.and_then(|c| serde_json::from_value::<Path>(c.clone()).ok()) {
+        let moved = curve.transformed(&DAffine2::from_translation(by));
+        text["on_curve"]["curve"] = serde_json::to_value(moved).expect("paths serialise");
+    }
+    text
+}
+
 /// `id` as a change has left it (`pending`, where `None` is removed), else as in `doc`.
 fn shadowed<'a, T>(
     pending: &'a BTreeMap<EntityId, Option<T>>,
@@ -1202,22 +1222,91 @@ pub struct ChangeBuilder<'a> {
 
 impl ChangeBuilder<'_> {
     /// Adds a copy of each of `originals` under each of `transforms`, on its original's
-    /// layer: the originals then the copies, in order.
+    /// layer: the originals then the copies, in order. Each copy of a group is a group of its
+    /// own with the original's part name, and stays text when it is only moved.
     pub fn copies(
         &mut self,
         doc: &Document,
         originals: &[EntityId],
         transforms: &[DAffine2],
     ) -> Vec<EntityId> {
+        self.copies_grouped(doc, originals, transforms, true)
+    }
+
+    fn copies_grouped(
+        &mut self,
+        doc: &Document,
+        originals: &[EntityId],
+        transforms: &[DAffine2],
+        regroup: bool,
+    ) -> Vec<EntityId> {
         let mut all = originals.to_vec();
         for t in transforms {
-            for &id in originals {
-                let copy = self.add(doc.vectors[&id].transformed(t));
+            let paths = originals
+                .iter()
+                .map(|id| {
+                    let group = doc.vector_groups.get(id).copied().filter(|_| regroup);
+                    (doc.vectors[id].transformed(t), group)
+                })
+                .collect();
+            let copies = self.add_regrouped(paths, &doc.texts, &doc.part_names, shift_of(t));
+            for (&id, &copy) in originals.iter().zip(&copies) {
                 self.move_to_layer(copy, doc.layer_of(id));
-                all.push(copy);
             }
+            all.extend(copies);
         }
         all
+    }
+
+    /// Adds `paths`, each with the group it had where it came from (`None`: none). Each of
+    /// those groups becomes one new group here, with its part name from `names` and, when the
+    /// copy is only moved (by `shift`), its text settings from `texts`, moved with it.
+    pub fn add_regrouped(
+        &mut self,
+        paths: Vec<(Path, Option<u64>)>,
+        texts: &BTreeMap<u64, serde_json::Value>,
+        names: &BTreeMap<u64, String>,
+        shift: Option<Point>,
+    ) -> Vec<EntityId> {
+        let mut new_groups: BTreeMap<u64, u64> = BTreeMap::new();
+        let mut ids = Vec::with_capacity(paths.len());
+        for (path, group) in paths {
+            let id = self.add(path);
+            if let Some(old) = group {
+                if let Some(&g) = new_groups.get(&old) {
+                    self.set_group(id, Some(g));
+                    ids.push(id);
+                    continue;
+                }
+                let g = self.next_group();
+                new_groups.insert(old, g);
+                let text = shift.and_then(|by| Some(shifted_text(texts.get(&old)?, by)));
+                if let Some(text) = text {
+                    self.set_text(g, Some(text));
+                }
+                if let Some(name) = names.get(&old) {
+                    self.set_part_name(g, Some(name.clone()));
+                }
+                self.set_group(id, Some(g));
+            }
+            ids.push(id);
+        }
+        ids
+    }
+
+    /// A group number neither the document nor this change uses yet.
+    pub fn next_group(&self) -> u64 {
+        let given = self
+            .edits
+            .iter()
+            .filter_map(|e| match e {
+                Edit::SetGroup { after, .. } => *after,
+                Edit::SetText { group, .. } | Edit::SetPartName { group, .. } => Some(*group),
+                _ => None,
+            })
+            .max()
+            .map_or(0, |g| g + 1);
+        self.doc.next_group().max(given)
     }
 
     /// Current path of `id` as seen by this change so far.

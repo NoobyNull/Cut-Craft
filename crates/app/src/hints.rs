@@ -281,11 +281,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "paste",
-        "Paste: adds the objects on the clipboard to the job exactly where they were copied from; lines lying on top of their original show red",
+        "Paste: adds the objects on the clipboard to the job exactly where they were copied from, on their own layer; a copied group or word of text pastes as a group of its own, still text. Lines lying on top of their original show red",
     ),
     (
         "paste_in_place",
-        "Paste in Place: adds the objects on the clipboard to the job exactly where they were copied from",
+        "Paste in Place: adds the objects on the clipboard to the job exactly where they were copied from; a copied group or word of text pastes as a group of its own",
     ),
     (
         "edit_object",

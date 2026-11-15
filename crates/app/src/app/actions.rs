@@ -140,6 +140,7 @@ impl CutCraftApp {
             updates: crate::update::Updates::default(),
             restart_after_close: None,
             clipboard: vec![],
+            clipboard_from: super::Copied::default(),
             clipboard_components: vec![],
             fit_3d: None,
             handles_3d: vec![],
@@ -3884,6 +3885,10 @@ impl CutCraftApp {
                 self.invoke(ctx, "copy");
             }
             if let Some(paths) = pasted.and_then(|text| serde_json::from_str(&text).ok()) {
+                // vectors another window copied: what they belonged to there is not known
+                if paths != self.clipboard {
+                    self.clipboard_from = super::Copied::default();
+                }
                 self.clipboard = paths;
                 self.invoke(ctx, "paste");
             }
@@ -5724,6 +5729,18 @@ impl CutCraftApp {
                     .iter()
                     .map(|id| self.doc.vectors[id].clone())
                     .collect();
+                let doc = &self.doc;
+                let groups: Vec<Option<u64>> = doc
+                    .selection
+                    .iter()
+                    .map(|id| doc.vector_groups.get(id).copied())
+                    .collect();
+                self.clipboard_from = super::Copied {
+                    layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
+                    texts: records_of(&groups, &doc.texts),
+                    names: records_of(&groups, &doc.part_names),
+                    groups,
+                };
                 self.clipboard_components = self
                     .doc
                     .selected_components
@@ -5741,7 +5758,20 @@ impl CutCraftApp {
             // pasted where they were copied from, in this job or another (Paste in Place)
             "paste" | "paste_in_place" => {
                 let mut c = Change::builder(&self.doc);
-                let ids: Vec<_> = self.clipboard.iter().map(|p| c.add(p.clone())).collect();
+                // a copied group pastes as a group of its own, on its layer, text still text
+                let from = &self.clipboard_from;
+                let ids = if from.groups.len() == self.clipboard.len() {
+                    let paths = self.clipboard.iter().cloned().zip(from.groups.clone());
+                    let shift = Some(Point::ZERO);
+                    c.add_regrouped(paths.collect(), &from.texts, &from.names, shift)
+                } else {
+                    self.clipboard.iter().map(|p| c.add(p.clone())).collect()
+                };
+                for (&id, layer) in ids.iter().zip(&from.layers) {
+                    if self.doc.layer(*layer).is_some() {
+                        c.move_to_layer(id, *layer);
+                    }
+                }
                 c.select(ids);
                 for k in &self.clipboard_components {
                     c.add_component(k.clone());
@@ -6281,4 +6311,16 @@ fn installed_machines(added: usize, here: usize) -> String {
         String::new()
     };
     format!("Installed {added} machines{here}")
+}
+
+/// The entries of `records` (text settings or part names, by group) for `groups`.
+fn records_of<T: Clone>(
+    groups: &[Option<u64>],
+    records: &std::collections::BTreeMap<u64, T>,
+) -> std::collections::BTreeMap<u64, T> {
+    groups
+        .iter()
+        .flatten()
+        .filter_map(|g| Some((*g, records.get(g).cloned()?)))
+        .collect()
 }

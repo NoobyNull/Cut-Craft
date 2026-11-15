@@ -542,8 +542,8 @@ say "not implemented yet".
   - Array Copy (rows × columns by gap or offset; symmetry block of mirrors or half turns,
     row / column displacement, Group Copies) and Circular Copy (round the selection's
     middle, the job centre or a point; total or step angle, clockwise positive; Group Copies; turning the
-    copies or not). Copies stay on their originals' layers; copies of grouped vectors are
-    not grouped.
+    copies or not). Copies stay on their originals' layers; each copy of a group is a group
+    of its own (still text when only moved), as are Mirror copies and pasted vectors.
   - Nest Parts (Edit ▸ Nest Selected Objects too): parts (grouped or overlapping vectors)
     packed by their boxes in rows from a chosen corner, along X or Y, a tool diameter plus
     clearance apart and a border in, quarter-turned where that fits better, moved or

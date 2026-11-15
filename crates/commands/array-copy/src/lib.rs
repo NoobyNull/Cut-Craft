@@ -79,7 +79,8 @@ pub struct Params {
     #[serde(default)]
     #[schemars(extend("x-unit" = "mm"))]
     pub column_displacement: f64,
-    /// The original and its copies made one group
+    /// The original and its copies made one group. Off, each copy of a group (a word of
+    /// text, say) is a group of its own
     #[serde(default)]
     pub group_copies: bool,
 }

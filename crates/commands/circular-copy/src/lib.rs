@@ -54,7 +54,8 @@ pub struct Params {
     /// Turn each copy to match its place on the circle; off, copies keep the original's
     /// orientation
     pub rotate_copies: bool,
-    /// The original and its copies made one group
+    /// The original and its copies made one group. Off, each copy of a group (a word of
+    /// text, say) is a group of its own
     #[serde(default)]
     pub group_copies: bool,
 }
