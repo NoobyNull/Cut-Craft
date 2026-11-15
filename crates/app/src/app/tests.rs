@@ -2022,6 +2022,76 @@ fn hiding_a_layer_from_the_panel_is_undoable_and_stops_picking() {
 }
 
 #[test]
+fn hiding_or_locking_a_layer_keeps_its_material() {
+    let mut h = Harness::new();
+    let mut layer = cmd_layer_properties::Params::from(h.app.doc.layers[0].clone());
+    layer.material = "Oak".into();
+    h.app
+        .apply("layer_properties", &serde_json::to_value(&layer).unwrap())
+        .unwrap();
+    h.app.layer_action(&h.ctx, LayerId(1), "toggle_visible");
+    h.app.layer_action(&h.ctx, LayerId(1), "toggle_locked");
+    let l = &h.app.doc.layers[0];
+    assert!(!l.visible && l.locked);
+    assert_eq!(
+        l.material, "Oak",
+        "the eye and lock leave the material alone"
+    );
+}
+
+#[test]
+fn a_layer_used_on_another_sheet_is_never_deleted_from_under_it() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::two_sheets();
+    h.app
+        .apply("add_layer", &serde_json::json!({ "name": "Engraving" }))
+        .unwrap();
+    let engraving = h.app.doc.layers.last().unwrap().id;
+    let first = h.app.doc.layers[0].id;
+    // on Sheet 2, draw on Engraving, then go back to Sheet 1, where it is empty
+    h.app
+        .apply("activate_sheet", &serde_json::json!({ "sheet": 1 }))
+        .unwrap();
+    h.app
+        .apply(
+            "set_current_layer",
+            &serde_json::json!({ "layer": engraving }),
+        )
+        .unwrap();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app
+        .apply("set_current_layer", &serde_json::json!({ "layer": first }))
+        .unwrap();
+    h.app
+        .apply("activate_sheet", &serde_json::json!({ "sheet": 0 }))
+        .unwrap();
+    // Delete ▸ Empty leaves it: it isn't empty on Sheet 2
+    let empty = serde_json::json!({ "items": "layers", "item": 0, "which": "empty" });
+    let _ = h.app.apply("delete_items", &empty);
+    assert!(h.app.doc.layer(engraving).is_some(), "kept for Sheet 2");
+    // Delete Layer says where its work is, rather than lose it
+    let refused = h
+        .app
+        .apply("delete_layer", &serde_json::json!({ "layer": engraving }))
+        .unwrap_err();
+    assert!(refused.contains("Sheet 2"), "{refused}");
+    // Merge Visible brings Sheet 2's vectors onto the layer merged into
+    h.app
+        .apply(
+            "merge_visible_layers",
+            &serde_json::json!({ "layer": first }),
+        )
+        .unwrap();
+    assert!(h.app.doc.layer(engraving).is_none());
+    h.app
+        .apply("activate_sheet", &serde_json::json!({ "sheet": 1 }))
+        .expect("Sheet 2 still opens");
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    assert_eq!(h.app.doc.layer_of(id), first);
+}
+
+#[test]
 fn choosing_a_layer_makes_it_current_without_an_undo_step() {
     let mut h = Harness::new();
     h.app
@@ -2872,6 +2942,46 @@ fn the_3d_view_shows_the_model_until_there_is_a_preview() {
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
     h.frame(vec![]);
     assert!(!raised(&mut h.app), "the preview, cut down from the top");
+}
+
+#[test]
+fn reshaping_a_made_shape_by_hand_stops_it_being_remade_from_its_settings() {
+    // sculpting or embossing a Create Shape dome and then pressing E would rebuild it from
+    // its outline and throw the work away: once its heights are edited, it is just a model
+    for tool in [
+        "emboss",
+        "smooth_selected_components",
+        "replace_below",
+        "sculpt",
+    ] {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        let shape = h.app.registry.get("create_shape").unwrap().default_params();
+        h.app.apply("create_shape", &shape).unwrap();
+        let id = *h.app.doc.components.keys().next().unwrap();
+        h.app.doc.selection.clear();
+        h.app.doc.selected_components = [id].into_iter().collect();
+        assert_eq!(
+            h.app.made_to_edit(),
+            Some("create_shape"),
+            "{tool}: made here"
+        );
+        let mut params = h.app.registry.get(tool).unwrap().default_params();
+        if tool == "sculpt" {
+            params["points"] = serde_json::json!([{ "x": 30.0, "y": 30.0 }]);
+        }
+        if tool == "replace_below" {
+            params["below"] = 0.5.into();
+        }
+        h.app.apply(tool, &params).unwrap();
+        assert!(
+            h.app.doc.components.values().all(|k| k.shape.is_none()),
+            "{tool} leaves a model, not a recipe to remake"
+        );
+        let ids: Vec<_> = h.app.doc.components.keys().copied().collect();
+        h.app.doc.selected_components = ids.into_iter().collect();
+        assert_eq!(h.app.made_to_edit(), None, "{tool}: E no longer remakes it");
+    }
 }
 
 #[test]
@@ -5672,6 +5782,12 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
         "unsaved until saved"
     );
     assert!(next.app.status.message.contains("Recovered"));
+    // opening it keeps the copy, so a second crash before any edit still has it
+    assert!(recovery.exists(), "kept until saved or closed");
+    let mut again = Harness::at_start();
+    again.app.recovery_path = Some(recovery.clone());
+    assert!(again.app.open_recovery(), "still there for the run after");
+    drop(again);
     next.app.save_to(&dir.join("kept.ccjob"));
     assert!(!recovery.exists(), "saved: nothing to recover");
     assert!(!next.app.open_recovery());
@@ -8198,6 +8314,27 @@ fn escape_lets_a_picked_open_end_go_and_keeps_join_open_ends_open() {
 }
 
 #[test]
+fn a_copy_pasted_on_its_original_shows_its_common_lines_in_red() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let red = |h: &mut Harness| {
+        h.frame(vec![]);
+        let colour = egui::epaint::ColorMode::Solid(h.ctx.global_style().visuals.error_fg_color);
+        h.shapes
+            .iter()
+            .filter(|c| matches!(&c.shape, egui::Shape::Path(p) if p.stroke.color == colour))
+            .count()
+    };
+    let before = red(&mut h);
+    h.app.invoke(&h.ctx, "copy");
+    h.app.invoke(&h.ctx, "paste");
+    // pasted in place, on top of the original: each of both rectangles' four sides
+    assert_eq!(red(&mut h), before + 8);
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(red(&mut h), before, "gone with the copy");
+}
+
+#[test]
 fn show_open_vector_ends_is_a_view_menu_switch() {
     let mut h = Harness::new();
     assert!(!h.app.display.open_ends, "off to start with");
@@ -8704,6 +8841,30 @@ fn tools_loaded_in_the_tool_changer_window_take_their_slot_numbers() {
     h.app.invoke(&h.ctx, "tool_database");
     let draft = &h.app.tool_manager.as_ref().unwrap().draft;
     assert_eq!(draft.get("3 mm End Mill").unwrap().number, 4);
+}
+
+#[test]
+fn v_carve_fill_has_no_edit_passes_for_a_depth_it_does_not_cut() {
+    // Fill works its depth out from each shape's width: the hidden Groove depth is not it
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "vcarve_engrave_toolpath");
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.app.form.as_ref().unwrap().params["place"], "fill");
+    assert!(
+        h.text_at("Edit Passes…").is_none(),
+        "no passes window for Fill"
+    );
+    h.app.form.as_mut().unwrap().params["place"] = "inside".into();
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(
+        h.text_at("Edit Passes…").is_some(),
+        "a groove has its depth"
+    );
 }
 
 #[test]
@@ -9683,6 +9844,54 @@ fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
         assert!(dir.join(name).exists(), "{name}");
     }
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn short_names_never_send_two_files_under_one_name() {
+    use cut_craft_machines::send::{Folder, Store};
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let card = std::env::temp_dir().join(format!("cut-craft-short-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&card);
+    std::fs::create_dir_all(&card).unwrap();
+    h.app.machines.add();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.send_to.folder = card.display().to_string();
+    machine.send_to.short_names = true;
+    h.app.session.path = Some(std::path::PathBuf::from("/jobs/Oak sign front.ccjob"));
+    // a post that can't change tools writes one file per tool, Oak sign front_1_6_mm... and
+    // Oak sign front_2_3_mm...: cut to 8 letters both are Oaksignf.nc
+    let plain = cut_craft_post::Post::parse(
+        "POST_NAME = \"Plain (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
+         begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\n\
+         begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n",
+    )
+    .unwrap();
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: true,
+    };
+    let store = Folder::new(&card);
+    let never = |_: &[String]| panic!("nothing there to replace yet");
+    let done = h.app.send_to(&form, &plain, &store, &never).unwrap();
+    assert!(done.starts_with("Sent 3 files"), "{done}");
+    let folder = store.list(&[]).unwrap()[0].name.clone();
+    let names: Vec<String> = store
+        .list(&[folder])
+        .unwrap()
+        .into_iter()
+        .map(|i| i.name)
+        .collect();
+    assert_eq!(
+        names.len(),
+        3,
+        "two tool files and the sheet, none lost: {names:?}"
+    );
+    let _ = std::fs::remove_dir_all(card);
 }
 
 #[test]
@@ -12924,6 +13133,22 @@ fn edit_tab_with_icons() -> Harness {
         .position(|t| t.name == "Edit")
         .expect("an Edit tab");
     for _ in 0..4 {
+        h.frame(vec![]);
+    }
+    // the icons decode on a background thread: one that lands mid-test grows its button and
+    // moves the page, so wait until every picture is in (a slow machine took long enough)
+    for _ in 0..500 {
+        if !h.ctx.has_pending_images() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        h.frame(vec![]);
+    }
+    assert!(
+        !h.ctx.has_pending_images(),
+        "the icons never finished loading"
+    );
+    for _ in 0..2 {
         h.frame(vec![]);
     }
     h

@@ -38,7 +38,7 @@ A number field takes a sum as well as a number, worked out when it is entered:
 - **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options
 - **F11** the designing layout, **F12** the machining layout
 - **Esc** closes the open form
-- **E** edits the selected shape (or Create Shape component) in the tool that made it
+- **E** edits the selected shape (or Create Shape component) in the tool that made it. Once a Create Shape component has been sculpted, smoothed, embossed or cut back with Replace Below or Reset, it is kept as you left it: E no longer remakes it from its settings, so your hand work is never thrown away
 - Help ▸ Keyboard Shortcuts lists the rest.
 
 ## Updates

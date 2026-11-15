@@ -1940,8 +1940,7 @@ fn tool_picker(
         Some(tool) => {
             // The Passes: how many the cut depth takes, as set in Edit Passes
             #[expect(clippy::cast_precision_loss, reason = "a small count")]
-            let passes = top["depth"]
-                .as_f64()
+            let passes = passes::cut_depth(top)
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
             ui.strong(held_name(current, slots));

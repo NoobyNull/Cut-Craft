@@ -105,7 +105,9 @@ pub struct Params {
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
-    /// Which point of the material is the machine's X0, Y0
+    /// Which point of the material is the machine's X0, Y0. Changing it moves only the
+    /// coordinates: the design, toolpaths, pictures, clamp zones and guides stay where they
+    /// are on the material
     #[schemars(
         title = "XY Datum Position",
         extend("x-section" = true),
@@ -271,7 +273,7 @@ impl Command for JobSetup {
             units: p.size.units,
             clearance: p.gaps.clearance,
             plunge: Some(p.gaps.plunge),
-            home: Some(p.home),
+            home: Some(home_for(doc, p)),
             z_zero: p.z_zero,
             datum: p.datum.position,
             offset: if p.datum.use_offset {
@@ -311,9 +313,45 @@ impl Command for JobSetup {
     }
 }
 
-/// Vectors, toolpaths and components all shifted by `by`.
+/// Home as `p` sets it, but with a Home Z still at the old clearance (never set by hand)
+/// following the clearance up or down: raising Clearance (Z1) to clear tall clamps must
+/// not leave the start and end moves travelling at the old, lower height.
+fn home_for(doc: &Document, p: &Params) -> Home {
+    let mut home = p.home;
+    if (home.z - doc.job.clearance).abs() < 1e-9 {
+        home.z = p.gaps.clearance;
+    }
+    home
+}
+
+/// Everything placed on the material shifted by `by`: vectors, toolpaths, components,
+/// pictures, keep-out (clamp) zones and guides.
 fn move_everything(doc: &Document, c: &mut cut_craft_core::ChangeBuilder, by: Point) {
     let shift = DAffine2::from_translation(by);
+    let zones = doc
+        .keep_out
+        .iter()
+        .map(|z| cut_craft_core::keep_out::KeepOutZone {
+            path: z.path.transformed(&shift),
+            ..z.clone()
+        })
+        .collect();
+    c.set_keep_out(zones);
+    for (&id, bitmap) in &doc.bitmaps {
+        let mut moved = bitmap.clone();
+        moved.rect =
+            cut_craft_core::geometry::Rect::new(bitmap.rect.min + by, bitmap.rect.max + by);
+        c.replace_bitmap(id, moved);
+    }
+    let guides = doc
+        .guides
+        .iter()
+        .map(|g| cut_craft_core::document::Guide {
+            at: g.at + if g.vertical { by.x } else { by.y },
+            ..*g
+        })
+        .collect();
+    c.set_guides(guides);
     for (&id, path) in &doc.vectors {
         c.replace(id, path.transformed(&shift));
     }
@@ -335,7 +373,7 @@ fn move_everything(doc: &Document, c: &mut cut_craft_core::ChangeBuilder, by: Po
 mod tests {
     use super::*;
     use cut_craft_core::component::{Combine, Component};
-    use cut_craft_core::geometry::Rect;
+    use cut_craft_core::geometry::{Path, Rect};
     use cut_craft_core::testing::{after, after_err, run_on, sample_document};
     use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath};
 
@@ -407,6 +445,79 @@ mod tests {
         };
         assert_eq!(offset(true), Point::new(10.0, 20.0));
         assert_eq!(offset(false), Point::ZERO);
+    }
+
+    #[test]
+    fn home_z_follows_a_raised_clearance_until_it_is_set_by_hand() {
+        let mut doc = sample_document();
+        // raised in the same dialog, Home Z (shown at the old clearance) goes up with it
+        run_on::<JobSetup>(&mut doc, &with(|p| p.gaps.clearance = 25.0));
+        assert!(
+            (doc.job.home().z - 25.0).abs() < 1e-9,
+            "{:?}",
+            doc.job.home()
+        );
+        // and again later
+        let mut p = JobSetup::initial_params(&doc);
+        p.gaps.clearance = 30.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        assert!((doc.job.home().z - 30.0).abs() < 1e-9);
+        // a Home Z of its own is kept
+        let mut p = JobSetup::initial_params(&doc);
+        p.home.z = 50.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        let mut p = JobSetup::initial_params(&doc);
+        p.gaps.clearance = 10.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        assert!((doc.job.home().z - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_new_datum_moves_clamp_zones_pictures_and_guides_with_the_design() {
+        let mut doc = sample_document();
+        let mut c = Change::builder(&doc);
+        let zone = Path::polyline(
+            &[Point::ZERO, Point::new(50.0, 0.0), Point::new(50.0, 50.0)],
+            true,
+        );
+        c.set_keep_out(vec![cut_craft_core::keep_out::KeepOutZone::new(
+            "Clamp", zone,
+        )]);
+        let picture = c.add_bitmap(cut_craft_core::bitmap::Bitmap {
+            name: "b".into(),
+            columns: 2,
+            rows: 1,
+            grey: vec![0, 255],
+            rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
+            depth: Vec::new(),
+            rgb: Vec::new(),
+        });
+        c.set_guides(vec![
+            cut_craft_core::document::Guide {
+                vertical: true,
+                at: 100.0,
+                locked: false,
+                tilt: 0.0,
+            },
+            cut_craft_core::document::Guide {
+                vertical: false,
+                at: 40.0,
+                locked: false,
+                tilt: 0.0,
+            },
+        ]);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        run_on::<JobSetup>(&mut doc, &with(|p| p.datum.position = Datum::Centre));
+        let moved = Point::new(-300.0, -200.0);
+        assert_eq!(
+            doc.keep_out[0].path.bounds().min,
+            moved,
+            "the clamp stays on the clamp"
+        );
+        assert_eq!(doc.bitmaps[&picture].rect.min, moved);
+        assert!((doc.guides[0].at - (100.0 - 300.0)).abs() < 1e-9);
+        assert!((doc.guides[1].at - (40.0 - 200.0)).abs() < 1e-9);
     }
 
     #[test]

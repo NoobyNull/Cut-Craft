@@ -573,7 +573,9 @@ fn g_code_folders(ui: &mut egui::Ui, machine: &mut Machine) -> Option<MachineOut
                 )
                 .on_hover_hint(
                     "Some older controllers only read names of up to 8 letters off their card. \
-                     Leave this off for FluidNC and most WiFi controllers",
+                     Files that would end up with the same 8 letters get a number instead \
+                     (Oaksign2.nc), so none overwrites another. Leave this off for FluidNC and \
+                     most WiFi controllers",
                 );
                 ui.end_row();
             });

@@ -55,6 +55,23 @@ impl Command for MergeVisibleLayers {
                 c.move_to_layer(id, p.layer);
             }
         }
+        // the other sheets' vectors on them come over too, or those sheets would hold
+        // vectors on layers that are gone
+        let mut sheets = c.sheets().to_vec();
+        let first = doc.layers.first().map(|l| l.id);
+        let onto = |objects: &mut cut_craft_core::document::SheetObjects| {
+            for v in objects.vectors.values_mut() {
+                if v.layer.or(first).is_some_and(|l| merged.contains(&l)) {
+                    v.layer = Some(p.layer);
+                }
+            }
+        };
+        for (i, sheet) in sheets.iter_mut().enumerate() {
+            if i != doc.active_sheet {
+                onto(&mut sheet.objects);
+            }
+        }
+        c.set_sheets(sheets, doc.active_sheet);
         for layer in merged {
             c.remove_layer(layer);
         }

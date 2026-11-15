@@ -84,7 +84,7 @@ impl Command for Emboss {
         for id in ids {
             c.remove_component(id);
         }
-        c.add_component(part);
+        c.add_component(part.hand_edited());
         Ok(c.finish())
     }
 }

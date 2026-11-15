@@ -1,6 +1,8 @@
 //! Toolpath Tiling: save the toolpaths in tiles for a machine smaller than the job. The tiles are
 //! drawn in the 2D view; Save Toolpaths writes
-//! one file per tile, each moved to the job's lower-left corner.
+//! one file per tile, each moved to the job's lower-left corner. Where a cut runs off a
+//! tile the tool lifts straight up before moving across to where it comes back in; a
+//! laser keeps each line's own power, and a drill bank drills only the holes of its tile.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::tiling::Tiling;

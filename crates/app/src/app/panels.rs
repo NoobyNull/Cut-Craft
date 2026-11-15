@@ -985,7 +985,15 @@ impl CutCraftApp {
         let Some(l) = self.doc.layer(layer).cloned() else {
             return;
         };
-        let properties = |visible: bool, locked: bool| serde_json::json!({ "layer": l.id, "name": l.name, "visible": visible, "locked": locked });
+        // start from the whole layer, so the eye and lock change only what they show
+        let properties = |visible: bool, locked: bool| {
+            serde_json::to_value(cmd_layer_properties::Params {
+                visible,
+                locked,
+                ..l.clone().into()
+            })
+            .expect("layer properties serialize")
+        };
         let result = match action {
             "toggle_visible" => self.apply("layer_properties", &properties(!l.visible, l.locked)),
             "toggle_locked" => self.apply("layer_properties", &properties(l.visible, !l.locked)),

@@ -549,6 +549,16 @@ impl Component {
             .collect()
     }
 
+    /// Its heights edited by hand (sculpted, smoothed, embossed, cut back): it is no longer
+    /// what its Create Shape settings or texture seed make, so it forgets them. Otherwise a
+    /// later edit or move would remake it from them and throw the hand work away.
+    #[must_use]
+    pub fn hand_edited(mut self) -> Self {
+        self.shape = None;
+        self.texture = None;
+        self
+    }
+
     /// The same shape with its shaping made permanent (Component Properties' Bake).
     #[must_use]
     pub fn baked(&self) -> Self {

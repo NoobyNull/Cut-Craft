@@ -1389,6 +1389,12 @@ TIP_PICS[tp_ + "closed_shape.svg"] = lambda: [
     tip_arrow(52, 62),
     group([path(OPEN_BOX + " Z", INK, 2.5, SHEET), line(32, 10, 42, 10, ACC, 3)], "translate(56 0)"),
     tick(91, 28, 1.1)]
+TIP_PICS[tp_ + "common_lines.svg"] = lambda: [
+    # two squares edge to edge, the edge they share in red; a copy pasted on its original,
+    # red all round
+    rect(8, 14, 26, 26, 0, INK, 2.5, SHEET), rect(34, 14, 26, 26, 0, INK, 2.5, SHEET),
+    line(34, 14, 34, 40, RED, 4),
+    rect(76, 14, 26, 26, 0, RED, 4, SHEET), rect(72, 10, 26, 26, 0, INK, 2, "none", dash="3 2.5")]
 TIP_PICS[tp_ + "tool_database.svg"] = lambda: [
     bit("end_mill", 22, 2, 52, 8), tip_arrow(36, 46),
     rect(52, 6, 54, 44, 3, INK, 2, PAPER),

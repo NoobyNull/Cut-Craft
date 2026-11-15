@@ -40,7 +40,7 @@ impl Command for ResetInsideSelectedVectors {
                 }
             }
             if reset != *component {
-                c.replace_component(id, reset);
+                c.replace_component(id, reset.hand_edited());
             }
         }
         Ok(c.finish())
