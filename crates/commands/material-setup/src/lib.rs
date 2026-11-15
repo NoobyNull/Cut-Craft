@@ -2,7 +2,8 @@
 //! thickness, Z zero, XY datum, rapid Z gaps and home, as in Job Setup, and where the 3D model
 //! sits in the material, by the gap above its top (Gap Outside Model on rotary jobs) or below
 //! its bottom (Gap Inside Model, from the axis), with the model's thickness, which Set scales.
-//! 3D toolpaths and the wrapped 3D view place the model by it.
+//! 3D toolpaths and the wrapped 3D view place the model by it. What the material is (Job
+//! Setup's Material, which sets feeds and speeds) is left as it is.
 
 use cmd_job_setup::{DatumPosition, JobSetup, RapidGaps};
 use cmd_scale_model_z_height::{ScaleModelZHeight, model_height};
@@ -98,6 +99,8 @@ impl Command for MaterialSetup {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         // the material, as Job Setup sets it (a new datum moves the coordinates, not the design)
         let mut job = cmd_job_setup::Params::from(&doc.job);
+        // not one of this form's settings: keep what Job Setup chose
+        doc.job_material().clone_into(&mut job.material);
         if doc.job.rotary.is_none() {
             job.size.thickness = p.thickness;
         }
@@ -223,6 +226,20 @@ mod tests {
             ..Params::of(&doc)
         };
         assert!(MaterialSetup::run(&doc, &too_big).is_err());
+    }
+
+    #[test]
+    fn applying_it_keeps_the_material_job_setup_chose() {
+        // it opens by itself before the first toolpath, and OK must not wipe the material
+        // the feeds and speeds come from
+        let mut doc = domed();
+        let mut job = cmd_job_setup::Params::from(&doc.job);
+        job.material = "Hard Maple".into();
+        run_on::<JobSetup>(&mut doc, &job);
+        assert_eq!(doc.job_material(), "Hard Maple");
+        let unchanged = Params::of(&doc);
+        run_on::<MaterialSetup>(&mut doc, &unchanged);
+        assert_eq!(doc.job_material(), "Hard Maple");
     }
 
     #[test]
