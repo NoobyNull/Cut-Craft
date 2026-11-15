@@ -1290,6 +1290,10 @@ struct CutCraftApp {
     /// Counts the jobs opened or made: with the history's revision, which job and which
     /// change of it the 2D view draws (a new job's history starts its revisions again).
     job_epoch: u64,
+    /// What a tool with no form (Group) warned of, in red at the foot of the tool panel, for
+    /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
+    /// too, takes it away.
+    tool_note: Option<(u64, u64, String)>,
     /// When a height handle's drag last remade the model (the app's clock, seconds).
     height_applied_at: Option<f64>,
     /// The level clipart imported through Orientate 3D Model goes on (Import to Level),

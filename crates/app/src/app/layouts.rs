@@ -147,6 +147,7 @@ impl CutCraftApp {
             self.form_panel(ui);
             return;
         }
+        self.tool_note_label(ui);
         self.browser(ui);
     }
 

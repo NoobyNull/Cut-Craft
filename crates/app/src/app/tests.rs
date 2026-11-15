@@ -87,6 +87,46 @@ fn pasted_into_another_job_lands_on_its_current_layer() {
 }
 
 #[test]
+fn group_says_in_red_on_the_design_page_that_grouped_text_becomes_curves() {
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    let letter = c.add(Path::circle(Point::new(20.0, 20.0), 2.0));
+    c.set_group(letter, Some(5));
+    c.set_text(5, Some(serde_json::json!({"text": "o"})));
+    let border = c.add(Path::circle(Point::new(20.0, 20.0), 15.0));
+    c.select([letter, border]);
+    h.app.doc.apply(&c.finish()).unwrap();
+    h.frame(vec![]);
+    let red_note = |h: &Harness| {
+        let red = h.ctx.global_style().visuals.error_fg_color;
+        let page = h.app.page_rects[0].expect("the Design page");
+        h.shapes.iter().any(|clipped| match &clipped.shape {
+            egui::Shape::Text(t) => {
+                page.contains(t.pos)
+                    && t.galley.text().contains("turns it into curves")
+                    && t.galley.job.sections.iter().all(|s| s.format.color == red)
+            }
+            _ => false,
+        })
+    };
+    h.app.invoke(&h.ctx, "group");
+    h.frame(vec![]);
+    eprintln!(
+        "NOTE {:?} {:?} {:?}",
+        h.app.tool_note,
+        h.app.status.message,
+        h.texts()
+            .iter()
+            .filter(|t| t.contains("curves"))
+            .collect::<Vec<_>>()
+    );
+    assert!(red_note(&h), "said in red at the foot of the tool panel");
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    assert!(!red_note(&h), "gone once undone");
+}
+
+#[test]
 fn a_model_past_the_preview_limit_is_drawn_as_its_surface_with_only_undercuts_over_it() {
     let mut h = Harness::new();
     h.app.options.import.preview_faces = 1000;

@@ -1,6 +1,6 @@
 //! Group: the selected vectors become one group, picked and moved together. Groups do not
-//! hold groups yet: text grouped with something else becomes curves (Group says so in red),
-//! and a part's name moves to the new group.
+//! hold groups yet: text grouped with something else becomes curves (Group says so in red
+//! under the tools), and a part's name moves to the new group.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};

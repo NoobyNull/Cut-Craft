@@ -192,6 +192,7 @@ impl CutCraftApp {
             rough_3d: None,
             height_applied_at: None,
             job_epoch: 0,
+            tool_note: None,
             stale_known: 0,
             stale_while_form: false,
             recalculate_ask: None,
@@ -3717,6 +3718,10 @@ impl CutCraftApp {
         // next Apply
         if let Some(form) = self.form.as_mut().filter(|f| f.id == id) {
             form.warning = (!notes.is_empty()).then(|| notes.join("\n"));
+        } else {
+            // a tool with no form: in red at the foot of the tool panel until the next change
+            self.tool_note = (!notes.is_empty())
+                .then(|| (self.job_epoch, self.history.revision(), notes.join("\n")));
         }
         if stale.is_empty() {
             self.warn(&made, &notes);
@@ -4265,30 +4270,61 @@ impl CutCraftApp {
             self.form_panel(ui);
             return;
         }
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            match tab {
-                "Design" => {
-                    if self.options.favourites.of(Page::Design).1 {
-                        // favourites name every tool, whatever sub-tab it is on
-                        let groups = self.design_groups("Design");
-                        self.tools_or_favourites(ui, &groups, Page::Design);
-                    } else {
-                        self.design_subtabs(ui);
+        // room kept at the foot for a tool's red note, so the icons above never move for it
+        let note = self.tool_note_height(ui);
+        egui::ScrollArea::vertical()
+            .max_height(ui.available_height() - note)
+            .show(ui, |ui| {
+                match tab {
+                    "Design" => {
+                        if self.options.favourites.of(Page::Design).1 {
+                            // favourites name every tool, whatever sub-tab it is on
+                            let groups = self.design_groups("Design");
+                            self.tools_or_favourites(ui, &groups, Page::Design);
+                        } else {
+                            self.design_subtabs(ui);
+                        }
+                    }
+                    "Sheets" => self.sheets_panel(ui),
+                    "Library" => self.clipart_panel(ui),
+                    "Layers" => self.layers_panel(ui),
+                    "Components" => self.component_list(ui),
+                    tab => {
+                        ui.weak(format!("{tab} tools not implemented yet"));
                     }
                 }
-                "Sheets" => self.sheets_panel(ui),
-                "Library" => self.clipart_panel(ui),
-                "Layers" => self.layers_panel(ui),
-                "Components" => self.component_list(ui),
-                tab => {
-                    ui.weak(format!("{tab} tools not implemented yet"));
-                }
-            }
-        });
+            });
+        self.tool_note_label(ui);
         // the hovered tool's guidance, or the tool in hand's, in the room left under the icons
         if tab == "Design" {
             self.tip_box(ui);
         }
+    }
+
+    /// What the last tool with no form warned of (Group turning text into curves), in red,
+    /// while nothing has changed since.
+    pub(super) fn tool_note_label(&self, ui: &mut egui::Ui) {
+        if let Some(note) = self.tool_note() {
+            ui.colored_label(ui.visuals().error_fg_color, note);
+        }
+    }
+
+    /// The red note [`Self::tool_note_label`] shows, if any.
+    fn tool_note(&self) -> Option<&str> {
+        let (job, revision, note) = self.tool_note.as_ref()?;
+        ((*job, *revision) == (self.job_epoch, self.history.revision())).then_some(note.as_str())
+    }
+
+    /// How tall [`Self::tool_note_label`] draws at `ui`'s width, with the gap over it.
+    fn tool_note_height(&self, ui: &egui::Ui) -> f32 {
+        self.tool_note().map_or(0.0, |note| {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let colour = egui::Color32::PLACEHOLDER;
+            let galley = ui
+                .painter()
+                .layout(note.to_owned(), font, colour, ui.available_width());
+            galley.size().y + ui.spacing().item_spacing.y
+        })
     }
 
     /// The tool groups a design tab shows: Design has the drawing then the modeling tools.
