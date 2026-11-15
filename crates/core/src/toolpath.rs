@@ -186,6 +186,12 @@ pub struct Tool {
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
     pub flutes: u32,
+    /// A drill (a twist or brad-point bit, as a vendor's tool library lists them): it cuts
+    /// only straight down, so the checks before cutting warn when any toolpath but Drilling
+    /// uses it (added with drills from tool libraries)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[schemars(skip)]
+    pub drill_only: bool,
     /// Its tool number, for the post's `[T]` on a machine without a tool changer, and the
     /// holder Load by Tool Number puts it in; 0 for none (added with tool numbers)
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -660,6 +666,7 @@ impl Default for Tool {
             neck_length: 0.0,
             shank_length: 0.0,
             flutes: default_flutes(),
+            drill_only: false,
             number: 0,
             passes: vec![],
             passes_for: 0.0,

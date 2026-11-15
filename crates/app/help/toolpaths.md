@@ -41,6 +41,9 @@ dated folder under Archive beside them, then adds the new ones. Tick Do this eve
 stop being asked; Edit ▸ Options ▸ Confirmations ▸ G-code from an earlier save changes it.
 A name typed with a dot of its own (sign v1.5) keeps it: the file is sign v1.5.nc.
 
+A drill brought in from a tool library (.vtdb) is kept as a drill: it cuts only straight
+down, so the checks before saving warn if any toolpath but Drilling cuts sideways with it.
+
 When one file changes tools (a pause to change the bit by hand, or a tool changer), the
 first move after the change lifts the new bit straight up to the safe height, and only
 then moves across to the next cut. You set Z zero for the new bit during the pause, so

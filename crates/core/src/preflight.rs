@@ -161,6 +161,18 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
         )));
     }
     let has = |kind| toolpath.moves.iter().any(|m| m.kind == kind);
+    let drilling = matches!(
+        toolpath.strategy.as_str(),
+        "drilling_toolpath" | "drill_bank_toolpath"
+    );
+    if tool.drill_only && !drilling && has(MoveKind::Cut) {
+        found.push(Finding::warning(format!(
+            "{name}: {} is a drill, which cuts only straight down. Moved sideways it can snap \
+             or tear the work: pick an end mill for this toolpath, or use the drill in a \
+             Drilling toolpath",
+            tool.name
+        )));
+    }
     if has(MoveKind::Cut) && tool.feed_rate <= 0.0 {
         found.push(Finding::error(format!(
             "{name}: {} has no feed rate, so the machine would not move while cutting. Set \
@@ -553,6 +565,24 @@ mod tests {
             .filter(|f| f.severity == severity)
             .map(|f| f.message.as_str())
             .collect()
+    }
+
+    #[test]
+    fn a_drill_cutting_sideways_is_warned_about_and_drilling_with_it_is_not() {
+        let mut sideways = slot("Profile", 50.0, 20.0, 80.0, 3.0);
+        sideways.tool.drill_only = true;
+        sideways.tool.name = "Drill 6mm".into();
+        let mut drilling = sideways.clone();
+        drilling.strategy = "drilling_toolpath".into();
+        drilling.name = "Holes".into();
+        let warned = |t: &Toolpath| {
+            check(&job(), &[t], &Limits::default())
+                .iter()
+                .any(|f| f.severity == Severity::Warning && f.message.contains("is a drill"))
+        };
+        assert!(warned(&sideways));
+        assert!(!warned(&drilling));
+        assert!(!warned(&slot("Profile", 50.0, 20.0, 80.0, 3.0)));
     }
 
     #[test]
