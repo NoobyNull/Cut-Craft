@@ -2443,6 +2443,7 @@ dependencies = [
 name = "cut-craft-machines"
 version = "0.6.10"
 dependencies = [
+ "chrono",
  "cut-craft-bug-report",
  "cut-craft-core",
  "cut-craft-post",

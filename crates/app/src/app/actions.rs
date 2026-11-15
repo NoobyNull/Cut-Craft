@@ -1807,6 +1807,12 @@ impl CutCraftApp {
                 entry.name, machine.name
             );
             self.machines_changed(&done);
+        } else if entry.name.contains(" (copy ") {
+            self.status.set_message(&format!(
+                "Installed as {}: a post with its name was already listed, so this one is \
+                 kept beside it. Pick it in Machine Configuration to use it",
+                entry.name
+            ));
         } else {
             self.status
                 .set_message(&format!("Installed {}", entry.name));

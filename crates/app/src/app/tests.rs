@@ -5433,6 +5433,14 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
     h.app.install_post(&file);
     assert_eq!(h.app.machines.machines.len(), 1, "a machine to use it");
     assert_eq!(h.app.output_post().unwrap().name, "My Router (mm) (*.nc)");
+    // installed again: kept beside the first as a dated copy, the machine left as it was
+    h.app.install_post(&file);
+    let said = h.app.status.message.clone();
+    assert!(
+        said.starts_with("Installed as My Router (mm) (copy 1) ("),
+        "{said}"
+    );
+    assert_eq!(h.app.output_post().unwrap().name, "My Router (mm) (*.nc)");
     std::fs::remove_file(&file).unwrap();
     assert!(
         h.app.output_post().is_ok(),

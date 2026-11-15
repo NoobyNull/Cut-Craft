@@ -542,7 +542,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "install_post_processor",
-        "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet",
+        "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time",
     ),
     (
         "update_post_processor_database",
