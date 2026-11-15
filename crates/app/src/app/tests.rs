@@ -13114,6 +13114,22 @@ fn edit_tab_with_icons() -> Harness {
     for _ in 0..4 {
         h.frame(vec![]);
     }
+    // the icons decode on a background thread: one that lands mid-test grows its button and
+    // moves the page, so wait until every picture is in (a slow machine took long enough)
+    for _ in 0..500 {
+        if !h.ctx.has_pending_images() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        h.frame(vec![]);
+    }
+    assert!(
+        !h.ctx.has_pending_images(),
+        "the icons never finished loading"
+    );
+    for _ in 0..2 {
+        h.frame(vec![]);
+    }
     h
 }
 
