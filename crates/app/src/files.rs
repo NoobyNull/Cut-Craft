@@ -295,8 +295,19 @@ pub fn replaces_unasked(dialog: &Path, named: &Path) -> bool {
 /// This run's own recovery copy in `dir`, `recovery-<run>.ccjob`, and the lock that marks
 /// it as in use for as long as the returned file is kept open: another window started
 /// meanwhile leaves it alone. Lock files of runs that have ended, with no copy left, are
-/// tidied away.
-pub fn claim_recovery(dir: &Path, run: &str) -> Option<(PathBuf, std::fs::File)> {
+/// tidied away. Where the folder cannot lock files (some network or FUSE folders), the copy
+/// is still kept, with no lock: other windows go by whether the run is still going. `None`
+/// only when the folder cannot be made.
+pub fn claim_recovery(dir: &Path, run: &str) -> Option<(PathBuf, Option<std::fs::File>)> {
+    claim_recovery_locking(dir, run, |lock| lock.try_lock().is_ok())
+}
+
+/// [`claim_recovery`], locking with `lock` (whether it took the lock).
+fn claim_recovery_locking(
+    dir: &Path,
+    run: &str,
+    lock: impl Fn(&std::fs::File) -> bool,
+) -> Option<(PathBuf, Option<std::fs::File>)> {
     std::fs::create_dir_all(dir).ok()?;
     for entry in std::fs::read_dir(dir).ok()?.flatten() {
         let path = entry.path();
@@ -308,8 +319,9 @@ pub fn claim_recovery(dir: &Path, run: &str) -> Option<(PathBuf, std::fs::File)>
             let _ = std::fs::remove_file(&path);
         }
     }
-    let lock = std::fs::File::create(dir.join(format!("recovery-{run}.lock"))).ok()?;
-    lock.try_lock().ok()?;
+    let lock = std::fs::File::create(dir.join(format!("recovery-{run}.lock")))
+        .ok()
+        .filter(|file| lock(file));
     let own = dir.join(format!("recovery-{run}.ccjob"));
     if own.exists() {
         // an ended run that had the same number left it: kept aside to be recovered
@@ -332,7 +344,21 @@ fn recovery_in_use(lock: &Path) -> bool {
     let Ok(file) = std::fs::File::open(lock) else {
         return false;
     };
-    matches!(file.try_lock(), Err(std::fs::TryLockError::WouldBlock))
+    match file.try_lock() {
+        Err(std::fs::TryLockError::WouldBlock) => true,
+        // a folder that cannot lock files: whether the run named on it is still going
+        Err(std::fs::TryLockError::Error(_)) => lock
+            .file_stem()
+            .and_then(|s| s.to_str()?.strip_prefix("recovery-")?.parse::<u32>().ok())
+            .is_some_and(process_running),
+        Ok(()) => false,
+    }
+}
+
+/// Whether process `pid` is running, where the system says (Linux's `/proc`); elsewhere
+/// taken as ended.
+fn process_running(pid: u32) -> bool {
+    cfg!(target_os = "linux") && Path::new(&format!("/proc/{pid}")).exists()
 }
 
 /// A recovery copy in `dir` left by a run that ended without saving or closing its job (a
@@ -855,6 +881,29 @@ pub fn write_creating(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 fn read(path: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_that_cannot_lock_files_still_keeps_a_recovery_copy() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-no-locks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (own, lock) = claim_recovery_locking(&dir, "12", |_| false).expect("a copy is kept");
+        assert_eq!(own, dir.join("recovery-12.ccjob"));
+        assert!(lock.is_none());
+        // with no lock held, another window goes by whether the run is still going
+        std::fs::write(&own, b"work").unwrap();
+        let ours = dir.join("recovery-ours.ccjob");
+        if cfg!(target_os = "linux") {
+            assert!(process_running(std::process::id()));
+            assert!(!process_running(u32::MAX));
+        }
+        assert_eq!(orphaned_recovery(&dir, &ours), Some(own));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }
 
 #[cfg(test)]

@@ -2427,9 +2427,19 @@ impl CutCraftApp {
     }
 
     /// This window's own recovery copy, in `dir`, named for `run` (the process), and locked
-    /// for as long as the window is open.
+    /// for as long as the window is open (where the folder can lock files). A folder that
+    /// cannot be written says so in the status bar.
     pub(super) fn claim_recovery(&mut self, dir: &std::path::Path, run: &str) {
-        (self.recovery_path, self.recovery_lock) = files::claim_recovery(dir, run).unzip();
+        if let Some((own, lock)) = files::claim_recovery(dir, run) {
+            (self.recovery_path, self.recovery_lock) = (Some(own), lock);
+        } else {
+            (self.recovery_path, self.recovery_lock) = (None, None);
+            self.status.set_message(&format!(
+                "Warning: unsaved work cannot be copied for recovery, because {} cannot be \
+                 written. Save often",
+                dir.display()
+            ));
+        }
     }
 
     /// The recovery copy a run that ended badly left, opened as an unsaved job; whether

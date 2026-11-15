@@ -66,6 +66,8 @@ A number field takes a sum as well as a number, worked out when it is entered:
 - Unsaved work is copied for recovery every 30 seconds (Edit ▸ Options ▸ General). If
   Cut Craft closes without saving, it opens that work again next time it starts. Each open
   window keeps its own copy: a second Cut Craft window does not take the first one's work.
+  This works on network and other shared settings folders too. If the settings folder
+  cannot be written at all, the status bar warns that no copy is being kept: save often.
 
 ## Updates
 
