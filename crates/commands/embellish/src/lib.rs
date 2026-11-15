@@ -183,8 +183,8 @@ pub struct Params {
     /// How far in from the shape's edge the pattern starts
     #[schemars(title = "Gap from the edge", range(min = 0), extend("x-group" = "Pattern", "x-unit" = "mm"))]
     pub border_inset: f64,
-    /// How each repeat is drawn, in turn: 0 a space, 1 as designed, 2 flipped top to
-    /// bottom, 3 back to front, 4 both. /n turns it by 180° ÷ n (1/4 is 45°), R turns it the
+    /// How each repeat is drawn, in turn: 0 a space, 1 as designed, 2 flipped UD, 3
+    /// flipped LR, 4 flipped LR and UD. /n turns it by 180° ÷ n (1/4 is 45°), R turns it the
     /// other way, S gives it a random size and T a random lean; S or T before brackets
     /// reaches all inside, as ST(1,2). Split entries with commas. It starts again when it
     /// runs out, nothing added between. Empty is 1 over and over; 12 makes the vine wave.

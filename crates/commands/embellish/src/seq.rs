@@ -1,9 +1,9 @@
 //! The Sequence box: entries saying how each repeat of a pattern is drawn, in turn.
 //!
 //! Each entry is a sample digit: `0` leaves a space, `1` draws the repeat as designed, `2`
-//! flips it across the line (top to bottom), `3` turns it back to front along the line and
-//! `4` does both. `/n` after it turns the repeat by 180° ÷ n (`1/4` is 45°), and `R` before
-//! it (or after it, `1/4r`) turns it the other way (or, with no turn, back to front). `S`
+//! flips it UD (up and down, across the line), `3` flips it LR (left and right, along the
+//! line) and `4` flips it LR and UD. `/n` after it turns the repeat by 180° ÷ n (`1/4` is 45°), and `R` before
+//! it (or after it, `1/4r`) turns it the other way (or, with no turn, flips it LR). `S`
 //! before an entry gives it a random size and `T` (or `O`) a random lean (tilt); before
 //! brackets they reach every entry inside (`ST(1,2)`). Entries may be split by commas or spaces;
 //! plain digits need none (`1110`). They run along the line one repeat each and start again

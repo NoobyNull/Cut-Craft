@@ -1097,14 +1097,12 @@ fn seed(ui: &mut egui::Ui, value: &mut Value) -> bool {
     changed
 }
 
-/// The turns the pattern maker offers: 180° split this many ways (0 for none).
-const TURNS: [u16; 8] = [0, 2, 3, 4, 6, 8, 12, 24];
-
+/// What a turn of 180° ÷ `div` comes to (0 for none).
 fn turn_name(div: u16) -> String {
     if div == 0 {
-        "None".to_owned()
+        "no turn".to_owned()
     } else {
-        format!("/{div}  ({}°)", 180.0 / f64::from(div))
+        format!("= {}°", (180.0 / f64::from(div) * 100.0).round() / 100.0)
     }
 }
 
@@ -1112,9 +1110,9 @@ fn turn_name(div: u16) -> String {
 const SAMPLES: [&str; 5] = [
     "A space: no repeat here",
     "The repeat as designed",
-    "Flipped top to bottom, across the line",
-    "Turned back to front, along the line",
-    "Flipped and turned back to front",
+    "Flipped UD: up and down, across the line",
+    "Flipped LR: left and right, along the line",
+    "Flipped LR and UD",
 ];
 
 /// What the pattern maker adds with each sample: the other way (R), a turn (/n), a
@@ -1196,17 +1194,12 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
             let id = ui.scope_id().with("pattern_maker");
             let mut with: AddWith = ui.data(|d| d.get_temp(id)).unwrap_or_default();
             ui.horizontal(|ui| {
-                ui.label("Turn")
-                    .on_hover_hint("Added samples are turned by this much");
-                egui::ComboBox::from_id_salt(id.with("turn"))
-                    .selected_text(turn_name(with.div))
-                    .show_ui(ui, |ui| {
-                        for d in TURNS {
-                            ui.selectable_value(&mut with.div, d, turn_name(d));
-                        }
-                    });
+                ui.label("Turn 180° ÷")
+                    .on_hover_hint("Added samples are turned by 180° divided by this; 0 for none");
+                ui.add(Number::new(&mut with.div).range(0..=999));
+                ui.weak(turn_name(with.div));
                 ui.checkbox(&mut with.rev, "Other way (R)")
-                    .on_hover_hint("Turn the other way; with no turn, back to front");
+                    .on_hover_hint("Turn the other way; with no turn, flip LR");
             });
             ui.horizontal(|ui| {
                 ui.checkbox(&mut with.size, "Random size (S)")
@@ -1214,21 +1207,40 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
                 ui.checkbox(&mut with.lean, "Random lean (T)")
                     .on_hover_hint("Each time this entry comes round it leans a different way");
             });
-            ui.horizontal_wrapped(|ui| {
-                for code in 0..=4u8 {
-                    let entry = entry_text(code, with);
-                    let hint = format!("Add {entry}: {}", SAMPLES[usize::from(code)]);
-                    if sample_button(ui, maker, params, &entry, code)
-                        .on_hover_hint(hint)
-                        .clicked()
-                    {
-                        let mut list = entries(&text);
-                        list.push(entry);
-                        text = join_entries(&list);
-                        changed = true;
-                    }
+            let sample = |ui: &mut egui::Ui, code: u8| {
+                let entry = entry_text(code, with);
+                let hint = format!("Add {entry}: {}", SAMPLES[usize::from(code)]);
+                sample_button(ui, maker, params, &entry, code)
+                    .on_hover_hint(hint)
+                    .clicked()
+                    .then_some(entry)
+            };
+            // the samples in quadrants: left to right flips LR (1 to 3), top to bottom flips
+            // UD (1 to 2); the space beside them
+            let mut add = None;
+            ui.horizontal(|ui| {
+                egui::Grid::new(id.with("quadrants"))
+                    .spacing(egui::vec2(2.0, 2.0))
+                    .show(ui, |ui| {
+                        for row in [[1, 3], [2, 4]] {
+                            for code in row {
+                                if let Some(e) = sample(ui, code) {
+                                    add = Some(e);
+                                }
+                            }
+                            ui.end_row();
+                        }
+                    });
+                if let Some(e) = sample(ui, 0) {
+                    add = Some(e);
                 }
             });
+            if let Some(entry) = add {
+                let mut list = entries(&text);
+                list.push(entry);
+                text = join_entries(&list);
+                changed = true;
+            }
             ui.horizontal(|ui| {
                 if ui
                     .button("Undo")
