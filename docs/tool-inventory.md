@@ -652,7 +652,9 @@ say "not implemented yet".
   number is the same on the cut list, the labels and the engraved names (`fmt-cut-list`).
   - File ▸ Import ▸ Import Cut List (CSV): rows of name, length, width, quantity and
     material (headings in any order, or none; commas, semicolons or tabs; decimal commas;
-    UTF-8 or Excel's Windows CSV) become named rectangles, length along X, a material's on a
+    UTF-8 or Excel's Windows CSV; sizes in the unit written after the Length and Width
+    headings, `(mm)`, `(cm)` or `(in)`, else the job's units, and a note says which) become
+    named rectangles, length along X, a material's on a
     layer of its name, laid out in rows and selected; Nest Parts then opens on them, set to
     move them. A mistake in the file opens a message naming the row and how to fix it.
   - Edit ▸ Name Part (Design tab, Offset and Layout): the selected parts' name, carried by

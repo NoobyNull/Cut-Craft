@@ -277,7 +277,8 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "import_cut_list",
         "Import Cut List",
         "Draw a part for each row of a spreadsheet's cut list (saved as CSV): name, length, \
-         width and how many, ready for Nest Parts",
+         width and how many, ready for Nest Parts. Sizes are in the units after the Length \
+         and Width headings, such as Length (in) or Length (mm), else in the job's units",
     ),
     // the Model sub-tab's exports, which are file formats rather than commands
     (

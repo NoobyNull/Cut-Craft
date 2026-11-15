@@ -8,7 +8,8 @@
 //!   one row with how many there are and which sheets they are on.
 //! - [`ImportCutList`] (File ▸ Import ▸ Import Cut List) reads a CSV cut list (part name,
 //!   length, width, quantity, and a material that picks the layer) and draws each part as a
-//!   named rectangle, ready for Nest Parts.
+//!   named rectangle, ready for Nest Parts. Sizes are in the unit after the Length and Width
+//!   headings (`Length (in)`), else the job's, and a note says which.
 
 use cut_craft_core::document::{Document, EntityId, LayerId, Units};
 use cut_craft_core::geometry::{Path, Point, Rect};
@@ -314,10 +315,66 @@ fn column(heading: &str) -> Column {
     }
 }
 
-/// The cut list in `text`, its sizes in `units`. Columns are found by their headings (Name,
-/// Length, Width, Quantity, Material, in any order; others are ignored); without a heading
-/// row they are Name, Length, Width, Quantity. Commas, semicolons or tabs separate fields.
+/// Millimetres per unit for a unit written in brackets after a heading (`Length (in)`,
+/// `Width [mm]`), if there is one Cut Craft knows.
+fn heading_unit(heading: &str) -> Option<(f64, &'static str)> {
+    let h = heading.trim().to_lowercase();
+    let unit = h.split_once(['(', '['])?.1;
+    let unit = unit.split([')', ']']).next()?.trim();
+    match unit {
+        "mm" | "millimetre" | "millimetres" | "millimeter" | "millimeters" => {
+            Some((1.0, "millimetres"))
+        }
+        "cm" | "centimetre" | "centimetres" | "centimeter" | "centimeters" => {
+            Some((10.0, "centimetres"))
+        }
+        "in" | "in." | "inch" | "inches" | "\"" | "''" => Some((25.4, "inches")),
+        _ => None,
+    }
+}
+
+/// Millimetres per unit of the Length and Width columns, from the units written after their
+/// headings or else the job's `units`, and a note saying which units were used.
+fn scales(head: &[String], headed: bool, units: Units) -> ((f64, f64), String) {
+    let job = match units {
+        Units::Mm => (1.0, "millimetres"),
+        Units::Inch => (25.4, "inches"),
+    };
+    // a unit written after the Length or Width heading says what that column is in
+    let written = |c: Column| {
+        head.iter()
+            .find(|f| headed && column(f) == c)
+            .and_then(|f| heading_unit(f))
+    };
+    let (length_unit, width_unit) = (written(Column::Length), written(Column::Width));
+    let note = match (length_unit, width_unit) {
+        (None, None) => format!(
+            "Sizes read as {}, the job's units. Write (mm) or (in) after the Length and Width \
+             headings to say which units the list uses.",
+            job.1
+        ),
+        (Some(l), Some(w)) if l.1 == w.1 => {
+            format!("Sizes read in {}, as the list's headings say.", l.1)
+        }
+        _ => "Sizes read in the units the list's headings say.".to_owned(),
+    };
+    (
+        (length_unit.unwrap_or(job).0, width_unit.unwrap_or(job).0),
+        note,
+    )
+}
+
+/// The cut list in `text`. Its sizes are in the units written after the Length and Width
+/// headings (`Length (in)`, `Width [mm]`), else in `units`. Columns are found by their
+/// headings (Name, Length, Width, Quantity, Material, in any order; others are ignored);
+/// without a heading row they are Name, Length, Width, Quantity. Commas, semicolons or tabs
+/// separate fields.
 pub fn read(text: &str, units: Units) -> Result<Vec<Entry>, String> {
+    read_noting(text, units).map(|(entries, _)| entries)
+}
+
+/// [`read`], with a note saying which units the sizes were read in.
+pub fn read_noting(text: &str, units: Units) -> Result<(Vec<Entry>, String), String> {
     let text = text.trim_start_matches('\u{feff}');
     let first = text
         .lines()
@@ -337,11 +394,8 @@ pub fn read(text: &str, units: Units) -> Result<Vec<Entry>, String> {
     let Some(head) = records.get(start) else {
         return Err("The cut list is empty.".into());
     };
-    let scale = match units {
-        Units::Mm => 1.0,
-        Units::Inch => 25.4,
-    };
     let headed = head.iter().any(|f| column(f) != Column::Other);
+    let ((length_scale, width_scale), note) = scales(head, headed, units);
     let columns: Vec<Column> = if headed {
         head.iter().map(|f| column(f)).collect()
     } else {
@@ -386,6 +440,11 @@ pub fn read(text: &str, units: Units) -> Result<Vec<Entry>, String> {
                     "Row {row}: the {what} \"{raw}\" is not a number. Use digits, like 450 or 17.5."
                 )
             })?;
+            let scale = if c == Column::Length {
+                length_scale
+            } else {
+                width_scale
+            };
             if value > 0.0 && value.is_finite() {
                 Ok(value * scale)
             } else {
@@ -409,7 +468,7 @@ pub fn read(text: &str, units: Units) -> Result<Vec<Entry>, String> {
     if out.iter().all(|e| e.quantity == 0) {
         return Err("The cut list has no parts in it (every quantity is 0, or no rows).".into());
     }
-    Ok(out)
+    Ok((out, note))
 }
 
 /// A number written with a point, or with a comma when commas do not separate fields (as
@@ -435,7 +494,7 @@ impl Importer for ImportCutList {
     };
 
     fn import(doc: &Document, bytes: &[u8]) -> Result<Change, CommandError> {
-        let entries = read(&cut_craft_core::csv::decode(bytes), doc.job.units)
+        let (entries, units) = read_noting(&cut_craft_core::csv::decode(bytes), doc.job.units)
             .map_err(CommandError::Failed)?;
         let total: u64 = entries.iter().map(|e| u64::from(e.quantity)).sum();
         if total > MOST_PARTS {
@@ -493,6 +552,7 @@ impl Importer for ImportCutList {
             made.len(),
             if made.len() == 1 { "" } else { "s" }
         ));
+        c.note(units);
         c.select(made);
         Ok(c.finish())
     }
@@ -561,6 +621,37 @@ mod tests {
         // inches in an inch job
         let e = read("Top,24,12", Units::Inch).unwrap();
         assert!((e[0].length - 609.6).abs() < 1e-9 && e[0].quantity == 1);
+    }
+
+    #[test]
+    fn units_written_in_the_headings_win_over_the_jobs() {
+        // an inch job's own export, read into a mm job, keeps its sizes
+        let e = read(
+            "Part,Quantity,Length (in),Width (in)\nTop,1,24,12\n",
+            Units::Mm,
+        )
+        .unwrap();
+        assert!((e[0].length - 609.6).abs() < 1e-9, "{}", e[0].length);
+        assert!((e[0].width - 304.8).abs() < 1e-9, "{}", e[0].width);
+        let e = read("Name,Length [mm],Width [cm]\nTop,600,30\n", Units::Inch).unwrap();
+        assert!((e[0].length - 600.0).abs() < 1e-9 && (e[0].width - 300.0).abs() < 1e-9);
+        let e = read("Name,Length (inch),Width (inches)\nTop,2,1\n", Units::Mm).unwrap();
+        assert!((e[0].length - 50.8).abs() < 1e-9 && (e[0].width - 25.4).abs() < 1e-9);
+        // the import says which units it read the sizes in
+        let doc = Document::default();
+        let change = ImportCutList::import(&doc, b"Name,Length,Width\nTop,600,300\n").unwrap();
+        let notes = change.notes.join(" ");
+        assert!(
+            notes.contains("millimetres") && notes.contains("job's units"),
+            "{notes}"
+        );
+        let change =
+            ImportCutList::import(&doc, b"Name,Length (in),Width (in)\nTop,6,3\n").unwrap();
+        let notes = change.notes.join(" ");
+        assert!(
+            notes.contains("inches") && notes.contains("headings"),
+            "{notes}"
+        );
     }
 
     #[test]
