@@ -24,7 +24,9 @@ pub struct Params {
     /// The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt)
     pub file: String,
     /// The tool the file cuts with: its shape and size draw the preview; the file's own
-    /// feed rate, spindle speed and tool number are used where it gives them
+    /// feed rate, spindle speed and tool number are used where it gives them. With more than
+    /// one tool in the file each part's tool is named after its number (`6 mm End Mill (T3
+    /// in the file)`), so saving it again still changes tools between them
     pub tool: Tool,
     /// Which tool's part of the file, counting from 1 in the order they come (0: every
     /// part, a toolpath each)
@@ -76,6 +78,15 @@ impl Command for ImportToolpaths {
             let mut tool = p.tool.clone();
             if let Some(number) = part.tool {
                 tool.number = number;
+            }
+            // the posts change tools when the name changes: each of the file's tools gets
+            // its own, or a file's T1 and T3 would be saved as one tool, with no change
+            // between them
+            if several {
+                tool.name = match part.tool {
+                    Some(t) => format!("{} (T{t} in the file)", p.tool.name),
+                    None => format!("{} (tool {n} in the file)", p.tool.name),
+                };
             }
             if let Some(feed) = part.feed {
                 tool.feed_rate = feed;
@@ -585,6 +596,17 @@ mod tests {
             .find(|t| t.name == "sign T3")
             .unwrap();
         assert_eq!(t3.tool.number, 3);
+        // each tool its own, so Save Toolpaths changes tools between them
+        let t1 = after
+            .toolpaths
+            .values()
+            .find(|t| t.name == "sign T1")
+            .unwrap();
+        assert_ne!(
+            t1.tool.name, t3.tool.name,
+            "a tool change between the parts"
+        );
+        assert!(t3.tool.name.contains("T3"), "{}", t3.tool.name);
         assert_eq!(
             t3.params["part"], 2,
             "recalculating reads its own part again"
