@@ -1,5 +1,5 @@
-//! Sheet Properties: a sheet's name and whether it shows. Its size and setup are the
-//! job's while it is active (Job Setup).
+//! Sheet Properties: a sheet's name. Its size and setup are the job's while it is active
+//! (Job Setup). Only the active sheet is drawn, so there is no Show or Hide for a sheet.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
@@ -14,8 +14,6 @@ pub struct Params {
     pub sheet: usize,
     /// What the sheet is called in the Sheets list
     pub name: String,
-    /// Shown in the 2D view
-    pub visible: bool,
 }
 
 impl Default for Params {
@@ -23,7 +21,6 @@ impl Default for Params {
         Self {
             sheet: 0,
             name: "Sheet 1".into(),
-            visible: true,
         }
     }
 }
@@ -46,7 +43,6 @@ impl Command for SheetProperties {
         Params {
             sheet: doc.active_sheet,
             name: sheet.name.clone(),
-            visible: sheet.visible,
         }
     }
 
@@ -56,7 +52,7 @@ impl Command for SheetProperties {
         let Some(sheet) = sheets.get_mut(p.sheet) else {
             return Err(cut_craft_core::gone("sheet"));
         };
-        (sheet.name, sheet.visible) = (name, p.visible);
+        sheet.name = name;
         let mut c = Change::builder(doc);
         c.set_sheets(sheets, doc.active_sheet);
         Ok(c.finish())
@@ -71,18 +67,16 @@ mod tests {
     cut_craft_core::contract_tests!(SheetProperties, two_sheets);
 
     #[test]
-    fn renames_and_hides_a_sheet() {
+    fn renames_a_sheet() {
         let mut doc = two_sheets();
         run_on::<SheetProperties>(
             &mut doc,
             &Params {
                 sheet: 1,
                 name: "Offcuts".into(),
-                visible: false,
             },
         );
         assert_eq!(doc.sheets[1].name, "Offcuts");
-        assert!(!doc.sheets[1].visible);
         assert_eq!(doc.sheets[0].name, "Sheet 1");
     }
 

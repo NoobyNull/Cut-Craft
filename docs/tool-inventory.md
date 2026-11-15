@@ -236,7 +236,7 @@ say "not implemented yet".
   save first. Flatpak, macOS, other processors and builds from the source code are told how
   to update by hand instead. Skip This Version quiets the startup check for that version.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
-  Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
+  Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
   (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
   (Aspire's Clipart tab, renamed: folders of your own files, kept between runs, as a tree
   of the folders in them however deep, each with how many files are in it; hidden folders

@@ -8101,6 +8101,18 @@ fn e_on_a_shape_component_opens_create_shape_on_it() {
 }
 
 #[test]
+fn the_sheet_menu_offers_no_show_or_hide_that_would_do_nothing() {
+    let doc = cut_craft_core::testing::two_sheets();
+    let menu = gui::sheet_menu(&doc, 1);
+    let names: Vec<&str> = menu.iter().map(|m| m.name.as_str()).collect();
+    assert!(!names.contains(&"Show"), "{names:?}");
+    assert!(!names.contains(&"Hide"), "{names:?}");
+    // nor a Shown tick in Rename
+    let schema = serde_json::to_value(schemars::schema_for!(cmd_sheet_properties::Params)).unwrap();
+    assert!(schema["properties"].get("visible").is_none(), "{schema}");
+}
+
+#[test]
 fn sheets_take_selected_vectors_and_toolpaths_from_their_menus() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::two_sheets();

@@ -1860,14 +1860,6 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
     let props = cmd_sheet_properties::Params {
         sheet,
         name: s.name.clone(),
-        visible: s.visible,
-    };
-    let shown = |name: &str, visible: bool| {
-        let params = cmd_sheet_properties::Params {
-            visible,
-            ..props.clone()
-        };
-        MenuItem::run::<SheetProperties>(name, &params).enabled(s.visible != visible)
     };
     let send = |name: &str, move_vectors: bool| {
         let params = cmd_send_to_sheet::Params {
@@ -1883,8 +1875,6 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
             &cmd_activate_sheet::Params { sheet },
         )
         .enabled(sheet != doc.active_sheet),
-        shown("Show", true),
-        shown("Hide", false),
         MenuItem::separator(),
         send("Copy Selected Vectors Here", false),
         send("Move Selected Vectors Here", true),
