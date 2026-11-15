@@ -4,7 +4,9 @@
 //! (True Shape) each where its own shape first fits, turned in steps, holes filled by
 //! smaller parts, with as many copies of each as asked; mirrored where that fits better,
 //! inside a boundary layer's vectors, onto new sheets when the job is full, with a double-
-//! sided part's other side following it, and filler parts in what is left.
+//! sided part's other side following it, and filler parts in what is left. Parts (or copies)
+//! that do not fit are counted in red at the foot of the form, and the parts left out are
+//! selected where they were.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
@@ -194,36 +196,38 @@ impl Command for NestParts {
         } else {
             (room.y, room.x)
         };
-        let mut order: Vec<(usize, Point, bool)> = parts
+        let mut order: Vec<(usize, Point, f64)> = parts
             .iter()
             .enumerate()
             .map(|(i, (_, bounds))| {
                 let mut size = bounds.size();
-                let mut turned = false;
+                let mut turn = 0.0;
                 // a quarter turn when it makes the part lower in its row and still fits
                 if p.rotate_parts && size.x < size.y && size.y <= room_u {
                     size = Point::new(size.y, size.x);
-                    turned = true;
+                    turn = std::f64::consts::FRAC_PI_2;
                 }
                 let size_uv = if along_x {
                     size
                 } else {
                     Point::new(size.y, size.x)
                 };
-                (i, size_uv, turned)
+                (i, size_uv, turn)
             })
             .collect();
         order.sort_by(|first, second| second.1.y.total_cmp(&first.1.y));
         let (mut across, mut up, mut row) = (0.0_f64, 0.0_f64, 0.0_f64);
         let mut placed = Vec::new();
-        for (i, size, turned) in order {
+        let mut left_out = Vec::new();
+        for (i, size, turn) in order {
             if across > 0.0 && across + size.x > room_u {
                 (across, up, row) = (0.0, up + row + gap, 0.0);
             }
             if size.x > room_u || up + size.y > room_v {
+                left_out.push(i);
                 continue;
             }
-            placed.push((i, Point::new(across, up), size, turned));
+            placed.push((i, Point::new(across, up), size, turn));
             across += size.x + gap;
             row = row.max(size.y);
         }
@@ -236,7 +240,7 @@ impl Command for NestParts {
         );
         let mut c = Change::builder(doc);
         let mut made = Vec::new();
-        for (i, at_uv, size_uv, turned) in placed {
+        for (i, at_uv, size_uv, turn) in placed {
             let (ids, bounds) = &parts[i];
             let (at, size) = if along_x {
                 (at_uv, size_uv)
@@ -259,11 +263,7 @@ impl Command for NestParts {
             };
             let target = Point::new(left_x, low_y) + size / 2.0;
             let place = DAffine2::from_translation(target)
-                * DAffine2::from_angle(if turned {
-                    std::f64::consts::FRAC_PI_2
-                } else {
-                    0.0
-                })
+                * DAffine2::from_angle(turn)
                 * DAffine2::from_translation(-bounds.center());
             for id in ids {
                 let moved = doc.vectors[id].transformed(&place);
@@ -275,9 +275,31 @@ impl Command for NestParts {
                 }
             }
         }
+        // the parts left out, if any, are selected so they can be seen
+        if !left_out.is_empty() {
+            c.note(left_out_note(left_out.len(), parts.len(), false, p));
+            made = left_out.iter().flat_map(|&i| parts[i].0.clone()).collect();
+        }
         c.select(made);
         Ok(c.finish())
     }
+}
+
+/// What to say when `out` of `of` parts (or with `copies`, copies) did not fit.
+fn left_out_note(out: usize, of: usize, copies: bool, p: &Params) -> String {
+    let (what, after) = if copies {
+        ("copies", "")
+    } else {
+        ("parts", " and are left where they were, selected")
+    };
+    let more = if p.true_shape && p.more_sheets {
+        ", or make the parts or the border gap smaller"
+    } else if p.true_shape {
+        ", or tick Add sheets as needed"
+    } else {
+        ", or tick True Shape and Add sheets as needed"
+    };
+    format!("{out} of {of} {what} did not fit{after}. Make the material bigger in Job Setup{more}.")
 }
 
 /// A part as it nests: its vectors, its box, and the other side's vectors under it.
@@ -327,7 +349,24 @@ fn true_shape(
     if placed.iter().all(|placed| parts[placed.part].filler) {
         return Err(nothing_fits());
     }
-    Ok(write(doc, p, &parts, &placed))
+    // the parts (or copies) asked for that found no room
+    let real: Vec<usize> = (0..parts.len()).filter(|&i| !parts[i].filler).collect();
+    let count = |i: usize| placed.iter().filter(|q| q.part == i).count();
+    let wanted = p.copies.max(1) as usize;
+    let missing: usize = real.iter().map(|&i| wanted - count(i).min(wanted)).sum();
+    let left: Vec<EntityId> = real
+        .iter()
+        .filter(|&&i| count(i) == 0)
+        .flat_map(|&i| parts[i].ids.clone())
+        .collect();
+    let note = (missing > 0).then(|| {
+        if wanted > 1 {
+            left_out_note(missing, wanted * real.len(), true, p)
+        } else {
+            left_out_note(missing, real.len(), false, p)
+        }
+    });
+    Ok(write(doc, p, &parts, &placed, &left, note))
 }
 
 /// The parts to nest (the boundary layer's left out, the filler layer's marked, a two-sided
@@ -498,8 +537,15 @@ fn riders(doc: &Document, bounds: Rect) -> Vec<EntityId> {
 
 /// The nested parts written: on the active sheet as moves or copies, and on the new sheets
 /// (named after the active one) as stored vectors; a two-sided part's riders moved to match
-/// on the other side.
-fn write(doc: &Document, p: &Params, parts: &[Part], placed: &[Placed]) -> Change {
+/// on the other side. The `left` out are selected and `note` says so.
+fn write(
+    doc: &Document,
+    p: &Params,
+    parts: &[Part],
+    placed: &[Placed],
+    left: &[EntityId],
+    note: Option<String>,
+) -> Change {
     use cut_craft_core::document::{Sheet, SheetObjects, StoredVector};
     let mut c = Change::builder(doc);
     let mut made = Vec::new();
@@ -588,7 +634,15 @@ fn write(doc: &Document, p: &Params, parts: &[Part], placed: &[Placed]) -> Chang
         }
         c.set_sheets(all, doc.active_sheet);
     }
-    c.select(made);
+    // parts left out are selected, so they can be seen
+    if left.is_empty() {
+        c.select(made);
+    } else {
+        c.select(left.iter().copied());
+    }
+    if let Some(note) = note {
+        c.note(note);
+    }
     c.finish()
 }
 
@@ -860,6 +914,86 @@ mod tests {
                 || boxes[b].max.y + 1.9 <= boxes[a].min.y;
             assert!(apart, "a gap between copies: {:?} {:?}", boxes[a], boxes[b]);
         }
+    }
+
+    /// Parts each over half the material's width and height: only one fits.
+    fn too_many_parts() -> Document {
+        use cut_craft_core::geometry::Path;
+        let doc = Document::default();
+        let size = 0.6 * doc.job.area().size();
+        let part = |x: f64| {
+            let p = Point::new;
+            Path::polyline(
+                &[
+                    p(x, 0.0),
+                    p(x + size.x, 0.0),
+                    p(x + size.x, size.y),
+                    p(x, size.y),
+                ],
+                true,
+            )
+        };
+        let mut doc = document_with(
+            (0..3)
+                .map(|k| part(f64::from(k) * 5000.0 + 5000.0))
+                .collect(),
+        );
+        doc.selection = doc.vectors.keys().copied().collect();
+        doc
+    }
+
+    #[test]
+    fn parts_that_do_not_fit_are_named_in_a_note_and_selected() {
+        for true_shape in [false, true] {
+            let doc = too_many_parts();
+            let p = Params {
+                true_shape,
+                rotate_parts: false,
+                ..Params::default()
+            };
+            let change = NestParts::run(&doc, &p).unwrap();
+            assert!(
+                change
+                    .notes
+                    .iter()
+                    .any(|n| n.contains("2 of 3 parts did not fit")),
+                "true shape {true_shape}: {:?}",
+                change.notes
+            );
+            let mut doc = doc;
+            doc.apply(&change).unwrap();
+            assert_eq!(doc.selection.len(), 2, "the two left out are selected");
+        }
+    }
+
+    #[test]
+    fn copies_that_do_not_fit_are_counted() {
+        let mut doc = too_many_parts();
+        let first = *doc.vectors.keys().next().unwrap();
+        doc.selection = [first].into_iter().collect();
+        let p = Params {
+            true_shape: true,
+            copies: 3,
+            rotate_parts: false,
+            ..Params::default()
+        };
+        let change = NestParts::run(&doc, &p).unwrap();
+        assert!(
+            change
+                .notes
+                .iter()
+                .any(|n| n.contains("2 of 3 copies did not fit")),
+            "{:?}",
+            change.notes
+        );
+    }
+
+    #[test]
+    fn when_everything_fits_there_is_no_note() {
+        let mut doc = document_with(vec![square(500.0, 300.0, 10.0)]);
+        doc.selection = doc.vectors.keys().copied().collect();
+        let change = NestParts::run(&doc, &Params::default()).unwrap();
+        assert_eq!(change.notes, Vec::<String>::new());
     }
 
     use cut_craft_core::document::{Layer, LayerId};
