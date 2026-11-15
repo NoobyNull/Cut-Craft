@@ -9750,6 +9750,54 @@ fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
 }
 
 #[test]
+fn short_names_never_send_two_files_under_one_name() {
+    use cut_craft_machines::send::{Folder, Store};
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let card = std::env::temp_dir().join(format!("cut-craft-short-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&card);
+    std::fs::create_dir_all(&card).unwrap();
+    h.app.machines.add();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.send_to.folder = card.display().to_string();
+    machine.send_to.short_names = true;
+    h.app.session.path = Some(std::path::PathBuf::from("/jobs/Oak sign front.ccjob"));
+    // a post that can't change tools writes one file per tool, Oak sign front_1_6_mm... and
+    // Oak sign front_2_3_mm...: cut to 8 letters both are Oaksignf.nc
+    let plain = cut_craft_post::Post::parse(
+        "POST_NAME = \"Plain (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
+         begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\n\
+         begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n",
+    )
+    .unwrap();
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: true,
+    };
+    let store = Folder::new(&card);
+    let never = |_: &[String]| panic!("nothing there to replace yet");
+    let done = h.app.send_to(&form, &plain, &store, &never).unwrap();
+    assert!(done.starts_with("Sent 3 files"), "{done}");
+    let folder = store.list(&[]).unwrap()[0].name.clone();
+    let names: Vec<String> = store
+        .list(&[folder])
+        .unwrap()
+        .into_iter()
+        .map(|i| i.name)
+        .collect();
+    assert_eq!(
+        names.len(),
+        3,
+        "two tool files and the sheet, none lost: {names:?}"
+    );
+    let _ = std::fs::remove_dir_all(card);
+}
+
+#[test]
 fn send_to_machine_puts_the_files_and_job_sheet_in_the_projects_own_folder() {
     use cut_craft_machines::send::{Folder, Store};
     let mut h = Harness::new();

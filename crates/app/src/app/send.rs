@@ -6,7 +6,9 @@
 // holds the window until the system gives up on it (as the system's file dialog does)
 
 use super::{CutCraftApp, SaveForm, dialog_size, file_dialog, message_dialog};
-use cut_craft_machines::send::{Folder, Item, SendTo, Store, safe_file_name, safe_name, size_text};
+use cut_craft_machines::send::{
+    Folder, Item, SendTo, Store, distinct_names, safe_file_name, safe_name, size_text,
+};
 use cut_craft_machines::webdav;
 use eframe::egui;
 use std::path::{Path, PathBuf};
@@ -77,12 +79,14 @@ impl CutCraftApp {
             .iter()
             .map(|p| (p.clone(), safe_file_name(&super::file_name(p), short)))
             .collect();
+        number_clashes(&mut files, short);
         if form.job_sheet {
             let outputs = files.iter().map(|(_, n)| (n.clone(), true)).collect();
             let name = self.project().1;
             let sheet = self.job_sheet_with(outputs, staging, &name)?;
             let on_card = safe_file_name(&sheet, short);
             files.push((staging.join(sheet), on_card));
+            number_clashes(&mut files, short);
         }
         if let Some(busy) = store.busy() {
             return Err(format!("Not sent: {busy}"));
@@ -520,4 +524,13 @@ enum Ask {
     ConfirmDelete(String),
     KeepIt,
     Delete(String),
+}
+
+/// `files`' names on the card made different where they clash: short names can cut two
+/// files to the same 8 letters, and the second would overwrite the first.
+fn number_clashes(files: &mut [(PathBuf, String)], short: bool) {
+    let names: Vec<String> = files.iter().map(|(_, n)| n.clone()).collect();
+    for ((_, name), distinct) in files.iter_mut().zip(distinct_names(&names, short)) {
+        *name = distinct;
+    }
 }
