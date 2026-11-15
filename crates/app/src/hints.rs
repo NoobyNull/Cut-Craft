@@ -255,7 +255,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "tool_database",
-        "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from",
+        "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in the job's toolpaths too, so its tool changer slot still finds it",
     ),
     (
         "tool_changer",

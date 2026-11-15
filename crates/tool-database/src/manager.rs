@@ -84,6 +84,8 @@ pub struct Manager {
     pub library: cut_craft_core::material_library::MaterialLibrary,
     /// What a button inside the window asked for this frame (Materials Library…).
     pending: Option<Outcome>,
+    /// The tools renamed since it opened, first name to the name now.
+    renames: Vec<(String, String)>,
     /// The picked tool and the maker ▸ type group it had last drawn: while its group is
     /// still that one, the group follows its maker and type.
     followed: Option<(usize, String)>,
@@ -253,7 +255,29 @@ impl Manager {
             library: cut_craft_core::material_library::MaterialLibrary::starter(),
             pending: None,
             followed: None,
+            renames: vec![],
         }
+    }
+
+    /// The tool named `before` is now `name`.
+    pub fn note_rename(&mut self, before: &str, name: &str) {
+        if before == name {
+            return;
+        }
+        match self.renames.iter_mut().find(|(_, now)| now == before) {
+            Some((_, now)) => name.clone_into(now),
+            None => self.renames.push((before.to_owned(), name.to_owned())),
+        }
+    }
+
+    /// The tools renamed since it opened or this was last asked, as (first name, name
+    /// now); the open job's toolpaths follow them, so they still find the tool's tool
+    /// changer slot.
+    pub fn take_renamed(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.renames)
+            .into_iter()
+            .filter(|(first, now)| first != now)
+            .collect()
     }
 
     /// Opens on a copy of `db` to pick a toolpath's tool, on `current` when it is listed.
@@ -763,6 +787,7 @@ impl Manager {
                     Some(&self.library),
                 );
                 let name = self.draft.tools[i].name.clone();
+                self.note_rename(&before, &name);
                 let mut chosen = None;
                 if let Some(changer) = &mut self.changer {
                     changer.rename(&before, &name);
@@ -1456,6 +1481,21 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn renames_are_kept_from_the_first_name_to_the_last() {
+        let mut m = super::Manager::new(&cut_craft_core::toolpath::ToolDatabase::default());
+        // typed a letter at a time
+        m.note_rename("6 mm", "6 mm A");
+        m.note_rename("6 mm A", "6 mm AT");
+        m.note_rename("V-Bit", "V");
+        m.note_rename("V", "V-Bit");
+        assert_eq!(
+            m.take_renamed(),
+            vec![("6 mm".to_owned(), "6 mm AT".to_owned())]
+        );
+        assert_eq!(m.take_renamed(), vec![]);
+    }
+
     use super::*;
 
     fn frame(manager: &mut Manager, ctx: &egui::Context) -> Option<Outcome> {

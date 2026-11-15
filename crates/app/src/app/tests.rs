@@ -13418,3 +13418,55 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
     assert!(path.exists());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn a_tool_renamed_in_the_tool_database_is_renamed_in_the_jobs_toolpaths_too() {
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    h.app
+        .rename_toolpath_tools(&[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())]);
+    let names: Vec<(String, String)> = h
+        .app
+        .doc
+        .toolpaths
+        .values()
+        .map(|t| {
+            (
+                t.tool.name.clone(),
+                t.params["tool"]["name"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+            )
+        })
+        .collect();
+    assert!(
+        names.contains(&("Spiral 6".to_owned(), "Spiral 6".to_owned())),
+        "{names:?}"
+    );
+    assert!(names.iter().any(|(n, _)| n == "3 mm End Mill"), "{names:?}");
+    assert!(h.app.doc.toolpaths.values().all(|t| !t.stale));
+    // so the tool changer slot it was loaded in still gives its number
+    let ids: Vec<_> = h.app.doc.toolpaths.keys().copied().collect();
+    h.app.machines.add();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.set_slot_count(2);
+    machine.slots[0] = Some("Spiral 6".into());
+    machine.slots[1] = Some("3 mm End Mill".into());
+    let found = h
+        .app
+        .preflight(&[ids], crate::files::ToolChanges::ToolChanger);
+    assert!(
+        found.iter().all(|f| !f.message.contains("not loaded")),
+        "{found:?}"
+    );
+    // undone in one step
+    h.app.invoke(&h.ctx, "undo");
+    assert!(
+        h.app
+            .doc
+            .toolpaths
+            .values()
+            .any(|t| t.tool.name == "6 mm End Mill")
+    );
+}

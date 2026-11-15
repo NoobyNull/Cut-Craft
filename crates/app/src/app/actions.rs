@@ -5264,6 +5264,34 @@ impl CutCraftApp {
         }
     }
 
+    /// Tools renamed in the Tool Database, (old name, new name): the job's toolpaths that
+    /// cut with them take the new name too (one undoable step), so the file still finds the
+    /// tool changer slot the tool is loaded in under its new name. Nothing is recalculated.
+    pub(super) fn rename_toolpath_tools(&mut self, renamed: &[(String, String)]) {
+        let mut change = Change::builder(&self.doc);
+        let mut count = 0;
+        for (&id, toolpath) in &self.doc.toolpaths {
+            let Some((_, to)) = renamed.iter().find(|(from, _)| *from == toolpath.tool.name) else {
+                continue;
+            };
+            let mut after = toolpath.clone();
+            after.tool.name.clone_from(to);
+            if let Some(name) = after.params.pointer_mut("/tool/name") {
+                *name = to.as_str().into();
+            }
+            change.replace_toolpath(id, after);
+            count += 1;
+        }
+        if count == 0 {
+            return;
+        }
+        let what = if count == 1 { "toolpath" } else { "toolpaths" };
+        self.record(
+            Ok(change.finish()),
+            &format!("Tool database saved; {count} {what} use the renamed tool's new name"),
+        );
+    }
+
     /// Reads the user's tool database; a broken one is reported and left untouched on disk.
     pub(super) fn load_tools(&mut self) {
         self.tools_path = files::tool_database_path();
