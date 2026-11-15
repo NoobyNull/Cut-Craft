@@ -1298,6 +1298,11 @@ fn tool_info(
                 })
                 .response
                 .on_hover_hint("Units: how this tool's lengths read; the tool stays the same size");
+            ui.checkbox(&mut tool.drill_only, "Drill only").on_hover_hint(
+                "A drill (twist or brad-point) cuts only straight down. Any toolpath but \
+                 Drilling that uses it is warned of in red, as moved sideways it can snap or \
+                 tear the work",
+            );
         });
         ui.end_row();
         // stands in for dragging a tool between groups

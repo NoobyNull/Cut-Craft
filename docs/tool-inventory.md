@@ -340,7 +340,7 @@ say "not implemented yet".
   Tool types show both names ("Radiused End Mill (bowl / bull nose)").
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
-  (its tip, taper and shank), drill (as an end mill marked drill only: the checks before cutting warn when any toolpath but Drilling uses it); one tool per material it has cutting data for.
+  (its tip, taper and shank), drill (as an end mill marked Drill only, a tick beside its Tool Type: a toolpath form other than Drilling warns in red when it is picked, and so do the checks before cutting); one tool per material it has cutting data for.
   Form tools and diamond drags are skipped.
 - Checks before cutting (Cut Craft's own; Aspire has none): a toolpath deeper than its tool's
   flute length (or with none set), a 3D finish whose taper cannot reach part of the model, and

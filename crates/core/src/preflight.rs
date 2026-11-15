@@ -161,17 +161,10 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
         )));
     }
     let has = |kind| toolpath.moves.iter().any(|m| m.kind == kind);
-    let drilling = matches!(
-        toolpath.strategy.as_str(),
-        "drilling_toolpath" | "drill_bank_toolpath"
-    );
-    if tool.drill_only && !drilling && has(MoveKind::Cut) {
-        found.push(Finding::warning(format!(
-            "{name}: {} is a drill, which cuts only straight down. Moved sideways it can snap \
-             or tear the work: pick an end mill for this toolpath, or use the drill in a \
-             Drilling toolpath",
-            tool.name
-        )));
+    if has(MoveKind::Cut)
+        && let Some(drill) = drill_sideways(&toolpath.strategy, tool)
+    {
+        found.push(Finding::warning(format!("{name}: {drill}")));
     }
     if has(MoveKind::Cut) && tool.feed_rate <= 0.0 {
         found.push(Finding::error(format!(
@@ -297,6 +290,22 @@ fn on_machine(
             tool.name, limits.name
         )));
     }
+}
+
+/// What to say when a toolpath of `strategy` (a command id such as `profile_toolpath`)
+/// cuts with `tool` and it is a drill, which cuts only straight down: in red at the foot of
+/// the toolpath's form, and in the checks before saving. `None` for any other bit, or a
+/// Drilling toolpath.
+pub fn drill_sideways(strategy: &str, tool: &crate::toolpath::Tool) -> Option<String> {
+    let drilling = matches!(strategy, "drilling_toolpath" | "drill_bank_toolpath");
+    (tool.drill_only && !drilling).then(|| {
+        format!(
+            "{} is a drill, which cuts only straight down. Moved sideways it can snap or \
+             tear the work: pick an end mill for this toolpath, or use the drill in a \
+             Drilling toolpath",
+            tool.name
+        )
+    })
 }
 
 /// The lowest and highest corners of what `moves` reach; `None` without any.

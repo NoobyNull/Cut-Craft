@@ -187,8 +187,9 @@ pub struct Tool {
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
     pub flutes: u32,
     /// A drill (a twist or brad-point bit, as a vendor's tool library lists them): it cuts
-    /// only straight down, so the checks before cutting warn when any toolpath but Drilling
-    /// uses it (added with drills from tool libraries)
+    /// only straight down, so a toolpath form other than Drilling says so in red when it is
+    /// picked, and the checks before cutting warn of it. Ticked as Drill only beside the
+    /// Tool Type in the Tool Database (added with drills from tool libraries)
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[schemars(skip)]
     pub drill_only: bool,

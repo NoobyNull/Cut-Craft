@@ -44,7 +44,9 @@ stop being asked; Edit ▸ Options ▸ Confirmations ▸ G-code from an earlier 
 A name typed with a dot of its own (sign v1.5) keeps it: the file is sign v1.5.nc.
 
 A drill brought in from a tool library (.vtdb) is kept as a drill: it cuts only straight
-down, so the checks before saving warn if any toolpath but Drilling cuts sideways with it.
+down. Its Drill only tick sits beside its Tool Type in the Tool Database, to see or change.
+Picked for any toolpath but Drilling, the form says so in red at its foot, and the checks
+before saving warn of it too.
 
 When one file changes tools (a pause to change the bit by hand, or a tool changer), the
 first move after the change lifts the new bit straight up to the safe height, and only

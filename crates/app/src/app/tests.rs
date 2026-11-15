@@ -13614,3 +13614,55 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_other_saved_jobs_when_they_
     assert!(names(&h).contains(&"6 mm End Mill".to_owned()));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn a_drill_picked_for_a_profile_is_warned_of_in_red_at_the_foot_of_its_form() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let warning = |name: &str| {
+        format!(
+            "{name} is a drill, which cuts only straight down. Moved sideways it can snap or \
+             tear the work: pick an end mill for this toolpath, or use the drill in a \
+             Drilling toolpath"
+        )
+    };
+    // a drill brought in from a vendor's tool library
+    let mut drill = h.app.tools.tools[0].clone();
+    drill.name = "Drill 6mm".into();
+    drill.drill_only = true;
+    h.app.tools.tools.push(drill);
+    for (id, warned) in [("profile_toolpath", true), ("drilling_toolpath", false)] {
+        h.app.invoke(&h.ctx, id);
+        h.app.choose_tool("Drill 6mm");
+        h.frame(vec![]);
+        h.frame(vec![]);
+        assert_eq!(h.text_at(&warning("Drill 6mm")).is_some(), warned, "{id}");
+        h.app.form = None;
+    }
+    // an end mill: nothing said
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.frame(vec![]);
+    let name = h.app.form.as_ref().unwrap().params["tool"]["name"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(h.text_at(&warning(&name)).is_none());
+}
+
+#[test]
+fn a_drill_shows_as_drill_only_in_the_tool_database_and_can_be_changed_there() {
+    let mut h = Harness::new();
+    let mut drill = h.app.tools.tools[0].clone();
+    drill.name = "Drill 6mm".into();
+    drill.drill_only = true;
+    h.app.tools.tools.push(drill);
+    let at = h.app.tools.tools.len() - 1;
+    h.app.invoke(&h.ctx, "tool_database");
+    h.app.tool_manager.as_mut().unwrap().pick = Some(cut_craft_tool_database::Pick::Tool(at));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let tick = h.text_at("Drill only").expect("shown beside its tool type");
+    h.click(tick, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(!h.app.tool_manager.as_ref().unwrap().draft.tools[at].drill_only);
+}

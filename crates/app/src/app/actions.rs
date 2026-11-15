@@ -4779,11 +4779,30 @@ impl CutCraftApp {
         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
     }
 
+    /// The warning for a toolpath form whose tool is a drill (it cuts only straight down)
+    /// when the toolpath is not Drilling.
+    fn drill_sideways(form: &super::OpenForm) -> Option<String> {
+        let tool = form.params.get("tool")?;
+        if !form.id.ends_with("_toolpath") || tool.get("drill_only") != Some(&Value::Bool(true)) {
+            return None;
+        }
+        let tool = cut_craft_core::toolpath::Tool {
+            name: tool.get("name")?.as_str()?.to_owned(),
+            drill_only: true,
+            ..Default::default()
+        };
+        cut_craft_core::preflight::drill_sideways(form.id, &tool)
+    }
+
     /// Why the open form's last Apply failed, or what it warned of, in red, over its buttons.
     fn form_error(&self, ui: &mut egui::Ui) {
         let Some(form) = self.form.as_ref() else {
             return;
         };
+        // a drill picked for a toolpath that cuts sideways: said as soon as it is picked
+        if let Some(drill) = Self::drill_sideways(form) {
+            ui.colored_label(ui.visuals().error_fg_color, drill);
+        }
         // what the last Apply made is not quite what was asked: said in red, never a pop-up
         if let Some(warning) = form.warning.as_ref().filter(|_| form.error.is_none()) {
             ui.colored_label(ui.visuals().error_fg_color, warning);
