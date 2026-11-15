@@ -1011,7 +1011,6 @@ impl MenuSystem {
                 )],
             )
             .enabled(text),
-            MenuItem::with_action("Convert To Vectors", "convert_text_to_curves").enabled(text),
             MenuItem::separator(),
             MenuItem::form::<cmd_join_close_vectors::JoinCloseVectors>(
                 "Join / Close Vectors...",

@@ -186,7 +186,7 @@ say "not implemented yet".
   wheel zooms about the cursor, F (or a double-click off the model) fits; Top, Front, Right, Iso, Fit buttons.
   A right-click picks the component under it and opens the 2D/3D view menu headed by its
   name (Cut, Copy, Paste, Duplicate, Delete, Group, Ungroup, Select ▸, Activate Layer of
-  Selection, Text ▸, Convert To Vectors, Join / Close Vectors..., Node Edit Mode, Appearance,
+  Selection, Text ▸ (Convert to Vectors), Join / Close Vectors..., Node Edit Mode, Appearance,
   Component ▸ with Create Vector Boundary, Copy To ▸, Move To ▸; the vector items greyed for a
   component; the components under the click are listed first, the selected ticked, a click
   picking one). In Transform mode (a second double-click on a selected component, or the

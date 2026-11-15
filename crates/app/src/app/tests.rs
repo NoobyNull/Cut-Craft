@@ -2793,6 +2793,23 @@ fn escape_during_a_2d_drag_cancels_it_and_the_release_does_nothing() {
 }
 
 #[test]
+fn the_3d_views_menu_offers_convert_to_vectors_once_under_text() {
+    fn count(items: &[gui::MenuItem]) -> usize {
+        items
+            .iter()
+            .map(|i| usize::from(i.action == "convert_text_to_curves") + count(&i.children))
+            .sum()
+    }
+    let h = Harness::new();
+    let menu = h.app.menus.view_3d_menu(&h.app.doc, &[]);
+    assert_eq!(count(&menu), 1);
+    assert_eq!(
+        leaf(&menu, &["Text", "Convert to Vectors"]).action,
+        "convert_text_to_curves"
+    );
+}
+
+#[test]
 fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
