@@ -58,7 +58,8 @@ pub struct Field {
     pub diagram: Option<String>,
 }
 
-/// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`),
+/// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`,
+/// a value written as text, a bool or a number),
 /// judged on the form's top-level parameters: the forms change with what is chosen. A rule
 /// naming more than one key holds when every one of them does.
 #[derive(Debug, PartialEq)]
@@ -82,11 +83,9 @@ impl When {
     }
 
     fn from_rule(rule: &Value, show: bool) -> Option<Self> {
-        // a tick box's rule may be written as a bool or as "true" / "false"
-        let text = |v: &Value| match v {
-            Value::Bool(ticked) => Some(ticked.to_string()),
-            v => v.as_str().map(String::from),
-        };
+        // a tick box's rule may be written as a bool or as "true" / "false", a count's as a
+        // number or as text
+        let text = value_text;
         let mut rules = rule.as_object()?.iter().map(|(key, values)| {
             let values = match values {
                 Value::Array(list) => list.iter().filter_map(text).collect(),
@@ -106,15 +105,22 @@ impl When {
     /// Whether the field shows, given the form's top-level `params`.
     pub fn shown(&self, params: &Value) -> bool {
         let holds = |key: &String, values: &[String]| {
-            // a tick box reads as "true" or "false"
-            let value = match &params[key] {
-                Value::Bool(ticked) => Some(ticked.to_string()),
-                value => value.as_str().map(String::from),
-            };
+            // a tick box reads as "true" or "false", a number as its digits ("1", not "1.0")
+            let value = value_text(&params[key]);
             value.is_some_and(|v| values.contains(&v))
         };
         let is = holds(&self.key, &self.values) && self.also.iter().all(|(k, v)| holds(k, v));
         is == self.show
+    }
+}
+
+/// How a rule or a setting reads when they are compared: a tick box as "true" or "false", a
+/// number as its digits (1 and 1.0 both "1"), text as it is.
+fn value_text(v: &Value) -> Option<String> {
+    match v {
+        Value::Bool(ticked) => Some(ticked.to_string()),
+        Value::Number(n) => n.as_f64().map(|n| n.to_string()),
+        v => v.as_str().map(String::from),
     }
 }
 
@@ -1581,6 +1587,49 @@ mod tests {
         assert!(speed <= 0.01 + 1e-12, "{speed} mm a point");
         // whole numbers still drag one a point
         assert_eq!(feel(None, true, 1.0..=100.0), (1.0, 1.0));
+    }
+
+    #[test]
+    fn show_rules_written_as_numbers_or_bools_hide_their_fields() {
+        let f = fields(&schema("segment_3d_model"));
+        let when = field(&f, "position")
+            .when
+            .as_ref()
+            .expect("Position has a rule");
+        assert!(when.shown(&serde_json::json!({ "cuts": 1 })));
+        assert!(!when.shown(&serde_json::json!({ "cuts": 3 })));
+        let f = fields(&schema("extrude_and_weave"));
+        let when = field(&f, "weave_by")
+            .when
+            .as_ref()
+            .expect("Weave by has a rule");
+        assert!(!when.shown(&serde_json::json!({ "weave": false })));
+        // every rule in every form is read, none dropped
+        for (id, schema) in every_form() {
+            for s in rule_holders(&schema) {
+                for key in [
+                    "x-show-when",
+                    "x-hide-when",
+                    "x-enable-when",
+                    "x-percent-when",
+                ] {
+                    if let Some(rule) = s.get(key) {
+                        assert!(When::from_rule(rule, true).is_some(), "{id}: {key} {rule}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every object in `schema`, where a rule may sit.
+    fn rule_holders(schema: &Value) -> Vec<&Value> {
+        let mut found = vec![schema];
+        match schema {
+            Value::Object(map) => map.values().for_each(|v| found.extend(rule_holders(v))),
+            Value::Array(list) => list.iter().for_each(|v| found.extend(rule_holders(v))),
+            _ => {}
+        }
+        found
     }
 
     #[test]
