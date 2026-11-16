@@ -350,9 +350,12 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
 /// double-sided job the side and how the material is turned over.
 fn material(h: &mut String, doc: &Document, len: &dyn Fn(f64) -> String) {
     let job = &doc.job;
-    let z = match job.z_zero {
-        ZZero::MaterialSurface => "Material surface",
-        ZZero::MachineBed => "Machine bed",
+    let z = match (job.z_zero, job.rotary) {
+        (ZZero::MaterialSurface, None) => "Material surface",
+        (ZZero::MachineBed, None) => "Machine bed",
+        // a rotary job is zeroed on the top of the cylinder or on its centre line
+        (ZZero::MaterialSurface, Some(_)) => "Cylinder surface",
+        (ZZero::MachineBed, Some(_)) => "Cylinder axis",
     };
     let datum = match job.datum {
         Datum::BottomLeft => "Bottom left",
@@ -454,6 +457,26 @@ mod tests {
             "1 toolpaths",
         ] {
             assert!(html.contains(part), "missing {part}");
+        }
+    }
+
+    #[test]
+    fn a_rotary_job_s_sheet_says_z_zero_is_on_the_cylinder_s_surface_or_axis() {
+        use cut_craft_core::document::{Along, Job};
+        for (z_zero, says) in [
+            (ZZero::MaterialSurface, "Cylinder surface"),
+            (ZZero::MachineBed, "Cylinder axis"),
+        ] {
+            let mut doc = cut_craft_core::testing::with_toolpath();
+            doc.job = Job {
+                z_zero,
+                ..Job::rotary(300.0, 50.0, Along::X)
+            };
+            let html = String::from_utf8(JobSheet::export(&doc).unwrap()).unwrap();
+            assert!(
+                html.contains(&format!("<th>Z zero</th><td>{says}</td>")),
+                "{says}"
+            );
         }
     }
 
