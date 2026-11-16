@@ -511,6 +511,11 @@ fn grid(
                         percent_when: Some(w),
                         ..
                     } => serde_json::json!({ &w.key: params[&w.key] }),
+                    // a choice offered only while another says so reads the form's settings,
+                    // its own section's first
+                    Kind::Choice(options, _) if options.iter().any(|o| o.when.is_some()) => {
+                        within(params, top)
+                    }
                     _ => Value::Null,
                 };
                 changed |= ui
@@ -522,6 +527,16 @@ fn grid(
             }
         });
     changed
+}
+
+/// The form's top-level settings `top` with those of the section being drawn (`local`) laid
+/// over them, so a rule reads a setting as [`When::judged`] does.
+fn within(local: &Value, top: &Value) -> Value {
+    let mut all = top.clone();
+    if let (Some(all), Some(local)) = (all.as_object_mut(), local.as_object()) {
+        all.extend(local.iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
+    all
 }
 
 fn hover(label: egui::Response, help: Option<&String>) {
@@ -739,8 +754,18 @@ fn choose(
     around: &Value,
     look: &Look,
 ) -> bool {
-    let current = value.as_str().unwrap_or_default().to_owned();
-    let options = &offered(options, around)[..];
+    let mut current = value.as_str().unwrap_or_default().to_owned();
+    let all = options;
+    let options = &offered(all, around)[..];
+    // a pick a rule now hides (Profile Pass: First, then Adaptive chosen) becomes the first
+    // one offered, so a choice is always shown picked
+    let hidden = !options.is_empty()
+        && all.iter().any(|o| o.value == current)
+        && !options.iter().any(|o| o.value == current);
+    if hidden {
+        current.clone_from(&options[0].value);
+        *value = Value::String(current.clone());
+    }
     let picked = match widget {
         Widget::Auto if options.len() <= MOST_RADIOS => {
             // stacked, so their size does not depend on the width the layout gives them
@@ -788,7 +813,7 @@ fn choose(
             *value = Value::String(v);
             true
         }
-        _ => false,
+        _ => hidden,
     }
 }
 
@@ -2188,6 +2213,31 @@ mod tests {
                 .unwrap_or_default()
                 .contains("raster lines")
                 || first.when.is_some()
+        );
+    }
+
+    #[test]
+    fn a_pockets_form_offers_first_for_raster_and_never_leaves_a_hidden_pick() {
+        // the form judges a choice's rule on the form's own settings, as drawn
+        let f = fields(&schema("pocket_toolpath"));
+        let pocket = |strategy: &str, pass: &str| {
+            let mut params = registry()
+                .get("pocket_toolpath")
+                .map(cut_craft_core::DynCommand::default_params)
+                .expect("Pocket's form");
+            params["strategy"] = Value::String(strategy.into());
+            params["profile_pass"] = Value::String(pass.into());
+            let texts = drawn(&f, &mut params, Units::Mm);
+            (texts, params["profile_pass"].clone())
+        };
+        let (raster, pass) = pocket("raster", "first");
+        assert!(raster.iter().any(|t| t == "First"), "{raster:?}");
+        assert_eq!(pass, "first", "a Raster pocket keeps First");
+        let (adaptive, pass) = pocket("adaptive", "first");
+        assert!(!adaptive.iter().any(|t| t == "First"), "{adaptive:?}");
+        assert_eq!(
+            pass, "last",
+            "First switched to Adaptive shows as Last, which it cuts"
         );
     }
 
