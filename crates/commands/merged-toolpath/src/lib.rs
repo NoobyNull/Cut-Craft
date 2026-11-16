@@ -18,7 +18,8 @@ pub struct MergedToolpath;
 pub struct Params {
     /// What the toolpath is called in the toolpath list. It merges the toolpaths ticked
     /// (shown) in the toolpath list when Apply is pressed: tick them there first
-    /// (it is marked out of date when one of them changes: recalculate it then)
+    /// (it is marked out of date when one of them changes: recalculate it then). Those
+    /// toolpaths are then hidden, so saving the shown toolpaths does not cut them twice
     pub name: String,
     /// The toolpaths to merge (none: the ones shown in the toolpath list when Apply is
     /// pressed). Not on the form: tick the toolpaths to merge in the toolpath list
@@ -395,6 +396,11 @@ impl Command for MergedToolpath {
         }
         let mut c = Change::builder(doc);
         c.add_toolpath(toolpath);
+        // the sources are under the new toolpath: hidden, so the default save (every shown
+        // toolpath) does not cut them twice. Recalculating leaves them as they are
+        if p.sources.is_empty() {
+            c.hide_toolpaths(&named);
+        }
         Ok(c.finish())
     }
 }
@@ -537,6 +543,17 @@ mod tests {
             .find(|t| t.strategy == MergedToolpath::ID)
             .unwrap();
         assert_eq!(made.moves.len(), once, "a repeated id is merged once");
+    }
+
+    #[test]
+    fn the_toolpaths_merged_are_hidden_so_a_save_does_not_cut_them_twice() {
+        let doc = two();
+        let change = MergedToolpath::run(&doc, &Params::default()).unwrap();
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        assert!(!after.toolpaths[&EntityId(1)].visible);
+        assert!(!after.toolpaths[&EntityId(2)].visible);
+        assert!(merged(&doc).visible, "the merged toolpath is shown");
     }
 
     #[test]

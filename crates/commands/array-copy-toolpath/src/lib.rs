@@ -25,7 +25,8 @@ pub enum Spacing {
 pub struct Params {
     /// What the toolpath is called in the toolpath list. It copies the toolpaths ticked
     /// (shown) in the toolpath list when Apply is pressed: tick them there first
-    /// (it is marked out of date when one of them changes: recalculate it then)
+    /// (it is marked out of date when one of them changes: recalculate it then). Those
+    /// toolpaths are then hidden, so saving the shown toolpaths does not cut them twice
     pub name: String,
     /// The toolpaths to copy (none: the ones shown in the toolpath list when Apply is
     /// pressed). Not on the form: tick the toolpaths to copy in the toolpath list
@@ -179,6 +180,11 @@ impl Command for ArrayCopyToolpath {
             toolpath.power = power;
             toolpath.drill_bank = source.drill_bank.as_ref().map(|b| b.copied(&placed));
             c.add_toolpath(toolpath);
+        }
+        // the sources are under the new toolpath: hidden, so the default save (every shown
+        // toolpath) does not cut them twice. Recalculating leaves them as they are
+        if p.sources.is_empty() {
+            c.hide_toolpaths(&named);
         }
         Ok(c.finish())
     }
@@ -365,6 +371,33 @@ mod tests {
         let again = array(&doc, &saved);
         assert_eq!(again.len(), 1, "recalculating still makes the array");
         assert_eq!(again[0].moves, made[0].moves);
+    }
+
+    #[test]
+    fn the_toolpaths_copied_are_hidden_so_a_save_does_not_cut_them_twice() {
+        let doc = with_profile();
+        let change = ArrayCopyToolpath::run(&doc, &Params::default()).unwrap();
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        assert!(
+            !after.toolpaths[&EntityId(1)].visible,
+            "the first copy sits on the source"
+        );
+        // recalculating (sources saved) leaves a source shown again as it is
+        let saved: Params = serde_json::from_value(
+            after
+                .toolpaths
+                .values()
+                .find(|t| t.strategy == ArrayCopyToolpath::ID)
+                .unwrap()
+                .params
+                .clone(),
+        )
+        .unwrap();
+        let again = ArrayCopyToolpath::run(&doc, &saved).unwrap();
+        let mut shown = doc.clone();
+        shown.apply(&again).unwrap();
+        assert!(shown.toolpaths[&EntityId(1)].visible);
     }
 
     #[test]

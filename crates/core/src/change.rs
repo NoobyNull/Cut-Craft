@@ -1493,6 +1493,22 @@ impl ChangeBuilder<'_> {
         });
     }
 
+    /// The toolpaths `ids` hidden, those shown: ones a Merged or Array Copy toolpath now
+    /// cuts, so saving the shown toolpaths does not cut them twice.
+    pub fn hide_toolpaths(&mut self, ids: &[EntityId]) {
+        for &id in ids {
+            if let Some(shown) = self.toolpath(id).filter(|t| t.visible).cloned() {
+                self.replace_toolpath(
+                    id,
+                    Toolpath {
+                        visible: false,
+                        ..shown
+                    },
+                );
+            }
+        }
+    }
+
     pub fn add_component(&mut self, component: Component) -> EntityId {
         let id = EntityId(self.next_id);
         self.next_id += 1;
