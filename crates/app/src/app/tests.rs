@@ -12834,6 +12834,40 @@ fn an_on_the_line_profile_leaves_no_open_vector_out() {
         "quick_engrave_toolpath",
         &serde_json::json!({})
     ));
+    // a texture fills closed vectors, but follows any vector used as the pattern
+    assert!(actions::closed_only_toolpath(
+        "texture_toolpath",
+        &serde_json::json!({ "use_selected_vectors_as_pattern": false })
+    ));
+    assert!(!actions::closed_only_toolpath(
+        "texture_toolpath",
+        &serde_json::json!({ "use_selected_vectors_as_pattern": true })
+    ));
+}
+
+#[test]
+fn the_texture_form_says_when_it_will_texture_the_whole_material() {
+    use cut_craft_core::document::VectorCount;
+    let filled = serde_json::json!({ "use_selected_vectors_as_pattern": false });
+    let note = |closed, open| {
+        actions::texture_area_note("texture_toolpath", &filled, VectorCount { closed, open })
+    };
+    assert!(note(0, 0).is_some_and(|n| n.contains("whole material")));
+    let open_only = note(0, 2).unwrap();
+    assert!(
+        open_only.contains("whole material") && open_only.contains("open"),
+        "{open_only}"
+    );
+    assert_eq!(note(1, 2), None, "the closed one is textured");
+    let pattern = serde_json::json!({ "use_selected_vectors_as_pattern": true });
+    assert_eq!(
+        actions::texture_area_note(
+            "texture_toolpath",
+            &pattern,
+            VectorCount { closed: 0, open: 0 }
+        ),
+        None
+    );
 }
 
 /// A job with a pocket toolpath made from its one rectangle, the form closed.

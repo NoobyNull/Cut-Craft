@@ -266,6 +266,7 @@ impl Command for TextureToolpath {
         p.validate()?;
         let mut random = Random(u64::from(p.seed));
         let safe = doc.job.clearance;
+        let mut notes = vec![];
         let (ids, mut moves) = if p.use_selected_vectors_as_pattern {
             let (ids, paths) = doc.selected_paths(|_| true);
             if ids.is_empty() {
@@ -277,7 +278,14 @@ impl Command for TextureToolpath {
             (ids, moves)
         } else {
             let (ids, paths) = doc.selected_paths(|path| path.closed);
-            // nothing selected: the whole material
+            // nothing closed selected: the whole material
+            if ids.is_empty() && !doc.selection.is_empty() {
+                notes.push(
+                    "the selected vectors are open, so the whole material was textured: close \
+                     them, or clear the selection"
+                        .to_owned(),
+                );
+            }
             let paths = if ids.is_empty() {
                 let a = doc.job.area();
                 vec![Path::polyline(
@@ -317,6 +325,9 @@ impl Command for TextureToolpath {
             ids,
             moves,
         ));
+        for note in notes {
+            c.note(note);
+        }
         Ok(c.finish())
     }
 }
@@ -338,6 +349,24 @@ mod tests {
             .iter()
             .filter(|m| m.kind != MoveKind::Rapid)
             .map(|m| m.to)
+    }
+
+    #[test]
+    fn only_open_vectors_selected_textures_the_material_and_says_so() {
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        let line = c.add(cut_craft_core::geometry::Path::polyline(
+            &[Point::new(10.0, 10.0), Point::new(50.0, 10.0)],
+            false,
+        ));
+        c.select([line]);
+        doc.apply(&c.finish()).unwrap();
+        let change = TextureToolpath::run(&doc, &Params::default()).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("whole material")),
+            "{:?}",
+            change.notes
+        );
     }
 
     #[test]

@@ -5301,6 +5301,14 @@ impl CutCraftApp {
                 ui.colored_label(ui.visuals().warn_fg_color, left_out)
                     .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
             }
+            if let Some(area) = texture_area_note(open.id, &open.params, count) {
+                if count.open > 0 {
+                    ui.colored_label(ui.visuals().error_fg_color, area)
+                } else {
+                    ui.weak(area)
+                }
+                .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
+            }
         }
     }
 
@@ -6650,8 +6658,32 @@ fn suggestion_note(s: &cmd_pocket_toolpath::Suggestion, finishing: &str) -> Stri
 pub(super) fn closed_only_toolpath(id: &str, params: &Value) -> bool {
     match id {
         "profile_toolpath" => params["side"].as_str() != Some("on"),
+        // a texture fills closed vectors, but follows any vector used as its pattern
+        "texture_toolpath" => params["use_selected_vectors_as_pattern"] != Value::Bool(true),
         _ => CLOSED_ONLY_TOOLPATHS.contains(&id),
     }
+}
+
+/// What a Texture Toolpath form filling closed vectors will texture when no closed vector is
+/// selected: the whole material, said plainly (in red when vectors are selected but open).
+pub(super) fn texture_area_note(
+    id: &str,
+    params: &Value,
+    count: cut_craft_core::document::VectorCount,
+) -> Option<String> {
+    if id != "texture_toolpath"
+        || params["use_selected_vectors_as_pattern"] == Value::Bool(true)
+        || count.closed > 0
+    {
+        return None;
+    }
+    Some(if count.open > 0 {
+        "Nothing closed is selected, so the whole material will be textured: close the open \
+         vectors, or clear the selection"
+            .to_owned()
+    } else {
+        "Nothing selected: the whole material will be textured".to_owned()
+    })
 }
 
 /// The toolpaths that take only closed vectors from the selection.
