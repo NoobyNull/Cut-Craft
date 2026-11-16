@@ -13983,7 +13983,10 @@ fn save_toolpaths_waits_for_cancelled_checks_rather_than_saving_unchecked() {
         machine: h.app.machines.active,
         found: None,
     }];
-    assert!(h.app.ready_to_save(&form).is_none(), "not saved unchecked");
+    assert!(
+        h.app.ready_to_save(&form, false).is_none(),
+        "not saved unchecked"
+    );
     assert!(
         h.app.status.message.contains("were cancelled"),
         "{}",
@@ -16526,4 +16529,205 @@ fn undo_last_preview_after_swap_sides_brings_the_preview_back_turned_over_with_t
     h.frame(vec![]);
     assert!(!h.app.doc.bottom_side);
     assert_eq!(h.app.simulation.as_ref().map(|m| &m.heights), Some(&up));
+}
+
+/// The Output tab with one Profile toolpath ready to save.
+fn ready_for_output() -> Harness {
+    let mut h = analysing();
+    h.app.toolpath_subtab = gui::TOOLPATH_SUBTABS
+        .iter()
+        .position(|t| t.name == "Output")
+        .unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h
+}
+
+fn one_file_form() -> SaveForm {
+    SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::SeparateFiles,
+        job_sheet: false,
+    }
+}
+
+#[test]
+fn view_gcode_shows_what_saving_would_write_without_saving_a_file() {
+    // a 0.6.11 user: "Sometimes just need to quickly look at gcode and not need to save it"
+    use super::panels::VIEW_GCODE;
+    let mut h = ready_for_output();
+    h.click(h.text_at(VIEW_GCODE).unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let view = h
+        .app
+        .gcode_view
+        .as_ref()
+        .expect("the G-code window is open");
+    let (name, text) = &view.files.as_ref().unwrap()[0];
+    assert_eq!(
+        std::path::Path::new(name)
+            .extension()
+            .and_then(|e| e.to_str()),
+        Some("nc"),
+        "{name}"
+    );
+    assert!(text.lines().any(|l| l.starts_with("G1")), "{text}");
+    // the same text the machine's file would hold, made at the same time
+    let form = view.form.clone();
+    let post = h.app.form_post(&form).unwrap();
+    let path = std::path::PathBuf::from(name);
+    let saved = h
+        .app
+        .toolpath_texts(&form, &post, &path, view.made)
+        .unwrap();
+    assert_eq!(&saved[0].1, text);
+    // shown in the window, numbered, through the default post
+    assert!(h.text_at(&post.name).is_some(), "says which post");
+    assert!(
+        h.texts().iter().any(|t| t.starts_with("G1")),
+        "the lines are shown"
+    );
+    assert!(h.text_at("Copy All").is_some());
+    assert!(h.text_at("Save Toolpaths…").is_some());
+    // nothing written: viewing is not saving
+    assert!(!path.exists());
+}
+
+#[test]
+fn view_gcode_lists_each_file_when_saving_would_make_several() {
+    let mut h = ready_for_output();
+    h.rectangle(70.0, 10.0, 20.0, 20.0);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    // another tool, so separate files per tool make two
+    params["tool"]["name"] = serde_json::json!("Another 3 mm end mill");
+    params["tool"]["diameter"] = serde_json::json!(3.0);
+    h.app.apply("pocket_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.view_gcode(one_file_form());
+    let view = h.app.gcode_view.as_ref().unwrap();
+    let files = view.files.as_ref().unwrap();
+    assert_eq!(files.len(), 2, "a file per tool");
+    let first = files[0].0.clone();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at(&first).is_some(), "the file shown is named");
+}
+
+#[test]
+fn view_gcode_says_why_when_there_is_nothing_to_show() {
+    let mut h = Harness::new();
+    h.app.view_gcode(one_file_form());
+    let view = h.app.gcode_view.as_ref().unwrap();
+    assert!(view.files.is_err(), "no toolpaths: nothing to show");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let said = view_error(&h);
+    assert!(h.text_at(&said).is_some(), "the reason is in the window");
+}
+
+fn view_error(h: &Harness) -> String {
+    h.app
+        .gcode_view
+        .as_ref()
+        .unwrap()
+        .files
+        .as_ref()
+        .unwrap_err()
+        .clone()
+}
+
+#[test]
+fn the_save_toolpaths_form_can_view_its_gcode_too() {
+    let mut h = ready_for_output();
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let view = h
+        .texts_at(super::panels::VIEW_GCODE)
+        .into_iter()
+        .max_by(|a, b| a.y.total_cmp(&b.y))
+        .unwrap();
+    h.click(view, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.gcode_view.is_some());
+}
+
+#[test]
+fn save_anyway_is_asked_in_the_window_not_by_a_dialog_that_can_hide_behind_it() {
+    // a 0.6.11 user: the save question sometimes opened behind Cut Craft's window. Linux
+    // shows rfd's questions as zenity windows of their own, not kept above Cut Craft's
+    let mut h = ready_for_output();
+    let form = one_file_form();
+    let post = h.app.form_post(&form).unwrap();
+    h.app.save_checks = vec![super::SaveChecks {
+        plan: h.app.plan(&form, &post).unwrap(),
+        changes: form.changes,
+        revision: h.app.history.revision(),
+        machine: h.app.machines.active,
+        found: Some(vec![cut_craft_core::preflight::Finding {
+            severity: cut_craft_core::preflight::Severity::Warning,
+            message: "Air cutting".to_owned(),
+        }]),
+    }];
+    // asked over the window rather than by the system (a test opening one panics)
+    assert!(
+        h.app.ready_to_save(&form, false).is_none(),
+        "waits for the answer"
+    );
+    assert!(h.app.save_anyway.is_some());
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Save the toolpaths anyway?").is_some());
+    assert!(h.text_at("• Air cutting").is_some());
+    h.click(h.text_at("Don't Save").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.save_anyway.is_none());
+    assert_eq!(h.app.status.message, "Toolpaths not saved");
+    // answered Save Anyway, the same save goes on without asking again
+    assert!(h.app.ready_to_save(&form, false).is_none());
+    h.app.checks_accepted = true;
+    assert!(h.app.ready_to_save(&form, false).is_some(), "agreed to");
+    assert!(!h.app.checks_accepted, "only for that save");
+}
+
+#[test]
+fn save_toolpaths_window_steps_aside_while_the_save_asks_then_comes_back() {
+    // a 0.6.11 user found the save dialog behind a window: Save Toolpaths is a window of its
+    // own, in front of Cut Craft's, which the system's dialogs belong to
+    let mut h = ready_for_output();
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    let form = h.app.save_form.clone().unwrap();
+    let post = h.app.form_post(&form).unwrap();
+    h.app.save_checks = vec![super::SaveChecks {
+        plan: h.app.plan(&form, &post).unwrap(),
+        changes: form.changes,
+        revision: h.app.history.revision(),
+        machine: h.app.machines.active,
+        found: Some(vec![cut_craft_core::preflight::Finding {
+            severity: cut_craft_core::preflight::Severity::Warning,
+            message: "Air cutting".to_owned(),
+        }]),
+    }];
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.click(h.text_at("Save Toolpaths...").unwrap(), Modifiers::NONE);
+    assert!(h.app.save_form.is_none(), "the form closes first");
+    assert!(
+        h.app.save_anyway.is_none(),
+        "nothing asked while it is still there"
+    );
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(h.app.save_anyway.is_some(), "then the save asks");
+    assert!(h.app.save_form.is_none(), "with the form out of the way");
+    h.frame(vec![]);
+    h.click(h.text_at("Don't Save").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.save_form.is_some(), "the form is back once answered");
 }

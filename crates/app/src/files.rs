@@ -91,6 +91,7 @@ pub fn export(registry: &Registry, id: &str, doc: &Document, path: &Path) -> Res
 
 /// Writes the toolpaths through `post` to `path`, tools numbered by their tool changer
 /// `slots` (empty: in the order used); `job` is the saved job they come from.
+#[cfg(test)]
 pub fn save_through(
     post: &Post,
     slots: &[Option<String>],
@@ -99,13 +100,31 @@ pub fn save_through(
     job: Option<&Path>,
 ) -> Result<(), String> {
     let made = chrono::Local::now().naive_local();
+    let text = render_through(post, slots, doc, path, job, made)?;
+    write_text(path, &text)
+}
+
+/// The G-code [`save_through`] writes to `path`, as made at `made`, without writing it
+/// (View G-code).
+pub fn render_through(
+    post: &Post,
+    slots: &[Option<String>],
+    doc: &Document,
+    path: &Path,
+    job: Option<&Path>,
+    made: chrono::NaiveDateTime,
+) -> Result<String, String> {
     let file = cut_craft_post::File {
         path,
         job,
         made,
         slots,
     };
-    let text = post.render(doc, &file)?;
+    post.render(doc, &file)
+}
+
+/// Writes a G-code file's `text` to `path`, saying where when it cannot.
+pub fn write_text(path: &Path, text: &str) -> Result<(), String> {
     write_atomic(path, text.as_bytes())
         .map_err(|e| format!("could not write {}: {e}", path.display()))
 }

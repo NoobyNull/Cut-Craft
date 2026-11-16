@@ -81,6 +81,10 @@ impl CutCraftApp {
         self.units_question(ctx);
         // a save that would replace G-code from an earlier save: Replace or Archive?
         self.earlier_question(ctx);
+        // what the checks before cutting found: save anyway?
+        self.save_anyway_question(ctx);
+        // Save or Send pressed in Save Toolpaths: once its window has closed
+        self.save_when_form_closed(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
         if !self.tracing() {
@@ -369,6 +373,7 @@ impl CutCraftApp {
         self.machine_windows(ctx);
         self.info_window(ctx);
         self.save_toolpaths_window(ctx);
+        self.gcode_window(ctx);
         self.machine_files_window(ctx);
         self.measure_window(ctx);
         self.snap_options_window(ctx);
@@ -3551,9 +3556,7 @@ impl CutCraftApp {
             return;
         };
         let mut open = true;
-        let mut save = false;
-        let mut send = false;
-        let mut manage = None;
+        let mut pressed = (false, false, None, false);
         let mut machine_changed = None;
         let choices = self.post_choices();
         let default = self.output_post().map(|p| p.name);
@@ -3634,7 +3637,7 @@ impl CutCraftApp {
             again = self.checks_or_waiting(ui, found.as_deref());
             ui.add_space(ui.spacing().item_spacing.y);
             let ready = plan.is_ok() && !errors && found.is_some();
-            (save, send, manage) = self.save_buttons(ui, ready, errors);
+            pressed = self.save_buttons(ui, ready, errors);
         });
         if again {
             self.check_again();
@@ -3645,8 +3648,8 @@ impl CutCraftApp {
             form.changes = self.default_changes();
             self.machines_changed("Machine changed");
         }
-        self.pressed(&form, (save, send, manage));
-        self.save_form = open.then_some(form);
+        self.pressed(&form, pressed);
+        self.save_form = (open && self.save_after.is_none()).then_some(form);
     }
 
     /// Save Toolpaths' checks before cutting: what they found, or that they are running or
@@ -3669,17 +3672,21 @@ impl CutCraftApp {
     fn pressed(
         &mut self,
         form: &super::SaveForm,
-        (save, send, manage): (
+        (save, send, manage, view): (
             bool,
             bool,
             Option<(String, cut_craft_machines::send::SendTo)>,
+            bool,
         ),
     ) {
-        if save {
-            self.save_toolpaths(form);
+        if view {
+            self.view_gcode(form.clone());
         }
-        if send {
-            self.send_toolpaths(form);
+        if save || send {
+            // the form is a window of its own: it closes first, so the file dialog and the
+            // questions saving asks are not hidden behind it, and comes back once they are
+            // answered (a 0.6.11 user found the save dialog behind it)
+            self.save_after = Some(super::gcode_view::SaveAfter::new(form.clone(), send));
         }
         if let Some((name, send_to)) = manage {
             self.open_machine_files(&name, &send_to);
@@ -3698,8 +3705,9 @@ impl CutCraftApp {
         bool,
         bool,
         Option<(String, cut_craft_machines::send::SendTo)>,
+        bool,
     ) {
-        let (mut save, mut send, mut manage) = (false, false, None);
+        let (mut save, mut send, mut manage, mut view) = (false, false, None, false);
         ui.horizontal(|ui| {
             let response = ui.add_enabled(ready, egui::Button::new("Save Toolpaths..."));
             save = if errors {
@@ -3729,8 +3737,12 @@ impl CutCraftApp {
             if reachable && ui.button("Machine Files…").clicked() {
                 manage = machine.map(|m| (m.name.clone(), m.send_to.clone()));
             }
+            view = ui
+                .button(super::panels::VIEW_GCODE)
+                .on_hover_hint(super::panels::VIEW_GCODE_ABOUT)
+                .clicked();
         });
-        (save, send, manage)
+        (save, send, manage, view)
     }
 
     /// Gadgets ▸ Job Setup Sheet Editor: the job sheets' title, colours, logo and sections,

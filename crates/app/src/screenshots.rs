@@ -21,7 +21,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 11] = [
+const SCENES: [Scene; 12] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -33,6 +33,8 @@ const SCENES: [Scene; 11] = [
     ("rail-layout", rail),
     ("ribbon-layout", ribbon),
     ("rotary-import", rotary_import),
+    // Help: Toolpaths ▸ Looking at the G-code
+    ("view-gcode", view_gcode),
 ];
 
 /// Where the run is.
@@ -95,6 +97,11 @@ impl Shots {
 fn design(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.invoke(ctx, "new");
     app.job_setup_ok();
+    draw_shapes(app);
+}
+
+/// A rectangle, circle, star and hexagon drawn on the job, the Design tab open.
+fn draw_shapes(app: &mut CutCraftApp) {
     let shapes = [
         (
             "draw_rectangle",
@@ -263,6 +270,25 @@ fn rotary_import(app: &mut CutCraftApp, ctx: &egui::Context) {
         cut_craft_core::document::Job::rotary(200.0, 90.0, cut_craft_core::document::Along::X);
     import(app, ctx);
     app.framing = crate::view3d::Framing::default();
+}
+
+/// View G-code on the Output tab: the profile and pocket's G-code in its window, on a flat
+/// job again (the job is replaced as is: a New would ask about the unsaved rotary one).
+fn view_gcode(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.form = None;
+    app.doc = cut_craft_core::document::Document::default();
+    draw_shapes(app);
+    toolpaths(app, ctx);
+    app.invoke(ctx, "reset_preview");
+    app.view = View::TwoD;
+    app.pages.set_pinned(super::Page::Toolpaths, true);
+    app.toolpath_subtab = crate::gui::TOOLPATH_SUBTABS
+        .iter()
+        .position(|t| t.name == "Output")
+        .unwrap_or_default();
+    app.view_gcode(app.default_save_form());
+    // its window drawn inside Cut Craft's, where the picture is taken
+    ctx.set_embed_viewports(true);
 }
 
 /// Orientate 3D Model with a model in the scene: a stepped pyramid, made here.

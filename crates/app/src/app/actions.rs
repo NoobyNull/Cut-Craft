@@ -119,6 +119,11 @@ impl CutCraftApp {
             deep_cut: None,
             units_ask: None,
             earlier_ask: None,
+            gcode_view: None,
+            save_anyway: None,
+            checks_accepted: false,
+            save_after: None,
+            form_back: None,
             shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
@@ -1356,16 +1361,22 @@ impl CutCraftApp {
                 }
             }
             "save_toolpaths" => {
-                self.save_form = Some(SaveForm {
-                    mode: files::SaveMode::VisibleToOneFile,
-                    group: false,
-                    post: None,
-                    add_side: self.doc.job.double_sided.is_some(),
-                    changes: self.default_changes(),
-                    job_sheet: true,
-                });
+                self.save_form = Some(self.default_save_form());
             }
             _ => unreachable!("not a toolpath action: {id}"),
+        }
+    }
+
+    /// Save Toolpaths' form as it opens: every shown toolpath in one file through the
+    /// machine's default post.
+    pub(super) fn default_save_form(&self) -> SaveForm {
+        SaveForm {
+            mode: files::SaveMode::VisibleToOneFile,
+            group: false,
+            post: None,
+            add_side: self.doc.job.double_sided.is_some(),
+            changes: self.default_changes(),
+            job_sheet: true,
         }
     }
 
@@ -1395,7 +1406,7 @@ impl CutCraftApp {
     /// each file of the form's plan through its post (and each tile, when the job is tiled),
     /// with the job sheet beside them when the form says so.
     pub(super) fn save_toolpaths(&mut self, form: &SaveForm) {
-        let Some((post, told)) = self.ready_to_save(form) else {
+        let Some((post, told)) = self.ready_to_save(form, false) else {
             return;
         };
         let extension = post.extension.clone();
@@ -1569,6 +1580,7 @@ impl CutCraftApp {
     pub(super) fn ready_to_save(
         &mut self,
         form: &SaveForm,
+        sending: bool,
     ) -> Option<(cut_craft_post::Post, String)> {
         let post = match self.form_post(form) {
             Ok(post) => post,
@@ -1603,10 +1615,12 @@ impl CutCraftApp {
             .flatten()
             .any(|id| self.doc.toolpaths.get(id).is_some_and(|t| t.stale));
         let ask = stale || self.options.confirmations.cutting_checks == CuttingChecks::Ask;
-        if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
-            self.status.set_message("Toolpaths not saved");
+        if !problems.is_empty() && ask && !std::mem::take(&mut self.checks_accepted) {
+            // asked over the window: the answer saves (or sends) again
+            self.ask_save_anyway(form, problems, sending);
             return None;
         }
+        self.checks_accepted = false;
         let told = if problems.is_empty() || ask {
             String::new()
         } else {
@@ -1906,6 +1920,26 @@ impl CutCraftApp {
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, String> {
+        let made = chrono::Local::now().naive_local();
+        let texts = self.toolpath_texts(form, post, path, made)?;
+        let mut written = vec![];
+        for (path, text) in texts {
+            files::write_text(&path, &text)?;
+            written.push(path);
+        }
+        Ok(written)
+    }
+
+    /// The files the form's plan makes through `post` at `path` (and beside it), with the
+    /// G-code each holds as made at `made`, in the order they are run: what Save Toolpaths
+    /// writes and View G-code shows.
+    pub(super) fn toolpath_texts(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+        made: chrono::NaiveDateTime,
+    ) -> Result<Vec<(std::path::PathBuf, String)>, String> {
         let plan = self.plan(form, post)?;
         let thinned = self.thinned_for_saving(&plan)?;
         let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
@@ -1919,7 +1953,7 @@ impl CutCraftApp {
         let slots = self.slots();
         let per_tool = Self::split_for(form, post);
         let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
-        let mut written = vec![];
+        let mut texts = vec![];
         for (path, part) in &parts {
             // one file per tile, each tile moved to the job's corner
             if let Some(tiling) = self.doc.tiling {
@@ -1933,15 +1967,15 @@ impl CutCraftApp {
                     if in_tile.toolpaths.is_empty() {
                         continue;
                     }
-                    files::save_through(post, &slots, &in_tile, &named, job)?;
-                    written.push(named);
+                    let text = files::render_through(post, &slots, &in_tile, &named, job, made)?;
+                    texts.push((named, text));
                 }
             } else {
-                files::save_through(post, &slots, part, path, job)?;
-                written.push(path.clone());
+                let text = files::render_through(post, &slots, part, path, job, made)?;
+                texts.push((path.clone(), text));
             }
         }
-        Ok(written)
+        Ok(texts)
     }
 
     /// The post toolpaths are saved through: the active machine's default when it suits the
@@ -3105,19 +3139,6 @@ impl CutCraftApp {
             rfd::MessageDialogResult::No => Some(true),
             _ => Some(false),
         }
-    }
-
-    fn save_anyway(problems: &[String]) -> bool {
-        let answer = message_dialog()
-            .set_title(APP_NAME)
-            .set_level(rfd::MessageLevel::Warning)
-            .set_description(format!(
-                "Check before cutting:\n\n• {}\n\nSave the toolpaths anyway?",
-                problems.join("\n• ")
-            ))
-            .set_buttons(rfd::MessageButtons::YesNo)
-            .show();
-        answer == rfd::MessageDialogResult::Yes
     }
 
     /// The icons over the toolpath list: edit and hide the selected toolpath, and with
