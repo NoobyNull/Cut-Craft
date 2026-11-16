@@ -31,7 +31,8 @@ pub enum Strategy {
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
-    /// Of the laser's maximum
+    /// Of the laser's maximum. The laser burns only along the cuts: it is off while it
+    /// comes down to the surface, so no dot is burned where a line starts
     #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
     #[schemars(extend("x-group" = "Laser"))]
     pub power: f64,
@@ -93,17 +94,13 @@ pub fn laser() -> Tool {
     }
 }
 
-/// `moves` with the laser's `power` on every move but rapids: what a laser toolpath holds.
+/// `moves` with the laser's `power` on its cuts only, what a laser toolpath holds: off on
+/// rapids, and while it comes down to the surface, so it never burns a dot standing still
+/// where a line starts.
 pub fn powered(moves: &[Move], power: f64) -> Vec<f64> {
     moves
         .iter()
-        .map(|m| {
-            if m.kind == MoveKind::Rapid {
-                0.0
-            } else {
-                power
-            }
-        })
+        .map(|m| if m.kind == MoveKind::Cut { power } else { 0.0 })
         .collect()
 }
 
@@ -232,7 +229,8 @@ mod tests {
         let t = cut(&Params::default());
         assert_eq!(t.power.len(), t.moves.len());
         for (m, &p) in t.moves.iter().zip(&t.power) {
-            assert_eq!(p, if m.kind == MoveKind::Rapid { 0.0 } else { 80.0 });
+            // off while it comes down to the surface, so no dot burns where each line starts
+            assert_eq!(p, if m.kind == MoveKind::Cut { 80.0 } else { 0.0 });
             if m.kind != MoveKind::Rapid {
                 assert!(m.to.z.abs() < 1e-12);
             }
