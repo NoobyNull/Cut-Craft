@@ -17,6 +17,9 @@ const PROFILE: &str = "profile_toolpath";
 /// The Pocket strategy, which clears inside its shapes.
 const POCKET: &str = "pocket_toolpath";
 
+/// The Drilling strategy, which goes straight down at each hole's centre.
+const DRILLING: &str = "drilling_toolpath";
+
 /// How close to the material's bottom a cut must reach to count as right through, mm.
 const THROUGH: f64 = 1e-3;
 
@@ -58,10 +61,68 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
     if let Some(loose) = comes_loose(doc, toolpath, deepest) {
         found.push(loose);
     }
+    if toolpath.strategy == DRILLING {
+        let holes: Vec<Path> = toolpath
+            .vectors
+            .iter()
+            .filter_map(|id| doc.vectors.get(id))
+            .filter(|v| v.closed)
+            .cloned()
+            .collect();
+        found.extend(drill_sizes(name, tool, &holes, units));
+    }
     if let Some(missed) = missed_spots(doc, toolpath, left) {
         found.push(missed);
     }
     found.extend(fell_back(toolpath, units));
+    found
+}
+
+/// What Drilling's bit does to `holes` not its size, a sentence each: it drills straight down
+/// at each centre, so every hole comes out the bit's width, whatever was drawn. A bit wider
+/// than a hole spoils it; a hole much wider than the bit wants a Pocket or Profile instead.
+/// `name` is the toolpath's, or the form's.
+pub fn drill_sizes(
+    name: &str,
+    tool: &crate::toolpath::Tool,
+    holes: &[Path],
+    units: crate::document::Units,
+) -> Vec<String> {
+    let bit = tool.diameter;
+    // a hole drawn within this of the bit is taken as its size
+    let near = (bit * 0.05).max(0.1);
+    let sizes: Vec<f64> = holes
+        .iter()
+        .map(|h| {
+            let size = h.bounds().size();
+            size.x.max(size.y)
+        })
+        .collect();
+    let width = units.length(bit, 1);
+    let mut found = vec![];
+    let small: Vec<f64> = sizes.iter().copied().filter(|s| bit - s > near).collect();
+    if let Some(smallest) = small.iter().copied().reduce(f64::min) {
+        found.push(format!(
+            "{name}: {} ({width}) is bigger than {} of the holes drawn (the smallest is {} across), \
+             so it drills them {width} wide: pick a smaller bit, or check the holes are \
+             meant to be that size",
+            tool.name,
+            small.len(),
+            units.length(smallest, 1),
+        ));
+    }
+    let big: Vec<f64> = sizes.iter().copied().filter(|s| s - bit > near).collect();
+    if let Some(largest) = big.iter().copied().reduce(f64::max) {
+        let are = if big.len() == 1 { "is" } else { "are" };
+        found.push(format!(
+            "{name}: {} of the holes drawn {are} wider than {} ({width}; the largest is {} across), \
+             and Drilling only goes straight down, so they come out {width} wide: use a \
+             Pocket or a Profile (Inside) toolpath for a hole wider than the bit",
+            big.len(),
+            tool.name,
+            units.length(largest, 1),
+        ));
+    }
     found
 }
 
@@ -502,6 +563,50 @@ mod tests {
             ..profile(&[1], "outside", "none", 20.0)
         };
         assert!(!loose(&problems(&doc, &pocket)));
+    }
+
+    #[test]
+    fn a_drill_not_the_size_of_the_holes_drawn_is_flagged() {
+        use crate::geometry::Path;
+        let doc = crate::testing::document_with(vec![
+            Path::circle(Point::new(20.0, 20.0), 1.5),
+            Path::circle(Point::new(40.0, 20.0), 5.0),
+            Path::circle(Point::new(60.0, 20.0), 3.0),
+        ]);
+        let ids: Vec<_> = doc.vectors.keys().copied().collect();
+        let bit = |diameter: f64| Tool {
+            name: "Drill".into(),
+            diameter,
+            flute_length: 30.0,
+            ..Tool::default()
+        };
+        let drilling = |tool: Tool, vectors: &[EntityId]| Toolpath {
+            name: "Drilling 1".into(),
+            vectors: vectors.to_vec(),
+            ..toolpath(tool, "drilling_toolpath", 5.0)
+        };
+        let found = problems(&doc, &drilling(bit(6.0), &ids));
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(
+            found[0].contains("bigger than 1 of the holes") && found[0].contains("3.0 mm"),
+            "{found:?}"
+        );
+        assert!(
+            found[1].contains("1 of the holes") && found[1].contains("10.0 mm"),
+            "{found:?}"
+        );
+        assert!(found[1].contains("Pocket"), "says what to use: {found:?}");
+        // the right bit for the 6 mm hole: nothing to say
+        assert_eq!(
+            problems(&doc, &drilling(bit(6.0), &ids[2..])),
+            Vec::<String>::new()
+        );
+        // only Drilling is judged so
+        let pocket = Toolpath {
+            strategy: POCKET.into(),
+            ..drilling(bit(6.0), &ids)
+        };
+        assert!(!problems(&doc, &pocket).iter().any(|f| f.contains("holes")));
     }
 
     #[test]
