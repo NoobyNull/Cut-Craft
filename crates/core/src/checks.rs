@@ -17,6 +17,9 @@ const PROFILE: &str = "profile_toolpath";
 /// The Pocket strategy, which clears inside its shapes.
 const POCKET: &str = "pocket_toolpath";
 
+/// The Inlay strategy, whose inserts and holes are cut out with no tabs.
+const INLAY: &str = "inlay_toolpath";
+
 /// The Drilling strategy, which goes straight down at each hole's centre.
 const DRILLING: &str = "drilling_toolpath";
 
@@ -282,6 +285,12 @@ fn finished_after(doc: &Document, toolpath: &Toolpath) -> bool {
 fn comes_loose(doc: &Document, toolpath: &Toolpath, deepest: f64) -> Option<String> {
     let params = &toolpath.params;
     let through = doc.job.thickness > 0.0 && deepest + THROUGH >= doc.job.thickness;
+    if toolpath.strategy == INLAY && through {
+        return inlay_loose(
+            &toolpath.name,
+            params["inlay_type"].as_str().unwrap_or_default(),
+        );
+    }
     if toolpath.strategy != PROFILE || !through {
         return None;
     }
@@ -312,6 +321,23 @@ fn comes_loose(doc: &Document, toolpath: &Toolpath, deepest: f64) -> Option<Stri
          loose and can move into the cutter. Add tabs (Tabs in the toolpath's form), or hold \
          the piece down another way: tape, screws or a vacuum table",
         toolpath.name
+    ))
+}
+
+/// What comes loose when an Inlay toolpath of `inlay_type` (its form's value) cuts right
+/// through the material, as a sentence; `None` for a pocket, which keeps its floor. Inlay
+/// has no tabs, so the insert (or a hole's waste) is held only by what holds the material.
+pub fn inlay_loose(name: &str, inlay_type: &str) -> Option<String> {
+    let piece = match inlay_type {
+        "male_straight" | "male_stepped" => "the insert",
+        "female_hole" => "the waste inside the hole",
+        _ => return None,
+    };
+    Some(format!(
+        "{name} cuts right through the material, and inlays have no tabs, so {piece} comes \
+         loose and can move into the cutter. Hold it down (tape, screws or a vacuum table), \
+         or make the Cut Depth a little less than the material and cut the thin skin left \
+         by hand"
     ))
 }
 
@@ -607,6 +633,27 @@ mod tests {
             ..drilling(bit(6.0), &ids)
         };
         assert!(!problems(&doc, &pocket).iter().any(|f| f.contains("holes")));
+    }
+
+    #[test]
+    fn an_inlay_cut_out_right_through_comes_loose() {
+        let mut doc = crate::testing::sample_document();
+        doc.job.thickness = 6.0;
+        let inlay = |kind: &str, depth: f64| Toolpath {
+            name: "Inlay 1".into(),
+            params: serde_json::json!({ "inlay_type": kind }),
+            vectors: vec![crate::document::EntityId(1)],
+            ..toolpath(Tool::default(), "inlay_toolpath", depth)
+        };
+        for kind in ["male_straight", "male_stepped", "female_hole"] {
+            assert!(loose(&problems(&doc, &inlay(kind, 6.0))), "{kind}");
+            assert!(
+                !loose(&problems(&doc, &inlay(kind, 5.0))),
+                "{kind} short of it"
+            );
+        }
+        // a pocket for the insert has a floor
+        assert!(!loose(&problems(&doc, &inlay("female_pocket", 6.0))));
     }
 
     #[test]
