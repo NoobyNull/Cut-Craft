@@ -10664,6 +10664,32 @@ fn previewing_several_toolpaths_off_the_windows_thread_says_how_many() {
 }
 
 #[test]
+fn a_fine_bit_note_after_a_preview_keeps_the_count_beside_it() {
+    let mut h = Harness::new();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.app.display.animate_preview = false;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    for id in ["profile_toolpath", "pocket_toolpath"] {
+        h.app.invoke(&h.ctx, id);
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply_form(id, &params).unwrap();
+        until_not_busy(&mut h);
+        h.app.form = None;
+    }
+    for t in h.app.doc.toolpaths.values_mut() {
+        t.tool.diameter = 0.05;
+    }
+    h.app.preview_all(false);
+    until_not_busy(&mut h);
+    let message = &h.app.status.message;
+    assert!(
+        message.starts_with("Previewed 2 toolpaths. ⚠ "),
+        "{message}"
+    );
+    assert!(message.contains("narrower than two of the preview's squares"));
+}
+
+#[test]
 fn a_double_sided_preview_cuts_the_other_side_off_the_windows_thread_too() {
     let mut h = Harness::new();
     h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());

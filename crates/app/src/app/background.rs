@@ -205,11 +205,13 @@ impl CutCraftApp {
                 if app.display.auto_open_3d {
                     app.view = super::View::ThreeD;
                 }
-                if let Some(done) = done {
-                    app.status.set_message(&done);
-                }
-                if let Some(note) = fine_bit {
-                    app.status.set_message(&note);
+                // one line, so the fine-bit note never hides what was previewed
+                let message = match (done, fine_bit) {
+                    (Some(done), Some(note)) => Some(format!("{done}. {note}")),
+                    (done, note) => done.or(note),
+                };
+                if let Some(message) = message {
+                    app.status.set_message(&message);
                 }
                 then(app);
             },
