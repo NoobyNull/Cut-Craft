@@ -2597,12 +2597,18 @@ impl CutCraftApp {
     /// Set as Default in Job Setup: new jobs start with the job its settings make.
     pub(super) fn job_setup_default(&mut self) {
         let Some(form) = &mut self.form else { return };
-        // made on an empty document, so only the job's own settings count
+        // made on an empty document, so only the job's own settings count; it starts from
+        // the default kept now, so what is not on the form (Clearing Settings' Use as My
+        // Default, the preview colours, where the model sits) is kept as it was
+        let mut empty = Document::default();
+        if let Some(job) = self.options.default_job {
+            empty.job = job;
+        }
         let made = self
             .registry
             .get(form.id)
             .expect("only registered commands have forms")
-            .run_json(&Document::default(), &form.params)
+            .run_json(&empty, &form.params)
             .map_err(|e| e.to_string())
             .and_then(|change| {
                 change
@@ -5072,7 +5078,10 @@ impl CutCraftApp {
                 if job_setup {
                     default = ui
                         .button("Set as Default")
-                        .on_hover_hint("Start every new job with these settings")
+                        .on_hover_hint(
+                            "Start every new job with these settings (your Clearing \
+                             Settings default is kept)",
+                        )
                         .clicked();
                 }
             });

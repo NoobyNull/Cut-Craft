@@ -7157,6 +7157,31 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
 }
 
 #[test]
+fn set_as_default_in_job_setup_keeps_the_clearing_default() {
+    use cut_craft_core::entry::WayBack;
+    let mut h = Harness::at_start();
+    let mut mine = cut_craft_core::document::Job::default();
+    mine.clearing.way_back = WayBack::Alternate;
+    h.app.options.default_job = Some(mine);
+    h.app.invoke(&h.ctx, "new");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().expect("the Job Setup form");
+    form.params["size"]["width"] = 300.0.into();
+    let button = h
+        .text_at("Set as Default")
+        .expect("a Set as Default button");
+    h.click(button, Modifiers::NONE);
+    h.frame(vec![]);
+    let saved = h.app.options.default_job.expect("kept in the options");
+    assert!((saved.width - 300.0).abs() < 1e-9);
+    assert_eq!(
+        saved.clearing.way_back,
+        WayBack::Alternate,
+        "Clearing Settings' own default is left as it was"
+    );
+}
+
+#[test]
 fn a_crash_last_time_opens_its_report_with_the_crash_log() {
     let mut h = Harness::new();
     h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;

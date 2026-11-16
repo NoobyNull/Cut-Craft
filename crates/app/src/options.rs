@@ -1561,7 +1561,8 @@ pub struct Options {
     #[schemars(skip)]
     pub stl: fmt_export_as_stl::Settings,
     /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
-    /// own starting job until then.
+    /// own starting job until then. Set as Default changes only what is on its form, so the
+    /// clearing kept by Clearing Settings' Use as My Default stays.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub default_job: Option<cut_craft_core::document::Job>,
