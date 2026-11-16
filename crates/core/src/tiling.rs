@@ -37,8 +37,11 @@ pub struct Tiling {
     pub height: f64,
     /// How far each tile's cuts run past its edges (at least the tool's radius for V-carving).
     /// Each tile file's zero is at the start of its overlap, so a file covers the tile and
-    /// the overlap on both sides, and nothing in it goes below zero. Laser toolpaths have
-    /// none: their tiles meet edge to edge, so no seam burns twice
+    /// the overlap on both sides. A tile at the material's edge also holds every cut past
+    /// that edge (an outside profile's centreline, a lead-in): one running further out than
+    /// the overlap goes below zero (or past the far side) by the difference, and the checks
+    /// before saving measure each file with it. Laser toolpaths have none: their tiles meet
+    /// edge to edge, so no seam burns twice
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub overlap: f64,
     /// Put the part-size tile first rather than last
@@ -155,7 +158,8 @@ impl Tiling {
 
     /// `doc` with each toolpath's moves cut to `tile` (with the overlap) and moved so the
     /// start of the tile's overlap sits where the job's lower-left corner is: nothing in a
-    /// tile file goes below zero for its overlap.
+    /// tile file goes below zero for its overlap (a cut past the material's edge, kept in
+    /// the edge tile, can).
     pub fn tiled(&self, doc: &Document, tile: Rect) -> Document {
         self.cut_to(doc, tile, true)
     }

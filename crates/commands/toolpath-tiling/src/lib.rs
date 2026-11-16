@@ -1,10 +1,11 @@
 //! Toolpath Tiling: save the toolpaths in tiles for a machine smaller than the job. The tiles are
 //! drawn in the 2D view; Save Toolpaths writes
 //! one file per tile, each moved so the start of its overlap is at the job's lower-left
-//! corner (nothing goes below zero); the form says in red when a tile with its overlap is
-//! bigger than the machine's bed (not said for a machine whose bed size was not given). Where a cut runs off a
-//! tile the tool lifts straight up before moving across to where it comes back in; a
-//! laser keeps each line's own power, and a drill bank drills only the holes of its tile.
+//! corner (the overlap never goes below zero; a cut past the material's edge further out
+//! than the overlap does, by the difference); the form says in red when a tile with its
+//! overlap is bigger than the machine's bed (not said for a machine whose bed size was not
+//! given). Where a cut runs off a tile the tool lifts straight up before moving across to
+//! where it comes back in; a laser keeps each line's own power, and a drill bank drills only the holes of its tile.
 //! A cut past the material's edge (an outside profile's centreline, a lead-in) goes in the
 //! tile at that edge, so nothing is left out of every tile. A toolpath with nothing to cut
 //! in a tile is left out of that tile's file (no tool change or spindle start for it), and a
