@@ -14627,3 +14627,16 @@ fn ctrl_alt_s_saves_a_numbered_copy_and_leaves_the_file_as_it_was() {
     assert!(dir.join("Sign_1.ccjob").is_file(), "a numbered copy");
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn shift_cmd_z_redoes_on_a_mac() {
+    let mut h = Harness::new();
+    h.ctx.set_os(egui::os::OperatingSystem::Mac);
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    assert!(h.app.doc.vectors.is_empty());
+    let held = Modifiers::COMMAND | Modifiers::SHIFT;
+    h.frame_holding(held, vec![key_with(Key::Z, held)]);
+    assert_eq!(h.app.doc.vectors.len(), 1, "⇧⌘Z is Redo, as the menu shows");
+}
