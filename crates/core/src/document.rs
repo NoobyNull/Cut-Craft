@@ -1094,6 +1094,72 @@ impl Document {
             .unzip()
     }
 
+    /// The selected vectors as the items a user sees: a group's selected members are one
+    /// item, and with `nest`, a closed vector also takes in the items lying inside it (a
+    /// part and its holes). Items come in the order their first member was picked.
+    pub fn selected_items(&self, nest: bool) -> Vec<Vec<EntityId>> {
+        let mut items: Vec<Vec<EntityId>> = Vec::new();
+        let mut by_group: BTreeMap<u64, usize> = BTreeMap::new();
+        for &id in &self.selection {
+            if let Some(&g) = self.vector_groups.get(&id) {
+                if let Some(&at) = by_group.get(&g) {
+                    items[at].push(id);
+                    continue;
+                }
+                by_group.insert(g, items.len());
+            }
+            items.push(vec![id]);
+        }
+        if !nest || items.len() < 2 {
+            return items;
+        }
+        let bounds = |item: &[EntityId]| {
+            item.iter()
+                .map(|id| self.vectors[id].bounds())
+                .reduce(Rect::union)
+                .expect("an item has a member")
+        };
+        let boxes: Vec<Rect> = items.iter().map(|i| bounds(i)).collect();
+        // a lone closed vector is an outline other items can sit inside
+        let rings: Vec<Option<Vec<Point>>> = items
+            .iter()
+            .map(|i| match i.as_slice() {
+                [id] if self.vectors[id].closed => Some(self.vectors[id].flatten(0.01)),
+                _ => None,
+            })
+            .collect();
+        let area = |r: Rect| r.size().x * r.size().y;
+        // each item's tightest outline around it
+        let parent: Vec<Option<usize>> = (0..items.len())
+            .map(|a| {
+                (0..items.len())
+                    .filter(|&b| b != a && area(boxes[b]) > area(boxes[a]))
+                    .filter(|&b| {
+                        rings[b].as_ref().is_some_and(|ring| {
+                            boxes[b].contains_rect(boxes[a])
+                                && inside(
+                                    std::slice::from_ref(ring),
+                                    self.vectors[&items[a][0]].start,
+                                )
+                        })
+                    })
+                    .min_by(|&x, &y| area(boxes[x]).total_cmp(&area(boxes[y])))
+            })
+            .collect();
+        let root = |mut a: usize| {
+            while let Some(p) = parent[a] {
+                a = p;
+            }
+            a
+        };
+        let mut merged: Vec<Vec<EntityId>> = vec![Vec::new(); items.len()];
+        for (a, item) in items.iter().enumerate() {
+            merged[root(a)].extend(item);
+        }
+        merged.retain(|i| !i.is_empty());
+        merged
+    }
+
     /// Bounds of everything selected, or `None` when nothing is.
     pub fn selection_bounds(&self) -> Option<Rect> {
         self.selection

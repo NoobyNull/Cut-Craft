@@ -59,11 +59,14 @@ pub struct Field {
 }
 
 /// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`),
-/// judged on the form's top-level parameters: the forms change with what is chosen.
+/// judged on the form's top-level parameters: the forms change with what is chosen. A rule
+/// naming more than one key holds when every one of them does.
 #[derive(Debug, PartialEq)]
 pub struct When {
     pub key: String,
     pub values: Vec<String>,
+    /// Further keys and their values that must hold too.
+    pub also: Vec<(String, Vec<String>)>,
     /// Shown when the value is one of `values`; else hidden then.
     pub show: bool,
 }
@@ -79,29 +82,38 @@ impl When {
     }
 
     fn from_rule(rule: &Value, show: bool) -> Option<Self> {
-        let (key, values) = rule.as_object()?.iter().next()?;
-        let values = match values {
-            Value::Array(list) => list
-                .iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect(),
-            one => vec![one.as_str()?.to_owned()],
+        // a tick box's rule may be written as a bool or as "true" / "false"
+        let text = |v: &Value| match v {
+            Value::Bool(ticked) => Some(ticked.to_string()),
+            v => v.as_str().map(String::from),
         };
+        let mut rules = rule.as_object()?.iter().map(|(key, values)| {
+            let values = match values {
+                Value::Array(list) => list.iter().filter_map(text).collect(),
+                one => vec![text(one)?],
+            };
+            Some((key.clone(), values))
+        });
+        let (key, values) = rules.next()??;
         Some(Self {
-            key: key.clone(),
+            key,
             values,
+            also: rules.collect::<Option<_>>()?,
             show,
         })
     }
 
     /// Whether the field shows, given the form's top-level `params`.
     pub fn shown(&self, params: &Value) -> bool {
-        // a tick box reads as "true" or "false"
-        let value = match &params[&self.key] {
-            Value::Bool(ticked) => Some(ticked.to_string()),
-            value => value.as_str().map(String::from),
+        let holds = |key: &String, values: &[String]| {
+            // a tick box reads as "true" or "false"
+            let value = match &params[key] {
+                Value::Bool(ticked) => Some(ticked.to_string()),
+                value => value.as_str().map(String::from),
+            };
+            value.is_some_and(|v| values.contains(&v))
         };
-        let is = value.is_some_and(|v| self.values.contains(&v));
+        let is = holds(&self.key, &self.values) && self.also.iter().all(|(k, v)| holds(k, v));
         is == self.show
     }
 }
@@ -2373,6 +2385,40 @@ mod tests {
             }
         }
         assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    #[test]
+    fn settings_that_do_nothing_in_the_current_mode_are_hidden() {
+        let shown = |id: &str, key: &str, params: Value| {
+            let f = fields(&schema(id));
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&params))
+        };
+        let count = serde_json::json!({ "spacing": "count" });
+        let distance = serde_json::json!({ "spacing": "distance" });
+        assert!(shown("copy_along_vectors", "copies", count.clone()));
+        assert!(!shown("copy_along_vectors", "copies", distance.clone()));
+        for key in ["distance", "force_even_spacing"] {
+            assert!(shown("copy_along_vectors", key, distance.clone()), "{key}");
+            assert!(!shown("copy_along_vectors", key, count.clone()), "{key}");
+        }
+        let relative = |r: bool| serde_json::json!({ "relative": r, "rotated": true });
+        assert!(!shown("move", "anchor", relative(true)));
+        assert!(shown("move", "anchor", relative(false)));
+        assert!(
+            !shown("move", "rotated", relative(false)),
+            "a tick box rule as a bool"
+        );
+        assert!(shown("move", "angle", relative(true)));
+        assert!(
+            !shown("move", "angle", relative(false)),
+            "the angle only turns relative moves"
+        );
+        let sharp = |k: bool| serde_json::json!({ "keep_sharp_corners": k });
+        assert!(shown("fit_curves_to_vectors", "max_angle", sharp(true)));
+        assert!(!shown("fit_curves_to_vectors", "max_angle", sharp(false)));
     }
 
     #[test]

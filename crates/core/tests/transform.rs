@@ -205,3 +205,173 @@ mod components {
         );
     }
 }
+
+/// A 100-wide plaque and the two-letter word "II" grouped as text, all selected.
+fn plaque_and_grouped_word() -> Document {
+    let mut doc = Document::default();
+    let mut c = Change::builder(&doc);
+    let plaque = c.add(Path::polyline(
+        &[
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            Point::new(100.0, 40.0),
+            Point::new(0.0, 40.0),
+        ],
+        true,
+    ));
+    let bar = |x: f64| {
+        Path::polyline(
+            &[
+                Point::new(x, 10.0),
+                Point::new(x + 2.0, 10.0),
+                Point::new(x + 2.0, 30.0),
+                Point::new(x, 30.0),
+            ],
+            true,
+        )
+    };
+    let a = c.add(bar(0.0));
+    let b = c.add(bar(10.0));
+    c.set_group(a, Some(7));
+    c.set_group(b, Some(7));
+    c.select([plaque, a, b]);
+    doc.apply(&c.finish()).unwrap();
+    doc
+}
+
+#[test]
+fn centring_moves_a_group_as_one_piece() {
+    let mut doc = plaque_and_grouped_word();
+    let change = Change::align_selected(&doc, |item, sel| {
+        Point::new(sel.center().x - item.center().x, 0.0)
+    })
+    .unwrap();
+    doc.apply(&change).unwrap();
+    let a = doc.vectors[&EntityId(2)].bounds();
+    let b = doc.vectors[&EntityId(3)].bounds();
+    assert!(
+        (b.min.x - a.min.x - 10.0).abs() < 1e-9,
+        "letters kept apart: {a:?} {b:?}"
+    );
+    assert!((a.min.x - 44.0).abs() < 1e-9, "the word is centred: {a:?}");
+}
+
+#[test]
+fn spacing_spaces_whole_groups() {
+    let mut doc = Document::default();
+    let mut c = Change::builder(&doc);
+    let mut ids = Vec::new();
+    // three two-letter words, each a group
+    for (n, x) in [0.0, 30.0, 100.0].into_iter().enumerate() {
+        for dx in [0.0, 5.0] {
+            let id = c.add(Path::polyline(
+                &[
+                    Point::new(x + dx, 0.0),
+                    Point::new(x + dx + 2.0, 0.0),
+                    Point::new(x + dx + 2.0, 5.0),
+                ],
+                true,
+            ));
+            c.set_group(id, Some(n as u64 + 1));
+            ids.push(id);
+        }
+    }
+    c.select(ids.clone());
+    doc.apply(&c.finish()).unwrap();
+    let change =
+        Change::space_selected(&doc, false, cut_craft_core::Sequence::ByPosition, false).unwrap();
+    doc.apply(&change).unwrap();
+    let x = |i: usize| doc.vectors[&ids[i]].bounds().min.x;
+    assert!(
+        (x(1) - x(0) - 5.0).abs() < 1e-9,
+        "the first word holds together"
+    );
+    assert!(
+        (x(3) - x(2) - 5.0).abs() < 1e-9,
+        "the middle word holds together"
+    );
+    assert!(
+        (x(2) - 50.0).abs() < 1e-9,
+        "the middle word is spaced evenly: {}",
+        x(2)
+    );
+}
+
+#[test]
+fn copies_of_a_group_are_groups_of_their_own_and_moved_text_stays_text() {
+    let mut doc = plaque_and_grouped_word();
+    doc.texts.insert(
+        7,
+        serde_json::json!({"text": "II", "anchor": {"x": 0.0, "y": 10.0}}),
+    );
+    doc.part_names.insert(7, "Word".into());
+    let word = [EntityId(2), EntityId(3)];
+    let shifts = [
+        DAffine2::from_translation(Point::new(0.0, 50.0)),
+        DAffine2::from_translation(Point::new(0.0, 100.0)),
+    ];
+    doc.apply(&Change::copy_vectors(&doc, &word, &shifts))
+        .unwrap();
+    let copies: Vec<EntityId> = doc.vectors.keys().copied().filter(|id| id.0 > 3).collect();
+    assert_eq!(copies.len(), 4);
+    let groups: Vec<u64> = copies.iter().map(|id| doc.vector_groups[id]).collect();
+    assert_eq!(groups[0], groups[1], "the first copy is one group");
+    assert_eq!(groups[2], groups[3], "so is the second");
+    assert!(
+        groups[0] != groups[2] && groups[0] != 7,
+        "each copy its own group"
+    );
+    let text = &doc.texts[&groups[2]];
+    assert_eq!(text["anchor"]["y"], 110.0, "the text moved with its copy");
+    assert_eq!(doc.part_names[&groups[0]], "Word");
+}
+
+#[test]
+fn a_mirrored_copy_of_text_is_grouped_curves() {
+    let mut doc = plaque_and_grouped_word();
+    doc.texts.insert(7, serde_json::json!({"text": "II"}));
+    let word = [EntityId(2), EntityId(3)];
+    let flip = DAffine2::from_scale(Point::new(-1.0, 1.0));
+    doc.apply(&Change::copy_vectors(&doc, &word, &[flip]))
+        .unwrap();
+    let g = doc.vector_groups[&EntityId(4)];
+    assert_eq!(doc.vector_groups[&EntityId(5)], g);
+    assert!(
+        !doc.texts.contains_key(&g),
+        "mirrored letters cannot be edited as text"
+    );
+}
+
+#[test]
+fn a_moved_copy_of_a_dimension_is_grouped_curves() {
+    let mut doc = plaque_and_grouped_word();
+    doc.texts.insert(
+        7,
+        serde_json::json!({"command": "dimensions", "from": {"x": 0.0, "y": 0.0}, "to": {"x": 50.0, "y": 0.0}}),
+    );
+    let word = [EntityId(2), EntityId(3)];
+    let shift = [DAffine2::from_translation(Point::new(0.0, 50.0))];
+    doc.apply(&Change::copy_vectors(&doc, &word, &shift))
+        .unwrap();
+    let copy = doc.vector_groups[&EntityId(4)];
+    assert_ne!(copy, 7, "the copy is a group of its own");
+    assert!(
+        !doc.texts.contains_key(&copy),
+        "a dimension's settings point at what it measured, so its copy does not take them"
+    );
+}
+
+#[test]
+fn a_dimension_copied_onto_itself_is_still_a_dimension() {
+    let mut doc = plaque_and_grouped_word();
+    let record = serde_json::json!({"command": "dimensions", "from": {"x": 0.0, "y": 0.0}});
+    doc.texts.insert(7, record.clone());
+    let word = [EntityId(2), EntityId(3)];
+    doc.apply(&Change::copy_vectors(&doc, &word, &[DAffine2::IDENTITY]))
+        .unwrap();
+    let copy = doc.vector_groups[&EntityId(4)];
+    assert_eq!(
+        doc.texts[&copy], record,
+        "a pasted dimension can still be edited"
+    );
+}

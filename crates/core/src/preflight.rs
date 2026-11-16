@@ -185,6 +185,11 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
         )));
     }
     let has = |kind| toolpath.moves.iter().any(|m| m.kind == kind);
+    if has(MoveKind::Cut)
+        && let Some(drill) = drill_sideways(&toolpath.strategy, tool)
+    {
+        found.push(Finding::warning(format!("{name}: {drill}")));
+    }
     if has(MoveKind::Cut) && tool.feed_rate <= 0.0 {
         found.push(Finding::error(format!(
             "{name}: {} has no feed rate, so the machine would not move while cutting. Set \
@@ -309,6 +314,22 @@ fn on_machine(
             tool.name, limits.name
         )));
     }
+}
+
+/// What to say when a toolpath of `strategy` (a command id such as `profile_toolpath`)
+/// cuts with `tool` and it is a drill, which cuts only straight down: in red at the foot of
+/// the toolpath's form, and in the checks before saving. `None` for any other bit, or a
+/// Drilling toolpath.
+pub fn drill_sideways(strategy: &str, tool: &crate::toolpath::Tool) -> Option<String> {
+    let drilling = matches!(strategy, "drilling_toolpath" | "drill_bank_toolpath");
+    (tool.drill_only && !drilling).then(|| {
+        format!(
+            "{} is a drill, which cuts only straight down. Moved sideways it can snap or \
+             tear the work: pick an end mill for this toolpath, or use the drill in a \
+             Drilling toolpath",
+            tool.name
+        )
+    })
 }
 
 /// The lowest and highest corners of what `moves` reach; `None` without any.
@@ -718,6 +739,24 @@ mod tests {
                 .any(|m| m.starts_with("3D Finishing cuts air")),
             "{warnings:?}"
         );
+    }
+
+    #[test]
+    fn a_drill_cutting_sideways_is_warned_about_and_drilling_with_it_is_not() {
+        let mut sideways = slot("Profile", 50.0, 20.0, 80.0, 3.0);
+        sideways.tool.drill_only = true;
+        sideways.tool.name = "Drill 6mm".into();
+        let mut drilling = sideways.clone();
+        drilling.strategy = "drilling_toolpath".into();
+        drilling.name = "Holes".into();
+        let warned = |t: &Toolpath| {
+            check(&job(), &[t], &Limits::default())
+                .iter()
+                .any(|f| f.severity == Severity::Warning && f.message.contains("is a drill"))
+        };
+        assert!(warned(&sideways));
+        assert!(!warned(&drilling));
+        assert!(!warned(&slot("Profile", 50.0, 20.0, 80.0, 3.0)));
     }
 
     #[test]

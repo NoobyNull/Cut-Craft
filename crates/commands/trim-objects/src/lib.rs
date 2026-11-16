@@ -156,9 +156,14 @@ impl Command for TrimObjects {
             }
         }
         if removed.is_empty() {
-            return Err(CommandError::Failed(
-                "nothing lies on the side to clear. Click on the other side".into(),
-            ));
+            let (side, other) = match p.clear {
+                Clear::OutsideBoundary => ("outside", "Inside"),
+                Clear::InsideBoundary => ("inside", "Outside"),
+            };
+            return Err(CommandError::Failed(format!(
+                "nothing lies {side} the boundary to clear. Set Clear to {other} boundary, or \
+                 pick a different boundary last"
+            )));
         }
         Ok(Change::swap(doc, removed, added))
     }
@@ -214,6 +219,18 @@ mod tests {
         let mut got = ends(&doc);
         got.sort_by(|a, b| a.0.total_cmp(&b.0));
         assert_eq!(got, [(-10.0, 0.0), (20.0, 30.0)]);
+    }
+
+    #[test]
+    fn nothing_to_clear_says_which_setting_to_change() {
+        let inner = Path::polyline(&[Point::new(5.0, 10.0), Point::new(15.0, 10.0)], false);
+        let doc = document_with(vec![inner, square(0.0, 0.0, 20.0)]);
+        let err = TrimObjects::run(&doc, &Params::default())
+            .unwrap_err()
+            .to_string();
+        assert!(!err.contains("Click"), "{err}");
+        assert!(err.contains("outside the boundary"), "{err}");
+        assert!(err.contains("Set Clear to Inside boundary"), "{err}");
     }
 
     #[test]

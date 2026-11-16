@@ -35,11 +35,11 @@ mod view3d;
 fn main() {
     // the command line first: --version and --help print and stop, touching nothing (a closed
     // pipe or, on Windows, no console to print to is no reason to panic)
-    let shots = match startup::parse(std::env::args().skip(1)) {
+    let (shots, open) = match startup::parse(std::env::args().skip(1)) {
         startup::Start::Version => return startup::print(&format!("{}\n", startup::version())),
         startup::Start::Help => return startup::print(&startup::help()),
-        startup::Start::Screenshots(dir) => Some(dir),
-        startup::Start::App => None,
+        startup::Start::Screenshots(dir) => (Some(dir), None),
+        startup::Start::App(open) => (None, open),
     };
     // the log and, on a panic, the crash log the next start offers to report
     cut_craft_bug_report::logs::install(files::config_dir().as_deref());
@@ -49,5 +49,9 @@ fn main() {
     if let Some(program) = cut_craft_updater::this_install().program() {
         cut_craft_updater::clean_up(program);
     }
-    app::run(concat!("Cut Craft v", env!("CARGO_PKG_VERSION")), shots);
+    app::run(
+        concat!("Cut Craft v", env!("CARGO_PKG_VERSION")),
+        shots,
+        open.as_deref(),
+    );
 }

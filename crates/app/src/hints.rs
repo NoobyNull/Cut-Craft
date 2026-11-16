@@ -45,15 +45,15 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "center_horizontally",
-        "Center Horizontally: moves the selected objects sideways so their centres line up on one vertical line",
+        "Center Horizontally: moves the selected objects sideways so their centres line up on one vertical line. A group, like a word of text, moves as one piece",
     ),
     (
         "center_vertically",
-        "Center Vertically: moves the selected objects up or down so their centres line up on one horizontal line",
+        "Center Vertically: moves the selected objects up or down so their centres line up on one horizontal line. A group, like a word of text, moves as one piece",
     ),
     (
         "center",
-        "Center: moves the selected objects so their centres all sit on one point, the middle of the selection",
+        "Center: moves the selected objects so their centres all sit on one point, the middle of the selection. A group, like a word of text, moves as one piece",
     ),
     (
         "center_horizontally_in_material",
@@ -100,6 +100,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Ungroup onto Current Layer: takes the selected groups apart and moves their vectors onto the layer you are working on",
     ),
     (
+        "merge_visible_layers",
+        "Merge Visible: moves the vectors of every shown, unlocked layer onto this one. This layer is shown and unlocked so the merged work can be edited; locked layers are left as they are",
+    ),
+    (
         "group_toolpaths",
         "Group Toolpaths: puts the selected toolpaths together in a folder in the toolpath list, to keep a long list tidy",
     ),
@@ -129,7 +133,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "select",
-        "Select: puts away the tool in hand, so clicking picks objects, Shift-click adds to the pick and dragging draws a box round them",
+        "Select: puts away the tool in hand, so clicking picks objects, Shift-click adds to the pick, dragging draws a box round them (a slip of a pixel or two is still a click, not a move), and right-clicking an object picks it and opens its menu",
     ),
     (
         "transform",
@@ -137,11 +141,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "node_edit",
-        "Node Edit: shows the points (nodes) a vector is made of, to drag them, or right-click to add, delete or change them",
+        "Node Edit: shows the points (nodes) a vector is made of, to drag them, or right-click to add, delete or change them. Del deletes the nodes picked with a box; picked nodes are let go when you pick another vector, undo or leave Node Edit",
     ),
     (
         "measure_inspect",
-        "Measure: drag between two points to read the distance and angle between them, or click an object to see its size",
+        "Measure: drag between two points to read the distance and angle between them (both ends snap to ends, middles and centres as drawing does; hold Shift to place them freely), or click an object to see its size",
     ),
     (
         "pan",
@@ -186,7 +190,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "save_as",
-        "Save As: saves the job under a new name or in another folder",
+        "Save As: saves the job under a new name or in another folder, starting from its own name and folder",
     ),
     (
         "save_as_template",
@@ -194,7 +198,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "increment_and_save",
-        "Increment and Save: saves the job as a new copy with the next number on its name (Sign 2, Sign 3), keeping the earlier versions",
+        "Increment and Save: saves the job as a new copy with the next number on its name (sign_1, sign_2), keeping the earlier versions. A year or date on the end of the name stays as it is (Smith-2024 becomes Smith-2024_1, order_2024-11-15 becomes order_2024-11-15_1)",
     ),
     (
         "recent_files",
@@ -255,7 +259,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "tool_database",
-        "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from",
+        "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it",
     ),
     (
         "tool_changer",
@@ -277,11 +281,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "paste",
-        "Paste: adds the objects on the clipboard to the job exactly where they were copied from; lines lying on top of their original show red",
+        "Paste: adds the objects on the clipboard to the job exactly where they were copied from, on their own layer (in another job, on the current layer); a copied group or word of text pastes as a group of its own, still text (a dimension stays a dimension). Lines lying on top of their original show red. Ctrl+V of a copy made in another Cut Craft window brings its vectors only: 3D components paste only in the window they were copied in",
     ),
     (
         "paste_in_place",
-        "Paste in Place: adds the objects on the clipboard to the job exactly where they were copied from",
+        "Paste in Place: adds the objects on the clipboard to the job exactly where they were copied from; a copied group or word of text pastes as a group of its own",
     ),
     (
         "edit_object",
@@ -325,11 +329,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "run:space_horizontally:{\"order\":\"left_to_right\",\"inside_last_vector\":false}",
-        "Space Left to Right: spreads the selected objects evenly across, in the order you picked them from the left",
+        "Space Left to Right: spreads the selected objects evenly across, in the order you picked them from the left. A group, like a word of text, counts as one object",
     ),
     (
         "run:space_horizontally:{\"order\":\"right_to_left\",\"inside_last_vector\":false}",
-        "Space Right to Left: spreads the selected objects evenly across, in the order you picked them from the right",
+        "Space Right to Left: spreads the selected objects evenly across, in the order you picked them from the right. A group, like a word of text, counts as one object",
     ),
     (
         "run:space_horizontally:{\"order\":\"as_placed\",\"inside_last_vector\":true}",
@@ -349,7 +353,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "guides_visible",
-        "Guides Visible: shows or hides the guide lines you dragged out of the rulers",
+        "Guides Visible: shows or hides the guide lines you dragged out of the rulers; drag a guide where no shape lies on it to move it, or right-click it for its properties, to lock it or to delete it",
     ),
     (
         "lock_all_existing_guides",
@@ -522,7 +526,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "machine_configuration",
-        "Machine Configuration: your machine's size, its post processor and the folder its files go to",
+        "Machine Configuration: your machine's size, its post processor and the folder its files go to. If the saved machines can't be read at start, a copy is kept as machines.json.bad and they are never saved over",
     ),
     (
         "add_machine",
@@ -542,7 +546,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "install_post_processor",
-        "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet",
+        "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time",
     ),
     (
         "update_post_processor_database",
@@ -594,7 +598,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "addons",
-        "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft",
+        "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository",
     ),
     (
         "community:0",

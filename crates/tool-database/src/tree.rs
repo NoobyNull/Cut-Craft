@@ -173,6 +173,7 @@ pub fn export_group(db: &ToolDatabase, group: &str) -> ToolDatabase {
         // exported tools are plain tools: whoever imports them decides
         catalogues: vec![],
         joined: std::collections::BTreeMap::new(),
+        renamed: std::collections::BTreeMap::new(),
     }
 }
 

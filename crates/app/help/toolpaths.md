@@ -34,10 +34,29 @@ the places the post prints, inch posts included: controllers such as GRBL stop t
 (error 33, invalid arc target) when they are not. Pick a post without arcs (GRBL Straight,
 say) only if your controller cannot cut arcs.
 
+Saving again where an earlier save left G-code (the file itself, or the numbered, tile and
+side files saved beside it) asks first. Replace deletes all of them, so an old file for a
+toolpath you have since removed is not left to run by mistake. Archive moves them into a
+dated folder under Archive beside them (a second one saved in the same second gets its own
+folder), then adds the new ones. If the new files cannot be saved (a toolpath crossing a
+keep-out zone, say), the earlier ones are put back as they were. Tick Do this every time to
+stop being asked; Edit ▸ Options ▸ Confirmations ▸ G-code from an earlier save changes it.
+A name typed with a dot of its own (sign v1.5) keeps it: the file is sign v1.5.nc.
+
+A drill brought in from a tool library (.vtdb) is kept as a drill: it cuts only straight
+down. Its Drill only tick sits beside its Tool Type in the Tool Database, to see or change.
+Picked for any toolpath but Drilling, the form says so in red at its foot, and the checks
+before saving warn of it too.
+
 When one file changes tools (a pause to change the bit by hand, or a tool changer), the
 first move after the change lifts the new bit straight up to the safe height, and only
 then moves across to the next cut. You set Z zero for the new bit during the pause, so
 the machine never travels sideways at the height the bit was left at.
+If the next toolpath uses the same bit at another spindle speed (another material, say),
+the file sets the new speed there, without stopping, so each toolpath cuts at its own rpm.
+A bit renamed in the Tool Database keeps its tool changer slot: this job's toolpaths take
+the new name at once, and a job saved before the rename takes it when it opens (Undo puts
+the old name back), so the file still gives the bit its slot's tool number.
 
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the

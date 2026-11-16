@@ -186,7 +186,7 @@ say "not implemented yet".
   wheel zooms about the cursor, F (or a double-click off the model) fits; Top, Front, Right, Iso, Fit buttons.
   A right-click picks the component under it and opens the 2D/3D view menu headed by its
   name (Cut, Copy, Paste, Duplicate, Delete, Group, Ungroup, Select ▸, Activate Layer of
-  Selection, Text ▸, Convert To Vectors, Join / Close Vectors..., Node Edit Mode, Appearance,
+  Selection, Text ▸ (Convert to Vectors), Join / Close Vectors..., Node Edit Mode, Appearance,
   Component ▸ with Create Vector Boundary, Copy To ▸, Move To ▸; the vector items greyed for a
   component; the components under the click are listed first, the selected ticked, a click
   picking one). In Transform mode (a second double-click on a selected component, or the
@@ -236,7 +236,7 @@ say "not implemented yet".
   save first. Flatpak, macOS, other processors and builds from the source code are told how
   to update by hand instead. Skip This Version quiets the startup check for that version.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
-  Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
+  Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
   (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
   (Aspire's Clipart tab, renamed: folders of your own files, kept between runs, as a tree
   of the folders in them however deep, each with how many files are in it; hidden folders
@@ -252,8 +252,8 @@ say "not implemented yet".
   dropped; a model goes through Orientate 3D Model already placed and levelled. Click picks
   a tile, Ctrl+click adds or removes one, Shift+click picks a range. Right-click (on what is
   picked): Add to Project (several are added one after another, each model's form in
-  turn), Add to Level (one of the job's levels, or a New Level each, named after the
-  file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
+  turn), Add to Level (3D clipart only; one of the job's levels, or a New Level each,
+  named after the file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
   answering `org.freedesktop.FileManager1`, else its folder opened), Add Tag / Remove Tag
   (kept in the config folder's `library-tags.json`, never in the files), Delete from Disk
   (asks first, naming the files; a model's picture goes with it; not to the bin). A Show
@@ -340,7 +340,7 @@ say "not implemented yet".
   Tool types show both names ("Radiused End Mill (bowl / bull nose)").
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
-  (its tip, taper and shank), drill (as an end mill); one tool per material it has cutting data for.
+  (its tip, taper and shank), drill (as an end mill marked Drill only, a tick beside its Tool Type: a toolpath form other than Drilling warns in red when it is picked, and so do the checks before cutting); one tool per material it has cutting data for.
   Form tools and diamond drags are skipped.
 - Checks before cutting (Cut Craft's own; Aspire has none): a toolpath deeper than its tool's
   flute length (or with none set), a 3D finish whose taper cannot reach part of the model, and
@@ -542,8 +542,8 @@ say "not implemented yet".
   - Array Copy (rows × columns by gap or offset; symmetry block of mirrors or half turns,
     row / column displacement, Group Copies) and Circular Copy (round the selection's
     middle, the job centre or a point; total or step angle, clockwise positive; Group Copies; turning the
-    copies or not). Copies stay on their originals' layers; copies of grouped vectors are
-    not grouped.
+    copies or not). Copies stay on their originals' layers; each copy of a group is a group
+    of its own (still text when only moved), as are Mirror copies and pasted vectors.
   - Nest Parts (Edit ▸ Nest Selected Objects too): parts (grouped or overlapping vectors)
     packed by their boxes in rows from a chosen corner, along X or Y, a tool diameter plus
     clearance apart and a border in, quarter-turned where that fits better, moved or
@@ -652,7 +652,9 @@ say "not implemented yet".
   number is the same on the cut list, the labels and the engraved names (`fmt-cut-list`).
   - File ▸ Import ▸ Import Cut List (CSV): rows of name, length, width, quantity and
     material (headings in any order, or none; commas, semicolons or tabs; decimal commas;
-    UTF-8 or Excel's Windows CSV) become named rectangles, length along X, a material's on a
+    UTF-8 or Excel's Windows CSV; sizes in the unit written after the Length and Width
+    headings, `(mm)`, `(cm)` or `(in)`, else the job's units, and a note says which) become
+    named rectangles, length along X, a material's on a
     layer of its name, laid out in rows and selected; Nest Parts then opens on them, set to
     move them. A mistake in the file opens a message naming the row and how to fix it.
   - Edit ▸ Name Part (Design tab, Offset and Layout): the selected parts' name, carried by

@@ -242,7 +242,8 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "import_vectors_bitmap",
         "Import Vectors or Picture",
         "Bring in a drawing (DXF, SVG or a Vectric job's vectors) or a picture (PNG, JPG, \
-         BMP, GIF or TIFF) to trace, carve round or draw over",
+         BMP, GIF or TIFF) to trace, carve round or draw over. An SVG sized in pixels is \
+         read at 96 pixels per inch, and a note says the size it came in at",
     ),
     (
         "import_vectors",
@@ -277,7 +278,10 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "import_cut_list",
         "Import Cut List",
         "Draw a part for each row of a spreadsheet's cut list (saved as CSV): name, length, \
-         width and how many, ready for Nest Parts",
+         width and how many, ready for Nest Parts. Sizes are in the units after the Length \
+         and Width headings, such as Length (in) or Length (mm), else in the job's units. \
+         The note after importing names the units used for each, so a heading missing its \
+         unit shows up",
     ),
     // the Model sub-tab's exports, which are file formats rather than commands
     (
@@ -1007,7 +1011,6 @@ impl MenuSystem {
                 )],
             )
             .enabled(text),
-            MenuItem::with_action("Convert To Vectors", "convert_text_to_curves").enabled(text),
             MenuItem::separator(),
             MenuItem::form::<cmd_join_close_vectors::JoinCloseVectors>(
                 "Join / Close Vectors...",
@@ -1856,14 +1859,6 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
     let props = cmd_sheet_properties::Params {
         sheet,
         name: s.name.clone(),
-        visible: s.visible,
-    };
-    let shown = |name: &str, visible: bool| {
-        let params = cmd_sheet_properties::Params {
-            visible,
-            ..props.clone()
-        };
-        MenuItem::run::<SheetProperties>(name, &params).enabled(s.visible != visible)
     };
     let send = |name: &str, move_vectors: bool| {
         let params = cmd_send_to_sheet::Params {
@@ -1879,8 +1874,6 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
             &cmd_activate_sheet::Params { sheet },
         )
         .enabled(sheet != doc.active_sheet),
-        shown("Show", true),
-        shown("Hide", false),
         MenuItem::separator(),
         send("Copy Selected Vectors Here", false),
         send("Move Selected Vectors Here", true),

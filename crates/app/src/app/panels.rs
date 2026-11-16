@@ -121,6 +121,10 @@ impl CutCraftApp {
             Outcome::MaterialsLibrary => {}
             Outcome::Apply | Outcome::Ok | Outcome::Select(_) => {
                 self.tools = manager.draft.clone();
+                let renamed = manager.take_renamed();
+                for (from, to) in &renamed {
+                    self.tools.note_renamed(from, to);
+                }
                 let mut changer = manager.changer.clone();
                 // the Tool Changer window's Select…: the tool goes in that holder
                 if let (Outcome::Select(name), Some(super::PickFor::Holder(slot)), Some(c)) =
@@ -135,6 +139,7 @@ impl CutCraftApp {
                     self.tool_manager = None;
                 }
                 self.tools_changed("Tool database saved");
+                self.rename_toolpath_tools(&renamed, "Tool database saved");
                 self.refresh_form_tool();
                 if let Outcome::Select(name) = &outcome {
                     let picking = self.picking;
@@ -466,7 +471,7 @@ impl CutCraftApp {
         let available = self.available(id);
         let response = tool_cell(ui, edge, |ui| ui.add_enabled(available, button));
         self.with_guidance(response, id)
-            .on_disabled_hover_text(format!("{label}: not implemented yet"))
+            .on_disabled_hover_text(self.unavailable_why(id))
     }
 
     /// A flyout's button: its face as [`Self::tool_button`] with an arrow in the corner. A
@@ -506,7 +511,7 @@ impl CutCraftApp {
         super::guide::hover(&response, &tip);
         let response = response
             .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
-            .on_disabled_hover_text(format!("{label}: not implemented yet"));
+            .on_disabled_hover_text(self.unavailable_why(id));
         let r = response.rect;
         flyout_arrow(ui, &response);
         let popup_id = response.id.with("flyout");
@@ -588,7 +593,7 @@ impl CutCraftApp {
             let row = ui.add_enabled(self.available(member), row);
             let row = self
                 .with_guidance(row, member)
-                .on_disabled_hover_text(format!("{name}: not implemented yet"));
+                .on_disabled_hover_text(self.unavailable_why(member));
             if opened && member == button.face {
                 row.request_focus();
             }
@@ -969,6 +974,7 @@ impl CutCraftApp {
         cut_craft_bug_report::context_menu(response, |ui| {
             let menus = Menus {
                 available: &|id| self.available(id),
+                why: &|id| self.unavailable_why(id),
                 checked: &|_| None,
                 shortcut_of: &|id| self.shortcut_text(id),
                 recent: &[],
@@ -3804,7 +3810,8 @@ impl CutCraftApp {
                 ui,
                 picked.len() == 1 && self.available("delete_toolpath"),
                 "Delete",
-                "Delete Toolpath: take the picked toolpath out of the job",
+                "Delete Toolpath: take the picked toolpath out of the job. Del does the same \
+                 just after you click it in the list",
             );
         });
         ui.horizontal_wrapped(|ui| {
@@ -4015,6 +4022,10 @@ impl CutCraftApp {
         let mut group_picked = None;
         let mut clicked = None;
         let ctrl = ui.input(|i| i.modifiers.command || i.modifiers.shift);
+        // any press elsewhere hands Del back to the drawing; a row's click takes it below
+        if ui.input(|i| i.pointer.any_pressed()) {
+            self.toolpath_list_clicked = false;
+        }
         let dragging = egui::DragAndDrop::has_payload_of_type::<Vec<EntityId>>(ui.ctx());
         // each toolpath's colour in the preview, when the machined areas take them
         let swatches = self.doc.job.machined_area == MachinedArea::ToolpathColor;
@@ -4067,6 +4078,7 @@ impl CutCraftApp {
                             }
                             // The toolpath menu acts on the row right-clicked, so it selects it
                             if label.secondary_clicked() {
+                                self.toolpath_list_clicked = true;
                                 self.selected_toolpath = Some(id);
                                 self.more_toolpaths.clear();
                                 self.selected_group = None;
@@ -4108,6 +4120,7 @@ impl CutCraftApp {
                 }
             });
         if let Some((id, selected)) = clicked {
+            self.toolpath_list_clicked = true;
             if ctrl {
                 // Ctrl-click: one more picked, or one less
                 if self.selected_toolpath.is_none() {

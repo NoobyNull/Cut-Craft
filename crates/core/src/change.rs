@@ -406,11 +406,22 @@ impl Change {
         c.finish()
     }
 
-    /// Transforms each selected path and component by `f(its bounds)`; the shared core of
-    /// move, scale, rotate, mirror and align. Nothing selected is an error; identity
+    /// Transforms each selected item (a lone path, or a group's selected paths together) and
+    /// component by `f(its bounds)`; the shared core of move, scale, rotate, mirror and align. Nothing selected is an error; identity
     /// transforms make no edit.
     pub fn transform_selected(
         doc: &Document,
+        f: impl Fn(Rect) -> DAffine2,
+    ) -> Result<Self, CommandError> {
+        Self::transform_items(doc, &doc.selected_items(false), f)
+    }
+
+    /// [`Self::transform_selected`] with the selected vectors taken as `items` (see
+    /// [`Document::selected_items`]): every member of an item gets the one transform
+    /// worked out from the whole item's bounds.
+    pub fn transform_items(
+        doc: &Document,
+        items: &[Vec<EntityId>],
         f: impl Fn(Rect) -> DAffine2,
     ) -> Result<Self, CommandError> {
         let components: Vec<_> = doc
@@ -423,11 +434,19 @@ impl Change {
             return Err(CommandError::NothingSelected);
         }
         let mut c = Self::builder(doc);
-        for &id in &doc.selection {
-            let path = &doc.vectors[&id];
-            let t = f(path.bounds());
+        for item in items {
+            let Some(bounds) = item
+                .iter()
+                .map(|id| doc.vectors[id].bounds())
+                .reduce(Rect::union)
+            else {
+                continue;
+            };
+            let t = f(bounds);
             if t != DAffine2::IDENTITY {
-                c.replace(id, path.transformed(&t));
+                for id in item {
+                    c.replace(*id, doc.vectors[id].transformed(&t));
+                }
             }
         }
         for id in components {
@@ -458,10 +477,7 @@ impl Change {
         })
     }
 
-    /// Spaces the selected paths evenly along x (`vertical` false) or y: the first and last
-    /// stay put and the others move so the gaps between their extents are equal, keeping
-    /// their order and their other coordinate.
-    /// Spaces the selected objects evenly along x (or y when `vertical`) in `sequence`: the
+    /// Spaces the selected objects (a group counts as one) evenly along x (or y when `vertical`) in `sequence`: the
     /// outermost stay put; or with `inside_last`, the last one picked stays and the others
     /// are spread inside it, the same gap at its edges as between them.
     pub fn space_selected(
@@ -477,12 +493,18 @@ impl Change {
                 (r.min.x, r.max.x)
             }
         };
-        let mut items: Vec<(EntityId, f64, f64)> = doc
-            .selection
-            .iter()
-            .map(|&id| {
-                let (lo, hi) = along(doc.vectors[&id].bounds());
-                (id, lo, hi)
+        // a group spaces as one object
+        let mut items: Vec<(Vec<EntityId>, f64, f64)> = doc
+            .selected_items(false)
+            .into_iter()
+            .map(|item| {
+                let bounds = item
+                    .iter()
+                    .map(|id| doc.vectors[id].bounds())
+                    .reduce(Rect::union)
+                    .expect("an item has a member");
+                let (lo, hi) = along(bounds);
+                (item, lo, hi)
             })
             .collect();
         let frame = if inside_last { items.pop() } else { None };
@@ -514,7 +536,7 @@ impl Change {
             None => ((end - start - sizes) / (items.len() - 1) as f64, start),
         };
         let mut c = Self::builder(doc);
-        for &(id, lo, hi) in &items {
+        for (item, lo, hi) in &items {
             let by = at - lo;
             if by.abs() > 1e-12 {
                 let shift = if vertical {
@@ -522,10 +544,12 @@ impl Change {
                 } else {
                     Point::new(by, 0.0)
                 };
-                c.replace(
-                    id,
-                    doc.vectors[&id].transformed(&DAffine2::from_translation(shift)),
-                );
+                for &id in item {
+                    c.replace(
+                        id,
+                        doc.vectors[&id].transformed(&DAffine2::from_translation(shift)),
+                    );
+                }
             }
             at += hi - lo + gap;
         }
@@ -543,8 +567,8 @@ impl Change {
     pub fn copy_selected_grouped(doc: &Document, transforms: &[DAffine2]) -> Self {
         let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
         let mut c = Self::builder(doc);
-        let all = c.copies(doc, &originals, transforms);
-        let group = doc.next_group();
+        let all = c.copies_grouped(doc, &originals, transforms, false);
+        let group = c.next_group();
         for &id in &all {
             c.set_group(id, Some(group));
         }
@@ -570,17 +594,40 @@ impl Change {
     }
 
     /// Replaces `remove` with `add`, selecting what was added: the shape of every boolean,
-    /// offset or join result.
+    /// offset or join result. The results go on the layer of the first original removed (the
+    /// current layer when nothing is), and a result identical to an original just keeps it.
     pub fn swap(
         doc: &Document,
         remove: impl IntoIterator<Item = EntityId>,
         add: Vec<Path>,
     ) -> Self {
         let mut c = Self::builder(doc);
-        for id in remove {
+        let mut removing: Vec<EntityId> = remove.into_iter().collect();
+        let layer = removing.first().map(|&id| doc.layer_of(id));
+        // a result the same as an original keeps the original, its id, layer and group
+        let ids: Vec<Option<EntityId>> = add
+            .iter()
+            .map(|p| {
+                let at = removing.iter().position(|id| doc.vectors[id] == *p)?;
+                Some(removing.remove(at))
+            })
+            .collect();
+        for id in removing {
             c.remove(id);
         }
-        let ids: Vec<EntityId> = add.into_iter().map(|p| c.add(p)).collect();
+        let ids: Vec<EntityId> = add
+            .into_iter()
+            .zip(ids)
+            .map(|(p, kept)| {
+                kept.unwrap_or_else(|| {
+                    let id = c.add(p);
+                    if let Some(layer) = layer {
+                        c.move_to_layer(id, layer);
+                    }
+                    id
+                })
+            })
+            .collect();
         c.select(ids);
         c.finish()
     }
@@ -1083,6 +1130,30 @@ fn insert_new<T>(
     Ok(())
 }
 
+/// How far `t` moves things, when all it does is move them.
+fn shift_of(t: &DAffine2) -> Option<Point> {
+    (t.matrix2 == glam::DMat2::IDENTITY).then_some(t.translation)
+}
+
+/// Text settings `text` for its letters moved by `by`: its anchor, and the curve it was laid
+/// on, go with them. `None` for another tool's settings moved anywhere (a dimension's name
+/// their tool under `command`): they point at what was measured, which the copy is not at.
+fn shifted_text(text: &serde_json::Value, by: Point) -> Option<serde_json::Value> {
+    if text.get("command").is_some() && by != Point::ZERO {
+        return None;
+    }
+    let mut text = text.clone();
+    if let (Some(x), Some(y)) = (text["anchor"]["x"].as_f64(), text["anchor"]["y"].as_f64()) {
+        text["anchor"] = serde_json::json!({ "x": x + by.x, "y": y + by.y });
+    }
+    let curve = text.get("on_curve").and_then(|o| o.get("curve"));
+    if let Some(curve) = curve.and_then(|c| serde_json::from_value::<Path>(c.clone()).ok()) {
+        let moved = curve.transformed(&DAffine2::from_translation(by));
+        text["on_curve"]["curve"] = serde_json::to_value(moved).expect("paths serialise");
+    }
+    Some(text)
+}
+
 /// `id` as a change has left it (`pending`, where `None` is removed), else as in `doc`.
 fn shadowed<'a, T>(
     pending: &'a BTreeMap<EntityId, Option<T>>,
@@ -1155,22 +1226,92 @@ pub struct ChangeBuilder<'a> {
 
 impl ChangeBuilder<'_> {
     /// Adds a copy of each of `originals` under each of `transforms`, on its original's
-    /// layer: the originals then the copies, in order.
+    /// layer: the originals then the copies, in order. Each copy of a group is a group of its
+    /// own with the original's part name, and stays text when it is only moved.
     pub fn copies(
         &mut self,
         doc: &Document,
         originals: &[EntityId],
         transforms: &[DAffine2],
     ) -> Vec<EntityId> {
+        self.copies_grouped(doc, originals, transforms, true)
+    }
+
+    fn copies_grouped(
+        &mut self,
+        doc: &Document,
+        originals: &[EntityId],
+        transforms: &[DAffine2],
+        regroup: bool,
+    ) -> Vec<EntityId> {
         let mut all = originals.to_vec();
         for t in transforms {
-            for &id in originals {
-                let copy = self.add(doc.vectors[&id].transformed(t));
+            let paths = originals
+                .iter()
+                .map(|id| {
+                    let group = doc.vector_groups.get(id).copied().filter(|_| regroup);
+                    (doc.vectors[id].transformed(t), group)
+                })
+                .collect();
+            let copies = self.add_regrouped(paths, &doc.texts, &doc.part_names, shift_of(t));
+            for (&id, &copy) in originals.iter().zip(&copies) {
                 self.move_to_layer(copy, doc.layer_of(id));
-                all.push(copy);
             }
+            all.extend(copies);
         }
         all
+    }
+
+    /// Adds `paths`, each with the group it had where it came from (`None`: none). Each of
+    /// those groups becomes one new group here, with its part name from `names` and, when the
+    /// copy is only moved (by `shift`), its text settings from `texts`, moved with it. A
+    /// dimension's copy is plain curves unless it lies on the original (Paste).
+    pub fn add_regrouped(
+        &mut self,
+        paths: Vec<(Path, Option<u64>)>,
+        texts: &BTreeMap<u64, serde_json::Value>,
+        names: &BTreeMap<u64, String>,
+        shift: Option<Point>,
+    ) -> Vec<EntityId> {
+        let mut new_groups: BTreeMap<u64, u64> = BTreeMap::new();
+        let mut ids = Vec::with_capacity(paths.len());
+        for (path, group) in paths {
+            let id = self.add(path);
+            if let Some(old) = group {
+                if let Some(&g) = new_groups.get(&old) {
+                    self.set_group(id, Some(g));
+                    ids.push(id);
+                    continue;
+                }
+                let g = self.next_group();
+                new_groups.insert(old, g);
+                let text = shift.and_then(|by| shifted_text(texts.get(&old)?, by));
+                if let Some(text) = text {
+                    self.set_text(g, Some(text));
+                }
+                if let Some(name) = names.get(&old) {
+                    self.set_part_name(g, Some(name.clone()));
+                }
+                self.set_group(id, Some(g));
+            }
+            ids.push(id);
+        }
+        ids
+    }
+
+    /// A group number neither the document nor this change uses yet.
+    pub fn next_group(&self) -> u64 {
+        let given = self
+            .edits
+            .iter()
+            .filter_map(|e| match e {
+                Edit::SetGroup { after, .. } => *after,
+                Edit::SetText { group, .. } | Edit::SetPartName { group, .. } => Some(*group),
+                _ => None,
+            })
+            .max()
+            .map_or(0, |g| g + 1);
+        self.doc.next_group().max(given)
     }
 
     /// Current path of `id` as seen by this change so far.

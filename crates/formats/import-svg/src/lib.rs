@@ -1,6 +1,8 @@
-//! Import vectors from SVG: every subpath becomes a vector, in millimetres, y up.
+//! Import vectors from SVG: every subpath becomes a vector, in millimetres, y up. An SVG
+//! sized in pixels (or not sized) is read at 96 pixels per inch, and a note says the size it
+//! came in at, since programs that use 72 per inch make it come in 25% small.
 
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, Units};
 use cut_craft_core::geometry::{Path, Point, Segment};
 use cut_craft_core::{Change, CommandError, FileFormat, Importer};
 use usvg::tiny_skia_path::{self as skia, PathSegment};
@@ -53,9 +55,65 @@ impl Importer for ImportSvg {
                 "the SVG has no vector paths. Export it again with its shapes as paths".into(),
             ));
         }
+        if !real_size(bytes) {
+            let (w, h) = (
+                f64::from(tree.size.width()) * MM_PER_PX,
+                f64::from(tree.size.height()) * MM_PER_PX,
+            );
+            let size = match doc.job.units {
+                Units::Mm => format!("{w:.1} x {h:.1} mm"),
+                Units::Inch => format!("{:.2} x {:.2} in", w / 25.4, h / 25.4),
+            };
+            c.note(format!(
+                "The SVG gives its size in pixels, so it was read at 96 pixels per inch and came \
+                 in at {size}. If it came from a program that uses 72 per inch, it is 25% too \
+                 small: put it right with Set Size."
+            ));
+        }
         c.select(ids);
         Ok(c.finish())
     }
+}
+
+/// Whether the SVG's own `width` and `height` are in real-world units (mm, cm, in, pt, pc),
+/// so its size does not depend on how many pixels make an inch.
+fn real_size(bytes: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(bytes);
+    let Some(start) = text.find("<svg") else {
+        return false;
+    };
+    let tag = &text[start..];
+    let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
+    let real = |name: &str| {
+        attribute(tag, name).is_some_and(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            ["mm", "cm", "in", "pt", "pc"]
+                .iter()
+                .any(|u| v.ends_with(u))
+        })
+    };
+    real("width") && real("height")
+}
+
+/// The value of attribute `name` in an element's start `tag`.
+fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+    let mut from = 0;
+    while let Some(at) = tag[from..].find(name).map(|i| i + from) {
+        from = at + name.len();
+        let before = tag[..at].chars().next_back();
+        if !before.is_some_and(char::is_whitespace) {
+            continue;
+        }
+        let rest = tag[from..].trim_start();
+        let Some(rest) = rest.strip_prefix('=') else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let quote = rest.chars().next().filter(|q| *q == '"' || *q == '\'')?;
+        let value = &rest[1..];
+        return value.find(quote).map(|end| &value[..end]);
+    }
+    None
 }
 
 /// Splits a path at each move-to; quadratics become cubics (exactly).
@@ -162,6 +220,36 @@ mod tests {
             b.min.distance(want.min) < 1e-3 && b.max.distance(want.max) < 1e-3,
             "{b:?} vs {want:?}"
         );
+    }
+
+    #[test]
+    fn a_size_in_pixels_or_none_says_what_it_was_read_at() {
+        let notes = |svg: &str| {
+            ImportSvg::import(&Document::default(), svg.as_bytes())
+                .unwrap()
+                .notes
+                .join(" ")
+        };
+        let rect = r#"<rect x="0" y="0" width="72" height="36"/>"#;
+        for size in [
+            r#"width="288" height="144""#,
+            r#"width="288px" height="144px""#,
+            "",
+        ] {
+            let told = notes(&format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" {size} viewBox="0 0 288 144">{rect}</svg>"#
+            ));
+            assert!(
+                told.contains("96 pixels per inch") && told.contains("Set Size"),
+                "{size}: {told}"
+            );
+            assert!(told.contains("72"), "names the other common size: {told}");
+        }
+        // a size in real units needs no note
+        let told = notes(&format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="50mm" viewBox="0 0 100 50">{rect}</svg>"#
+        ));
+        assert!(told.is_empty(), "{told}");
     }
 
     #[test]

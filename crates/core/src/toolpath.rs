@@ -186,6 +186,13 @@ pub struct Tool {
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
     pub flutes: u32,
+    /// A drill (a twist or brad-point bit, as a vendor's tool library lists them): it cuts
+    /// only straight down, so a toolpath form other than Drilling says so in red when it is
+    /// picked, and the checks before cutting warn of it. Ticked as Drill only beside the
+    /// Tool Type in the Tool Database (added with drills from tool libraries)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[schemars(skip)]
+    pub drill_only: bool,
     /// Its tool number, for the post's `[T]` on a machine without a tool changer, and the
     /// holder Load by Tool Number puts it in; 0 for none (added with tool numbers)
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -660,6 +667,7 @@ impl Default for Tool {
             neck_length: 0.0,
             shank_length: 0.0,
             flutes: default_flutes(),
+            drill_only: false,
             number: 0,
             passes: vec![],
             passes_for: 0.0,
@@ -731,6 +739,12 @@ pub struct ToolDatabase {
     /// [`crate::tool_copies`] (added with one shape per bit)
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub joined: std::collections::BTreeMap<String, crate::tool_copies::JoinedCopy>,
+    /// Tools renamed, by their old name: the name each has now. A job saved before the
+    /// rename still names the old one; it takes the new name when it opens
+    /// ([`Self::renamed_now`]), so the tool changer slot the tool is loaded in is found
+    /// (added with renaming in jobs)
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub renamed: std::collections::BTreeMap<String, String>,
 }
 
 /// The top-level group the catalogues are imported into, apart from My Tools.
@@ -848,6 +862,36 @@ impl ToolDatabase {
 
     pub fn get(&self, name: &str) -> Option<&Tool> {
         self.index_of(name).map(|i| &self.tools[i])
+    }
+
+    /// Keeps that the tool `from` is now called `to`: an earlier rename to `from` now
+    /// leads to `to`, and renaming back forgets it.
+    pub fn note_renamed(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        for now in self.renamed.values_mut() {
+            if now == from {
+                to.clone_into(now);
+            }
+        }
+        self.renamed.insert(from.to_owned(), to.to_owned());
+        self.renamed.retain(|old, now| old != now);
+    }
+
+    /// The name `tool` (a toolpath's copy) has now, when its tool was renamed: only while
+    /// no tool has the old name again and the renamed one is still the same size and
+    /// shape, so a new bit given the old name is never mistaken for it.
+    pub fn renamed_now(&self, tool: &Tool) -> Option<&str> {
+        let now = self.renamed.get(&tool.name)?;
+        if self.tools.iter().any(|t| t.name == tool.name) {
+            return None;
+        }
+        let renamed = self.tools.iter().find(|t| t.name == *now)?;
+        let same = renamed.shape == tool.shape
+            && (renamed.diameter - tool.diameter).abs() < 1e-6
+            && (renamed.angle - tool.angle).abs() < 1e-6;
+        same.then_some(now.as_str())
     }
 
     /// Where the tool `name` is: in My Tools when it is there, else in a catalogue (a tool
@@ -2090,5 +2134,36 @@ mod projection {
             .unwrap_err()
             .to_string();
         assert!(why.contains("3D model"), "{why}");
+    }
+}
+
+#[cfg(test)]
+mod renamed_tools {
+    use super::*;
+
+    #[test]
+    fn a_rename_is_followed_to_the_last_name_and_not_to_a_new_bit_of_the_old_name() {
+        let mut db = ToolDatabase::starter();
+        let six = db.get("6 mm End Mill").unwrap().clone();
+        let at = db.index_of("6 mm End Mill").unwrap();
+        db.tools[at].name = "Spiral".into();
+        db.note_renamed("6 mm End Mill", "Spiral");
+        db.tools[at].name = "Spiral 6".into();
+        db.note_renamed("Spiral", "Spiral 6");
+        assert_eq!(db.renamed_now(&six), Some("Spiral 6"));
+        // a different bit under the old name is not the renamed one
+        let mut other = six.clone();
+        other.diameter = 3.0;
+        assert_eq!(db.renamed_now(&other), None);
+        // renamed back: its own name is not renamed, the names between lead back to it
+        db.tools[at].name = "6 mm End Mill".into();
+        db.note_renamed("Spiral 6", "6 mm End Mill");
+        assert_eq!(db.renamed_now(&six), None);
+        assert!(
+            !db.renamed.contains_key("6 mm End Mill"),
+            "{:?}",
+            db.renamed
+        );
+        assert_eq!(db.renamed["Spiral"], "6 mm End Mill");
     }
 }

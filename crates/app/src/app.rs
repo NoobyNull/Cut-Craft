@@ -79,6 +79,19 @@ struct FineKey {
     importing: bool,
 }
 
+/// What the vectors on the clipboard belonged to where they were copied, so a pasted word is
+/// still a word: by clipboard position, each one's group and layer, and the groups' text
+/// settings and part names.
+#[derive(Default)]
+struct Copied {
+    groups: Vec<Option<u64>>,
+    layers: Vec<LayerId>,
+    /// The job they were copied from (`job_epoch`): layer numbers mean nothing in another.
+    job: u64,
+    texts: std::collections::BTreeMap<u64, Value>,
+    names: std::collections::BTreeMap<u64, String>,
+}
+
 /// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id.
 fn preview_mark(id: EntityId) -> u32 {
     u32::try_from(id.0).unwrap_or(u32::MAX)
@@ -418,6 +431,20 @@ enum Info {
 #[derive(Clone, Debug)]
 pub(super) struct BeforePreview(Option<Material>);
 
+/// A save held while the user chooses what happens to an earlier save's G-code.
+pub(super) struct EarlierAsk {
+    form: SaveForm,
+    post: cut_craft_post::Post,
+    /// Where the files go, as named.
+    path: std::path::PathBuf,
+    /// What the checks before cutting add to the saved message.
+    told: String,
+    /// The earlier save's files there.
+    earlier: Vec<std::path::PathBuf>,
+    /// Keep the answer as the default.
+    remember: bool,
+}
+
 /// Save Toolpaths' choices (Save Toolpaths form), while its window is open.
 #[derive(Clone, Debug)]
 pub(super) struct SaveForm {
@@ -589,11 +616,21 @@ const VECTOR_EXPORTERS: [&str; 5] = [
     "export_eps",
     "export_ai",
 ];
-/// The layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
-const LAYOUT_KEYS: [(&str, &str); 3] = [
+/// The layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned); and
+/// the keys of actions with no menu item: N Node Edit, F1 help, F2 and F3 the views.
+const LAYOUT_KEYS: [(&str, &str); 6] = [
     ("design_layout", "F11"),
     ("machining_layout", "F12"),
     ("node_edit", "N"),
+    ("tool_help", "F1"),
+    ("view_2d", "F2"),
+    ("view_3d", "F3"),
+];
+/// The names of [`LAYOUT_KEYS`]' actions that no menu names.
+const KEY_ACTION_NAMES: [(&str, &str); 3] = [
+    ("tool_help", "Help on the Open Tool"),
+    ("view_2d", "2D View"),
+    ("view_3d", "3D View"),
 ];
 /// The view buttons over the top right of the 2D view: action, label and icon.
 const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
@@ -824,6 +861,18 @@ enum Screen {
     Job,
 }
 
+/// A snap mark picked in the 2D view, and what was picked and done when it was: once the
+/// selection, the tool or the job changes, it is no longer picked.
+#[derive(Clone, Debug)]
+struct PickedSnap {
+    snap: cut_craft_core::constraint::Constraint,
+    selection: cut_craft_core::selection::Selection,
+    tool: Option<ViewTool>,
+    /// The undo history's revision, which never repeats: an edit, undo or redo since lets
+    /// it go, even one that leaves the history as deep as it was
+    revision: u64,
+}
+
 /// A 2D view tool that takes the left button from drawing and selecting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ViewTool {
@@ -968,7 +1017,8 @@ struct OpenForm {
     /// What Suggest last found for the form's clearing bits, shown under them.
     suggested: Option<String>,
     /// Orientate 3D Model's Model Size (X, Y, Z) as last shown, and the sizes the user typed
-    /// (with the ratio locked, only the latest): the rest follow the model as it turns.
+    /// (with the ratio locked, only the latest): the rest follow the model as it turns. Set
+    /// Size's width and height as last shown, to tell which one was typed in.
     shown_size: Option<[f64; 3]>,
     typed_size: [Option<f64>; 3],
     /// Orientate 3D Model's model as placed, each triangle with whether a cutter from above
@@ -1043,6 +1093,12 @@ struct CutCraftApp {
     /// The toolpaths Ctrl-clicked in the list besides `selected_toolpath`, to group, move
     /// or drag together.
     more_toolpaths: std::collections::BTreeSet<EntityId>,
+    /// A toolpath row was the last thing clicked: Del deletes the picked toolpath, not the
+    /// drawing's selection. Any other click hands Del back to the drawing.
+    toolpath_list_clicked: bool,
+    /// The form a placing tool (Move, Rotate, Set Size: Transform Objects) was opened over,
+    /// with its edits: Esc on the placing tool's form goes back to it.
+    form_behind: Option<OpenForm>,
     /// Whether the first click on the Toolpaths page of a job that has not had Material
     /// Setup opens it (tests leave it off).
     ask_material: bool,
@@ -1117,6 +1173,8 @@ struct CutCraftApp {
     machines: cut_craft_machines::Machines,
     /// Where `machines` is kept; `None` keeps them in memory (tests).
     machines_path: Option<std::path::PathBuf>,
+    /// The machines file could not be read at start: it is never saved over this run.
+    machines_unsaved: bool,
     /// Cut Craft's posts and the user's custom ones.
     posts: cut_craft_machines::Library,
     /// The open Machine Configuration Management and Post-Processor Management windows.
@@ -1142,6 +1200,8 @@ struct CutCraftApp {
     deep_cut: Option<depth::DeepCut>,
     /// An import waiting on which units its drawing is in.
     units_ask: Option<units_ask::UnitsAsk>,
+    /// Save Toolpaths held for the question about G-code an earlier save left there.
+    earlier_ask: Option<EarlierAsk>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.
@@ -1160,6 +1220,8 @@ struct CutCraftApp {
     shots: Option<screenshots::Shots>,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
+    /// What the copied vectors were part of: groups, layers, text and part names.
+    clipboard_from: Copied,
     clipboard_components: Vec<cut_craft_core::component::Component>,
     /// Where the 3D view's picture was fitted last frame, for picking.
     fit_3d: Option<egui::Rect>,
@@ -1265,6 +1327,10 @@ struct CutCraftApp {
     /// Counts the jobs opened or made: with the history's revision, which job and which
     /// change of it the 2D view draws (a new job's history starts its revisions again).
     job_epoch: u64,
+    /// What a tool with no form (Group) warned of, in red at the foot of the tool panel, for
+    /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
+    /// too, takes it away.
+    tool_note: Option<(u64, u64, String)>,
     /// When a height handle's drag last remade the model (the app's clock, seconds).
     height_applied_at: Option<f64>,
     /// The level clipart imported through Orientate 3D Model goes on (Import to Level),
@@ -1278,9 +1344,8 @@ struct CutCraftApp {
         cut_craft_core::geometry::Point,
         cut_craft_core::constraint::Anchor,
     )>,
-    /// The snap mark picked in the 2D view (an index into the job's constraints): Delete
-    /// lets that point go.
-    picked_constraint: Option<usize>,
+    /// The snap mark picked in the 2D view: Delete lets that point go.
+    picked_constraint: Option<PickedSnap>,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
     /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,
@@ -1379,11 +1444,17 @@ struct CutCraftApp {
     /// Files from the Library waiting to be added, one after another, each with the level
     /// Add to Level puts it on.
     import_queue: std::collections::VecDeque<(std::path::PathBuf, Option<crate::clipart::ToLevel>)>,
+    /// A drawing or picture Cut Craft was started with (Open With) while no job was open:
+    /// imported once Job Setup's OK has made the job to hold it.
+    import_after_setup: Option<std::path::PathBuf>,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
     recent_path: Option<std::path::PathBuf>,
     /// Where unsaved work is copied (as often as Options says) for the next run to recover;
     /// `None` keeps no copy (tests).
     recovery_path: Option<std::path::PathBuf>,
+    /// Held while this run lasts: marks `recovery_path` as this window's, so another window
+    /// does not take it for a crash's.
+    recovery_lock: Option<std::fs::File>,
     /// The history revision and input time (seconds) of the last recovery copy.
     autosaved: (u64, f64),
     /// A recovery copy being written.
@@ -1752,6 +1823,32 @@ fn message_dialog() -> rfd::MessageDialog {
     }
 }
 
+/// Where a save dialog's answer is saved: the name typed with one of `extensions` on its end
+/// (a dot in the name stays), or `None` when that adds the extension, a file of that name is
+/// there already and the user does not want it replaced (the dialog only asked about the
+/// name typed).
+fn saving_path(dialog: &std::path::Path, extensions: &[&str]) -> Option<std::path::PathBuf> {
+    let named = files::named_for_saving(dialog, extensions);
+    if !files::replaces_unasked(dialog, &named) {
+        return Some(named);
+    }
+    let answer = message_dialog()
+        .set_title(APP_NAME)
+        .set_level(rfd::MessageLevel::Warning)
+        .set_description(format!(
+            "{} already exists. Replace it?",
+            named.file_name().map_or_default(|n| n.to_string_lossy())
+        ))
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            "Replace".into(),
+            "Cancel".into(),
+        ))
+        .show();
+    let replace = matches!(&answer, rfd::MessageDialogResult::Custom(c) if c == "Replace")
+        || answer == rfd::MessageDialogResult::Ok;
+    replace.then_some(named)
+}
+
 /// Cut Craft's window, kept up to date each frame: the system's dialogs open as its own,
 /// kept above it and brought forward with it, rather than as windows of their own.
 static DIALOG_PARENT: std::sync::Mutex<Option<std::sync::Arc<dyn Window>>> =
@@ -1781,6 +1878,8 @@ fn on_the_desktop() {
 /// What drawing the menus needs from the app.
 struct Menus<'a> {
     available: &'a dyn Fn(&str) -> bool,
+    /// Why an item is greyed out ([`CutCraftApp::unavailable_why`]).
+    why: &'a dyn Fn(&str) -> String,
     /// Ticked state of the items that are settings; `None` keeps the item's own.
     checked: &'a dyn Fn(&str) -> Option<bool>,
     shortcut_of: &'a dyn Fn(&str) -> Option<String>,
@@ -2570,7 +2669,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
             cut_craft_bug_report::hint::hint(ui.ctx(), about);
         }
         if !available {
-            response = response.on_disabled_hover_text("Not implemented yet");
+            response = response.on_disabled_hover_text((menus.why)(&item.action));
         }
         if response.clicked() {
             *clicked = Some(item.action.clone());
@@ -2650,8 +2749,9 @@ fn window_frame(builder: egui::ViewportBuilder, system_title_bar: bool) -> egui:
 }
 
 /// Opens the main window and runs until it is closed; with `shots`, takes the README's
-/// pictures into that folder instead and quits ([`screenshots`]).
-pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
+/// pictures into that folder instead and quits ([`screenshots`]). `open` is a file named on
+/// the command line, opened once the window is up.
+pub fn run(title: &str, shots: Option<std::path::PathBuf>, open: Option<&std::path::Path>) {
     // winit 0.29 delivered dropped files only on X11; 0.30 should on Wayland too, but until that
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
@@ -2749,8 +2849,8 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.addons = crate::addons::Addons::new(crate::depth::addons_dir());
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
-            app.recovery_path = files::config_dir().map(|d| d.join("recovery.ccjob"));
-            app.open_recovery();
+            app.start_recovery();
+            app.open_given(open);
             // a crash last time: offer its crash log as a report
             if let Some(crash) =
                 files::config_dir().and_then(|d| cut_craft_bug_report::logs::take_crash(&d))

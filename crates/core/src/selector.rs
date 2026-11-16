@@ -36,7 +36,8 @@ pub enum Layers {
     AllVisibleLayers,
     /// Only the layer you are working on
     CurrentLayerOnly,
-    /// The layers named below, shown or not
+    /// The layers named below, shown or not. Vector Selector itself leaves out the vectors
+    /// on hidden or locked layers, so they cannot be deleted by mistake
     SelectedLayers,
 }
 

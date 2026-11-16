@@ -19,7 +19,8 @@ pub enum Mode {
     /// The whole selection, as one group
     #[default]
     ScaleSelection,
-    /// Each selected item on its own, as if it alone were selected
+    /// Each selected item on its own, as if it alone were selected. A group, like a word of
+    /// text, is one item, and so is a shape with the holes and shapes drawn inside it
     ScaleItemsIndividually,
 }
 
@@ -35,7 +36,8 @@ pub struct Params {
     )]
     #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/size_wh.png"))]
     pub width: f64,
-    /// Ignored when keeping proportions
+    /// The height, or with Percent, the share of the present height. With Link XY, typing
+    /// it works out the width to match; items one by one each take this height
     #[schemars(
         range(min = 0),
         extend("x-unit" = "mm", "x-percent-when" = {"percent": "true"})
@@ -45,9 +47,16 @@ pub struct Params {
     /// Width and height are percentages of the present size, not millimetres
     #[serde(default)]
     pub percent: bool,
-    /// Change the width and the height is worked out, so the shape is not stretched
+    /// Type the width or the height and the other is worked out, so the shape is not
+    /// stretched. Items one by one each keep their own proportions, sized by the box typed
+    /// last
     #[schemars(title = "Link XY")]
     pub keep_proportions: bool,
+    /// With Link XY, the Height was typed last: sizes go by it (the width is worked out).
+    /// With Scale items individually, each item then takes the typed height
+    #[serde(default)]
+    #[schemars(skip)]
+    pub by_height: bool,
     /// Point of the selection that stays put
     pub anchor: Anchor,
 }
@@ -60,6 +69,7 @@ impl Default for Params {
             height: 100.0,
             percent: false,
             keep_proportions: true,
+            by_height: false,
             anchor: Anchor::Center,
         }
     }
@@ -89,8 +99,11 @@ impl Command for SetSize {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        ensure_positive("width", p.width)?;
-        if !p.keep_proportions {
+        let by_height = p.keep_proportions && p.by_height;
+        if !by_height {
+            ensure_positive("width", p.width)?;
+        }
+        if !p.keep_proportions || by_height {
             ensure_positive("height", p.height)?;
         }
         let bounds = doc
@@ -105,11 +118,11 @@ impl Command for SetSize {
             } else {
                 (p.width, p.height)
             };
-            let sx = w / size.x;
-            Some(if p.keep_proportions {
-                Point::splat(sx)
-            } else {
-                Point::new(sx, h / size.y)
+            let (sx, sy) = (w / size.x, h / size.y);
+            Some(match (p.keep_proportions, by_height) {
+                (true, true) => Point::splat(sy),
+                (true, false) => Point::splat(sx),
+                (false, _) => Point::new(sx, sy),
             })
         };
         let about = |b: cut_craft_core::geometry::Rect, by: Point| {
@@ -119,8 +132,9 @@ impl Command for SetSize {
                 * DAffine2::from_translation(-a)
         };
         if p.mode == Mode::ScaleItemsIndividually {
-            // each item about its own anchor; one without area stays as it is
-            return Change::transform_selected(doc, |b| {
+            // each item (a group, or an outline with what lies inside it) about its own
+            // anchor; one without area stays as it is
+            return Change::transform_items(doc, &doc.selected_items(true), |b| {
                 scale(b.size()).map_or(DAffine2::IDENTITY, |by| about(b, by))
             });
         }
@@ -178,6 +192,71 @@ mod tests {
         let after = doc.selection_bounds().unwrap();
         assert!((after.size().x - 2.0 * before.size().x).abs() < 1e-9);
         assert!(after.center().distance(before.center()) < 1e-9);
+    }
+
+    #[test]
+    fn items_one_by_one_keep_their_holes_and_groups_whole() {
+        use cut_craft_core::testing::{document_with, square};
+        // a 20 mm square with a 10 mm hole, and a grouped two-letter word 25 mm wide
+        let mut doc = document_with(vec![
+            square(0.0, 0.0, 20.0),
+            square(5.0, 5.0, 10.0),
+            square(100.0, 0.0, 10.0),
+            square(115.0, 0.0, 10.0),
+        ]);
+        let ids: Vec<_> = doc.vectors.keys().copied().collect();
+        doc.vector_groups.insert(ids[2], 3);
+        doc.vector_groups.insert(ids[3], 3);
+        doc.selection = ids.iter().copied().collect();
+        let p = Params {
+            mode: Mode::ScaleItemsIndividually,
+            width: 50.0,
+            height: 50.0,
+            anchor: Anchor::BottomLeft,
+            ..Params::default()
+        };
+        doc.apply(&SetSize::run(&doc, &p).unwrap()).unwrap();
+        let width = |i: usize| doc.vectors[&ids[i]].bounds().size().x;
+        assert!((width(0) - 50.0).abs() < 1e-9, "the part is 50 wide");
+        assert!((width(1) - 25.0).abs() < 1e-9, "its hole grows with it");
+        assert!(
+            (width(2) - 20.0).abs() < 1e-9,
+            "a letter grows with its word"
+        );
+        let word = doc.vectors[&ids[2]]
+            .bounds()
+            .union(doc.vectors[&ids[3]].bounds());
+        assert!((word.size().x - 50.0).abs() < 1e-9, "the word is 50 wide");
+    }
+
+    #[test]
+    fn items_one_by_one_by_a_typed_height_each_take_that_height() {
+        use cut_craft_core::geometry::Path;
+        use cut_craft_core::testing::document_with;
+        let rect = |x: f64, w: f64, h: f64| {
+            let corners = [(x, 0.0), (x + w, 0.0), (x + w, h), (x, h)];
+            Path::polyline(&corners.map(|(x, y)| Point::new(x, y)), true)
+        };
+        // a wide one and a tall one, each given 30 mm high
+        let mut doc = document_with(vec![rect(0.0, 40.0, 10.0), rect(100.0, 10.0, 20.0)]);
+        doc.selection = doc.vectors.keys().copied().collect();
+        let p = Params {
+            mode: Mode::ScaleItemsIndividually,
+            width: 1.0,
+            height: 30.0,
+            by_height: true,
+            ..Params::default()
+        };
+        doc.apply(&SetSize::run(&doc, &p).unwrap()).unwrap();
+        let sizes: Vec<Point> = doc.vectors.values().map(|v| v.bounds().size()).collect();
+        assert!(
+            (sizes[0] - Point::new(120.0, 30.0)).length() < 1e-9,
+            "{sizes:?}"
+        );
+        assert!(
+            (sizes[1] - Point::new(15.0, 30.0)).length() < 1e-9,
+            "{sizes:?}"
+        );
     }
 
     #[test]

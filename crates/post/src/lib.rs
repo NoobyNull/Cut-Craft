@@ -626,6 +626,7 @@ impl Post {
         out.block("HEADER", &v);
 
         let mut previous_tool: Option<&str> = None;
+        let mut previous_speed: Option<f64> = None;
         let mut first_rapid = true;
         // the rate of the feed moves since the last rapid: a new one starts a FIRST_ block,
         // which is where most posts print it
@@ -654,10 +655,25 @@ impl Post {
                     out.value("Y", &v);
                     out.block("RAPID_MOVE", &v);
                 }
-                Some(_) => out.block("NEW_SEGMENT", &v),
+                Some(_) => {
+                    out.block("NEW_SEGMENT", &v);
+                    // the same bit at another speed (another material, or the speed edited
+                    // between toolpaths): its feeds print on every move, but the spindle
+                    // speed only where the post starts the spindle, so start it again
+                    if previous_speed != Some(toolpath.tool.spindle_speed)
+                        && toolpath.power.is_empty()
+                    {
+                        if out.post.blocks.contains_key("SPINDLE_ON") {
+                            out.block("SPINDLE_ON", &v);
+                        } else {
+                            out.line("[S] M3", &v);
+                        }
+                    }
+                }
                 None => {}
             }
             previous_tool = Some(&toolpath.tool.name);
+            previous_speed = Some(toolpath.tool.spindle_speed);
             let laser = !toolpath.power.is_empty();
             // the laser's power while it is on
             let mut burning: Option<f64> = None;
@@ -1661,6 +1677,25 @@ begin FOOTER
                 "M30",
             ]
         );
+    }
+
+    #[test]
+    fn the_same_tool_at_a_new_spindle_speed_sets_the_new_speed() {
+        let mut fast = toolpath("A", "6 mm");
+        fast.tool.spindle_speed = 18000.0;
+        let mut slow = toolpath("B", "6 mm");
+        slow.tool.spindle_speed = 12000.0;
+        let lines = render(BASIC, vec![fast, slow]);
+        let header = lines.iter().position(|l| l == "S18000 M3");
+        let second = lines.iter().position(|l| l == "S12000 M3");
+        assert!(header.is_some() && second > header, "{lines:#?}");
+        assert!(
+            !lines.contains(&"M0".to_owned()),
+            "no tool change: {lines:#?}"
+        );
+        // the same speed again writes nothing new
+        let lines = render(BASIC, vec![toolpath("A", "6 mm"), toolpath("B", "6 mm")]);
+        assert_eq!(lines.iter().filter(|l| l.ends_with("M3")).count(), 1);
     }
 
     #[test]

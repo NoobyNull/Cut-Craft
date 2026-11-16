@@ -227,6 +227,8 @@ impl Row {
         Some(Tool {
             name,
             shape,
+            // a drill cuts only down: kept a drill, so cutting sideways with it is warned of
+            drill_only: self.tool_type == 6,
             rate_units: per,
             units: if self.units == 1 {
                 cut_craft_core::document::Units::Inch
@@ -346,6 +348,16 @@ mod tests {
             tooth_size: None,
             tooth_offset: None,
         }
+    }
+
+    #[test]
+    fn a_drill_comes_in_as_a_drill_only_bit() {
+        let drill = Row {
+            tool_type: 6,
+            ..end_mill()
+        };
+        assert!(drill.tool().unwrap().drill_only);
+        assert!(!end_mill().tool().unwrap().drill_only);
     }
 
     #[test]

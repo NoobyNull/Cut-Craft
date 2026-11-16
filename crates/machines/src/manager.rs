@@ -105,6 +105,8 @@ pub enum MachineOutcome {
     PickFolder(FolderFor),
     /// Open Machine Files on the machine being edited.
     ManageFiles,
+    /// Install Offline Package: pick a machine package file and add its machines here.
+    InstallPackage,
 }
 
 /// Which of a machine's folders is being picked.
@@ -147,11 +149,11 @@ impl MachineManager {
         look: &Look,
     ) -> Option<MachineOutcome> {
         let mut open = true;
-        let mut outcome = None;
+        let (mut outcome, mut row) = (None, None);
         let (id, title) = (machine_window(), "Machine Configuration Management");
         cut_craft_bug_report::dialog(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
             cut_craft_bug_report::mark(ui, "Machine Configuration Management");
-            self.machine_row(ui, look);
+            row = self.machine_row(ui, look);
             ui.separator();
             let names_clash = self.draft.names_clash();
             let Some(machine) = self.draft.active_mut() else {
@@ -190,12 +192,13 @@ impl MachineManager {
         if !open {
             outcome = Some(MachineOutcome::Cancel);
         }
-        outcome
+        outcome.or(row)
     }
 
-    /// The machine drop-down with Add / Duplicate / Delete, and the online ones Cut Craft
-    /// has no service for.
-    fn machine_row(&mut self, ui: &mut egui::Ui, look: &Look) {
+    /// The machine drop-down with Add / Duplicate / Delete and Install Offline Package;
+    /// what was asked for.
+    fn machine_row(&mut self, ui: &mut egui::Ui, look: &Look) -> Option<MachineOutcome> {
+        let mut asked = None;
         ui.label("Machine Configuration");
         ui.horizontal(|ui| {
             let shown = self
@@ -228,16 +231,17 @@ impl MachineManager {
                 self.draft.delete();
                 self.picked = None;
             }
-            // ponytail: machine packages come from a vendor's online service, which Cut Craft
-            // has none of; machines are made by hand
-            icon_button(
+            if icon_button(
                 ui,
                 look,
                 "common/open.png",
-                "Install Offline Package (needs an online machine service)",
-                false,
-            );
+                "Install Offline Package: add the machines in a package file you downloaded",
+                true,
+            ) {
+                asked = Some(MachineOutcome::InstallPackage);
+            }
         });
+        asked
     }
 }
 
@@ -922,7 +926,8 @@ fn buttons(ui: &mut egui::Ui, can_keep: bool) -> Option<MachineOutcome> {
 pub enum PostOutcome {
     /// Pick a `.pp` file to install.
     Install,
-    /// Use this post with the active machine.
+    /// Make this post the active machine's default, used for the jobs it suits (flat, or
+    /// rotary wrapping its side).
     Select(String),
     /// Show the custom posts' folder.
     OpenFolder(PathBuf),
@@ -1086,7 +1091,9 @@ impl PostManager {
                     let picked = self.picked.clone();
                     let select = ui
                         .add_enabled(picked.is_some(), egui::Button::new("Select"))
-                        .on_hover_hint("Use it with the active machine");
+                        .on_hover_hint(
+                            "Make it the post the active machine saves toolpaths through, for the jobs it suits: a flat post for flat jobs, a wrapping one for rotary jobs",
+                        );
                     if select.clicked()
                         && let Some(name) = picked
                     {
@@ -1256,6 +1263,62 @@ mod tests {
         };
         // no renderer takes a headless frame's texture changes
         ctx.run_pass(input, draw).textures_delta.clear();
+    }
+
+    #[test]
+    fn install_offline_package_is_a_button_that_asks_for_a_package() {
+        let ctx = egui::Context::default();
+        let library = Library::new(None);
+        let look = Look { picture: &|_| None };
+        let mut manager = MachineManager::adding(&Machines::default());
+        let label = "Install Offline Package: add the machines in a package file you downloaded";
+        let mut at = None;
+        let mut asked = vec![];
+        for n in 0..8 {
+            let events = match (n, at) {
+                (4, Some(pos)) => vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                (5, Some(pos)) => vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                _ => vec![],
+            };
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1200.0, 1000.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_pass(input, |ctx| {
+                asked.extend(manager.show(ctx, &library, &look));
+            });
+            output.textures_delta.clear();
+            at = at.or_else(|| {
+                output
+                    .shapes
+                    .iter()
+                    .find_map(|clipped| match &clipped.shape {
+                        egui::Shape::Text(t) if t.galley.text() == label => {
+                            Some(t.pos + t.galley.size() / 2.0)
+                        }
+                        _ => None,
+                    })
+            });
+        }
+        assert!(at.is_some(), "the button is drawn");
+        assert_eq!(asked, vec![MachineOutcome::InstallPackage]);
     }
 
     #[test]

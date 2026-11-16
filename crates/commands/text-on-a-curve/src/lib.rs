@@ -62,8 +62,9 @@ pub struct Params {
     /// Keep the letters their own size, or grow them to run the whole curve
     #[schemars(title = "Text size")]
     pub size: Size,
-    /// Spacing between letters, as a share of their normal spacing
-    #[schemars(title = "Text spacing", extend("x-unit" = "%"), range(min = -50, max = 300))]
+    /// Spacing between letters, as a share of their normal spacing: under 100% closes them
+    /// up, over 100% spreads them out. 50% is the closest they go
+    #[schemars(title = "Text spacing", extend("x-unit" = "%"), range(min = 50, max = 300))]
     pub spacing: f64,
     /// Which side of the curve the letters stand on
     #[schemars(title = "Text position")]
@@ -161,7 +162,7 @@ impl Command for TextOnACurve {
             curve = curve.reversed();
         }
         let walk = Walk::new(&curve);
-        let spread = p.spacing / 100.0;
+        let spread = p.spacing.max(MIN_SPACING) / 100.0;
         let natural = |h: f64| {
             let g = face.glyphs(text, h);
             g.last().map_or(0.0, |last| (last.0 + last.1) * spread)
@@ -212,8 +213,25 @@ impl Command for TextOnACurve {
             c.set_group(id, Some(group));
         }
         c.select(ids);
+        if let Some(note) = too_tight(p.spacing) {
+            c.note(note);
+        }
         Ok(c.finish())
     }
+}
+
+/// The closest Text spacing (%) letters are put at: closer, they overlap and then run
+/// backwards.
+const MIN_SPACING: f64 = 50.0;
+
+/// What to say when Text spacing `spacing` is closer than letters are put.
+fn too_tight(spacing: f64) -> Option<String> {
+    (spacing < MIN_SPACING).then(|| {
+        format!(
+            "Text spacing {spacing}% is too tight: the letters are spaced at 50%, the closest \
+             they go"
+        )
+    })
 }
 
 /// A path walked by distance along it, extended straight past its ends.
@@ -298,6 +316,29 @@ mod tests {
             .map(|id| doc.vectors[id].bounds())
             .reduce(Rect::union)
             .unwrap()
+    }
+
+    #[test]
+    fn spacing_too_tight_is_raised_so_the_letters_keep_their_order() {
+        let doc = text_and_line();
+        let p = Params {
+            spacing: -10.0,
+            ..Params::default()
+        };
+        let change = TextOnACurve::run(&doc, &p).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("50%")),
+            "{:?}",
+            change.notes
+        );
+        let mut doc = doc;
+        doc.apply(&change).unwrap();
+        let ys: Vec<f64> = doc
+            .selection
+            .iter()
+            .map(|id| doc.vectors[id].bounds().min.y)
+            .collect();
+        assert!(ys[0] < ys[1], "H comes before I up the line: {ys:?}");
     }
 
     #[test]

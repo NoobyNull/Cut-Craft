@@ -268,13 +268,36 @@ impl MachineFiles {
         }
     }
 
+    /// Upload Files: `paths` copied into the folder shown, asking first before any replaces
+    /// a file already there (the machine may be cutting it).
     pub(super) fn upload(&mut self, paths: &[PathBuf]) {
+        self.upload_asking(paths, &ask_replace);
+    }
+
+    /// [`MachineFiles::upload`], asking `replace` about the files already there.
+    pub(super) fn upload_asking(&mut self, paths: &[PathBuf], replace: &dyn Fn(&[String]) -> bool) {
         if !self.free() {
             return;
         }
+        let named: Vec<(&PathBuf, String)> = paths
+            .iter()
+            .map(|p| (p, safe_file_name(&super::file_name(p), self.short)))
+            .collect();
+        let mut there = vec![];
+        for (_, name) in &named {
+            match self.store.exists(&self.at, name) {
+                Ok(true) => there.push(name.clone()),
+                Ok(false) => {}
+                Err(e) => return self.done(Err(e)),
+            }
+        }
+        if !there.is_empty() && !replace(&there) {
+            return self.done(Err(
+                "Not uploaded: the files on the machine were kept".to_owned()
+            ));
+        }
         let mut sent = 0;
-        for path in paths {
-            let name = safe_file_name(&super::file_name(path), self.short);
+        for (path, name) in named {
             let result = std::fs::read(path)
                 .map_err(|e| format!("{}: {e}", path.display()))
                 .and_then(|bytes| self.store.upload(&self.at, &name, &bytes));
@@ -364,7 +387,10 @@ impl MachineFiles {
         ui.horizontal(|ui| {
             upload = ui
                 .add_enabled(reachable, egui::Button::new("Upload Files…"))
-                .on_hover_text("Copy files from this computer into this folder")
+                .on_hover_text(
+                    "Copy files from this computer into this folder. If a file of the same \
+                     name is here already, you are asked before it is replaced",
+                )
                 .clicked();
             if ui
                 .add_enabled(reachable, egui::Button::new("New Folder"))

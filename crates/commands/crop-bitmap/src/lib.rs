@@ -1,5 +1,6 @@
 //! Crop Bitmap: trims the selected picture to the selected closed vectors, everything outside
-//! them cleared to white. With several vectors, what is inside any of them is kept, and a
+//! them cleared to white. A colour picture keeps its colours, so it can still be traced in
+//! colour. With several vectors, what is inside any of them is kept, and a
 //! vector inside another makes a hole.
 
 use cut_craft_core::document::Document;
@@ -85,6 +86,9 @@ impl Command for CropBitmap {
         // a depth map is cut with the picture
         let deep = bitmap.depth.len() == bitmap.grey.len();
         let mut depth = Vec::new();
+        // and so are its colours, cleared to white outside like the grey
+        let coloured = bitmap.rgb.len() == bitmap.grey.len() * 3;
+        let mut rgb = Vec::new();
         for row in rows.clone() {
             for column in columns.clone() {
                 let centre = Point::new(
@@ -94,6 +98,13 @@ impl Command for CropBitmap {
                 let at = row * bitmap.columns + column;
                 let kept = inside(&rings, centre);
                 grey.push(if kept { bitmap.grey[at] } else { CLEARED });
+                if coloured {
+                    rgb.extend_from_slice(if kept {
+                        &bitmap.rgb[at * 3..at * 3 + 3]
+                    } else {
+                        &[CLEARED; 3]
+                    });
+                }
                 if deep {
                     depth.push(if kept {
                         bitmap.depth[at]
@@ -103,16 +114,7 @@ impl Command for CropBitmap {
                 }
             }
         }
-        let rect = Rect::new(
-            Point::new(
-                r.min.x + columns.start as f64 * pixel.x,
-                r.max.y - rows.end as f64 * pixel.y,
-            ),
-            Point::new(
-                r.min.x + columns.end as f64 * pixel.x,
-                r.max.y - rows.start as f64 * pixel.y,
-            ),
-        );
+        let rect = covered(r, pixel, &columns, &rows);
         let mut c = Change::builder(doc);
         c.replace_bitmap(
             id,
@@ -122,11 +124,32 @@ impl Command for CropBitmap {
                 grey,
                 rect,
                 depth,
+                rgb,
                 ..bitmap.clone()
             },
         );
         Ok(c.finish())
     }
+}
+
+/// Where the pixels `columns` by `rows` (counted from the top) of a picture at `r` lie.
+#[expect(clippy::cast_precision_loss, reason = "pixel counts are small")]
+fn covered(
+    r: Rect,
+    pixel: Point,
+    columns: &std::ops::Range<usize>,
+    rows: &std::ops::Range<usize>,
+) -> Rect {
+    Rect::new(
+        Point::new(
+            r.min.x + columns.start as f64 * pixel.x,
+            r.max.y - rows.end as f64 * pixel.y,
+        ),
+        Point::new(
+            r.min.x + columns.end as f64 * pixel.x,
+            r.max.y - rows.start as f64 * pixel.y,
+        ),
+    )
 }
 
 #[cfg(test)]
@@ -188,6 +211,25 @@ mod tests {
         assert_eq!((b.columns, b.rows), (6, 6));
         assert_eq!(b.grey[0], CLEARED, "a corner is outside the circle");
         assert_eq!(b.grey[2 * 6 + 2], 0, "the middle is kept");
+    }
+
+    #[test]
+    fn a_colour_picture_keeps_its_colours_cropped_with_it() {
+        let mut doc = cropping();
+        let b = doc.bitmaps.get_mut(&EntityId(1)).unwrap();
+        b.rgb = (0..100).flat_map(|i: u8| [i, 0, 50]).collect();
+        let circle = cut_craft_core::geometry::Path::circle(Point::new(5.0, 5.0), 3.0);
+        let mut c = Change::builder(&doc);
+        let id = c.add(circle);
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        run_on::<CropBitmap>(&mut doc, &NoParams {});
+        let b = &doc.bitmaps[&EntityId(1)];
+        assert_eq!(b.rgb.len(), b.columns * b.rows * 3, "one colour a pixel");
+        assert_eq!(b.rgb[..3], [255, 255, 255], "a corner is cleared to white");
+        // the middle (row 2, column 2 of the crop) is row 4, column 4 of the picture
+        let middle = (2 * 6 + 2) * 3;
+        assert_eq!(b.rgb[middle..middle + 3], [44, 0, 50]);
     }
 
     #[test]

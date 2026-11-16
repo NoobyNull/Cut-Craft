@@ -129,7 +129,7 @@ impl CutCraftApp {
                         }
                     });
             });
-        // Escape closes it from `shortcuts`, with whatever else is open
+        // Escape closes it (and only it) from `shortcuts`
         if let Some(id) = picked {
             self.search = None;
             self.invoke(ctx, id);
@@ -147,6 +147,7 @@ impl CutCraftApp {
             self.form_panel(ui);
             return;
         }
+        self.tool_note_label(ui);
         self.browser(ui);
     }
 
@@ -192,7 +193,7 @@ impl CutCraftApp {
             let response = ui.add_enabled(self.available(id), button);
             let response = self
                 .with_guidance(response, id)
-                .on_disabled_hover_text(format!("{label}: not implemented yet"));
+                .on_disabled_hover_text(self.unavailable_why(id));
             if response.clicked() {
                 clicked = Some(id);
             }
