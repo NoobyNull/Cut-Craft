@@ -1,3 +1,5 @@
+- Embellish: a Sequence box and pattern maker say how each repeat is drawn (spaces, flips, turns, random size or lean)
+- Embellish: works along open lines, every style fills a closed shape, plain style names, Reverse, Reset and Apply
 - After a tool change the bit lifts straight to safe height before moving, and tiles lift out of a cut before crossing
 - Lines lying on top of each other on one layer (a paste, a copy on its original, shapes edge to edge) show in red
 - Layers keep their material when hidden or locked, and are never deleted while another sheet uses them
