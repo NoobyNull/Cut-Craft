@@ -6,7 +6,7 @@ Pick a toolpath's tool to open its form; choose the cutter from the tool databas
 
 Reordering the toolpath list (a drag, Move Up or Down, Group), or undoing or redoing that,
 leaves each toolpath what it was: a toolpath open in its form stays the one its Calculate
-makes again.
+makes again, and notes being written in the Toolpath Summary stay with their toolpath.
 
 While a preview plays, its controls sit over the 2D and 3D views: Pause or Run, Single
 Step, Run to Retract, Stop, the speed, Progress to drag the tool along the whole job, and

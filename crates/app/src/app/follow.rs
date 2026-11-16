@@ -82,8 +82,8 @@ impl CutCraftApp {
         }
     }
 
-    /// Toolpaths moved to other ids, old id to new: the toolpath an open form edits goes
-    /// with them.
+    /// Toolpaths moved to other ids, old id to new: the toolpath an open form edits, and
+    /// the one Toolpath Summary is writing notes for, go with them.
     pub(super) fn toolpaths_moved(&mut self, moved: &BTreeMap<EntityId, EntityId>) {
         let follow = |id: &mut Option<EntityId>| {
             if let Some(to) = id.and_then(|id| moved.get(&id)) {
@@ -93,5 +93,6 @@ impl CutCraftApp {
         if let Some(form) = self.form.as_mut() {
             follow(&mut form.editing);
         }
+        follow(&mut self.summary.picked);
     }
 }

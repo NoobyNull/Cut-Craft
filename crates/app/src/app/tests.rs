@@ -15698,3 +15698,28 @@ fn an_open_edit_toolpath_form_follows_its_toolpath_through_a_reorder_and_its_und
     h.frame(vec![]);
     assert_eq!(h.app.form.as_ref().unwrap().editing, Some(EntityId(2)));
 }
+
+#[test]
+fn the_toolpath_summary_s_notes_follow_their_toolpath_through_a_reorder() {
+    let mut h = named_toolpaths();
+    h.app.job_epoch += 1;
+    h.frame(vec![]);
+    h.app.summary.picked = Some(EntityId(1));
+    h.app.summary.notes = "Use the downcut".into();
+    h.app
+        .apply(
+            "arrange_toolpaths",
+            &serde_json::json!({ "order": [2, 1, 3] }),
+        )
+        .unwrap();
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.toolpaths[&EntityId(2)].name, "Pocket");
+    assert_eq!(
+        h.app.summary.picked,
+        Some(EntityId(2)),
+        "still the Pocket's"
+    );
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    assert_eq!(h.app.summary.picked, Some(EntityId(1)));
+}
