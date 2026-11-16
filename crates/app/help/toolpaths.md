@@ -85,6 +85,9 @@ the file sets the new speed there, without stopping, so each toolpath cuts at it
 A bit renamed in the Tool Database keeps its tool changer slot: this job's toolpaths take
 the new name at once, and a job saved before the rename takes it when it opens (Undo puts
 the old name back), so the file still gives the bit its slot's tool number.
+If the Tool Database's or Materials Library's file (tools.json, materials.json) cannot be
+read when Cut Craft starts, it is left as it is: changes are kept until Cut Craft closes but
+not saved, and each OK says "not saved". Fix or rename that file, then restart.
 
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the

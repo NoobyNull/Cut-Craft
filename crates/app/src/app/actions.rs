@@ -109,9 +109,11 @@ impl CutCraftApp {
             post_window: None,
             tools: ToolDatabase::starter(),
             tools_path: None,
+            tools_unreadable: None,
             tool_manager: None,
             materials: cut_craft_core::material_library::MaterialLibrary::starter(),
             materials_path: None,
+            materials_unreadable: None,
             materials_window: None,
             picking: None,
             deep_cut: None,
@@ -6124,17 +6126,33 @@ impl CutCraftApp {
     /// Reads the user's Materials Library (the starter list when there is none); a broken
     /// one is reported, kept on disk and not saved over.
     pub(super) fn load_materials(&mut self) {
-        self.materials_path = files::materials_path();
+        self.load_materials_at(files::materials_path());
+    }
+
+    /// [`Self::load_materials`] from `path`.
+    pub(super) fn load_materials_at(&mut self, path: Option<std::path::PathBuf>) {
+        self.materials_path = path;
         if let Some(path) = &self.materials_path {
             match files::load_materials(path) {
                 Ok(lib) => self.materials = lib,
                 Err(e) => {
                     self.status
                         .set_message(&format!("{e}; material changes will not be saved"));
-                    self.materials_path = None;
+                    self.materials_unreadable = self.materials_path.take();
                 }
             }
         }
+    }
+
+    /// Writes the Materials Library, if it has a file; an error when it could not be
+    /// written, or when its file could not be read at start and so is not saved over.
+    pub(super) fn save_materials(&self) -> Result<(), String> {
+        if let Some(path) = &self.materials_unreadable {
+            return Err(not_saved("Materials Library", path));
+        }
+        self.materials_path.as_deref().map_or(Ok(()), |p| {
+            files::write_creating(p, &self.materials.to_json())
+        })
     }
 
     /// Tools renamed in the Tool Database, (old name, new name): the job's toolpaths that
@@ -6168,7 +6186,12 @@ impl CutCraftApp {
 
     /// Reads the user's tool database; a broken one is reported and left untouched on disk.
     pub(super) fn load_tools(&mut self) {
-        self.tools_path = files::tool_database_path();
+        self.load_tools_at(files::tool_database_path());
+    }
+
+    /// [`Self::load_tools`] from `path`.
+    pub(super) fn load_tools_at(&mut self, path: Option<std::path::PathBuf>) {
+        self.tools_path = path;
         if let Some(path) = &self.tools_path {
             match files::load_tools_joining(path) {
                 Ok((tools, report)) => {
@@ -6192,7 +6215,7 @@ impl CutCraftApp {
                 Err(e) => {
                     self.status
                         .set_message(&format!("{e}; tool changes will not be saved"));
-                    self.tools_path = None;
+                    self.tools_unreadable = self.tools_path.take();
                 }
             }
         }
@@ -6306,6 +6329,11 @@ impl CutCraftApp {
 
     /// Writes the tool database, if it has a file, and reports `done` or the failure.
     pub(super) fn tools_changed(&mut self, done: &str) {
+        if let Some(path) = &self.tools_unreadable {
+            let message = not_saved("Tool database", path);
+            self.status.set_message(&message);
+            return;
+        }
         let result = self
             .tools_path
             .as_deref()
@@ -6980,4 +7008,15 @@ fn records_of<T: Clone>(
         .flatten()
         .filter_map(|g| Some((*g, records.get(g).cloned()?)))
         .collect()
+}
+
+/// What a save says when `what`'s file, at `path`, could not be read when Cut Craft started:
+/// the changes are kept until it closes, but not written over that file.
+fn not_saved(what: &str, path: &std::path::Path) -> String {
+    format!(
+        "{what} not saved: {} could not be read when Cut Craft started, so it is not written \
+         over. Fix or rename that file, then restart Cut Craft; your changes are kept only \
+         until it closes",
+        path.display()
+    )
 }

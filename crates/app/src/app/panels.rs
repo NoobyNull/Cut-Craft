@@ -39,10 +39,7 @@ impl CutCraftApp {
                 if outcome == MaterialsOutcome::Ok {
                     self.materials_window = None;
                 }
-                let saved = self.materials_path.as_deref().map_or(Ok(()), |p| {
-                    files::write_creating(p, &self.materials.to_json())
-                });
-                match saved {
+                match self.save_materials() {
                     Ok(()) => self.tools_changed("Materials Library saved"),
                     Err(e) => self.status.set_message(&e),
                 }

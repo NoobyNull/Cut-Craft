@@ -16195,3 +16195,27 @@ fn save_toolpaths_says_tiling_is_on_and_how_many_tiles() {
         h.texts()
     );
 }
+
+#[test]
+fn a_tool_database_or_materials_library_that_could_not_be_read_is_never_said_saved() {
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-broken-db-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (tools, materials) = (dir.join("tools.json"), dir.join("materials.json"));
+    std::fs::write(&tools, "{ not json").unwrap();
+    std::fs::write(&materials, "{ not json").unwrap();
+    h.app.load_tools_at(Some(tools.clone()));
+    h.app.load_materials_at(Some(materials.clone()));
+    h.app.tools_changed("Tool database saved");
+    let message = h.app.status.message.clone();
+    assert!(message.starts_with("Tool database not saved"), "{message}");
+    assert!(message.contains("tools.json"), "{message}");
+    assert!(message.contains("rename that file"), "{message}");
+    let saved = h.app.save_materials();
+    let e = saved.unwrap_err();
+    assert!(e.starts_with("Materials Library not saved"), "{e}");
+    assert!(e.contains("materials.json"), "{e}");
+    // the broken files are left as they were
+    assert_eq!(std::fs::read_to_string(&tools).unwrap(), "{ not json");
+    std::fs::remove_dir_all(&dir).ok();
+}
