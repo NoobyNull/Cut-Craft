@@ -37,7 +37,8 @@ pub struct Params {
     #[schemars(range(min = 1))]
     #[schemars(extend("x-group" = "Laser"))]
     pub passes: u32,
-    /// The pattern of lines the picture is burned in
+    /// The pattern of lines the picture is burned in (along the selected vectors, the line
+    /// spacing and angle are theirs, so those settings are hidden)
     #[schemars(extend("x-group" = "Picture"))]
     pub strategy: Strategy,
     /// Full power or off, spread to give the tones, for materials that only burn or don't
@@ -46,10 +47,12 @@ pub struct Params {
     /// Between lines, in kerf widths (1 densest to 30 sparsest)
     #[schemars(range(min = 1, max = 30))]
     #[schemars(extend("x-group" = "Picture"))]
+    #[schemars(extend("x-hide-when" = {"strategy": "selected"}))]
     pub line_spacing: f64,
     /// The angle of the lines: 0° along X, 90° along Y
     #[schemars(extend("x-unit" = "°"))]
     #[schemars(extend("x-group" = "Picture"))]
+    #[schemars(extend("x-hide-when" = {"strategy": "selected"}))]
     pub line_angle: f64,
     /// The laser: its diameter is the kerf, its feed rate the move speed
     pub tool: Tool,

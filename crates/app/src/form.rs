@@ -1547,6 +1547,39 @@ mod tests {
     }
 
     #[test]
+    fn laser_forms_show_only_the_settings_of_the_strategy_picked() {
+        let f = fields(&schema("laser_cut_fill_toolpath"));
+        let shown = |key, strategy: &str| {
+            let params = serde_json::json!({ "strategy": strategy });
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&params))
+        };
+        for hatch in ["stepover", "hatch_angle", "cross_hatch", "outline"] {
+            assert!(shown(hatch, "hatch_fill"), "{hatch}");
+            assert!(
+                !shown(hatch, "cut_outside") && !shown(hatch, "cut_on"),
+                "{hatch}"
+            );
+        }
+        assert!(shown("allowance", "cut_outside") && shown("allowance", "cut_inside"));
+        assert!(!shown("allowance", "hatch_fill") && !shown("allowance", "cut_on"));
+        let f = fields(&schema("laser_picture_toolpath"));
+        let shown = |key, strategy: &str| {
+            let params = serde_json::json!({ "strategy": strategy });
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&params))
+        };
+        for lines in ["line_angle", "line_spacing"] {
+            assert!(shown(lines, "raster") && shown(lines, "hatch"), "{lines}");
+            assert!(!shown(lines, "selected"), "{lines}");
+        }
+    }
+
+    #[test]
     fn finishing_shows_its_rest_machining_settings_only_with_two_tools_or_more() {
         let f = fields(&schema("3d_finishing_toolpath"));
         let tools = |n: usize| serde_json::json!({ "tools": vec![serde_json::json!({}); n] });

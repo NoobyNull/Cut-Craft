@@ -40,26 +40,31 @@ pub struct Params {
     #[schemars(range(min = 1))]
     #[schemars(extend("x-group" = "Laser"))]
     pub passes: u32,
-    /// Cut along the shapes, or fill them with lines
+    /// Cut along the shapes, or fill them with lines (each shows only its own settings)
     #[schemars(extend("x-group" = "Fill"))]
     pub strategy: Strategy,
     /// Extra offset for cutting outside or inside, to ease or tighten a fit
     #[schemars(extend("x-unit" = "mm"))]
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": ["cut_outside", "cut_inside"]}))]
     pub allowance: f64,
     /// Between hatch lines
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub stepover: f64,
     /// The angle of the hatch lines: 0° along X, 90° along Y
     #[schemars(extend("x-unit" = "°"))]
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub hatch_angle: f64,
     /// A second set of hatch lines at right angles
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub cross_hatch: bool,
     /// Round the shapes as well, so a hatch has crisp edges
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub outline: bool,
     /// The laser: its diameter is the kerf, its feed rate the move speed
     pub tool: Tool,
