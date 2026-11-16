@@ -4042,6 +4042,14 @@ impl CutCraftApp {
             if self.screen == Screen::NewJob {
                 self.job_setup_cancel();
             }
+            // a form whose buttons are Import and Cancel: Esc is its Cancel
+            if self
+                .form
+                .as_ref()
+                .is_some_and(|f| f.id == "orientate_3d_model")
+            {
+                self.cancel_form();
+            }
             self.form = None;
             self.search = None;
             self.view_tool = None;
@@ -5020,7 +5028,7 @@ impl CutCraftApp {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 cancel = ui
                     .button("Cancel")
-                    .on_hover_hint("Close without importing the model")
+                    .on_hover_hint("Close without importing the model (Esc does the same)")
                     .clicked();
                 import = ui
                     .button("Import")

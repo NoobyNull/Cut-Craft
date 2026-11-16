@@ -14729,3 +14729,31 @@ fn del_in_node_edit_deletes_the_picked_nodes_not_the_shape() {
         h.app.status.message
     );
 }
+
+#[test]
+fn esc_on_import_3d_model_cancels_the_import() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("esc-cancels-import");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.form.as_ref().map(|f| f.id),
+        Some("orientate_3d_model")
+    );
+    assert!(
+        !h.app.doc.components.is_empty(),
+        "placed while the form is open"
+    );
+    h.frame(vec![escape()]);
+    assert!(h.app.form.is_none());
+    assert!(
+        h.app.doc.components.is_empty(),
+        "Esc is the form's Cancel: the model is not imported"
+    );
+    assert!(
+        h.app.status.message.contains("cancelled"),
+        "{}",
+        h.app.status.message
+    );
+    let _ = std::fs::remove_file(file);
+}
