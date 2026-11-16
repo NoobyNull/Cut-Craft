@@ -9,6 +9,7 @@ const CONTENTS: &str = include_str!("../../help/contents.md");
 const DESIGN: &str = include_str!("../../help/design.md");
 const TOOLPATHS: &str = include_str!("../../help/toolpaths.md");
 const WEB_API: &str = include_str!("../../help/web-api.md");
+const VIEW_3D: &str = include_str!("../../help/view-3d.md");
 const GROUPS: &str = include_str!("../../help/groups.md");
 
 /// The tools whose help pages link the Groups page.
@@ -40,6 +41,10 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "web-api-docs.png",
         include_bytes!("../../help/pictures/web-api-docs.png"),
+    ),
+    (
+        "auto-rotate.gif",
+        include_bytes!("../../help/pictures/auto-rotate.gif"),
     ),
     (
         "line-colors-dark.png",
@@ -174,6 +179,7 @@ impl CutCraftApp {
             "toolpaths" => "Toolpaths page".into(),
             "tips" => "Did You Know?".into(),
             "web_api" => "Web API".into(),
+            "view_3d" => "3D View".into(),
             "groups" => "Groups".into(),
             id => self.tool_label(id),
         }
@@ -187,6 +193,7 @@ impl CutCraftApp {
             "toolpaths",
             "tips",
             "web_api",
+            "view_3d",
             "groups",
         ];
         for page in [Page::Design, Page::Toolpaths] {
@@ -221,6 +228,7 @@ impl CutCraftApp {
             "toolpaths" => tools_page(Page::Toolpaths, TOOLPATHS),
             "tips" => super::tips::markdown(),
             "web_api" => WEB_API.to_owned(),
+            "view_3d" => VIEW_3D.to_owned(),
             "groups" => GROUPS.to_owned(),
             id => {
                 let (page, name) = match self.page_of(id) {
