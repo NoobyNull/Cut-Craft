@@ -55,14 +55,20 @@ pub struct Params {
     /// Size the ramps as a percentage of the longest they can be, instead of a length
     #[schemars(extend("x-group" = "Ramp"))]
     pub use_ramp_percent: bool,
-    /// Length of each ramp along the vector (capped at the longest it can be)
+    /// Length of each ramp along the vector (capped at the longest it can be), with Use ramp
+    /// percent unticked
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Ramp"))]
+    #[schemars(extend("x-group" = "Ramp", "x-enable-when" = {"use_ramp_percent": "false"}))]
     #[schemars(extend("x-dim" = "L", "x-diagram" = "diagrams/fluting_ramp.png"))]
     pub ramp_length: f64,
-    /// Percentage of the longest ramp: the whole vector at the start only, half of it at both ends
-    #[schemars(range(min = 0, max = 100))]
-    #[schemars(extend("x-group" = "Ramp"))]
+    /// Percentage of the longest ramp: the whole vector at the start only, half of it at both
+    /// ends, with Use ramp percent ticked
+    #[schemars(title = "Ramp percent", range(min = 0, max = 100))]
+    #[schemars(extend(
+        "x-unit" = "%",
+        "x-group" = "Ramp",
+        "x-enable-when" = {"use_ramp_percent": "true"}
+    ))]
     pub ramp_percent: f64,
     /// The bit that cuts the flutes, usually a ball nose or V-bit
     pub tool: Tool,

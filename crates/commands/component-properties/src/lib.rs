@@ -45,8 +45,8 @@ pub struct Params {
     #[schemars(extend("x-widget" = "drop-down"))]
     #[serde(default)]
     pub appearance: Appearance,
-    /// Its colour, with Solid Color
-    #[schemars(extend("x-kind" = "colour"))]
+    /// Its colour, with Solid Color (greyed with Same as Parent)
+    #[schemars(extend("x-kind" = "colour", "x-enable-when" = {"appearance": "solid_color"}))]
     #[serde(default = "solid")]
     pub colour: [u8; 3],
 }

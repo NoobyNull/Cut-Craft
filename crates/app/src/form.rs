@@ -102,6 +102,17 @@ impl When {
         })
     }
 
+    /// Whether the rule holds for a field inside a section: on the section's own settings
+    /// (`local`) when its key is one of them (Job Setup's datum offset greyed by the datum's
+    /// own tick), else on the form's top-level ones.
+    pub fn judged(&self, local: &Value, top: &Value) -> bool {
+        if local.get(&self.key).is_some() {
+            self.shown(local)
+        } else {
+            self.shown(top)
+        }
+    }
+
     /// Whether the field shows, given the form's top-level `params`.
     pub fn shown(&self, params: &Value) -> bool {
         let holds = |key: &String, values: &[String]| {
@@ -460,7 +471,7 @@ fn grid(
                     .as_ref()
                     .filter(|_| own)
                     .and_then(|template| (look.picture)(&icon_path(template, &params[&f.key])));
-                let enabled = f.enabled.as_ref().is_none_or(|w| w.shown(top));
+                let enabled = f.enabled.as_ref().is_none_or(|w| w.judged(params, top));
                 ui.add_enabled_ui(enabled, |ui| {
                     ui.horizontal(|ui| {
                         if let Some(picture) = picture {
@@ -1630,6 +1641,46 @@ mod tests {
             _ => {}
         }
         found
+    }
+
+    #[test]
+    fn fields_used_only_with_a_tick_are_greyed_without_it() {
+        let live = |f: &[Field], key, local: Value, top: Value| {
+            field(f, key)
+                .enabled
+                .as_ref()
+                .expect("greyed by a rule")
+                .judged(&local, &top)
+        };
+        let job = fields(&schema("job_setup"));
+        let Kind::Group(datum) = &field(&job, "datum").kind else {
+            panic!("the datum section");
+        };
+        for key in ["x", "y"] {
+            // judged on the datum section's own tick, not the form's top level
+            let top = serde_json::json!({ "datum": {} });
+            let ticked = serde_json::json!({ "use_offset": true });
+            let unticked = serde_json::json!({ "use_offset": false });
+            assert!(live(datum, key, ticked, top.clone()));
+            assert!(!live(datum, key, unticked, top));
+        }
+        let flute = fields(&schema("fluting_toolpath"));
+        let percent = serde_json::json!({ "use_ramp_percent": true });
+        let length = serde_json::json!({ "use_ramp_percent": false });
+        assert!(live(&flute, "ramp_percent", Value::Null, percent.clone()));
+        assert!(!live(&flute, "ramp_length", Value::Null, percent));
+        assert!(live(&flute, "ramp_length", Value::Null, length));
+        let ramp_percent = field(&flute, "ramp_percent");
+        assert_eq!(ramp_percent.label, "Ramp percent");
+        assert!(matches!(&ramp_percent.kind, Kind::Number { unit: Some(u), .. } if u == "%"));
+        let weave = fields(&schema("extrude_and_weave"));
+        let scale = serde_json::json!({ "scale_to_exact_height": false });
+        assert!(!live(&weave, "height", Value::Null, scale));
+        let component = fields(&schema("component_properties"));
+        let parent = serde_json::json!({ "appearance": "same_as_parent" });
+        let solid = serde_json::json!({ "appearance": "solid_color" });
+        assert!(!live(&component, "colour", Value::Null, parent));
+        assert!(live(&component, "colour", Value::Null, solid));
     }
 
     #[test]

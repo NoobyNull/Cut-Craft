@@ -75,11 +75,17 @@ pub struct DatumPosition {
     pub position: Datum,
     /// Give that point coordinates other than 0, 0
     pub use_offset: bool,
-    /// The X the datum point is given
-    #[schemars(title = "X", extend("x-unit" = "mm"))]
+    /// The X the datum point is given, with Use offset ticked
+    #[schemars(
+        title = "X",
+        extend("x-unit" = "mm", "x-enable-when" = {"use_offset": "true"})
+    )]
     pub x: f64,
-    /// The Y the datum point is given
-    #[schemars(title = "Y", extend("x-unit" = "mm"))]
+    /// The Y the datum point is given, with Use offset ticked
+    #[schemars(
+        title = "Y",
+        extend("x-unit" = "mm", "x-enable-when" = {"use_offset": "true"})
+    )]
     pub y: f64,
 }
 
