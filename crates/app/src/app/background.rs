@@ -175,7 +175,12 @@ impl CutCraftApp {
             [(_, one)] => format!("Previewing {}", one.name),
             _ => format!("Previewing {} toolpaths", cuts.len()),
         };
-        let last = cuts.last().map(|(_, t)| t.name.clone());
+        // the same split as the progress title: the one toolpath's name, else how many
+        let done = match &cuts[..] {
+            [] => None,
+            [(_, one)] => Some(format!("Previewed {}", one.name)),
+            _ => Some(format!("Previewed {} toolpaths", cuts.len())),
+        };
         let tools: Vec<cut_craft_core::toolpath::Tool> =
             cuts.iter().map(|(_, t)| t.tool.clone()).collect();
         self.in_background(
@@ -200,8 +205,8 @@ impl CutCraftApp {
                 if app.display.auto_open_3d {
                     app.view = super::View::ThreeD;
                 }
-                if let Some(name) = last {
-                    app.status.set_message(&format!("Previewed {name}"));
+                if let Some(done) = done {
+                    app.status.set_message(&done);
                 }
                 if let Some(note) = fine_bit {
                     app.status.set_message(&note);
