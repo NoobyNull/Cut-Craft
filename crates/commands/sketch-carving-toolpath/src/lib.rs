@@ -44,7 +44,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_sketch.png"))]
     pub start_depth: f64,
-    /// Below the start depth
+    /// Below the start depth, cut in passes no deeper than the tool's pass depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D"))]
@@ -60,7 +60,7 @@ pub struct Params {
     #[schemars(range(min = 0, max = 100))]
     #[schemars(extend("x-group" = "Sketch"))]
     pub line_thickness: f64,
-    /// Its stepover spaces the passes over the lines
+    /// Its stepover spaces the passes over the lines; its pass depth is the most each cuts
     pub tool: Tool,
 }
 
@@ -196,12 +196,12 @@ impl Params {
     }
 }
 
-/// Cuts each row's runs of line cells (where `keep` allows) flat at `z`.
+/// Cuts each row's runs of line cells (where `keep` allows) flat at each of `depths`.
 fn cut_rows(
     grid: &Grid,
     line: &[bool],
     keep: impl Fn(Point) -> bool,
-    z: f64,
+    depths: &[f64],
     safe: f64,
 ) -> Vec<Move> {
     let mut moves = vec![];
@@ -222,7 +222,7 @@ fn cut_rows(
             moves.extend(contour_moves(
                 &[centre(first, r), centre(c, r)],
                 false,
-                &[z],
+                depths,
                 safe,
             ));
             c += 1;
@@ -249,8 +249,20 @@ impl Command for SketchCarvingToolpath {
         let inside = |q: Point| sketch.inside(q);
         // ponytail: each row's runs of line cells are cut flat; offsetting round the lines
         // would give smoother edges
-        let z = -(p.start_depth + p.cut_depth);
-        let moves = cut_rows(&sketch.grid, &sketch.line, inside, z, doc.job.clearance);
+        // down to the cut depth in the tool's passes, below the start depth
+        let depths: Vec<f64> = p
+            .tool
+            .pass_depths(p.cut_depth)
+            .into_iter()
+            .map(|z| z - p.start_depth)
+            .collect();
+        let moves = cut_rows(
+            &sketch.grid,
+            &sketch.line,
+            inside,
+            &depths,
+            doc.job.clearance,
+        );
         if moves.is_empty() {
             return Err(CommandError::Failed(
                 "the sketch has no lines. Use a thicker line".into(),
@@ -411,6 +423,29 @@ mod tests {
             "only along the line"
         );
         assert!(cuts.iter().all(|q| (q.z + 1.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn a_deep_carve_steps_down_by_the_tools_pass_depth() {
+        let mut p = Params {
+            start_depth: 0.5,
+            cut_depth: 1.5,
+            ..Params::default()
+        };
+        p.tool.pass_depth = 0.5;
+        let moves = sketch(&with_picture(), &p);
+        let mut levels: Vec<f64> = moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut)
+            .map(|m| m.to.z)
+            .collect();
+        levels.sort_by(f64::total_cmp);
+        levels.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+        assert_eq!(
+            levels,
+            [-2.0, -1.5, -1.0],
+            "three passes below the start depth"
+        );
     }
 
     #[test]
