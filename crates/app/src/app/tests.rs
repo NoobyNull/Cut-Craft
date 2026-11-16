@@ -12168,7 +12168,7 @@ fn the_tabs_read_in_one_line_on_the_form() {
     assert_eq!(tabs::summary(Tabs::None, tab, true, 0, mm), None);
     assert_eq!(
         tabs::summary(Tabs::Flat, tab, true, 0, mm).unwrap(),
-        "12.7 mm long, 6.35 mm thick (from the tool), about one every 150 mm, at least 3 a shape"
+        "12.7 mm long, 6.35 mm thick (from the tool), about one every 150 mm, 3 a shape (fewer if small)"
     );
     let by_number = TabSettings {
         spacing: TabSpacing::ConstantNumber,

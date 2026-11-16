@@ -104,7 +104,7 @@ pub(super) fn summary(
     );
     let spread = match tab.spacing {
         TabSpacing::Automatic => format!(
-            "about one every {}, at least 3 a shape",
+            "about one every {}, 3 a shape (fewer if small)",
             shown(tab.distance, units)
         ),
         TabSpacing::ConstantNumber => format!("{} a shape", tab.number),
@@ -350,8 +350,8 @@ fn settings(
     ui.label("How many, and where");
     ui.radio_value(&mut tab.spacing, TabSpacing::Automatic, "Automatic")
         .on_hover_hint(
-            "About one every distance below, at least 3 on a shape, and never more than a \
-             third of it in tabs: a safe start",
+            "About one every distance below, 3 or more on a shape, but never more than a \
+             third of it in tabs, so a small shape gets fewer (1 or 2): a safe start",
         );
     egui::Grid::new("tab_spread").num_columns(2).show(ui, |ui| {
         ui.radio_value(&mut tab.spacing, TabSpacing::ConstantNumber, "Number")
