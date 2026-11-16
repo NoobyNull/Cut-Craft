@@ -15124,3 +15124,21 @@ fn the_keep_out_check_at_saving_checks_the_moves_that_are_saved() {
     let why = h.app.thinned_for_saving(&plan).unwrap_err();
     assert!(why.contains("keep-out zone"), "{why}");
 }
+
+#[test]
+fn material_setup_hides_the_thickness_on_a_rotary_job() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "material_setup");
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(h.text_at("Material Thickness").is_some(), "a flat job's");
+    h.app.form = None;
+    h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
+    h.app.invoke(&h.ctx, "material_setup");
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(h.text_at("Material Thickness").is_none());
+}

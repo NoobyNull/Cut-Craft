@@ -16,11 +16,12 @@ pub struct MaterialSetup;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// The material's thickness (flat jobs; a rotary job's size is its diameter). Changing it,
-    /// or the model's gap, after making toolpaths marks them out of date
+    /// The material's thickness. Changing it, or the model's gap, after making toolpaths
+    /// marks them out of date. A rotary job has none here: its size is the cylinder's
+    /// diameter, set in Job Setup
     #[schemars(
         title = "Material Thickness",
-        extend("x-unit" = "mm", "x-section" = true),
+        extend("x-unit" = "mm", "x-section" = true, "x-hide-when" = {"rotary": true}),
         range(min = 0)
     )]
     pub thickness: f64,
@@ -269,6 +270,11 @@ mod tests {
         );
         assert_eq!(
             rule("rotary_z_zero", "x-show-when"),
+            serde_json::json!({ "rotary": true })
+        );
+        // a rotary job's size is its diameter, set in Job Setup: no thickness to type here
+        assert_eq!(
+            rule("thickness", "x-hide-when"),
             serde_json::json!({ "rotary": true })
         );
     }
