@@ -2957,7 +2957,9 @@ impl CutCraftApp {
         if removed > 0 {
             self.before_preview = Some(super::BeforePreview(before));
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-            self.status.set_message("Removed the piece cut free");
+            self.status.set_message(
+                "Removed the piece cut free: Undo Last Preview on the Toolpaths page brings it back",
+            );
         }
         removed > 0
     }

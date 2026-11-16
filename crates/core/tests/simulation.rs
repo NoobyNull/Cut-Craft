@@ -738,3 +738,18 @@ fn material_covers_only_the_job_it_was_made_for() {
     };
     assert!(!material.covers(&thicker) && !material.covers(&wider));
 }
+
+#[test]
+fn material_not_cut_free_is_not_removed() {
+    // uncut: no piece cut free anywhere
+    let mut m = material();
+    assert_eq!(m.remove_piece(Point::new(50.0, 50.0)), 0);
+    assert!(m.heights.iter().all(|h| !h.is_nan()), "the block stays");
+    // a pocket, not through
+    m.cut(&toolpath(&[(30.0, 50.0, -5.0), (70.0, 50.0, -5.0)]));
+    assert_eq!(m.remove_piece(Point::new(50.0, 50.0)), 0);
+    // a slot right through that cuts nothing free (its ends stay joined)
+    m.cut(&toolpath(&[(30.0, 50.0, -25.0), (70.0, 50.0, -25.0)]));
+    assert_eq!(m.remove_piece(Point::new(10.0, 10.0)), 0);
+    assert!(m.heights.iter().all(|h| !h.is_nan()));
+}

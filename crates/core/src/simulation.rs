@@ -355,7 +355,9 @@ impl Material {
     /// Takes away the piece of material at `p`: every cell joined to it, side to side,
     /// without a cut right through between (the preview's double-click on a part or the
     /// waste cut free of it). Taken cells hold NaN, which the views leave out. Returns how
-    /// many cells went; none when `p` is off the material, cut through or already gone.
+    /// many cells went; none when `p` is off the material, cut through or already gone, or
+    /// when nothing is cut free there: the piece would be all the material left, with none
+    /// taken away before (an uncut block, a pocket, a profile held by tabs).
     pub fn remove_piece(&mut self, p: Point) -> usize {
         let (column, row) = (
             ((p.x - self.origin.x) / self.cell).floor(),
@@ -371,14 +373,15 @@ impl Material {
         // through means at the underside, to within a hair
         let solid = |h: f64| !h.is_nan() && h > self.bottom + 1e-9;
         let mut stack = vec![(column, row)];
-        let mut removed = 0;
+        let mut piece = vec![];
+        let mut seen = vec![false; self.heights.len()];
         while let Some((c, r)) = stack.pop() {
-            let height = &mut self.heights[r * self.columns + c];
-            if !solid(*height) {
+            let i = r * self.columns + c;
+            if seen[i] || !solid(self.heights[i]) {
                 continue;
             }
-            *height = f64::NAN;
-            removed += 1;
+            seen[i] = true;
+            piece.push(i);
             if c > 0 {
                 stack.push((c - 1, r));
             }
@@ -392,7 +395,15 @@ impl Material {
                 stack.push((c, r + 1));
             }
         }
-        removed
+        let left = self.heights.iter().filter(|&&h| solid(h)).count();
+        let taken_before = self.heights.iter().any(|h| h.is_nan());
+        if piece.len() == left && !taken_before {
+            return 0;
+        }
+        for &i in &piece {
+            self.heights[i] = f64::NAN;
+        }
+        piece.len()
     }
 
     /// Removes what the tool following `toolpath` cuts away.

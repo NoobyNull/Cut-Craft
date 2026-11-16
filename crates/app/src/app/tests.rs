@@ -7897,9 +7897,32 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
     assert!(at(50.0, 50.0).is_nan());
     assert_eq!(at(5.0, 5.0), 0.0);
     assert!(
+        h.app.status.message.contains("Undo Last Preview"),
+        "says how to bring it back: {}",
+        h.app.status.message
+    );
+    assert!(
         !h.app.remove_preview_piece(fit, fit.center()),
         "already gone"
     );
+}
+
+#[test]
+fn double_clicking_an_uncut_preview_leaves_the_block() {
+    let mut h = Harness::new();
+    h.app.simulation = Some(cut_craft_core::simulation::Material::new(
+        &h.app.doc.job,
+        200,
+    ));
+    h.app.orbit = view3d::Orbit::TOP;
+    let fit = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 400.0));
+    assert!(
+        !h.app.remove_preview_piece(fit, fit.center()),
+        "nothing cut free"
+    );
+    let sim = h.app.simulation.as_ref().unwrap();
+    assert!(sim.heights.iter().all(|h| !h.is_nan()), "the block stays");
+    assert!(h.app.before_preview.is_none());
 }
 
 #[test]

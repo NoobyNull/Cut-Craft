@@ -19,7 +19,11 @@ preview, its controls and Undo Last Preview, so nothing of the old job shows in 
 change to the job (an edit, a recalculation, Undo) stops a playing preview where it is and
 closes the controls, as its moves are out of date: preview again to play the new ones. A
 change in Job Setup to the material's size, thickness or place clears the preview, so the
-3D view shows the new block and the next Preview cuts into that. Going back starts from the nearest point saved
+3D view shows the new block and the next Preview cuts into that. In the 3D view,
+double-click a piece the preview has cut right free (a part, or the waste round it) to take
+it away and see what is left; Undo Last Preview brings it back. Where nothing is cut free
+(uncut material, a pocket, a part held by tabs), a double-click selects a component or
+fits the view as usual. Going back starts from the nearest point saved
 while it played, so it is quick once played through. A jump is cut across all the
 computer's cores, and the 3D view keeps its full detail while the preview plays (it is
 redrawn a few times a second; the tool moves smoothly in between). If a bit has no shank
