@@ -2008,6 +2008,22 @@ mod tests {
     }
 
     #[test]
+    fn properties_forms_do_not_show_the_internal_id_of_what_they_change() {
+        // the right-click menu fills the id in: a number box for it could point the form
+        // at a different item
+        for (id, key) in [
+            ("toolpath_properties", "toolpath"),
+            ("layer_properties", "layer"),
+            ("component_properties", "component"),
+            ("bitmap_properties", "bitmap"),
+            ("edit_picture", "bitmap"),
+        ] {
+            let f = fields(&schema(id));
+            assert!(!keys(&f).contains(&key), "{id} shows {key}");
+        }
+    }
+
+    #[test]
     fn combine_mode_is_a_row_of_pictures() {
         let f = fields(&schema("component_properties"));
         assert!(matches!(

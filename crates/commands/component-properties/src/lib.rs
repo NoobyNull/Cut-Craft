@@ -14,6 +14,9 @@ pub struct ComponentProperties;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The component these settings belong to
+    /// (the one right-clicked or picked: never shown on the form, so it cannot be changed
+    /// to another by mistake)
+    #[schemars(skip)]
     pub component: EntityId,
     /// What the component is called in the component tree
     pub name: String,
