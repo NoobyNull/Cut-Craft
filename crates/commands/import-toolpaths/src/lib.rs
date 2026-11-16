@@ -24,7 +24,10 @@ pub struct Params {
     /// The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt)
     pub file: String,
     /// The tool the file cuts with: its shape and size draw the preview; the file's own
-    /// feed rate, spindle speed and tool number are used where it gives them. With more than
+    /// feed rate (from its first cutting move), plunge rate (from its first straight-down
+    /// plunge), spindle speed and tool number are used where it gives them. A toolpath keeps
+    /// one of each, so a file that changes them more often with one tool is noted in red,
+    /// as saving it again writes every move at those. With more than
     /// one tool in the file each part's tool is named after its number (`6 mm End Mill (T3
     /// in the file)`), so saving it again still changes tools between them
     pub tool: Tool,
@@ -91,6 +94,9 @@ impl Command for ImportToolpaths {
             if let Some(feed) = part.feed {
                 tool.feed_rate = feed;
             }
+            if let Some(plunge) = part.plunge {
+                tool.plunge_rate = plunge;
+            }
             if let Some(speed) = part.spindle {
                 tool.spindle_speed = speed;
             }
@@ -104,6 +110,9 @@ impl Command for ImportToolpaths {
                 part: n,
                 ..p.clone()
             };
+            if let Some(lost) = part.flattened() {
+                c.note(format!("{name}: {lost}"));
+            }
             c.add_toolpath(made_by::<Self>(&own, name, tool, vec![], part.moves));
             made += 1;
         }
@@ -122,10 +131,67 @@ impl Command for ImportToolpaths {
 pub struct Part {
     /// Its `T` number, if the file gives one.
     pub tool: Option<u32>,
-    /// The first feed rate given, mm/min.
+    /// The feed rate of its first cutting move (sideways, or down at a slant), mm/min.
     pub feed: Option<f64>,
+    /// The feed rate of its first straight-down plunge, mm/min.
+    pub plunge: Option<f64>,
+    /// The first spindle speed given, rpm.
     pub spindle: Option<f64>,
     pub moves: Vec<Move>,
+    /// Every feed rate its moves are made at, each once, mm/min.
+    pub feeds: Vec<f64>,
+    /// Every spindle speed given with it, each once, rpm.
+    pub speeds: Vec<f64>,
+}
+
+impl Part {
+    /// What is lost when this part becomes one toolpath, which keeps one feed rate, one
+    /// plunge rate and one spindle speed: `None` when the file gives no more than that.
+    #[must_use]
+    pub fn flattened(&self) -> Option<String> {
+        let list = |values: &[f64]| {
+            values
+                .iter()
+                .map(|v| format!("{}", (v * 10.0).round() / 10.0))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let mut dropped = vec![];
+        if self.feeds.len() > 2 {
+            dropped.push(format!(
+                "{} feed rates ({} mm/min)",
+                self.feeds.len(),
+                list(&self.feeds)
+            ));
+        }
+        if self.speeds.len() > 1 {
+            dropped.push(format!(
+                "{} spindle speeds ({} rpm)",
+                self.speeds.len(),
+                list(&self.speeds)
+            ));
+        }
+        if dropped.is_empty() {
+            return None;
+        }
+        let or_form = |v: Option<f64>| v.map_or("the tool's own".to_owned(), |v| list(&[v]));
+        Some(format!(
+            "the file uses {} with this tool, but a toolpath keeps one feed rate ({}), one \
+             plunge rate ({}) and one spindle speed ({}), so Save Toolpaths writes every move \
+             at those. Check them in the toolpath's tool before saving it again",
+            dropped.join(" and "),
+            or_form(self.feed),
+            or_form(self.plunge),
+            or_form(self.spindle),
+        ))
+    }
+}
+
+/// `values` with `v` added, unless it is there already.
+fn add_once(values: &mut Vec<f64>, v: f64) {
+    if !values.iter().any(|&w| (w - v).abs() < 1e-6) {
+        values.push(v);
+    }
 }
 
 /// How far an arc's chords may stray from it, mm.
@@ -152,6 +218,8 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
     let mut parts = vec![Part::default()];
     // a T picks the next tool; the change itself comes with M6, on its line or later
     let mut next_tool = None;
+    // the feed rate in force (F is modal), mm/min
+    let mut rate = None::<f64>;
     for (line_number, raw) in (1usize..).zip(text.lines()) {
         let words = words(raw).map_err(|e| format!("line {line_number}: {e}"))?;
         // a post that changes tools by hand names the next tool in a comment, then pauses
@@ -200,12 +268,11 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
                         first.tool = Some(v.round() as u32);
                     }
                 }
-                'F' => {
-                    let part = parts.last_mut().expect("a part");
-                    part.feed.get_or_insert(v * scale);
-                }
+                'F' => rate = Some(v * scale),
                 'S' => {
-                    parts.last_mut().expect("a part").spindle.get_or_insert(v);
+                    let part = parts.last_mut().expect("a part");
+                    part.spindle.get_or_insert(v);
+                    add_once(&mut part.speeds, v);
                 }
                 _ => {}
             }
@@ -226,6 +293,14 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
         let made = moves_to(at, to, kind, &value, scale)
             .map_err(|e| format!("line {line_number}: {e}"))?;
         let part = parts.last_mut().expect("a part");
+        if let Some(f) = rate.filter(|_| kind != 0 && to != at) {
+            if made.iter().all(|m| m.kind == MoveKind::Plunge) {
+                part.plunge.get_or_insert(f);
+            } else {
+                part.feed.get_or_insert(f);
+            }
+            add_once(&mut part.feeds, f);
+        }
         part.moves.extend(made.into_iter().map(|mut m| {
             m.to.z -= bed;
             m
@@ -534,13 +609,40 @@ mod tests {
     }
 
     #[test]
+    fn the_plunge_feed_and_the_cutting_feed_are_read_apart() {
+        // as most posts write it: the plunge's feed first, then the cutting feed
+        let text = "G0 X0 Y0 Z5\nG1 Z-1 F762\nG1 X10 F2540\nY10\nG0 Z5\nX20\nG1 Z-1 F762\n";
+        let p = &parse(text, &job()).unwrap()[0];
+        assert_eq!(p.plunge, Some(762.0));
+        assert_eq!(p.feed, Some(2540.0));
+        assert!(p.flattened().is_none(), "two feeds and a plunge are kept");
+    }
+
+    #[test]
+    fn more_feeds_or_speeds_than_a_toolpath_keeps_are_counted() {
+        let text = "S12000 M3\nG0 X0 Y0 Z5\nG1 Z-1 F500\nG1 X10 F2000\nG1 X20 F1000\n\
+                    S16000\nG1 X30\n";
+        let p = &parse(text, &job()).unwrap()[0];
+        assert_eq!(
+            (p.feed, p.plunge, p.spindle),
+            (Some(2000.0), Some(500.0), Some(12000.0))
+        );
+        let note = p.flattened().unwrap();
+        assert!(note.contains("2000"), "{note}");
+        assert!(note.contains("12000"), "{note}");
+    }
+
+    #[test]
     fn each_tool_change_starts_a_part() {
-        let text = "T1 M6\nS18000 M3\nG0 X0 Y0 Z5\nG1 Z-1 F500\nT2\nM6\nG0 X5 Y5\nG1 Z-1 F800\n";
+        let text = "T1 M6\nS18000 M3\nG0 X0 Y0 Z5\nG1 Z-1 F500\nT2\nM6\nG0 X5 Y5 Z5\nG1 Z-1 F800\n";
         let parts = parse(text, &job()).unwrap();
         assert_eq!(parts.len(), 2);
         assert_eq!((parts[0].tool, parts[1].tool), (Some(1), Some(2)));
         assert_eq!(parts[0].spindle, Some(18000.0));
-        assert_eq!((parts[0].feed, parts[1].feed), (Some(500.0), Some(800.0)));
+        assert_eq!(
+            (parts[0].plunge, parts[1].plunge),
+            (Some(500.0), Some(800.0))
+        );
     }
 
     #[test]
@@ -566,6 +668,30 @@ mod tests {
                 .unwrap_err()
                 .contains("no moves")
         );
+    }
+
+    #[test]
+    fn running_it_sets_the_tools_feed_and_plunge_and_notes_what_it_flattens() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-import-fd-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("rates.nc");
+        std::fs::write(&file, "G0 X0 Y0 Z5\nG1 Z-1 F700\nG1 X10 F2500\nX20 F1200\n").unwrap();
+        let p = Params {
+            file: file.display().to_string(),
+            ..Params::default()
+        };
+        let change = ImportToolpaths::run(&Document::default(), &p).unwrap();
+        let mut after = Document::default();
+        after.apply(&change).unwrap();
+        let tp = after.toolpaths.values().next().unwrap();
+        assert_eq!((tp.tool.feed_rate, tp.tool.plunge_rate), (2500.0, 700.0));
+        assert_eq!(change.notes.len(), 1, "{:?}", change.notes);
+        assert!(
+            change.notes[0].contains("3 feed rates"),
+            "{:?}",
+            change.notes
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
