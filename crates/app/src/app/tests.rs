@@ -90,7 +90,7 @@ fn pasted_into_another_job_lands_on_its_current_layer() {
 }
 
 #[test]
-fn group_says_in_red_on_the_design_page_that_grouped_text_becomes_curves() {
+fn grouping_text_says_nothing_in_red_and_keeps_it_text() {
     let mut h = Harness::new();
     let mut c = Change::builder(&h.app.doc);
     let letter = c.add(Path::circle(Point::new(20.0, 20.0), 2.0));
@@ -100,33 +100,15 @@ fn group_says_in_red_on_the_design_page_that_grouped_text_becomes_curves() {
     c.select([letter, border]);
     h.app.doc.apply(&c.finish()).unwrap();
     h.frame(vec![]);
-    let red_note = |h: &Harness| {
-        let red = h.ctx.global_style().visuals.error_fg_color;
-        let page = h.app.page_rects[0].expect("the Design page");
-        h.shapes.iter().any(|clipped| match &clipped.shape {
-            egui::Shape::Text(t) => {
-                page.contains(t.pos)
-                    && t.galley.text().contains("turns it into curves")
-                    && t.galley.job.sections.iter().all(|s| s.format.color == red)
-            }
-            _ => false,
-        })
-    };
     h.app.invoke(&h.ctx, "group");
     h.frame(vec![]);
-    eprintln!(
-        "NOTE {:?} {:?} {:?}",
-        h.app.tool_note,
-        h.app.status.message,
-        h.texts()
-            .iter()
-            .filter(|t| t.contains("curves"))
-            .collect::<Vec<_>>()
+    assert_eq!(h.app.tool_note(), None, "nothing to warn about");
+    assert!(
+        !h.texts().iter().any(|t| t.contains("curves")),
+        "no word of curves"
     );
-    assert!(red_note(&h), "said in red at the foot of the tool panel");
-    h.app.invoke(&h.ctx, "undo");
-    h.frame(vec![]);
-    assert!(!red_note(&h), "gone once undone");
+    assert_eq!(h.app.doc.text_group(letter), Some(5), "still text");
+    assert_eq!(h.app.doc.group_members(border).len(), 2, "one group");
 }
 
 #[test]
@@ -304,19 +286,31 @@ fn edit_units_switches_the_job_between_millimetres_and_inches() {
 }
 
 #[test]
-fn a_tools_figures_read_in_the_tools_own_units() {
+fn a_tool_in_other_units_leaves_the_form_in_the_jobs_units() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "pocket_toolpath");
+    // an inch bit picked in a mm job: the bit's units are its own, not the form's
     h.app.form.as_mut().unwrap().params["tool"]["units"] = Value::from("Inch");
     // the Toolpaths page flies out unseen on its first frame
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Pocket Toolpath").is_some(), "the form is drawn");
-    let line = h.shapes.iter().any(|clipped| {
-        matches!(&clipped.shape, egui::Shape::Text(t)
-            if t.galley.text().starts_with("0.236 in end mill"))
-    });
-    assert!(line, "a 6 mm end mill reads in inches in a mm job");
+    let texts: Vec<String> = h
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.iter().any(|t| t.starts_with("6 mm end mill")),
+        "the bit reads in the job's mm: {texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t.trim() == "in"),
+        "no field of a mm job's form turns to inches: {texts:?}"
+    );
 }
 
 #[test]
@@ -2757,6 +2751,131 @@ fn dragging_an_unselected_grouped_vector_moves_its_whole_group() {
     for (b, a) in before.iter().zip(&after) {
         assert!((a - b - 20.0).abs() < 1.0, "{before:?} -> {after:?}");
     }
+}
+
+/// Two rectangles grouped, nothing selected, the 2D view drawn.
+fn two_grouped(h: &mut Harness) {
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.rectangle(100.0, 10.0, 40.0, 40.0);
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.app.invoke(&h.ctx, "group");
+    h.app.doc.selection.clear();
+    h.frame(vec![]);
+}
+
+#[test]
+fn double_clicking_a_group_steps_inside_and_a_click_then_picks_one_item() {
+    let mut h = Harness::new();
+    two_grouped(&mut h);
+    h.double_click(h.at(10.0, 30.0));
+    assert!(h.app.doc.inside_group.is_some(), "stepped inside");
+    assert_eq!(h.app.doc.selection.len(), 1, "the one rectangle clicked");
+    // a drag moves that one alone, and it stays in the group
+    h.click(h.at(100.0, 30.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.selection.len(), 1);
+    let moved = h.app.doc.selection.iter().next().copied().unwrap();
+    h.drag(h.at(100.0, 30.0), h.at(120.0, 30.0));
+    let lefts: Vec<f64> = h
+        .app
+        .doc
+        .vectors
+        .values()
+        .map(|v| v.bounds().min.x)
+        .collect();
+    assert!((lefts[0] - 10.0).abs() < 1.0, "the other stays: {lefts:?}");
+    assert!((h.app.doc.vectors[&moved].bounds().min.x - 120.0).abs() < 1.0);
+    assert_eq!(h.app.doc.group_members(moved).len(), 2, "still grouped");
+    // Esc steps out: a click picks the whole group again
+    h.frame(vec![key(Key::Escape)]);
+    assert_eq!(h.app.doc.inside_group, None);
+    h.click(h.at(10.0, 30.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.selection.len(), 2);
+}
+
+#[test]
+fn a_shape_changed_in_its_own_tool_inside_a_group_stays_in_the_group() {
+    let mut h = Harness::new();
+    two_grouped(&mut h);
+    h.double_click(h.at(10.0, 30.0));
+    let old = *h.app.doc.selection.iter().next().unwrap();
+    let (command, mut params) = h
+        .app
+        .registry
+        .drawn_by(&h.app.doc, &h.app.doc.vectors[&old])
+        .expect("a rectangle the tool drew");
+    params["width"] = Value::from(60.0);
+    h.app.redraw(command, &params, old).unwrap();
+    let made = *h.app.doc.vectors.keys().max().unwrap();
+    assert_ne!(made, old);
+    assert_eq!(h.app.doc.group_members(made).len(), 2, "still in the group");
+}
+
+#[test]
+fn a_double_click_on_empty_space_steps_out_of_the_group() {
+    let mut h = Harness::new();
+    two_grouped(&mut h);
+    h.double_click(h.at(10.0, 30.0));
+    assert!(h.app.doc.inside_group.is_some());
+    h.double_click(h.at(300.0, 300.0));
+    assert_eq!(h.app.doc.inside_group, None);
+    assert!(
+        h.app.status.message.contains("Stepped out"),
+        "{}",
+        h.app.status.message
+    );
+}
+
+#[test]
+fn text_grouped_with_a_border_stays_editable_inside_the_group() {
+    let mut h = Harness::new();
+    let mut full = h.app.registry.get("draw_text").unwrap().default_params();
+    full["text"] = Value::from("HI");
+    full["font"] = Value::from("Test Boxes");
+    h.app.apply("draw_text", &full).unwrap();
+    h.app.form = None;
+    let letters = h.app.doc.selection.clone();
+    let letter = *letters.iter().next().unwrap();
+    let box_ = h.app.doc.vectors[&letter].bounds();
+    h.rectangle(box_.min.x - 200.0, box_.min.y - 200.0, 600.0, 600.0);
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.app.invoke(&h.ctx, "group");
+    assert!(
+        h.app.tool_note().is_none(),
+        "no warning: the text stays text"
+    );
+    h.app.doc.selection.clear();
+    h.frame(vec![]);
+    // the letters are still text: Edit Text works on the group
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    assert!(h.app.available("edit_text"));
+    h.app.doc.selection.clear();
+    h.frame(vec![]);
+    // double-click steps in, a second double-click on the letters opens Edit Text
+    let on_letter = h.at(box_.min.x, box_.center().y);
+    h.double_click(on_letter);
+    assert!(h.app.doc.inside_group.is_some());
+    h.double_click(on_letter);
+    let form = h.app.form.as_ref().expect("Edit Text's form");
+    assert_eq!(
+        (form.id, form.params["text"].as_str()),
+        ("draw_text", Some("HI"))
+    );
+    assert_eq!(
+        h.app.doc.selection.len(),
+        letters.len(),
+        "the text alone is picked"
+    );
+    // the edited text is still in the group with its border
+    let mut params = form.params.clone();
+    params["text"] = Value::from("HO");
+    h.app.apply("draw_text", &params).unwrap();
+    let letter = *h.app.doc.selection.iter().next().unwrap();
+    assert_eq!(
+        h.app.doc.group_members(letter).len(),
+        h.app.doc.vectors.len(),
+        "one group still"
+    );
+    assert!(h.app.doc.text_group(letter).is_some(), "still text");
 }
 
 #[test]
@@ -6110,8 +6229,6 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
     }
     assert!(h.app.machine_window.is_some() && h.app.post_window.is_some());
     assert!(h.text_at("Associated Post-Processors").is_some());
-    // Cut Craft's own posts come with Cut Craft: updating them is an update check
-    assert!(h.app.available("update_post_processor_database"));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -6208,7 +6325,7 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-    const ASKS: [&str; 31] = [
+    const ASKS: [&str; 30] = [
         "save_shaded_image",
         "import_toolpaths_file",
         // opens the browser
@@ -6231,7 +6348,6 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "save_all_visible_toolpaths_as_template",
         "load_template",
         "print",
-        "print_preview",
         "install_post_processor",
         "install_offline_package",
         // opens the browser
@@ -10470,21 +10586,6 @@ fn import_toolpaths_opens_its_form_on_the_file_and_adds_its_toolpaths() {
     assert_eq!(toolpath.name, "nameplate");
     assert_eq!(toolpath.tool.feed_rate, 600.0, "the file's feed rate");
     std::fs::remove_dir_all(&dir).ok();
-}
-
-#[test]
-fn update_post_processor_database_says_what_it_found() {
-    let entries = h_posts();
-    let message = super::actions::post_database_message(&entries);
-    assert!(
-        message.contains(&format!("{} post-processors", entries.len())),
-        "{message}"
-    );
-    assert!(message.contains("newer Cut Craft"), "{message}");
-}
-
-fn h_posts() -> Vec<cut_craft_machines::Entry> {
-    cut_craft_machines::Library::new(None).entries()
 }
 
 /// Print Job Sheet's page names the job's file, the active machine, its post and its tool
@@ -16746,4 +16847,31 @@ fn another_job_closes_the_gcode_shown_and_any_save_waiting_on_the_last() {
         "its question is not this job's"
     );
     assert!(h.app.form_back.is_none());
+}
+
+/// #511: Machine has no "Update Post-Processor Database" (it only ran Cut Craft's own update
+/// check), and File has one print item that says it opens a PDF, not Print and Print Preview
+/// doing the same thing.
+#[test]
+fn print_is_one_honest_item_and_no_post_database_update() {
+    fn actions(items: &[crate::gui::MenuItem], out: &mut Vec<(String, String)>) {
+        for item in items {
+            out.push((item.name.clone(), item.action.clone()));
+            actions(&item.children, out);
+        }
+    }
+    let h = Harness::new();
+    let mut all = Vec::new();
+    for menu in &h.app.current_menus().menus {
+        actions(&menu.items, &mut all);
+    }
+    assert!(
+        !all.iter()
+            .any(|(_, a)| a == "update_post_processor_database")
+    );
+    assert!(!all.iter().any(|(_, a)| a == "print_preview"));
+    let prints: Vec<_> = all.iter().filter(|(_, a)| a == "print").collect();
+    assert_eq!(prints.len(), 1, "{prints:?}");
+    assert_eq!(prints[0].0, "Print (opens a PDF)...");
+    assert!(h.app.available("print"));
 }

@@ -6,6 +6,8 @@ a CNC machine cuts them with.
 - [Design](help:design): the page down the left. Draw and edit vectors, then model in 3D.
 - [Toolpaths](help:toolpaths): the page down the right. Turn vectors into toolpaths,
   preview them and save them for the machine.
+- [Groups](help:groups): step inside a group to change one thing in it; text in a
+  group stays editable.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.
@@ -20,16 +22,30 @@ a CNC machine cuts them with.
 - Hover over a greyed-out menu item or tool to see what it is waiting for, such as a
   selection, a toolpath picked in the list, or a job open.
 
+## Printing
+
+**File ▸ Print (opens a PDF)...** opens the 2D view as a PDF in your computer's PDF viewer.
+Check it there, then print from the viewer as you would any PDF. To print what the machine
+operator needs, use **Toolpaths ▸ Print Job Sheet** or **Toolpaths ▸ Print Part Labels** instead.
+
+## Newer post-processors
+
+Cut Craft's own post-processors come with Cut Craft, so **Help ▸ Check for Updates** brings the
+newest ones. Post-processors you added yourself are read from their folder each time, so
+there is nothing to update; see **Machine ▸ Post-Processor Management**.
+
 ## Number fields
 
 Every number field has small up and down arrows on its right. Click one to nudge the value
 by a step that suits it: 0.1 mm or 0.01 in for a length, 1 for a percentage, an angle or a
 count, 100 mm/min (5 in/min) for a feed rate, 1000 rpm for a spindle speed. A field with a
-small range takes a smaller step, so a few micrometres shown in inches never jumps to its limit
-in one click. Hold the arrow to keep going, and hold **Shift** for steps ten times as big. The
-arrows stop at the field's lowest and highest values. You can also drag sideways on the value
-(the pointer shows a two-way arrow there): each point moves it a tenth of a step, 0.01 mm or
-0.001 in for a length. Or just click it and type.
+small range takes a smaller step, so a few micrometres shown in inches never jumps to its
+limit in one click. A value between steps goes to the next step first: the 5 mm default
+clearance shows as 0.19685 in an inch job, and one click up makes it exactly 0.2 in, so the
+G-code says Z0.2000, not Z0.2069. Hold the arrow to keep going, and hold **Shift** for steps
+ten times as big. The arrows stop at the field's lowest and highest values. You can also
+drag sideways on the value (the pointer shows a two-way arrow there): each point moves it a
+tenth of a step, 0.01 mm or 0.001 in for a length. Or just click it and type.
 
 A number field takes a sum as well as a number, worked out when it is entered:
 `+ - * / ^` and brackets, and these letters:

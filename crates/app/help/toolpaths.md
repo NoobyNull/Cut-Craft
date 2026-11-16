@@ -4,6 +4,11 @@ The Toolpaths page, down the right, turns the selected vectors and the 3D model 
 toolpaths, lists them, previews them cutting the material and saves them for the machine.
 Pick a toolpath's tool to open its form; choose the cutter from the tool database there.
 
+A toolpath's form shows its lengths in the job's units, whatever the bit's own units are.
+In an inch job, picking a metric bit (a 6 mm end mill, say) leaves Cut Depth, Allowance
+Offset, lead lengths and the rest in inches; only the bit's own sizes show as the Tool
+Database keeps them. Change the job's units in [Job Setup](help:job_setup).
+
 Reordering the toolpath list (a drag, Move Up or Down, Group), or undoing or redoing that,
 leaves each toolpath what it was: a toolpath open in its form stays the one its Calculate
 makes again, notes being written in the Toolpath Summary stay with their toolpath, and

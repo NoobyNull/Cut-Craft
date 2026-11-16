@@ -146,15 +146,15 @@ say "not implemented yet".
   skip rotary posts. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows
-  its version (the date of its last change). Machine ▸ Update Post-Processor Database opens
-  Post-Processor Management, says how many posts there are (and how many will not load), and
-  checks for a newer Cut Craft, which is how Cut Craft's own posts are updated (custom posts
-  are read from their folder each time).
+  its version (the date of its last change). Aspire's Machine ▸ Update Post-Processor
+  Database is left out on purpose (#511): Cut Craft's own posts come with Cut Craft, so Help ▸
+  Check for Updates brings the newest, and custom posts are read from their folder each time.
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
   `x-hide-when`). Rotary Z Zero reads Cylinder Surface / Cylinder Axis, with its own
-  pictures (Material Setup too); Flip design is not done.
+  pictures (Material Setup too), and the post's `[Z_ORIGIN]` and the job sheet name them
+  the same; Flip design is not done.
 - Save Toolpaths (a form, as Aspire's): the machine and its posts suiting the job (the
   machine's default first, else Cut Craft's own FluidNC posts: tool changer, rotary jobs
   wrapped onto A in inverse time); the selected toolpath, the shown ones to one file, or each
@@ -468,8 +468,9 @@ say "not implemented yet".
     tangent lines (T).
   - Text: system TrueType fonts and Vectric single-line `.vfont` fonts (from
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
-    The text is a group that remembers its settings: Draw Text on selected text edits it;
-    Ungroup turns it into curves. With the form open on selected text, two green handles
+    The text is a group that remembers its settings: Draw Text on selected text edits it
+    (so does a double-click on it, inside a group too); grouped with other vectors it stays
+    text; Ungroup on the text itself turns it into curves. With the form open on selected text, two green handles
     above and below it bend the line into an arc (the middle follows the pointer; drag back
     to flatten); Arc angle and Arc rotation are typed too. Each letter stays whole. Not
     done: the red / blue / white handles (rotate, radius, move) and kerning clicks on arched
@@ -602,8 +603,9 @@ say "not implemented yet".
 - Toolpaths ▸ Templates: save the selected or all visible toolpaths' settings as a
   `.cctpt` template, and load one as empty toolpaths to edit and calculate. The Missing
   Layers dialog is not done.
-- File ▸ Print and Print Preview: the drawing as a PDF opened in the system viewer, which
-  prints it (Aspire's own print window with scale and tiling is not done).
+- File ▸ Print (opens a PDF): the drawing as a PDF opened in the system viewer, which
+  previews and prints it. One item in place of Aspire's Print and Print Preview, which did
+  the same thing here (#511); Aspire's own print window with scale and tiling is not done.
 - Edit ▸ Select ▸ Vector Selector: selects vectors by open / closed, circles, circles of a
   diameter within a tolerance, on all visible layers, the current one or the layers named
   (dialog 949; Z values are not done). Every toolpath form has Associate a Vector Selector
@@ -859,7 +861,10 @@ implemented yet" listed.)
 - Components show in the 2D view as greyscale depth maps (black lowest, white highest, per
   component) and a click on one selects it, as in Aspire; in the 3D view a double-click picks
   the topmost shown component under it (Shift adds or takes away; off the model it fits).
-- Vector groups do not nest. Grouping leaves each member on its own layer; the right-click
+- Vector groups nest: grouping groups (or text) keeps each inside the new group, and Ungroup
+  takes one level apart. A double-click steps inside a group, where a click picks one item to
+  move, size, node edit, delete or edit; the rest fades; Esc or a double-click on empty space
+  steps out (#378). Grouping leaves each member on its own layer; the right-click
   Ungroup ▸ puts them back as they were (onto Original Object Layers) or all onto the
   current layer (Aspire's onto Group's Layer, as Cut Craft's groups have no layer).
 - The Toolpath Drawing toggles (rapids, plunges, retracts, joins) last only for the session;

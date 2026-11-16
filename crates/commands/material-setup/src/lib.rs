@@ -36,7 +36,9 @@ pub struct Params {
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
-    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis
+    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis. The
+    /// picture shows where. Pick the one you touch the bit off on at the machine: the G-code
+    /// heights depend on it, and a wrong pick cuts too deep or in the air
     #[schemars(
         title = "Z Zero Position",
         extend("x-section" = true, "x-show-when" = {"rotary": true}),

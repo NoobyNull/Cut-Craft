@@ -62,10 +62,8 @@ impl Command for NamePart {
     fn initial_params(doc: &Document) -> Params {
         let name = selected(doc)
             .first()
-            .and_then(|(outline, _)| doc.vector_groups.get(outline))
-            .and_then(|g| doc.part_names.get(g))
-            .cloned()
-            .unwrap_or_default();
+            .and_then(|(outline, _)| doc.part_name(*outline))
+            .map_or_else(String::new, str::to_owned);
         Params { name }
     }
 
@@ -83,15 +81,16 @@ impl Command for NamePart {
         let mut c = Change::builder(doc);
         let mut next = doc.next_group();
         for (outline, members) in parts {
-            let group = doc.vector_groups.get(&outline).copied().unwrap_or_else(|| {
+            let group = doc.top_group(outline).unwrap_or_else(|| {
                 c.set_group(outline, Some(next));
                 next += 1;
                 next - 1
             });
             // only the outline's group names the part
-            for g in members.iter().filter_map(|m| doc.vector_groups.get(m)) {
-                if *g != group {
-                    c.set_part_name(*g, None);
+            // (groups inside the part included: the nearest name is the one shown)
+            for g in members.iter().flat_map(|&m| doc.group_chain(m)) {
+                if g != group {
+                    c.set_part_name(g, None);
                 }
             }
             c.set_part_name(group, (!name.is_empty()).then(|| name.to_owned()));
