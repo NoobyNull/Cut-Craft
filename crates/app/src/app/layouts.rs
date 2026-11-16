@@ -193,7 +193,7 @@ impl CutCraftApp {
             let response = ui.add_enabled(self.available(id), button);
             let response = self
                 .with_guidance(response, id)
-                .on_disabled_hover_text(format!("{label}: not implemented yet"));
+                .on_disabled_hover_text(self.unavailable_why(id));
             if response.clicked() {
                 clicked = Some(id);
             }

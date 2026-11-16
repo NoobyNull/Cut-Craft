@@ -15,6 +15,8 @@ a CNC machine cuts them with.
 - **?** at the top of the Design or Toolpaths page lists that page's tools.
 - **F1** with a tool's form open goes straight to that tool; with none open, to this page.
 - Hover over a setting's name in a form for a short note about it.
+- Hover over a greyed-out menu item or tool to see what it is waiting for, such as a
+  selection, a toolpath picked in the list, or a job open.
 
 ## Number fields
 

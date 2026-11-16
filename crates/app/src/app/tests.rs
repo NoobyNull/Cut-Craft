@@ -14893,3 +14893,33 @@ fn f1_f2_and_f3_are_shortcuts_like_any_other() {
     h.frame(vec![key(Key::F8)]);
     assert_eq!(h.app.view, View::TwoD);
 }
+
+#[test]
+fn a_greyed_item_says_what_it_waits_for_not_that_it_is_missing() {
+    let h = Harness::new();
+    for (id, said) in [
+        ("undo", "Nothing to undo"),
+        ("copy", "Select"),
+        ("cut", "Select"),
+        ("paste", "copy something first"),
+        ("delete_toolpath", "Pick a toolpath"),
+        ("recalculate_all_toolpaths", "No toolpaths yet"),
+    ] {
+        assert!(!h.app.available(id), "{id}");
+        let why = h.app.unavailable_why(id);
+        assert!(why.contains(said), "{id}: {why}");
+        assert!(!why.to_lowercase().contains("not implemented"), "{id}");
+    }
+    assert!(
+        h.app
+            .unavailable_why("no_such_tool")
+            .contains("not implemented yet")
+    );
+    let start = Harness::at_start();
+    assert!(
+        start
+            .app
+            .unavailable_why("close")
+            .contains("No job is open")
+    );
+}

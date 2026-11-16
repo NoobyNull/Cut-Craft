@@ -340,6 +340,57 @@ impl CutCraftApp {
         }
     }
 
+    /// Why `id` is greyed out, shown on hover: what it waits for (a selection, a toolpath
+    /// picked, something to undo, a job open). "Not implemented yet" only for an action
+    /// nothing runs.
+    pub(super) fn unavailable_why(&self, id: &str) -> String {
+        const PICK: &str = "Pick a toolpath in the Toolpath List first";
+        const SHOWN: &str = "No toolpath is shown: tick one in the Toolpath List first";
+        const PREVIEW: &str = "Preview a toolpath first";
+        let job_first = "Open or start a job first";
+        let why = match id {
+            "undo" => "Nothing to undo yet",
+            "redo" => "Nothing to redo: undo something first",
+            "close" => "No job is open",
+            "zoom_selected" | "activate_layer_of_selection" => "Select something first",
+            "cut" => "Select the vectors or 3D parts to cut first",
+            "copy" => "Select the vectors or 3D parts to copy first",
+            "paste" | "paste_in_place" => "Nothing copied yet: copy something first",
+            "recalculate_toolpath"
+            | "delete_toolpath"
+            | "save_selected_toolpath_as_template"
+            | "edit_toolpath" => PICK,
+            "preview_toolpath" => "Pick a toolpath or a group in the Toolpath List first",
+            "edit_text" => "Select a piece of text first",
+            "save_all_visible_toolpaths_as_template"
+            | "recalculate_visible_toolpaths"
+            | "preview_visible_toolpaths" => SHOWN,
+            "recalculate_all_toolpaths" | "preview_all_toolpaths" | "save_toolpaths" => {
+                "No toolpaths yet: make one first"
+            }
+            "undo_last_preview" => "No preview to undo",
+            "save_shaded_image" => "Preview a toolpath or bring in a 3D model first",
+            "edit_object" | "object_properties" => "Select a shape first",
+            "reset_preview" | "create_component_from_toolpath_preview" => PREVIEW,
+            id if id.starts_with(gui::REIMPORT_MODEL) => {
+                "The model's file is not in the job's folder any more"
+            }
+            id if id.starts_with(EXPORT_LEVEL) => "Export as 3D clipart is not available",
+            id if self.registry.get(id).is_some()
+                || self.registry.exporter(id).is_some()
+                || crate::flyout::variant(id).is_some()
+                || gui::command_action(id).is_some()
+                || BUILT_INS.contains(&id)
+                || self.resolution_checked(id).is_some()
+                || self.units_checked(id).is_some() =>
+            {
+                job_first
+            }
+            _ => return format!("{}: not implemented yet", self.tool_label(id)),
+        };
+        why.to_owned()
+    }
+
     /// Menu items, tool buttons and shortcuts all end up here: built-in actions first, then
     /// the command registry.
     #[expect(clippy::too_many_lines, reason = "the one dispatch of every action")]
@@ -4305,6 +4356,7 @@ impl CutCraftApp {
                         &menu.items,
                         &Menus {
                             available: &|id| self.available(id),
+                            why: &|id| self.unavailable_why(id),
                             checked: &|id| {
                                 self.display
                                     .checked(id)
@@ -4368,7 +4420,7 @@ impl CutCraftApp {
             .frame(false);
             let response = ui
                 .add_enabled(self.available(id), button)
-                .on_disabled_hover_text(format!("{label}: not implemented yet"));
+                .on_disabled_hover_text(self.unavailable_why(id));
             if response.clicked() {
                 clicked = Some(id.to_owned());
             }

@@ -1867,6 +1867,8 @@ fn on_the_desktop() {
 /// What drawing the menus needs from the app.
 struct Menus<'a> {
     available: &'a dyn Fn(&str) -> bool,
+    /// Why an item is greyed out ([`CutCraftApp::unavailable_why`]).
+    why: &'a dyn Fn(&str) -> String,
     /// Ticked state of the items that are settings; `None` keeps the item's own.
     checked: &'a dyn Fn(&str) -> Option<bool>,
     shortcut_of: &'a dyn Fn(&str) -> Option<String>,
@@ -2656,7 +2658,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
             cut_craft_bug_report::hint::hint(ui.ctx(), about);
         }
         if !available {
-            response = response.on_disabled_hover_text("Not implemented yet");
+            response = response.on_disabled_hover_text((menus.why)(&item.action));
         }
         if response.clicked() {
             *clicked = Some(item.action.clone());

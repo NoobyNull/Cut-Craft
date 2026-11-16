@@ -471,7 +471,7 @@ impl CutCraftApp {
         let available = self.available(id);
         let response = tool_cell(ui, edge, |ui| ui.add_enabled(available, button));
         self.with_guidance(response, id)
-            .on_disabled_hover_text(format!("{label}: not implemented yet"))
+            .on_disabled_hover_text(self.unavailable_why(id))
     }
 
     /// A flyout's button: its face as [`Self::tool_button`] with an arrow in the corner. A
@@ -511,7 +511,7 @@ impl CutCraftApp {
         super::guide::hover(&response, &tip);
         let response = response
             .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
-            .on_disabled_hover_text(format!("{label}: not implemented yet"));
+            .on_disabled_hover_text(self.unavailable_why(id));
         let r = response.rect;
         flyout_arrow(ui, &response);
         let popup_id = response.id.with("flyout");
@@ -593,7 +593,7 @@ impl CutCraftApp {
             let row = ui.add_enabled(self.available(member), row);
             let row = self
                 .with_guidance(row, member)
-                .on_disabled_hover_text(format!("{name}: not implemented yet"));
+                .on_disabled_hover_text(self.unavailable_why(member));
             if opened && member == button.face {
                 row.request_focus();
             }
@@ -974,6 +974,7 @@ impl CutCraftApp {
         cut_craft_bug_report::context_menu(response, |ui| {
             let menus = Menus {
                 available: &|id| self.available(id),
+                why: &|id| self.unavailable_why(id),
                 checked: &|_| None,
                 shortcut_of: &|id| self.shortcut_text(id),
                 recent: &[],
