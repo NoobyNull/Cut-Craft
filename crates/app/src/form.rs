@@ -113,11 +113,13 @@ impl When {
         }
     }
 
-    /// Whether the field shows, given the form's top-level `params`.
+    /// Whether the field shows, given the form's top-level `params`. A key with dots reads
+    /// a setting inside another (`tool.shape`: the form's tool's shape).
     pub fn shown(&self, params: &Value) -> bool {
         let holds = |key: &String, values: &[String]| {
+            let setting = key.split('.').fold(params, |at, part| &at[part]);
             // a tick box reads as "true" or "false", a number as its digits ("1", not "1.0")
-            let value = value_text(&params[key]);
+            let value = value_text(setting);
             value.is_some_and(|v| values.contains(&v))
         };
         let is = holds(&self.key, &self.values) && self.also.iter().all(|(k, v)| holds(k, v));
@@ -2143,6 +2145,23 @@ mod tests {
             options[1].label, "Machine bed",
             "untitled choices fall back to the value"
         );
+    }
+
+    #[test]
+    fn chamfer_shows_angle_for_a_ball_nose_and_overcut_for_a_v_bit() {
+        // a V-bit's slope is half its angle, and only a V-bit's point is moved by an overcut
+        let f = fields(&schema("chamfer_toolpath"));
+        let with = |shape: &str| serde_json::json!({ "tool": { "shape": shape } });
+        let shown = |key: &str, shape: &str| {
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&with(shape)))
+        };
+        assert!(!shown("angle", "v_bit"));
+        assert!(shown("angle", "ball_nose"));
+        assert!(shown("overcut", "v_bit"));
+        assert!(!shown("overcut", "ball_nose"));
     }
 
     #[test]
