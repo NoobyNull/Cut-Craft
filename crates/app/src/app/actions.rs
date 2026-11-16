@@ -3,16 +3,16 @@
 
 use super::{
     APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Document,
-    EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key, KeyboardShortcut,
-    LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers, OpenForm,
-    PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS, SECTION_PICTURE_ROWS,
-    SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen, Session,
-    Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
-    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, commit, dialog_size, egui,
-    file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, page_width, rest_section, saving_path, selector_section,
-    shortcut, show_page, side_tabs, side_tabs_width, summary_table, template_dialog,
-    texture_dialog, tool_picker, toolpath_template_dialog, view3d,
+    EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, KEY_ACTION_NAMES, Key,
+    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers,
+    OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS,
+    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks,
+    SaveForm, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES,
+    ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog,
+    commands, commit, dialog_size, egui, file_dialog, file_name, files, form, form_settings_dialog,
+    gui, job_dialog, menu_items, message_dialog, on_the_desktop, page_width, rest_section,
+    saving_path, selector_section, shortcut, show_page, side_tabs, side_tabs_width, summary_table,
+    template_dialog, texture_dialog, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -270,7 +270,7 @@ impl CutCraftApp {
             {
                 true
             }
-            "add_clipart_folder" => true,
+            "add_clipart_folder" | "tool_help" | "view_2d" | "view_3d" => true,
             id if id.starts_with(gui::COMMUNITY) => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
             id if id.starts_with(gui::GUIDE) => true,
@@ -559,6 +559,13 @@ impl CutCraftApp {
             | "help_contents"
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
+            // F1: the open form's help page, else the contents
+            "tool_help" => {
+                let topic = self.form.as_ref().map_or("contents", |f| f.id);
+                self.info = Some(Info::Help(topic));
+            }
+            "view_2d" => self.view = View::TwoD,
+            "view_3d" => self.view = View::ThreeD,
             "first_run_setup" => self.open_first_run(),
             "did_you_know" => self.open_tips(self.options.next_tip),
             "try_sample_project" => self.open_sample(),
@@ -4073,18 +4080,6 @@ impl CutCraftApp {
             }
         }
         self.nudge(ctx);
-        ctx.input(|i| {
-            if i.key_pressed(Key::F1) {
-                let topic = self.form.as_ref().map_or("contents", |f| f.id);
-                self.info = Some(Info::Help(topic));
-            }
-            if i.key_pressed(Key::F2) {
-                self.view = View::TwoD;
-            }
-            if i.key_pressed(Key::F3) {
-                self.view = View::ThreeD;
-            }
-        });
     }
 
     /// Whether `id` is a placing tool (Transform Objects: Move, Rotate, Set Size, Mirror,
@@ -4144,10 +4139,16 @@ impl CutCraftApp {
         let fired: Vec<String> = shortcut::most_specific_first(self.bindings(ctx))
             .into_iter()
             .filter(|(id, _)| id != shortcut::PAN_DRAG)
-            .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))
-            .filter(|(_, trigger)| match trigger {
+            .filter(|(id, _)| job || ["new", "open", "tool_help"].contains(&id.as_str()))
+            .filter(|(id, trigger)| match trigger {
+                // help and the views work from a field being typed in too, as they always did,
+                // while on a function key (which types nothing)
                 shortcut::Trigger::Key(keys) => {
-                    !typing && ctx.input_mut(|i| i.consume_shortcut(keys))
+                    let name = keys.logical_key.name();
+                    let function = name.len() > 1 && name.starts_with('F');
+                    let any_time =
+                        function && ["tool_help", "view_2d", "view_3d"].contains(&id.as_str());
+                    (!typing || any_time) && ctx.input_mut(|i| i.consume_shortcut(keys))
                 }
                 shortcut::Trigger::Mouse(held, button) => ctx.input(|i| {
                     i.pointer.button_pressed(*button) && i.modifiers.matches_exact(*held)
@@ -4239,7 +4240,13 @@ impl CutCraftApp {
             named
                 .iter()
                 .find(|i| i.action == id)
-                .map_or_else(|| gui::title_case(id), |i| i.name.clone())
+                .map(|i| i.name.clone())
+                .or_else(|| {
+                    (KEY_ACTION_NAMES.iter())
+                        .find(|(a, _)| *a == id)
+                        .map(|(_, name)| (*name).to_owned())
+                })
+                .unwrap_or_else(|| gui::title_case(id))
         };
         actions.extend(
             self.registry

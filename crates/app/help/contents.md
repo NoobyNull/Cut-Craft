@@ -35,7 +35,7 @@ A number field takes a sum as well as a number, worked out when it is entered:
 
 ## Keys
 
-- **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options
+- **F1** the open tool's help, **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options. Edit ▸ Options ▸ Mouse and Shortcuts can move these like any other key; the arrow keys always nudge the selection
 - **F11** the designing layout, **F12** the machining layout
 - **Ctrl+Alt+S** Increment and Save: a new numbered copy (sign_1), leaving the file you opened as it was. **Ctrl+S** saves over it
 - **Ctrl+Y** redoes; on a Mac **⇧⌘Z** does too, as in other Mac apps

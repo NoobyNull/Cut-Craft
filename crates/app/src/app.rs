@@ -604,11 +604,21 @@ const VECTOR_EXPORTERS: [&str; 5] = [
     "export_eps",
     "export_ai",
 ];
-/// The layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
-const LAYOUT_KEYS: [(&str, &str); 3] = [
+/// The layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned); and
+/// the keys of actions with no menu item: N Node Edit, F1 help, F2 and F3 the views.
+const LAYOUT_KEYS: [(&str, &str); 6] = [
     ("design_layout", "F11"),
     ("machining_layout", "F12"),
     ("node_edit", "N"),
+    ("tool_help", "F1"),
+    ("view_2d", "F2"),
+    ("view_3d", "F3"),
+];
+/// The names of [`LAYOUT_KEYS`]' actions that no menu names.
+const KEY_ACTION_NAMES: [(&str, &str); 3] = [
+    ("tool_help", "Help on the Open Tool"),
+    ("view_2d", "2D View"),
+    ("view_3d", "3D View"),
 ];
 /// The view buttons over the top right of the 2D view: action, label and icon.
 const VIEW_BUTTONS: [(&str, &str, &str); 4] = [

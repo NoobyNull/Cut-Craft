@@ -14861,3 +14861,35 @@ fn reset_asks_before_taking_back_a_key_another_action_now_has() {
         "undo is back to its own"
     );
 }
+
+#[test]
+fn f1_f2_and_f3_are_shortcuts_like_any_other() {
+    let mut h = Harness::new();
+    let f2 = shortcut::parse_trigger("F2").unwrap();
+    let bindings = h.app.bindings(&h.ctx);
+    assert_eq!(
+        shortcut::clash(&bindings, f2, "draw_circle"),
+        Some("view_2d"),
+        "setting F2 for another action is asked about"
+    );
+    let rows = h.app.shortcut_rows("F1");
+    assert!(
+        rows.iter()
+            .any(|r| r.id == "tool_help" && r.label == "Help on the Open Tool"),
+        "listed by name"
+    );
+    // still work
+    h.app.view = View::ThreeD;
+    h.frame(vec![key(Key::F2)]);
+    assert_eq!(h.app.view, View::TwoD);
+    h.frame(vec![key(Key::F3)]);
+    assert_eq!(h.app.view, View::ThreeD);
+    // moved to F8, F2 no longer switches
+    h.app.remove_shortcut("view_2d", f2);
+    h.app
+        .add_shortcut("view_2d", shortcut::parse_trigger("F8").unwrap());
+    h.frame(vec![key(Key::F2)]);
+    assert_eq!(h.app.view, View::ThreeD);
+    h.frame(vec![key(Key::F8)]);
+    assert_eq!(h.app.view, View::TwoD);
+}

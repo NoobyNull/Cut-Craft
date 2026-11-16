@@ -125,13 +125,17 @@ pub enum Captured {
 pub const RIGHT_REFUSED: &str =
     "The right button opens menus, so it can't be a shortcut. Press another key or button.";
 
+/// Why the arrow keys can't be a shortcut.
+pub const ARROWS_REFUSED: &str = "The arrow keys nudge the selection (with Shift or Ctrl for \
+    smaller steps), so they can't be shortcuts. Press another key or button.";
+
 /// Why Ctrl+C, Ctrl+X and Ctrl+V can't be given to another action.
 pub const CLIPBOARD_REFUSED: &str = "Ctrl+C, Ctrl+X and Ctrl+V always copy, cut and paste, \
     so they can't run anything else. Press another key or button.";
 
 /// The first key or mouse button pressed in `events` while a shortcut is being set: Esc
 /// cancels, the right button is refused, and the left button is left to click the window's
-/// own buttons (such as Cancel). Ctrl+C, Ctrl+X and Ctrl+V reach egui as Copy, Cut and Paste,
+/// own buttons (such as Cancel). The arrow keys nudge, so are refused. Ctrl+C, Ctrl+X and Ctrl+V reach egui as Copy, Cut and Paste,
 /// never as keys, so they are refused: they can only ever copy, cut and paste.
 pub fn capture(events: &[egui::Event]) -> Option<Captured> {
     events.iter().find_map(|e| match e {
@@ -141,6 +145,11 @@ pub fn capture(events: &[egui::Event]) -> Option<Captured> {
             modifiers,
             ..
         } if modifiers.is_none() => Some(Captured::Cancel),
+        egui::Event::Key {
+            key: Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight,
+            pressed: true,
+            ..
+        } => Some(Captured::Refused(ARROWS_REFUSED)),
         egui::Event::Key {
             key,
             pressed: true,
@@ -366,6 +375,16 @@ mod tests {
                 PointerButton::Middle
             )))
         );
+    }
+
+    #[test]
+    fn capturing_refuses_the_arrow_keys() {
+        for key in [Key::ArrowUp, Key::ArrowLeft] {
+            assert_eq!(
+                capture(&[key_event(key, Modifiers::SHIFT)]),
+                Some(Captured::Refused(ARROWS_REFUSED))
+            );
+        }
     }
 
     #[test]
