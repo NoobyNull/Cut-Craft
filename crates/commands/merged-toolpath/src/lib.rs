@@ -19,7 +19,9 @@ pub struct Params {
     /// What the toolpath is called in the toolpath list. It merges the toolpaths ticked
     /// (shown) in the toolpath list when Apply is pressed: tick them there first
     /// (it is marked out of date when one of them changes: recalculate it then). Those
-    /// toolpaths are then hidden, so saving the shown toolpaths does not cut them twice
+    /// toolpaths are then hidden, so saving the shown toolpaths does not cut them twice. They
+    /// must use one tool, and all is cut with the first one's feeds and speed: a toolpath
+    /// whose copy of that tool is set differently is warned of
     pub name: String,
     /// The toolpaths to merge (none: the ones shown in the toolpath list when Apply is
     /// pressed). Not on the form: tick the toolpaths to merge in the toolpath list
@@ -280,6 +282,39 @@ fn nearest_first(mut left: Vec<Cut>) -> Vec<Cut> {
     order
 }
 
+/// What the merged toolpath warns of: each source whose tool, named as `first`'s, has other
+/// settings (feeds, speed or the bit's size), which merging replaces with `first`'s.
+fn tool_differences(first: &Toolpath, sources: &[&Toolpath]) -> Vec<String> {
+    let (a, mut notes) = (&first.tool, vec![]);
+    for source in sources {
+        let b = &source.tool;
+        let differ = |x: f64, y: f64| (x - y).abs() > 1e-9;
+        let fields: Vec<&str> = [
+            (a.shape != b.shape, "shape"),
+            (differ(a.diameter, b.diameter), "diameter"),
+            (differ(a.angle, b.angle), "angle"),
+            (differ(a.tip_radius, b.tip_radius), "tip radius"),
+            (differ(a.feed_rate, b.feed_rate), "feed rate"),
+            (differ(a.plunge_rate, b.plunge_rate), "plunge rate"),
+            (differ(a.spindle_speed, b.spindle_speed), "spindle speed"),
+        ]
+        .into_iter()
+        .filter_map(|(differs, field)| differs.then_some(field))
+        .collect();
+        if !fields.is_empty() {
+            notes.push(format!(
+                "{} uses {} with a different {}: the merged toolpath cuts it all with {}'s \
+                 settings. Edit the tool in one of them to match if that is not right",
+                source.name,
+                b.name,
+                fields.join(", "),
+                first.name
+            ));
+        }
+    }
+    notes
+}
+
 /// The toolpaths shown in the toolpath list, but none made by `strategy`.
 fn visible(doc: &Document, strategy: &str) -> Vec<EntityId> {
     doc.toolpaths
@@ -338,6 +373,7 @@ impl Command for MergedToolpath {
                 first.name, first.tool.name, other.name, other.tool.name
             )));
         }
+        let notes = tool_differences(first, &sources);
         let in_order: Vec<Cut> = sources.iter().flat_map(|t| cuts(t)).collect();
         let height = doc.job.height;
         let order = if p.merge_by_part {
@@ -396,6 +432,9 @@ impl Command for MergedToolpath {
         }
         let mut c = Change::builder(doc);
         c.add_toolpath(toolpath);
+        for note in notes {
+            c.note(note);
+        }
         // the sources are under the new toolpath: hidden, so the default save (every shown
         // toolpath) does not cut them twice. Recalculating leaves them as they are
         if p.sources.is_empty() {
@@ -606,6 +645,32 @@ mod tests {
         doc.apply(&c.finish()).unwrap();
         let err = MergedToolpath::run(&doc, &Params::default()).unwrap_err();
         assert!(err.to_string().contains("drill bank"), "{err}");
+    }
+
+    #[test]
+    fn a_same_named_tool_with_other_settings_merges_with_a_warning_naming_them() {
+        let mut doc = two();
+        let mut t = doc.toolpaths[&EntityId(2)].clone();
+        t.tool.feed_rate += 500.0;
+        t.tool.spindle_speed += 1000.0;
+        let mut c = Change::builder(&doc);
+        c.replace_toolpath(EntityId(2), t);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        let change = MergedToolpath::run(&doc, &Params::default()).unwrap();
+        let note = change.notes.join(" ");
+        assert!(
+            note.contains("Second") && note.contains("feed rate") && note.contains("spindle speed"),
+            "{note}"
+        );
+        assert!(!note.contains("plunge rate"), "only what differs: {note}");
+        assert!(
+            MergedToolpath::run(&two(), &Params::default())
+                .unwrap()
+                .notes
+                .is_empty(),
+            "the same tool: nothing to say"
+        );
     }
 
     #[test]
