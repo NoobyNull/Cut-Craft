@@ -274,11 +274,8 @@ impl CutCraftApp {
         self.options = options;
         self.options.apply();
         self.playback_speed = self.options.toolpaths.preview_speed();
-        if !unread.is_empty() {
-            self.status
-                .set_message(&crate::options::unread_message(&unread));
-        } else if tampered {
-            self.status.set_message(crate::options::TAMPERED);
+        if let Some(message) = crate::options::load_message(&unread, tampered) {
+            self.status.set_message(&message);
         }
         self.options_path = crate::options::Options::path();
         self.options.apply_to(&mut self.display);

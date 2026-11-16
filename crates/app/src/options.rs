@@ -1254,6 +1254,17 @@ pub fn unread_message(unread: &[String]) -> String {
 pub const TAMPERED: &str = "Advanced settings were changed outside Cut Craft, so they were put \
     back to their safe defaults. Change them in Edit ▸ Options ▸ Advanced.";
 
+/// What the status bar says after the options are read: what could not be read, and that
+/// the advanced settings were put back, both when both happened; nothing when all was well.
+pub fn load_message(unread: &[String], tampered: bool) -> Option<String> {
+    match (unread.is_empty(), tampered) {
+        (true, false) => None,
+        (true, true) => Some(TAMPERED.to_owned()),
+        (false, false) => Some(unread_message(unread)),
+        (false, true) => Some(format!("{} {TAMPERED}", unread_message(unread))),
+    }
+}
+
 /// Help ▸ Check for Updates, and the check at startup.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Updates {
@@ -1956,6 +1967,16 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_file_both_unreadable_and_tampered_says_both() {
+        let unread = vec!["Display".to_owned()];
+        let both = load_message(&unread, true).unwrap();
+        assert!(both.contains("Display"), "{both}");
+        assert!(both.contains(TAMPERED), "{both}");
+        assert_eq!(load_message(&[], true).as_deref(), Some(TAMPERED));
+        assert_eq!(load_message(&unread, false), Some(unread_message(&unread)));
+        assert_eq!(load_message(&[], false), None);
+    }
     #[test]
     fn tilting_pans_as_set_and_reset_puts_back_cut_crafts_own_shortcuts() {
         assert!((Tilt::default().pan(-3.0) + 3.0).abs() < f32::EPSILON);
