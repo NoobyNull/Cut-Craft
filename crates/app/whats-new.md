@@ -1,7 +1,4 @@
-- Embellish: a Sequence box and pattern maker say how each repeat is drawn (spaces, flips, turns, random size or lean)
-- Embellish: works along open lines, every style fills a closed shape, plain style names, Reverse, Reset and Apply
-- After a tool change the bit lifts straight to safe height before moving, and tiles lift out of a cut before crossing
-- Lines lying on top of each other on one layer (a paste, a copy on its original, shapes edge to edge) show in red
-- Layers keep their material when hidden or locked, and are never deleted while another sheet uses them
-- Edit Passes, tabs, Job Setup, Material Setup, crash recovery and Send to Machine short names fixed so they no longer lose or overwrite work
-- Tool buttons keep one size, so pointing at them no longer makes the page jump
+- See the G-code before you save it: View G-code on the Toolpaths page
+- Spin the 3D view on its own with Auto-rotate, and pick the colours lines and toolpaths are drawn in
+- Embellish now runs along open lines, and you can edit shapes inside a group without ungrouping
+- Inch jobs keep exact values, and Analyse no longer freezes on big 3D jobs
