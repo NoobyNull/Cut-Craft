@@ -232,6 +232,10 @@ impl Tiling {
                 .map(|(m, _)| Move { to: m.to - by, ..m })
                 .collect();
         }
+        // a toolpath with nothing in the tile is left out, so its tool is not changed to
+        // and its spindle not started for nothing
+        out.toolpaths
+            .retain(|_, t| t.moves.iter().any(|m| m.kind != MoveKind::Rapid));
         out
     }
 }
@@ -601,9 +605,11 @@ mod tests {
                 .iter()
                 .map(|&tile| {
                     let tiled = tiling.cut_to(&doc, tile, false);
-                    let t = tiled.toolpaths.values().next().unwrap();
-                    t.moves
-                        .windows(2)
+                    // a tile with nothing to cut has no toolpath
+                    tiled
+                        .toolpaths
+                        .values()
+                        .flat_map(|t| t.moves.windows(2))
                         .filter(|pair| pair[1].kind == MoveKind::Cut)
                         .map(|pair| pair[0].to.distance(pair[1].to))
                         .sum::<f64>()
@@ -661,6 +667,29 @@ mod tests {
             "the tile's start is at the overlap: {xs:?}"
         );
         assert_eq!(t.file_size(second), Point::new(106.0, a.size().y));
+    }
+
+    #[test]
+    fn a_toolpath_with_nothing_in_a_tile_is_left_out_of_it() {
+        let mut doc = crate::testing::with_toolpath();
+        let a = doc.job.area();
+        let cut = |x: f64| Move {
+            kind: MoveKind::Cut,
+            to: DVec3::new(a.min.x + x, a.min.y + 10.0, -1.0),
+        };
+        doc.toolpaths.values_mut().next().unwrap().moves = vec![cut(10.0), cut(40.0)];
+        let t = Tiling {
+            layout: Layout::FeedX,
+            width: 100.0,
+            overlap: 3.0,
+            ..Tiling::default()
+        };
+        let tiles = t.tiles(a);
+        assert_eq!(t.tiled(&doc, tiles[0]).toolpaths.len(), 1);
+        assert!(
+            t.tiled(&doc, tiles[2]).toolpaths.is_empty(),
+            "nothing to cut there"
+        );
     }
 
     #[test]

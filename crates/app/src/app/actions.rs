@@ -1877,8 +1877,8 @@ impl CutCraftApp {
         };
         if tiled {
             format!(
-                "{saved}, one for each tile: Toolpath Tiling is on (Toolpaths ▸ Toolpath \
-                 Tiling to turn it off)"
+                "{saved}, one for each tile with something to cut: Toolpath Tiling is on \
+                 (Toolpaths ▸ Toolpath Tiling to turn it off)"
             )
         } else {
             saved
@@ -1915,7 +1915,12 @@ impl CutCraftApp {
                     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
                     let extension = path.extension().unwrap_or_default().to_string_lossy();
                     let named = path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
-                    files::save_through(post, &slots, &tiling.tiled(part, tile), &named, job)?;
+                    let in_tile = tiling.tiled(part, tile);
+                    // nothing to cut there: no file to change tools and start the spindle for
+                    if in_tile.toolpaths.is_empty() {
+                        continue;
+                    }
+                    files::save_through(post, &slots, &in_tile, &named, job)?;
                     written.push(named);
                 }
             } else {

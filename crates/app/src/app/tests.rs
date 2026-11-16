@@ -15863,3 +15863,43 @@ fn a_tile_and_its_overlap_bigger_than_the_bed_is_said_in_red() {
     h.frame(vec![]);
     assert!(!red(&h));
 }
+
+#[test]
+fn a_tile_with_nothing_to_cut_gets_no_file() {
+    let mut h = Harness::new();
+    let area = h.app.doc.job.area();
+    // a small square in the left half only
+    h.rectangle(area.min.x + 20.0, area.min.y + 20.0, 40.0, 40.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.doc.tiling = Some(cut_craft_core::tiling::Tiling {
+        width: area.size().x / 2.0,
+        height: area.size().y,
+        ..Default::default()
+    });
+    let post = h.app.output_post().unwrap();
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: false,
+    };
+    let dir = std::env::temp_dir().join(format!("cut-craft-empty-tile-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let written = h
+        .app
+        .write_toolpath_files(&form, &post, &dir.join("sign.nc"))
+        .unwrap();
+    let names: Vec<String> = written.iter().map(|p| file_name(p)).collect();
+    assert_eq!(
+        names,
+        ["sign_tile1.nc"],
+        "the right-hand tile has nothing to cut"
+    );
+    assert!(!dir.join("sign_tile2.nc").exists());
+    let _ = std::fs::remove_dir_all(dir);
+}
