@@ -1144,7 +1144,7 @@ impl CutCraftApp {
             .unzip();
         drop(source);
         let start = (self.simulation.clone())
-            .filter(|_| !fresh)
+            .filter(|m| !fresh && m.covers(&self.doc.job))
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
         // rapids as fast as the Toolpath Summary times them
         let rapid = self.summary.rapid;
@@ -1185,6 +1185,7 @@ impl CutCraftApp {
     /// cut material becomes the preview.
     pub(super) fn advance_playback(&mut self, ctx: &egui::Context) {
         self.drop_stale_playback();
+        self.drop_preview_of_old_block();
         let Some(playback) = self.playback.as_mut() else {
             self.playback_goal = None;
             return;
@@ -1238,6 +1239,23 @@ impl CutCraftApp {
         );
     }
 
+    /// Once Job Setup changes the block's size, thickness or place, the preview of the old
+    /// block goes (Undo Last Preview's too), so the 3D view shows the new block and the
+    /// next Preview cuts into that.
+    fn drop_preview_of_old_block(&mut self) {
+        let job = self.doc.job;
+        let old = |m: &Material| !m.covers(&job);
+        if self.simulation.as_ref().is_some_and(old)
+            || (self.before_preview.as_ref()).is_some_and(|b| b.0.as_ref().is_some_and(old))
+        {
+            (self.simulation, self.before_preview) = (None, None);
+            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.status.set_message(
+                "Job Setup changed the material, so the preview starts again on the new block",
+            );
+        }
+    }
+
     /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path), and
     /// the playback, so its controls stay to scrub it again.
     pub(super) fn finish_playback(&mut self) {
@@ -1267,10 +1285,9 @@ impl CutCraftApp {
             return;
         }
         self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-        // cut into the preview so far
-        let start = self
-            .simulation
-            .clone()
+        // cut into the preview so far (on a block Job Setup has not changed since)
+        let start = (self.simulation.clone())
+            .filter(|m| m.covers(&self.doc.job))
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
         self.preview_in_background(&[id], start, |_| {});
     }

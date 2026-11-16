@@ -15618,3 +15618,28 @@ fn a_change_to_the_job_stops_a_playing_preview_keeping_what_is_cut() {
     assert!(h.app.simulation.is_some(), "kept as far as it went");
     assert!(h.text_at("Progress").is_none());
 }
+
+#[test]
+fn a_job_setup_change_starts_the_preview_again_on_the_new_block() {
+    let mut h = playing_preview();
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    assert!(h.app.simulation.is_some());
+    h.app.doc.job.thickness += 7.0;
+    h.frame(vec![]);
+    assert!(h.app.simulation.is_none(), "the old block is not kept");
+    assert!(!h.app.available("undo_last_preview"), "nor brought back");
+    assert!(
+        h.app.status.message.contains("Job Setup"),
+        "{}",
+        h.app.status.message
+    );
+    // straight after a change, before a frame: Preview cuts the new block
+    let mut h = playing_preview();
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    h.app.doc.job.width += 20.0;
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    h.app.preview_toolpath(id);
+    let fresh = Material::new(&h.app.doc.job, h.app.display.preview_cells());
+    let start = h.app.playback.as_ref().expect("it plays").material();
+    assert_eq!((start.columns, start.origin), (fresh.columns, fresh.origin));
+}

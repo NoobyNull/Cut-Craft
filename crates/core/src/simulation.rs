@@ -142,6 +142,17 @@ impl Material {
         }
     }
 
+    /// Whether this is a block of `job`'s size, thickness and place: false once Job Setup
+    /// has changed them since it was made.
+    pub fn covers(&self, job: &Job) -> bool {
+        let close = |a: f64, b: f64| (a - b).abs() <= self.cell;
+        let area = job.area();
+        (self.origin - area.min).length() < 1e-9
+            && (self.bottom + job.thickness).abs() < 1e-9
+            && close(self.columns as f64 * self.cell, job.width)
+            && close(self.rows as f64 * self.cell, job.height)
+    }
+
     /// The material with its other side's cuts on its underside, the other side's point
     /// for each of this side's being where `turn` takes it; a cell cut through from both
     /// sides is left empty (NaN, top and underside). Unchanged without an other side.

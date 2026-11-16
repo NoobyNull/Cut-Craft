@@ -718,3 +718,23 @@ fn a_cancelled_preview_stops_cutting() {
     progress.track(|| m.cut(&path));
     assert!(m.heights.iter().all(|&z| z == 0.0), "nothing was cut");
 }
+
+#[test]
+fn material_covers_only_the_job_it_was_made_for() {
+    let job = Job {
+        width: 100.0,
+        height: 60.0,
+        ..Job::default()
+    };
+    let material = Material::new(&job, 200);
+    assert!(material.covers(&job));
+    let thicker = Job {
+        thickness: job.thickness + 5.0,
+        ..job
+    };
+    let wider = Job {
+        width: 140.0,
+        ..job
+    };
+    assert!(!material.covers(&thicker) && !material.covers(&wider));
+}
