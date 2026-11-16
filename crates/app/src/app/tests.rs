@@ -286,19 +286,31 @@ fn edit_units_switches_the_job_between_millimetres_and_inches() {
 }
 
 #[test]
-fn a_tools_figures_read_in_the_tools_own_units() {
+fn a_tool_in_other_units_leaves_the_form_in_the_jobs_units() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "pocket_toolpath");
+    // an inch bit picked in a mm job: the bit's units are its own, not the form's
     h.app.form.as_mut().unwrap().params["tool"]["units"] = Value::from("Inch");
     // the Toolpaths page flies out unseen on its first frame
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Pocket Toolpath").is_some(), "the form is drawn");
-    let line = h.shapes.iter().any(|clipped| {
-        matches!(&clipped.shape, egui::Shape::Text(t)
-            if t.galley.text().starts_with("0.236 in end mill"))
-    });
-    assert!(line, "a 6 mm end mill reads in inches in a mm job");
+    let texts: Vec<String> = h
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.iter().any(|t| t.starts_with("6 mm end mill")),
+        "the bit reads in the job's mm: {texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t.trim() == "in"),
+        "no field of a mm job's form turns to inches: {texts:?}"
+    );
 }
 
 #[test]
