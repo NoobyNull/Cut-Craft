@@ -2757,23 +2757,36 @@ fn dragging_an_unselected_grouped_vector_moves_its_whole_group() {
 }
 
 #[test]
-fn dragging_the_move_cross_with_shift_keeps_to_one_axis_in_select_mode() {
-    let mut h = Harness::new();
-    h.rectangle(10.0, 10.0, 40.0, 40.0);
-    h.frame(vec![]);
-    let id = *h.app.doc.vectors.keys().next().unwrap();
-    // from the cross in the middle, mostly right and a little up, Shift held throughout
-    let (from, to) = (h.at(30.0, 30.0), h.at(60.0, 35.0));
-    let shift = Modifiers::SHIFT;
-    h.frame_holding(shift, vec![Event::PointerMoved(from)]);
-    h.press(from, true, shift);
-    h.frame_holding(shift, vec![Event::PointerMoved(from.lerp(to, 0.5))]);
-    h.frame_holding(shift, vec![Event::PointerMoved(to)]);
-    h.press(to, false, shift);
-    h.frame(vec![]);
-    let b = h.app.doc.vectors[&id].bounds();
-    assert!((b.min.y - 10.0).abs() < 1e-9, "kept level: {b:?}");
-    assert!((b.min.x - 40.0).abs() < 1.0, "moved across: {b:?}");
+fn dragging_the_move_cross_with_shift_or_ctrl_keeps_to_one_axis_in_select_mode() {
+    // Ctrl as the keyboard gives it: Ctrl, and the command key on this platform
+    let ctrl = Modifiers {
+        ctrl: true,
+        command: true,
+        ..Modifiers::NONE
+    };
+    for held in [Modifiers::SHIFT, ctrl] {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.frame(vec![]);
+        let id = *h.app.doc.vectors.keys().next().unwrap();
+        // from the cross in the middle, mostly right and a little up, the key held throughout
+        let (from, to) = (h.at(30.0, 30.0), h.at(60.0, 35.0));
+        h.frame_holding(held, vec![Event::PointerMoved(from)]);
+        h.press(from, true, held);
+        h.frame_holding(held, vec![Event::PointerMoved(from.lerp(to, 0.5))]);
+        h.frame_holding(held, vec![Event::PointerMoved(to)]);
+        h.press(to, false, held);
+        h.frame(vec![]);
+        let b = h.app.doc.vectors[&id].bounds();
+        assert!(
+            (b.min.y - 10.0).abs() < 1e-9,
+            "kept level with {held:?}: {b:?}"
+        );
+        assert!(
+            (b.min.x - 40.0).abs() < 1.0,
+            "moved across with {held:?}: {b:?}"
+        );
+    }
 }
 
 #[test]

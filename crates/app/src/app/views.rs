@@ -1574,8 +1574,6 @@ impl CutCraftApp {
         }
     }
 
-    /// Guides: dragged out of a ruler (top: across, left: up and down), dragged along when
-    /// unlocked, and dragged back onto a ruler to delete them. True while one is dragged.
     /// The unlocked guide a Select-mode drag from `at` takes: only where no vector, selection
     /// or handle is, so a shape lying on a guide is dragged rather than the guide.
     fn guide_to_drag(&self, at: Point, reach: f64) -> Option<usize> {
@@ -1592,6 +1590,8 @@ impl CutCraftApp {
             .flatten()
     }
 
+    /// Guides: dragged out of a ruler (top: across, left: up and down), dragged along when
+    /// unlocked, and dragged back onto a ruler to delete them. True while one is dragged.
     pub(super) fn guide_gesture(&mut self, ui: &egui::Ui, canvas: &Canvas, reach: f64) -> bool {
         if canvas.drag_started()
             && let Some(origin) = ui.input(|i| i.pointer.press_origin())
@@ -1954,8 +1954,6 @@ impl CutCraftApp {
             .collect()
     }
 
-    /// A select-mode drag let go: what it took hold of moves (as one undo)
-    /// select tool does; a drag from empty space selects by window.
     /// How far a Select-mode drag moves what it grabbed: from the move cross in the
     /// selection's middle with Shift or Ctrl held (`axis`), along one axis only, as its
     /// hint says; anywhere else, where it was dragged.
@@ -1971,6 +1969,8 @@ impl CutCraftApp {
         by
     }
 
+    /// A select-mode drag let go: what it took hold of moves (as one undo), as the
+    /// select tool does; a drag from empty space selects by window.
     pub(super) fn select_drop(&mut self, drag: Drag, shift: bool, reach: f64) {
         let Some(grab) = self.grabbed(drag.start, reach) else {
             let ids = self
