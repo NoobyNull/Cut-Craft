@@ -2749,6 +2749,12 @@ impl CutCraftApp {
         (self.playing, self.playback_goal, self.playback_shown) = (false, None, None);
         (self.playback_view, self.playback_gpu) = (None, None);
         self.preview_side = self.doc.bottom_side;
+        // the G-code shown, and a save waiting or asked about, were the job that was open
+        self.gcode_view = None;
+        self.save_anyway = None;
+        self.save_after = None;
+        self.form_back = None;
+        self.checks_accepted = false;
         self.clear_recovery();
     }
 

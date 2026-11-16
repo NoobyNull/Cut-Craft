@@ -27,8 +27,15 @@ pub(super) struct GcodeView {
 
 /// Where each line of `text` starts.
 fn line_starts(text: &str) -> Vec<usize> {
+    let bytes = text.as_bytes();
+    // a line ends at LF, CR LF or a lone CR (a post's LINE_ENDING can be any of them)
+    let ends = bytes.iter().enumerate().filter_map(|(at, &b)| match b {
+        b'\n' => Some(at + 1),
+        b'\r' if bytes.get(at + 1) != Some(&b'\n') => Some(at + 1),
+        _ => None,
+    });
     std::iter::once(0)
-        .chain(text.match_indices('\n').map(|(at, _)| at + 1))
+        .chain(ends)
         .filter(|&at| at < text.len())
         .collect()
 }
@@ -44,12 +51,16 @@ fn line<'a>(text: &'a str, starts: &[usize], n: usize) -> &'a str {
 /// place.
 fn numbered_lines(ui: &mut egui::Ui, text: &str, starts: &[usize], file: usize) {
     let digits = starts.len().max(1).to_string().len();
-    let row = ui.text_style_height(&egui::TextStyle::Monospace);
+    // a row is a horizontal layout: at least the interact height, whatever the text's
+    let row = ui
+        .text_style_height(&egui::TextStyle::Monospace)
+        .max(ui.spacing().interact_size.y);
+    // set before show_rows, which spaces the rows it skips by it
+    ui.spacing_mut().item_spacing.y = 0.0;
     egui::ScrollArea::both()
         .id_salt(("gcode_lines", file))
         .auto_shrink(false)
         .show_rows(ui, row, starts.len(), |ui, rows| {
-            ui.spacing_mut().item_spacing.y = 0.0;
             for n in rows {
                 ui.horizontal(|ui| {
                     ui.label(
@@ -274,9 +285,14 @@ impl CutCraftApp {
         egui::Modal::new(egui::Id::unique("save_anyway")).show(ctx, |ui| {
             ui.set_width(ui.spacing().interact_size.x * 11.0);
             ui.heading("Check before cutting");
-            for problem in &ask.problems {
-                ui.label(format!("• {problem}"));
-            }
+            // a long list scrolls, so the buttons under it stay in reach
+            egui::ScrollArea::vertical()
+                .max_height(ui.ctx().content_rect().height() * 0.5)
+                .show(ui, |ui| {
+                    for problem in &ask.problems {
+                        ui.label(format!("• {problem}"));
+                    }
+                });
             ui.add_space(ui.spacing().item_spacing.y);
             ui.strong("Save the toolpaths anyway?");
             ui.separator();
@@ -342,6 +358,11 @@ mod tests {
         let lines: Vec<_> = (0..starts.len()).map(|n| line(text, &starts, n)).collect();
         assert_eq!(lines, ["G21", "G90", "", "M30"]);
         assert_eq!(line_starts("G0 X1"), [0]);
+        // a post ending its lines with a lone CR
+        let text = "G21\rG90\r";
+        let starts = line_starts(text);
+        assert_eq!(starts, [0, 4]);
+        assert_eq!(line(text, &starts, 1), "G90");
         assert_eq!(line_starts(""), Vec::<usize>::new());
     }
 }

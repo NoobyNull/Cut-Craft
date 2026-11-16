@@ -16731,3 +16731,19 @@ fn save_toolpaths_window_steps_aside_while_the_save_asks_then_comes_back() {
     h.frame(vec![]);
     assert!(h.app.save_form.is_some(), "the form is back once answered");
 }
+
+#[test]
+fn another_job_closes_the_gcode_shown_and_any_save_waiting_on_the_last() {
+    let mut h = ready_for_output();
+    h.app.view_gcode(one_file_form());
+    h.app
+        .ask_save_anyway(&one_file_form(), vec!["Air cutting".to_owned()], false);
+    h.app.form_back = Some(one_file_form());
+    h.app.reset_job();
+    assert!(h.app.gcode_view.is_none(), "not the last job's G-code");
+    assert!(
+        h.app.save_anyway.is_none(),
+        "its question is not this job's"
+    );
+    assert!(h.app.form_back.is_none());
+}
