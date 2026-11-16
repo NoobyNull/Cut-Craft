@@ -3997,8 +3997,7 @@ impl CutCraftApp {
         // button's can, as it types nothing
         let typing = ctx.egui_wants_keyboard_input();
         let job = self.screen == Screen::Job;
-        let fired: Vec<String> = self
-            .bindings(ctx)
+        let fired: Vec<String> = shortcut::most_specific_first(self.bindings(ctx))
             .into_iter()
             .filter(|(id, _)| id != shortcut::PAN_DRAG)
             .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))

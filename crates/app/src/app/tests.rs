@@ -14599,3 +14599,31 @@ fn a_drawing_named_on_the_command_line_goes_through_job_setup_into_a_new_job() {
     assert!(h.app.doc.vectors.is_empty(), "the cancelled file stays out");
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+fn key_with(key: Key, modifiers: Modifiers) -> Event {
+    Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    }
+}
+
+#[test]
+fn ctrl_alt_s_saves_a_numbered_copy_and_leaves_the_file_as_it_was() {
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-increment-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let job = dir.join("Sign.ccjob");
+    std::fs::write(&job, b"earlier").unwrap();
+    h.app.session.path = Some(job.clone());
+    let held = Modifiers::COMMAND | Modifiers::ALT;
+    h.frame_holding(held, vec![key_with(Key::S, held)]);
+    assert!(
+        std::fs::read(&job).unwrap() == b"earlier",
+        "the earlier file is kept, not saved over"
+    );
+    assert!(dir.join("Sign_1.ccjob").is_file(), "a numbered copy");
+    std::fs::remove_dir_all(&dir).unwrap();
+}

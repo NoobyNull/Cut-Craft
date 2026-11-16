@@ -207,6 +207,23 @@ pub fn effective(
     out
 }
 
+/// `bindings` with the shortcuts that hold more modifiers first, else in their own order.
+/// egui counts a key as pressed even with an extra Shift or Alt held that its shortcut does
+/// not name, so Ctrl+Alt+S would also be Ctrl+S: trying the most specific first gives
+/// Ctrl+Alt+S to Increment and Save, and Shift+M to whatever it was set for, not to M's.
+pub fn most_specific_first(mut bindings: Vec<(String, Trigger)>) -> Vec<(String, Trigger)> {
+    bindings.sort_by_key(|(_, t)| {
+        let m = match t {
+            Trigger::Key(k) => k.modifiers,
+            Trigger::Mouse(m, _) => *m,
+        };
+        std::cmp::Reverse(
+            u8::from(m.command || m.ctrl || m.mac_cmd) + u8::from(m.alt) + u8::from(m.shift),
+        )
+    });
+    bindings
+}
+
 /// The action other than `except` that `trigger` already runs, if any.
 pub fn clash<'a>(
     bindings: &'a [(String, Trigger)],
@@ -402,5 +419,21 @@ mod tests {
         assert_eq!(clash(&got, k("Mouse Back"), "undo"), Some("pan"));
         assert_eq!(clash(&got, k("Mouse Back"), "pan"), None);
         assert_eq!(clash(&got, k("Ctrl+Y"), "undo"), None);
+    }
+
+    #[test]
+    fn shortcuts_with_more_modifiers_are_tried_first() {
+        let k = |t: &str| parse_trigger(t).unwrap();
+        let bindings = vec![
+            ("save".to_owned(), k("Ctrl+S")),
+            ("move".to_owned(), k("M")),
+            ("increment_and_save".to_owned(), k("Ctrl+Alt+S")),
+            ("mine".to_owned(), k("Shift+M")),
+        ];
+        let ids: Vec<String> = most_specific_first(bindings)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(ids, ["increment_and_save", "save", "mine", "move"]);
     }
 }
