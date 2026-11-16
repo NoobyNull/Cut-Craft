@@ -3783,6 +3783,19 @@ impl CutCraftApp {
         {
             form.params["replaces"] = made;
         }
+        // Bake made the shaping permanent and reset it: the form shows that reset (100 %,
+        // Bake unticked), so pressing Apply again does not bake it in a second time
+        if id == "component_properties"
+            && params.get("bake") == Some(&Value::Bool(true))
+            && let Ok(p) =
+                serde_json::from_value::<cmd_component_properties::Params>(params.clone())
+            && let Some(k) = self.doc.components.get(&p.component)
+            && let Some(form) = self.form.as_mut().filter(|f| f.id == id)
+            && let Ok(fresh) =
+                serde_json::to_value(cmd_component_properties::Params::of(p.component, k))
+        {
+            form.params = fresh;
+        }
         self.status
             .set_message(&format!("{} applied", cmd.meta().label));
         // new keep-out zones: the toolpaths are made again round them

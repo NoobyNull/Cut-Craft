@@ -35,7 +35,8 @@ pub struct Params {
     pub fade: Fade,
     #[schemars(extend("x-section" = true))]
     pub tilt: Tilt,
-    /// Make the shape and base height, fade and tilt permanent, then reset them
+    /// Make the shape and base height, fade and tilt permanent, then reset them: after
+    /// Apply the form goes back to 100 % with this unticked, so it bakes only once
     pub bake: bool,
     /// How the 3D view colours it
     #[schemars(extend("x-widget" = "drop-down"))]

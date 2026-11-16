@@ -14941,3 +14941,32 @@ fn on_a_mac_quick_engrave_has_no_cmd_q() {
         "Ctrl+Q elsewhere"
     );
 }
+
+#[test]
+fn baking_component_properties_resets_the_form_so_apply_again_does_not_bake_twice() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    let top = |h: &Harness| h.app.doc.components[&EntityId(1)].height_range().unwrap().1;
+    let high = top(&h);
+    h.app.invoke(&h.ctx, "component_properties");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().expect("Component Properties is open");
+    form.params["shape_height"] = serde_json::json!(150.0);
+    form.params["bake"] = serde_json::json!(true);
+    let params = form.params.clone();
+    h.app.apply_form("component_properties", &params).unwrap();
+    assert!((top(&h) - high * 1.5).abs() < 1e-6, "baked once");
+    let form = h.app.form.as_ref().expect("still open");
+    assert_eq!(
+        form.params["bake"],
+        serde_json::json!(false),
+        "Bake unticked"
+    );
+    assert_eq!(form.params["shape_height"], serde_json::json!(100.0));
+    let params = form.params.clone();
+    h.app.apply_form("component_properties", &params).unwrap();
+    assert!(
+        (top(&h) - high * 1.5).abs() < 1e-6,
+        "not baked a second time"
+    );
+}
