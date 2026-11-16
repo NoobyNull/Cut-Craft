@@ -1,4 +1,5 @@
-//! Merged Toolpath: the visible toolpaths that use one tool made into one, with their cuts
+//! Merged Toolpath: the toolpaths shown in the toolpath list when Apply is pressed (tick the
+//! ones to merge there), all using one tool, made into one, with their cuts
 //! in whichever of the orders asked for leaves the least travelling between them, each
 //! part's cuts together when asked; and Ungroup, which takes a merged toolpath apart again.
 
@@ -17,7 +18,10 @@ pub struct MergedToolpath;
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
-    /// The toolpaths to merge (none: the visible ones)
+    /// The toolpaths to merge (none: the ones shown in the toolpath list when Apply is
+    /// pressed). Not on the form: tick the toolpaths to merge in the toolpath list
+    #[schemars(skip)]
+    #[serde(default)]
     pub sources: Vec<EntityId>,
     /// Cuts in order across the job; of the orders ticked, the quickest is kept
     #[serde(default = "yes")]
@@ -221,6 +225,15 @@ fn nearest_first(mut left: Vec<Cut>) -> Vec<Cut> {
     order
 }
 
+/// The toolpaths shown in the toolpath list, but none made by `strategy`.
+fn visible(doc: &Document, strategy: &str) -> Vec<EntityId> {
+    doc.toolpaths
+        .iter()
+        .filter(|(_, t)| t.visible && t.strategy != strategy)
+        .map(|(&id, _)| id)
+        .collect()
+}
+
 impl Command for MergedToolpath {
     const ID: &'static str = "merged_toolpath";
     type Params = Params;
@@ -234,24 +247,20 @@ impl Command for MergedToolpath {
         }
     }
 
-    fn initial_params(doc: &Document) -> Params {
-        Params {
-            sources: doc
-                .toolpaths
-                .iter()
-                .filter(|(_, t)| t.visible && t.strategy != Self::ID)
-                .map(|(&id, _)| id)
-                .collect(),
-            ..Params::default()
-        }
+    fn initial_params(_: &Document) -> Params {
+        // no sources: the toolpaths shown when Apply is pressed, not when the form opened
+        Params::default()
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let named = if p.sources.is_empty() {
-            Self::initial_params(doc).sources
+        let mut named = if p.sources.is_empty() {
+            visible(doc, Self::ID)
         } else {
             p.sources.clone()
         };
+        // a toolpath named twice is used once, not cut twice
+        let mut seen = std::collections::BTreeSet::new();
+        named.retain(|id| seen.insert(*id));
         let sources: Vec<&Toolpath> = named
             .iter()
             .filter_map(|id| doc.toolpaths.get(id))
@@ -446,6 +455,28 @@ mod tests {
             .into_values()
             .find(|t| t.strategy == MergedToolpath::ID)
             .unwrap()
+    }
+
+    #[test]
+    fn the_form_hides_the_sources_and_merges_the_toolpaths_visible_at_apply() {
+        let doc = two();
+        let schema = serde_json::to_value(schemars::schema_for!(Params)).unwrap();
+        assert!(schema["properties"].get("sources").is_none(), "no id list");
+        assert_eq!(MergedToolpath::initial_params(&doc).sources, []);
+        let once = merged(&doc).moves.len();
+        let doubled = Params {
+            sources: vec![EntityId(1), EntityId(1), EntityId(2)],
+            ..Params::default()
+        };
+        let change = MergedToolpath::run(&doc, &doubled).unwrap();
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        let made = after
+            .toolpaths
+            .values()
+            .find(|t| t.strategy == MergedToolpath::ID)
+            .unwrap();
+        assert_eq!(made.moves.len(), once, "a repeated id is merged once");
     }
 
     #[test]

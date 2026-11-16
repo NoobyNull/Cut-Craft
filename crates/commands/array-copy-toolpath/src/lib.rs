@@ -1,5 +1,6 @@
-//! Array Copy Toolpath: a grid of copies of the source toolpaths, above and to the right of
-//! them, kept up to date with them: recalculating copies them again.
+//! Array Copy Toolpath: a grid of copies of the toolpaths shown in the toolpath list when
+//! Apply is pressed (tick the ones to copy there), above and to the right of them, kept up to
+//! date with them: recalculating copies them again.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
@@ -24,7 +25,10 @@ pub enum Spacing {
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
-    /// The toolpaths to copy (none: the visible ones)
+    /// The toolpaths to copy (none: the ones shown in the toolpath list when Apply is
+    /// pressed). Not on the form: tick the toolpaths to copy in the toolpath list
+    #[schemars(skip)]
+    #[serde(default)]
     pub sources: Vec<EntityId>,
     /// How many copies up the job, counting the first
     #[schemars(range(min = 1))]
@@ -69,6 +73,15 @@ fn extent(t: &Toolpath) -> Option<Rect> {
         .reduce(Rect::union)
 }
 
+/// The toolpaths shown in the toolpath list, but none made by `strategy`.
+fn visible(doc: &Document, strategy: &str) -> Vec<EntityId> {
+    doc.toolpaths
+        .iter()
+        .filter(|(_, t)| t.visible && t.strategy != strategy)
+        .map(|(&id, _)| id)
+        .collect()
+}
+
 impl Command for ArrayCopyToolpath {
     const ID: &'static str = "array_copy_toolpath";
     type Params = Params;
@@ -82,16 +95,9 @@ impl Command for ArrayCopyToolpath {
         }
     }
 
-    fn initial_params(doc: &Document) -> Params {
-        Params {
-            sources: doc
-                .toolpaths
-                .iter()
-                .filter(|(_, t)| t.visible && t.strategy != Self::ID)
-                .map(|(&id, _)| id)
-                .collect(),
-            ..Params::default()
-        }
+    fn initial_params(_: &Document) -> Params {
+        // no sources: the toolpaths shown when Apply is pressed, not when the form opened
+        Params::default()
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
@@ -100,11 +106,14 @@ impl Command for ArrayCopyToolpath {
                 "set rows and columns to 1 or more".into(),
             ));
         }
-        let named = if p.sources.is_empty() {
-            Self::initial_params(doc).sources
+        let mut named = if p.sources.is_empty() {
+            visible(doc, Self::ID)
         } else {
             p.sources.clone()
         };
+        // a toolpath named twice is used once, not cut twice
+        let mut seen = std::collections::BTreeSet::new();
+        named.retain(|id| seen.insert(*id));
         let sources: Vec<(EntityId, &Toolpath)> = named
             .iter()
             .filter_map(|id| doc.toolpaths.get(id).map(|t| (*id, t)))
@@ -247,11 +256,22 @@ mod tests {
     }
 
     #[test]
-    fn the_form_starts_with_the_visible_toolpaths() {
-        assert_eq!(
-            ArrayCopyToolpath::initial_params(&with_profile()).sources,
-            [EntityId(1)]
+    fn the_form_hides_the_sources_and_copies_the_toolpaths_visible_at_apply() {
+        let doc = with_profile();
+        let schema = schemars::schema_for!(Params);
+        assert!(
+            schema.as_value()["properties"].get("sources").is_none(),
+            "no id list"
         );
+        assert_eq!(ArrayCopyToolpath::initial_params(&doc).sources, []);
+        let once = array(&doc, &Params::default())[0].moves.len();
+        let doubled = Params {
+            sources: vec![EntityId(1), EntityId(1)],
+            ..Params::default()
+        };
+        let made = array(&doc, &doubled);
+        assert_eq!(made.len(), 1, "a repeated id is copied once");
+        assert_eq!(made[0].moves.len(), once);
     }
 
     #[test]
