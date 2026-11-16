@@ -94,8 +94,9 @@ The Materials Library can stay open while you use the Tool Database: its OK adds
 own feeds and materials, so tools added, deleted, changed or renamed there meanwhile stay as
 they are. In its Add Tool picker, Select keeps the picker's changes at once (a catalogue bit
 copied into My Tools, say); the library's own feeds still wait for its OK.
-Deleting a whole group in the Tool Database asks first, counting its tools, those Hide Unset
-Tools hides and those loaded in the tool changer; Cancel still brings them back until OK.
+Deleting a whole group in the Tool Database asks first, under the tree, counting its tools,
+those Hide Unset Tools hides, those loaded in the tool changer and the job's toolpaths that
+cut with them; Cancel still brings them back until OK.
 Its Materials Library… button keeps your changes first, as Apply does; when they delete tools
 or materials it asks first, as Cancel could not bring those back afterwards (a tool only
 renamed is not counted).

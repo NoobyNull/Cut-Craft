@@ -18,6 +18,8 @@ fn tool_window() -> egui::Id {
 const WINDOW_SHARE: f32 = 0.7;
 /// The tree's share of the window's width when it first opens.
 const TREE_SHARE: f32 = 0.35;
+/// The lines of text the questions' area under the tree keeps room for.
+const QUESTION_ROWS: f32 = 5.0;
 /// The tool pictures are 90 × 130: their width for a height.
 const PICTURE_ASPECT: f32 = 90.0 / 130.0;
 /// Lines of the notes boxes.
@@ -93,6 +95,12 @@ pub struct Manager {
     asking: Option<Question>,
     /// The database as last kept (opened, or Apply): what the edits since would delete.
     saved: ToolDatabase,
+    /// The tool each of the open job's toolpaths cuts with, one name per toolpath: Delete
+    /// says how many of them cut with the tools it would take.
+    pub job_tools: Vec<String>,
+    /// Where the tree was last drawn: a question showing never moves it.
+    #[cfg(test)]
+    tree_rect: egui::Rect,
 }
 
 /// A question the window asks before it goes on.
@@ -279,6 +287,9 @@ impl Manager {
             renames: vec![],
             asking: None,
             saved: db.clone(),
+            job_tools: vec![],
+            #[cfg(test)]
+            tree_rect: egui::Rect::NOTHING,
         }
     }
 
@@ -462,11 +473,23 @@ impl Manager {
                             if let Some(action) = self.tree_buttons(ui, look) {
                                 outcome = self.act(action).or(outcome.take());
                             }
-                            self.confirm_delete(ui);
                         });
                         // the active material is the whole database's, so it sits by the tree
                         egui::Panel::bottom("tool_database_material")
                             .show(ui, |ui| self.materials(ui));
+                        // the questions' own area, kept whether one shows or not, so one
+                        // showing never moves the tree or the buttons
+                        let rows = ui.text_style_height(&egui::TextStyle::Body) * QUESTION_ROWS;
+                        let height =
+                            rows + ui.spacing().interact_size.y + ui.spacing().item_spacing.y * 2.0;
+                        egui::Panel::bottom("tool_database_question")
+                            .resizable(false)
+                            .exact_size(height)
+                            .show(ui, |ui| self.question(ui));
+                        #[cfg(test)]
+                        {
+                            self.tree_rect = ui.available_rect_before_wrap();
+                        }
                         egui::ScrollArea::both().show(ui, |ui| self.tree(ui, look));
                     });
                 egui::CentralPanel::default().show(ui, |ui| {
@@ -890,10 +913,22 @@ impl Manager {
         } else {
             format!(" ({})", notes.join("; "))
         };
+        let cutting = self
+            .job_tools
+            .iter()
+            .filter(|name| inside.iter().any(|t| t.name == **name))
+            .count();
+        let toolpaths = match cutting {
+            0 => String::new(),
+            n => format!(
+                " {} in this job cut with them: they keep their tool, but it can no longer \
+                 be picked here or loaded in the tool changer.",
+                plural(n, "toolpath")
+            ),
+        };
         Some(format!(
-            "Delete the group \"{}\" and its {what}{notes}? Toolpaths cutting with them \
-             keep their tool but can no longer pick it here. Cancel still brings them back \
-             until OK.",
+            "Delete the group \"{}\" and its {what}{notes}?{toolpaths} Cancel still brings \
+             them back until OK.",
             tree::leaf(group)
         ))
     }
@@ -912,27 +947,44 @@ impl Manager {
         }
     }
 
-    /// The question Delete asks before a group goes, with its Delete and Keep, under the
-    /// tree buttons; picking something else drops it.
-    fn confirm_delete(&mut self, ui: &mut egui::Ui) {
+    /// The question the window is asking, in its own area under the tree: Delete's, with
+    /// Delete and Keep (picking something else drops it), or Materials Library…'s, with Keep
+    /// and Open and Not Now. The text scrolls when it is longer than the area.
+    fn question(&mut self, ui: &mut egui::Ui) {
         if let Some(Question::Delete(group)) = &self.asking
             && self.pick.as_ref() != Some(&Pick::Group(group.clone()))
         {
             self.asking = None;
         }
-        let Some(question) = self.delete_question() else {
+        let (question, yes, no) = if let Some(q) = self.delete_question() {
+            (q, "Delete", "Keep")
+        } else if let Some(q) = self.library_question() {
+            (q, "Keep and Open", "Not Now")
+        } else {
             return;
         };
-        ui.group(|ui| {
-            ui.colored_label(ui.visuals().warn_fg_color, question);
-            ui.horizontal(|ui| {
-                if ui.button("Delete").clicked() {
-                    self.answer_delete(true);
-                }
-                if ui.button("Keep").clicked() {
-                    self.answer_delete(false);
-                }
+        let room =
+            ui.available_height() - ui.spacing().interact_size.y - ui.spacing().item_spacing.y;
+        egui::ScrollArea::vertical()
+            .max_height(room.max(0.0))
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.colored_label(ui.visuals().warn_fg_color, question)
             });
+        let delete = matches!(self.asking, Some(Question::Delete(_)));
+        ui.horizontal(|ui| {
+            let answer = if ui.button(yes).clicked() {
+                Some(true)
+            } else if ui.button(no).clicked() {
+                Some(false)
+            } else {
+                None
+            };
+            match answer {
+                Some(a) if delete => self.answer_delete(a),
+                Some(a) => self.answer_library(a),
+                None => {}
+            }
         });
     }
 
@@ -1117,19 +1169,6 @@ impl Manager {
             ui.checkbox(&mut self.copy_cutting_data, "with cutting data")
                 .on_hover_hint("The copy gets every tool's cutting data for the material");
         });
-        if let Some(question) = self.library_question() {
-            ui.group(|ui| {
-                ui.colored_label(ui.visuals().warn_fg_color, question);
-                ui.horizontal(|ui| {
-                    if ui.button("Keep and Open").clicked() {
-                        self.answer_library(true);
-                    }
-                    if ui.button("Not Now").clicked() {
-                        self.answer_library(false);
-                    }
-                });
-            });
-        }
     }
 
     /// A catalogue's tool, read only, with Copy to My Tools.
@@ -2093,6 +2132,46 @@ mod tests {
             m.draft.tools[1].number, 2,
             "taken out, it keeps its last number"
         );
+    }
+
+    #[test]
+    fn deleting_a_group_says_how_many_of_the_job_s_toolpaths_cut_with_its_tools() {
+        let db = ToolDatabase::starter();
+        let mut m = Manager::new(&db);
+        let used = db.tools[0].clone();
+        m.pick = Some(Pick::Group(used.group.clone()));
+        m.act(TreeAction::Delete);
+        let question = m.delete_question().expect("it asks");
+        assert!(!question.contains("toolpath"), "none use them: {question}");
+        m.job_tools = vec![used.name.clone(), used.name.clone(), "Elsewhere".into()];
+        let question = m.delete_question().expect("it asks");
+        assert!(
+            question.contains("2 toolpaths in this job cut with them"),
+            "{question}"
+        );
+    }
+
+    #[test]
+    fn a_question_never_moves_the_tree_or_the_buttons_under_it() {
+        let ctx = egui::Context::default();
+        let mut m = Manager::new(&ToolDatabase::starter());
+        let group = m.draft.tools[0].group.clone();
+        m.pick = Some(Pick::Group(group));
+        frame(&mut m, &ctx);
+        frame(&mut m, &ctx);
+        let before = m.tree_rect;
+        m.act(TreeAction::Delete);
+        assert!(m.delete_question().is_some());
+        frame(&mut m, &ctx);
+        frame(&mut m, &ctx);
+        assert_eq!(m.tree_rect, before, "the delete question has its own area");
+        m.answer_delete(false);
+        m.draft.tools.remove(0);
+        m.open_materials_library();
+        assert!(m.library_question().is_some());
+        frame(&mut m, &ctx);
+        frame(&mut m, &ctx);
+        assert_eq!(m.tree_rect, before, "and so has Materials Library…'s");
     }
 
     #[test]

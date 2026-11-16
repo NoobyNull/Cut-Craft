@@ -119,10 +119,21 @@ impl CutCraftApp {
         true
     }
 
+    /// The open Tool Database learns which tools the job's toolpaths cut with, so its
+    /// Delete can say when it would take one.
+    fn tool_manager_sees_the_job(&mut self) {
+        if let Some(manager) = &mut self.tool_manager {
+            manager.job_tools.clear();
+            let names = self.doc.toolpaths.values().map(|t| t.tool.name.clone());
+            manager.job_tools.extend(names);
+        }
+    }
+
     /// The Tool Database manager; its edits are kept on Apply or OK.
     pub(super) fn tool_database_window(&mut self, ctx: &egui::Context) {
         use cut_craft_tool_database::Outcome;
         self.materials_library_window(ctx);
+        self.tool_manager_sees_the_job();
         let Some(manager) = &mut self.tool_manager else {
             return;
         };
