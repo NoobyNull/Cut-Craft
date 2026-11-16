@@ -37,7 +37,8 @@ pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
     /// The picture it was made from (for a Bitmap source; none: the one picked last, else the newest). Not on
-    /// the form: recalculating carves this picture again, whichever is picked
+    /// the form: recalculating carves this picture again, whichever is picked. Left out of
+    /// toolpath templates and saved settings, which carve the other job's own picture
     #[schemars(skip)]
     #[serde(default)]
     pub bitmap: Option<cut_craft_core::document::EntityId>,

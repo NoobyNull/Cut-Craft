@@ -776,13 +776,19 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
     let toolpaths: Vec<_> = ids
         .iter()
         .filter_map(|id| doc.toolpaths.get(id))
-        .map(|t| cut_craft_core::toolpath::Toolpath {
-            moves: vec![],
-            vectors: vec![],
-            power: vec![],
-            drill_bank: None,
-            fallbacks: vec![],
-            ..t.clone()
+        .map(|t| {
+            let mut t = cut_craft_core::toolpath::Toolpath {
+                moves: vec![],
+                vectors: vec![],
+                power: vec![],
+                drill_bank: None,
+                fallbacks: vec![],
+                ..t.clone()
+            };
+            // like its vectors, the picture it carved is this job's: another job's own
+            // picture is carved instead
+            drop_job_ids(&mut t.params);
+            t
         })
         .collect();
     serde_json::to_vec_pretty(&toolpaths).expect("toolpaths serialise")
@@ -833,8 +839,26 @@ pub fn load_form_settings(
     let (Some(saved), Some(params)) = (file["settings"].as_object(), params.as_object_mut()) else {
         return Err("the file holds no settings".into());
     };
-    merge_settings(params, saved);
+    let mut saved = saved.clone();
+    // the picture a toolpath was made from belongs to its job: the form keeps its own
+    for key in JOB_IDS {
+        saved.remove(key);
+    }
+    merge_settings(params, &saved);
     Ok(())
+}
+
+/// Settings naming something of the job they were saved in (the picture a Photo V-Carve or
+/// Sketch Carving carved), left out of templates and settings files.
+const JOB_IDS: [&str; 1] = ["bitmap"];
+
+/// `params` without the settings that name something of their job ([`JOB_IDS`]).
+fn drop_job_ids(params: &mut serde_json::Value) {
+    if let Some(params) = params.as_object_mut() {
+        for key in JOB_IDS {
+            params.remove(key);
+        }
+    }
 }
 
 /// `saved`'s values put into the `params` the form has, group by group, so a setting a
@@ -1147,6 +1171,43 @@ mod tests {
         assert_eq!(loaded.name, "Profile");
         assert_eq!(loaded.moves, vec![]);
         assert!(super::load_toolpath_template(&doc, b"[]").is_err());
+    }
+
+    #[test]
+    fn templates_and_saved_settings_leave_out_the_picture_a_toolpath_was_made_from() {
+        // a Photo V-Carve made from picture 7 of its job
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        let id = *doc.toolpaths.keys().next().unwrap();
+        doc.toolpaths.get_mut(&id).unwrap().params["bitmap"] = serde_json::json!(7);
+        let bytes = super::toolpath_template(&doc, &[id]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        doc.apply(&change).unwrap();
+        let loaded = doc.toolpaths.values().last().unwrap();
+        assert_eq!(
+            loaded.params.get("bitmap"),
+            None,
+            "another job carves its own picture"
+        );
+        // settings saved from its Edit form, loaded into a new form
+        let saved = super::form_settings(
+            "photo_vcarve_toolpath",
+            "Photo V-Carve",
+            &serde_json::json!({ "name": "Face", "bitmap": 7 }),
+        );
+        let mut params = serde_json::json!({ "name": "Photo V-Carve", "bitmap": null });
+        super::load_form_settings(
+            "photo_vcarve_toolpath",
+            "Photo V-Carve",
+            &mut params,
+            &saved,
+        )
+        .unwrap();
+        assert_eq!(params["name"], "Face");
+        assert_eq!(
+            params["bitmap"],
+            serde_json::Value::Null,
+            "the form's own picture"
+        );
     }
 
     /// Four shown toolpaths (End Mill, End Mill, V-Bit, End Mill) and a hidden one.

@@ -304,8 +304,8 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
         "load_template",
         "Load Toolpath Template",
-        "Add the toolpaths saved in a template to this job, ready to pick the vectors each \
-         one cuts and calculate",
+        "Add the toolpaths saved in a template to this job, ready to pick the vectors (or \
+         picture) each one cuts and calculate",
     ),
     (
         "save_selected_toolpath_as_template",
