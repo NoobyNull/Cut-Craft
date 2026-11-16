@@ -2242,6 +2242,28 @@ mod tests {
     }
 
     #[test]
+    fn quick_engraves_old_passes_show_only_while_above_one() {
+        // a job saved when Passes repeated the pattern keeps a pass count the bit's passes
+        // cannot go below, so it shows until set back to 1
+        let f = fields(&schema("quick_engrave_toolpath"));
+        let drawn_with = |passes: u32| {
+            let mut params = registry()
+                .get("quick_engrave_toolpath")
+                .map(cut_craft_core::DynCommand::default_params)
+                .expect("Quick Engrave's form");
+            params["passes"] = passes.into();
+            drawn(&f, &mut params, Units::Mm)
+        };
+        let label = "Passes at Least";
+        assert!(
+            drawn_with(3).iter().any(|t| t == label),
+            "{:?}",
+            drawn_with(3)
+        );
+        assert!(!drawn_with(1).iter().any(|t| t == label));
+    }
+
+    #[test]
     fn marked_groups_are_sections_and_marked_arrays_are_colours() {
         let schema = serde_json::json!({
             "type": "object",

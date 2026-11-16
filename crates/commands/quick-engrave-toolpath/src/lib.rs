@@ -57,10 +57,12 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Engrave"))]
     pub stepover: f64,
-    /// From jobs saved when Passes ran the pattern again at the same depth: that many passes
-    /// at least, now each a step deeper. The passes are the bit's (Edit Passes)
+    /// Kept from a job saved when Passes ran the pattern again at the same depth: at least this
+    /// many passes are cut, each a step deeper, even when Edit Passes sets fewer. Set it to 1
+    /// to cut the bit's passes (Edit Passes) only; it is then hidden
     #[serde(default = "one")]
-    #[schemars(skip)]
+    #[schemars(title = "Passes at Least", range(min = 1))]
+    #[schemars(extend("x-group" = "Cutting Depths", "x-hide-when" = {"passes": 1}))]
     pub passes: u32,
     /// The engraving bit or drag point that marks the lines
     pub tool: Tool,
