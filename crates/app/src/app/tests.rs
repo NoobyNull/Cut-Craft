@@ -11745,6 +11745,29 @@ fn first_time_setup_again_keeps_the_posts_added_to_my_machine() {
 }
 
 #[test]
+fn first_time_setup_again_keeps_the_rest_of_the_default_job() {
+    let mut h = Harness::at_start();
+    h.app.open_first_run();
+    let setup = h.app.first_run.take().unwrap();
+    h.app.finish_first_run(&setup);
+    // set in Job Setup's Set as Default, not asked about by first-time setup
+    let mut kept = h.app.options.default_job.unwrap();
+    kept.clearance = 12.5;
+    kept.colour = [10, 20, 30];
+    h.app.options.default_job = Some(kept);
+    // asked again only to change the material's thickness
+    h.app.open_first_run();
+    let setup = h.app.first_run.as_mut().unwrap();
+    setup.sheet[2] = 12.0;
+    let setup = h.app.first_run.take().unwrap();
+    h.app.finish_first_run(&setup);
+    let job = h.app.options.default_job.unwrap();
+    assert_eq!(job.thickness, 12.0);
+    assert_eq!(job.clearance, 12.5, "the clearance kept");
+    assert_eq!(job.colour, [10, 20, 30], "the colour kept");
+}
+
+#[test]
 fn skipping_first_time_setup_keeps_todays_start() {
     let mut h = Harness::at_start();
     h.app.open_first_run();

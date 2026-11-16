@@ -61,6 +61,9 @@ pub(super) struct Setup {
     pub sheet: [f64; 3],
     /// Whether a crash's log may be offered to send (`Ask` until answered).
     pub crash_logs: CrashLogs,
+    /// The job new files start with now: asked again, only its size, thickness and units
+    /// change, so the rest set in Job Setup (Set as Default) is kept.
+    pub base: Job,
 }
 
 impl Setup {
@@ -74,6 +77,7 @@ impl Setup {
             inches: false,
             sheet: [BED_MM[0], BED_MM[1], THICKNESS_MM],
             crash_logs: CrashLogs::Ask,
+            base: Job::default(),
         }
     }
 
@@ -97,6 +101,7 @@ impl Setup {
             }
         }
         if let Some(job) = options.default_job {
+            setup.base = job;
             setup.inches = job.units == Units::Inch;
             setup.sheet = [job.width, job.height, job.thickness];
         }
@@ -202,14 +207,15 @@ impl Setup {
         }
     }
 
-    /// The job new files start with.
+    /// The job new files start with: the size, thickness and units answered, the rest as
+    /// it was kept before.
     pub fn job(&self) -> Job {
         Job {
             width: self.sheet[0],
             height: self.sheet[1],
             thickness: self.sheet[2],
             units: if self.inches { Units::Inch } else { Units::Mm },
-            ..Job::default()
+            ..self.base
         }
     }
 }
