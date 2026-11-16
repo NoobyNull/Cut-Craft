@@ -193,6 +193,7 @@ impl CutCraftApp {
             rough_3d: None,
             height_applied_at: None,
             job_epoch: 0,
+            toolpath_keys: super::follow::Keys::default(),
             tool_note: None,
             stale_known: 0,
             stale_while_form: false,

@@ -15666,3 +15666,35 @@ fn a_job_setup_change_starts_the_preview_again_on_the_new_block() {
     let start = h.app.playback.as_ref().expect("it plays").material();
     assert_eq!((start.columns, start.origin), (fresh.columns, fresh.origin));
 }
+
+#[test]
+fn an_open_edit_toolpath_form_follows_its_toolpath_through_a_reorder_and_its_undo() {
+    let mut h = named_toolpaths();
+    // the job put in as a new one is
+    h.app.job_epoch += 1;
+    h.frame(vec![]);
+    h.app.selected_toolpath = Some(EntityId(1));
+    h.app.edit_toolpath();
+    assert_eq!(h.app.form.as_ref().unwrap().editing, Some(EntityId(1)));
+    // the Pocket moved down below the Drill: it is now at id 2
+    h.app
+        .apply(
+            "arrange_toolpaths",
+            &serde_json::json!({ "order": [2, 1, 3] }),
+        )
+        .unwrap();
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.toolpaths[&EntityId(2)].name, "Pocket");
+    assert_eq!(
+        h.app.form.as_ref().unwrap().editing,
+        Some(EntityId(2)),
+        "still edits the Pocket"
+    );
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.toolpaths[&EntityId(1)].name, "Pocket");
+    assert_eq!(h.app.form.as_ref().unwrap().editing, Some(EntityId(1)));
+    h.app.invoke(&h.ctx, "redo");
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().unwrap().editing, Some(EntityId(2)));
+}

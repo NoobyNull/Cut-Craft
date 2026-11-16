@@ -10,6 +10,7 @@ mod draw3d;
 mod entry;
 mod first_run;
 mod fit_import;
+mod follow;
 mod guide;
 mod help;
 #[cfg(test)]
@@ -1327,6 +1328,9 @@ struct CutCraftApp {
     /// Counts the jobs opened or made: with the history's revision, which job and which
     /// change of it the 2D view draws (a new job's history starts its revisions again).
     job_epoch: u64,
+    /// What told the toolpaths apart at the last change, so a reorder, or its undo or redo,
+    /// moving them between ids is seen (see [`follow`]).
+    toolpath_keys: follow::Keys,
     /// What a tool with no form (Group) warned of, in red at the foot of the tool panel, for
     /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
     /// too, takes it away.

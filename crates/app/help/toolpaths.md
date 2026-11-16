@@ -4,6 +4,10 @@ The Toolpaths page, down the right, turns the selected vectors and the 3D model 
 toolpaths, lists them, previews them cutting the material and saves them for the machine.
 Pick a toolpath's tool to open its form; choose the cutter from the tool database there.
 
+Reordering the toolpath list (a drag, Move Up or Down, Group), or undoing or redoing that,
+leaves each toolpath what it was: a toolpath open in its form stays the one its Calculate
+makes again.
+
 While a preview plays, its controls sit over the 2D and 3D views: Pause or Run, Single
 Step, Run to Retract, Stop, the speed, Progress to drag the tool along the whole job, and
 Close up to drag it back and forth over the few minutes either side of where it is. At

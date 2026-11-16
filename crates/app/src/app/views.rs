@@ -64,6 +64,8 @@ impl CutCraftApp {
         self.sync_machine_keep_out();
         // nodes picked on a vector since unselected, undone or put away are let go
         self.prune_picked_nodes();
+        // a reorder, or its undo, moved toolpaths between ids: what holds them follows
+        self.follow_toolpaths();
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);
