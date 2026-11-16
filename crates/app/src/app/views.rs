@@ -3463,7 +3463,11 @@ impl CutCraftApp {
         egui::Modal::new(egui::Id::unique("earlier_gcode")).show(ctx, |ui| {
             ui.set_width(ui.spacing().interact_size.x * 11.0);
             ui.heading("Replace the earlier G-code?");
-            ui.label("These files from an earlier save are where the new ones go:");
+            ui.label(if ask.sending {
+                "These files from an earlier send are on the machine, where the new ones go:"
+            } else {
+                "These files from an earlier save are where the new ones go:"
+            });
             for file in ask.earlier.iter().take(SHOWN) {
                 ui.label(format!("• {}", super::file_name(file)));
             }

@@ -445,6 +445,8 @@ pub(super) struct EarlierAsk {
     earlier: Vec<std::path::PathBuf>,
     /// Keep the answer as the default.
     remember: bool,
+    /// Asked for Send to Machine: `earlier` are names on the machine, not paths here.
+    sending: bool,
 }
 
 /// Save Toolpaths' choices (Save Toolpaths form), while its window is open.

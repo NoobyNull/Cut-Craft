@@ -1432,6 +1432,7 @@ impl CutCraftApp {
                     told,
                     earlier,
                     remember: false,
+                    sending: false,
                 });
             }
             choice => self.save_with(choice, form, &post, &path, &told, &earlier),
@@ -1454,6 +1455,9 @@ impl CutCraftApp {
         if remember {
             self.options.confirmations.earlier_gcode = choice;
             self.save_options();
+        }
+        if ask.sending {
+            return self.send_choosing(&ask.form, ask.post, ask.told, choice);
         }
         self.save_with(
             choice,

@@ -374,6 +374,31 @@ pub fn orphaned_recovery(dir: &Path, own: &Path) -> Option<PathBuf> {
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
 }
 
+/// Whether the file `name` is one a save as `stem`.`extension` writes: that name itself, or
+/// a numbered, tiled or sided file beside it (`sign_1_Profile.nc`, `sign_tile2.nc`,
+/// `sign_Top.nc`).
+pub fn of_earlier_save(name: &str, stem: &str, extension: &str) -> bool {
+    let Some(rest) = name
+        .strip_suffix(&format!(".{extension}"))
+        .and_then(|n| n.strip_prefix(stem))
+    else {
+        return false;
+    };
+    if rest.is_empty() {
+        return true;
+    }
+    let Some(rest) = rest.strip_prefix('_') else {
+        return false;
+    };
+    let mut words = rest.split('_');
+    let first = words.next().unwrap_or_default();
+    let digits = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit());
+    (digits(first) && words.next().is_some())
+        || first.strip_prefix("tile").is_some_and(digits)
+        || first == "Top"
+        || first == "Bottom"
+}
+
 /// The G-code files an earlier save to `path` left in its folder: `path` itself and the
 /// numbered, tiled and sided files [`save_files`] writes beside it (`sign_1_Profile.nc`,
 /// `sign_tile2.nc`, `sign_Top.nc`), with the same extension. Other files are left out.
@@ -390,27 +415,7 @@ pub fn earlier_save(path: &Path) -> Vec<PathBuf> {
     } else {
         dir
     };
-    let ours = |name: &str| {
-        let Some(rest) = name
-            .strip_suffix(&format!(".{extension}"))
-            .and_then(|n| n.strip_prefix(stem.as_str()))
-        else {
-            return false;
-        };
-        if rest.is_empty() {
-            return true;
-        }
-        let Some(rest) = rest.strip_prefix('_') else {
-            return false;
-        };
-        let mut words = rest.split('_');
-        let first = words.next().unwrap_or_default();
-        let digits = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit());
-        (digits(first) && words.next().is_some())
-            || first.strip_prefix("tile").is_some_and(digits)
-            || first == "Top"
-            || first == "Bottom"
-    };
+    let ours = |name: &str| of_earlier_save(name, &stem, &extension);
     let Ok(read) = std::fs::read_dir(dir) else {
         return vec![];
     };

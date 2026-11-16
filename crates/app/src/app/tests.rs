@@ -10749,7 +10749,7 @@ fn send_to_machine_puts_the_files_and_job_sheet_in_the_projects_own_folder() {
     // sending again asks before replacing what is there, and keeps it on No
     let no = |there: &[String]| {
         assert_eq!(there.len(), 2);
-        false
+        None
     };
     let kept = h.app.send_to(&form, &post, &store, &no).unwrap_err();
     assert!(kept.contains("were kept"), "{kept}");
@@ -10759,10 +10759,147 @@ fn send_to_machine_puts_the_files_and_job_sheet_in_the_projects_own_folder() {
         "Oak sign_ front"
     );
     h.app.session.path = Some(std::path::PathBuf::from("/old/Oak sign_ front.ccjob"));
-    let yes = |_: &[String]| true;
+    let yes = |_: &[String]| Some(crate::options::EarlierGcode::Replace);
     let done = h.app.send_to(&form, &post, &store, &yes).unwrap();
     assert!(done.ends_with("in its folder Oak sign_ front 2"), "{done}");
     let _ = std::fs::remove_dir_all(card);
+}
+
+#[test]
+fn sending_again_replaces_or_archives_tile_files_an_earlier_layout_left_on_the_machine() {
+    use crate::options::EarlierGcode;
+    use cut_craft_machines::send::{Folder, Store};
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let card = std::env::temp_dir().join(format!("cut-craft-tiles-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&card);
+    std::fs::create_dir_all(card.join("sign")).unwrap();
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().send_to.folder = card.display().to_string();
+    h.app.session.path = Some(std::path::PathBuf::from("/jobs/sign.ccjob"));
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: false,
+    };
+    let post = h.app.form_post(&form).unwrap();
+    let ext = post.extension.clone();
+    // an earlier send of three tiles; this one is not tiled, so all three are left over
+    for n in 1..=3 {
+        std::fs::write(card.join("sign").join(format!("sign_tile{n}.{ext}")), "old").unwrap();
+    }
+    std::fs::write(card.join("sign").join("notes.txt"), "mine").unwrap();
+    let store = Folder::new(&card);
+    let names = |store: &Folder, at: &[String]| -> Vec<String> {
+        store
+            .list(at)
+            .unwrap()
+            .into_iter()
+            .map(|i| i.name)
+            .collect()
+    };
+    let asked = std::cell::RefCell::new(vec![]);
+    let keep = |there: &[String]| {
+        asked.borrow_mut().extend_from_slice(there);
+        None
+    };
+    let kept = h.app.send_to(&form, &post, &store, &keep).unwrap_err();
+    assert!(kept.contains("were kept"), "{kept}");
+    assert_eq!(
+        *asked.borrow(),
+        (1..=3)
+            .map(|n| format!("sign_tile{n}.{ext}"))
+            .collect::<Vec<_>>(),
+        "the leftover tiles are asked about, not the user's own file"
+    );
+    // Archive: moved into a dated folder under Archive, then the new file sent
+    let archive = |_: &[String]| Some(EarlierGcode::Archive);
+    let done = h.app.send_to(&form, &post, &store, &archive).unwrap();
+    assert!(
+        done.contains("the earlier files are in sign/Archive/sign "),
+        "{done}"
+    );
+    let at = ["sign".to_owned()];
+    assert_eq!(
+        names(&store, &at),
+        [
+            "Archive".to_owned(),
+            "notes.txt".into(),
+            format!("sign.{ext}")
+        ]
+    );
+    let dated = names(&store, &["sign".into(), "Archive".into()]);
+    assert_eq!(dated.len(), 1);
+    assert_eq!(
+        names(&store, &["sign".into(), "Archive".into(), dated[0].clone()]).len(),
+        3
+    );
+    // Replace: an old tile left beside the new file is deleted
+    std::fs::write(card.join("sign").join(format!("sign_tile2.{ext}")), "old").unwrap();
+    let replace = |_: &[String]| Some(EarlierGcode::Replace);
+    h.app.send_to(&form, &post, &store, &replace).unwrap();
+    assert_eq!(
+        names(&store, &at),
+        [
+            "Archive".to_owned(),
+            "notes.txt".into(),
+            format!("sign.{ext}")
+        ]
+    );
+    let _ = std::fs::remove_dir_all(card);
+}
+
+#[test]
+fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_off() {
+    use crate::options::EarlierGcode;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let dir = std::env::temp_dir().join(format!("cut-craft-old-tiles-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("card").join("sign")).unwrap();
+    h.app.options.confirmations.earlier_gcode = EarlierGcode::Ask;
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: false,
+    };
+    let post = h.app.form_post(&form).unwrap();
+    let ext = post.extension.clone();
+    for n in 1..=2 {
+        let tile = format!("sign_tile{n}.{ext}");
+        std::fs::write(dir.join(&tile), "old").unwrap();
+        std::fs::write(dir.join("card").join("sign").join(&tile), "old").unwrap();
+    }
+    // saving sign.nc where an earlier tiled save left its tiles asks Replace or Archive
+    let path = dir.join(format!("sign.{ext}"));
+    h.app
+        .save_over_earlier(&form, post.clone(), path, String::new());
+    let ask = h.app.earlier_ask.take().expect("asked");
+    assert!(!ask.sending);
+    assert_eq!(ask.earlier.len(), 2, "{:?}", ask.earlier);
+    // and so does sending, the answer then sending on
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().send_to.folder = dir.join("card").display().to_string();
+    h.app.session.path = Some(std::path::PathBuf::from("/jobs/sign.ccjob"));
+    h.app
+        .send_choosing(&form, post, String::new(), EarlierGcode::Ask);
+    let ask = h.app.earlier_ask.as_ref().expect("asked");
+    assert!(ask.sending);
+    assert_eq!(ask.earlier.len(), 2);
+    h.app.answer_earlier(Some(EarlierGcode::Replace), false);
+    let mut left: Vec<String> = std::fs::read_dir(dir.join("card").join("sign"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    left.sort();
+    assert_eq!(left, [format!("sign.{ext}")]);
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
