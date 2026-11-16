@@ -16431,3 +16431,37 @@ fn a_renamed_tool_s_toolpaths_never_say_an_unreadable_tool_database_was_saved() 
     assert!(names.iter().any(|n| *n == "Spiral 6"), "{names:?}");
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn a_fine_bit_is_noted_under_the_controls_while_its_preview_plays() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    for _ in 0..2 {
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.form = None;
+    }
+    // only the first toolpath's bit is fine
+    let first = *h.app.doc.toolpaths.keys().next().expect("two toolpaths");
+    h.app.doc.toolpaths.get_mut(&first).unwrap().tool.diameter = 0.05;
+    h.app.display.animate_preview = true;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // paused near each end, so on the fine toolpath and on the wide one: not stopped
+    h.app.playing = false;
+    for share in [0.01, 0.99] {
+        let playback = h.app.playback.as_mut().expect("playing");
+        let at = playback.length() * share;
+        playback.seek(at);
+        h.frame(vec![]);
+        assert!(h.app.playback.is_some() && h.app.simulation.is_none());
+        assert!(
+            h.texts()
+                .iter()
+                .any(|t| t.contains("narrower than two of the preview's squares")),
+            "the note shows while it plays, whichever toolpath is cutting ({share})"
+        );
+    }
+}

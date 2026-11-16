@@ -39,8 +39,8 @@ diameter set in the Tool Database, the preview draws a common one (1/4" for a V-
 to 1/2" for others) and says so under the controls. The preview cuts a grid of small
 squares; a bit narrower than two of them (a 1/16" bit on a full sheet at Standard, say)
 still cuts every square its tip passes through, but its thin cuts can look broken or
-dotted, so a line under the controls (or the status bar, with Animate Preview off) says
-so: pick a finer Toolpaths ▸ Preview Simulation Quality and preview again. The Vectors button above the 3D view
+dotted, so a line under the controls says so for as long as the preview plays (or the
+status bar, with Animate Preview off): pick a finer Toolpaths ▸ Preview Simulation Quality and preview again. The Vectors button above the 3D view
 (or View ▸ Draw Vectors in 3D View) shows or hides the vectors over the model, and is
 remembered next time. Turn off Animate Preview (the
 Toolpaths menu, Toolpath Drawing) to cut the whole preview at once, with a progress window
