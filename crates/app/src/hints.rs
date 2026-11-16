@@ -25,7 +25,8 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "edit_text",
-        "Edit Text: opens the selected text in its form, to change its words, font or size",
+        "Edit Text: opens the selected text in its form, to change its words, font or size (text \
+         in a group too); double-clicking the text does the same",
     ),
     (
         "align_left",
@@ -97,7 +98,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "ungroup_onto_current_layer",
-        "Ungroup onto Current Layer: takes the selected groups apart and moves their vectors onto the layer you are working on",
+        "Ungroup onto Current Layer: takes the selected groups apart one level (groups and text in them come out as they were) and moves their vectors onto the layer you are working on",
     ),
     (
         "merge_visible_layers",
@@ -236,10 +237,9 @@ pub const HINTS: &[(&str, &str)] = &[
         "export_ai",
         "Export as AI: saves the selected vectors as an Illustrator-style file, for drawing programs",
     ),
-    ("print", "Print: prints the 2D view of the job"),
     (
-        "print_preview",
-        "Print Preview: shows how the 2D view will look printed, before you print it",
+        "print",
+        "Print (opens a PDF): opens the 2D view as a PDF in your PDF viewer, to check and print from there",
     ),
     (
         "save_shaded_image",
@@ -556,10 +556,6 @@ pub const HINTS: &[(&str, &str)] = &[
     (
         "install_post_processor",
         "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time",
-    ),
-    (
-        "update_post_processor_database",
-        "Update Post Processor Database: checks for newer post processors and opens the list",
     ),
     (
         "job_sheet_editor",

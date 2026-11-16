@@ -319,7 +319,7 @@ impl CutCraftApp {
             "tile_windows_horizontal" | "tile_windows_vertical" | "cascade_windows" => {
                 self.screen == Screen::Job
             }
-            "update_post_processor_database" | "job_sheet_editor" => true,
+            "job_sheet_editor" => true,
             "reset_preview" => {
                 self.simulation.is_some() || self.playback.is_some() || self.kept_playback.is_some()
             }
@@ -608,8 +608,7 @@ impl CutCraftApp {
             | "paste_in_place"
             | "increment_and_save"
             | "open_application_data_folder"
-            | "print"
-            | "print_preview" => {
+            | "print" => {
                 self.clipboard_or_file_action(ctx, id);
             }
             "keyboard_shortcuts"
@@ -699,15 +698,6 @@ impl CutCraftApp {
             "tile_windows_horizontal" => self.split = Some(super::Split::Stacked),
             "tile_windows_vertical" => self.split = Some(super::Split::SideBySide),
             "cascade_windows" => self.split = None,
-            "update_post_processor_database" => {
-                // custom posts are read from their folder each time they are listed, and
-                // Cut Craft's own come with Cut Craft: an update check brings the newest
-                self.post_window = Some(cut_craft_machines::PostManager::default());
-                let skipped = self.options.updates.skipped_version.clone();
-                self.updates.check(ctx, true, skipped);
-                self.status
-                    .set_message(&post_database_message(&self.posts.entries()));
-            }
             "save_shaded_image" => {
                 if let Some(path) = file_dialog()
                     .add_filter("PNG image", &["png"])
@@ -3569,8 +3559,23 @@ impl CutCraftApp {
         let mut without = self.doc.clone();
         without.apply(&taken).map_err(|e| e.to_string())?;
         let made = cmd.run_json(&without, params).map_err(|e| e.to_string())?;
+        // a shape changed inside a group stays in that group
+        let mut regrouped = Vec::new();
+        if let Some(&group) = self.doc.vector_groups.get(&old) {
+            let mut after = without.clone();
+            after.apply(&made).map_err(|e| e.to_string())?;
+            let mut c = Change::builder(&after);
+            for edit in &made.edits {
+                if let cut_craft_core::Edit::Add { id, .. } = edit {
+                    c.set_group(*id, Some(group));
+                }
+            }
+            regrouped = c.finish().edits;
+        }
         let change = Change {
-            edits: taken.edits.into_iter().chain(made.edits).collect(),
+            edits: (taken.edits.into_iter().chain(made.edits))
+                .chain(regrouped)
+                .collect(),
             notes: made.notes,
             unit_guess: made.unit_guess,
         };
@@ -4353,6 +4358,14 @@ impl CutCraftApp {
             self.status
                 .set_message("Preview stopped: what it had cut is kept");
         }
+        // Escape with no form open, stepped inside a group, steps out one level
+        if let Some(group) = self.doc.inside_group
+            && self.form.is_none()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.step_out_of_group(group);
+        }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| {
@@ -4777,7 +4790,7 @@ impl CutCraftApp {
     }
 
     /// The red note [`Self::tool_note_label`] shows, if any.
-    fn tool_note(&self) -> Option<&str> {
+    pub(super) fn tool_note(&self) -> Option<&str> {
         let (job, revision, note) = self.tool_note.as_ref()?;
         ((*job, *revision) == (self.job_epoch, self.history.revision())).then_some(note.as_str())
     }
@@ -6417,10 +6430,12 @@ impl CutCraftApp {
                     .map(|id| self.doc.vectors[id].clone())
                     .collect();
                 let doc = &self.doc;
-                let groups: Vec<Option<u64>> = doc
+                let picked: std::collections::BTreeSet<EntityId> =
+                    doc.selection.iter().copied().collect();
+                let groups: Vec<Vec<u64>> = doc
                     .selection
                     .iter()
-                    .map(|id| doc.vector_groups.get(id).copied())
+                    .map(|&id| doc.chain_within(id, &picked))
                     .collect();
                 self.clipboard_from = super::Copied {
                     layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
@@ -6476,9 +6491,9 @@ impl CutCraftApp {
                 Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
                 None => self.file_action("save_as"),
             },
-            // ponytail: the drawing as a PDF opened in the system viewer, which prints it;
-            // The own print window (scale, tiling) is not done
-            "print" | "print_preview" => {
+            // the drawing as a PDF opened in the system viewer, which previews and prints it
+            // (a print window of our own, with scale and tiling, is not done)
+            "print" => {
                 let path = std::env::temp_dir().join("cut-craft-print.pdf");
                 let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)
                     .and_then(|()| {
@@ -6845,22 +6860,6 @@ fn ask_to_run_unsigned(label: &str) -> bool {
     matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
 }
 
-/// What Update Post-Processor Database says once it has looked through the posts.
-pub(super) fn post_database_message(entries: &[cut_craft_machines::Entry]) -> String {
-    let custom = entries.iter().filter(|e| e.is_custom()).count();
-    let broken = entries.iter().filter(|e| e.broken.is_some()).count();
-    let unreadable = if broken > 0 {
-        format!("; {broken} could not be read: Post-Processor Management shows why")
-    } else {
-        String::new()
-    };
-    format!(
-        "{} post-processors ({custom} of your own){unreadable}; checking for a newer Cut \
-         Craft, which brings its newest post-processors",
-        entries.len()
-    )
-}
-
 /// The size of the box round a model's `faces`.
 fn model_size(faces: &[cmd_orientate_3d_model::Seen]) -> Option<[f64; 3]> {
     let corners = faces.iter().flat_map(|(t, _)| t);
@@ -7039,7 +7038,7 @@ fn installed_machines(added: usize, here: usize) -> String {
 
 /// The entries of `records` (text settings or part names, by group) for `groups`.
 fn records_of<T: Clone>(
-    groups: &[Option<u64>],
+    groups: &[Vec<u64>],
     records: &std::collections::BTreeMap<u64, T>,
 ) -> std::collections::BTreeMap<u64, T> {
     groups

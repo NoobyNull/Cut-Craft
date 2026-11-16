@@ -8,6 +8,8 @@ a CNC machine cuts them with.
   preview them and save them for the machine.
 - [3D View](help:view_3d): turning, zooming and fitting the 3D view, and Auto-rotate to
   see the job from every side.
+- [Groups](help:groups): step inside a group to change one thing in it; text in a
+  group stays editable.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.
@@ -21,6 +23,18 @@ a CNC machine cuts them with.
 - Hover over a setting's name in a form for a short note about it.
 - Hover over a greyed-out menu item or tool to see what it is waiting for, such as a
   selection, a toolpath picked in the list, or a job open.
+
+## Printing
+
+**File ▸ Print (opens a PDF)...** opens the 2D view as a PDF in your computer's PDF viewer.
+Check it there, then print from the viewer as you would any PDF. To print what the machine
+operator needs, use **Toolpaths ▸ Print Job Sheet** or **Toolpaths ▸ Print Part Labels** instead.
+
+## Newer post-processors
+
+Cut Craft's own post-processors come with Cut Craft, so **Help ▸ Check for Updates** brings the
+newest ones. Post-processors you added yourself are read from their folder each time, so
+there is nothing to update; see **Machine ▸ Post-Processor Management**.
 
 ## Number fields
 

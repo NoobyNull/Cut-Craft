@@ -10,6 +10,15 @@ const DESIGN: &str = include_str!("../../help/design.md");
 const TOOLPATHS: &str = include_str!("../../help/toolpaths.md");
 const WEB_API: &str = include_str!("../../help/web-api.md");
 const VIEW_3D: &str = include_str!("../../help/view-3d.md");
+const GROUPS: &str = include_str!("../../help/groups.md");
+
+/// The tools whose help pages link the Groups page.
+const GROUP_TOOLS: [&str; 4] = [
+    "group",
+    "ungroup",
+    "ungroup_onto_current_layer",
+    "edit_text",
+];
 
 /// The help's own pictures, by the `bytes://help/` name its pages show them by.
 pub(super) const PICTURES: &[(&str, &[u8])] = &[
@@ -36,6 +45,10 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "auto-rotate.gif",
         include_bytes!("../../help/pictures/auto-rotate.gif"),
+    ),
+    (
+        "group-step-inside.png",
+        include_bytes!("../../help/pictures/group-step-inside.png"),
     ),
 ];
 
@@ -159,6 +172,7 @@ impl CutCraftApp {
             "tips" => "Did You Know?".into(),
             "web_api" => "Web API".into(),
             "view_3d" => "3D View".into(),
+            "groups" => "Groups".into(),
             id => self.tool_label(id),
         }
     }
@@ -172,6 +186,7 @@ impl CutCraftApp {
             "tips",
             "web_api",
             "view_3d",
+            "groups",
         ];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
@@ -206,6 +221,7 @@ impl CutCraftApp {
             "tips" => super::tips::markdown(),
             "web_api" => WEB_API.to_owned(),
             "view_3d" => VIEW_3D.to_owned(),
+            "groups" => GROUPS.to_owned(),
             id => {
                 let (page, name) = match self.page_of(id) {
                     Page::Design => ("design", "Design"),
@@ -219,6 +235,12 @@ impl CutCraftApp {
                 );
                 for (label, help) in fields {
                     let _ = writeln!(md, "- **{label}**: {help}");
+                }
+                if GROUP_TOOLS.contains(&id) {
+                    md.push_str(
+                        "\nDouble-click a group to step inside it and change one thing in it. \
+                         See [Groups](help:groups).\n",
+                    );
                 }
                 md
             }

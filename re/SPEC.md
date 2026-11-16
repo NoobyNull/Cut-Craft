@@ -163,7 +163,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 ### Job model [obs]
 - **Job type:** Single-sided, Double-sided (both sides in one file, `Sd` subsystem) or Rotary (4th axis, wrapped view).
 - **Material block:** width X, height Y, thickness Z, and units (mm or inch).
-- **Z-zero:** on the material surface or on the machine bed.
+- **Z-zero:** on the material surface or on the machine bed. A rotary job's choices are Cylinder Surface or Cylinder Axis instead [inf: rotary job setup help]; Cut Craft names them so in the post's `[Z_ORIGIN]` and on the job sheet too.
 - **XY datum:** any corner or the centre, with an optional offset. A red square marks it while Job Setup is open.
 - **Design scaling:** when resizing an existing job, choose whether drawings scale with it.
 - **Modeling resolution:** Standard / High (3× slower) / Highest (7× slower), applied over the whole job area.
@@ -173,6 +173,12 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 ### Vectors (Drawing tab) [obs]
 - **Create:** Rectangle, Circle, Ellipse, Polygon, Star, Arc, Line/Polyline, Freehand, Text, Text on a Curve, Dimensions, Fillets, Vector Texture.
 - **Edit:** node editing, Join (J), Weld, Subtract, Trim, Overlap, Offset, Extend, Fit Curves, Mirror, Align, Distort, Array Copy, Circular Copy, Copy Along Vectors, Nest Parts, Group/Ungroup, Vector Validator, Vector Unwrapper, Trace Bitmap, Measure (Ctrl+M).
+- **Groups inside groups** (Cut Craft's own choice) [inf]: a group can hold groups, and
+  grouped text stays editable text. A double-click steps inside a group (the rest fades),
+  where a click picks one item in it to move, size, node edit, delete or edit, keeping it in
+  the group; a double-click on text opens Edit Text; Esc or a double-click on empty space
+  steps out. Chosen over turning grouped text into curves, so a beginner never loses
+  editable text by grouping it (#378).
 - **Layers** (`Cm`): name, colour, visible, active, ordering arrows, select-all-on-layer, move objects to a layer, Ctrl+L toggles the dialog.
 - **Sheets:** several material sheets per job. Double-click a sheet in the 2D view to make it active.
 - **Shape-tool interaction**, using Draw Rectangle as the template; every shape tool works the same way:
