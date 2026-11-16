@@ -107,7 +107,8 @@ Full Depth goes round the edge once, at the bottom, after all the clearing passe
 clean wall with no lines where the passes met. It needs a bit whose flutes reach the full
 depth; with shorter flutes (from the Tool Database) the edge is cut at each pass instead.
 Raster and Adaptive pockets can also leave the edge pass out (Profile Pass: None); offset
-rings always end on the edge.
+rings always end on the edge. Only Raster offers First, round the edge before the rows:
+Adaptive always goes round the edge last.
 
 ## Checks before cutting (the Analyse tab)
 

@@ -62,7 +62,7 @@ pub struct Field {
 /// a value written as text, a bool or a number),
 /// judged on the form's top-level parameters: the forms change with what is chosen. A rule
 /// naming more than one key holds when every one of them does.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct When {
     pub key: String,
     pub values: Vec<String>,
@@ -267,11 +267,23 @@ pub enum Widget {
     },
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Choice {
     pub value: String,
     pub label: String,
     pub help: Option<String>,
+    /// Only offered while another choice says so (the variant's `x-show-when` /
+    /// `x-hide-when`), judged on the params round the field.
+    pub when: Option<When>,
+}
+
+/// The `options` offered with `around` as it is: those whose rule holds.
+pub fn offered(options: &[Choice], around: &Value) -> Vec<Choice> {
+    options
+        .iter()
+        .filter(|o| o.when.as_ref().is_none_or(|w| w.shown(around)))
+        .cloned()
+        .collect()
 }
 
 /// Edits `params` through its fields; true when anything changed.
@@ -726,6 +738,7 @@ fn choose(
     look: &Look,
 ) -> bool {
     let current = value.as_str().unwrap_or_default().to_owned();
+    let options = &offered(options, around)[..];
     let picked = match widget {
         Widget::Auto if options.len() <= MOST_RADIOS => {
             // stacked, so their size does not depend on the width the layout gives them
@@ -1397,6 +1410,7 @@ fn choices(s: &Value) -> Option<Vec<Choice>> {
         help: about
             .and_then(|o| o["description"].as_str())
             .map(String::from),
+        when: about.and_then(When::from_schema),
     };
     match s["enum"].as_array() {
         Some(values) => values
@@ -2132,6 +2146,33 @@ mod tests {
     }
 
     #[test]
+    fn a_choice_can_be_offered_only_while_another_says_so() {
+        // Pocket's Profile Pass: First only for Raster, adaptive clearing always goes round last
+        let f = fields(&schema("pocket_toolpath"));
+        let Kind::Choice(options, _) = &field(&f, "profile_pass").kind else {
+            panic!("a choice")
+        };
+        let offered = |strategy: &str| -> Vec<String> {
+            let params = serde_json::json!({ "strategy": strategy });
+            offered(options, &params)
+                .into_iter()
+                .map(|o| o.value)
+                .collect()
+        };
+        assert_eq!(offered("raster"), ["first", "last", "none"]);
+        assert_eq!(offered("adaptive"), ["last", "none"]);
+        let first = options.iter().find(|o| o.value == "first").unwrap();
+        assert!(
+            !first
+                .help
+                .as_deref()
+                .unwrap_or_default()
+                .contains("raster lines")
+                || first.when.is_some()
+        );
+    }
+
+    #[test]
     fn marked_groups_are_sections_and_marked_arrays_are_colours() {
         let schema = serde_json::json!({
             "type": "object",
@@ -2220,6 +2261,7 @@ mod tests {
                 value: v.into(),
                 label: v.into(),
                 help: None,
+                when: None,
             })
             .into();
         let nearest = |x, y| nearest_corner(&options, vec2(x, y)).map(|c| c.value.as_str());
@@ -2294,6 +2336,7 @@ mod tests {
                 value: (*v).into(),
                 label: crate::gui::title_case(v),
                 help: None,
+                when: None,
             })
             .collect();
         let ctx = egui::Context::default();

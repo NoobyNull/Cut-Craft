@@ -66,9 +66,11 @@ impl RingOrder {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfilePass {
-    /// Round the edge before the raster lines
+    /// Round the edge before the raster lines (Raster only: adaptive clearing always goes
+    /// round last)
+    #[schemars(extend("x-show-when" = {"strategy": "raster"}))]
     First,
-    /// Round the edge after them
+    /// Round the edge after the clearing
     #[default]
     Last,
     /// No pass round the edge: it is left rough
@@ -112,8 +114,9 @@ pub struct Params {
     )]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub raster_angle: f64,
-    /// Whether a pass round the edge cleans up the wall, and when (adaptive clearing always
-    /// goes round last, if at all; offset rings end on the edge anyway)
+    /// Whether a pass round the edge cleans up the wall, and when (First is offered for
+    /// Raster only: adaptive clearing always goes round last, if at all; offset rings end on
+    /// the edge anyway)
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"strategy": ["raster", "adaptive"]}))]
     #[schemars(extend("x-group" = "Clear Pocket"))]
