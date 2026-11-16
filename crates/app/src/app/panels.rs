@@ -1040,7 +1040,9 @@ impl CutCraftApp {
         if self.display.animate_preview {
             self.finish_playback();
             self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-            self.play(&visible, move |app| app.preview_other_side(visible_only));
+            self.play(&visible, true, move |app| {
+                app.preview_other_side(visible_only);
+            });
         } else {
             self.preview_fresh(&visible, move |app| app.preview_other_side(visible_only));
         }
@@ -1054,7 +1056,7 @@ impl CutCraftApp {
         }
         self.finish_playback();
         self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-        self.play(ids, |_| {});
+        self.play(ids, true, |_| {});
     }
 
     /// Cuts `ids` in order into fresh material, as one preview to undo, then `then`.
@@ -1124,10 +1126,16 @@ impl CutCraftApp {
         }
     }
 
-    /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet),
-    /// then `then`. Their moves are laid out off the window's thread, with Cancel should
+    /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet,
+    /// or `fresh`: Preview All and a group start again from uncut material), then `then`.
+    /// Their moves are laid out off the window's thread, with Cancel should
     /// that take a while (millions of moves); the preview before stays shown till then.
-    pub(super) fn play(&mut self, toolpaths: &[EntityId], then: impl FnOnce(&mut Self) + 'static) {
+    pub(super) fn play(
+        &mut self,
+        toolpaths: &[EntityId],
+        fresh: bool,
+        then: impl FnOnce(&mut Self) + 'static,
+    ) {
         self.finish_playback();
         let source = self.preview_source();
         let (list, marks): (Vec<cut_craft_core::toolpath::Toolpath>, Vec<u32>) = toolpaths
@@ -1135,9 +1143,8 @@ impl CutCraftApp {
             .filter_map(|&id| Some((source.toolpaths.get(&id)?.clone(), super::preview_mark(id))))
             .unzip();
         drop(source);
-        let start = self
-            .simulation
-            .clone()
+        let start = (self.simulation.clone())
+            .filter(|_| !fresh)
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
         // rapids as fast as the Toolpath Summary times them
         let rapid = self.summary.rapid;
@@ -1233,7 +1240,7 @@ impl CutCraftApp {
         if self.display.animate_preview {
             self.finish_playback();
             self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-            self.play(&[id], |_| {});
+            self.play(&[id], false, |_| {});
             return;
         }
         self.finish_playback();

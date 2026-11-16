@@ -23,7 +23,9 @@ to 1/2" for others) and says so under the controls. The Vectors button above the
 (or View ▸ Draw Vectors in 3D View) shows or hides the vectors over the model, and is
 remembered next time. Turn off Animate Preview (the
 Toolpaths menu, Toolpath Drawing) to cut the whole preview at once, with a progress window
-you can Cancel (or press Esc).
+you can Cancel (or press Esc). Either way, Preview All and Preview Visible start again
+from uncut material, so old cuts never stay in the result; previewing one toolpath cuts
+into what is already previewed.
 
 When you save toolpaths, the post processor writes them as G-code for your machine. A post
 with arcs (the Cut Craft GRBL Arcs, Mach3 Arcs and FluidNC ATC Arcs posts) turns runs of
