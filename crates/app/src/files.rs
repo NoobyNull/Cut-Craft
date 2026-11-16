@@ -775,8 +775,8 @@ pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";
 pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::EntityId]) -> Vec<u8> {
     let toolpaths: Vec<_> = ids
         .iter()
-        .filter_map(|id| doc.toolpaths.get(id))
-        .map(|t| {
+        .filter_map(|id| Some((id, doc.toolpaths.get(id)?)))
+        .map(|(id, t)| {
             let mut t = cut_craft_core::toolpath::Toolpath {
                 moves: vec![],
                 vectors: vec![],
@@ -788,10 +788,36 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
             // like its vectors, the picture it carved is this job's: another job's own
             // picture is carved instead
             drop_job_ids(&mut t.params);
+            // its id here, so a Merged or Array Copy toolpath saved with it still names it
+            // once both are loaded into another job (at other ids)
+            if let Some(params) = t.params.as_object_mut() {
+                params.insert(TEMPLATE_ID.into(), serde_json::json!(id.0));
+            }
             t
         })
         .collect();
     serde_json::to_vec_pretty(&toolpaths).expect("toolpaths serialise")
+}
+
+/// The key a template keeps each toolpath's id under, in its settings.
+const TEMPLATE_ID: &str = "template_id";
+
+/// Each id in `params` naming another toolpath: a Merged toolpath's `sources`, and an
+/// Array Copy's `sources` and `only` (the one it copies).
+fn named_toolpaths(params: &mut serde_json::Value) -> Vec<&mut serde_json::Value> {
+    let Some(params) = params.as_object_mut() else {
+        return vec![];
+    };
+    params
+        .iter_mut()
+        .flat_map(|(key, value)| match key.as_str() {
+            "sources" => value
+                .as_array_mut()
+                .map_or_else(Vec::new, |ids| ids.iter_mut().collect()),
+            "only" if value.is_u64() => vec![value],
+            _ => vec![],
+        })
+        .collect()
 }
 
 /// A template's toolpaths added, empty, ready to be edited and calculated on vectors.
@@ -802,8 +828,53 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
         return Err("the template holds no toolpaths".into());
     }
     let mut c = Change::builder(doc);
-    for t in toolpaths {
-        c.add_toolpath(t);
+    // the template's ids, and where those toolpaths are now
+    let mut moved = std::collections::BTreeMap::new();
+    let mut added = vec![];
+    for mut t in toolpaths {
+        let was = t
+            .params
+            .as_object_mut()
+            .and_then(|p| p.remove(TEMPLATE_ID))
+            .and_then(|id| id.as_u64());
+        added.push((c.add_toolpath(t.clone()), t));
+        if let Some(was) = was {
+            moved.insert(was, added.last().map(|(id, _)| *id).expect("just added"));
+        }
+    }
+    // a Merged or Array Copy toolpath names the template's own toolpaths at their new ids;
+    // one it named that the template left out (or an older template's) is of the job it
+    // was saved from, so it names none of this job's
+    for (id, mut t) in added {
+        let names = named_toolpaths(&mut t.params);
+        if names.is_empty() {
+            continue;
+        }
+        let mut lost = false;
+        for name in names {
+            if let Some(now) = name.as_u64().and_then(|was| moved.get(&was)) {
+                *name = serde_json::json!(now.0);
+            } else {
+                *name = serde_json::Value::Null;
+                lost = true;
+            }
+        }
+        if let Some(sources) = t.params.get_mut("sources").and_then(|s| s.as_array_mut()) {
+            sources.retain(|s| !s.is_null());
+        }
+        if lost {
+            if t.params.get("only").is_some_and(serde_json::Value::is_null)
+                && let Some(params) = t.params.as_object_mut()
+            {
+                params.remove("only");
+            }
+            c.note(format!(
+                "{} came without the toolpaths it was made from: tick the ones to use in the \
+                 toolpath list, then calculate it",
+                t.name
+            ));
+        }
+        c.replace_toolpath(id, t);
     }
     Ok(c.finish())
 }
@@ -1171,6 +1242,63 @@ mod tests {
         assert_eq!(loaded.name, "Profile");
         assert_eq!(loaded.moves, vec![]);
         assert!(super::load_toolpath_template(&doc, b"[]").is_err());
+    }
+
+    #[test]
+    fn a_template_s_merged_toolpath_merges_the_template_s_own_toolpaths() {
+        use cut_craft_core::document::EntityId;
+        let last = |doc: &Document, n: usize| -> Vec<EntityId> {
+            let ids: Vec<EntityId> = doc.toolpaths.keys().copied().collect();
+            ids[ids.len() - n..].to_vec()
+        };
+        let mut doc = cut_craft_core::testing::three_toolpaths();
+        for t in doc.toolpaths.values_mut() {
+            t.params = serde_json::json!({ "name": t.name });
+        }
+        let [a, b, m] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        doc.toolpaths.get_mut(&m).unwrap().params["sources"] = serde_json::json!([a.0, b.0]);
+        // all three: the merged one names the two saved with it, at their new ids
+        let bytes = super::toolpath_template(&doc, &[a, b, m]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        doc.apply(&change).unwrap();
+        let [a2, b2, m2] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        assert_eq!(
+            doc.toolpaths[&m2].params["sources"],
+            serde_json::json!([a2.0, b2.0])
+        );
+        assert!(doc.toolpaths[&m2].params.get("template_id").is_none());
+        // the merged one alone: what it merged is not in the template, so it names nothing
+        // of this job, and says so
+        let bytes = super::toolpath_template(&doc, &[m]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("tick")),
+            "{:?}",
+            change.notes
+        );
+        doc.apply(&change).unwrap();
+        let loaded = doc.toolpaths.values().last().unwrap();
+        assert_eq!(loaded.params["sources"], serde_json::json!([]));
+        // an Array Copy's one source likewise
+        let mut doc = cut_craft_core::testing::three_toolpaths();
+        for t in doc.toolpaths.values_mut() {
+            t.params = serde_json::json!({ "name": t.name });
+        }
+        let [a, _, m] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        doc.toolpaths.get_mut(&m).unwrap().params["only"] = serde_json::json!(a.0);
+        let bytes = super::toolpath_template(&doc, &[a, m]);
+        doc.apply(&super::load_toolpath_template(&doc, &bytes).unwrap())
+            .unwrap();
+        let [a2, m2] = last(&doc, 2)[..] else {
+            unreachable!()
+        };
+        assert_eq!(doc.toolpaths[&m2].params["only"], serde_json::json!(a2.0));
     }
 
     #[test]
