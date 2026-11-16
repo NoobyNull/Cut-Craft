@@ -1684,6 +1684,13 @@ mod tests {
     }
 
     #[test]
+    fn interactive_vector_trim_shows_no_at_position_to_type() {
+        // the click on the canvas says where: typed X and Y would trim nothing
+        let f = fields(&schema("interactive_vector_trim"));
+        assert_eq!(keys(&f), ["reach", "rejoin_trimmed_sections"]);
+    }
+
+    #[test]
     fn micrometres_show_in_inches_in_an_inch_job() {
         assert_eq!(shown_in("µm", Units::Inch), Some((25_400.0, "in")));
         assert_eq!(shown_in("µm", Units::Mm), None);
