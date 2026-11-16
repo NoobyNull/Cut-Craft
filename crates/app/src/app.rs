@@ -93,7 +93,8 @@ struct Copied {
     names: std::collections::BTreeMap<u64, String>,
 }
 
-/// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id.
+/// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id, unless a
+/// reorder has moved it since it was first previewed (see [`CutCraftApp::preview_mark`]).
 fn preview_mark(id: EntityId) -> u32 {
     u32::try_from(id.0).unwrap_or(u32::MAX)
 }
@@ -1331,6 +1332,9 @@ struct CutCraftApp {
     /// What told the toolpaths apart at the last change, so a reorder, or its undo or redo,
     /// moving them between ids is seen (see [`follow`]).
     toolpath_keys: follow::Keys,
+    /// The mark each toolpath's cells take in the preview, where it is not its own id: the
+    /// one it was previewed under before a reorder moved it to another id.
+    preview_marks: std::collections::BTreeMap<EntityId, u32>,
     /// What a tool with no form (Group) warned of, in red at the foot of the tool panel, for
     /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
     /// too, takes it away.

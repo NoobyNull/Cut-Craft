@@ -59,6 +59,15 @@ fn moved(
 }
 
 impl CutCraftApp {
+    /// The mark toolpath `id`'s cells take in the preview: the same one all its life, so
+    /// its cuts keep its colour when a reorder moves it to another id.
+    pub(super) fn preview_mark(&self, id: EntityId) -> u32 {
+        self.preview_marks
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| super::preview_mark(id))
+    }
+
     /// Run each frame: once the job has changed, what follows a toolpath goes to the id the
     /// toolpath is now at.
     pub(super) fn follow_toolpaths(&mut self) {
@@ -74,6 +83,8 @@ impl CutCraftApp {
             .collect();
         let before = std::mem::replace(&mut self.toolpath_keys, Keys { at, keys });
         if before.at.map(|(job, _)| job) != at.map(|(job, _)| job) {
+            // another job: its toolpaths have marks of their own
+            self.preview_marks.clear();
             return;
         }
         let moved = moved(&before.keys, &self.toolpath_keys.keys);
@@ -82,8 +93,9 @@ impl CutCraftApp {
         }
     }
 
-    /// Toolpaths moved to other ids, old id to new: the toolpath an open form edits, and
-    /// the one Toolpath Summary is writing notes for, go with them.
+    /// Toolpaths moved to other ids, old id to new: the toolpath an open form edits, the
+    /// one Toolpath Summary is writing notes for, and the mark of each one's cells in the
+    /// preview (so they keep its colour) go with them.
     pub(super) fn toolpaths_moved(&mut self, moved: &BTreeMap<EntityId, EntityId>) {
         let follow = |id: &mut Option<EntityId>| {
             if let Some(to) = id.and_then(|id| moved.get(&id)) {
@@ -94,5 +106,16 @@ impl CutCraftApp {
             follow(&mut form.editing);
         }
         follow(&mut self.summary.picked);
+        let marks: Vec<(EntityId, u32)> = moved
+            .iter()
+            .map(|(&from, &to)| (to, self.preview_mark(from)))
+            .collect();
+        for (id, mark) in marks {
+            if mark == super::preview_mark(id) {
+                self.preview_marks.remove(&id);
+            } else {
+                self.preview_marks.insert(id, mark);
+            }
+        }
     }
 }

@@ -1140,7 +1140,7 @@ impl CutCraftApp {
         let source = self.preview_source();
         let (list, marks): (Vec<cut_craft_core::toolpath::Toolpath>, Vec<u32>) = toolpaths
             .iter()
-            .filter_map(|&id| Some((source.toolpaths.get(&id)?.clone(), super::preview_mark(id))))
+            .filter_map(|&id| Some((source.toolpaths.get(&id)?.clone(), self.preview_mark(id))))
             .unzip();
         drop(source);
         let start = (self.simulation.clone())
@@ -1733,19 +1733,24 @@ impl CutCraftApp {
                 view3d::painted(material, |_| Some(rgb(job.fill_colour)))
             }
             MachinedArea::ToolpathColor => {
-                let fills: std::collections::HashMap<u32, Option<[u8; 3]>> = self
-                    .doc
-                    .toolpaths
-                    .iter()
-                    .enumerate()
-                    .map(|(place, (&id, t))| (super::preview_mark(id), t.preview_colour(place)))
-                    .collect();
+                let fills = self.preview_fills();
                 view3d::painted(material, |id| fills.get(&id).copied().flatten().map(rgb))
             }
             MachinedArea::Lithophane => {
                 view3d::lit_through(material, rgb(job.colour), job.lithophane_light)
             }
         }
+    }
+
+    /// Each toolpath's colour in a Toolpath Color preview (none: no fill), by the mark its
+    /// cells take in the preview.
+    pub(super) fn preview_fills(&self) -> std::collections::HashMap<u32, Option<[u8; 3]>> {
+        self.doc
+            .toolpaths
+            .iter()
+            .enumerate()
+            .map(|(place, (&id, t))| (self.preview_mark(id), t.preview_colour(place)))
+            .collect()
     }
 
     /// The model's shape, `cells` across; while Orientate 3D Model shows its model whole,

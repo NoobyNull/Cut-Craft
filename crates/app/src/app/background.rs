@@ -168,7 +168,7 @@ impl CutCraftApp {
         let source = self.preview_source();
         let cuts: Vec<(u32, cut_craft_core::toolpath::Toolpath)> = ids
             .iter()
-            .filter_map(|&id| Some((super::preview_mark(id), source.toolpaths.get(&id)?.clone())))
+            .filter_map(|&id| Some((self.preview_mark(id), source.toolpaths.get(&id)?.clone())))
             .collect();
         drop(source);
         let what = match &cuts[..] {

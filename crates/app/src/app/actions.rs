@@ -194,6 +194,7 @@ impl CutCraftApp {
             height_applied_at: None,
             job_epoch: 0,
             toolpath_keys: super::follow::Keys::default(),
+            preview_marks: std::collections::BTreeMap::new(),
             tool_note: None,
             stale_known: 0,
             stale_while_form: false,

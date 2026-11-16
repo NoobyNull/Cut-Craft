@@ -15723,3 +15723,28 @@ fn the_toolpath_summary_s_notes_follow_their_toolpath_through_a_reorder() {
     h.frame(vec![]);
     assert_eq!(h.app.summary.picked, Some(EntityId(1)));
 }
+
+#[test]
+fn a_previewed_toolpath_s_cuts_keep_its_colour_through_a_reorder() {
+    let mut h = named_toolpaths();
+    h.app.job_epoch += 1;
+    h.frame(vec![]);
+    // the Pocket (id 1) was previewed: its cells carry its mark
+    let mark = h.app.preview_mark(EntityId(1));
+    let pocket = h.app.preview_fills()[&mark];
+    assert_eq!(pocket, h.app.doc.toolpaths[&EntityId(1)].preview_colour(0));
+    h.app
+        .apply(
+            "arrange_toolpaths",
+            &serde_json::json!({ "order": [2, 1, 3] }),
+        )
+        .unwrap();
+    h.frame(vec![]);
+    let now = h.app.doc.toolpaths[&EntityId(2)].preview_colour(1);
+    assert_eq!(h.app.preview_fills()[&mark], now, "the Pocket's swatch");
+    assert_eq!(
+        h.app.preview_mark(EntityId(2)),
+        mark,
+        "previewing the Pocket again marks its cells the same"
+    );
+}
