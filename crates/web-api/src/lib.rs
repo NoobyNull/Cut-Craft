@@ -19,7 +19,9 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 mod call;
+mod docs;
 pub mod job;
+pub mod openapi;
 
 pub use call::{Call, Pick};
 
@@ -245,7 +247,14 @@ struct Gate {
 }
 
 impl Gate {
+    /// The checks every request passes: the host, then (for calls) the token.
     fn check(&self, request: &tiny_http::Request) -> Result<(), ApiError> {
+        self.check_host(request)?;
+        self.check_token(request)
+    }
+
+    /// On localhost, the request must be addressed to localhost.
+    fn check_host(&self, request: &tiny_http::Request) -> Result<(), ApiError> {
         if self.local_only {
             let host = header(request, "Host").unwrap_or_default();
             if !is_local_host(&host) {
@@ -255,6 +264,11 @@ impl Gate {
                 });
             }
         }
+        Ok(())
+    }
+
+    /// While other computers are allowed, the request must carry the access token.
+    fn check_token(&self, request: &tiny_http::Request) -> Result<(), ApiError> {
         if let Some(token) = &self.token {
             let given = header(request, "Authorization")
                 .and_then(|h| h.strip_prefix("Bearer ").map(|t| t.trim().to_owned()));
@@ -305,13 +319,32 @@ fn serve(
     calls: &Sender<Pending>,
     wake: &(impl Fn() + Send),
 ) {
+    let docs = docs::config();
     for mut request in http.incoming_requests() {
-        let answer = gate
-            .check(&request)
-            .and_then(|()| read_call(&mut request))
-            .and_then(|call| ask_app(call, calls, wake));
         let method = request.method().to_string();
         let url = request.url().to_owned();
+        let path = url.split('?').next().unwrap_or_default().to_owned();
+        // the docs page is a web page: a browser cannot add the token to it, so it and the
+        // description it reads are shown without one (on localhost, still only to localhost).
+        // Every call tried from it needs the token as any other does.
+        if path == "/docs" || path.starts_with("/docs/") {
+            let page = gate
+                .check_host(&request)
+                .and_then(|()| docs::file(&path, &docs));
+            let _ = match page {
+                Ok(page) => request.respond(page),
+                Err(e) => request.respond(response(Err(e))),
+            };
+            continue;
+        }
+        let open = path == docs::DESCRIPTION;
+        let answer = if open {
+            gate.check_host(&request)
+        } else {
+            gate.check(&request)
+        }
+        .and_then(|()| read_call(&mut request))
+        .and_then(|call| ask_app(call, calls, wake));
         match &answer {
             Ok(_) => log::info!("Web API: {method} {url}"),
             Err(e) => log::info!(

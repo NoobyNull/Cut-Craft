@@ -60,9 +60,9 @@ fn call_with(
             request += "\r\n";
         }
         s.write_all(request.as_bytes()).unwrap();
-        let mut text = String::new();
-        s.read_to_string(&mut text).unwrap();
-        text
+        let mut bytes = vec![];
+        s.read_to_end(&mut bytes).unwrap();
+        bytes
     });
     for _ in 0..2000 {
         if client.is_finished() {
@@ -71,10 +71,36 @@ fn call_with(
         h.frame(vec![]);
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
-    let text = client.join().unwrap();
-    let status = text[9..12].parse().unwrap();
-    let json = text.split("\r\n\r\n").nth(1).unwrap_or_default();
-    (status, serde_json::from_str(json).unwrap_or(Value::Null))
+    let bytes = client.join().unwrap();
+    let split = bytes
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .unwrap_or(bytes.len() - 4);
+    let head = String::from_utf8_lossy(&bytes[..split]);
+    let status = head[9..12].parse().unwrap();
+    let body = &bytes[split + 4..];
+    let body = if head.contains("Transfer-Encoding: chunked") {
+        unchunk(body)
+    } else {
+        body.to_vec()
+    };
+    (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
+}
+
+/// A long answer (the description) comes in chunks, each led by its length in hex. Lengths
+/// count bytes, so a chunk can end inside a letter: they are joined as bytes.
+fn unchunk(mut rest: &[u8]) -> Vec<u8> {
+    let mut joined = vec![];
+    while let Some(end) = rest.windows(2).position(|w| w == b"\r\n") {
+        let size = std::str::from_utf8(&rest[..end]).unwrap_or_default();
+        let size = usize::from_str_radix(size.trim(), 16).unwrap_or(0);
+        if size == 0 {
+            break;
+        }
+        joined.extend_from_slice(&rest[end + 2..end + 2 + size]);
+        rest = &rest[end + 4 + size..];
+    }
+    joined
 }
 
 #[test]
@@ -314,4 +340,51 @@ fn this_computer_needs_no_token_but_open_to_the_network_every_call_does() {
     assert_eq!(status, 401);
     let (status, _) = call(&mut h, here, "GET", "status", None);
     assert_eq!(status, 200);
+}
+
+#[test]
+fn the_docs_page_offers_every_tool_and_menu_item_to_try() {
+    let (mut h, at) = switched_on();
+    let (status, doc) = call_with(&mut h, at, None, "GET", "openapi.json", None);
+    assert_eq!(status, 200, "{doc}");
+    let run = &doc["paths"]["/run"]["post"]["requestBody"]["content"]["application/json"];
+    let circle = &run["examples"]["draw_circle"]["value"];
+    assert_eq!(circle["command"], "draw_circle");
+    assert!(circle["params"]["radius"].is_number(), "{circle}");
+    let commands = run["schema"]["properties"]["command"]["enum"]
+        .as_array()
+        .unwrap();
+    assert!(commands.iter().any(|c| c == "profile_toolpath"));
+    let invoke = &doc["paths"]["/invoke"]["post"]["requestBody"]["content"]["application/json"];
+    assert_eq!(invoke["examples"]["undo"]["value"]["action"], "undo");
+    assert!(
+        invoke["examples"].get("exit").is_none(),
+        "Exit is not offered"
+    );
+    // on this computer the page offers no Authorize; open to the network it does
+    assert!(doc.get("security").is_none());
+    h.app.options.web_api.allow_network = true;
+    h.frame(vec![]);
+    let State::Running(open) = h.app.web_api_state().clone() else {
+        panic!("{:?}", h.app.web_api_state());
+    };
+    let here = SocketAddr::from(([127, 0, 0, 1], open.port()));
+    let (status, doc) = call_with(&mut h, here, None, "GET", "openapi.json", None);
+    assert_eq!(status, 200, "the page reads it without the token: {doc}");
+    assert_eq!(doc["security"], json!([{ "token": [] }]));
+    let (status, _) = call_with(&mut h, here, None, "GET", "job", None);
+    assert_eq!(status, 401, "calls tried from it still need the token");
+}
+
+#[test]
+fn options_points_to_the_docs_page_on_the_chosen_port() {
+    assert_eq!(
+        super::super::web_api::docs_address(8123),
+        "http://localhost:8123/docs/"
+    );
+    let page = Harness::new().app.help_markdown("web_api");
+    assert!(
+        page.contains("http://localhost:7340/docs/"),
+        "help points to /docs"
+    );
 }

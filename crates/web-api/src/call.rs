@@ -7,6 +7,8 @@ use serde_json::Value;
 /// One thing a caller asks Cut Craft to do or tell.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Call {
+    /// `GET openapi.json`: the description of every call, which the docs page shows.
+    OpenApi,
     /// `GET status`: the version, whether a job is open, its units, the last message.
     Status,
     /// `GET commands`: every tool, with its name, group and settings.
@@ -77,6 +79,7 @@ pub(crate) fn parse(route: &str, post: bool, body: Value) -> Result<Call, ApiErr
     };
     match (route, post) {
         ("status", false) => Ok(Call::Status),
+        ("openapi.json", false) => Ok(Call::OpenApi),
         ("commands", false) => Ok(Call::Commands),
         ("actions", false) => Ok(Call::Actions),
         ("job", false) => Ok(Call::Job),

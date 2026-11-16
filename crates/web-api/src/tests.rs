@@ -492,3 +492,100 @@ mod job {
         assert!(c["settings"]["properties"]["keep"].is_object());
     }
 }
+
+/// The raw reply to a GET of `path`, headers and all.
+fn get_raw(address: SocketAddr, path: &str, host: &str) -> Vec<u8> {
+    let mut stream = TcpStream::connect(address).unwrap();
+    stream
+        .write_all(
+            format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes(),
+        )
+        .unwrap();
+    let mut bytes = vec![];
+    stream.read_to_end(&mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn the_docs_page_opens_in_a_browser_without_the_token() {
+    let (address, _stop) = running(Some(TOKEN));
+    let to_page = String::from_utf8_lossy(&get_raw(address, "/docs", "localhost")).into_owned();
+    assert!(to_page.starts_with("HTTP/1.1 308"), "{to_page}");
+    assert!(to_page.contains("Location: /docs/"), "{to_page}");
+    let page = String::from_utf8_lossy(&get_raw(address, "/docs/", "localhost")).into_owned();
+    assert!(page.starts_with("HTTP/1.1 200"), "{page}");
+    assert!(page.contains("text/html"), "{page}");
+    // the page's own script, and the description it reads
+    let script = get_raw(address, "/docs/swagger-initializer.js", "localhost");
+    let script = String::from_utf8_lossy(&script);
+    assert!(script.starts_with("HTTP/1.1 200"), "{script}");
+    assert!(script.contains(docs::DESCRIPTION), "{script}");
+    let missing =
+        String::from_utf8_lossy(&get_raw(address, "/docs/no-such.js", "localhost")).into_owned();
+    assert!(missing.starts_with("HTTP/1.1 404"), "{missing}");
+}
+
+#[test]
+fn the_description_needs_no_token_but_every_call_still_does() {
+    let (address, _stop) = running(Some(TOKEN));
+    let reply = get(address, docs::DESCRIPTION, None);
+    assert_eq!(reply.status, 200);
+    assert_eq!(reply.body["call"], "OpenApi");
+    assert_eq!(get(address, "/api/v1/status", None).status, 401);
+    assert_eq!(get(address, "/api/v1/commands", None).status, 401);
+}
+
+#[test]
+fn on_localhost_the_docs_page_is_not_shown_to_another_host_name() {
+    let (address, _stop) = running(None);
+    for path in ["/docs/", docs::DESCRIPTION] {
+        let raw = get_raw(address, path, "evil.example:7340");
+        let reply = String::from_utf8_lossy(&raw);
+        assert!(reply.starts_with("HTTP/1.1 403"), "{path}: {reply}");
+    }
+}
+
+#[test]
+fn the_description_lists_every_tool_and_menu_item_with_an_example() {
+    let tools = [openapi::Tool {
+        id: "draw_circle",
+        name: "Draw Circle",
+        group: "Draw",
+        starts_with: serde_json::json!({ "radius": 10 }),
+    }];
+    let actions = [("undo".to_owned(), "Undo".to_owned())];
+    let doc = openapi::document(&tools, &actions, false);
+    assert_eq!(doc["openapi"], "3.0.3");
+    let run = &doc["paths"]["/run"]["post"]["requestBody"]["content"]["application/json"];
+    assert_eq!(
+        run["schema"]["properties"]["command"]["enum"],
+        serde_json::json!(["draw_circle"])
+    );
+    assert_eq!(
+        run["examples"]["draw_circle"]["value"],
+        serde_json::json!({ "command": "draw_circle", "params": { "radius": 10 } })
+    );
+    let invoke = &doc["paths"]["/invoke"]["post"]["requestBody"]["content"]["application/json"];
+    assert_eq!(
+        invoke["examples"]["undo"]["value"],
+        serde_json::json!({ "action": "undo" })
+    );
+    for path in [
+        "/status",
+        "/commands",
+        "/commands/{id}",
+        "/actions",
+        "/job",
+        "/select",
+    ] {
+        assert!(doc["paths"][path].is_object(), "{path}");
+    }
+    // Authorize is offered only when calls need the token
+    assert!(doc.get("security").is_none());
+    let open = openapi::document(&tools, &actions, true);
+    assert_eq!(open["security"], serde_json::json!([{ "token": [] }]));
+    assert_eq!(
+        open["components"]["securitySchemes"]["token"]["scheme"],
+        "bearer"
+    );
+}

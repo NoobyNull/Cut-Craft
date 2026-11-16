@@ -54,7 +54,25 @@ fix that (most often by picking another port), then press **Try Again** in Optio
 
 **Copy Command** under **Try it** copies a command (with your token in it, when other
 computers are allowed) to paste in a terminal (on Windows, in PowerShell use `curl.exe`). Cut Craft answers with its version and
-what it is doing.
+what it is doing. **Open Docs Page** opens the docs page (below).
+
+## The docs page
+
+Every call, and every tool and menu item, is listed on the **docs page**, ready to try in your
+web browser. While the Web API is running, press **Open Docs Page** in Options, or go to
+`http://localhost:7340/docs/` (with your own port in place of 7340).
+
+![The docs page in a web browser, listing every call](bytes://help/web-api-docs.png)
+
+1. Click a call, such as **POST /run**, to open it.
+2. Under **Examples**, pick a tool (or, under **POST /invoke**, a menu item): its settings
+   fill in, ready to change.
+3. Press **Execute**. Cut Craft does it in the window, and the page shows its answer, and
+   the `curl` command that does the same from a terminal or script.
+
+The page always shows what this copy of Cut Craft has, add-ons included. While other computers
+are allowed, press **Authorize** first and paste the access token: the page itself opens
+without it, but every call tried from it needs it. The page works without the internet.
 
 ## The calls
 

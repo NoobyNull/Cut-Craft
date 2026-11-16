@@ -4,8 +4,8 @@
 use super::{CutCraftApp, Screen, egui};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::Change;
-use cut_craft_web_api::job;
 use cut_craft_web_api::{Answer, ApiError, Call, Pending, Server, State};
+use cut_craft_web_api::{job, openapi};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
@@ -125,6 +125,7 @@ impl CutCraftApp {
                 "form": self.form.as_ref().map(|f| f.id),
                 "message": self.status.message,
             })),
+            Call::OpenApi => Ok(self.web_description()),
             Call::Commands => Ok(job::commands(&self.registry)),
             Call::Command(id) => job::command(&self.registry, &self.doc, id),
             Call::Actions => Ok(self.web_actions()),
@@ -162,6 +163,36 @@ impl CutCraftApp {
                 "No job is open. Open or start one in Cut Craft's window first.",
             ))
         }
+    }
+
+    /// `GET openapi.json`: every call, with each tool's and menu item's example, for the
+    /// docs page. Tools start from their plain settings, so the page (which asks for no
+    /// token) shows nothing of the open job.
+    fn web_description(&self) -> Value {
+        let tools: Vec<openapi::Tool<'_>> = self
+            .registry
+            .commands()
+            .map(|c| {
+                let m = c.meta();
+                openapi::Tool {
+                    id: c.id(),
+                    name: m.label,
+                    group: m.group,
+                    starts_with: c.default_params(),
+                }
+            })
+            .collect();
+        let actions: Vec<(String, String)> = self
+            .web_actions()
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|a| {
+                let text = |k: &str| a[k].as_str().unwrap_or_default().to_owned();
+                (text("id"), text("name"))
+            })
+            .collect();
+        openapi::document(&tools, &actions, self.options.web_api.allow_network)
     }
 
     /// `GET actions`: every menu item and tool button, by id and name, each with whether it
@@ -414,8 +445,29 @@ pub(super) fn options_section(
         ui.ctx().copy_text(example.replace("<token>", token));
         pressed = Some(Pressed::Copied);
     }
-    ui.label("Help ▸ Contents ▸ Web API lists every call.");
+    ui.add_space(ui.spacing().item_spacing.y);
+    ui.strong("Every call");
+    let page = docs_address(settings.port);
+    ui.label(format!(
+        "The docs page lists every call, and every tool and menu item, each ready to try in \
+         your web browser: {page}"
+    ));
+    let running = matches!(state, State::Running(_));
+    if ui
+        .add_enabled(running, egui::Button::new("Open Docs Page"))
+        .on_hover_hint("Open the docs page in your web browser")
+        .on_disabled_hover_text("The Web API must be running to show its docs page")
+        .clicked()
+    {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(&page));
+    }
+    ui.label("Help ▸ Contents ▸ Web API explains more.");
     pressed
+}
+
+/// The docs page on this computer: Swagger UI, where every call can be read about and tried.
+pub(super) fn docs_address(port: u16) -> String {
+    format!("http://localhost:{port}/docs/")
 }
 
 /// A first call to try: with `<token>` where the token goes when calls need one.
