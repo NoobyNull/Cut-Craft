@@ -737,7 +737,7 @@ say "not implemented yet".
     boundary vectors).
   - Split Component (by a closed vector: "- A" inside, "- B" outside), Emboss Component
     (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
-    component with no wall steeper than the draft angle), Create Cross Section Vector (drag
+    component with no wall steeper than the draft angle, originals hidden), Create Cross Section Vector (drag
     a line; the profile is drawn from it, height 1:1).
   - Extrude and Weave: shapes swept along drive rails (the form's count of vectors picked
     first). Open cross-sections after them are hung across the rail nearest each, where

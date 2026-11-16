@@ -1,8 +1,9 @@
 //! Add Draft to Model: a new component holding the visible model with no wall steeper than
 //! the draft angle allows (material is added at the foot of steep walls), for moulds.
-//! The components it came from stay visible.
+//! The components it came from are hidden, so the model keeps its height (the drafted copy
+//! takes their place; show them again to compare).
 
-use cut_craft_core::component::{Combine, Component, model_at_resolution};
+use cut_craft_core::component::{Combine, Component, model_at_resolution, shown_components};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
@@ -99,6 +100,11 @@ impl Command for AddDraft {
         }
         let name = format!("Draft {}°", p.draft_angle);
         let mut c = Change::builder(doc);
+        for id in shown_components(doc) {
+            let mut k = doc.components[&id].clone();
+            k.visible = false;
+            c.replace_component(id, k);
+        }
         c.add_component(Component::from_material(&name, Combine::Add, &model));
         Ok(c.finish())
     }
@@ -144,6 +150,17 @@ mod tests {
         assert!((top - 10.0).abs() < 1e-9, "the top is untouched");
         let far = made.height_at(Point::new(38.0, 20.0)).unwrap();
         assert!(far.abs() < 1e-9, "the skirt ends 10 mm out");
+    }
+
+    #[test]
+    fn the_model_keeps_its_height_the_originals_hidden() {
+        let mut doc = block();
+        run_on::<AddDraft>(&mut doc, &Params { draft_angle: 45.0 });
+        let first = doc.components.values().next().unwrap();
+        assert!(!first.visible, "the original is hidden");
+        let model = model_at_resolution(&doc);
+        let top = model.heights.iter().copied().fold(0.0, f64::max);
+        assert!((top - 10.0).abs() < 1e-9, "not doubled: {top}");
     }
 
     #[test]

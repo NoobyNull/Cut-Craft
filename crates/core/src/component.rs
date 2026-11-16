@@ -721,6 +721,26 @@ pub fn silhouette(parts: &[&Component]) -> Vec<crate::geometry::Path> {
         .collect()
 }
 
+/// The components the model is made of: shown, on a shown level (a component whose level is
+/// gone counting as on the first). A tool that builds a new component from the model hides
+/// these, so the model keeps its look and is not counted twice.
+pub fn shown_components(doc: &Document) -> Vec<EntityId> {
+    let first = doc.levels.keys().next().copied().unwrap_or(0);
+    doc.components
+        .iter()
+        .filter(|(_, c)| c.visible)
+        .filter(|(_, c)| {
+            let level = if doc.levels.contains_key(&c.level) {
+                c.level
+            } else {
+                first
+            };
+            doc.levels.get(&level).is_some_and(|l| l.visible)
+        })
+        .map(|(&id, _)| id)
+        .collect()
+}
+
 /// What a "selected components" tool works on: the selected components (else the newest
 /// one), and the single component they make: the one itself, or several baked together over
 /// the job. Removing the returned ids and adding the component replaces them.
