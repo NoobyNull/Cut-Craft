@@ -104,7 +104,7 @@ pub(super) fn summary(
     );
     let spread = match tab.spacing {
         TabSpacing::Automatic => format!(
-            "about one every {}, 3 a shape (fewer if small)",
+            "about one every {}, 3 or more a shape (fewer if small)",
             shown(tab.distance, units)
         ),
         TabSpacing::ConstantNumber => format!("{} a shape", tab.number),
