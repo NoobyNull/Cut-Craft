@@ -81,7 +81,8 @@ it needs only the `ADDON_RELEASE_TOKEN` secret.
   and its repository.
 - **Install from GitHub** takes any repository, typed as `owner/name` or pasted as a link.
 - Opening the window checks each installed add-on's repository. When there is a newer
-  release, it offers **Update to x.y.z**. **Remove** deletes the add-on's folder.
+  release, it offers **Update to x.y.z**. **Remove** asks first, then deletes the add-on's folder;
+  a removed gadget leaves the Gadgets menu when Cut Craft restarts.
 
 Tools may also start an install themselves. Relief from Photo has **Install Depth
 Add-on**, which installs the official Depth entry and shows progress in its own form.

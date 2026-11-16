@@ -598,7 +598,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "addons",
-        "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository",
+        "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts",
     ),
     (
         "community:0",
