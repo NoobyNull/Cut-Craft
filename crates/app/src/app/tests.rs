@@ -11476,6 +11476,44 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
 }
 
 #[test]
+fn add_tabs_with_nothing_selected_and_delete_all_tabs_leave_the_tab_settings_alone() {
+    let mut h = profile_form();
+    h.app.doc.selection.clear();
+    let params = |h: &Harness| h.app.form.as_ref().unwrap().params.clone();
+    assert_eq!(params(&h)["tabs"], "none");
+    h.ctx
+        .data_mut(|d| d.insert_temp(egui::Id::unique("edit_tabs"), true));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.click(h.text_at("Add Tabs").expect("the window"), Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(params(&h)["tabs"], "none", "nothing added: tabs stay off");
+    assert_eq!(params(&h)["tab"]["spacing"], "automatic");
+    assert!(
+        h.app.status.message.contains("select the vectors"),
+        "{}",
+        h.app.status.message
+    );
+    // tabs placed by hand, then turned off: deleting them leaves them off
+    {
+        let p = &mut h.app.form.as_mut().unwrap().params;
+        p["tab"]["spacing"] = "placed".into();
+        p["tab_points"] = serde_json::json!([[10.0, 30.0]]);
+    }
+    h.frame(vec![]);
+    h.click(h.text_at("Delete All Tabs").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(params(&h)["tab_points"], serde_json::json!([]));
+    assert_eq!(params(&h)["tabs"], "none", "still off");
+    assert_eq!(params(&h)["tab"]["spacing"], "placed");
+    assert!(
+        h.app.status.message.contains("click the vectors"),
+        "says how to place more: {}",
+        h.app.status.message
+    );
+}
+
+#[test]
 fn a_toolpath_made_with_cut_right_through_reads_as_the_materials_thickness() {
     let mut h = profile_form();
     let thickness = h.app.doc.job.thickness;

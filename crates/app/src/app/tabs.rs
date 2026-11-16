@@ -223,11 +223,16 @@ impl CutCraftApp {
                             .button("Add Tabs")
                             .on_hover_hint(
                                 "Put the tabs on the selected vectors, as set above, to move \
-                                 by hand",
+                                 by hand (select the vectors first: with none selected, \
+                                 nothing changes)",
                             )
                             .clicked();
                         clear = ui
                             .add_enabled(placed > 0, egui::Button::new("Delete All Tabs"))
+                            .on_hover_hint(
+                                "Take every tab off; they stay placed by hand, so click the \
+                                 vectors to put new ones on",
+                            )
                             .clicked();
                     });
                     ui.label(format!("{placed} tabs placed"));
@@ -242,29 +247,37 @@ impl CutCraftApp {
             if spread.spacing == TabSpacing::Placed {
                 spread.spacing = TabSpacing::ConstantNumber;
             }
-            if add || clear {
+            // tabs added are placed, to move by hand, and turn tabs on; with nothing selected
+            // none are added and the settings stay as they were
+            let on = if tabs == Tabs::None { Tabs::Flat } else { tabs };
+            if add && self.add_tabs(on, spread, tool.diameter) {
                 tab.spacing = TabSpacing::Placed;
-                if tabs == Tabs::None {
-                    tabs = Tabs::Flat;
-                }
+                tabs = on;
             }
+            let Some(form) = self.form.as_mut() else {
+                return;
+            };
+            let params = &mut form.params;
             params["tabs"] = serde_json::to_value(tabs).expect("tabs serialise");
             params["tab"] = serde_json::to_value(tab).expect("tab settings serialise");
             form.dirty |= before != (params["tabs"].clone(), params["tab"].clone());
             if clear {
+                // still placed by hand, on or off as they were: say how to place more
                 params["tab_points"] = serde_json::json!([]);
                 form.dirty = true;
-            }
-            if add {
-                self.add_tabs(tabs, spread, tool.diameter);
+                self.status.set_message(
+                    "All tabs deleted: click the vectors in the 2D view to place new ones, or \
+                     pick another spacing",
+                );
             }
         }
         ui.data_mut(|d| d.insert_temp(id, open));
     }
 
     /// Tabs spread on each selected vector by `tab`'s number or distance (by number when it
-    /// was set to be placed by hand) and placement, in place of those placed before.
-    fn add_tabs(&mut self, tabs: Tabs, tab: TabSettings, tool_diameter: f64) {
+    /// was set to be placed by hand) and placement, in place of those placed before. Whether
+    /// any were added (none with nothing selected).
+    fn add_tabs(&mut self, tabs: Tabs, tab: TabSettings, tool_diameter: f64) -> bool {
         let entry = Entry {
             tabs,
             tab,
@@ -287,7 +300,7 @@ impl CutCraftApp {
         if points.is_empty() {
             self.status
                 .set_message("select the vectors to put the tabs on");
-            return;
+            return false;
         }
         self.status
             .set_message(&format!("{} tabs added", points.len()));
@@ -295,6 +308,7 @@ impl CutCraftApp {
             form.params["tab_points"] = serde_json::json!(points);
             form.dirty = true;
         }
+        true
     }
 }
 
