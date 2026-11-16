@@ -503,7 +503,7 @@ pub const HINTS: &[(&str, &str)] = &[
     (
         "undo_last_preview",
         "Undo Last Preview: goes back to the preview as it was before the last Preview or Reset \
-         Preview, once",
+         Preview, once, turned over to the side the job is on now",
     ),
     (
         "preview_quality_1",

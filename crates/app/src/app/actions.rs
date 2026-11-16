@@ -719,10 +719,13 @@ impl CutCraftApp {
             "preview_all_toolpaths" => self.preview_all(false),
             "preview_visible_toolpaths" => self.preview_all(true),
             "undo_last_preview" => {
-                if let Some(before) = self.before_preview.take() {
-                    self.simulation = before.0;
+                if let Some(super::BeforePreview(material, side)) = self.before_preview.take() {
+                    self.simulation = material;
                     self.kept_playback = None;
                     (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+                    // made before Swap Sides: turned over to the side the job is on now
+                    self.preview_side = side;
+                    self.follow_side();
                     self.status.set_message("Undid the last preview");
                 }
             }
@@ -730,7 +733,10 @@ impl CutCraftApp {
                 // a playing preview stops first, keeping what it has cut, so Undo Last
                 // Preview brings back what was showing
                 self.finish_playback();
-                self.before_preview = Some(super::BeforePreview(self.simulation.take()));
+                self.before_preview = Some(super::BeforePreview(
+                    self.simulation.take(),
+                    self.preview_side,
+                ));
                 (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
                 self.kept_playback = None;

@@ -429,9 +429,10 @@ enum Info {
     Help(&'static str),
 }
 
-/// The previewed material before a preview: `None` was uncut material.
+/// The previewed material before a preview (`None` was uncut material), and the side
+/// it was made on (`true` the bottom), so Undo Last Preview turns it over to the job's side.
 #[derive(Clone, Debug)]
-pub(super) struct BeforePreview(Option<Material>);
+pub(super) struct BeforePreview(Option<Material>, bool);
 
 /// A save held while the user chooses what happens to an earlier save's G-code.
 pub(super) struct EarlierAsk {

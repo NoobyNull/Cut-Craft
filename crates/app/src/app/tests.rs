@@ -16465,3 +16465,39 @@ fn a_fine_bit_is_noted_under_the_controls_while_its_preview_plays() {
         );
     }
 }
+
+#[test]
+fn undo_last_preview_after_swap_sides_brings_the_preview_back_turned_over_with_the_job() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("pocket_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let up = h.app.simulation.clone().expect("previewed").heights;
+    assert!(up.iter().any(|&z| z < 0.0), "the pocket is cut");
+    h.app.invoke(&h.ctx, "reset_preview");
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    h.frame(vec![]);
+    assert!(h.app.doc.bottom_side);
+    h.app.invoke(&h.ctx, "undo_last_preview");
+    h.frame(vec![]);
+    let back = h.app.simulation.as_ref().expect("brought back");
+    assert!(
+        back.heights.iter().all(|&z| z == 0.0),
+        "the job is on its other side, so that side is up, uncut"
+    );
+    assert_eq!(
+        back.other_side.as_deref().map(|m| &m.heights),
+        Some(&up),
+        "the side the preview was made on is underneath"
+    );
+    // swapped back, the preview is up again
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    assert!(!h.app.doc.bottom_side);
+    assert_eq!(h.app.simulation.as_ref().map(|m| &m.heights), Some(&up));
+}

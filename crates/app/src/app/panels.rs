@@ -1078,7 +1078,10 @@ impl CutCraftApp {
             .collect();
         if self.display.animate_preview {
             self.finish_playback();
-            self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+            self.before_preview = Some(super::BeforePreview(
+                self.simulation.clone(),
+                self.preview_side,
+            ));
             self.play(&visible, true, move |app| {
                 app.preview_other_side(visible_only);
             });
@@ -1094,7 +1097,10 @@ impl CutCraftApp {
             return;
         }
         self.finish_playback();
-        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        self.before_preview = Some(super::BeforePreview(
+            self.simulation.clone(),
+            self.preview_side,
+        ));
         self.play(ids, true, |_| {});
     }
 
@@ -1102,7 +1108,10 @@ impl CutCraftApp {
     fn preview_fresh(&mut self, ids: &[EntityId], then: impl FnOnce(&mut Self) + 'static) {
         self.finish_playback();
         // the preview before stays shown until this one is cut
-        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        self.before_preview = Some(super::BeforePreview(
+            self.simulation.clone(),
+            self.preview_side,
+        ));
         let fresh = Material::new(&self.doc.job, self.display.preview_cells());
         self.preview_in_background(ids, fresh, then);
     }
@@ -1315,7 +1324,10 @@ impl CutCraftApp {
     pub(super) fn preview_toolpath(&mut self, id: EntityId) {
         if self.display.animate_preview {
             self.finish_playback();
-            self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+            self.before_preview = Some(super::BeforePreview(
+                self.simulation.clone(),
+                self.preview_side,
+            ));
             self.play(&[id], false, |_| {});
             return;
         }
@@ -1323,7 +1335,10 @@ impl CutCraftApp {
         if !self.preview_source().toolpaths.contains_key(&id) {
             return;
         }
-        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        self.before_preview = Some(super::BeforePreview(
+            self.simulation.clone(),
+            self.preview_side,
+        ));
         // cut into the preview so far (on a block Job Setup has not changed since)
         let start = (self.simulation.clone())
             .filter(|m| m.covers(&self.doc.job))
@@ -3006,7 +3021,7 @@ impl CutCraftApp {
             self.kept_playback = None;
         }
         if removed > 0 {
-            self.before_preview = Some(super::BeforePreview(before));
+            self.before_preview = Some(super::BeforePreview(before, self.preview_side));
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
             self.status.set_message(
                 "Removed the piece cut free: Undo Last Preview on the Toolpaths page brings it back",
