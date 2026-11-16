@@ -1262,10 +1262,20 @@ impl CutCraftApp {
         // moves saved, which the tolerance may have straightened
         let crossing = self.not_kept_out(&thinned, plan);
         if !crossing.is_empty() {
+            let clippable = plan
+                .iter()
+                .flatten()
+                .filter_map(|id| thinned.toolpaths.get(id))
+                .any(|t| crossing.contains(&t.name) && can_clip(t));
+            let way = if clippable {
+                format!(", or turn on clipping ({CLIP_SETTING}) and recalculate")
+            } else {
+                " (laser and drill bank toolpaths are not clipped: move the part or the zone)"
+                    .to_owned()
+            };
             return Err(format!(
                 "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
-                 their clearance are right, or turn on clipping ({CLIP_SETTING}) and \
-                 recalculate",
+                 their clearance are right{way}",
                 crossing.join(", ")
             ));
         }
@@ -1289,15 +1299,18 @@ impl CutCraftApp {
     /// Options not allowing it to be clipped there (or it being a laser or drill bank
     /// toolpath, which are not clipped). A clamp is never cut by mistake.
     pub(super) fn keep_out_refusal(&self, change: &Change) -> Option<String> {
+        let mut clippable = false;
         let refused: Vec<String> = change
             .toolpaths_making()
             .filter_map(|t| {
                 let zones = self.zones_entered(t);
+                clippable |= !zones.is_empty() && can_clip(t);
                 (!zones.is_empty())
                     .then(|| format!("{} would cut into {}", t.name, zones.join(" and ")))
             })
             .collect();
-        let way = if self.doc.clip_keep_out {
+        // clipping can't help a laser or drill bank toolpath: they are never clipped
+        let way = if self.doc.clip_keep_out || !clippable {
             "Move the part or the zone (laser and drill bank toolpaths are not clipped)"
         } else {
             &format!(
@@ -6664,6 +6677,12 @@ fn model_size(faces: &[cmd_orientate_3d_model::Seen]) -> Option<[f64; 3]> {
 /// How a toolpath refused for cutting into a keep-out zone is said to be (the form's message
 /// then explains how to allow clipping when hovered).
 pub(super) const KEEP_OUT_REFUSED: &str = "Not made, to keep out of a keep-out zone";
+
+/// Whether clipping at keep-out zones can keep `toolpath` out of them: not a laser's (its
+/// power goes with each move) or a drill bank's (its head plunges whole).
+fn can_clip(toolpath: &cut_craft_core::toolpath::Toolpath) -> bool {
+    toolpath.power.is_empty() && toolpath.drill_bank.is_none()
+}
 
 /// Where clipping at keep-out zones is turned on.
 pub(super) const CLIP_SETTING: &str =

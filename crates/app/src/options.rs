@@ -466,7 +466,9 @@ pub struct ToolpathSettings {
     pub keep_out_labels: bool,
     /// Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
     /// made. On: it is made with the part under the zone left uncut, the tool lifting over
-    /// the zone, as if the zone were cut out of whatever is under it
+    /// the zone, as if the zone were cut out of whatever is under it. Either way, moves
+    /// across a zone go round it. Laser and drill bank toolpaths are never clipped: move the
+    /// part or the zone for those
     #[serde(default)]
     #[schemars(title = "Clip toolpaths at keep-out zones")]
     pub clip_at_keep_out_zones: bool,

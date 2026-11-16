@@ -1484,18 +1484,36 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    /// `toolpath` with its rapids routed round the keep-out zones, and when clipping is on,
-    /// what would cut into one left out (laser toolpaths, whose power runs move for move, as
-    /// they are; drill banks, whose hits are their moves, not clipped).
+    /// `toolpath` with its rapids routed round the keep-out zones (a laser's with the laser
+    /// off), and when clipping is on, what would cut into one left out (laser toolpaths,
+    /// whose power runs move for move, and drill banks, whose hits are their moves, not
+    /// clipped).
     fn kept_out(&self, mut toolpath: Toolpath) -> Toolpath {
         let zones = self.doc.keep_out_zones();
-        if !zones.is_empty() && toolpath.power.is_empty() {
-            if self.doc.clip_keep_out && toolpath.drill_bank.is_none() {
+        if !zones.is_empty() {
+            // a laser's lines are not clipped (its power goes with each move), only its
+            // rapids routed round
+            let laser = !toolpath.power.is_empty();
+            if self.doc.clip_keep_out && toolpath.drill_bank.is_none() && !laser {
                 let radius = toolpath.tool.diameter / 2.0;
                 let safe = self.doc.job.clearance;
                 toolpath.moves = crate::keep_out::clip(&zones, &toolpath.moves, radius, safe);
             }
             let (moves, origin, _) = crate::keep_out::route_indexed(&zones, &toolpath.moves);
+            // the ways round are rapids, with the laser off; every other move keeps its power
+            if laser {
+                toolpath.power = moves
+                    .iter()
+                    .zip(&origin)
+                    .map(|(m, &o)| {
+                        if m.kind == crate::toolpath::MoveKind::Rapid {
+                            0.0
+                        } else {
+                            toolpath.power.get(o).copied().unwrap_or(0.0)
+                        }
+                    })
+                    .collect();
+            }
             // a drill bank's plunges keep their moves, and the ways round that lead to them
             if let Some(bank) = &mut toolpath.drill_bank {
                 let at = |old: usize| origin.partition_point(|&o| o < old);

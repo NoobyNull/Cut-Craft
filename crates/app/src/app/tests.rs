@@ -15796,3 +15796,38 @@ fn saving_while_tiling_is_on_says_so() {
     let plain = CutCraftApp::saved_message(&[path.to_path_buf()], path, false);
     assert_eq!(plain, "Saved toolpaths to sign.nc");
 }
+
+#[test]
+fn a_laser_cutting_into_a_keep_out_zone_is_not_told_to_turn_on_clipping() {
+    use cut_craft_core::toolpath::{Move, MoveKind};
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::with_toolpath();
+    h.app.doc.clip_keep_out = false;
+    h.app.doc.keep_out = vec![cut_craft_core::keep_out::KeepOutZone::new(
+        "Clamp",
+        cut_craft_core::testing::square(40.0, -10.0, 20.0),
+    )];
+    let mut t = h.app.doc.toolpaths.values().next().unwrap().clone();
+    let at = |kind, x: f64, z: f64| Move {
+        kind,
+        to: cut_craft_core::glam::DVec3::new(x, 0.0, z),
+    };
+    // a line burned right across the clamp
+    t.moves = vec![
+        at(MoveKind::Rapid, 0.0, 5.0),
+        at(MoveKind::Plunge, 0.0, 0.0),
+        at(MoveKind::Cut, 100.0, 0.0),
+    ];
+    t.power = vec![0.0, 0.0, 0.8];
+    let mut c = Change::builder(&h.app.doc);
+    c.add_toolpath(t.clone());
+    let why = h.app.keep_out_refusal(&c.finish()).expect("refused");
+    assert!(!why.contains("Clip toolpaths"), "{why}");
+    assert!(why.contains("laser"), "{why}");
+    // a router's toolpath is still told it can be clipped
+    t.power.clear();
+    let mut c = Change::builder(&h.app.doc);
+    c.add_toolpath(t);
+    let why = h.app.keep_out_refusal(&c.finish()).expect("refused");
+    assert!(why.contains("Clip toolpaths"), "{why}");
+}
