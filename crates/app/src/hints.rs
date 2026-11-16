@@ -518,7 +518,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "create_component_from_toolpath_preview",
-        "Create Component from Toolpath Preview: turns the previewed, cut material into a 3D component, to carve on or reuse",
+        "Create Component from Toolpath Preview: turns the previewed, cut material into a 3D component, to carve on or reuse. It goes on the level of the component picked in the tree, else the top shown level, and the status bar names it",
     ),
     (
         "segment_3d_model_file",

@@ -15437,3 +15437,84 @@ fn the_status_bar_names_the_level_a_new_component_went_on() {
         h.app.status.message
     );
 }
+
+#[test]
+fn a_component_from_the_toolpath_preview_goes_on_the_top_shown_level_and_says_so() {
+    use cut_craft_core::component::Level;
+    let mut h = Harness::new();
+    // the first level hidden, a second one shown above it
+    h.app.doc.levels.get_mut(&0).unwrap().visible = false;
+    h.app.doc.levels.insert(
+        1,
+        Level {
+            name: "Top".into(),
+            ..Level::default()
+        },
+    );
+    let job = h.app.doc.job;
+    h.app.simulation = Some(cut_craft_core::simulation::Material::new(&job, 50));
+    h.app.component_from_preview();
+    assert_eq!(h.app.doc.components.values().last().unwrap().level, 1);
+    assert!(
+        h.app.status.message.contains("on level Top"),
+        "{}",
+        h.app.status.message
+    );
+}
+
+#[test]
+fn the_status_bar_names_no_level_when_a_tool_replaces_components() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let shape = h.app.registry.get("create_shape").unwrap().default_params();
+    h.app.apply("create_shape", &shape).unwrap();
+    // Split replaces the component it cuts by two pieces: not a new component
+    let piece = *h.app.doc.components.keys().next_back().unwrap();
+    h.rectangle(0.0, 0.0, 30.0, 30.0);
+    h.app.doc.selected_components = [piece].into_iter().collect();
+    let none = h.app.registry.get("split").unwrap().default_params();
+    h.app.apply("split", &none).unwrap();
+    let said = h.app.status.message.clone();
+    assert!(said.starts_with("Split Component applied"), "{said}");
+    assert!(!said.contains("level"), "{said}");
+}
+
+#[test]
+fn only_new_components_all_on_one_level_have_their_level_named() {
+    use cut_craft_core::component::{Component, Level};
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let shape = h.app.registry.get("create_shape").unwrap().default_params();
+    h.app.apply("create_shape", &shape).unwrap();
+    let doc = &h.app.doc;
+    let made = doc.components.values().next().unwrap().clone();
+    let on = |level| Component {
+        level,
+        ..made.clone()
+    };
+    // one new component: its level
+    let mut c = Change::builder(doc);
+    c.add_component(on(0));
+    assert_eq!(CutCraftApp::new_components_level(&c.finish()), Some(0));
+    // new components shared over levels (Slice Model): none named
+    let mut c = Change::builder(doc);
+    c.add_component(on(0));
+    c.add_component(on(1));
+    assert_eq!(CutCraftApp::new_components_level(&c.finish()), None);
+    // a tool that sets out levels itself (Slice Model, Bake): none named
+    let mut c = Change::builder(doc);
+    c.set_level(
+        1,
+        Some(Level {
+            name: "Slice 1".into(),
+            ..Level::default()
+        }),
+    );
+    c.add_component(on(1));
+    assert_eq!(CutCraftApp::new_components_level(&c.finish()), None);
+    // a component replaced by remove and add (Split, Emboss, Sculpt): none named
+    let mut c = Change::builder(doc);
+    c.remove_component(*doc.components.keys().next().unwrap());
+    c.add_component(on(0));
+    assert_eq!(CutCraftApp::new_components_level(&c.finish()), None);
+}

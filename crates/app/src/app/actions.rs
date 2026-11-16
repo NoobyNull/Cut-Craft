@@ -3818,6 +3818,37 @@ impl CutCraftApp {
         change
     }
 
+    /// The level `change`'s new components all went on, for the status bar to name. None
+    /// when it makes no new component, shares them over several levels, sets out levels
+    /// itself (Slice Model, Bake: it says what it showed and hid), or replaces components
+    /// by removing and adding them (Split, Emboss, Sculpt): there is no new component then.
+    pub(super) fn new_components_level(change: &Change) -> Option<u64> {
+        use cut_craft_core::Edit;
+        let mut levels = change.edits.iter().filter_map(|e| match e {
+            Edit::AddComponent { component, .. } => Some(component.level),
+            _ => None,
+        });
+        let first = levels.next()?;
+        let replaces = change
+            .edits
+            .iter()
+            .any(|e| matches!(e, Edit::RemoveComponent { .. } | Edit::SetLevel { .. }));
+        (!replaces && levels.all(|l| l == first)).then_some(first)
+    }
+
+    /// ": new component on level <name>" for the status bar, saying when that level is
+    /// hidden so a new shape that cannot be seen is not taken for lost.
+    fn placed_on(&self, level: u64) -> String {
+        self.doc.levels.get(&level).map_or_else(String::new, |l| {
+            let hidden = if l.visible {
+                ""
+            } else {
+                " (hidden: show the level to see it)"
+            };
+            format!(": new component on level {}{hidden}", l.name)
+        })
+    }
+
     /// What command `id` made with `params` (or why it made nothing) put into the job: onto
     /// the import level, into the picked toolpath group, as one undo; then whatever the
     /// command goes on to do.
@@ -3842,11 +3873,8 @@ impl CutCraftApp {
             None => change,
         };
         let (made, notes) = (change.toolpaths_made(), change.notes.clone());
-        // the level the last component it made went on, for the status bar
-        let new_level = change.edits.iter().rev().find_map(|e| match e {
-            cut_craft_core::Edit::AddComponent { component, .. } => Some(component.level),
-            _ => None,
-        });
+        // the level the new components went on, for the status bar
+        let new_level = Self::new_components_level(&change);
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
@@ -3870,17 +3898,7 @@ impl CutCraftApp {
         {
             form.params = fresh;
         }
-        let placed =
-            new_level
-                .and_then(|l| self.doc.levels.get(&l))
-                .map_or_else(String::new, |level| {
-                    let hidden = if level.visible {
-                        ""
-                    } else {
-                        " (hidden: show the level to see it)"
-                    };
-                    format!(": new component on level {}{hidden}", level.name)
-                });
+        let placed = new_level.map_or_else(String::new, |l| self.placed_on(l));
         self.status
             .set_message(&format!("{} applied{placed}", cmd.meta().label));
         // new keep-out zones: the toolpaths are made again round them
@@ -6139,8 +6157,13 @@ impl CutCraftApp {
                 &block,
             );
             let mut c = Change::builder(&self.doc);
-            c.add_component(component);
-            self.record(Ok(c.finish()), "Made a component from the toolpath preview");
+            let id = c.add_new_component(component);
+            let level = c.component(id).map_or(0, |k| k.level);
+            let done = format!(
+                "Made a component from the toolpath preview{}",
+                self.placed_on(level)
+            );
+            self.record(Ok(c.finish()), &done);
         }
     }
 
