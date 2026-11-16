@@ -2,8 +2,8 @@
 //! program) read back as toolpaths, one for each tool it uses, to preview, check and save
 //! again through another post.
 //!
-//! Read: G0 / G1 / G2 / G3 (arcs in the XY plane, by I J centre or R radius), G20 / G21,
-//! G90 / G91, F, S and T with M6. Comments in brackets or after `;` and line numbers are
+//! Read: G0 / G1 / G2 / G3 (arcs by centre or R radius, in the plane G17 / G18 / G19 picks:
+//! XY by I J, XZ by I K, YZ by J K), G20 / G21, G90 / G91, F, S and T with M6. Comments in brackets or after `;` and line numbers are
 //! passed over. Drilling cycles (G81 to G89) are refused with a message, as reading them
 //! wrongly would show holes where none are cut.
 
@@ -21,7 +21,9 @@ pub struct Params {
     /// The toolpath's name; with more than one tool in the file, each is named after it and
     /// its tool number
     pub name: String,
-    /// The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt)
+    /// The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt). Straight moves and arcs are
+    /// read, arcs in the XY plane and the upright XZ and YZ ones too (G17, G18, G19); a
+    /// drilling cycle is not
     pub file: String,
     /// The tool the file cuts with: its shape and size draw the preview; the file's own
     /// feed rate (from its first cutting move), plunge rate (from its first straight-down
@@ -187,6 +189,19 @@ impl Part {
     }
 }
 
+impl Part {
+    /// `made`, a feed move, made at `f` mm/min: its plunge rate if it goes straight down,
+    /// else its feed rate, unless one was found before.
+    fn fed_at(&mut self, f: f64, made: &[Move]) {
+        if made.iter().all(|m| m.kind == MoveKind::Plunge) {
+            self.plunge.get_or_insert(f);
+        } else {
+            self.feed.get_or_insert(f);
+        }
+        add_once(&mut self.feeds, f);
+    }
+}
+
 /// `values` with `v` added, unless it is there already.
 fn add_once(values: &mut Vec<f64>, v: f64) {
     if !values.iter().any(|&w| (w - v).abs() < 1e-6) {
@@ -215,6 +230,7 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
     // the machine's position, in the file's coordinates converted to mm
     let mut at = DVec3::new(home.x, home.y, job.machine_z(home.z));
     let (mut scale, mut absolute, mut motion) = (1.0, true, None::<u32>);
+    let mut plane = Plane::Xy;
     let mut parts = vec![Part::default()];
     // a T picks the next tool; the change itself comes with M6, on its line or later
     let mut next_tool = None;
@@ -240,6 +256,9 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
                     let code = (v * 10.0).round() as i64;
                     match code {
                         0 | 10 | 20 | 30 => motion = Some(u32::try_from(code / 10).unwrap_or(0)),
+                        170 => plane = Plane::Xy,
+                        180 => plane = Plane::Xz,
+                        190 => plane = Plane::Yz,
                         200 => scale = MM_PER_INCH,
                         210 => scale = 1.0,
                         900 => absolute = true,
@@ -290,16 +309,11 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
             continue;
         };
         let to = DVec3::new(axis('X', at.x), axis('Y', at.y), axis('Z', at.z));
-        let made = moves_to(at, to, kind, &value, scale)
+        let made = moves_to(at, to, kind, plane, &value, scale)
             .map_err(|e| format!("line {line_number}: {e}"))?;
         let part = parts.last_mut().expect("a part");
         if let Some(f) = rate.filter(|_| kind != 0 && to != at) {
-            if made.iter().all(|m| m.kind == MoveKind::Plunge) {
-                part.plunge.get_or_insert(f);
-            } else {
-                part.feed.get_or_insert(f);
-            }
-            add_once(&mut part.feeds, f);
+            part.fed_at(f, &made);
         }
         part.moves.extend(made.into_iter().map(|mut m| {
             m.to.z -= bed;
@@ -314,12 +328,52 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
     Ok(parts)
 }
 
-/// The moves of one G0 to G3 (`kind` 0 to 3) from `at` to `to`, an arc's in chords; the
-/// line's words are read by `value` in the file's units, `scale` mm each.
+/// The plane arcs are cut in (G17, G18, G19).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Plane {
+    Xy,
+    Xz,
+    Yz,
+}
+
+impl Plane {
+    /// `p` with the plane's two axes first and the one it turns round last, the pair in the
+    /// order that makes "clockwise" the same seen from that axis's plus end as in XY: Z X
+    /// for G18, Y Z for G19.
+    fn flat(self, p: DVec3) -> DVec3 {
+        match self {
+            Self::Xy => p,
+            Self::Xz => DVec3::new(p.z, p.x, p.y),
+            Self::Yz => DVec3::new(p.y, p.z, p.x),
+        }
+    }
+
+    /// `flat` undone.
+    fn back(self, p: DVec3) -> DVec3 {
+        match self {
+            Self::Xy => p,
+            Self::Xz => DVec3::new(p.y, p.z, p.x),
+            Self::Yz => DVec3::new(p.z, p.x, p.y),
+        }
+    }
+
+    /// The letters giving an arc's centre, in `flat`'s order.
+    fn centre_letters(self) -> (char, char) {
+        match self {
+            Self::Xy => ('I', 'J'),
+            Self::Xz => ('K', 'I'),
+            Self::Yz => ('J', 'K'),
+        }
+    }
+}
+
+/// The moves of one G0 to G3 (`kind` 0 to 3) from `at` to `to`, an arc's in chords in
+/// `plane`; the line's words are read by `value` in the file's units, `scale` mm each.
 fn moves_to(
     at: DVec3,
     to: DVec3,
     kind: u32,
+    plane: Plane,
     value: &impl Fn(char) -> Option<f64>,
     scale: f64,
 ) -> Result<Vec<Move>, String> {
@@ -336,20 +390,24 @@ fn moves_to(
         }
         _ => {
             let clockwise = kind == 2;
-            let centre = match (value('I'), value('J'), value('R')) {
-                (None, None, Some(radius)) => centre_from_radius(at, to, radius * scale, clockwise)
-                    .ok_or("an arc's radius is too small to reach its end")?,
+            let (from, end) = (plane.flat(at), plane.flat(to));
+            let (u, v) = plane.centre_letters();
+            let centre = match (value(u), value(v), value('R')) {
+                (None, None, Some(radius)) => {
+                    centre_from_radius(from, end, radius * scale, clockwise)
+                        .ok_or("an arc's radius is too small to reach its end")?
+                }
                 (i, j, _) => DVec3::new(
-                    at.x + i.unwrap_or(0.0) * scale,
-                    at.y + j.unwrap_or(0.0) * scale,
+                    from.x + i.unwrap_or(0.0) * scale,
+                    from.y + j.unwrap_or(0.0) * scale,
                     0.0,
                 ),
             };
-            arc(at, to, centre, clockwise)
+            arc(from, end, centre, clockwise)
                 .into_iter()
                 .map(|p| Move {
                     kind: MoveKind::Cut,
-                    to: p,
+                    to: plane.back(p),
                 })
                 .collect()
         }
@@ -630,6 +688,38 @@ mod tests {
         let note = p.flattened().unwrap();
         assert!(note.contains("2000"), "{note}");
         assert!(note.contains("12000"), "{note}");
+    }
+
+    #[test]
+    fn arcs_in_the_xz_and_yz_planes_stay_in_them() {
+        // G18: an arc in XZ by I and K, round Y; G3 seen from +Y goes down from +x to -x
+        let xz = &parse("G0 X10 Y0 Z0\nG18 G3 X-10 Z0 I-10 K0\n", &job()).unwrap()[0].moves;
+        assert!(xz.len() > 10);
+        for m in &xz[1..] {
+            assert!(m.to.y.abs() < 1e-9, "stays in XZ: {}", m.to);
+            assert!((m.to.x.hypot(m.to.z) - 10.0).abs() < 0.02, "{}", m.to);
+            assert!(m.to.z <= 1e-9, "{}", m.to);
+        }
+        assert!(xz.iter().any(|m| m.to.z < -9.9), "{xz:?}");
+        // G19: in YZ by J and K, round X; by radius too
+        for text in [
+            "G0 X0 Y10 Z0\nG19 G2 Y-10 Z0 J-10 K0\n",
+            "G0 X0 Y10 Z0\nG19 G2 Y-10 Z0 R10\n",
+        ] {
+            let yz = &parse(text, &job()).unwrap()[0].moves;
+            for m in &yz[1..] {
+                assert!(m.to.x.abs() < 1e-9, "{text}: stays in YZ: {}", m.to);
+                assert!(
+                    (m.to.y.hypot(m.to.z) - 10.0).abs() < 0.02,
+                    "{text}: {}",
+                    m.to
+                );
+            }
+            assert!(yz.iter().any(|m| m.to.z.abs() > 9.9), "{text}: {yz:?}");
+        }
+        // and G17 brings XY back
+        let back = &parse("G18\nG17\nG0 X10 Y0 Z0\nG3 X-10 Y0 I-10 J0\n", &job()).unwrap()[0];
+        assert!(back.moves.iter().all(|m| m.to.z.abs() < 1e-9));
     }
 
     #[test]
