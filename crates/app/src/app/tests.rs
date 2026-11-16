@@ -15865,6 +15865,28 @@ fn a_tile_and_its_overlap_bigger_than_the_bed_is_said_in_red() {
 }
 
 #[test]
+fn a_machine_with_no_bed_size_gets_no_tile_bed_warning() {
+    let mut h = Harness::new();
+    // the bed size was not given: 0 × 0, so there is nothing to check the tiles against
+    h.app.machines.machines.push(cut_craft_machines::Machine {
+        name: "Unsized".into(),
+        ..cut_craft_machines::Machine::default()
+    });
+    h.app.machines.active = h.app.machines.machines.len() - 1;
+    h.app.invoke(&h.ctx, "toolpath_tiling");
+    let form = h.app.form.as_mut().unwrap();
+    form.params["enabled"] = serde_json::json!(true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        !h.texts()
+            .iter()
+            .any(|t| t.contains("bigger than Unsized's bed")),
+        "an unsized bed cannot be too small"
+    );
+}
+
+#[test]
 fn a_tile_with_nothing_to_cut_gets_no_file() {
     let mut h = Harness::new();
     let area = h.app.doc.job.area();

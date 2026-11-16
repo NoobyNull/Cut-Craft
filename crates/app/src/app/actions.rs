@@ -5420,12 +5420,17 @@ impl CutCraftApp {
     }
 
     /// The warning for a Toolpath Tiling form whose tiles, each with its overlap all round
-    /// (what a tile's file covers), are bigger than the active machine's bed.
+    /// (what a tile's file covers), are bigger than the active machine's bed; none when the
+    /// machine's bed size was not given.
     fn tiles_past_bed(&self, form: &super::OpenForm) -> Option<String> {
         if form.id != "toolpath_tiling" || form.params["enabled"] != Value::Bool(true) {
             return None;
         }
-        let machine = self.machines.active()?;
+        // a bed whose size was not given (0) is nothing to check against
+        let machine = self
+            .machines
+            .active()
+            .filter(|m| m.width > 0.0 && m.height > 0.0)?;
         let tiling: cut_craft_core::tiling::Tiling =
             serde_json::from_value(form.params["tiling"].clone()).ok()?;
         let file = tiling.largest_file(self.doc.job.area());
