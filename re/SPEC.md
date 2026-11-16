@@ -256,6 +256,13 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   Toolpath Templates; Save and Print Job Sheet, Print Part Labels and Save Cut List in
   Output. Settings, view toggles, the lists' right-click items, node editing, the Gadgets
   and the Machine menu stay in their menus, as in Aspire.
+- **Vector and toolpath colors** (Cut Craft's own; 0.6.11 user report, 2026-11-16) [inf]:
+  Options ▸ Appearance picks how the 2D view draws vectors, toolpaths and rapid moves (vectors
+  in the 3D view too): Standard (the theme's text, warning and error colours, as before),
+  Color-blind friendly (black or white vectors, Okabe-Ito vermillion toolpaths and reddish
+  purple rapids, apart in lightness as well as hue, blue left to the selection) or My own
+  colors, picked per theme beside each theme's sheet and grid colours. A colour-blind user
+  could not tell the dark theme's grey vectors from its orange toolpaths, both as bright.
 - **Next-step guidance** (Cut Craft's own) [inf]: Aspire's status bar shows a tool's tooltip.
   Cut Craft adds a box in the room left under a page's icons: the hovered tool's name, what
   it does and its next step (a flyout's names the tools it holds too), else the tool in

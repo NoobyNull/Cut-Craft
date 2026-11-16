@@ -79,6 +79,32 @@ A number field takes a sum as well as a number, worked out when it is entered:
   This works on network and other shared settings folders too. If the settings folder
   cannot be written at all, the status bar warns that no copy is being kept: save often.
 
+## Colors on screen
+
+The 2D view draws your vectors, the toolpaths made from them and the bit's rapid moves each
+in its own color. If you find them hard to tell apart (with color blindness, say), change
+them in **Edit ▸ Options ▸ Appearance ▸ Vector and toolpath colors**:
+
+- **Standard**: vectors in the text color, toolpaths orange, rapid moves red, as Cut Craft
+  has always drawn them.
+- **Color-blind friendly**: vectors black (white in the dark theme), toolpaths deep orange,
+  rapid moves pink. They differ in how light or dark they are, not only in hue, so they
+  stay apart for every kind of color blindness and in grayscale.
+- **My own colors**: a **Vector color**, **Toolpath color** and **Rapid move color** to
+  pick for the light theme and for the dark theme, under **2D view in the light theme** and
+  **2D view in the dark theme**. Pick a toolpath color lighter or darker than the vector
+  color as well as another hue.
+
+![The same profile toolpath in the dark theme, in the standard colors (left) and the color-blind friendly ones (right)](bytes://help/line-colors-dark.png)
+
+![The same in the light theme](bytes://help/line-colors-light.png)
+
+The 3D view draws vectors in the same vector color. What you have selected is always blue,
+whichever colors you choose. Solid previews (**Toolpaths ▸ Toolpath Drawing ▸ Make 2D
+Previews Solid**) take the **2D solid preview color** in **Options ▸ Toolpath Settings**
+instead, and the 3D preview's colors are in **Toolpaths ▸ Preview Colors**. **Reset to defaults** at the foot of the
+Appearance page puts every color back.
+
 ## Updates
 
 Cut Craft asks GitHub about once a day, when it starts, whether there is a new version, and

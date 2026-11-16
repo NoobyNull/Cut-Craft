@@ -32,6 +32,14 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
         "web-api-docs.png",
         include_bytes!("../../help/pictures/web-api-docs.png"),
     ),
+    (
+        "line-colors-dark.png",
+        include_bytes!("../../help/pictures/line-colors-dark.png"),
+    ),
+    (
+        "line-colors-light.png",
+        include_bytes!("../../help/pictures/line-colors-light.png"),
+    ),
 ];
 
 /// The help's pictures handed to egui, once, so its pages can show them.
