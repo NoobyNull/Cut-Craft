@@ -3490,6 +3490,28 @@ fn previewing_all_toolpaths_is_previewing_each_in_turn() {
 }
 
 #[test]
+fn undo_last_preview_brings_back_a_reset_preview() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.frame(vec![]);
+    let previewed = h.app.simulation.clone().expect("a preview");
+    h.app.invoke(&h.ctx, "reset_preview");
+    assert!(h.app.simulation.is_none(), "reset");
+    assert!(
+        h.app.available("undo_last_preview"),
+        "the reset can be undone"
+    );
+    h.app.invoke(&h.ctx, "undo_last_preview");
+    assert_eq!(h.app.simulation, Some(previewed));
+}
+
+#[test]
 fn the_3d_view_shows_the_model_until_there_is_a_preview() {
     let mut h = Harness::new();
     h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Design").unwrap();

@@ -497,6 +497,15 @@ pub const HINTS: &[(&str, &str)] = &[
         "Model Resolution Highest: the 3D model in the finest detail, for small, detailed carvings; much slower",
     ),
     (
+        "reset_preview",
+        "Reset Preview: clears the preview back to uncut material; Undo Last Preview brings it back",
+    ),
+    (
+        "undo_last_preview",
+        "Undo Last Preview: goes back to the preview as it was before the last Preview or Reset \
+         Preview, once",
+    ),
+    (
         "preview_quality_1",
         "Preview Quality Standard: toolpath previews in normal detail, quickest to draw; a finer quality draws a small bit's thin cuts truer on a big sheet",
     ),

@@ -727,15 +727,15 @@ impl CutCraftApp {
                 }
             }
             "reset_preview" => {
-                self.before_preview = None;
-                (
-                    self.simulation,
-                    self.simulation_coarse,
-                    self.fine_3d,
-                    self.surface_gpu,
-                ) = (None, None, None, None);
+                // a playing preview stops first, keeping what it has cut, so Undo Last
+                // Preview brings back what was showing
+                self.finish_playback();
+                self.before_preview = Some(super::BeforePreview(self.simulation.take()));
+                (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
                 self.kept_playback = None;
+                self.status
+                    .set_message("Preview reset: Undo Last Preview brings it back");
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {

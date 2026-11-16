@@ -21,7 +21,8 @@ it starts. The line under the controls gives the machine time left, and how long
 takes to watch at the chosen speed. A finishing toolpath with a small bit can take hours,
 so speed it up, drag Progress on, or press Stop (or Esc) to keep what is cut so far. Once
 stopped or played to the end the controls stay, so you can scrub back over it, until
-another preview, Reset Preview, or Close. New, Open and Close on the File menu clear the
+another preview, Reset Preview, or Close (Undo Last Preview brings back a preview Reset
+Preview cleared). New, Open and Close on the File menu clear the
 preview, its controls and Undo Last Preview, so nothing of the old job shows in the next. Any
 change to the job (an edit, a recalculation, Undo) stops a playing preview where it is and
 closes the controls, as its moves are out of date: preview again to play the new ones. A
