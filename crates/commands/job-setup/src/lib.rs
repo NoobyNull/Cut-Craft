@@ -189,7 +189,8 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Material", extend("x-kind" = "material"))]
     pub material: String,
-    /// The material's colour in the 3D view
+    /// The material's colour in the 3D view. How the preview colours what the toolpaths cut
+    /// is Toolpaths ▸ Preview Colors, which this leaves as it is
     #[schemars(
         title = "Material Settings",
         extend("x-section" = true),
@@ -337,8 +338,13 @@ impl Command for JobSetup {
             },
             resolution: p.resolution,
             colour: preview_colour(doc, p),
+            // not on this form: kept as Material Setup, Clearing Settings and Toolpaths ▸
+            // Preview Colors set them
             model_position: doc.job.model_position,
             clearing: doc.job.clearing,
+            machined_area: doc.job.machined_area,
+            fill_colour: doc.job.fill_colour,
+            lithophane_light: doc.job.lithophane_light,
             ..shape
         };
         let mut c = Change::builder(doc);
@@ -475,6 +481,26 @@ mod tests {
         p.material = "Titanium Grade 5".into();
         run_on::<JobSetup>(&mut doc, &p);
         assert_eq!(doc.job.colour, [1, 2, 3], "no preview colour for it: kept");
+    }
+
+    #[test]
+    fn applying_it_keeps_the_preview_colours_set_elsewhere() {
+        use cut_craft_core::document::MachinedArea;
+        let mut doc = sample_document();
+        doc.job.machined_area = MachinedArea::Lithophane;
+        doc.job.fill_colour = [1, 2, 3];
+        doc.job.lithophane_light = 0.9;
+        let mut p = JobSetup::initial_params(&doc);
+        p.size.width += 10.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(
+            (
+                doc.job.machined_area,
+                doc.job.fill_colour,
+                doc.job.lithophane_light
+            ),
+            (MachinedArea::Lithophane, [1, 2, 3], 0.9)
+        );
     }
 
     fn with(change: impl FnOnce(&mut Params)) -> Params {
