@@ -734,7 +734,8 @@ say "not implemented yet".
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
     top or bottom, by count, or a Custom Slice List of each slice's thickness; optional
-    boundary vectors).
+    boundary vectors; each slice on a new level of its own, only the first shown, the
+    originals hidden).
   - Split Component (by a closed vector: "- A" inside, "- B" outside), Emboss Component
     (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
     component with no wall steeper than the draft angle, originals hidden), Create Cross Section Vector (drag

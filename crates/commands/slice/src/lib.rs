@@ -1,8 +1,12 @@
 //! Slice Model: the visible model divided into Z bands, each a new component starting at the
-//! zero plane, for parts thicker than the material or the machine allows. The components it
-//! came from stay.
+//! zero plane, for parts thicker than the material or the machine allows. Each slice goes on
+//! a new level of its own named after it, and only the first slice's level is shown: show
+//! one slice's level at a time (eye in the component tree) to make its toolpaths. The
+//! components it came from are hidden.
 
-use cut_craft_core::component::{Combine, Component, model_at_resolution, silhouette};
+use cut_craft_core::component::{
+    Combine, Component, Level, model_at_resolution, shown_components, silhouette,
+};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -122,10 +126,26 @@ impl Command for Slice {
             }
         };
         let mut c = Change::builder(doc);
-        for (k, band) in cuts.windows(2).enumerate() {
+        for id in shown_components(doc) {
+            let mut k = doc.components[&id].clone();
+            k.visible = false;
+            c.replace_component(id, k);
+        }
+        let first_new = doc.levels.keys().next_back().map_or(0, |last| last + 1);
+        let count = cuts.len() - 1;
+        for (level, (k, band)) in (first_new..).zip(cuts.windows(2).enumerate()) {
             let (lo, hi) = (band[0], band[1]);
-            let mut slice =
-                Component::from_material(&format!("Slice {}", k + 1), Combine::Add, &model);
+            let name = format!("Slice {}", k + 1);
+            c.set_level(
+                level,
+                Some(Level {
+                    name: name.clone(),
+                    visible: k == 0,
+                    ..Level::default()
+                }),
+            );
+            let mut slice = Component::from_material(&name, Combine::Add, &model);
+            slice.level = level;
             for h in &mut slice.heights {
                 // NaN (no shape) is not above `lo` and stays NaN
                 *h = if *h > lo { h.min(hi) - lo } else { f64::NAN };
@@ -137,6 +157,15 @@ impl Command for Slice {
             }
             c.add_component(slice);
         }
+        let made = if count == 1 {
+            "1 slice".to_string()
+        } else {
+            format!("{count} slices")
+        };
+        c.note(format!(
+            "Made {made}, each on its own level. Only Slice 1 is shown; show one \
+             slice's level at a time to make its toolpaths. The original model is hidden."
+        ));
         Ok(c.finish())
     }
 }
@@ -239,6 +268,38 @@ mod tests {
         assert!(slices[1].height_at(cap_edge).is_none());
         assert!(slices[0].height_at(cap_edge).is_some());
         assert_eq!(doc.vectors.len(), 2, "a boundary round each slice");
+    }
+
+    #[test]
+    fn each_slice_on_its_own_level_only_the_first_shown() {
+        let mut doc = domed();
+        let p = Params {
+            slicing: Slicing::NumberOfSlices,
+            number_of_slices: 2,
+            ..Params::default()
+        };
+        let change = Slice::run(&doc, &p).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("Slice 1")),
+            "{:?}",
+            change.notes
+        );
+        doc.apply(&change).unwrap();
+        let dome = doc.components.values().next().unwrap();
+        assert!(!dome.visible, "the original is hidden");
+        assert_eq!(doc.levels.len(), 3, "a level for each slice");
+        let slices: Vec<_> = doc.components.values().skip(1).collect();
+        assert_ne!(slices[0].level, slices[1].level);
+        assert!(doc.levels[&slices[0].level].visible);
+        assert!(!doc.levels[&slices[1].level].visible);
+        assert_eq!(doc.levels[&slices[1].level].name, "Slice 2");
+        // the model is the first slice alone, not the dome and both slices stacked
+        let top = |m: &cut_craft_core::simulation::Material| {
+            m.heights.iter().copied().fold(0.0, f64::max)
+        };
+        let whole = top(&model_at_resolution(&domed()));
+        let now = top(&model_at_resolution(&doc));
+        assert!((now - whole / 2.0).abs() < 1e-6, "{now} vs {whole}");
     }
 
     #[test]
