@@ -3376,11 +3376,13 @@ impl CutCraftApp {
             _ => None,
         };
         let changer = self.machines.active().is_none_or(|m| !m.slots.is_empty());
+        // `None` while the checks run, or once they were cancelled
         let found = match &plan {
-            Ok(plan) => self.save_checks(plan, form.changes).to_vec(),
-            Err(_) => vec![],
+            Ok(plan) => self.save_checks(plan, form.changes).map(<[_]>::to_vec),
+            Err(_) => Some(vec![]),
         };
-        let errors = Self::refused(&found).is_some();
+        let mut again = false;
+        let errors = found.as_deref().is_some_and(|f| Self::refused(f).is_some());
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong("Machine and post-processor");
@@ -3432,11 +3434,14 @@ impl CutCraftApp {
                 );
             ui.separator();
             files_section(ui, &self.doc, &plan, split);
-            checks_section(ui, &found);
+            again = self.checks_or_waiting(ui, found.as_deref());
             ui.add_space(ui.spacing().item_spacing.y);
-            let ready = plan.is_ok() && !errors;
+            let ready = plan.is_ok() && !errors && found.is_some();
             (save, send, manage) = self.save_buttons(ui, ready, errors);
         });
+        if again {
+            self.check_again();
+        }
         if let Some(n) = machine_changed {
             self.machines.active = n;
             form.post = None;
@@ -3445,6 +3450,22 @@ impl CutCraftApp {
         }
         self.pressed(&form, (save, send, manage));
         self.save_form = open.then_some(form);
+    }
+
+    /// Save Toolpaths' checks before cutting: what they found, or that they are running or
+    /// were cancelled, with Check Again; whether it was pressed.
+    fn checks_or_waiting(
+        &self,
+        ui: &mut egui::Ui,
+        found: Option<&[cut_craft_core::preflight::Finding]>,
+    ) -> bool {
+        if let Some(found) = found {
+            checks_section(ui, found);
+            return false;
+        }
+        ui.separator();
+        ui.strong("Checks before cutting");
+        self.checks_waiting(ui)
     }
 
     /// Does what Save Toolpaths' buttons asked (as [`Self::save_buttons`] says).

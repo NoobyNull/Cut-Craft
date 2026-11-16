@@ -89,3 +89,19 @@ clean wall with no lines where the passes met. It needs a bit whose flutes reach
 depth; with shorter flutes (from the Tool Database) the edge is cut at each pass instead.
 Raster and Adaptive pockets can also leave the edge pass out (Profile Pass: None); offset
 rings always end on the edge.
+
+## Checks before cutting (the Analyse tab)
+
+The Analyse tab, and Save Toolpaths before it writes a file, checks the shown toolpaths
+before you cut: rapid moves that would crash into material still there, cutting that only
+cuts air, spots the bit can't reach, settings the machine can't do, and toolpaths that are
+out of date. Each finding says how to put it right; ones marked Must fix stop the save.
+
+The checks cut every toolpath in order, so a big 3D finish (millions of tiny moves with a
+small ball nose) takes a little while: a few seconds on a fast computer, longer on a slow
+one. They run in the background with a progress window that says which step they are on,
+and Cut Craft keeps drawing while they work. Cancel (or Esc) stops them; the tab then says
+nothing has been checked yet, with a Check Again button, and Save Toolpaths and Send to
+Machine wait until the checks have run. They run again only when a toolpath, the job or
+the machine changes, so going back to the tab is instant. See also
+[Save Toolpaths](help:save_toolpaths) and [Toolpath Summary](help:toolpath_summary).

@@ -6,7 +6,8 @@
 
 use crate::checks::{LEFT, problems_over};
 use crate::document::Document;
-use crate::simulation::Material;
+use crate::progress;
+use crate::simulation::{Material, each};
 use crate::toolpath::{MoveKind, Tool, ToolShape, Toolpath};
 use glam::DVec3;
 
@@ -31,6 +32,15 @@ const AIR_LENGTH: f64 = 100.0;
 /// How far below the material a cut may go before it is called out, mm: profiles cut a
 /// little into the spoilboard on purpose.
 const SPOILBOARD: f64 = 1.0;
+
+/// How far from a toolpath's own moves the simulation's may stray, mm: a 3D finish's steps
+/// of a fiftieth of a millimetre come to a tenth as many moves, well within [`CUTS`].
+const SIMPLIFIED: f64 = 0.01;
+
+/// Cutting moves the simulation measures at once, across the cores: each sees the material
+/// as the batches before it left it, so one cutting again what another in its own batch cut
+/// counts as cutting, not air.
+const BATCH: usize = 4096;
 
 /// The simulation's cells across the job's longer side: about the smallest tool's radius,
 /// within these bounds.
@@ -103,12 +113,26 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
         .collect();
     let toolpaths = toolpaths.as_slice();
     let mut found = vec![];
-    for toolpath in toolpaths {
-        settings(doc, toolpath, limits, &mut found);
-    }
+    // the settings (with the spots each bit can't reach) fill the first half of the
+    // progress bar, cutting the toolpaths in order the second
+    progress::part(0, 2, || {
+        for (i, toolpath) in toolpaths.iter().enumerate() {
+            if progress::cancelled() {
+                return;
+            }
+            progress::stage(&format!(
+                "Checking the settings and reach of {}",
+                toolpath.name
+            ));
+            progress::part(i, toolpaths.len(), || {
+                settings(doc, toolpath, limits, &mut found);
+            });
+        }
+    });
     machine(doc, toolpaths, limits, &mut found);
-    if doc.job.rotary.is_none() {
-        simulate(doc, toolpaths, &mut found);
+    if doc.job.rotary.is_none() && !progress::cancelled() {
+        progress::stage("Cutting the toolpaths in order to look for crashes and air cutting");
+        progress::part(1, 2, || simulate(doc, toolpaths, &mut found));
     }
     // stable: each severity keeps toolpath order
     found.sort_by_key(|f| std::cmp::Reverse(f.severity));
@@ -361,7 +385,8 @@ fn machine(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits, found: &mut
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "a cell count within bounds"
+    clippy::cast_precision_loss,
+    reason = "a cell count within bounds; a fraction for a progress bar"
 )]
 fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     let job = &doc.job;
@@ -386,6 +411,13 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     }
     let cells = (job.width.max(job.height) / (smallest / 2.0)).clamp(FEWEST_CELLS, MOST_CELLS);
     let mut material = Material::new(job, cells as usize);
+    // how far through the moves of all the toolpaths, for the progress bar
+    let total = toolpaths
+        .iter()
+        .map(|t| t.moves.len())
+        .sum::<usize>()
+        .max(1) as f64;
+    let mut moved = 0.0;
     for (n, toolpath) in (1..).zip(toolpaths) {
         // what this toolpath cuts is marked as its own
         material.cutting = n;
@@ -394,35 +426,17 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
             continue;
         }
         let tool = &toolpath.tool;
-        let clear = clear_of(tool, material.cell);
-        // the peaks only come down as the material is cut, so they stay safe to search by
-        let peaks = material.peaks();
-        let (mut crashes, mut worst): (usize, Option<(f64, DVec3)>) = (0, None);
-        let (mut cutting, mut air) = (0.0, 0.0);
-        for pair in toolpath.moves.windows(2) {
-            let (a, b) = (pair[0].to, pair[1].to);
-            match pair[1].kind {
-                MoveKind::Rapid => {
-                    let into = material.overcut_near(tool, a, b, &peaks, clear);
-                    if into > CRASH {
-                        crashes += 1;
-                        if worst.is_none_or(|(deepest, _)| into > deepest) {
-                            worst = Some((into, b));
-                        }
-                    }
-                }
-                MoveKind::Cut => {
-                    let length = a.distance(b);
-                    cutting += length;
-                    let takes = material.overcut_near(tool, a, b, &peaks, 2.0 * clear);
-                    if takes < -clear || (takes <= CUTS && cut_before(&material, b, n)) {
-                        air += length;
-                    }
-                }
-                MoveKind::Plunge => {}
-            }
-            material.sweep(a, b, tool);
-        }
+        let share = (moved / total, toolpath.moves.len() as f64 / total);
+        let Some(Cut {
+            crashes,
+            worst,
+            cutting,
+            air,
+        }) = cut_in_order(&mut material, toolpath, n, share)
+        else {
+            return;
+        };
+        moved += toolpath.moves.len() as f64;
         let name = &toolpath.name;
         if let Some((into, at)) = worst {
             let more = match crashes {
@@ -454,6 +468,85 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
             )));
         }
     }
+}
+
+/// What cutting one toolpath in order found: its rapid moves into the material (how many,
+/// and the deepest with where it went), and how far it cut, in all and in air.
+struct Cut {
+    crashes: usize,
+    worst: Option<(f64, DVec3)>,
+    cutting: f64,
+    air: f64,
+}
+
+/// Cuts `toolpath`, the `n`th, into `material`, finding rapid moves that hit it and cutting
+/// moves that take nothing off; the progress bar runs over `share` (where it starts and
+/// how much of the bar this toolpath takes). `None` once the person cancelled.
+#[expect(clippy::cast_precision_loss, reason = "a fraction for a progress bar")]
+fn cut_in_order(
+    material: &mut Material,
+    toolpath: &Toolpath,
+    n: u32,
+    (start, width): (f64, f64),
+) -> Option<Cut> {
+    let tool = &toolpath.tool;
+    let clear = clear_of(tool, material.cell);
+    // the peaks only come down as the material is cut, so they stay safe to search by
+    let peaks = material.peaks();
+    let mut cut = Cut {
+        crashes: 0,
+        worst: None,
+        cutting: 0.0,
+        air: 0.0,
+    };
+    // a 3D finish's millions of tiny steps come to far fewer moves within a hair of them,
+    // which take off the same material on these cells
+    let simplified = crate::simplify::simplify(&toolpath.moves, SIMPLIFIED);
+    let mut batch: Vec<(DVec3, DVec3, MoveKind)> = Vec::with_capacity(BATCH);
+    // cuts and plunges a batch at a time across the cores, each measured against the
+    // material as it was before its batch; rapids one at a time against all cut so far
+    let flush = |material: &mut Material, batch: &mut Vec<_>, cut: &mut Cut| {
+        let takes = each(batch, |&(a, b, kind): &(DVec3, DVec3, MoveKind)| {
+            (kind == MoveKind::Cut).then(|| material.overcut_near(tool, a, b, &peaks, 2.0 * clear))
+        });
+        for (&(a, b, _), takes) in batch.iter().zip(takes) {
+            let Some(takes) = takes else { continue };
+            let length = a.distance(b);
+            cut.cutting += length;
+            if takes < -clear || (takes <= CUTS && cut_before(material, b, n)) {
+                cut.air += length;
+            }
+        }
+        let pairs: Vec<(DVec3, DVec3)> = batch.iter().map(|&(a, b, _)| (a, b)).collect();
+        material.sweep_each(&pairs, tool);
+        batch.clear();
+    };
+    let steps = simplified.len().max(1) as f64;
+    for (done, pair) in simplified.windows(2).enumerate() {
+        let (a, b) = (pair[0].to, pair[1].to);
+        if pair[1].kind != MoveKind::Rapid {
+            batch.push((a, b, pair[1].kind));
+            if batch.len() == BATCH {
+                if progress::cancelled() {
+                    return None;
+                }
+                flush(material, &mut batch, &mut cut);
+                progress::report(start + width * done as f64 / steps);
+            }
+            continue;
+        }
+        flush(material, &mut batch, &mut cut);
+        let into = material.overcut_near(tool, a, b, &peaks, clear);
+        if into > CRASH {
+            cut.crashes += 1;
+            if cut.worst.is_none_or(|(deepest, _)| into > deepest) {
+                cut.worst = Some((into, b));
+            }
+        }
+        material.sweep(a, b, tool);
+    }
+    flush(material, &mut batch, &mut cut);
+    Some(cut)
 }
 
 /// How far clear of the material `tool`'s cut must seem, on cells `cell` wide, to be
@@ -553,6 +646,78 @@ mod tests {
             .filter(|f| f.severity == severity)
             .map(|f| f.message.as_str())
             .collect()
+    }
+
+    /// A 3D finish's raster as a 1/64" tapered ball nose cuts it: rows `stepover` apart
+    /// in steps of a fiftieth of a millimetre over a gently waving surface.
+    #[expect(clippy::cast_precision_loss, reason = "a row number")]
+    fn fine_finish(rows: usize, stepover: f64) -> Toolpath {
+        let mut finish = slot("3D Finishing", 0.0, 0.0, 0.0, 0.0);
+        finish.strategy = "3d_finishing_toolpath".into();
+        finish.tool = Tool {
+            name: "TBN 1/64\"".into(),
+            shape: ToolShape::BallNose,
+            diameter: 0.396_875,
+            taper: 6.3,
+            shank_diameter: 6.35,
+            flute_length: 25.0,
+            ..tool()
+        };
+        let mut moves = vec![mv(MoveKind::Rapid, 0.0, 0.0, 5.0)];
+        for row in 0..rows {
+            let y = 10.0 + stepover * row as f64;
+            moves.push(mv(MoveKind::Rapid, 0.0, y, 5.0));
+            moves.push(mv(MoveKind::Plunge, 0.0, y, -1.0));
+            for step in 1..=10_000 {
+                let x = 0.02 * f64::from(step);
+                moves.push(mv(MoveKind::Cut, x, y, -1.0 - 0.5 * (x / 5.0).sin()));
+            }
+            moves.push(mv(MoveKind::Rapid, 200.0, y, 5.0));
+        }
+        finish.moves = moves;
+        finish
+    }
+
+    #[test]
+    fn a_3d_finish_of_millions_of_tiny_steps_is_checked_in_moments() {
+        // Matthew's lock-up (v0.6.10): Analyse on a 3D finish of 12.7 million moves ran the
+        // simulation a move at a time on one core, about a minute per million moves. A
+        // million here took over a minute before; simplified to the simulation's cells and
+        // measured a batch at a time across the cores, a few seconds at most.
+        let finish = fine_finish(100, 0.16);
+        assert!(finish.moves.len() > 1_000_000);
+        let started = std::time::Instant::now();
+        let found = check(&job(), &[&finish], &Limits::default());
+        let took = started.elapsed();
+        assert!(took < std::time::Duration::from_secs(20), "took {took:?}");
+        // the first rows cut uncut material: no crash and no air
+        assert!(messages(&found, Severity::Error).is_empty(), "{found:?}");
+        assert!(
+            !messages(&found, Severity::Warning)
+                .iter()
+                .any(|m| m.contains("cuts air")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn a_fine_finish_run_twice_still_cuts_air_the_second_time() {
+        // simplified and batched, the second pass over what the first cut is still air
+        let first = fine_finish(20, 0.16);
+        let mut again = first.clone();
+        again.name = "Again".into();
+        let found = check(&job(), &[&first, &again], &Limits::default());
+        let warnings = messages(&found, Severity::Warning);
+        assert!(
+            warnings.iter().any(|m| m.starts_with("Again cuts air")),
+            "{warnings:?}"
+        );
+        assert!(
+            !warnings
+                .iter()
+                .any(|m| m.starts_with("3D Finishing cuts air")),
+            "{warnings:?}"
+        );
     }
 
     #[test]
