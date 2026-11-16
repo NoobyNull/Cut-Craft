@@ -77,9 +77,8 @@ pub fn parts(doc: &Document) -> Vec<Part> {
             let size = bounds.size();
             let name = vectors
                 .iter()
-                .filter_map(|id| on.vector_groups.get(id))
-                .find_map(|g| on.part_names.get(g))
-                .cloned();
+                .find_map(|&id| on.part_name(id))
+                .map(str::to_owned);
             out.push(Part {
                 number: out.len() + 1,
                 name,

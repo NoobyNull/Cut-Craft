@@ -10,6 +10,9 @@ use cut_craft_core::toolpath::MoveKind;
 use eframe::egui::{self, PointerButton, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, vec2};
 use std::f32::consts::FRAC_PI_2;
 
+/// How strongly vectors outside the group stepped into are drawn (a share of the usual).
+const OUTSIDE_GROUP_FADE: f32 = 0.35;
+
 /// Ruler labels stay at least this many rows of the theme's interactive height apart.
 // ponytail: fixed spacing until a preferences dialog exists
 const RULER_LABEL_ROWS: f32 = 3.0;
@@ -810,6 +813,7 @@ const MOVING_FADE: u8 = 70;
 
 /// The shown vectors: selected ones dashed (selected groups solid), then their common lines
 /// (spans lying on another span of the same layer) over them in red, for attention.
+/// Stepped inside a group, vectors outside it are drawn faded.
 fn paint_vectors(
     painter: &egui::Painter,
     ui: &egui::Ui,
@@ -823,11 +827,19 @@ fn paint_vectors(
     let width = visuals.widgets.noninteractive.fg_stroke.width;
     let normal = Stroke::new(width, colour32(colour));
     let selected = visuals.selection.stroke;
+    // stepped inside a group, what is outside it fades back
+    let faded = Stroke::new(width, normal.color.gamma_multiply(OUTSIDE_GROUP_FADE));
+    let outside = |id: EntityId| {
+        doc.inside_group
+            .is_some_and(|g| !doc.group_chain(id).contains(&g))
+    };
     for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
         if doc.selection.contains(id) && doc.vector_groups.contains_key(id) {
             painter.add(Shape::line(screen(path), selected));
         } else if doc.selection.contains(id) {
             painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
+        } else if outside(*id) {
+            painter.add(Shape::line(screen(path), faded));
         } else {
             painter.add(Shape::line(screen(path), normal));
         }

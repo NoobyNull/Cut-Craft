@@ -85,7 +85,8 @@ struct FineKey {
 /// settings and part names.
 #[derive(Default)]
 struct Copied {
-    groups: Vec<Option<u64>>,
+    /// Each copied vector's groups, innermost first: those wholly copied.
+    groups: Vec<Vec<u64>>,
     layers: Vec<LayerId>,
     /// The job they were copied from (`job_epoch`): layer numbers mean nothing in another.
     job: u64,
@@ -287,7 +288,7 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 105] = [
+const BUILT_INS: [&str; 104] = [
     "import_into_shape",
     "try_sample_project",
     "machine_files",
@@ -335,7 +336,6 @@ const BUILT_INS: [&str; 105] = [
     "transform",
     "measure_inspect",
     "print",
-    "print_preview",
     "save_all_visible_toolpaths_as_template",
     "load_template",
     "save_selected_toolpath_as_template",

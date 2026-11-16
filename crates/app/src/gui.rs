@@ -2013,8 +2013,7 @@ impl MenuSystem {
                         i("Save As Template..."),
                         k("Increment and Save", "Ctrl+Alt+S"),
                         sep(),
-                        i("Print..."),
-                        i("Print Preview"),
+                        a("Print (opens a PDF)...", "print"),
                         sep(),
                         sub(
                             "Import",
@@ -2201,7 +2200,6 @@ impl MenuSystem {
                         i("Post-Processor Management..."),
                         sep(),
                         i("Install Post-Processor..."),
-                        i("Update Post-Processor Database"),
                     ],
                 ),
                 menu(
