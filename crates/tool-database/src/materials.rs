@@ -10,7 +10,7 @@ use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::material_class::MaterialClass;
 use cut_craft_core::material_library::{ClassFeeds, Material, MaterialLibrary};
-use cut_craft_core::toolpath::{CuttingData, RateUnits, ToolDatabase};
+use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase};
 use eframe::egui;
 
 /// What is picked in the tree.
@@ -65,11 +65,31 @@ impl MaterialsWindow {
     /// elsewhere meanwhile stay as they are.
     #[must_use]
     pub fn tools_onto(&self, now: &ToolDatabase) -> ToolDatabase {
+        // the same tool here: by its name, and a catalogue's entry only by a catalogue's
+        // (a copy in My Tools shares its name)
+        fn find<'a>(db: &'a ToolDatabase, name: &str, catalogue: bool) -> Option<&'a Tool> {
+            db.tools
+                .iter()
+                .find(|t| t.name == name && db.is_catalogue(t) == catalogue)
+        }
         let mut out = now.clone();
         for tool in &mut out.tools {
-            let (Some(mine), Some(before)) =
-                (self.tools.get(&tool.name), self.opened_on.get(&tool.name))
-            else {
+            let catalogue = now.is_catalogue(tool);
+            // or by the name it had, when renamed meanwhile
+            let name = if find(&self.opened_on, &tool.name, catalogue).is_some() {
+                tool.name.as_str()
+            } else {
+                now.renamed
+                    .iter()
+                    .find(|(old, new)| {
+                        **new == tool.name && find(&self.opened_on, old, catalogue).is_some()
+                    })
+                    .map_or(tool.name.as_str(), |(old, _)| old.as_str())
+            };
+            let (Some(mine), Some(before)) = (
+                find(&self.tools, name, catalogue),
+                find(&self.opened_on, name, catalogue),
+            ) else {
                 continue;
             };
             if mine.materials != before.materials {
@@ -97,6 +117,13 @@ impl MaterialsWindow {
     pub fn applied(&mut self, tools: &ToolDatabase) {
         self.tools = tools.clone();
         self.opened_on = tools.clone();
+    }
+
+    /// The Tool Database kept edits (the Add Tool picker's Select, say): the window goes
+    /// on from `now`, its own edits still unkept on top, so Cancel still drops only those.
+    pub fn rebase(&mut self, now: &ToolDatabase) {
+        self.tools = self.tools_onto(now);
+        self.opened_on = now.clone();
     }
 
     /// The picked material's name, when one is picked.
@@ -584,6 +611,53 @@ mod tests {
         assert!(
             again.get(&bit).unwrap().materials.is_empty(),
             "a later Tool Database edit is not undone by the next OK"
+        );
+    }
+
+    #[test]
+    fn a_catalogue_bit_copied_into_my_tools_gets_the_feeds_not_the_catalogue_entry() {
+        let mut db = ToolDatabase::starter();
+        let mut bit = db.tools[0].clone();
+        bit.name = "Maker Bit".into();
+        bit.group = "Catalogues/Maker".into();
+        db.catalogues.push("Catalogues/Maker".into());
+        db.tools.push(bit);
+        let mut w = MaterialsWindow::new(&MaterialLibrary::starter(), &db);
+        // the Add Tool picker's Copy to My Tools and Select, kept as the Tool Database's
+        // Select keeps it
+        let mut now = db.clone();
+        let catalogue = now.tools.len() - 1;
+        crate::tree::copy_to_mine(&mut now, catalogue);
+        w.rebase(&now);
+        w.pick = Some(MaterialPick::Material(at(&w, "Hard Maple")));
+        w.add_tool("Maker Bit");
+        let merged = w.tools_onto(&now);
+        let has_maple = |t: &cut_craft_core::toolpath::Tool| {
+            t.materials.iter().any(|d| d.material == "Hard Maple")
+        };
+        let mine = merged.get("Maker Bit").unwrap();
+        assert!(!merged.is_catalogue(mine), "the My Tools copy stays");
+        assert!(has_maple(mine), "the copy has the feeds");
+        assert!(
+            !has_maple(&merged.tools[catalogue]),
+            "the read-only catalogue entry is left as it was"
+        );
+    }
+
+    #[test]
+    fn its_feeds_follow_a_tool_renamed_in_the_tool_database_meanwhile() {
+        let mut w = window();
+        let bit = w.tools.tools[0].name.clone();
+        w.pick = Some(MaterialPick::Material(at(&w, "Hard Maple")));
+        w.add_tool(&bit);
+        let mut now = ToolDatabase::starter();
+        now.tools[0].name = "Renamed Bit".into();
+        now.note_renamed(&bit, "Renamed Bit");
+        let merged = w.tools_onto(&now);
+        let tool = merged.get("Renamed Bit").unwrap();
+        assert!(
+            tool.materials.iter().any(|d| d.material == "Hard Maple"),
+            "the library's feeds reach the renamed tool"
         );
     }
 

@@ -34,22 +34,13 @@ impl CutCraftApp {
         };
         match outcome {
             MaterialsOutcome::Apply | MaterialsOutcome::Ok => {
-                self.materials = window.library.clone();
-                // the library's own edits onto the database as it is now, not the copy it
-                // opened on: edits in the Tool Database since then stay
-                self.tools = window.tools_onto(&self.tools);
-                window.applied(&self.tools);
-                if outcome == MaterialsOutcome::Ok {
-                    self.materials_window = None;
-                }
-                match self.save_materials() {
-                    Ok(()) => self.tools_changed("Materials Library saved"),
-                    Err(e) => self.status.set_message(&e),
-                }
+                self.materials_kept(outcome == MaterialsOutcome::Ok);
             }
             MaterialsOutcome::Cancel => self.materials_window = None,
             MaterialsOutcome::AddTool => {
-                let mut manager = cut_craft_tool_database::Manager::selecting(&window.tools, "");
+                // on the database as kept: its own edits are kept as the Tool Database's
+                // Select keeps them, the library's stay unkept until its OK
+                let mut manager = cut_craft_tool_database::Manager::selecting(&self.tools, "");
                 manager.library = self.materials.clone();
                 self.open_tool_manager(manager);
                 self.picking = Some(super::PickFor::Material);
@@ -57,21 +48,53 @@ impl CutCraftApp {
         }
     }
 
+    /// The Materials Library's Apply or OK (`close`): its library and its own edits to the
+    /// bits' feeds kept and saved.
+    pub(super) fn materials_kept(&mut self, close: bool) {
+        let Some(window) = &mut self.materials_window else {
+            return;
+        };
+        self.materials = window.library.clone();
+        // the library's own edits onto the database as it is now, not the copy it
+        // opened on: edits in the Tool Database since then stay
+        self.tools = window.tools_onto(&self.tools);
+        window.applied(&self.tools);
+        if close {
+            self.materials_window = None;
+        }
+        match self.save_materials() {
+            Ok(()) => self.tools_changed("Materials Library saved"),
+            Err(e) => self.status.set_message(&e),
+        }
+    }
+
     /// The manager's outcomes that belong to the Materials Library: a bit picked for its Add
     /// Tool goes to its window, and the manager's Materials Library button opens it. True when
     /// the outcome was handled here.
-    fn library_outcome(&mut self, outcome: &cut_craft_tool_database::Outcome) -> bool {
+    pub(super) fn library_outcome(&mut self, outcome: &cut_craft_tool_database::Outcome) -> bool {
         use cut_craft_tool_database::Outcome;
         let Some(manager) = &mut self.tool_manager else {
             return false;
         };
         match (outcome, self.picking) {
             (Outcome::Select(name), Some(super::PickFor::Material)) => {
+                // the picker's own edits (a catalogue bit copied into My Tools, a tool
+                // added or edited) kept as the Tool Database's Select keeps them
+                self.tools = manager.draft.clone();
+                let renamed = manager.take_renamed();
+                for (from, to) in &renamed {
+                    self.tools.note_renamed(from, to);
+                }
+                self.tool_manager = None;
+                self.picking = None;
+                self.tools_changed("Tool database saved");
+                self.rename_toolpath_tools(&renamed, "Tool database saved");
+                self.refresh_form_tool();
                 if let Some(window) = &mut self.materials_window {
-                    window.tools = manager.draft.clone();
+                    window.rebase(&self.tools);
                     window.add_tool(name);
                 }
-                self.picking = None;
+                return true;
             }
             (Outcome::Cancel, Some(super::PickFor::Material)) => self.picking = None,
             (Outcome::MaterialsLibrary, _) => {

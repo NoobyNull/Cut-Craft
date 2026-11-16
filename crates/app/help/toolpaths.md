@@ -89,7 +89,9 @@ If the Tool Database's or Materials Library's file (tools.json, materials.json) 
 read when Cut Craft starts, it is left as it is: changes are kept until Cut Craft closes but
 not saved, and each OK says "not saved". Fix or rename that file, then restart.
 The Materials Library can stay open while you use the Tool Database: its OK adds only its
-own feeds and materials, so tools added, deleted or changed there meanwhile stay as they are.
+own feeds and materials, so tools added, deleted, changed or renamed there meanwhile stay as
+they are. In its Add Tool picker, Select keeps the picker's changes at once (a catalogue bit
+copied into My Tools, say); the library's own feeds still wait for its OK.
 Deleting a whole group in the Tool Database asks first, counting its tools, those Hide Unset
 Tools hides and those loaded in the tool changer; Cancel still brings them back until OK.
 Its Materials Library… button keeps your changes first, as Apply does; when they delete tools

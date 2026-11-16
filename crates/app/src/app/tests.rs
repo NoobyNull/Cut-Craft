@@ -16219,3 +16219,45 @@ fn a_tool_database_or_materials_library_that_could_not_be_read_is_never_said_sav
     assert_eq!(std::fs::read_to_string(&tools).unwrap(), "{ not json");
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn the_materials_library_s_add_tool_keeps_a_catalogue_bit_copied_into_my_tools() {
+    use cut_craft_tool_database::materials::{MaterialPick, MaterialsWindow};
+    let mut h = Harness::new();
+    let mut bit = h.app.tools.tools[0].clone();
+    bit.name = "Maker Bit".into();
+    bit.group = "Catalogues/Maker".into();
+    h.app.tools.catalogues.push("Catalogues/Maker".into());
+    h.app.tools.tools.push(bit);
+    let catalogue = h.app.tools.tools.len() - 1;
+    let mut window = MaterialsWindow::new(&h.app.materials, &h.app.tools);
+    let maple = window
+        .library
+        .materials
+        .iter()
+        .position(|m| m.name == "Hard Maple")
+        .unwrap();
+    window.pick = Some(MaterialPick::Material(maple));
+    h.app.materials_window = Some(window);
+    // Add Tool, then Copy to My Tools and Select on the catalogue bit
+    let mut picker = cut_craft_tool_database::Manager::selecting(&h.app.tools, "Maker Bit");
+    cut_craft_tool_database::tree::copy_to_mine(&mut picker.draft, catalogue);
+    h.app.tool_manager = Some(picker);
+    h.app.picking = Some(super::PickFor::Material);
+    assert!(
+        h.app
+            .library_outcome(&cut_craft_tool_database::Outcome::Select(
+                "Maker Bit".into()
+            ))
+    );
+    h.app.materials_kept(true);
+    let has_maple =
+        |t: &cut_craft_core::toolpath::Tool| t.materials.iter().any(|d| d.material == "Hard Maple");
+    let mine = h.app.tools.get("Maker Bit").unwrap();
+    assert!(!h.app.tools.is_catalogue(mine), "the My Tools copy is kept");
+    assert!(has_maple(mine), "with the material's feeds");
+    assert!(
+        !has_maple(&h.app.tools.tools[catalogue]),
+        "the read-only catalogue entry is left as it was"
+    );
+}
