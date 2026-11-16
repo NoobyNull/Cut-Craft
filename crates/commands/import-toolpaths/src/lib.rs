@@ -30,8 +30,9 @@ pub struct Params {
     /// The tool the file cuts with: its shape and size draw the preview; the file's own
     /// feed rate (from its first cutting move), plunge rate (from its first straight-down
     /// plunge), spindle speed and tool number are used where it gives them. A toolpath keeps
-    /// one of each, so a file that changes them more often with one tool is noted in red,
-    /// as saving it again writes every move at those. With more than
+    /// one of each, so a file that cuts at a second feed rate, plunges at a second one or
+    /// changes the spindle speed with one tool is noted in red, as saving it again writes
+    /// every move at those. With more than
     /// one tool in the file each part's tool is named after its number (`6 mm End Mill (T3
     /// in the file)`), so saving it again still changes tools between them
     pub tool: Tool,
@@ -142,8 +143,10 @@ pub struct Part {
     /// The first spindle speed given, rpm.
     pub spindle: Option<f64>,
     pub moves: Vec<Move>,
-    /// Every feed rate its moves are made at, each once, mm/min.
-    pub feeds: Vec<f64>,
+    /// Every feed rate its straight-down plunges are made at, each once, mm/min.
+    pub plunge_feeds: Vec<f64>,
+    /// Every feed rate its other feed moves (the cuts) are made at, each once, mm/min.
+    pub cut_feeds: Vec<f64>,
     /// Every spindle speed given with it, each once, rpm.
     pub speeds: Vec<f64>,
     /// The rotary axes (A, B, C) its lines turn, each once: not read, so its moves are flat.
@@ -163,12 +166,15 @@ impl Part {
                 .join(", ")
         };
         let mut dropped = vec![];
-        if self.feeds.len() > 2 {
-            dropped.push(format!(
-                "{} feed rates ({} mm/min)",
-                self.feeds.len(),
-                list(&self.feeds)
-            ));
+        // one of each is kept: a second plunge feed or cutting feed is lost
+        for (feeds, what) in [(&self.cut_feeds, "cutting"), (&self.plunge_feeds, "plunge")] {
+            if feeds.len() > 1 {
+                dropped.push(format!(
+                    "{} {what} feed rates ({} mm/min)",
+                    feeds.len(),
+                    list(feeds)
+                ));
+            }
         }
         if self.speeds.len() > 1 {
             dropped.push(format!(
@@ -229,10 +235,11 @@ impl Part {
     fn fed_at(&mut self, f: f64, made: &[Move]) {
         if made.iter().all(|m| m.kind == MoveKind::Plunge) {
             self.plunge.get_or_insert(f);
+            add_once(&mut self.plunge_feeds, f);
         } else {
             self.feed.get_or_insert(f);
+            add_once(&mut self.cut_feeds, f);
         }
-        add_once(&mut self.feeds, f);
     }
 }
 
@@ -722,6 +729,20 @@ mod tests {
     }
 
     #[test]
+    fn a_second_cutting_feed_or_plunge_feed_is_noted_even_with_two_feeds_in_all() {
+        // the plunge and the first cut share a feed; a later cut is faster
+        let text = "G0 X0 Y0 Z5\nG1 Z-1 F1000\nG1 X10\nG1 X20 F2000\n";
+        let p = &parse(text, &job()).unwrap()[0];
+        let note = p.flattened().expect("the F2000 cut is noted");
+        assert!(note.contains("2 cutting feed rates (1000, 2000"), "{note}");
+        // plunges at 500, then later at 2000, the cutting feed too
+        let text = "G0 X0 Y0 Z5\nG1 Z-1 F500\nG1 X10 F2000\nG0 Z5\nX20\nG1 Z-1 F2000\n";
+        let p = &parse(text, &job()).unwrap()[0];
+        let note = p.flattened().expect("the second plunge feed is noted");
+        assert!(note.contains("2 plunge feed rates (500, 2000"), "{note}");
+    }
+
+    #[test]
     fn arcs_in_the_xz_and_yz_planes_stay_in_them() {
         // G18: an arc in XZ by I and K, round Y; G3 seen from +Y goes down from +x to -x
         let xz = &parse("G0 X10 Y0 Z0\nG18 G3 X-10 Z0 I-10 K0\n", &job()).unwrap()[0].moves;
@@ -820,7 +841,7 @@ mod tests {
         assert_eq!((tp.tool.feed_rate, tp.tool.plunge_rate), (2500.0, 700.0));
         assert_eq!(change.notes.len(), 1, "{:?}", change.notes);
         assert!(
-            change.notes[0].contains("3 feed rates"),
+            change.notes[0].contains("2 cutting feed rates (2500, 1200"),
             "{:?}",
             change.notes
         );
