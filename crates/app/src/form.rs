@@ -2401,6 +2401,7 @@ mod tests {
             ("toolpath_properties", "toolpath"),
             ("layer_properties", "layer"),
             ("component_properties", "component"),
+            ("smooth_selected_components", "component"),
             ("bitmap_properties", "bitmap"),
             ("edit_picture", "bitmap"),
         ] {
