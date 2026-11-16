@@ -1,6 +1,8 @@
-//! Bake Components: the visible components replaced by one holding the model they make.
+//! Bake Components: the visible components replaced by one holding the model they make, with
+//! shape only where they had it (its outline, for a Model Boundary or Create Vector Boundary,
+//! is theirs, not the whole job).
 
-use cut_craft_core::component::{Combine, Component, model_at_resolution};
+use cut_craft_core::component::{Combine, Component, model_shape_at_resolution};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
@@ -31,7 +33,8 @@ impl Command for BakeComponents {
                 "show at least two components to bake together".into(),
             ));
         }
-        let baked = Component::from_material("Baked", Combine::Add, &model_at_resolution(doc));
+        let baked =
+            Component::from_material("Baked", Combine::Add, &model_shape_at_resolution(doc));
         let mut c = Change::builder(doc);
         for id in visible {
             c.remove_component(id);
@@ -44,10 +47,24 @@ impl Command for BakeComponents {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cut_craft_core::component::model_at_resolution;
     use cut_craft_core::geometry::Point;
     use cut_craft_core::testing::two_components;
 
     cut_craft_core::contract_tests!(BakeComponents, two_components);
+
+    #[test]
+    fn the_baked_component_has_shape_only_where_the_model_has() {
+        let mut doc = two_components();
+        let change = BakeComponents::run(&doc, &NoParams {}).unwrap();
+        doc.apply(&change).unwrap();
+        let baked = doc.components.values().next().unwrap();
+        assert!(
+            baked.height_at(Point::new(2.0, 2.0)).is_none(),
+            "the empty corner"
+        );
+        assert!(baked.height_at(Point::new(20.0, 20.0)).is_some());
+    }
 
     #[test]
     fn one_component_makes_the_same_model() {

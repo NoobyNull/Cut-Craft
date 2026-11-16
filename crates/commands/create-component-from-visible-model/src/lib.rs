@@ -1,7 +1,8 @@
 //! Create Component from Visible Model: a new component holding the model the visible
-//! components make; they are hidden, so the model looks the same.
+//! components make, with shape only where they have it; they are hidden, so the model looks
+//! the same.
 
-use cut_craft_core::component::{Combine, Component, model_at_resolution};
+use cut_craft_core::component::{Combine, Component, model_shape_at_resolution};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
@@ -27,8 +28,11 @@ impl Command for CreateComponentFromVisibleModel {
                     .into(),
             ));
         }
-        let made =
-            Component::from_material("Visible Model", Combine::Add, &model_at_resolution(doc));
+        let made = Component::from_material(
+            "Visible Model",
+            Combine::Add,
+            &model_shape_at_resolution(doc),
+        );
         let mut c = Change::builder(doc);
         for (&id, component) in doc.components.iter().filter(|(_, k)| k.visible) {
             c.replace_component(
@@ -47,10 +51,24 @@ impl Command for CreateComponentFromVisibleModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cut_craft_core::component::model_at_resolution;
     use cut_craft_core::geometry::Point;
     use cut_craft_core::testing::two_components;
 
     cut_craft_core::contract_tests!(CreateComponentFromVisibleModel, two_components);
+
+    #[test]
+    fn the_new_component_has_shape_only_where_the_model_has() {
+        let mut doc = two_components();
+        let change = CreateComponentFromVisibleModel::run(&doc, &NoParams {}).unwrap();
+        doc.apply(&change).unwrap();
+        let made = doc.components.values().last().unwrap();
+        assert!(
+            made.height_at(Point::new(2.0, 2.0)).is_none(),
+            "the empty corner"
+        );
+        assert!(made.height_at(Point::new(20.0, 20.0)).is_some());
+    }
 
     #[test]
     fn adds_one_and_hides_the_rest_keeping_the_model() {

@@ -1,9 +1,12 @@
 //! Add Draft to Model: a new component holding the visible model with no wall steeper than
-//! the draft angle allows (material is added at the foot of steep walls), for moulds.
+//! the draft angle allows (material is added at the foot of steep walls), for moulds. Its
+//! shape ends where the skirt does.
 //! The components it came from are hidden, so the model keeps its height (the drafted copy
 //! takes their place; show them again to compare).
 
-use cut_craft_core::component::{Combine, Component, model_at_resolution, shown_components};
+use cut_craft_core::component::{
+    Combine, Component, model_at_resolution, model_shape_at_resolution, shown_components,
+};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
@@ -50,6 +53,7 @@ impl Command for AddDraft {
             ));
         }
         let mut model = model_at_resolution(doc);
+        let shape = model_shape_at_resolution(doc);
         // the steepest a wall may fall per mm across
         let fall = (90.0 - p.draft_angle).to_radians().tan();
         let (cols, rows) = (model.columns, model.rows);
@@ -96,6 +100,12 @@ impl Command for AddDraft {
                         lift(i, i + cols - 1, diagonal);
                     }
                 }
+            }
+        }
+        // where the model had nothing and no skirt reached, the new component has nothing
+        for (h, was) in model.heights.iter_mut().zip(&shape.heights) {
+            if was.is_nan() && *h <= 0.0 {
+                *h = f64::NAN;
             }
         }
         let name = format!("Draft {}°", p.draft_angle);
@@ -148,8 +158,10 @@ mod tests {
         assert!((out - 8.0).abs() < 0.3, "{out}");
         let top = made.height_at(Point::new(20.0, 20.0)).unwrap();
         assert!((top - 10.0).abs() < 1e-9, "the top is untouched");
-        let far = made.height_at(Point::new(38.0, 20.0)).unwrap();
-        assert!(far.abs() < 1e-9, "the skirt ends 10 mm out");
+        assert!(
+            made.height_at(Point::new(38.0, 20.0)).is_none(),
+            "the skirt ends 10 mm out"
+        );
     }
 
     #[test]
@@ -161,6 +173,21 @@ mod tests {
         let model = model_at_resolution(&doc);
         let top = model.heights.iter().copied().fold(0.0, f64::max);
         assert!((top - 10.0).abs() < 1e-9, "not doubled: {top}");
+    }
+
+    #[test]
+    fn the_skirt_ends_where_the_drafted_model_does() {
+        let mut doc = block();
+        run_on::<AddDraft>(&mut doc, &Params { draft_angle: 45.0 });
+        let made = doc.components.values().last().unwrap();
+        assert!(
+            made.height_at(Point::new(27.0, 20.0)).is_some(),
+            "the skirt"
+        );
+        assert!(
+            made.height_at(Point::new(39.0, 2.0)).is_none(),
+            "nothing past the skirt"
+        );
     }
 
     #[test]

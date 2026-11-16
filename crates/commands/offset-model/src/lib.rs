@@ -1,7 +1,8 @@
 //! Offset Model: a new component holding the visible model grown (or shrunk) by a ball of the
-//! offset's radius in 3D; the components it came from are hidden.
+//! offset's radius in 3D; the components it came from are hidden. Only the shape grows: the
+//! empty job round it stays empty.
 
-use cut_craft_core::component::{Combine, Component, model_at_resolution};
+use cut_craft_core::component::{Combine, Component, model_shape_at_resolution};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
@@ -65,7 +66,8 @@ impl Command for OffsetModel {
                 "there is no visible model to offset. Show a component, or create one with a modelling tool".into(),
             ));
         }
-        let model = model_at_resolution(doc);
+        // NaN where nothing is: growing spreads only the shape, not the empty job round it
+        let model = model_shape_at_resolution(doc);
         let (cols, rows, cell) = (model.columns as i64, model.rows as i64, model.cell);
         let r = p.distance.abs();
         let reach = (r / cell).floor() as i64;
@@ -86,19 +88,31 @@ impl Command for OffsetModel {
                 } else {
                     f64::INFINITY
                 };
+                let here = model.heights[(row * cols + col) as usize];
+                if !grow && here.is_nan() {
+                    // shrinking leaves the empty job empty
+                    out.heights[(row * cols + col) as usize] = f64::NAN;
+                    continue;
+                }
                 for &(dx, dy, lift) in &ball {
                     let (c, rr) = (col + dx, row + dy);
-                    // off the job the model is its flat base at 0
+                    // off the job, and where there is no shape, it is the zero plane
                     let h = if (0..cols).contains(&c) && (0..rows).contains(&rr) {
                         model.heights[(rr * cols + c) as usize]
                     } else {
-                        0.0
+                        f64::NAN
                     };
                     best = if grow {
-                        best.max(h + lift)
+                        // only the shape grows outwards
+                        if h.is_nan() { best } else { best.max(h + lift) }
                     } else {
-                        best.min(h - lift)
+                        best.min(if h.is_nan() { 0.0 } else { h } - lift)
                     };
+                }
+                if best == f64::NEG_INFINITY {
+                    // no shape within reach
+                    out.heights[(row * cols + col) as usize] = f64::NAN;
+                    continue;
                 }
                 let z = if p.clip_to_zero_plane {
                     best.max(0.0)
@@ -147,9 +161,11 @@ mod tests {
         assert!(made.visible);
         let top = made.height_at(Point::new(20.0, 20.0)).unwrap();
         assert!((top - 9.0).abs() < 0.05, "8 high dome + 1: {top}");
-        // the flat base grows by the distance too
-        let base = made.height_at(Point::new(2.0, 2.0)).unwrap();
-        assert!((base - 1.0).abs() < 1e-9);
+        // only the shape grows: the empty job round it stays empty
+        assert!(made.height_at(Point::new(2.0, 2.0)).is_none());
+        // and it grows out sideways by the distance
+        assert!(made.height_at(Point::new(28.5, 20.0)).is_some());
+        assert!(made.height_at(Point::new(29.5, 20.0)).is_none());
         // a sphere of radius 8 grown by 1 is a sphere of radius 9
         let side = made.height_at(Point::new(28.5, 20.0)).unwrap();
         // within a model cell of the true sphere (the cells are about 0.1 mm)
@@ -173,8 +189,8 @@ mod tests {
             .unwrap()
             .0;
         assert!(
-            (low + 1.0).abs() < 1e-9,
-            "unclipped base sinks to -1: {low}"
+            (low + 1.0).abs() < 0.01,
+            "unclipped, the rim sinks to about -1: {low}"
         );
     }
 
