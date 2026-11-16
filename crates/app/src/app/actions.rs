@@ -177,6 +177,7 @@ impl CutCraftApp {
             machine_files: None,
             save_checks: vec![],
             before_preview: None,
+            preview_side: false,
             picked_nodes: Vec::new(),
             node_mirror: [false, false],
             menu_at: None,
@@ -2707,6 +2708,7 @@ impl CutCraftApp {
         (self.playback, self.kept_playback, self.before_preview) = (None, None, None);
         (self.playing, self.playback_goal, self.playback_shown) = (false, None, None);
         (self.playback_view, self.playback_gpu) = (None, None);
+        self.preview_side = self.doc.bottom_side;
         self.clear_recovery();
     }
 
@@ -3809,19 +3811,32 @@ impl CutCraftApp {
         ));
     }
 
-    /// After Swap Sides, a double-sided preview turned over with the job: its other side on
-    /// top, the side that was up underneath.
-    fn turn_preview_over(&mut self) {
+    /// Once the job has turned over (Swap Sides, its undo or its redo), the preview turns
+    /// with it: its other side on top, the side that was up underneath. A side never
+    /// previewed comes up uncut, so the one that was up is kept underneath, not lost.
+    pub(super) fn follow_side(&mut self) {
+        if self.doc.bottom_side == self.preview_side {
+            return;
+        }
+        self.preview_side = self.doc.bottom_side;
+        if self.simulation.is_none() {
+            return;
+        }
         self.finish_playback();
         let Some(mut top) = self.simulation.take() else {
             return;
         };
-        let under = top.other_side.take();
-        self.simulation = under.map(|under| {
-            let mut now_up = std::sync::Arc::unwrap_or_clone(under);
-            now_up.other_side = Some(std::sync::Arc::new(top));
-            now_up
-        });
+        let mut now_up = if let Some(under) = top.other_side.take() {
+            std::sync::Arc::unwrap_or_clone(under)
+        } else {
+            let mut fresh = top.clone();
+            fresh.heights.fill(0.0);
+            fresh.cut_by.fill(0);
+            (fresh.paint, fresh.under) = (vec![], vec![]);
+            fresh
+        };
+        now_up.other_side = Some(std::sync::Arc::new(top));
+        self.simulation = Some(now_up);
         (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
     }
 
@@ -4036,9 +4051,8 @@ impl CutCraftApp {
                 app.warn(&made, &notes);
             });
         }
-        if id == "swap_sides" {
-            self.turn_preview_over();
-        }
+        // the preview turns over with the job (follow_side)
+        self.follow_side();
         Ok(())
     }
 

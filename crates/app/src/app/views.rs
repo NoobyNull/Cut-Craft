@@ -66,6 +66,8 @@ impl CutCraftApp {
         self.prune_picked_nodes();
         // a reorder, or its undo, moved toolpaths between ids: what holds them follows
         self.follow_toolpaths();
+        // Swap Sides undone or redone: the preview turns over with the job
+        self.follow_side();
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);

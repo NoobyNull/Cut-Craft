@@ -8472,6 +8472,46 @@ fn a_double_sided_preview_cuts_both_sides_and_turns_over_with_the_job() {
 }
 
 #[test]
+fn undoing_swap_sides_turns_the_preview_back_and_redo_turns_it_over_again() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("pocket_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let up = h.app.simulation.clone().expect("previewed").heights;
+    assert!(up.iter().any(|&z| z < 0.0), "the pocket is cut");
+    // only this side has toolpaths: turned over, its preview is kept underneath
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    h.frame(vec![]);
+    let turned = h.app.simulation.as_ref().expect("the preview is kept");
+    assert!(
+        turned.heights.iter().all(|&z| z == 0.0),
+        "nothing cut on this side"
+    );
+    assert_eq!(
+        turned.other_side.as_deref().map(|m| &m.heights),
+        Some(&up),
+        "the side that was up is underneath"
+    );
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    assert!(!h.app.doc.bottom_side);
+    assert_eq!(
+        h.app.simulation.as_ref().map(|m| &m.heights),
+        Some(&up),
+        "undone, the side that was up is up again"
+    );
+    h.app.invoke(&h.ctx, "redo");
+    h.frame(vec![]);
+    let again = h.app.simulation.as_ref().expect("still previewed");
+    assert_eq!(again.other_side.as_deref().map(|m| &m.heights), Some(&up));
+}
+
+#[test]
 fn save_shaded_image_saves_the_3d_view_s_part_of_the_window() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::domed();

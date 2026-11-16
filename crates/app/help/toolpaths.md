@@ -45,7 +45,9 @@ remembered next time. Turn off Animate Preview (the
 Toolpaths menu, Toolpath Drawing) to cut the whole preview at once, with a progress window
 you can Cancel (or press Esc). Either way, Preview All and Preview Visible start again
 from uncut material, so old cuts never stay in the result; previewing one toolpath cuts
-into what is already previewed.
+into what is already previewed. In a double-sided job the preview turns over with Swap
+Sides, and back again with its Undo (and over with Redo); a side not previewed yet comes
+up uncut, with the side that was up kept underneath.
 
 When you save toolpaths, the post processor writes them as G-code for your machine. A post
 with arcs (the Cut Craft GRBL Arcs, Mach3 Arcs and FluidNC ATC Arcs posts) turns runs of

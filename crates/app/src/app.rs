@@ -1288,6 +1288,9 @@ struct CutCraftApp {
     stroke: Vec<Point>,
     /// The previewed material before the last preview, for Undo Last Preview.
     before_preview: Option<BeforePreview>,
+    /// The side of a double-sided job the preview has up (`Document::bottom_side`): when
+    /// the job turns over (Swap Sides, or its undo or redo), the preview turns with it.
+    preview_side: bool,
     /// Node editing: the nodes picked with a box, which a drag of one moves together.
     picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
     /// Node editing's mirror lines, H and V: with the first, nodes either side of the
