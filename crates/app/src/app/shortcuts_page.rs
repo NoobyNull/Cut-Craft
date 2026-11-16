@@ -209,8 +209,9 @@ const PAN_NEEDS_A_BUTTON: &str = "Panning is done by holding a mouse button and 
     it needs a button: press the wheel, or a thumb button.";
 
 /// What the list says while it waits for a key or button.
-const WAITING: &str = "Press a key (with Ctrl, Alt or Shift if you like) or a mouse button: \
-    the wheel, or a thumb button. Esc stops.";
+const WAITING: &str = "Press a key (with Ctrl, Alt or Shift if you like: Shift+M is a \
+    shortcut of its own, apart from M) or a mouse button: the wheel, or a thumb button. Esc \
+    stops.";
 
 /// The list of shortcuts: a search box, then each action with its shortcuts, an Add button
 /// and a Reset button where it was changed. `labels` names actions by id, for a clash.

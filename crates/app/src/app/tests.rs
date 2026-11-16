@@ -14640,3 +14640,25 @@ fn shift_cmd_z_redoes_on_a_mac() {
     h.frame_holding(held, vec![key_with(Key::Z, held)]);
     assert_eq!(h.app.doc.vectors.len(), 1, "⇧⌘Z is Redo, as the menu shows");
 }
+
+#[test]
+fn a_shift_shortcut_set_in_options_beats_the_plain_keys_own() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    let shift_m = shortcut::parse_trigger("Shift+M").unwrap();
+    h.app.add_shortcut("draw_circle", shift_m);
+    h.frame_holding(Modifiers::SHIFT, vec![key_with(Key::M, Modifiers::SHIFT)]);
+    assert_eq!(
+        h.app.form.as_ref().map(|f| f.id),
+        Some("draw_circle"),
+        "Shift+M runs what it was set for, not Move (M)"
+    );
+    h.app.form = None;
+    h.frame(vec![key_with(Key::M, Modifiers::NONE)]);
+    assert_eq!(
+        h.app.form.as_ref().map(|f| f.id),
+        Some("move"),
+        "M is still Move"
+    );
+}
