@@ -1,10 +1,14 @@
 //! Quick Engrave: marks the selected vectors at a shallow depth, along their lines or filling
-//! them with an offset, hatch or cross hatch pattern.
+//! them with an offset, hatch or cross hatch pattern. A depth deeper than the bit's pass depth
+//! is cut in passes, each running the whole pattern a step deeper; Edit Passes under the tool
+//! sets them, as on the other toolpaths.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon;
-use cut_craft_core::toolpath::{Move, Tool, contour_moves, cut_points, hatch_lines, made_by};
+use cut_craft_core::toolpath::{
+    Move, Tool, contour_moves, cut_points, hatch_lines, made_by, pass_depths,
+};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -37,7 +41,8 @@ pub enum FillPattern {
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
-    /// Below the material surface (or below the nose cone)
+    /// Below the material surface (or below the nose cone); cut in passes of the bit's pass
+    /// depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_engrave.png"))]
@@ -52,12 +57,17 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Engrave"))]
     pub stepover: f64,
-    /// Times the whole pattern is run
-    #[schemars(range(min = 1))]
-    #[schemars(extend("x-group" = "Cutting Depths"))]
+    /// From jobs saved when Passes ran the pattern again at the same depth: that many passes
+    /// at least, now each a step deeper. The passes are the bit's (Edit Passes)
+    #[serde(default = "one")]
+    #[schemars(skip)]
     pub passes: u32,
     /// The engraving bit or drag point that marks the lines
     pub tool: Tool,
+}
+
+fn one() -> u32 {
+    1
 }
 
 impl Default for Params {
@@ -74,6 +84,21 @@ impl Default for Params {
                 diameter: 0.5,
                 ..Tool::default()
             },
+        }
+    }
+}
+
+impl Params {
+    /// The depth of each pass (negative z): the bit's passes down to the cut depth, as Edit
+    /// Passes sets them. A job saved when Passes ran the pattern again at the same depth keeps
+    /// at least that many passes, now each a step deeper.
+    fn depths(&self) -> Vec<f64> {
+        let set = self.tool.pass_depths(self.depth);
+        let asked = self.passes.max(1);
+        if usize::try_from(asked).is_ok_and(|n| n > set.len()) {
+            pass_depths(self.depth, self.depth / f64::from(asked))
+        } else {
+            set
         }
     }
 }
@@ -104,11 +129,6 @@ impl Command for QuickEngraveToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("depth", p.depth)?;
         ensure_positive("tool diameter", p.tool.diameter)?;
-        if p.passes == 0 {
-            return Err(CommandError::InvalidParams(
-                "set passes to 1 or more".into(),
-            ));
-        }
         let fill = p.strategy == Strategy::Fill;
         if fill {
             ensure_positive("stepover", p.stepover)?;
@@ -121,33 +141,44 @@ impl Command for QuickEngraveToolpath {
                 "select the vectors to engrave".into()
             }));
         }
-        let (z, safe) = (-p.depth, doc.job.clearance);
-        let outline = |paths: &[Path]| -> Vec<Move> {
+        let safe = doc.job.clearance;
+        let outline = |paths: &[Path], z: f64| -> Vec<Move> {
             paths
                 .iter()
                 .flat_map(|path| contour_moves(&cut_points(path), path.closed, &[z], safe))
                 .collect()
         };
-        // ponytail: a fill also runs the outline, so the edges are crisp
-        let mut once = outline(&paths);
-        if fill {
-            let regions = polygon::regions(&paths);
-            once.extend(match p.fill_pattern {
-                FillPattern::Offset => {
-                    let mut rings = vec![];
-                    let mut ring = polygon::offset_regions_again(&regions, -p.stepover);
-                    while !ring.is_empty() {
-                        let next = polygon::offset_regions_again(&ring, -p.stepover);
-                        rings.extend(ring);
-                        ring = next;
-                    }
-                    outline(&rings)
-                }
-                FillPattern::Hatch => hatch(&regions, p.stepover, &[0.0], z, safe),
-                FillPattern::CrossHatch => hatch(&regions, p.stepover, &[0.0, 90.0], z, safe),
-            });
-        }
-        let moves = (0..p.passes).flat_map(|_| once.iter().copied()).collect();
+        let regions = if fill {
+            polygon::regions(&paths)
+        } else {
+            vec![]
+        };
+        let rings = if fill && p.fill_pattern == FillPattern::Offset {
+            let mut rings = vec![];
+            let mut ring = polygon::offset_regions_again(&regions, -p.stepover);
+            while !ring.is_empty() {
+                let next = polygon::offset_regions_again(&ring, -p.stepover);
+                rings.extend(ring);
+                ring = next;
+            }
+            rings
+        } else {
+            vec![]
+        };
+        // the whole pattern at `z`
+        let pattern = |z: f64| -> Vec<Move> {
+            // ponytail: a fill also runs the outline, so the edges are crisp
+            let mut once = outline(&paths, z);
+            if fill {
+                once.extend(match p.fill_pattern {
+                    FillPattern::Offset => outline(&rings, z),
+                    FillPattern::Hatch => hatch(&regions, p.stepover, &[0.0], z, safe),
+                    FillPattern::CrossHatch => hatch(&regions, p.stepover, &[0.0, 90.0], z, safe),
+                });
+            }
+            once
+        };
+        let moves = p.depths().into_iter().flat_map(pattern).collect();
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
             p,
@@ -202,13 +233,51 @@ mod tests {
         );
     }
 
+    /// The depth of each run of the pattern, in order.
+    fn levels(t: &Toolpath) -> Vec<f64> {
+        let mut z: Vec<f64> = t
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Plunge)
+            .map(|m| m.to.z)
+            .collect();
+        z.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+        z
+    }
+
     #[test]
-    fn passes_repeat_the_whole_pattern() {
+    fn passes_step_deeper_by_the_bits_pass_depth() {
         let p = Params {
+            tool: Tool {
+                pass_depth: 0.1,
+                ..Params::default().tool
+            },
+            ..Params::default()
+        };
+        let z = levels(&engrave(vec![square(0.0, 0.0, 10.0)], &p));
+        assert_eq!(z.len(), 3, "{z:?}");
+        for (z, want) in z.iter().zip([-0.1, -0.2, -0.3]) {
+            assert!((z - want).abs() < 1e-9, "{z}");
+        }
+        // passes set in Edit Passes are the ones cut
+        let mut edited = p.clone();
+        edited.tool.passes = vec![0.25];
+        let z = levels(&engrave(vec![square(0.0, 0.0, 10.0)], &edited));
+        assert!(
+            (z[0] + 0.25).abs() < 1e-9 && (z[1] + 0.3).abs() < 1e-9,
+            "{z:?}"
+        );
+        // a job saved when Passes repeated the pattern: as many passes, now stepping down
+        let old = Params {
             passes: 3,
             ..Params::default()
         };
-        assert_eq!(plunges(&engrave(vec![square(0.0, 0.0, 10.0)], &p)), 3);
+        let z = levels(&engrave(vec![square(0.0, 0.0, 10.0)], &old));
+        assert_eq!(z.len(), 3, "{z:?}");
+        assert!(
+            (z[0] + 0.1).abs() < 1e-9 && (z[2] + 0.3).abs() < 1e-9,
+            "{z:?}"
+        );
     }
 
     #[test]
