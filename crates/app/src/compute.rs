@@ -724,7 +724,8 @@ mod tests {
                 .zip(&relief().heights)
                 .filter(|(a, b)| a < b)
                 .count();
-            assert!(cut > 1000, "{}: only {cut} cells cut", tool.name);
+            // the fine end mill is narrower than a cell, so its cut is a thin line
+            assert!(cut > 500, "{}: only {cut} cells cut", tool.name);
         }
     }
 
