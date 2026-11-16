@@ -25,7 +25,8 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "edit_text",
-        "Edit Text: opens the selected text in its form, to change its words, font or size",
+        "Edit Text: opens the selected text in its form, to change its words, font or size (text \
+         in a group too); double-clicking the text does the same",
     ),
     (
         "align_left",
@@ -97,7 +98,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "ungroup_onto_current_layer",
-        "Ungroup onto Current Layer: takes the selected groups apart and moves their vectors onto the layer you are working on",
+        "Ungroup onto Current Layer: takes the selected groups apart one level (groups and text in them come out as they were) and moves their vectors onto the layer you are working on",
     ),
     (
         "merge_visible_layers",
