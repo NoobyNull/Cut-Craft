@@ -89,6 +89,8 @@ pub struct Manager {
     /// The picked tool and the maker ▸ type group it had last drawn: while its group is
     /// still that one, the group follows its maker and type.
     followed: Option<(usize, String)>,
+    /// The group whose Delete is waiting for Delete or Keep under the tree.
+    deleting: Option<String>,
 }
 
 /// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
@@ -231,6 +233,10 @@ fn shape_name(shape: ToolShape) -> &'static str {
         .map_or("", |(_, n)| n)
 }
 
+/// The Delete button's hover hint.
+const DELETE_HINT: &str = "Delete the picked tool, or the picked group with every tool and \
+                           group in it (it asks first, counting tools the tree hides)";
+
 /// What a tree button asked for.
 #[derive(Clone, Copy, PartialEq)]
 enum TreeAction {
@@ -259,6 +265,7 @@ impl Manager {
             pending: None,
             followed: None,
             renames: vec![],
+            deleting: None,
         }
     }
 
@@ -442,6 +449,7 @@ impl Manager {
                             if let Some(action) = self.tree_buttons(ui, look) {
                                 outcome = self.act(action).or(outcome.take());
                             }
+                            self.confirm_delete(ui);
                         });
                         // the active material is the whole database's, so it sits by the tree
                         egui::Panel::bottom("tool_database_material")
@@ -664,7 +672,11 @@ impl Manager {
                 };
                 if ui
                     .add_enabled(enabled, button)
-                    .on_hover_hint(label)
+                    .on_hover_hint(if asked == TreeAction::Delete {
+                        DELETE_HINT
+                    } else {
+                        label
+                    })
                     .clicked()
                 {
                     action = Some(asked);
@@ -707,12 +719,116 @@ impl Manager {
         if action == TreeAction::Delete && !self.deletable() {
             return None;
         }
+        // a whole group asks first: it can hold tools the tree hides
+        if let (TreeAction::Delete, Some(Pick::Group(g))) = (action, &self.pick) {
+            self.deleting = Some(g.clone());
+            return None;
+        }
         let outcome = self.do_action(action, &group);
         // a tool deleted leaves its slot
         if let Some(changer) = &mut self.changer {
             changer.unload_missing(&self.draft);
         }
         outcome
+    }
+
+    /// What Delete asks before a group goes, while it waits for an answer: the group, how
+    /// many tools and groups go with it, and how many of those the tree hides or the tool
+    /// changer holds.
+    pub fn delete_question(&self) -> Option<String> {
+        let group = self.deleting.as_deref()?;
+        let inside: Vec<&Tool> = self
+            .draft
+            .tools
+            .iter()
+            .filter(|t| tree::within(&t.group, group))
+            .collect();
+        let hidden = inside
+            .iter()
+            .filter(|t| self.hide_unset && !t.has_data_for(&self.draft.material))
+            .count();
+        let loaded = inside
+            .iter()
+            .filter(|t| {
+                self.changer
+                    .as_ref()
+                    .and_then(|c| c.slot_of(&t.name))
+                    .is_some()
+            })
+            .count();
+        let groups = tree::groups(&self.draft)
+            .iter()
+            .filter(|g| g.as_str() != group && tree::within(g, group))
+            .count();
+        let plural = |n: usize, one: &str| {
+            if n == 1 {
+                format!("1 {one}")
+            } else {
+                format!("{n} {one}s")
+            }
+        };
+        let mut what = plural(inside.len(), "tool");
+        if groups > 0 {
+            what = format!("{what} in {}", plural(groups, "group"));
+        }
+        let mut notes = vec![];
+        if hidden > 0 {
+            notes.push(format!("{hidden} hidden by Hide Unset Tools"));
+        }
+        if loaded > 0 {
+            notes.push(format!(
+                "{loaded} loaded in the tool changer, emptying their slots"
+            ));
+        }
+        let notes = if notes.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", notes.join("; "))
+        };
+        Some(format!(
+            "Delete the group \"{}\" and its {what}{notes}? Toolpaths cutting with them \
+             keep their tool but can no longer pick it here. Cancel still brings them back \
+             until OK.",
+            tree::leaf(group)
+        ))
+    }
+
+    /// Delete (`yes`) or Keep, for the group Delete asked about.
+    pub fn answer_delete(&mut self, yes: bool) {
+        let Some(group) = self.deleting.take() else {
+            return;
+        };
+        if yes {
+            tree::delete_group(&mut self.draft, &group);
+            self.pick = None;
+            if let Some(changer) = &mut self.changer {
+                changer.unload_missing(&self.draft);
+            }
+        }
+    }
+
+    /// The question Delete asks before a group goes, with its Delete and Keep, under the
+    /// tree buttons; picking something else drops it.
+    fn confirm_delete(&mut self, ui: &mut egui::Ui) {
+        if self.deleting.is_some()
+            && self.pick.as_ref() != self.deleting.clone().map(Pick::Group).as_ref()
+        {
+            self.deleting = None;
+        }
+        let Some(question) = self.delete_question() else {
+            return;
+        };
+        ui.group(|ui| {
+            ui.colored_label(ui.visuals().warn_fg_color, question);
+            ui.horizontal(|ui| {
+                if ui.button("Delete").clicked() {
+                    self.answer_delete(true);
+                }
+                if ui.button("Keep").clicked() {
+                    self.answer_delete(false);
+                }
+            });
+        });
     }
 
     fn do_action(&mut self, action: TreeAction, group: &str) -> Option<Outcome> {
@@ -1860,6 +1976,53 @@ mod tests {
     }
 
     #[test]
+    fn deleting_a_group_asks_first_naming_its_hidden_and_loaded_tools() {
+        let db = ToolDatabase::starter();
+        let mut m = Manager::new(&db);
+        let group = "Metric Tools".to_owned();
+        let inside: Vec<String> = db
+            .tools
+            .iter()
+            .filter(|t| tree::within(&t.group, &group))
+            .map(|t| t.name.clone())
+            .collect();
+        assert!(inside.len() > 1);
+        m.changer = Some(Changer {
+            machine: "Router".into(),
+            slots: vec![Some(inside[0].clone()), None],
+        });
+        m.hide_unset = true;
+        m.draft.material = "No Such Material".into();
+        m.pick = Some(Pick::Group(group.clone()));
+        m.act(TreeAction::Delete);
+        assert_eq!(m.draft.tools.len(), db.tools.len(), "nothing gone yet");
+        let question = m.delete_question().expect("it asks");
+        assert!(question.contains("Metric Tools"), "{question}");
+        assert!(
+            question.contains(&format!("{} tools", inside.len())),
+            "{question}"
+        );
+        assert!(question.contains("hidden"), "{question}");
+        assert!(question.contains("tool changer"), "{question}");
+        m.answer_delete(false);
+        assert_eq!(m.draft.tools.len(), db.tools.len(), "Keep keeps them");
+        assert!(m.delete_question().is_none());
+        m.act(TreeAction::Delete);
+        m.answer_delete(true);
+        assert!(
+            m.draft
+                .tools
+                .iter()
+                .all(|t| !tree::within(&t.group, &group))
+        );
+        assert_eq!(
+            m.changer.as_ref().unwrap().slots[0],
+            None,
+            "its slot is emptied"
+        );
+    }
+
+    #[test]
     fn tree_buttons_add_copy_and_delete_in_the_copy_only() {
         let db = ToolDatabase::starter();
         let mut m = Manager::new(&db);
@@ -1942,6 +2105,7 @@ mod tests {
         assert_eq!(m.draft.tools.len(), before + 1);
         m.pick = Some(Pick::Group("Catalogues/Amana".into()));
         m.act(TreeAction::Delete);
+        m.answer_delete(true);
         assert_eq!(
             m.draft.tools.len(),
             before - 1,

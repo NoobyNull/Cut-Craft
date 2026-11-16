@@ -90,6 +90,8 @@ read when Cut Craft starts, it is left as it is: changes are kept until Cut Craf
 not saved, and each OK says "not saved". Fix or rename that file, then restart.
 The Materials Library can stay open while you use the Tool Database: its OK adds only its
 own feeds and materials, so tools added, deleted or changed there meanwhile stay as they are.
+Deleting a whole group in the Tool Database asks first, counting its tools, those Hide Unset
+Tools hides and those loaded in the tool changer; Cancel still brings them back until OK.
 
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the

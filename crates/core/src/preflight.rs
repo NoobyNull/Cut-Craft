@@ -310,7 +310,8 @@ fn on_machine(
     {
         found.push(Finding::warning(format!(
             "{name}: {} is not loaded in the tool changer of {}, so the machine will stop \
-             and ask for it. Load it in a slot in Machine Configuration",
+             and ask for it. Load it in a slot in Machine Configuration; if it is no longer \
+             in the Tool Database, pick a tool again with the toolpath's Select…",
             tool.name, limits.name
         )));
     }
@@ -935,6 +936,12 @@ mod tests {
             warnings
                 .iter()
                 .any(|m| m.contains("not loaded in the tool changer"))
+        );
+        // a tool deleted from the Tool Database cannot be loaded: the advice says what to do
+        assert!(
+            warnings
+                .iter()
+                .any(|m| m.contains("pick a tool again with the toolpath's Select"))
         );
     }
 
