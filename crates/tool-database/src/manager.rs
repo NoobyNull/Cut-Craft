@@ -518,13 +518,19 @@ impl Manager {
         }
     }
 
-    /// What deleting since the last Apply took: "2 deleted tools (A, B)", and so on.
+    /// What deleting since the last Apply took: "2 deleted tools (A, B)", and so on. A tool
+    /// renamed is not deleted.
     fn deletions(&self) -> Vec<String> {
+        let renamed = |name: &str| {
+            self.renames
+                .iter()
+                .any(|(first, now)| first == name && self.draft.get(now).is_some())
+        };
         let tools: Vec<&str> = self
             .saved
             .tools
             .iter()
-            .filter(|t| self.draft.get(&t.name).is_none())
+            .filter(|t| self.draft.get(&t.name).is_none() && !renamed(&t.name))
             .map(|t| t.name.as_str())
             .collect();
         let materials: Vec<&str> = self
@@ -2159,6 +2165,25 @@ mod tests {
         m.applied();
         m.open_materials_library();
         assert!(matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)));
+    }
+
+    #[test]
+    fn a_renamed_tool_is_not_asked_about_as_deleted() {
+        let mut m = Manager::new(&ToolDatabase::starter());
+        let before = m.draft.tools[0].name.clone();
+        m.draft.tools[0].name = "Renamed".into();
+        m.note_rename(&before, "Renamed");
+        m.open_materials_library();
+        assert!(
+            matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)),
+            "{:?}",
+            m.library_question()
+        );
+        // renamed and then deleted: deleted
+        m.draft.tools.remove(0);
+        m.open_materials_library();
+        let question = m.library_question().expect("a question");
+        assert!(question.contains(&before), "{question}");
     }
 
     #[test]

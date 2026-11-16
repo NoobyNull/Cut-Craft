@@ -97,7 +97,8 @@ copied into My Tools, say); the library's own feeds still wait for its OK.
 Deleting a whole group in the Tool Database asks first, counting its tools, those Hide Unset
 Tools hides and those loaded in the tool changer; Cancel still brings them back until OK.
 Its Materials Library… button keeps your changes first, as Apply does; when they delete tools
-or materials it asks first, as Cancel could not bring those back afterwards.
+or materials it asks first, as Cancel could not bring those back afterwards (a tool only
+renamed is not counted).
 
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the
