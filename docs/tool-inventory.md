@@ -820,9 +820,10 @@ say "not implemented yet".
   the model's thickness, which a new value scales the model to (Aspire's Set). 3D roughing
   and finishing and the wrapped 3D view place the model by it, refusing a model it pushes
   out of the material. Toolpath forms do not show Aspire's summary of these settings.
-- Toolpaths ▸ Materials (also beside Material Setup): a library of woods, sheet goods,
+- Toolpaths ▸ Preview Colors (also beside Material Setup): a library of woods, sheet goods,
   plastics and metals that sets the material's colour in the 3D view (Job Setup's colour);
-  Custom keeps Job Setup's. Woods show grain on the 3D view's top (lines along X that drift,
+  Custom keeps Job Setup's. Only the look: feeds and speeds follow Job Setup's Material, and
+  picking that Material picks the matching colour here (Hard Maple shows as Maple). Woods show grain on the 3D view's top (lines along X that drift,
   bunch, and move across as the surface goes down, so carvings show rings); the wrapped
   rotary view and the block's sides are plain. Custom is a solid colour of one's own.
   As Aspire's Material Appearance it also sets Machined Area Color: Material Color (cuts

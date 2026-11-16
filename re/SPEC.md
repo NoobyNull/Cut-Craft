@@ -57,7 +57,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 
 ### Startup sequence [obs] (help: how-to-get-started, create-a-new-file, Job Setup Single; trial screenshots)
 - **Start page, no job open:** the left panel holds *Startup Tasks*: Create a new file, New file from template, Open an existing file. Below them is *Recently opened files*, a rolling list of the last 4 jobs, empty on a first run. The rest of the panel is vendor links (tutorial videos, online resources, social media, clipart shop), which are out of scope. The centre shows the product splash. There are no Drawing or Toolpaths panels, and no 2D/3D view.
-- **No-job menu:** File (New, New from template, Open, Open Application Data Folder, Recent files, Close, Exit), Edit (Options only), Machine (as with a job), Toolpaths (Materials, Tool Database), Gadgets, Help. Model and View are absent.
+- **No-job menu:** File (New, New from template, Open, Open Application Data Folder, Recent files, Close, Exit), Edit (Options only), Machine (as with a job), Toolpaths (Preview Colors, Tool Database), Gadgets, Help. Model and View are absent.
 - **Create a new file → Job Setup:** the form fills the left panel, with OK and Cancel at the bottom. The 2D view (rulers, zoom buttons) appears beside it, and the full menu bar is back. Sections, top down: Job Type, Job Size + Units, Z Zero Position, XY Datum Position (+ Use Offset X/Y), Modeling Resolution, Material Settings.
 - **OK** creates the new empty job: a grey rectangle in the 2D view, with dotted lines through X0 and Y0. **[inf]** Cancel abandons the new job and goes back to the start page; File ▸ Close closes the job and goes back to the start page too.
 - **Open an existing file** takes native jobs and importable 2D vector files (DXF, EPS, AI, PDF). Opening a 2D file starts a job at the drawing's size (see Import).
@@ -105,7 +105,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   - Drawing ▸ 2D previews, solid previews, auto-open 3D, draw rapid/plunge/retract/join moves.
   - Preview quality ▸ Standard ×1 / High ×2 / Very High ×4 / Extremely High ×8 / Maximum ×25.
   - Templates ▸ save selected / all visible, load.
-  - Also: Merge Visible, Job Sheet, Materials, Tool Database.
+  - Also: Merge Visible, Job Sheet, Preview Colors, Tool Database.
 - **View:** Toolbar, Zoom to Drawing (F6), Refresh 2D (F5), Guides ▸ visible / delete all / lock / unlock.
   - Draw Origin / Modeling Plane / Material Block / Vectors in 3D / Keep-Out Zones.
   - Auto-Wrapping, Colour Shaded, Shaded Background, Light Follows Viewer, Shadow Shading, Save Shaded Image, Tile H/V, Cascade.
@@ -218,7 +218,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   2026-11-14) [inf]: Aspire's Toolpaths page runs Material, the toolpath operations,
   templates, the toolpath list and preview/save down one page. Cut Craft's Toolpaths page
   follows the Design page's rules: the same width, **Job and Tools** (Material Setup,
-  Materials, Tool Database, Keep-Out Zones) and the tab row held at the top, four sub-tabs in
+  Preview Colors, Tool Database, Keep-Out Zones) and the tab row held at the top, four sub-tabs in
   the order a job goes, and the **toolpath list always under them** in its own part of the
   page (a strip over it drags it taller or shorter), so the toolpaths are never behind a tab:
   **Create** (Cut Out and Clear; Holes; Carve and Engrave; Edges and Inlays; 3D Toolpaths;
@@ -335,7 +335,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 
 ### Toolpaths (beyond P4, listed for completeness) [obs]
 - **Strategies:** Profile, Pocket, Drilling, V-Carve, Quick Engrave (Ctrl+Q), Inlay / V-Carve Inlay, Fluting, Prism, Chamfer, Keyhole, Thread Milling, Drag Knife, Moulding/Extruded, Texture, Rough and Finish Machining (3D), Rounding, PhotoVCarve, Sketch Carving, Laser Cut/Fill and Laser Picture, Array Copy, Merged; and Cut Craft's own Surfacing.
-- **Support:** Tool Database (with remote databases), Materials, Templates, Tabs, Keep-Out Zones, Toolpath Tiling, Preview (simulation), Job Sheet, Summary.
+- **Support:** Tool Database (with remote databases), Preview Colors, Templates, Tabs, Keep-Out Zones, Toolpath Tiling, Preview (simulation), Job Sheet, Summary.
 
 ### Keep-out zones [inf] (help: Keep-out Zones)
 - **[inf]** Aspire's keep-out zones are areas (clamps) its rapids go round; a toolpath that cannot keep out of one is not saved.
@@ -1118,7 +1118,7 @@ instead of half-cell steps.
 
 ### Lithophane preview [obs: help Preview Toolpaths; course RJogq_22TBs]
 - Preview Toolpaths ▸ Machined Area Color ▸ Lithophane: the material shown as if lit from behind, white at zero thickness and the chosen material or solid colour at full thickness, whatever material is picked; a slider beside it goes from very high contrast (left) to a much lighter look, as with no backlight (right).
-- **[inf]** Cut Craft: Toolpaths ▸ Materials ▸ Machined Area Color ▸ Lithophane, with Lithophane light 0 to 1 (0.5 to start). Each cell's colour mixes white and the material's colour by the share of the thickness left, raised to 4^(2 × light − 1): 0 darkens soon, 1 stays light.
+- **[inf]** Cut Craft: Toolpaths ▸ Preview Colors ▸ Machined Area Color ▸ Lithophane, with Lithophane light 0 to 1 (0.5 to start). Each cell's colour mixes white and the material's colour by the share of the thickness left, raised to 4^(2 × light − 1): 0 darkens soon, 1 stays light.
 
 ### Re-Import [obs: help Import a Component or 3D Model]
 - Once imported, a model can be re-imported to adjust its size, position and slicing plane, "provided it has not been changed significantly": right-click one of its components in the tree ▸ Re-Import. A model that was segmented reopens the 3D Segment dialog in its last state instead.

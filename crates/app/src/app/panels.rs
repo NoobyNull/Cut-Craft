@@ -3255,7 +3255,7 @@ impl CutCraftApp {
                     || self.model_on_material()),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
             wrap: None,
-            // a wood from Toolpaths ▸ Materials shows its grain
+            // a wood from Toolpaths ▸ Preview Colors shows its grain
             grain: cmd_materials::Material::of([r, g, b])
                 .grain()
                 .filter(|_| shown.colour_shaded)

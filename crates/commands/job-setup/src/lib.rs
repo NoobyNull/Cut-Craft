@@ -183,7 +183,8 @@ pub struct Params {
     )]
     pub resolution: Resolution,
     /// What the material is, from the Materials Library: toolpaths pick their bits' feeds
-    /// and speeds for it (a layer naming its own material overrides it). Left empty, each
+    /// and speeds for it (a layer naming its own material overrides it), and the 3D view
+    /// shows it in the matching colour from Toolpaths ▸ Preview Colors. Left empty, each
     /// bit's own feeds
     #[serde(default)]
     #[schemars(title = "Material", extend("x-kind" = "material"))]
@@ -335,7 +336,7 @@ impl Command for JobSetup {
                 Point::ZERO
             },
             resolution: p.resolution,
-            colour: p.colour,
+            colour: preview_colour(doc, p),
             model_position: doc.job.model_position,
             clearing: doc.job.clearing,
             ..shape
@@ -364,6 +365,18 @@ impl Command for JobSetup {
         }
         Ok(c.finish())
     }
+}
+
+/// The material's colour in the 3D view: the colour picked on the form, or, when only the
+/// Material changed, the matching one from Preview Colors (Walnut's for "Walnut").
+fn preview_colour(doc: &Document, p: &Params) -> [u8; 3] {
+    let material = p.material.trim();
+    if p.colour != doc.job.colour || material == doc.job_material() {
+        return p.colour;
+    }
+    cmd_materials::Material::matching(material)
+        .and_then(cmd_materials::Material::colour)
+        .unwrap_or(p.colour)
 }
 
 /// Home as `p` sets it, but with a Home Z still at the old clearance (never set by hand)
@@ -438,6 +451,30 @@ mod tests {
         run_on::<JobSetup>(&mut doc, &with(|p| p.material = " Hard Maple ".into()));
         assert_eq!(doc.job_material(), "Hard Maple");
         assert_eq!(JobSetup::initial_params(&doc).material, "Hard Maple");
+    }
+
+    #[test]
+    fn picking_a_material_shows_it_in_its_colour_unless_a_colour_is_picked_too() {
+        use cmd_materials::Material;
+        let mut doc = sample_document();
+        let walnut = Material::Walnut.colour().unwrap();
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Walnut".into();
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(doc.job.colour, walnut, "the 3D view shows walnut");
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Hard Maple".into();
+        p.colour = [1, 2, 3];
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(
+            doc.job.colour,
+            [1, 2, 3],
+            "a colour picked on the form wins"
+        );
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Titanium Grade 5".into();
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(doc.job.colour, [1, 2, 3], "no preview colour for it: kept");
     }
 
     fn with(change: impl FnOnce(&mut Params)) -> Params {

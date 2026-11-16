@@ -562,7 +562,7 @@ impl Default for Job {
             datum: Datum::BottomLeft,
             offset: Point::ZERO,
             resolution: Resolution::Standard,
-            // pine, as Toolpaths ▸ Materials has it
+            // pine, as Toolpaths ▸ Preview Colors has it
             colour: [214, 160, 102],
             machined_area: MachinedArea::MaterialColor,
             lithophane_light: 0.5,

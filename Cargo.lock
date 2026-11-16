@@ -1157,6 +1157,7 @@ dependencies = [
 name = "cmd-job-setup"
 version = "0.6.10"
 dependencies = [
+ "cmd-materials",
  "cut-craft-core",
  "schemars",
  "serde",

@@ -6736,16 +6736,16 @@ fn another_design_tab_closes_the_design_form() {
 }
 
 #[test]
-fn toolpaths_materials_opens_the_material_library() {
+fn toolpaths_preview_colors_opens_the_material_colours() {
     let mut h = Harness::new();
     let item = h
         .app
         .menus
         .items()
         .into_iter()
-        .find(|i| i.name == "Materials...")
+        .find(|i| i.name == "Preview Colors...")
         .map(|i| i.action.clone())
-        .expect("Toolpaths ▸ Materials...");
+        .expect("Toolpaths ▸ Preview Colors...");
     h.app.invoke(&h.ctx, &item);
     assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("materials"));
     assert_eq!(
@@ -8076,7 +8076,7 @@ fn the_preview_paints_machined_areas_in_the_materials_a_fill_or_each_toolpaths_c
         paints(&mut h).is_empty(),
         "the material's colour paints nothing"
     );
-    // Toolpaths ▸ Materials: one fill colour over every machined area
+    // Toolpaths ▸ Preview Colors: one fill colour over every machined area
     let mut p = h
         .app
         .registry

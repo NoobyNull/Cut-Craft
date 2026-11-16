@@ -2252,7 +2252,7 @@ impl MenuSystem {
                         a("Save Cut List...", "cut_list"),
                         sep(),
                         a("Clearing Settings...", "clearing_settings"),
-                        i("Materials..."),
+                        a("Preview Colors...", "materials"),
                         sep(),
                         i("Tool Database..."),
                     ],
