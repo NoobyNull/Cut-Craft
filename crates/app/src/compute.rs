@@ -724,8 +724,10 @@ mod tests {
                 .zip(&relief().heights)
                 .filter(|(a, b)| a < b)
                 .count();
-            // the fine end mill is narrower than a cell, so its cut is a thin line
-            assert!(cut > 500, "{}: only {cut} cells cut", tool.name);
+            // the fine end mill is narrower than a cell, so its cut is a thin line; the
+            // wide bits are held to a full cut's worth
+            let least = if tool.diameter < 1.0 { 500 } else { 1000 };
+            assert!(cut > least, "{}: only {cut} cells cut", tool.name);
         }
     }
 
