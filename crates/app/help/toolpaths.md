@@ -87,7 +87,9 @@ the new name at once, and a job saved before the rename takes it when it opens (
 the old name back), so the file still gives the bit its slot's tool number.
 If the Tool Database's or Materials Library's file (tools.json, materials.json) cannot be
 read when Cut Craft starts, it is left as it is: changes are kept until Cut Craft closes but
-not saved, and each OK says "not saved". Fix or rename that file, then restart.
+not saved, and each OK says "not saved". Fix or rename that file, then restart. The bits'
+feeds edited in the Materials Library live in tools.json, so they are still saved when only
+materials.json could not be read.
 The Materials Library can stay open while you use the Tool Database: its OK adds only its
 own feeds and materials, so tools added, deleted, changed or renamed there meanwhile stay as
 they are. In its Add Tool picker, Select keeps the picker's changes at once (a catalogue bit

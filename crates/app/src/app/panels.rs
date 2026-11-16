@@ -62,9 +62,16 @@ impl CutCraftApp {
         if close {
             self.materials_window = None;
         }
-        match self.save_materials() {
-            Ok(()) => self.tools_changed("Materials Library saved"),
-            Err(e) => self.status.set_message(&e),
+        // the bits' feeds live in tools.json: saved whatever became of materials.json
+        let library = self.save_materials();
+        self.tools_changed("Materials Library saved");
+        if let Err(e) = library {
+            let tools = if self.status.message == "Materials Library saved" {
+                "the bits' feeds were saved to the tool database".to_owned()
+            } else {
+                self.status.message.clone()
+            };
+            self.status.set_message(&format!("{e}. {tools}"));
         }
     }
 
@@ -87,8 +94,7 @@ impl CutCraftApp {
                 }
                 self.tool_manager = None;
                 self.picking = None;
-                self.tools_changed("Tool database saved");
-                self.rename_toolpath_tools(&renamed, "Tool database saved");
+                self.tools_kept("Tool database saved", &renamed);
                 self.refresh_form_tool();
                 if let Some(window) = &mut self.materials_window {
                     window.rebase(&self.tools);
@@ -161,8 +167,7 @@ impl CutCraftApp {
                 if matches!(outcome, Outcome::Ok | Outcome::Select(_)) {
                     self.tool_manager = None;
                 }
-                self.tools_changed("Tool database saved");
-                self.rename_toolpath_tools(&renamed, "Tool database saved");
+                self.tools_kept("Tool database saved", &renamed);
                 self.refresh_form_tool();
                 if let Outcome::Select(name) = &outcome {
                     let picking = self.picking;

@@ -16261,3 +16261,58 @@ fn the_materials_library_s_add_tool_keeps_a_catalogue_bit_copied_into_my_tools()
         "the read-only catalogue entry is left as it was"
     );
 }
+
+#[test]
+fn a_broken_materials_json_still_saves_the_bits_feeds_to_tools_json() {
+    use cut_craft_tool_database::materials::{MaterialPick, MaterialsWindow};
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-broken-lib-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (tools, materials) = (dir.join("tools.json"), dir.join("materials.json"));
+    std::fs::write(&materials, "{ not json").unwrap();
+    h.app.tools_path = Some(tools.clone());
+    h.app.load_materials_at(Some(materials.clone()));
+    let mut window = MaterialsWindow::new(&h.app.materials, &h.app.tools);
+    let maple = window
+        .library
+        .materials
+        .iter()
+        .position(|m| m.name == "Hard Maple")
+        .unwrap();
+    window.pick = Some(MaterialPick::Material(maple));
+    let bit = window.tools.tools[0].name.clone();
+    window.add_tool(&bit);
+    h.app.materials_window = Some(window);
+    h.app.materials_kept(true);
+    let saved = std::fs::read_to_string(&tools).unwrap_or_default();
+    assert!(saved.contains("Hard Maple"), "the feeds reach tools.json");
+    let message = h.app.status.message.clone();
+    assert!(
+        message.starts_with("Materials Library not saved"),
+        "{message}"
+    );
+    assert!(message.contains("feeds were saved"), "{message}");
+    assert_eq!(std::fs::read_to_string(&materials).unwrap(), "{ not json");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_renamed_tool_s_toolpaths_never_say_an_unreadable_tool_database_was_saved() {
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let dir = std::env::temp_dir().join(format!("cut-craft-broken-rename-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let tools = dir.join("tools.json");
+    std::fs::write(&tools, "{ not json").unwrap();
+    h.app.load_tools_at(Some(tools.clone()));
+    h.app.tools_kept(
+        "Tool database saved",
+        &[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())],
+    );
+    let message = h.app.status.message.clone();
+    assert!(message.starts_with("Tool database not saved"), "{message}");
+    assert!(!message.contains("Tool database saved"), "{message}");
+    let names: Vec<_> = h.app.doc.toolpaths.values().map(|t| &t.tool.name).collect();
+    assert!(names.iter().any(|n| *n == "Spiral 6"), "{names:?}");
+    std::fs::remove_dir_all(&dir).ok();
+}

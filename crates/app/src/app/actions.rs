@@ -6331,6 +6331,20 @@ impl CutCraftApp {
         }
     }
 
+    /// [`Self::tools_changed`] after the Tool Database's Apply, OK or Select, with the
+    /// job's toolpaths following the tools `renamed`: the status bar says what became of
+    /// the save (never "saved" when it was not) and then the renamed toolpaths.
+    pub(super) fn tools_kept(&mut self, done: &str, renamed: &[(String, String)]) {
+        self.tools_changed(done);
+        let said = self.status.message.clone();
+        self.rename_toolpath_tools(renamed, &said);
+        // a warning on the renamed toolpaths still leaves the save's outcome said
+        if !self.status.message.starts_with(&said) {
+            let message = format!("{said}. {}", self.status.message);
+            self.status.set_message(&message);
+        }
+    }
+
     /// Writes the tool database, if it has a file, and reports `done` or the failure.
     pub(super) fn tools_changed(&mut self, done: &str) {
         if let Some(path) = &self.tools_unreadable {
