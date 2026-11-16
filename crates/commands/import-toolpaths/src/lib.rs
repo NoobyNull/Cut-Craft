@@ -5,7 +5,8 @@
 //! Read: G0 / G1 / G2 / G3 (arcs by centre or R radius, in the plane G17 / G18 / G19 picks:
 //! XY by I J, XZ by I K, YZ by J K), G20 / G21, G90 / G91, F, S and T with M6. Comments in brackets or after `;` and line numbers are
 //! passed over. Drilling cycles (G81 to G89) are refused with a message, as reading them
-//! wrongly would show holes where none are cut.
+//! wrongly would show holes where none are cut. Rotary axis words (A, B, C) are left out
+//! with a note, so a rotary file is read flat.
 
 use cut_craft_core::document::{Document, Job, ZZero};
 use cut_craft_core::glam::DVec3;
@@ -23,7 +24,8 @@ pub struct Params {
     pub name: String,
     /// The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt). Straight moves and arcs are
     /// read, arcs in the XY plane and the upright XZ and YZ ones too (G17, G18, G19); a
-    /// drilling cycle is not
+    /// drilling cycle is not. Rotary-axis turns (A, B, C) are left out, with a note in red,
+    /// so a rotary file shows and saves flat
     pub file: String,
     /// The tool the file cuts with: its shape and size draw the preview; the file's own
     /// feed rate (from its first cutting move), plunge rate (from its first straight-down
@@ -112,8 +114,8 @@ impl Command for ImportToolpaths {
                 part: n,
                 ..p.clone()
             };
-            if let Some(lost) = part.flattened() {
-                c.note(format!("{name}: {lost}"));
+            for note in [part.flattened(), part.rotary_note()].into_iter().flatten() {
+                c.note(format!("{name}: {note}"));
             }
             c.add_toolpath(made_by::<Self>(&own, name, tool, vec![], part.moves));
             made += 1;
@@ -144,6 +146,8 @@ pub struct Part {
     pub feeds: Vec<f64>,
     /// Every spindle speed given with it, each once, rpm.
     pub speeds: Vec<f64>,
+    /// The rotary axes (A, B, C) its lines turn, each once: not read, so its moves are flat.
+    pub rotary: Vec<char>,
 }
 
 impl Part {
@@ -190,6 +194,36 @@ impl Part {
 }
 
 impl Part {
+    /// What is left out when the file turns a rotary axis: `None` when it turns none.
+    #[must_use]
+    pub fn rotary_note(&self) -> Option<String> {
+        let axes: Vec<String> = self.rotary.iter().map(char::to_string).collect();
+        let (last, rest) = axes.split_last()?;
+        let named = if rest.is_empty() {
+            last.clone()
+        } else {
+            format!("{} and {last}", rest.join(", "))
+        };
+        Some(format!(
+            "the file turns the rotary axis {named}, which Import Toolpaths cannot read yet: \
+             its turns are left out, so the preview is flat and saving it again would cut it \
+             flat. Make rotary toolpaths in Cut Craft from the drawing instead"
+        ))
+    }
+
+    /// A rotary axis, `letter`, turned with this tool.
+    fn turns(&mut self, letter: char) {
+        if !self.rotary.contains(&letter) {
+            self.rotary.push(letter);
+        }
+    }
+
+    /// A spindle speed, `rpm`, given with this tool.
+    fn spun_at(&mut self, rpm: f64) {
+        self.spindle.get_or_insert(rpm);
+        add_once(&mut self.speeds, rpm);
+    }
+
     /// `made`, a feed move, made at `f` mm/min: its plunge rate if it goes straight down,
     /// else its feed rate, unless one was found before.
     fn fed_at(&mut self, f: f64, made: &[Move]) {
@@ -288,11 +322,8 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
                     }
                 }
                 'F' => rate = Some(v * scale),
-                'S' => {
-                    let part = parts.last_mut().expect("a part");
-                    part.spindle.get_or_insert(v);
-                    add_once(&mut part.speeds, v);
-                }
+                'A' | 'B' | 'C' => parts.last_mut().expect("a part").turns(letter),
+                'S' => parts.last_mut().expect("a part").spun_at(v),
                 _ => {}
             }
         }
@@ -720,6 +751,18 @@ mod tests {
         // and G17 brings XY back
         let back = &parse("G18\nG17\nG0 X10 Y0 Z0\nG3 X-10 Y0 I-10 J0\n", &job()).unwrap()[0];
         assert!(back.moves.iter().all(|m| m.to.z.abs() < 1e-9));
+    }
+
+    #[test]
+    fn a_rotary_file_is_read_flat_and_says_so() {
+        let text = "G0 X0 Y0 Z5\nG1 Z-1 F500\nG1 A90\nG1 X10 A45\nG1 B10\n";
+        let parts = parse(text, &job()).unwrap();
+        assert_eq!(parts[0].rotary, ['A', 'B']);
+        let note = parts[0].rotary_note().unwrap();
+        assert!(note.contains("A and B"), "{note}");
+        assert!(note.contains("flat"), "{note}");
+        let flat = parse("G0 X0 Y0 Z5\nG1 Z-1\n", &job()).unwrap();
+        assert!(flat[0].rotary_note().is_none());
     }
 
     #[test]
