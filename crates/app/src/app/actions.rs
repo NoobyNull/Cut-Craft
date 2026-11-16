@@ -2431,8 +2431,14 @@ impl CutCraftApp {
         }
     }
 
+    /// The recent files listed: as many as Options lists. More are kept (up to
+    /// [`files::RECENT_KEPT`]), so a smaller list only hides the rest until it grows again.
+    pub(super) fn recent_shown(&self) -> &[std::path::PathBuf] {
+        &self.recent[..self.recent.len().min(self.options.recent_count())]
+    }
+
     pub(super) fn remember(&mut self, path: &std::path::Path) {
-        files::remember(&mut self.recent, path, self.options.recent_count());
+        files::remember(&mut self.recent, path, files::RECENT_KEPT);
         self.save_recent();
     }
 
@@ -4363,7 +4369,7 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Menu bar");
         let mut clicked = None;
         let recent: Vec<gui::MenuItem> = self
-            .recent
+            .recent_shown()
             .iter()
             .enumerate()
             .map(|(i, path)| {
@@ -4462,7 +4468,7 @@ impl CutCraftApp {
             ui.weak("None yet");
         }
         let glyph = self.icons.find(RECENT_FILE_ICON, "");
-        for (i, path) in self.recent.iter().enumerate() {
+        for (i, path) in self.recent_shown().iter().enumerate() {
             let name = file_name(path);
             let button = match glyph {
                 Some(glyph) => egui::Button::image_and_text(

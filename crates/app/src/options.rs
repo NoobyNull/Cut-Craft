@@ -653,7 +653,8 @@ pub enum CuttingChecks {
 /// General settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct General {
-    /// How many files File ▸ Recent Files and the start page list
+    /// How many files File ▸ Recent Files and the start page list. Up to 20 are always
+    /// remembered, so a smaller number only hides the rest until it is raised again
     #[schemars(range(min = 1, max = 20))]
     pub recent_file_list_size: u32,
     /// Read every icon at startup, so none shows a loading spinner the first time it is

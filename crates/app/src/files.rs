@@ -764,6 +764,9 @@ pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
 
 /// How many jobs the start page lists.
 pub const RECENT_COUNT: usize = 4;
+/// How many recent files are kept, whatever Options lists: its largest list size, so
+/// making the list smaller and larger again loses none.
+pub const RECENT_KEPT: usize = 20;
 
 /// Toolpath templates: the toolpaths' settings, without their moves or vectors.
 pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";

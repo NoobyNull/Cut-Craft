@@ -3503,7 +3503,6 @@ impl CutCraftApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
         }
-        self.recent.truncate(options.recent_count());
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
             self.playback_speed = options.toolpaths.preview_speed();
         }

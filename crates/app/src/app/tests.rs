@@ -15142,3 +15142,25 @@ fn material_setup_hides_the_thickness_on_a_rotary_job() {
     }
     assert!(h.text_at("Material Thickness").is_none());
 }
+
+#[test]
+fn a_smaller_recent_file_list_only_hides_the_rest_until_it_grows_again() {
+    let mut h = Harness::new();
+    h.app.options.general.recent_file_list_size = 9;
+    h.app.recent = (0..9)
+        .map(|i| std::path::PathBuf::from(format!("job{i}.ccjob")))
+        .collect();
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = *h.texts_at("General Settings").last().expect("listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    let reset = h.text_at("Reset to defaults").expect("the page's reset");
+    h.click(reset, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.options.recent_count(), files::RECENT_COUNT);
+    assert_eq!(h.app.recent_shown().len(), files::RECENT_COUNT);
+    h.app.options.general.recent_file_list_size = 9;
+    assert_eq!(h.app.recent_shown().len(), 9, "all nine back");
+}
