@@ -1,6 +1,7 @@
 //! The 2D view: job coordinates (mm, y up) ↔ screen points (pixels, y down), pointer
 //! gestures in job coordinates, and painting the document.
 
+use crate::options::Lines;
 use cut_craft_core::Drag;
 use cut_craft_core::document::{Document, EntityId, Job, Units};
 use cut_craft_core::geometry::{Path, Point, Rect as JobRect};
@@ -486,6 +487,7 @@ impl Canvas {
         doc: &Document,
         highlighted: Option<EntityId>,
         display: &crate::display::Display,
+        lines: &Lines,
     ) {
         let visuals = ui.visuals();
         let t = self.transform;
@@ -512,7 +514,7 @@ impl Canvas {
                 let [r, g, b] = display.solid_colour;
                 egui::Color32::from_rgb(r, g, b)
             } else {
-                visuals.warn_fg_color
+                colour32(lines.toolpath)
             };
             let cut_width = if display.solid_previews {
                 to_f32(toolpath.tool.diameter) * t.scale
@@ -520,7 +522,7 @@ impl Canvas {
                 datum.width
             };
             let cut = Stroke::new(cut_width.max(datum.width), colour);
-            let travel = Stroke::new(datum.width, visuals.error_fg_color);
+            let travel = Stroke::new(datum.width, colour32(lines.rapid));
             // the cuts as lines thinned to what the screen shows: one for each cut was
             // millions on a fine 3D finish, more than the graphics card takes
             let mut cuts = Runs::new(view.expand(cut.width), room);
@@ -690,6 +692,10 @@ impl Canvas {
         ui.painter_at(self.area).rect_filled(job, 0.0, colour);
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one frame's 2D view, taken apart"
+    )]
     pub fn paint(
         &self,
         ui: &egui::Ui,
@@ -698,6 +704,7 @@ impl Canvas {
         highlighted: Option<EntityId>,
         display: &crate::display::Display,
         stamp: Stamp,
+        lines: &Lines,
     ) {
         let painter = ui.painter_at(self.area);
         let visuals = ui.visuals();
@@ -736,10 +743,10 @@ impl Canvas {
                 .collect()
         };
         let selected = visuals.selection.stroke;
-        paint_vectors(&painter, ui, doc, stamp, &screen, (dash, gap));
+        paint_vectors(&painter, ui, doc, stamp, &screen, (dash, gap), lines.vector);
         self.paint_guides_and_zones(&painter, ui, doc, display, (dash, gap));
         self.paint_outlines(&painter, doc, selected, (dash, gap));
-        self.paint_toolpaths(&painter, ui, doc, highlighted, display);
+        self.paint_toolpaths(&painter, ui, doc, highlighted, display, lines);
         if display.open_ends {
             // a circle on each open end, in the warning colour: where a shape has a gap
             let radius = ui.spacing().interact_size.y * OPEN_END_SHARE;
@@ -796,6 +803,11 @@ impl Canvas {
     }
 }
 
+/// An `[r, g, b]` colour from the options, as egui draws it.
+pub fn colour32([r, g, b]: [u8; 3]) -> egui::Color32 {
+    egui::Color32::from_rgb(r, g, b)
+}
+
 /// How faint a dragged component is drawn where it was, out of 255.
 const MOVING_FADE: u8 = 70;
 
@@ -809,10 +821,11 @@ fn paint_vectors(
     stamp: Stamp,
     screen: &dyn Fn(&Path) -> Vec<Pos2>,
     (dash, gap): (f32, f32),
+    colour: [u8; 3],
 ) {
     let visuals = ui.visuals();
     let width = visuals.widgets.noninteractive.fg_stroke.width;
-    let normal = Stroke::new(width, visuals.text_color());
+    let normal = Stroke::new(width, colour32(colour));
     let selected = visuals.selection.stroke;
     // stepped inside a group, what is outside it fades back
     let faded = Stroke::new(width, normal.color.gamma_multiply(OUTSIDE_GROUP_FADE));

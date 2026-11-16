@@ -16629,6 +16629,46 @@ fn undo_last_preview_after_swap_sides_brings_the_preview_back_turned_over_with_t
     assert_eq!(h.app.simulation.as_ref().map(|m| &m.heights), Some(&up));
 }
 
+#[test]
+fn the_2d_view_draws_vectors_and_toolpaths_in_the_colours_picked() {
+    // a colour-blind user could not tell vectors from toolpaths: Options ▸ Appearance
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let params = h
+        .app
+        .registry
+        .get("profile_toolpath")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.selected_toolpath = None;
+    h.app.doc.selection.clear();
+    h.app.view = View::TwoD;
+    let (vector, toolpath) = ([1, 2, 3], [4, 5, 6]);
+    let look = &mut h.app.options.appearance;
+    look.line_colors = crate::options::LinePalette::MyOwn;
+    for theme in [&mut look.light_2d, &mut look.dark_2d] {
+        theme.vector_color = vector;
+        theme.toolpath_color = toolpath;
+    }
+    h.frame(vec![]);
+    let drawn_in = |h: &Harness, [r, g, b]: [u8; 3]| {
+        let colour = egui::epaint::ColorMode::Solid(egui::Color32::from_rgb(r, g, b));
+        h.shapes
+            .iter()
+            .filter(|c| matches!(&c.shape, egui::Shape::Path(p) if p.stroke.color == colour))
+            .count()
+    };
+    assert!(
+        drawn_in(&h, vector) > 0,
+        "the rectangle in the vector colour"
+    );
+    assert!(
+        drawn_in(&h, toolpath) > 0,
+        "its profile in the toolpath colour"
+    );
+}
+
 /// #511: Machine has no "Update Post-Processor Database" (it only ran Cut Craft's own update
 /// check), and File has one print item that says it opens a PDF, not Print and Print Preview
 /// doing the same thing.
