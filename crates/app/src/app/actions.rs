@@ -2366,6 +2366,8 @@ impl CutCraftApp {
                 applied: None,
                 remade: None,
                 undo_from: self.history.undo_depth(),
+                list_steps: Vec::new(),
+                in_list: false,
                 way: crate::flyout::DragWay::AsIs,
             });
             // a form shows in its page, so bring an auto-hidden page out
@@ -3826,7 +3828,52 @@ impl CutCraftApp {
     pub(super) fn apply(&mut self, id: &str, params: &Value) -> Result<(), String> {
         self.crossings_allowed(id, params)?;
         let change = super::background::command_change(&self.registry, &self.doc, id, params);
-        self.applied(id, params, change)
+        let depth = self.history.undo_depth();
+        self.applied(id, params, change)?;
+        // made in the toolpath list beside an open form: noted, for its Cancel to make again
+        if self.history.undo_depth() > depth
+            && let Some(form) = self.form.as_mut().filter(|f| f.in_list)
+        {
+            form.list_steps.push((id.to_owned(), params.clone()));
+        }
+        Ok(())
+    }
+
+    /// A toolpath list change's settings made to fit the job as it is now, after Cancel took
+    /// back what the form did: the toolpaths it names that are gone are left out (or the
+    /// change, when it was on one of them), and a show/hide keeps each name as it now is.
+    fn list_step_again(&self, id: &str, params: &Value) -> Option<Value> {
+        let toolpaths = &self.doc.toolpaths;
+        let exists = |v: &Value| {
+            v.as_u64()
+                .is_some_and(|n| toolpaths.contains_key(&EntityId(n)))
+        };
+        let mut params = params.clone();
+        if let Some(one) = params.get("toolpath") {
+            let n = one.as_u64().filter(|_| exists(one))?;
+            if id == "toolpath_properties" {
+                params["name"] = Value::from(toolpaths[&EntityId(n)].name.clone());
+            }
+        }
+        if let Some(Value::Array(ids)) = params.get_mut("toolpaths") {
+            ids.retain(exists);
+        }
+        if let Some(Value::Object(groups)) = params.get_mut("groups") {
+            groups.retain(|key, _| {
+                key.parse()
+                    .is_ok_and(|n| toolpaths.contains_key(&EntityId(n)))
+            });
+        }
+        if let Some(Value::Array(order)) = params.get_mut("order") {
+            // every toolpath once, as the order needs: ones it did not name go at the end
+            order.retain(exists);
+            for id in toolpaths.keys() {
+                if !order.iter().any(|v| v.as_u64() == Some(id.0)) {
+                    order.push(Value::from(id.0));
+                }
+            }
+        }
+        Some(params)
     }
 
     /// `change` with the points it placed on snaps kept there: a drawn shape's snapped
@@ -4309,6 +4356,7 @@ impl CutCraftApp {
         {
             // what was placed is kept: Cancel on the form back now leaves it
             behind.undo_from = self.history.undo_depth();
+            behind.list_steps.clear();
             if let Some(placing) = self.form.take().filter(|f| f.page != behind.page) {
                 self.pages.done_with(placing.page);
             }
@@ -5175,7 +5223,7 @@ impl CutCraftApp {
         let close_label = if new_job { "Cancel" } else { "Close" };
         let job_setup = open.id == "job_setup";
         // what the form has done that Cancel would take back
-        let done = self.history.undo_depth() > open.undo_from;
+        let done = self.history.undo_depth() > open.undo_from + open.list_steps.len();
         let (mut apply, mut close, mut default, mut cancel) = (false, false, false, false);
         let (mut save, mut load, mut new_shape) = (false, false, false);
         if open.page == Page::Toolpaths {
@@ -5211,8 +5259,7 @@ impl CutCraftApp {
                         .add_enabled(done, egui::Button::new("Cancel"))
                         .on_hover_hint(
                             "Undo what this tool did since it opened, and close it. A change \
-                             made in the toolpath list meanwhile is kept, with what the tool \
-                             did before it",
+                             made in the toolpath list meanwhile is kept",
                         )
                         .on_disabled_hover_text("Nothing done yet to take back")
                         .clicked();
@@ -5336,12 +5383,19 @@ impl CutCraftApp {
         }
     }
 
-    /// Cancel on a tool's form: everything done since the form opened (or since the toolpath
-    /// list beside it last changed the job) is undone (and can be redone), and the form
-    /// closes.
+    /// Cancel on a tool's form: everything done since the form opened is undone (and can be
+    /// redone), and the form closes. What was changed in the toolpath list beside it
+    /// meanwhile is not the form's: it is made again after (and Redo then has nothing).
     pub(super) fn cancel_form(&mut self) {
         let Some(form) = self.form.take() else { return };
         while self.history.undo_depth() > form.undo_from && self.history.undo(&mut self.doc) {}
+        for (id, params) in &form.list_steps {
+            if let Some(params) = self.list_step_again(id, params)
+                && let Err(e) = self.apply(id, &params)
+            {
+                self.status.set_message(&e);
+            }
+        }
         self.pages.done_with(form.page);
         self.status
             .set_message(&format!("{} cancelled", form.label));

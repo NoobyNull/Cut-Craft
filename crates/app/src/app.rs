@@ -995,6 +995,10 @@ type Rings3d = (
 );
 
 /// A command whose settings form is open.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the form's states, each on or off"
+)]
 struct OpenForm {
     id: &'static str,
     label: &'static str,
@@ -1044,9 +1048,15 @@ struct OpenForm {
     /// While a value is dragged, the undo depth after its last step and the shape and
     /// settings from before that step: the next step takes it back first.
     dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
-    /// How many changes could be undone when it opened: Cancel undoes back to there. A change
-    /// made in the toolpath list while it is open moves this past it, so Cancel keeps it.
+    /// How many changes could be undone when it opened: Cancel undoes back to there, then
+    /// makes again the changes in `list_steps`.
     undo_from: usize,
+    /// The changes made in the toolpath list beside it while it is open (reorder, group,
+    /// delete, show or hide), each as its command and settings: they are not the form's, so
+    /// Cancel makes them again after taking back everything since it opened.
+    list_steps: Vec<(String, Value)>,
+    /// While the toolpath list beside it is drawn: what it applies goes in `list_steps`.
+    in_list: bool,
     /// How its drag is read: another way for a toolbox variant (Draw Circle from Edge).
     way: crate::flyout::DragWay,
 }

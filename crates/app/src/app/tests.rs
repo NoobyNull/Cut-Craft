@@ -15777,9 +15777,37 @@ fn cancel_on_a_form_keeps_a_reorder_made_in_the_toolpath_list_while_it_was_open(
     );
     assert_eq!(
         h.app.doc.vectors.len(),
-        1,
-        "only what the form did after it is undone"
+        0,
+        "what the form did before the reorder and after it is undone"
     );
+    // one Undo takes back the reorder, as the list's own step
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(h.app.doc.toolpaths[&EntityId(1)].name, "Pocket");
+    assert_eq!(h.app.doc.vectors.len(), 0);
+}
+
+#[test]
+fn cancel_with_only_a_list_change_since_the_form_opened_has_nothing_to_take_back() {
+    let mut h = named_toolpaths();
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    h.app.selected_toolpath = Some(EntityId(1));
+    h.frame(vec![]);
+    let down = *h
+        .texts_at("Move Down")
+        .last()
+        .expect("the list's Move Down");
+    h.click(down, Modifiers::NONE);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.list_steps.len(), 1, "the list's step is noted");
+    assert_eq!(
+        h.app.history.undo_depth(),
+        form.undo_from + 1,
+        "only the list's step since it opened"
+    );
+    h.app.cancel_form();
+    assert_eq!(h.app.doc.toolpaths[&EntityId(2)].name, "Pocket");
 }
 
 #[test]

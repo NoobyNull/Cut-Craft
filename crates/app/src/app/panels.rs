@@ -4038,18 +4038,18 @@ impl CutCraftApp {
     }
 
     /// The toolpath list itself (see [`Self::toolpath_list_rows`]). What it changes while
-    /// a form is open beside it is not the form's to take back: Cancel on that form stops
-    /// short of it, undoing only what the form did after.
+    /// a form is open beside it is not the form's to take back: the form notes it, and its
+    /// Cancel makes it again after undoing everything since it opened.
     pub(super) fn toolpath_list_body(&mut self, ui: &mut egui::Ui, templates: bool) {
-        let open = self.form.as_ref().map(|f| (f.id, f.undo_from));
-        let depth = self.history.undo_depth();
+        if let Some(form) = self.form.as_mut() {
+            form.in_list = true;
+        }
         self.toolpath_list_rows(ui, templates);
-        let after = self.history.undo_depth();
-        if let Some(form) = self.form.as_mut()
-            && open == Some((form.id, form.undo_from))
-            && after > depth
-        {
-            form.undo_from = after;
+        if let Some(form) = self.form.as_mut() {
+            form.in_list = false;
+        }
+        if let Some(form) = self.form_behind.as_mut() {
+            form.in_list = false;
         }
     }
 
