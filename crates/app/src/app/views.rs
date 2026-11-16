@@ -1240,7 +1240,8 @@ impl CutCraftApp {
     /// The 2D view's drawing, and the snap grid's points while snapping to it.
     fn paint_2d(&self, ui: &egui::Ui, canvas: &view2d::Canvas, overlay: &view2d::Overlay) {
         let look = &self.options.appearance;
-        let colours = look.canvas(ui.visuals().dark_mode);
+        let dark = ui.visuals().dark_mode;
+        let colours = look.canvas(dark);
         canvas.paint_sheet(ui, colours.sheet_color);
         // Join Open Ends marks the ends it joins, whether or not the view shows them
         let display = crate::display::Display {
@@ -1254,6 +1255,7 @@ impl CutCraftApp {
             self.selected_toolpath,
             &display,
             (self.job_epoch, self.history.revision()),
+            &look.lines(dark),
         );
         if self.options.snapping.snap_to_grid {
             canvas.paint_grid(

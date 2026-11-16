@@ -286,19 +286,31 @@ fn edit_units_switches_the_job_between_millimetres_and_inches() {
 }
 
 #[test]
-fn a_tools_figures_read_in_the_tools_own_units() {
+fn a_tool_in_other_units_leaves_the_form_in_the_jobs_units() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "pocket_toolpath");
+    // an inch bit picked in a mm job: the bit's units are its own, not the form's
     h.app.form.as_mut().unwrap().params["tool"]["units"] = Value::from("Inch");
     // the Toolpaths page flies out unseen on its first frame
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Pocket Toolpath").is_some(), "the form is drawn");
-    let line = h.shapes.iter().any(|clipped| {
-        matches!(&clipped.shape, egui::Shape::Text(t)
-            if t.galley.text().starts_with("0.236 in end mill"))
-    });
-    assert!(line, "a 6 mm end mill reads in inches in a mm job");
+    let texts: Vec<String> = h
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.iter().any(|t| t.starts_with("6 mm end mill")),
+        "the bit reads in the job's mm: {texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t.trim() == "in"),
+        "no field of a mm job's form turns to inches: {texts:?}"
+    );
 }
 
 #[test]
@@ -16702,6 +16714,46 @@ fn undo_last_preview_after_swap_sides_brings_the_preview_back_turned_over_with_t
     h.frame(vec![]);
     assert!(!h.app.doc.bottom_side);
     assert_eq!(h.app.simulation.as_ref().map(|m| &m.heights), Some(&up));
+}
+
+#[test]
+fn the_2d_view_draws_vectors_and_toolpaths_in_the_colours_picked() {
+    // a colour-blind user could not tell vectors from toolpaths: Options ▸ Appearance
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let params = h
+        .app
+        .registry
+        .get("profile_toolpath")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.selected_toolpath = None;
+    h.app.doc.selection.clear();
+    h.app.view = View::TwoD;
+    let (vector, toolpath) = ([1, 2, 3], [4, 5, 6]);
+    let look = &mut h.app.options.appearance;
+    look.line_colors = crate::options::LinePalette::MyOwn;
+    for theme in [&mut look.light_2d, &mut look.dark_2d] {
+        theme.vector_color = vector;
+        theme.toolpath_color = toolpath;
+    }
+    h.frame(vec![]);
+    let drawn_in = |h: &Harness, [r, g, b]: [u8; 3]| {
+        let colour = egui::epaint::ColorMode::Solid(egui::Color32::from_rgb(r, g, b));
+        h.shapes
+            .iter()
+            .filter(|c| matches!(&c.shape, egui::Shape::Path(p) if p.stroke.color == colour))
+            .count()
+    };
+    assert!(
+        drawn_in(&h, vector) > 0,
+        "the rectangle in the vector colour"
+    );
+    assert!(
+        drawn_in(&h, toolpath) > 0,
+        "its profile in the toolpath colour"
+    );
 }
 
 /// #511: Machine has no "Update Post-Processor Database" (it only ran Cut Craft's own update

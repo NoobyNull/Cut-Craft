@@ -47,6 +47,14 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
         include_bytes!("../../help/pictures/auto-rotate.gif"),
     ),
     (
+        "line-colors-dark.png",
+        include_bytes!("../../help/pictures/line-colors-dark.png"),
+    ),
+    (
+        "line-colors-light.png",
+        include_bytes!("../../help/pictures/line-colors-light.png"),
+    ),
+    (
         "group-step-inside.png",
         include_bytes!("../../help/pictures/group-step-inside.png"),
     ),

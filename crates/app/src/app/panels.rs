@@ -3646,6 +3646,11 @@ impl CutCraftApp {
             vec![]
         };
         let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
+        // the vectors in the colour the 2D view draws them in (Options ▸ Appearance)
+        let vector = egui::Stroke::new(
+            stroke.width,
+            crate::view2d::colour32(self.options.appearance.lines(ui.visuals().dark_mode).vector),
+        );
         let screen = view3d::screen_of(surface, orbit, framing, fit, None);
         let local = |p: cut_craft_core::geometry::Point, z: f64| {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
@@ -3662,7 +3667,7 @@ impl CutCraftApp {
             let z = view3d::vector_plane(surface, points);
             let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
             for run in in_sight(&line) {
-                painter.add(egui::Shape::line(run, stroke));
+                painter.add(egui::Shape::line(run, vector));
             }
         }
         // the keep-out zones in red, closed, over whatever they cover

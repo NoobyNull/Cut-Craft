@@ -638,15 +638,13 @@ fn named(template: &str, fields: &Value) -> String {
     path
 }
 
-/// The units a form itself sets (Job Setup's), found anywhere in its params.
+/// The units a form itself sets: Job Setup's, beside its sizes. A tool picked on a toolpath
+/// form carries its own units too (a metric bit in an inch job), but they are the bit's, never
+/// the form's: the form stays in the job's units.
 pub fn units_chosen(params: &Value) -> Option<Units> {
-    match params {
-        Value::Object(map) => map
-            .get("units")
-            .and_then(|u| serde_json::from_value(u.clone()).ok())
-            .or_else(|| map.values().find_map(units_chosen)),
-        _ => None,
-    }
+    [&params["units"], &params["size"]["units"]]
+        .into_iter()
+        .find_map(|u| serde_json::from_value(u.clone()).ok())
 }
 
 /// Edits `value`; `around` holds the fields beside it, for pictures named by them.
@@ -2582,6 +2580,23 @@ mod tests {
         let job_setup = serde_json::json!({ "size": { "width": 10.0, "units": "Inch" } });
         assert_eq!(units_chosen(&job_setup), Some(Units::Inch));
         assert_eq!(units_chosen(&serde_json::json!({ "width": 1.0 })), None);
+    }
+
+    #[test]
+    fn a_metric_tool_leaves_an_inch_jobs_toolpath_form_in_inches() {
+        // a Profile form in an inch job with a 6 mm end mill picked: the bit's own units are
+        // the bit's, so cut depth, allowance and leads stay in the job's inches
+        let tool = cut_craft_core::toolpath::Tool {
+            units: Units::Mm,
+            ..Default::default()
+        };
+        let profile = serde_json::json!({
+            "cut_depth": 6.35,
+            "allowance": 0.0,
+            "tool": serde_json::to_value(&tool).expect("a tool serializes"),
+            "tools": [serde_json::to_value(&tool).expect("a tool serializes")],
+        });
+        assert_eq!(units_chosen(&profile), None);
     }
 
     #[test]

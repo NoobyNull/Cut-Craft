@@ -1416,6 +1416,12 @@ pub struct Appearance {
     #[serde(default)]
     #[schemars(title = "Use the desktop's title bar")]
     pub system_title_bar: bool,
+    /// The colors vectors, toolpaths and rapid moves are drawn in. Standard: as Cut Craft
+    /// has always drawn them. Color-blind friendly: colors told apart by how light or dark
+    /// they are, not only by their hue. My own colors: pick each one below, for each theme
+    #[serde(default)]
+    #[schemars(title = "Vector and toolpath colors")]
+    pub line_colors: LinePalette,
     /// The 2D view's colors while the light theme is on
     #[serde(default = "CanvasColours::light")]
     #[schemars(title = "2D view in the light theme")]
@@ -1445,6 +1451,7 @@ impl Default for Appearance {
         Self {
             theme: Theme::default(),
             system_title_bar: false,
+            line_colors: LinePalette::default(),
             light_2d: CanvasColours::light(),
             dark_2d: CanvasColours::dark(),
             grid_point_size: grid_point_size(),
@@ -1459,6 +1466,25 @@ impl Appearance {
         if dark { &self.dark_2d } else { &self.light_2d }
     }
 
+    /// The colours the 2D view draws vectors, toolpaths and rapid moves in (vectors in the
+    /// 3D view too), for the dark theme or the light one, as [`Self::line_colors`] says.
+    pub fn lines(&self, dark: bool) -> Lines {
+        let (visuals, own) = if dark {
+            (egui::Visuals::dark(), &self.dark_2d)
+        } else {
+            (egui::Visuals::light(), &self.light_2d)
+        };
+        match self.line_colors {
+            LinePalette::Standard => Lines::standard(&visuals),
+            LinePalette::ColorBlind => Lines::colour_blind(dark),
+            LinePalette::MyOwn => Lines {
+                vector: own.vector_color,
+                toolpath: own.toolpath_color,
+                rapid: own.rapid_color,
+            },
+        }
+    }
+
     /// What egui's text and control sizes are multiplied by, kept between 80% and 200%.
     pub fn text_scale(&self) -> f32 {
         #[expect(clippy::cast_precision_loss, reason = "80 to 200")]
@@ -1469,6 +1495,10 @@ impl Appearance {
 
 /// The colors of the 2D view's material sheet and of the snap grid's points over it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "the names options.json has kept them under"
+)]
 pub struct CanvasColours {
     /// The material sheet the drawing sits on
     #[schemars(title = "Sheet color", extend("x-kind" = "colour"))]
@@ -1476,6 +1506,26 @@ pub struct CanvasColours {
     /// The snap grid's points: pick one that stands out from the sheet color
     #[schemars(title = "Grid color", extend("x-kind" = "colour"))]
     pub grid_color: [u8; 3],
+    /// Your drawing's lines, the shapes toolpaths are made from
+    #[schemars(
+        title = "Vector color",
+        extend("x-kind" = "colour", "x-show-when" = {"appearance.line_colors": "my_own"})
+    )]
+    pub vector_color: [u8; 3],
+    /// Where the bit cuts: pick one that looks different from the vector color, lighter or
+    /// darker as well as another hue
+    #[schemars(
+        title = "Toolpath color",
+        extend("x-kind" = "colour", "x-show-when" = {"appearance.line_colors": "my_own"})
+    )]
+    pub toolpath_color: [u8; 3],
+    /// The bit's quick moves above the material, and its plunges and lifts, when the
+    /// Toolpath Drawing menu shows them
+    #[schemars(
+        title = "Rapid move color",
+        extend("x-kind" = "colour", "x-show-when" = {"appearance.line_colors": "my_own"})
+    )]
+    pub rapid_color: [u8; 3],
 }
 
 impl CanvasColours {
@@ -1492,9 +1542,61 @@ impl CanvasColours {
     /// The sheet in the theme's field colour, the grid as near it as stays easy to see.
     fn of(visuals: &egui::Visuals) -> Self {
         let sheet = rgb(visuals.widgets.inactive.bg_fill);
+        let lines = Lines::standard(visuals);
         Self {
             sheet_color: sheet,
             grid_color: contrasting(sheet, rgb(visuals.text_color())),
+            vector_color: lines.vector,
+            toolpath_color: lines.toolpath,
+            rapid_color: lines.rapid,
+        }
+    }
+}
+
+/// Which colours vectors, toolpaths and rapid moves are drawn in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LinePalette {
+    /// Vectors in the text color, toolpaths orange, rapid moves red: as Cut Craft has
+    /// always drawn them
+    #[default]
+    Standard,
+    /// Vectors black (white in the dark theme), toolpaths deep orange, rapid moves pink:
+    /// told apart by how light or dark they are as well as by their hue
+    #[schemars(title = "Color-blind friendly")]
+    ColorBlind,
+    /// The vector, toolpath and rapid move colors you pick for each theme below
+    #[schemars(title = "My own colors")]
+    MyOwn,
+}
+
+/// The colours the views draw vectors, toolpaths and rapid moves in, `[r, g, b]`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Lines {
+    pub vector: [u8; 3],
+    pub toolpath: [u8; 3],
+    pub rapid: [u8; 3],
+}
+
+impl Lines {
+    /// The theme's own: text, warning and error colours, as the views always drew them.
+    fn standard(visuals: &egui::Visuals) -> Self {
+        Self {
+            vector: rgb(visuals.text_color()),
+            toolpath: rgb(visuals.warn_fg_color),
+            rapid: rgb(visuals.error_fg_color),
+        }
+    }
+
+    /// From Okabe and Ito's colour-blind safe colours: vermillion toolpaths and reddish
+    /// purple rapids (one warm, one blue-ish to a red-green colour-blind eye) against black
+    /// or white vectors, far apart in lightness so hue is not needed to tell them apart.
+    /// Blue is left to the selection.
+    fn colour_blind(dark: bool) -> Self {
+        Self {
+            vector: if dark { [255, 255, 255] } else { [0, 0, 0] },
+            toolpath: [213, 94, 0],
+            rapid: [204, 121, 167],
         }
     }
 }
@@ -1883,6 +1985,30 @@ impl Options {
             .and_then(serde_json::Value::as_object_mut)
             .and_then(|a| a.remove("grid_color"))
             .and_then(|g| serde_json::from_value::<[u8; 3]>(g).ok());
+        // each theme's colours from before line colours: the theme's own filled in
+        if let Some(appearance) = file
+            .get_mut("appearance")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            for (key, theme) in [
+                ("light_2d", CanvasColours::light()),
+                ("dark_2d", CanvasColours::dark()),
+            ] {
+                let Some(saved) = appearance
+                    .get_mut(key)
+                    .and_then(serde_json::Value::as_object_mut)
+                else {
+                    continue;
+                };
+                if let serde_json::Value::Object(defaults) =
+                    serde_json::to_value(theme).expect("colours serialise")
+                {
+                    for (name, value) in defaults {
+                        saved.entry(name).or_insert(value);
+                    }
+                }
+            }
+        }
         let (mut options, unread) = match serde_json::from_value::<Self>(file.clone()) {
             Ok(options) => (options, vec![]),
             Err(_) => Self::read_each(file),
@@ -2625,6 +2751,131 @@ mod tests {
         let reset = o.reset("appearance");
         assert_eq!(reset.appearance.dark_2d, CanvasColours::dark());
         assert_eq!(reset.appearance.light_2d, CanvasColours::light());
+    }
+
+    #[test]
+    fn standard_line_colours_are_the_theme_s_own() {
+        // what the 2D view always drew: vectors in the text colour, toolpaths in the warning
+        // colour, rapid moves in the error colour
+        let a = Appearance::default();
+        assert_eq!(a.line_colors, LinePalette::Standard);
+        for (dark, v) in [
+            (false, egui::Visuals::light()),
+            (true, egui::Visuals::dark()),
+        ] {
+            let lines = a.lines(dark);
+            assert_eq!(lines.vector, rgb(v.text_color()), "dark {dark}");
+            assert_eq!(lines.toolpath, rgb(v.warn_fg_color), "dark {dark}");
+            assert_eq!(lines.rapid, rgb(v.error_fg_color), "dark {dark}");
+        }
+    }
+
+    #[test]
+    fn colour_blind_lines_differ_in_brightness_not_only_hue() {
+        // issue from 0.6.11: a colour-blind user could not tell vectors from toolpaths,
+        // the dark theme's grey vectors and orange toolpaths being as bright as each other
+        let a = Appearance {
+            line_colors: LinePalette::ColorBlind,
+            ..Appearance::default()
+        };
+        for dark in [false, true] {
+            let (lines, sheet) = (a.lines(dark), a.canvas(dark).sheet_color);
+            let pairs = [
+                ("vector and toolpath", lines.vector, lines.toolpath, 3.0),
+                ("vector and sheet", lines.vector, sheet, 4.5),
+                ("toolpath and sheet", lines.toolpath, sheet, 2.5),
+                ("rapid and sheet", lines.rapid, sheet, 2.0),
+            ];
+            for (what, a, b, least) in pairs {
+                assert!(
+                    contrast_of(a, b) >= least,
+                    "dark {dark}: {what} {a:?} {b:?} only {:.2}",
+                    contrast_of(a, b)
+                );
+            }
+        }
+        // the standard dark theme's are the pair the report was about
+        let standard = Appearance::default().lines(true);
+        assert!(contrast_of(standard.vector, standard.toolpath) < 2.0);
+    }
+
+    #[test]
+    fn my_own_line_colours_are_used_only_once_chosen() {
+        let mut a = Appearance::default();
+        a.light_2d.toolpath_color = [1, 2, 3];
+        a.dark_2d.vector_color = [4, 5, 6];
+        a.dark_2d.rapid_color = [7, 8, 9];
+        assert_ne!(a.lines(false).toolpath, [1, 2, 3], "still standard");
+        a.line_colors = LinePalette::ColorBlind;
+        assert_ne!(
+            a.lines(false).toolpath,
+            [1, 2, 3],
+            "still the colour-blind set"
+        );
+        a.line_colors = LinePalette::MyOwn;
+        assert_eq!(a.lines(false).toolpath, [1, 2, 3]);
+        assert_eq!(a.lines(true).vector, [4, 5, 6]);
+        assert_eq!(a.lines(true).rapid, [7, 8, 9]);
+        // my own start as the standard ones, so picking it changes nothing until edited
+        let fresh = Appearance {
+            line_colors: LinePalette::MyOwn,
+            ..Appearance::default()
+        };
+        assert_eq!(fresh.lines(true), Appearance::default().lines(true));
+        assert_eq!(fresh.lines(false), Appearance::default().lines(false));
+    }
+
+    #[test]
+    fn options_saved_before_line_colours_keep_their_2d_colours() {
+        // 0.6.11 saved each theme's sheet and grid colours, nothing more
+        let mut file = serde_json::to_value(Options::default()).unwrap();
+        file["appearance"]["dark_2d"] =
+            serde_json::json!({ "sheet_color": [9, 9, 9], "grid_color": [200, 200, 200] });
+        file["appearance"]["light_2d"] =
+            serde_json::json!({ "sheet_color": [250, 250, 250], "grid_color": [1, 1, 1] });
+        file["appearance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("line_colors");
+        let read = Options::read_bytes(file.to_string().as_bytes());
+        assert!(read.unread.is_empty(), "{:?}", read.unread);
+        let a = read.options.appearance;
+        assert_eq!(a.line_colors, LinePalette::Standard);
+        assert_eq!(a.dark_2d.sheet_color, [9, 9, 9]);
+        assert_eq!(a.light_2d.grid_color, [1, 1, 1]);
+        // each theme's line colours start as that theme's own
+        let (dark, light) = (CanvasColours::dark(), CanvasColours::light());
+        assert_eq!(a.dark_2d.vector_color, dark.vector_color);
+        assert_eq!(a.dark_2d.toolpath_color, dark.toolpath_color);
+        assert_eq!(a.light_2d.rapid_color, light.rapid_color);
+        assert_ne!(dark.vector_color, light.vector_color);
+    }
+
+    #[test]
+    fn my_own_line_colours_show_only_once_chosen() {
+        let schema = serde_json::to_value(schemars::schema_for!(Options)).unwrap();
+        let fields = crate::form::fields(&schema);
+        let appearance = fields.iter().find(|f| f.key == "appearance").unwrap();
+        let crate::form::Kind::Group(inner) = &appearance.kind else {
+            panic!("a section");
+        };
+        let palette = inner.iter().find(|f| f.key == "line_colors");
+        assert!(palette.is_some(), "the choice is on the Appearance page");
+        let light = inner.iter().find(|f| f.key == "light_2d").unwrap();
+        let crate::form::Kind::Group(colours) = &light.kind else {
+            panic!("a section");
+        };
+        let toolpath = colours.iter().find(|f| f.key == "toolpath_color").unwrap();
+        let sheet = colours.iter().find(|f| f.key == "sheet_color").unwrap();
+        let mut options = Options::default();
+        let shown = |f: &crate::form::Field, o: &Options| {
+            let values = serde_json::to_value(o).unwrap();
+            f.when.as_ref().is_none_or(|w| w.shown(&values))
+        };
+        assert!(!shown(toolpath, &options));
+        assert!(shown(sheet, &options), "the sheet's colour always shows");
+        options.appearance.line_colors = LinePalette::MyOwn;
+        assert!(shown(toolpath, &options));
     }
 
     #[test]
