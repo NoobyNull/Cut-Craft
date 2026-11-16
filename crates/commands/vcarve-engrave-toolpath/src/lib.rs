@@ -24,7 +24,8 @@ pub struct VcarveEngraveToolpath;
 #[serde(rename_all = "snake_case")]
 pub enum Place {
     /// Carve the whole shape: the tip runs down its middle, as deep as its width needs, so
-    /// the sides meet in a sharp crease (the usual V-carved lettering)
+    /// the sides meet in a sharp crease (the usual V-carved lettering). Its passes go at the
+    /// bit's pass depth; Edit Passes is for the carves of a set depth
     #[default]
     #[schemars(title = "Fill")]
     Fill,
@@ -577,7 +578,13 @@ impl Carving<'_> {
         }
         let mut all = vec![];
         let mut above = -p.start_depth;
-        let levels = tool.pass_depths(p.start_depth + widest / spread);
+        // passes set by hand were set against the Groove depth, which Fill doesn't cut to:
+        // its passes go at the pass depth (a thin last pass still counts)
+        let even = Tool {
+            passes: vec![],
+            ..tool.clone()
+        };
+        let levels = even.pass_depths(p.start_depth + widest / spread);
         let last_level = levels.last().copied().unwrap_or(above);
         for level in levels {
             if level >= above - 1e-9 {

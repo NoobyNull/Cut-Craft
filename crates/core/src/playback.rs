@@ -186,6 +186,11 @@ impl Playback {
         ))
     }
 
+    /// Every tool this playback cuts with, in the order their toolpaths play.
+    pub fn tools(&self) -> &[Tool] {
+        &self.tools
+    }
+
     /// Where the tool's tip is, and which tool it is.
     pub fn tool(&self) -> Option<(DVec3, &Tool)> {
         let (i, t) = self.locate(self.at)?;

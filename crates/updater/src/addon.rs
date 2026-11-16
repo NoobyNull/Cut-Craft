@@ -334,6 +334,7 @@ fn install_with(
     };
     manifest.suits(current)?;
     usable(&manifest)?;
+    owns_its_id(addons, &manifest, &offer.repo)?;
     let downloads = manifest
         .downloads
         .iter()
@@ -381,6 +382,36 @@ fn install_with(
         offer.repo
     );
     Ok(manifest)
+}
+
+/// Whether `repo`'s add-on may go in the folder its manifest names: never in place of one
+/// of Cut Craft's own add-ons (which come only from their own repositories), nor of an
+/// add-on installed from another repository. An update from the same repository may.
+fn owns_its_id(addons: &Path, manifest: &Manifest, repo: &Repo) -> Result<(), String> {
+    let same = |a: &Repo, b: &Repo| {
+        a.owner.eq_ignore_ascii_case(&b.owner) && a.name.eq_ignore_ascii_case(&b.name)
+    };
+    if let Some(own) = OFFICIAL.iter().find(|o| o.id == manifest.id)
+        && Repo::parse(own.repo).is_ok_and(|r| !same(&r, repo))
+    {
+        return Err(format!(
+            "Not installed: {repo}'s add-on uses the name \"{}\", which belongs to Cut \
+             Craft's own {} add-on from {}. Installing it would replace that one. Ask \
+             {repo}'s maker to give it a name of its own",
+            manifest.id, own.name, own.repo
+        ));
+    }
+    if let Some(record) = installed(addons, &manifest.id)
+        && !same(&record.repo, repo)
+    {
+        return Err(format!(
+            "Not installed: {repo}'s add-on uses the name \"{}\", the same as the add-on \
+             installed from {}. Installing it would replace that one. Remove that add-on \
+             first if you want this one instead",
+            manifest.id, record.repo
+        ));
+    }
+    Ok(())
 }
 
 fn cannot(dir: &Path, e: &std::io::Error) -> String {
@@ -597,7 +628,16 @@ mod tests {
 
     impl Fake {
         fn install(&self, addons: &Path, platform: &str) -> Result<Manifest, String> {
-            let offer = Offer::from_release(repo(), self.release.clone(), platform)?;
+            self.install_from(repo(), addons, platform)
+        }
+
+        fn install_from(
+            &self,
+            from: Repo,
+            addons: &Path,
+            platform: &str,
+        ) -> Result<Manifest, String> {
+            let offer = Offer::from_release(from, self.release.clone(), platform)?;
             install_with(
                 addons,
                 &offer,
@@ -707,6 +747,28 @@ mod tests {
         assert!(addons.join("depth").join(program()).is_file());
         remove(&addons, "depth").unwrap();
         assert!(!addons.join("depth").exists());
+        fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn another_repository_s_add_on_never_takes_an_installed_or_official_add_on_s_place() {
+        let fork = Repo::parse("someone/CutCraft-Depth-fork").unwrap();
+        // Cut Craft's own id comes only from its own repository
+        let addons = scratch("fork");
+        let e = depth_release(false)
+            .install_from(fork.clone(), &addons, &platform())
+            .unwrap_err();
+        assert!(e.contains("NoobyNull/CutCraft-Depth"), "{e}");
+        assert!(installed(&addons, "depth").is_none());
+        // installed from its repository, it is kept: the fork does not replace it
+        depth_release(true).install(&addons, &platform()).unwrap();
+        let e = depth_release(true)
+            .install_from(fork, &addons, &platform())
+            .unwrap_err();
+        assert!(e.contains("someone/CutCraft-Depth-fork"), "{e}");
+        assert_eq!(installed(&addons, "depth").unwrap().repo, repo());
+        // the same repository again is an update, as before
+        depth_release(true).install(&addons, &platform()).unwrap();
         fs::remove_dir_all(addons).unwrap();
     }
 

@@ -31,7 +31,8 @@ pub enum Strategy {
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
-    /// Of the laser's maximum
+    /// Of the laser's maximum. The laser burns only along the cuts: it is off while it
+    /// comes down to the surface, so no dot is burned where a line starts
     #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
     #[schemars(extend("x-group" = "Laser"))]
     pub power: f64,
@@ -39,28 +40,34 @@ pub struct Params {
     #[schemars(range(min = 1))]
     #[schemars(extend("x-group" = "Laser"))]
     pub passes: u32,
-    /// Cut along the shapes, or fill them with lines
+    /// Cut along the shapes, or fill them with lines (each shows only its own settings)
     #[schemars(extend("x-group" = "Fill"))]
     pub strategy: Strategy,
     /// Extra offset for cutting outside or inside, to ease or tighten a fit
     #[schemars(extend("x-unit" = "mm"))]
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": ["cut_outside", "cut_inside"]}))]
     pub allowance: f64,
     /// Between hatch lines
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub stepover: f64,
     /// The angle of the hatch lines: 0° along X, 90° along Y
     #[schemars(extend("x-unit" = "°"))]
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub hatch_angle: f64,
     /// A second set of hatch lines at right angles
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub cross_hatch: bool,
     /// Round the shapes as well, so a hatch has crisp edges
     #[schemars(extend("x-group" = "Fill"))]
+    #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub outline: bool,
-    /// The laser: its diameter is the kerf, its feed rate the move speed
+    /// The laser, a Laser in the Tool Database (Select… picks another): its diameter is the
+    /// kerf, its feed rate the move speed
     pub tool: Tool,
 }
 
@@ -81,29 +88,18 @@ impl Default for Params {
     }
 }
 
-/// A laser as a tool: its diameter is the kerf.
+/// A laser as a tool (the Tool Database's starter laser): its diameter is the kerf.
 pub fn laser() -> Tool {
-    Tool {
-        name: "Laser (0.15 mm kerf)".into(),
-        diameter: 0.15,
-        feed_rate: 1500.0,
-        plunge_rate: 1500.0,
-        spindle_speed: 0.0,
-        ..Tool::default()
-    }
+    Tool::laser()
 }
 
-/// `moves` with the laser's `power` on every move but rapids: what a laser toolpath holds.
+/// `moves` with the laser's `power` on its cuts only, what a laser toolpath holds: off on
+/// rapids, and while it comes down to the surface, so it never burns a dot standing still
+/// where a line starts.
 pub fn powered(moves: &[Move], power: f64) -> Vec<f64> {
     moves
         .iter()
-        .map(|m| {
-            if m.kind == MoveKind::Rapid {
-                0.0
-            } else {
-                power
-            }
-        })
+        .map(|m| if m.kind == MoveKind::Cut { power } else { 0.0 })
         .collect()
 }
 
@@ -232,7 +228,8 @@ mod tests {
         let t = cut(&Params::default());
         assert_eq!(t.power.len(), t.moves.len());
         for (m, &p) in t.moves.iter().zip(&t.power) {
-            assert_eq!(p, if m.kind == MoveKind::Rapid { 0.0 } else { 80.0 });
+            // off while it comes down to the surface, so no dot burns where each line starts
+            assert_eq!(p, if m.kind == MoveKind::Cut { 80.0 } else { 0.0 });
             if m.kind != MoveKind::Rapid {
                 assert!(m.to.z.abs() < 1e-12);
             }

@@ -650,9 +650,16 @@ I[js + "xy_datum_top_right.svg"] = lambda: datum(42, 10)
 I[js + "xy_datum_centre.svg"] = lambda: datum(24, 24)
 I[js + "z_zero_material_surface.svg"] = lambda: [line(2, 44, 46, 44, DARK, 2.5), slab(6, 26, 30, 14, 8), arrow(44, 6, 44, 17, ACC), line(36, 18, 47, 18, ACC, 2.5)]
 I[js + "z_zero_machine_bed.svg"] = lambda: [line(2, 44, 46, 44, ACC, 4), slab(6, 26, 30, 14, 8), arrow(44, 28, 44, 41, ACC)]
+I[js + "z_zero_cylinder_surface.svg"] = lambda: [*cylinder(), line(2, 30, 46, 30, GREY, 1.5, "4 2"), arrow(44, 4, 44, 16, ACC), line(30, 19, 47, 19, ACC, 2.5)]
+I[js + "z_zero_cylinder_axis.svg"] = lambda: [*cylinder(), line(2, 30, 46, 30, ACC, 3, "4 2"), arrow(44, 6, 44, 27, ACC)]
 I[js + "material_size_xyz.svg"] = lambda: [slab(5, 22, 28, 12, 10), darrow(5, 40, 33, 40, RED, 2), darrow(40, 22, 40, 34, TP, 2), darrow(5, 18, 15, 8, INK, 2)]
 I[js + "single_sided_job.svg"] = lambda: [slab(5, 24, 32, 12, 9), solid("M5,24 L14,15 H46 L37,24 Z", "#ffd19a"), path("M5,24 L14,15 H46 L37,24 Z", ACC, 2.5)]
 I[js + "double_sided_job.svg"] = lambda: [slab(5, 20, 32, 12, 9), path("M5,32 H37", ACC, 3), path("M5,20 L14,11 H46 L37,20 Z", ACC, 2.5), curved_arrow(42, 36, 6, 200, 450, INK, 2.5, 5)]
+def cylinder():
+    """A rotary job's cylinder lying along X, its axis at y = 30."""
+    return [path("M10,20 H36 A5,10 0 0 1 36,40 H10 A5,10 0 0 1 10,20 Z", WOODD, 2.5, WOOD), ell(10, 30, 5, 10, WOODD, 2.5, "#e2bd83")]
+
+
 I[js + "rotary_job.svg"] = lambda: [path("M10,14 H36 A5,10 0 0 1 36,34 H10 A5,10 0 0 1 10,14 Z", WOODD, 2.5, WOOD), ell(10, 24, 5, 10, WOODD, 2.5, "#e2bd83"),
                                     line(2, 24, 46, 24, GREY, 1.5, "4 2"), curved_arrow(40, 24, 9, 290, 430, ACC, 2.5, 5)]
 
@@ -1189,6 +1196,68 @@ DIAGRAMS[dg + "height_base.svg"] = lambda: [
     line(18, 48, 28, 48, ACC, 2, GUIDE), label("H2", 4, 40)]
 
 
+
+# ---- the clearing pictures (Clear Pocket's edge pass, and the help's Clearing pages) -----
+# the clearing stops A short of the wall (dashed, where the wall ends up), then the bit goes
+# round once at the full depth and skims A off in one even cut: drawn on the left, still to
+# come on the right
+DIAGRAMS[dg + "edge_pass.svg"] = lambda: [
+    section([(X0, TOP), (30, TOP), (30, 34), (74, 34), (74, TOP), (X1, TOP)]),
+    rect(74, TOP, 8, 34 - TOP, 0, ACC, 2, "#f7d3a8"), bit("end_mill", 35, 0, 34, 5),
+    line(74, 3, 74, TOP - 1, ACC, 2, GUIDE), line(82, 3, 82, TOP - 1, ACC, 2, GUIDE),
+    darrow(74, 5, 82, 5, ACC, 2, 3), label("A", 85, 1), dim_right(TOP, 34, "D", reach=X1)]
+
+
+def light_step():
+    """The bit from above taking a bite B of its diameter out of the wall as it goes along."""
+    r, wall, b = 18, 62, 7
+    cx, cy = wall - r + b, 30
+    h = math.sqrt(r * r - (r - b) ** 2)
+    return [rect(wall, 12, 104 - wall, 40, 0, WOODD, 2, WOOD),
+            path(f"M{wall},{cy - h:.2f} A{r},{r} 0 0 1 {wall},{cy + h:.2f} Z", ACC, 2, "#f7d3a8"),
+            circ(cx, cy, r, INK, 2.5), dot(cx, cy, 2, GREY), arrow(cx, cy + 8, cx, cy - 10, TP, 2, 4),
+            line(wall, 4, wall, cy - h - 1, ACC, 2, GUIDE), line(cx + r, 4, cx + r, cy - r - 1, ACC, 2, GUIDE),
+            darrow(wall, 6, cx + r, 6, ACC, 2, 2.5), label("B", cx + r + 4, 2),
+            darrow(cx - r, 52, cx + r, 52, ACC, 2, 3), label("Dia", cx - r - 20, 47)]
+
+
+DIAGRAMS[dg + "light_step.svg"] = light_step
+
+
+def channel_loops():
+    """A narrow channel from above, swept in one trip: down in the middle, out in a spiral,
+    then D-shaped loops a light step apart, each a half circle from wall to wall and straight
+    back, the bit (grey) on one of them."""
+    top, bottom, x0, x1 = 12, 44, 8, 104
+    cy, bit_r = (top + bottom) / 2, 5
+    room = (bottom - top) / 2 - bit_r
+    pts = [(24, cy)]
+    turns, n = 3, 24
+    for k in range(1, turns * n + 1):
+        f = k / (turns * n)
+        a = math.pi / 2 + 2 * math.pi * turns * (f - 1)
+        pts.append((24 + room * f * math.cos(a), cy + room * f * math.sin(a)))
+    x, step, back = 24, 6, 0.15 * room
+    while x + step <= 92:
+        x += step
+        pts.append((x, cy + room))
+        # the front half: from this wall round to the far one
+        pts += [(x + room * math.cos(math.pi / 2 - math.pi * k / 16),
+                 cy + room * math.sin(math.pi / 2 - math.pi * k / 16)) for k in range(1, 17)]
+        # straight back across, round corners at each wall
+        c1 = (x - 0 + 0, cy - room + back)
+        pts += [(c1[0] - back * math.sin(math.pi / 2 * k / 4), c1[1] - back * math.cos(math.pi / 2 * k / 4))
+                for k in range(1, 5)]
+        c2 = (x, cy + room - back)
+        pts += [(c2[0] - back * math.cos(math.pi / 2 * k / 4), c2[1] + back * math.sin(math.pi / 2 * k / 4))
+                for k in range(1, 5)]
+    return [rect(x0, 2, x1 - x0, top - 2, 0, WOODD, 2, WOOD), rect(x0, bottom, x1 - x0, 54 - bottom, 0, WOODD, 2, WOOD),
+            pl([(round(px, 2), round(py, 2)) for px, py in pts], TP, 1.5),
+            circ(66, cy + room, bit_r, GREY, 2), arrow(70, 6, 100, 6, ACC, 2, 4)]
+
+
+DIAGRAMS[dg + "adaptive_channel.svg"] = channel_loops
+
 # ---- the Did You Know? tips' illustrations -----------------------------------------------
 # The same 112 x 56 as the measurement pictures and the same parts (the ink, the orange on
 # what the tip is about, green toolpaths, wood), but a little scene each: what the tip says,
@@ -1327,6 +1396,12 @@ TIP_PICS[tp_ + "closed_shape.svg"] = lambda: [
     tip_arrow(52, 62),
     group([path(OPEN_BOX + " Z", INK, 2.5, SHEET), line(32, 10, 42, 10, ACC, 3)], "translate(56 0)"),
     tick(91, 28, 1.1)]
+TIP_PICS[tp_ + "common_lines.svg"] = lambda: [
+    # two squares edge to edge, the edge they share in red; a copy pasted on its original,
+    # red all round
+    rect(8, 14, 26, 26, 0, INK, 2.5, SHEET), rect(34, 14, 26, 26, 0, INK, 2.5, SHEET),
+    line(34, 14, 34, 40, RED, 4),
+    rect(76, 14, 26, 26, 0, RED, 4, SHEET), rect(72, 10, 26, 26, 0, INK, 2, "none", dash="3 2.5")]
 TIP_PICS[tp_ + "tool_database.svg"] = lambda: [
     bit("end_mill", 22, 2, 52, 8), tip_arrow(36, 46),
     rect(52, 6, 54, 44, 3, INK, 2, PAPER),

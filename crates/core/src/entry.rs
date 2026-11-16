@@ -89,6 +89,43 @@ impl Default for Loops {
     }
 }
 
+/// Which way a pass that travels back the other way cuts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WayBack {
+    /// Every cut climb: raster rows all run one way (the tool comes back through the row
+    /// it just cut), and loops keep turning the same way when the path runs back
+    #[default]
+    KeepClimb,
+    /// Back and forth: raster rows cut climb then conventional, and loops run backwards
+    /// turn the other way, cutting conventional; quicker, with a rougher wall
+    Alternate,
+}
+
+/// How the light-cut clearing styles cut, for the whole job and saved with it
+/// (Toolpaths ▸ Clearing Settings): a new job starts with the settings kept as the default.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct ClearingSettings {
+    /// Trochoidal loops' width, turn and step; the step is also how wide a bite adaptive
+    /// clearing takes (the light step), as a share of the bit's diameter
+    #[serde(default)]
+    pub loops: Loops,
+    /// Raster rows and loops on a pass that runs back the other way
+    #[serde(default)]
+    pub way_back: WayBack,
+}
+
+impl ClearingSettings {
+    /// How wide a bite, in mm, the light step is for a bit `diameter` across.
+    pub fn light_bite(&self, diameter: f64) -> f64 {
+        diameter * self.loops.step / 100.0
+    }
+
+    pub fn keeps_climb(&self) -> bool {
+        self.way_back == WayBack::KeepClimb
+    }
+}
+
 impl Loops {
     /// Whether the loops turn anticlockwise.
     pub fn anticlockwise(self) -> bool {
@@ -346,11 +383,9 @@ impl Room {
         }
     }
 
-    /// How far `p` is from the room's edge, or None when it is not in the room.
-    fn clearance(&self, p: Point) -> Option<f64> {
-        if crate::geometry::inside(&self.rings, p) != self.inside {
-            return None;
-        }
+    /// How far `p` is from the room's edge: less than nothing when it is not in the room (a
+    /// point on the edge itself may count as either, so is about nothing).
+    fn clearance(&self, p: Point) -> f64 {
         let mut near = f64::INFINITY;
         for ring in &self.rings {
             for (i, &a) in ring.iter().enumerate() {
@@ -358,19 +393,23 @@ impl Room {
                 near = near.min(segment_gap(p, a, b));
             }
         }
-        Some(near)
+        if crate::geometry::inside(&self.rings, p) == self.inside {
+            near
+        } else {
+            -near
+        }
     }
 
     /// Whether a circle `radius` round `centre` is in the room.
     pub fn fits(&self, centre: Point, radius: f64) -> bool {
-        self.clearance(centre).is_some_and(|c| c >= radius - 1e-9)
+        self.clearance(centre) >= radius - 1e-9
     }
 
     /// Whether the straight line from `a` to `b` stays in the room.
     pub fn holds(&self, a: Point, b: Point) -> bool {
         (0..=8).all(|i| {
             let p = a.lerp(b, f64::from(i) / 8.0);
-            self.clearance(p).is_some_and(|c| c >= -1e-6) || p.distance(b) < 1e-6
+            self.clearance(p) >= -1e-6 || p.distance(b) < 1e-6
         })
     }
 }
@@ -483,8 +522,9 @@ pub enum Tabs {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TabSpacing {
-    /// About one every distance, at least three on a path, and no more than a third of the
-    /// path in tabs: big parts get more, small ones are not all tab
+    /// About one every distance, three or more on a path, but no more than a third of the
+    /// path in tabs: big parts get more, and small ones get fewer than three (as few as one)
+    /// rather than being all tab
     #[default]
     Automatic,
     /// This many tabs spread evenly along each path
@@ -492,7 +532,9 @@ pub enum TabSpacing {
     /// A tab about every this far
     ConstantDistance,
     /// Where clicked: with the form open, click a vector in the 2D view to add a tab there,
-    /// click a tab to take it off
+    /// click a tab to take it off. Each tab goes on the shape nearest it, so give every
+    /// shape cut out at least one: the form and Checks before cutting warn about any left
+    /// without
     Placed,
 }
 

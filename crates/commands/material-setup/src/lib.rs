@@ -2,9 +2,10 @@
 //! thickness, Z zero, XY datum, rapid Z gaps and home, as in Job Setup, and where the 3D model
 //! sits in the material, by the gap above its top (Gap Outside Model on rotary jobs) or below
 //! its bottom (Gap Inside Model, from the axis), with the model's thickness, which Set scales.
-//! 3D toolpaths and the wrapped 3D view place the model by it.
+//! 3D toolpaths and the wrapped 3D view place the model by it. What the material is (Job
+//! Setup's Material, which sets feeds and speeds) is left as it is.
 
-use cmd_job_setup::{DatumPosition, JobSetup, RapidGaps};
+use cmd_job_setup::{DatumPosition, JobSetup, RapidGaps, RotaryZZero};
 use cmd_scale_model_z_height::{ScaleModelZHeight, model_height};
 use cut_craft_core::document::{Document, Home, Job, ModelPosition, ZZero};
 use cut_craft_core::{Change, Command, CommandError, Meta};
@@ -15,19 +16,36 @@ pub struct MaterialSetup;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// The material's thickness (flat jobs; a rotary job's size is its diameter)
+    /// The material's thickness. Changing it, or the model's gap, after making toolpaths
+    /// marks them out of date. A rotary job has none here: its size is the cylinder's
+    /// diameter, set in Job Setup
     #[schemars(
         title = "Material Thickness",
-        extend("x-unit" = "mm", "x-section" = true),
+        extend("x-unit" = "mm", "x-section" = true, "x-hide-when" = {"rotary": true}),
         range(min = 0)
     )]
     pub thickness: f64,
+    /// Whether the job is rotary: not a setting, it picks which fields show
+    #[schemars(skip)]
+    #[serde(default)]
+    pub rotary: bool,
+    /// Where the tool is zeroed in Z: on top of the material, or under it on the machine bed
     #[schemars(
         title = "Z Zero Position",
-        extend("x-section" = true),
+        extend("x-section" = true, "x-hide-when" = {"rotary": true}),
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
+    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis. The
+    /// picture shows where. Pick the one you touch the bit off on at the machine: the G-code
+    /// heights depend on it, and a wrong pick cuts too deep or in the air
+    #[schemars(
+        title = "Z Zero Position",
+        extend("x-section" = true, "x-show-when" = {"rotary": true}),
+        extend("x-icon" = "job_setup/z_zero_{}.png")
+    )]
+    #[serde(default)]
+    pub rotary_z_zero: RotaryZZero,
     /// Which point of the material is the machine's X0, Y0
     #[schemars(
         title = "XY Datum Position",
@@ -64,7 +82,9 @@ impl Params {
         let job = cmd_job_setup::Params::from(&doc.job);
         Self {
             thickness: doc.job.thickness,
+            rotary: doc.job.rotary.is_some(),
             z_zero: job.z_zero,
+            rotary_z_zero: job.rotary_z_zero,
             datum: job.datum,
             position: doc.job.model_position,
             model_thickness: if doc.components.is_empty() {
@@ -98,10 +118,13 @@ impl Command for MaterialSetup {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         // the material, as Job Setup sets it (a new datum moves the coordinates, not the design)
         let mut job = cmd_job_setup::Params::from(&doc.job);
+        // not one of this form's settings: keep what Job Setup chose
+        doc.job_material().clone_into(&mut job.material);
         if doc.job.rotary.is_none() {
             job.size.thickness = p.thickness;
         }
         job.z_zero = p.z_zero;
+        job.rotary_z_zero = p.rotary_z_zero;
         job.datum = p.datum.clone();
         job.gaps = p.gaps.clone();
         job.home = p.home;
@@ -223,6 +246,53 @@ mod tests {
             ..Params::of(&doc)
         };
         assert!(MaterialSetup::run(&doc, &too_big).is_err());
+    }
+
+    #[test]
+    fn a_rotary_job_s_z_zero_reads_as_the_cylinder_s_axis_or_surface() {
+        use cmd_job_setup::RotaryZZero;
+        use cut_craft_core::document::Along;
+        let mut doc = domed();
+        doc.job = Job::rotary(300.0, 50.0, Along::X);
+        let p = Params::of(&doc);
+        assert!(p.rotary, "the form knows the job is rotary");
+        run_on::<MaterialSetup>(
+            &mut doc,
+            &Params {
+                rotary_z_zero: RotaryZZero::CylinderAxis,
+                ..p
+            },
+        );
+        assert_eq!(doc.job.z_zero, ZZero::MachineBed, "zeroed on the axis");
+        let schema = serde_json::to_value(schemars::schema_for!(Params)).unwrap();
+        let rule = |field: &str, which: &str| schema["properties"][field][which].clone();
+        assert_eq!(
+            rule("z_zero", "x-hide-when"),
+            serde_json::json!({ "rotary": true })
+        );
+        assert_eq!(
+            rule("rotary_z_zero", "x-show-when"),
+            serde_json::json!({ "rotary": true })
+        );
+        // a rotary job's size is its diameter, set in Job Setup: no thickness to type here
+        assert_eq!(
+            rule("thickness", "x-hide-when"),
+            serde_json::json!({ "rotary": true })
+        );
+    }
+
+    #[test]
+    fn applying_it_keeps_the_material_job_setup_chose() {
+        // it opens by itself before the first toolpath, and OK must not wipe the material
+        // the feeds and speeds come from
+        let mut doc = domed();
+        let mut job = cmd_job_setup::Params::from(&doc.job);
+        job.material = "Hard Maple".into();
+        run_on::<JobSetup>(&mut doc, &job);
+        assert_eq!(doc.job_material(), "Hard Maple");
+        let unchanged = Params::of(&doc);
+        run_on::<MaterialSetup>(&mut doc, &unchanged);
+        assert_eq!(doc.job_material(), "Hard Maple");
     }
 
     #[test]

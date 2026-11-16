@@ -214,3 +214,25 @@ fn a_group_combines_its_members_first_then_where_its_top_member_is() {
     );
     assert!((at(&doc, 75.0, 50.0) - 6.5).abs() < 1e-9);
 }
+
+#[test]
+fn new_components_go_on_the_picked_component_s_level_else_the_top_shown_one() {
+    let hidden = Level {
+        visible: false,
+        ..level("Top", Combine::Add)
+    };
+    let mut doc = with(
+        job(100.0, 100.0),
+        &[(1, level("Middle", Combine::Add)), (2, hidden)],
+        vec![flat(rect(0.0, 0.0, 10.0, 10.0), 1.0, Combine::Add, 0)],
+    );
+    assert_eq!(doc.new_component_level(), 1, "the top shown level");
+    let id = *doc.components.keys().next().unwrap();
+    doc.selected_components = [id].into_iter().collect();
+    assert_eq!(doc.new_component_level(), 0, "the picked component's level");
+    // a new component added as new lands there
+    let mut c = Change::builder(&doc);
+    c.add_new_component(flat(rect(0.0, 0.0, 5.0, 5.0), 1.0, Combine::Add, 2));
+    doc.apply(&c.finish()).unwrap();
+    assert_eq!(doc.components.values().last().unwrap().level, 0);
+}

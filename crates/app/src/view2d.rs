@@ -1,6 +1,7 @@
 //! The 2D view: job coordinates (mm, y up) ↔ screen points (pixels, y down), pointer
 //! gestures in job coordinates, and painting the document.
 
+use crate::options::Lines;
 use cut_craft_core::Drag;
 use cut_craft_core::document::{Document, EntityId, Job, Units};
 use cut_craft_core::geometry::{Path, Point, Rect as JobRect};
@@ -8,6 +9,9 @@ use cut_craft_core::glam::DAffine2;
 use cut_craft_core::toolpath::MoveKind;
 use eframe::egui::{self, PointerButton, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, vec2};
 use std::f32::consts::FRAC_PI_2;
+
+/// How strongly vectors outside the group stepped into are drawn (a share of the usual).
+const OUTSIDE_GROUP_FADE: f32 = 0.35;
 
 /// Ruler labels stay at least this many rows of the theme's interactive height apart.
 // ponytail: fixed spacing until a preferences dialog exists
@@ -483,6 +487,7 @@ impl Canvas {
         doc: &Document,
         highlighted: Option<EntityId>,
         display: &crate::display::Display,
+        lines: &Lines,
     ) {
         let visuals = ui.visuals();
         let t = self.transform;
@@ -509,7 +514,7 @@ impl Canvas {
                 let [r, g, b] = display.solid_colour;
                 egui::Color32::from_rgb(r, g, b)
             } else {
-                visuals.warn_fg_color
+                colour32(lines.toolpath)
             };
             let cut_width = if display.solid_previews {
                 to_f32(toolpath.tool.diameter) * t.scale
@@ -517,7 +522,7 @@ impl Canvas {
                 datum.width
             };
             let cut = Stroke::new(cut_width.max(datum.width), colour);
-            let travel = Stroke::new(datum.width, visuals.error_fg_color);
+            let travel = Stroke::new(datum.width, colour32(lines.rapid));
             // the cuts as lines thinned to what the screen shows: one for each cut was
             // millions on a fine 3D finish, more than the graphics card takes
             let mut cuts = Runs::new(view.expand(cut.width), room);
@@ -609,12 +614,20 @@ impl Canvas {
                 painter.extend(Shape::dashed_line(&self.guide_ends(g), guide, dash, gap));
             }
         }
-        // toolpath tiles: their edges, and their overlap faintly
+        // toolpath tiles: their edges and numbers, and their overlap faintly
         if let Some(tiling) = doc.tiling {
             let edge = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
             let overlap = Stroke::new(datum.width, visuals.error_fg_color);
             let active = tiling.active_tile(doc.job.area());
-            for tile in tiling.tiles(doc.job.area()) {
+            for (n, tile) in tiling.tiles(doc.job.area()).into_iter().enumerate() {
+                // its number, as its file is named (name_tile1…), in its bottom-left corner
+                painter.text(
+                    t.to_screen(tile.min) + egui::vec2(4.0, -4.0),
+                    egui::Align2::LEFT_BOTTOM,
+                    format!("Tile {}", n + 1),
+                    egui::FontId::proportional(12.0),
+                    visuals.warn_fg_color,
+                );
                 let reach = tiling.reach(tile);
                 for (r, stroke) in [(reach, overlap), (tile, edge)] {
                     let screen_rect =
@@ -679,6 +692,10 @@ impl Canvas {
         ui.painter_at(self.area).rect_filled(job, 0.0, colour);
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one frame's 2D view, taken apart"
+    )]
     pub fn paint(
         &self,
         ui: &egui::Ui,
@@ -687,6 +704,7 @@ impl Canvas {
         highlighted: Option<EntityId>,
         display: &crate::display::Display,
         stamp: Stamp,
+        lines: &Lines,
     ) {
         let painter = ui.painter_at(self.area);
         let visuals = ui.visuals();
@@ -724,22 +742,11 @@ impl Canvas {
                 .map(|p| t.to_screen(p))
                 .collect()
         };
-        let normal = Stroke::new(datum.width, visuals.text_color());
         let selected = visuals.selection.stroke;
-        for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
-            // selected vectors dashed, selected groups solid
-            if doc.selection.contains(id) && doc.vector_groups.contains_key(id) {
-                painter.add(Shape::line(screen(path), selected));
-            } else if doc.selection.contains(id) {
-                painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
-            } else {
-                painter.add(Shape::line(screen(path), normal));
-            }
-        }
-
+        paint_vectors(&painter, ui, doc, stamp, &screen, (dash, gap), lines.vector);
         self.paint_guides_and_zones(&painter, ui, doc, display, (dash, gap));
         self.paint_outlines(&painter, doc, selected, (dash, gap));
-        self.paint_toolpaths(&painter, ui, doc, highlighted, display);
+        self.paint_toolpaths(&painter, ui, doc, highlighted, display, lines);
         if display.open_ends {
             // a circle on each open end, in the warning colour: where a shape has a gap
             let radius = ui.spacing().interact_size.y * OPEN_END_SHARE;
@@ -796,8 +803,76 @@ impl Canvas {
     }
 }
 
+/// An `[r, g, b]` colour from the options, as egui draws it.
+pub fn colour32([r, g, b]: [u8; 3]) -> egui::Color32 {
+    egui::Color32::from_rgb(r, g, b)
+}
+
 /// How faint a dragged component is drawn where it was, out of 255.
 const MOVING_FADE: u8 = 70;
+
+/// The shown vectors: selected ones dashed (selected groups solid), then their common lines
+/// (spans lying on another span of the same layer) over them in red, for attention.
+/// Stepped inside a group, vectors outside it are drawn faded.
+fn paint_vectors(
+    painter: &egui::Painter,
+    ui: &egui::Ui,
+    doc: &Document,
+    stamp: Stamp,
+    screen: &dyn Fn(&Path) -> Vec<Pos2>,
+    (dash, gap): (f32, f32),
+    colour: [u8; 3],
+) {
+    let visuals = ui.visuals();
+    let width = visuals.widgets.noninteractive.fg_stroke.width;
+    let normal = Stroke::new(width, colour32(colour));
+    let selected = visuals.selection.stroke;
+    // stepped inside a group, what is outside it fades back
+    let faded = Stroke::new(width, normal.color.gamma_multiply(OUTSIDE_GROUP_FADE));
+    let outside = |id: EntityId| {
+        doc.inside_group
+            .is_some_and(|g| !doc.group_chain(id).contains(&g))
+    };
+    for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
+        if doc.selection.contains(id) && doc.vector_groups.contains_key(id) {
+            painter.add(Shape::line(screen(path), selected));
+        } else if doc.selection.contains(id) {
+            painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
+        } else if outside(*id) {
+            painter.add(Shape::line(screen(path), faded));
+        } else {
+            painter.add(Shape::line(screen(path), normal));
+        }
+    }
+    let red = Stroke::new(2.0 * width, visuals.error_fg_color);
+    painter.extend(
+        common_lines(ui.ctx(), doc, stamp)
+            .iter()
+            .map(|span| Shape::line(screen(span), red)),
+    );
+}
+
+/// The job's common lines (see [`cut_craft_core::common_lines`]) as paths, found again only
+/// when the job has changed since they were last drawn.
+fn common_lines(ctx: &egui::Context, doc: &Document, stamp: Stamp) -> std::sync::Arc<Vec<Path>> {
+    type Kept = (Stamp, usize, std::sync::Arc<Vec<Path>>);
+    let key = egui::Id::unique("common lines");
+    let size = doc.vectors.len();
+    if let Some((at, n, spans)) = ctx.data(|d| d.get_temp::<Kept>(key))
+        && at == stamp
+        && n == size
+    {
+        return spans;
+    }
+    let spans: std::sync::Arc<Vec<Path>> = std::sync::Arc::new(
+        cut_craft_core::common_lines::common_lines(doc)
+            .iter()
+            .map(cut_craft_core::common_lines::Span::path)
+            .collect(),
+    );
+    ctx.data_mut(|d| d.insert_temp::<Kept>(key, (stamp, size, spans.clone())));
+    spans
+}
 
 /// Which job and which change of it the 2D view draws: what it keeps of the job (its
 /// models' pictures) is checked again only when this changes.
@@ -859,24 +934,39 @@ fn component_texture(
     texture
 }
 
-/// `bitmap`'s texture: uploaded once, and kept while the bitmap is the same size.
+/// `bitmap`'s texture: uploaded once, and again whenever its pixels change (Edit Picture,
+/// Undo, another job's picture under the same id). One is kept for each picture.
 fn bitmap_texture(
     ctx: &egui::Context,
     id: EntityId,
     bitmap: &cut_craft_core::bitmap::Bitmap,
 ) -> egui::TextureHandle {
-    let key = egui::Id::unique(("bitmap", id.0, bitmap.columns, bitmap.rows));
-    ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
-        .unwrap_or_else(|| {
-            let image = egui::ColorImage::from_gray([bitmap.columns, bitmap.rows], &bitmap.grey);
-            let texture = ctx.load_texture(
-                format!("bitmap {}", id.0),
-                fitting(ctx, image),
-                egui::TextureOptions::LINEAR,
-            );
-            ctx.data_mut(|d| d.insert_temp(key, texture.clone()));
-            texture
-        })
+    let key = egui::Id::unique(("bitmap", id.0));
+    let stamp = pixels_stamp(bitmap);
+    if let Some((kept, texture)) = ctx.data_mut(|d| d.get_temp::<(u64, egui::TextureHandle)>(key))
+        && kept == stamp
+    {
+        return texture;
+    }
+    let image = egui::ColorImage::from_gray([bitmap.columns, bitmap.rows], &bitmap.grey);
+    let texture = ctx.load_texture(
+        format!("bitmap {}", id.0),
+        fitting(ctx, image),
+        egui::TextureOptions::LINEAR,
+    );
+    ctx.data_mut(|d| d.insert_temp(key, (stamp, texture.clone())));
+    texture
+}
+
+/// What tells one picture's pixels from another's, cheaply enough for every frame: its size,
+/// where its grey levels are held (an edit makes new ones) and a sample of them.
+fn pixels_stamp(bitmap: &cut_craft_core::bitmap::Bitmap) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (bitmap.columns, bitmap.rows, bitmap.grey.len()).hash(&mut h);
+    bitmap.grey.as_ptr().hash(&mut h);
+    bitmap.grey.iter().step_by(251).for_each(|v| v.hash(&mut h));
+    h.finish()
 }
 
 /// `image` shrunk, if it must be, to at most `side` pixels each way (the graphics card's
@@ -1086,6 +1176,28 @@ mod tests {
 
     use super::*;
     use eframe::egui::{pos2, vec2};
+
+    #[test]
+    fn a_picture_edited_or_swapped_at_the_same_size_is_drawn_afresh() {
+        let ctx = egui::Context::default();
+        let picture = |grey: u8| cut_craft_core::bitmap::Bitmap {
+            name: "photo".into(),
+            columns: 40,
+            rows: 30,
+            grey: vec![grey; 40 * 30],
+            rect: cut_craft_core::geometry::Rect::new(Point::new(0.0, 0.0), Point::new(4.0, 3.0)),
+            depth: vec![],
+            rgb: vec![],
+        };
+        let (dark, light) = (picture(20), picture(230));
+        let first = bitmap_texture(&ctx, EntityId(1), &dark);
+        assert_eq!(bitmap_texture(&ctx, EntityId(1), &dark).id(), first.id());
+        // Edit Picture keeps the id and the size: its new pixels are shown
+        let edited = bitmap_texture(&ctx, EntityId(1), &light);
+        assert_ne!(edited.id(), first.id());
+        // and a picture back at its old pixels (Undo) is shown as they were
+        assert_ne!(bitmap_texture(&ctx, EntityId(1), &dark).id(), edited.id());
+    }
 
     /// Points of `runs` all told.
     fn points(runs: &[Vec<Pos2>]) -> usize {

@@ -18,6 +18,8 @@ fn tool_window() -> egui::Id {
 const WINDOW_SHARE: f32 = 0.7;
 /// The tree's share of the window's width when it first opens.
 const TREE_SHARE: f32 = 0.35;
+/// The lines of text the questions' area under the tree keeps room for.
+const QUESTION_ROWS: f32 = 5.0;
 /// The tool pictures are 90 × 130: their width for a height.
 const PICTURE_ASPECT: f32 = 90.0 / 130.0;
 /// Lines of the notes boxes.
@@ -84,9 +86,31 @@ pub struct Manager {
     pub library: cut_craft_core::material_library::MaterialLibrary,
     /// What a button inside the window asked for this frame (Materials Library…).
     pending: Option<Outcome>,
+    /// The tools renamed since it opened, first name to the name now.
+    renames: Vec<(String, String)>,
     /// The picked tool and the maker ▸ type group it had last drawn: while its group is
     /// still that one, the group follows its maker and type.
     followed: Option<(usize, String)>,
+    /// What the window is asking before it goes on, if anything.
+    asking: Option<Question>,
+    /// The database as last kept (opened, or Apply): what the edits since would delete.
+    saved: ToolDatabase,
+    /// The tool each of the open job's toolpaths cuts with, one name per toolpath: Delete
+    /// says how many of them cut with the tools it would take.
+    pub job_tools: Vec<String>,
+    /// Where the tree was last drawn: a question showing never moves it.
+    #[cfg(test)]
+    tree_rect: egui::Rect,
+}
+
+/// A question the window asks before it goes on.
+#[derive(Clone, Debug, PartialEq)]
+enum Question {
+    /// Delete on this group, waiting for Delete or Keep under the tree.
+    Delete(String),
+    /// Materials Library…, waiting for Keep and Open or Not Now, as opening it would keep
+    /// deletions that Cancel could then not bring back.
+    Library,
 }
 
 /// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
@@ -148,12 +172,14 @@ pub fn picture_path(tool: &Tool) -> &'static str {
         // ponytail: no thread mill or form tool picture is drawn yet, so none shows
         ToolShape::ThreadMill => "tool_database/thread_mill.png",
         ToolShape::FormTool => "tool_database/form_tool.png",
+        // ponytail: no laser picture is drawn yet, so none shows
+        ToolShape::Laser => "tool_database/laser.png",
     }
 }
 
 /// The Tool Type list: each type's trade name with what woodworkers call it, so either
 /// one finds it.
-const SHAPES: [(ToolShape, &str); 7] = [
+const SHAPES: [(ToolShape, &str); 8] = [
     (ToolShape::EndMill, "End Mill (flat / straight bit)"),
     (ToolShape::BallNose, "Ball Nose (core box)"),
     (ToolShape::VBit, "V-Bit (engraving / chamfer)"),
@@ -167,6 +193,7 @@ const SHAPES: [(ToolShape, &str); 7] = [
         ToolShape::SurfacingBit,
         "Surfacing Bit (spoilboard bit / fly cutter)",
     ),
+    (ToolShape::Laser, "Laser (for the laser toolpaths)"),
 ];
 const TAPERED_BALL: &str = "Tapered Ball Nose (cone ball nose)";
 
@@ -226,6 +253,10 @@ fn shape_name(shape: ToolShape) -> &'static str {
         .map_or("", |(_, n)| n)
 }
 
+/// The Delete button's hover hint.
+const DELETE_HINT: &str = "Delete the picked tool, or the picked group with every tool and \
+                           group in it (it asks first, counting tools the tree hides)";
+
 /// What a tree button asked for.
 #[derive(Clone, Copy, PartialEq)]
 enum TreeAction {
@@ -253,7 +284,34 @@ impl Manager {
             library: cut_craft_core::material_library::MaterialLibrary::starter(),
             pending: None,
             followed: None,
+            renames: vec![],
+            asking: None,
+            saved: db.clone(),
+            job_tools: vec![],
+            #[cfg(test)]
+            tree_rect: egui::Rect::NOTHING,
         }
+    }
+
+    /// The tool named `before` is now `name`.
+    pub fn note_rename(&mut self, before: &str, name: &str) {
+        if before == name {
+            return;
+        }
+        match self.renames.iter_mut().find(|(_, now)| now == before) {
+            Some((_, now)) => name.clone_into(now),
+            None => self.renames.push((before.to_owned(), name.to_owned())),
+        }
+    }
+
+    /// The tools renamed since it opened or this was last asked, as (first name, name
+    /// now); the open job's toolpaths follow them, so they still find the tool's tool
+    /// changer slot.
+    pub fn take_renamed(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.renames)
+            .into_iter()
+            .filter(|(first, now)| first != now)
+            .collect()
     }
 
     /// Opens on a copy of `db` to pick a toolpath's tool, on `current` when it is listed.
@@ -419,6 +477,19 @@ impl Manager {
                         // the active material is the whole database's, so it sits by the tree
                         egui::Panel::bottom("tool_database_material")
                             .show(ui, |ui| self.materials(ui));
+                        // the questions' own area, kept whether one shows or not, so one
+                        // showing never moves the tree or the buttons
+                        let rows = ui.text_style_height(&egui::TextStyle::Body) * QUESTION_ROWS;
+                        let height =
+                            rows + ui.spacing().interact_size.y + ui.spacing().item_spacing.y * 2.0;
+                        egui::Panel::bottom("tool_database_question")
+                            .resizable(false)
+                            .exact_size(height)
+                            .show(ui, |ui| self.question(ui));
+                        #[cfg(test)]
+                        {
+                            self.tree_rect = ui.available_rect_before_wrap();
+                        }
                         egui::ScrollArea::both().show(ui, |ui| self.tree(ui, look));
                     });
                 egui::CentralPanel::default().show(ui, |ui| {
@@ -439,7 +510,97 @@ impl Manager {
         if let Some(asked) = self.pending.take() {
             outcome = outcome.or(Some(asked));
         }
+        if matches!(outcome, Some(Outcome::Apply)) {
+            self.applied();
+        }
         outcome
+    }
+
+    /// The edits so far are kept (Apply): Cancel goes back to here from now on.
+    pub fn applied(&mut self) {
+        self.saved = self.draft.clone();
+    }
+
+    /// Materials Library…: opens it, keeping the edits so far as Apply does; when they
+    /// delete tools or materials, it asks first, as Cancel could not bring those back.
+    pub fn open_materials_library(&mut self) {
+        if self.deletions().is_empty() {
+            self.pending = Some(Outcome::MaterialsLibrary);
+        } else {
+            self.asking = Some(Question::Library);
+        }
+    }
+
+    /// Keep and Open (`yes`) or Not Now, for Materials Library….
+    pub fn answer_library(&mut self, yes: bool) {
+        if self.asking == Some(Question::Library) {
+            self.asking = None;
+        }
+        if yes {
+            self.pending = Some(Outcome::MaterialsLibrary);
+        }
+    }
+
+    /// What deleting since the last Apply took: "2 deleted tools (A, B)", and so on. A tool
+    /// renamed is not deleted.
+    fn deletions(&self) -> Vec<String> {
+        let renamed = |name: &str| {
+            self.renames
+                .iter()
+                .any(|(first, now)| first == name && self.draft.get(now).is_some())
+        };
+        let tools: Vec<&str> = self
+            .saved
+            .tools
+            .iter()
+            .filter(|t| self.draft.get(&t.name).is_none() && !renamed(&t.name))
+            .map(|t| t.name.as_str())
+            .collect();
+        let materials: Vec<&str> = self
+            .saved
+            .materials
+            .iter()
+            .filter(|m| {
+                !self
+                    .draft
+                    .materials
+                    .iter()
+                    .any(|d| d.eq_ignore_ascii_case(m))
+            })
+            .map(String::as_str)
+            .collect();
+        let named = |names: &[&str], one: &str| {
+            const SHOWN: usize = 3;
+            let mut list = names[..names.len().min(SHOWN)].join(", ");
+            if names.len() > SHOWN {
+                list.push_str(", …");
+            }
+            match names.len() {
+                1 => format!("1 deleted {one} ({list})"),
+                n => format!("{n} deleted {one}s ({list})"),
+            }
+        };
+        let mut out = vec![];
+        if !tools.is_empty() {
+            out.push(named(&tools, "tool"));
+        }
+        if !materials.is_empty() {
+            out.push(named(&materials, "material"));
+        }
+        out
+    }
+
+    /// What Materials Library… asks while it waits for an answer.
+    pub fn library_question(&self) -> Option<String> {
+        let deletions = self.deletions();
+        if self.asking != Some(Question::Library) || deletions.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "Opening the Materials Library keeps your changes here first, as Apply does, so \
+             Cancel can no longer bring back {}. Open it now?",
+            deletions.join(" and ")
+        ))
     }
 
     /// The tree: groups that open and close, each over its groups and tools.
@@ -637,7 +798,11 @@ impl Manager {
                 };
                 if ui
                     .add_enabled(enabled, button)
-                    .on_hover_hint(label)
+                    .on_hover_hint(if asked == TreeAction::Delete {
+                        DELETE_HINT
+                    } else {
+                        label
+                    })
                     .clicked()
                 {
                     action = Some(asked);
@@ -680,12 +845,147 @@ impl Manager {
         if action == TreeAction::Delete && !self.deletable() {
             return None;
         }
+        // a whole group asks first: it can hold tools the tree hides
+        if let (TreeAction::Delete, Some(Pick::Group(g))) = (action, &self.pick) {
+            self.asking = Some(Question::Delete(g.clone()));
+            return None;
+        }
         let outcome = self.do_action(action, &group);
         // a tool deleted leaves its slot
         if let Some(changer) = &mut self.changer {
             changer.unload_missing(&self.draft);
         }
         outcome
+    }
+
+    /// What Delete asks before a group goes, while it waits for an answer: the group, how
+    /// many tools and groups go with it, and how many of those the tree hides or the tool
+    /// changer holds.
+    pub fn delete_question(&self) -> Option<String> {
+        let Some(Question::Delete(group)) = &self.asking else {
+            return None;
+        };
+        let inside: Vec<&Tool> = self
+            .draft
+            .tools
+            .iter()
+            .filter(|t| tree::within(&t.group, group))
+            .collect();
+        let hidden = inside
+            .iter()
+            .filter(|t| self.hide_unset && !t.has_data_for(&self.draft.material))
+            .count();
+        let loaded = inside
+            .iter()
+            .filter(|t| {
+                self.changer
+                    .as_ref()
+                    .and_then(|c| c.slot_of(&t.name))
+                    .is_some()
+            })
+            .count();
+        let groups = tree::groups(&self.draft)
+            .iter()
+            .filter(|g| g.as_str() != group && tree::within(g, group))
+            .count();
+        let plural = |n: usize, one: &str| {
+            if n == 1 {
+                format!("1 {one}")
+            } else {
+                format!("{n} {one}s")
+            }
+        };
+        let mut what = plural(inside.len(), "tool");
+        if groups > 0 {
+            what = format!("{what} in {}", plural(groups, "group"));
+        }
+        let mut notes = vec![];
+        if hidden > 0 {
+            notes.push(format!("{hidden} hidden by Hide Unset Tools"));
+        }
+        if loaded > 0 {
+            notes.push(format!(
+                "{loaded} loaded in the tool changer, emptying their slots"
+            ));
+        }
+        let notes = if notes.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", notes.join("; "))
+        };
+        let cutting = self
+            .job_tools
+            .iter()
+            .filter(|name| inside.iter().any(|t| t.name == **name))
+            .count();
+        let toolpaths = match cutting {
+            0 => String::new(),
+            n => format!(
+                " {} in this job cut with them: they keep their tool, but it can no longer \
+                 be picked here or loaded in the tool changer.",
+                plural(n, "toolpath")
+            ),
+        };
+        Some(format!(
+            "Delete the group \"{}\" and its {what}{notes}?{toolpaths} Cancel still brings \
+             them back until OK.",
+            tree::leaf(group)
+        ))
+    }
+
+    /// Delete (`yes`) or Keep, for the group Delete asked about.
+    pub fn answer_delete(&mut self, yes: bool) {
+        let Some(Question::Delete(group)) = self.asking.take() else {
+            return;
+        };
+        if yes {
+            tree::delete_group(&mut self.draft, &group);
+            self.pick = None;
+            if let Some(changer) = &mut self.changer {
+                changer.unload_missing(&self.draft);
+            }
+        }
+    }
+
+    /// The question the window is asking, in its own area under the tree: Delete's, with
+    /// Delete and Keep (picking something else drops it), or Materials Library…'s, with Keep
+    /// and Open and Not Now. The text scrolls when it is longer than the area.
+    fn question(&mut self, ui: &mut egui::Ui) {
+        if let Some(Question::Delete(group)) = &self.asking
+            && self.pick.as_ref() != Some(&Pick::Group(group.clone()))
+        {
+            self.asking = None;
+        }
+        let (question, yes, no) = if let Some(q) = self.delete_question() {
+            (q, "Delete", "Keep")
+        } else if let Some(q) = self.library_question() {
+            (q, "Keep and Open", "Not Now")
+        } else {
+            return;
+        };
+        let room =
+            ui.available_height() - ui.spacing().interact_size.y - ui.spacing().item_spacing.y;
+        egui::ScrollArea::vertical()
+            .max_height(room.max(0.0))
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.colored_label(ui.visuals().warn_fg_color, question)
+            });
+        let delete = matches!(self.asking, Some(Question::Delete(_)));
+        ui.horizontal(|ui| {
+            let answer = if ui.button(yes).clicked() {
+                Some(true)
+            } else if ui.button(no).clicked() {
+                Some(false)
+            } else {
+                None
+            };
+            match answer {
+                Some(a) if delete => self.answer_delete(a),
+                Some(a) => self.answer_library(a),
+                None => {}
+            }
+        });
     }
 
     fn do_action(&mut self, action: TreeAction, group: &str) -> Option<Outcome> {
@@ -763,6 +1063,7 @@ impl Manager {
                     Some(&self.library),
                 );
                 let name = self.draft.tools[i].name.clone();
+                self.note_rename(&before, &name);
                 let mut chosen = None;
                 if let Some(changer) = &mut self.changer {
                     changer.rename(&before, &name);
@@ -828,11 +1129,13 @@ impl Manager {
             if ui
                 .button("Materials Library…")
                 .on_hover_hint(
-                    "The materials by class and hardness, and each one's bits with their feeds",
+                    "The materials by class and hardness, and each one's bits with their \
+                     feeds. Your changes here are kept first, as Apply does (it asks first \
+                     when they delete tools or materials)",
                 )
                 .clicked()
             {
-                self.pending = Some(Outcome::MaterialsLibrary);
+                self.open_materials_library();
             }
             ui.add(egui::TextEdit::singleline(&mut self.new_material).hint_text("New material"));
             let typed = !self.new_material.trim().is_empty();
@@ -1273,6 +1576,11 @@ fn tool_info(
                 })
                 .response
                 .on_hover_hint("Units: how this tool's lengths read; the tool stays the same size");
+            ui.checkbox(&mut tool.drill_only, "Drill only").on_hover_hint(
+                "A drill (twist or brad-point) cuts only straight down. Any toolpath but \
+                 Drilling that uses it is warned of in red, as moved sideways it can snap or \
+                 tear the work",
+            );
         });
         ui.end_row();
         // stands in for dragging a tool between groups
@@ -1334,6 +1642,20 @@ fn split(width: f32, gap: f32) -> Option<(f32, f32)> {
 /// The tool's shape: drawn from its sizes, each typed on its dimension line, then what the
 /// drawing does not show (flutes, a thread mill's tooth).
 fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
+    // a laser has no bit to draw: only the width it burns
+    if tool.shape == ToolShape::Laser {
+        egui::Grid::new("tool_geometry")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Kerf").on_hover_hint(
+                    "The width the laser burns (its diameter): Cut Outside and Cut Inside \
+                     keep half of it off the line",
+                );
+                length(ui, &mut tool.diameter, tool.units);
+                ui.end_row();
+            });
+        return;
+    }
     crate::profile::editor(ui, tool);
     egui::Grid::new("tool_geometry")
         .num_columns(2)
@@ -1367,6 +1689,10 @@ fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
 }
 
 fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
+    if tool.shape == ToolShape::Laser {
+        ui.weak(LASER_CUTTING);
+        return;
+    }
     egui::Grid::new("tool_cutting")
         .num_columns(2)
         .show(ui, |ui| {
@@ -1415,17 +1741,25 @@ pub(crate) fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
     changed
 }
 
+/// What a laser's Cutting Parameters say: it has none of a bit's.
+pub const LASER_CUTTING: &str = "A laser has no pass depth or stepover: Laser Cut / Fill \
+                                 sets its passes and power, Laser Picture its line spacing";
+
 fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
+    let laser = tool.shape == ToolShape::Laser;
     egui::Grid::new("tool_feeds").num_columns(2).show(ui, |ui| {
-        ui.label("Spindle Speed");
-        ui.add(
-            Number::new(&mut tool.spindle_speed)
-                .range(0.0..=f64::MAX)
-                .suffix(" r.p.m."),
-        );
-        ui.end_row();
+        // a laser has no spindle or plunge: only how fast it moves
+        if !laser {
+            ui.label("Spindle Speed");
+            ui.add(
+                Number::new(&mut tool.spindle_speed)
+                    .range(0.0..=f64::MAX)
+                    .suffix(" r.p.m."),
+            );
+            ui.end_row();
+        }
         // the rate units beside the feed rate
-        ui.label("Feed Rate");
+        ui.label(if laser { "Speed" } else { "Feed Rate" });
         ui.horizontal(|ui| {
             rate(ui, &mut tool.feed_rate, tool.rate_units);
             egui::ComboBox::from_id_salt("tool_rate_units")
@@ -1439,9 +1773,11 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
                 .on_hover_hint("Rate Units");
         });
         ui.end_row();
-        ui.label("Plunge Rate");
-        rate(ui, &mut tool.plunge_rate, tool.rate_units);
-        ui.end_row();
+        if !laser {
+            ui.label("Plunge Rate");
+            rate(ui, &mut tool.plunge_rate, tool.rate_units);
+            ui.end_row();
+        }
     });
     // the feed per tooth, to check against the cutter maker's figure
     if let Some(load) = tool.chip_load() {
@@ -1456,6 +1792,21 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn renames_are_kept_from_the_first_name_to_the_last() {
+        let mut m = super::Manager::new(&cut_craft_core::toolpath::ToolDatabase::default());
+        // typed a letter at a time
+        m.note_rename("6 mm", "6 mm A");
+        m.note_rename("6 mm A", "6 mm AT");
+        m.note_rename("V-Bit", "V");
+        m.note_rename("V", "V-Bit");
+        assert_eq!(
+            m.take_renamed(),
+            vec![("6 mm".to_owned(), "6 mm AT".to_owned())]
+        );
+        assert_eq!(m.take_renamed(), vec![]);
+    }
+
     use super::*;
 
     fn frame(manager: &mut Manager, ctx: &egui::Context) -> Option<Outcome> {
@@ -1784,6 +2135,137 @@ mod tests {
     }
 
     #[test]
+    fn deleting_a_group_says_how_many_of_the_job_s_toolpaths_cut_with_its_tools() {
+        let db = ToolDatabase::starter();
+        let mut m = Manager::new(&db);
+        let used = db.tools[0].clone();
+        m.pick = Some(Pick::Group(used.group.clone()));
+        m.act(TreeAction::Delete);
+        let question = m.delete_question().expect("it asks");
+        assert!(!question.contains("toolpath"), "none use them: {question}");
+        m.job_tools = vec![used.name.clone(), used.name.clone(), "Elsewhere".into()];
+        let question = m.delete_question().expect("it asks");
+        assert!(
+            question.contains("2 toolpaths in this job cut with them"),
+            "{question}"
+        );
+    }
+
+    #[test]
+    fn a_question_never_moves_the_tree_or_the_buttons_under_it() {
+        let ctx = egui::Context::default();
+        let mut m = Manager::new(&ToolDatabase::starter());
+        let group = m.draft.tools[0].group.clone();
+        m.pick = Some(Pick::Group(group));
+        frame(&mut m, &ctx);
+        frame(&mut m, &ctx);
+        let before = m.tree_rect;
+        m.act(TreeAction::Delete);
+        assert!(m.delete_question().is_some());
+        frame(&mut m, &ctx);
+        frame(&mut m, &ctx);
+        assert_eq!(m.tree_rect, before, "the delete question has its own area");
+        m.answer_delete(false);
+        m.draft.tools.remove(0);
+        m.open_materials_library();
+        assert!(m.library_question().is_some());
+        frame(&mut m, &ctx);
+        frame(&mut m, &ctx);
+        assert_eq!(m.tree_rect, before, "and so has Materials Library…'s");
+    }
+
+    #[test]
+    fn deleting_a_group_asks_first_naming_its_hidden_and_loaded_tools() {
+        let db = ToolDatabase::starter();
+        let mut m = Manager::new(&db);
+        let group = "Metric Tools".to_owned();
+        let inside: Vec<String> = db
+            .tools
+            .iter()
+            .filter(|t| tree::within(&t.group, &group))
+            .map(|t| t.name.clone())
+            .collect();
+        assert!(inside.len() > 1);
+        m.changer = Some(Changer {
+            machine: "Router".into(),
+            slots: vec![Some(inside[0].clone()), None],
+        });
+        m.hide_unset = true;
+        m.draft.material = "No Such Material".into();
+        m.pick = Some(Pick::Group(group.clone()));
+        m.act(TreeAction::Delete);
+        assert_eq!(m.draft.tools.len(), db.tools.len(), "nothing gone yet");
+        let question = m.delete_question().expect("it asks");
+        assert!(question.contains("Metric Tools"), "{question}");
+        assert!(
+            question.contains(&format!("{} tools", inside.len())),
+            "{question}"
+        );
+        assert!(question.contains("hidden"), "{question}");
+        assert!(question.contains("tool changer"), "{question}");
+        m.answer_delete(false);
+        assert_eq!(m.draft.tools.len(), db.tools.len(), "Keep keeps them");
+        assert!(m.delete_question().is_none());
+        m.act(TreeAction::Delete);
+        m.answer_delete(true);
+        assert!(
+            m.draft
+                .tools
+                .iter()
+                .all(|t| !tree::within(&t.group, &group))
+        );
+        assert_eq!(
+            m.changer.as_ref().unwrap().slots[0],
+            None,
+            "its slot is emptied"
+        );
+    }
+
+    #[test]
+    fn the_materials_library_button_asks_first_when_it_would_keep_deletions() {
+        let db = ToolDatabase::starter();
+        let mut m = Manager::new(&db);
+        // nothing deleted: it opens, keeping the edits as Apply
+        m.open_materials_library();
+        assert!(matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)));
+        let gone = m.draft.tools.remove(0).name;
+        m.open_materials_library();
+        assert!(m.pending.is_none(), "it asks first");
+        let question = m.library_question().expect("a question");
+        assert!(question.contains("1 deleted tool"), "{question}");
+        assert!(question.contains(&gone), "{question}");
+        m.answer_library(false);
+        assert!(m.pending.is_none() && m.library_question().is_none());
+        assert_eq!(m.draft.tools.len(), db.tools.len() - 1, "the edits stay");
+        m.open_materials_library();
+        m.answer_library(true);
+        assert!(matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)));
+        // once applied, the deletion is kept already: no question
+        m.applied();
+        m.open_materials_library();
+        assert!(matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)));
+    }
+
+    #[test]
+    fn a_renamed_tool_is_not_asked_about_as_deleted() {
+        let mut m = Manager::new(&ToolDatabase::starter());
+        let before = m.draft.tools[0].name.clone();
+        m.draft.tools[0].name = "Renamed".into();
+        m.note_rename(&before, "Renamed");
+        m.open_materials_library();
+        assert!(
+            matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)),
+            "{:?}",
+            m.library_question()
+        );
+        // renamed and then deleted: deleted
+        m.draft.tools.remove(0);
+        m.open_materials_library();
+        let question = m.library_question().expect("a question");
+        assert!(question.contains(&before), "{question}");
+    }
+
+    #[test]
     fn tree_buttons_add_copy_and_delete_in_the_copy_only() {
         let db = ToolDatabase::starter();
         let mut m = Manager::new(&db);
@@ -1866,6 +2348,7 @@ mod tests {
         assert_eq!(m.draft.tools.len(), before + 1);
         m.pick = Some(Pick::Group("Catalogues/Amana".into()));
         m.act(TreeAction::Delete);
+        m.answer_delete(true);
         assert_eq!(
             m.draft.tools.len(),
             before - 1,

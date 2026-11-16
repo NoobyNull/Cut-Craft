@@ -8,11 +8,70 @@ use std::fmt::Write as _;
 const CONTENTS: &str = include_str!("../../help/contents.md");
 const DESIGN: &str = include_str!("../../help/design.md");
 const TOOLPATHS: &str = include_str!("../../help/toolpaths.md");
+const WEB_API: &str = include_str!("../../help/web-api.md");
+const GROUPS: &str = include_str!("../../help/groups.md");
+
+/// The tools whose help pages link the Groups page.
+const GROUP_TOOLS: [&str; 4] = [
+    "group",
+    "ungroup",
+    "ungroup_onto_current_layer",
+    "edit_text",
+];
+
+/// The help's own pictures, by the `bytes://help/` name its pages show them by.
+pub(super) const PICTURES: &[(&str, &[u8])] = &[
+    (
+        "web-api-options.png",
+        include_bytes!("../../help/pictures/web-api-options.png"),
+    ),
+    (
+        "web-api-network.png",
+        include_bytes!("../../help/pictures/web-api-network.png"),
+    ),
+    (
+        "web-api-running.png",
+        include_bytes!("../../help/pictures/web-api-running.png"),
+    ),
+    (
+        "web-api-not-running.png",
+        include_bytes!("../../help/pictures/web-api-not-running.png"),
+    ),
+    (
+        "web-api-docs.png",
+        include_bytes!("../../help/pictures/web-api-docs.png"),
+    ),
+    (
+        "line-colors-dark.png",
+        include_bytes!("../../help/pictures/line-colors-dark.png"),
+    ),
+    (
+        "line-colors-light.png",
+        include_bytes!("../../help/pictures/line-colors-light.png"),
+    ),
+    (
+        "group-step-inside.png",
+        include_bytes!("../../help/pictures/group-step-inside.png"),
+    ),
+];
+
+/// The help's pictures handed to egui, once, so its pages can show them.
+fn load_pictures(ctx: &egui::Context) {
+    let id = egui::Id::unique("help_pictures_loaded");
+    if ctx.data(|d| d.get_temp::<bool>(id)).is_some() {
+        return;
+    }
+    for (name, bytes) in PICTURES {
+        ctx.include_bytes(format!("bytes://help/{name}"), *bytes);
+    }
+    ctx.data_mut(|d| d.insert_temp(id, true));
+}
 
 impl CutCraftApp {
     /// The Help window on `topic`: a `help:` link clicked goes to its page. The search box
     /// along its top lists every page whose name or words match, in place of the page.
     pub(super) fn help_window(&mut self, ctx: &egui::Context, topic: &'static str) {
+        load_pictures(ctx);
         let topics = self.help_topics();
         for t in &topics {
             self.help_cache.add_link_hook(format!("help:{t}"));
@@ -114,13 +173,22 @@ impl CutCraftApp {
             "design" => "Design page".into(),
             "toolpaths" => "Toolpaths page".into(),
             "tips" => "Did You Know?".into(),
+            "web_api" => "Web API".into(),
+            "groups" => "Groups".into(),
             id => self.tool_label(id),
         }
     }
 
     /// Every help page: Contents, the two tool pages, the tips, and each of the tools.
     pub(super) fn help_topics(&self) -> Vec<&'static str> {
-        let mut topics = vec!["contents", "design", "toolpaths", "tips"];
+        let mut topics = vec![
+            "contents",
+            "design",
+            "toolpaths",
+            "tips",
+            "web_api",
+            "groups",
+        ];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
         }
@@ -152,6 +220,8 @@ impl CutCraftApp {
             "design" => tools_page(Page::Design, DESIGN),
             "toolpaths" => tools_page(Page::Toolpaths, TOOLPATHS),
             "tips" => super::tips::markdown(),
+            "web_api" => WEB_API.to_owned(),
+            "groups" => GROUPS.to_owned(),
             id => {
                 let (page, name) = match self.page_of(id) {
                     Page::Design => ("design", "Design"),
@@ -165,6 +235,12 @@ impl CutCraftApp {
                 );
                 for (label, help) in fields {
                     let _ = writeln!(md, "- **{label}**: {help}");
+                }
+                if GROUP_TOOLS.contains(&id) {
+                    md.push_str(
+                        "\nDouble-click a group to step inside it and change one thing in it. \
+                         See [Groups](help:groups).\n",
+                    );
                 }
                 md
             }

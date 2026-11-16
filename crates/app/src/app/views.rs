@@ -7,8 +7,8 @@ use super::{
     OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
     Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
     ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
-    inspected, inspected_rows, measured, measured_rows, page_width, paint_focus_ring, show_page,
-    view2d,
+    inspected, inspected_rows, measured, measured_rows, page_width, paint_focus_ring, saving_path,
+    show_page, view2d,
 };
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
@@ -20,8 +20,20 @@ use cut_craft_core::snap::Snap;
 /// Where a crash log is kept when the person chose not to send crash logs.
 const LAST_CRASH: &str = "last-crash.log";
 
+/// The extensions of the files that, dropped or opened with Cut Craft, open as a job.
+const DROPPED_JOBS: [&str; 3] = [
+    JOB_EXTENSION,
+    OLD_JOB_EXTENSION,
+    cut_craft_core::file::TEMPLATE_EXTENSION,
+];
+
 /// How far beyond the selection's corners its rotation handles sit, in pick reaches.
 const ROTATE_OUT: f64 = 2.5;
+
+/// What the status bar says while stepped inside a group.
+pub(super) const INSIDE_GROUP: &str = "Inside a group: click an item to move, size or change it on \
+     its own, double-click a group in it to go further in or text to edit it; Esc or a \
+     double-click on empty space steps out";
 
 /// How big the selection's handles are, as a share of a row: bigger than a node's, as there
 /// are only a few and they are what a drag takes hold of.
@@ -55,6 +67,12 @@ impl CutCraftApp {
         self.note_stale();
         // a job opened or made, or another machine chosen: the machine's zones on it
         self.sync_machine_keep_out();
+        // nodes picked on a vector since unselected, undone or put away are let go
+        self.prune_picked_nodes();
+        // a reorder, or its undo, moved toolpaths between ids: what holds them follows
+        self.follow_toolpaths();
+        // Swap Sides undone or redone: the preview turns over with the job
+        self.follow_side();
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);
@@ -66,6 +84,8 @@ impl CutCraftApp {
         self.busy_window(ctx);
         // an import that doesn't say its units, waiting to be told
         self.units_question(ctx);
+        // a save that would replace G-code from an earlier save: Replace or Archive?
+        self.earlier_question(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
         if !self.tracing() {
@@ -75,6 +95,8 @@ impl CutCraftApp {
         self.autosave(ctx);
         self.report_bugs(ctx);
         self.space_mouse_input(ctx);
+        // calls from the Web API, run as clicks would be
+        self.web_api_frame(ctx);
         if let Some(mut shots) = self.shots.take() {
             shots.step(self, ctx);
             self.shots = Some(shots);
@@ -180,19 +202,25 @@ impl CutCraftApp {
         }
     }
 
+    /// Whether dropping `path` imports it into the job (it is not a job, a post-processor or
+    /// a tool database).
+    pub(super) fn drop_imports(path: &std::path::Path) -> bool {
+        let ext = path
+            .extension()
+            .map_or_default(|e| e.to_string_lossy().to_lowercase());
+        !(DROPPED_JOBS.contains(&ext.as_str())
+            || ext == "pp"
+            || (files::TOOL_FILE_EXTENSIONS.contains(&ext.as_str()) && ext != "json"))
+    }
+
     /// One dropped file: a job opens; a post-processor installs; a tool database's tools are
     /// added; anything else is imported into the open job.
     pub(super) fn drop_file(&mut self, path: &std::path::Path) {
         let ext = path
             .extension()
             .map_or_default(|e| e.to_string_lossy().to_lowercase());
-        let job = [
-            JOB_EXTENSION,
-            OLD_JOB_EXTENSION,
-            cut_craft_core::file::TEMPLATE_EXTENSION,
-        ];
         match ext.as_str() {
-            e if job.contains(&e) => {
+            e if DROPPED_JOBS.contains(&e) => {
                 if self.confirm_discard() {
                     self.open_path(path);
                 }
@@ -312,6 +340,8 @@ impl CutCraftApp {
             .retain(|id| doc.bitmaps.contains_key(id));
         if ctx.input(|i| i.viewport().close_requested()) {
             if self.confirm_discard() {
+                // asked once: a repeated close request must not ask again
+                self.session.discard_changes(&self.history);
                 self.clear_recovery();
                 self.restart_into_update();
             } else {
@@ -349,6 +379,7 @@ impl CutCraftApp {
         self.snap_options_window(ctx);
         self.job_sheet_window(ctx);
         self.part_labels_window(ctx);
+        self.clearing_window(ctx);
         self.stl_window(ctx);
         self.options_window(ctx);
         self.settings_3d_window(ctx);
@@ -473,8 +504,11 @@ impl CutCraftApp {
                 }
             });
         });
-        // new components go on the first level
-        let level = doc.levels.values().next().map_or("", |l| l.name.as_str());
+        // the level new components go on: the picked component's, else the top shown one
+        let level = doc
+            .levels
+            .get(&doc.new_component_level())
+            .map_or("", |l| l.name.as_str());
         drop_down(ui, "view/component_levels.png", level, &mut |ui| {
             bordered(ui, |ui| {
                 for (&id, l) in doc.levels.iter().rev() {
@@ -969,8 +1003,9 @@ impl CutCraftApp {
 
     /// Draw Line / Polyline's keys while it is the tool: S swaps curves and straight lines;
     /// with a polyline begun, Backspace takes back a point (or a typed character), Tab
-    /// closes it, Space finishes it and starts another, Esc finishes it (and closes the
-    /// form), and numbers typed then Enter place the next point.
+    /// closes it, Space finishes it and starts another (unless a point is being typed),
+    /// Esc finishes it (and closes the form), and numbers typed then Enter place the next
+    /// point.
     pub(super) fn polyline_keys(&mut self, ctx: &egui::Context) {
         use egui::{Key, Modifiers};
         if self.drawing_tool() != Some("draw_polyline") {
@@ -1012,10 +1047,14 @@ impl CutCraftApp {
                 })
                 .collect()
         });
-        let typed: String = typed
+        let mut typed: String = typed
             .chars()
             .filter(|c| c.is_ascii_digit() || ".,-aAlL ".contains(*c))
             .collect();
+        // a space only goes between what is typed ("90A 2L"); on its own it finishes
+        if self.polyline.typed.is_empty() {
+            typed = typed.trim_start().to_owned();
+        }
         if !typed.is_empty() {
             for k in [Key::A, Key::L, Key::Comma, Key::Period, Key::Minus]
                 .into_iter()
@@ -1053,7 +1092,8 @@ impl CutCraftApp {
             self.finish_polyline(true);
             self.polyline.tabbed = true;
         }
-        if key(Key::Space) {
+        // while a point is being typed, Space is part of it, not the end of the polyline
+        if key(Key::Space) && self.polyline.typed.is_empty() {
             self.finish_polyline(false);
         }
         // Escape is left for the shortcuts, which then close the form
@@ -1110,8 +1150,9 @@ impl CutCraftApp {
         }
     }
 
-    /// A click adds the next point (on the first, it closes the polyline; on the last, it
-    /// swaps curves and straight lines); a drag adds one with a smooth span.
+    /// A click adds the next point (on the first, it closes the polyline; on the last, as
+    /// the second click of a double-click, it finishes it open); a drag adds one with a
+    /// smooth span.
     fn polyline_gesture(&mut self, gesture: Option<Gesture>, reach: f64) {
         match gesture {
             Some(Gesture::Click { at, .. }) => {
@@ -1130,7 +1171,11 @@ impl CutCraftApp {
                 if near(first) {
                     self.finish_polyline(true);
                 } else if near(self.polyline.points.last()) {
-                    self.polyline.toggle_curves();
+                    // a double-click ends the polyline open there (S swaps to curves);
+                    // on a lone first point there is nothing to finish yet
+                    if self.polyline.points.len() >= 2 || self.polyline.extends.is_some() {
+                        self.finish_polyline(false);
+                    }
                 } else {
                     self.polyline.click(at);
                 }
@@ -1195,7 +1240,8 @@ impl CutCraftApp {
     /// The 2D view's drawing, and the snap grid's points while snapping to it.
     fn paint_2d(&self, ui: &egui::Ui, canvas: &view2d::Canvas, overlay: &view2d::Overlay) {
         let look = &self.options.appearance;
-        let colours = look.canvas(ui.visuals().dark_mode);
+        let dark = ui.visuals().dark_mode;
+        let colours = look.canvas(dark);
         canvas.paint_sheet(ui, colours.sheet_color);
         // Join Open Ends marks the ends it joins, whether or not the view shows them
         let display = crate::display::Display {
@@ -1209,6 +1255,7 @@ impl CutCraftApp {
             self.selected_toolpath,
             &display,
             (self.job_epoch, self.history.revision()),
+            &look.lines(dark),
         );
         if self.options.snapping.snap_to_grid {
             canvas.paint_grid(
@@ -1222,6 +1269,7 @@ impl CutCraftApp {
 
     pub(super) fn view_2d(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "2D view");
+        self.forget_gone_group();
         let job = self.shown_job();
         let mut canvas = Canvas::new(ui, &job, self.camera);
         self.clipart_dropped_2d(ui, &canvas);
@@ -1297,7 +1345,10 @@ impl CutCraftApp {
             {
                 self.transform_overlay(ui, drag, reach)
             }
-            (Some(Gesture::Dragging(drag)), _, None) => self.select_drag_overlay(drag, reach),
+            (Some(Gesture::Dragging(drag)), _, None) => {
+                let axis = ui.input(|i| i.modifiers.shift) || drag.constrain;
+                self.select_drag_overlay(drag, axis, reach)
+            }
             _ => Overlay::None,
         };
         self.paint_2d(ui, &canvas, &overlay);
@@ -1387,6 +1438,30 @@ impl CutCraftApp {
             placing_tabs,
             joining_ends,
         } = modes;
+        // a double-click with nothing in hand steps into a group, or edits text
+        if handled
+            && canvas.response().double_clicked()
+            && let Some(at) = canvas.cursor()
+        {
+            self.double_click_2d(at, canvas.pick_tolerance(ui));
+            return;
+        }
+        // selecting or transforming, a slow click or one the hand shifted a pixel or two is
+        // a click, not a move or a resize (a third of the reach is about three pixels)
+        let gesture = match gesture {
+            Some(Gesture::Dropped { drag, shift })
+                if matches!(self.view_tool, None | Some(ViewTool::Transform))
+                    && self.drawing_tool().is_none()
+                    && !tracing
+                    && drag.start.distance(drag.end) < reach / 3.0 =>
+            {
+                Some(Gesture::Click {
+                    at: drag.start,
+                    shift,
+                })
+            }
+            gesture => gesture,
+        };
         match (gesture, self.view_tool, self.drawing_tool()) {
             (Some(Gesture::Dropped { drag, .. }), Some(ViewTool::ZoomBox), _) => {
                 self.zoom_box(ui, area, drag);
@@ -1524,6 +1599,22 @@ impl CutCraftApp {
         }
     }
 
+    /// The unlocked guide a Select-mode drag from `at` takes: only where no vector, selection
+    /// or handle is, so a shape lying on a guide is dragged rather than the guide.
+    fn guide_to_drag(&self, at: Point, reach: f64) -> Option<usize> {
+        let selecting = self.view_tool.is_none() && self.drawing_tool().is_none();
+        let other = || {
+            self.handle_at(at, reach).is_some()
+                || matches!(
+                    self.grabbed(at, reach),
+                    Some(Grab::Selection | Grab::Vector(_))
+                )
+        };
+        (selecting && !other())
+            .then(|| (self.doc.guides.iter()).position(|g| !g.locked && g.distance(at) <= reach))
+            .flatten()
+    }
+
     /// Guides: dragged out of a ruler (top: across, left: up and down), dragged along when
     /// unlocked, and dragged back onto a ruler to delete them. True while one is dragged.
     pub(super) fn guide_gesture(&mut self, ui: &egui::Ui, canvas: &Canvas, reach: f64) -> bool {
@@ -1531,21 +1622,30 @@ impl CutCraftApp {
             && let Some(origin) = ui.input(|i| i.pointer.press_origin())
         {
             let at = canvas.transform.to_job(origin);
-            let selecting = self.view_tool.is_none() && self.drawing_tool().is_none();
             self.guide_drag = match canvas.ruler_at(ui, origin) {
                 Some(vertical) => Some((vertical, None)),
-                None if selecting => self
-                    .doc
-                    .guides
-                    .iter()
-                    .position(|g| !g.locked && g.distance(at) <= reach)
+                None => self
+                    .guide_to_drag(at, reach)
                     .map(|i| (self.doc.guides[i].vertical, Some(i))),
-                None => None,
             };
         }
         let Some((vertical, index)) = self.guide_drag else {
+            // resting on a guide a drag would take: a cursor that says it moves
+            if let Some(i) = canvas.cursor().and_then(|at| self.guide_to_drag(at, reach)) {
+                let g = self.doc.guides[i];
+                ui.ctx().set_cursor_icon(match (g.tilted(), g.vertical) {
+                    (true, _) => egui::CursorIcon::Move,
+                    (false, true) => egui::CursorIcon::ResizeColumn,
+                    (false, false) => egui::CursorIcon::ResizeRow,
+                });
+            }
             return false;
         };
+        // Escape (egui lets go of the drag) or the drag otherwise lost: no guide
+        if !canvas.response().dragged() && !canvas.drag_stopped() {
+            self.guide_drag = None;
+            return false;
+        }
         let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) else {
             return true;
         };
@@ -1818,7 +1918,9 @@ impl CutCraftApp {
             )
         };
         match grab {
-            Grab::Vector(id) => vec![self.doc.vectors[&id].clone()],
+            Grab::Vector(id) => (self.picked_with(id).iter())
+                .filter_map(|m| self.doc.vectors.get(m).cloned())
+                .collect(),
             Grab::Component(id) => vec![boxed(self.doc.components[&id].extent())],
             Grab::Selection => {
                 let vectors = self
@@ -1839,7 +1941,7 @@ impl CutCraftApp {
 
     /// A select-mode drag in progress: what it moves, followed by the pointer, else the
     /// selection window.
-    pub(super) fn select_drag_overlay(&self, drag: Drag, reach: f64) -> Overlay {
+    pub(super) fn select_drag_overlay(&self, drag: Drag, axis: bool, reach: f64) -> Overlay {
         let Some(grab) = self.grabbed(drag.start, reach) else {
             return Overlay::Window {
                 start: drag.start,
@@ -1847,7 +1949,9 @@ impl CutCraftApp {
                 crossing: drag.end.x < drag.start.x,
             };
         };
-        let by = cut_craft_core::glam::DAffine2::from_translation(drag.end - drag.start);
+        let by = cut_craft_core::glam::DAffine2::from_translation(
+            self.select_move_by(drag, axis, reach),
+        );
         let models: Vec<EntityId> = match grab {
             Grab::Vector(_) => vec![],
             Grab::Component(id) => vec![id],
@@ -1875,7 +1979,22 @@ impl CutCraftApp {
             .collect()
     }
 
-    /// A select-mode drag let go: what it took hold of moves (as one undo)
+    /// How far a Select-mode drag moves what it grabbed: from the move cross in the
+    /// selection's middle with Shift or Ctrl held (`axis`), along one axis only, as its
+    /// hint says; anywhere else, where it was dragged.
+    fn select_move_by(&self, drag: Drag, axis: bool, reach: f64) -> Point {
+        let mut by = drag.end - drag.start;
+        if axis && self.handle_at(drag.start, reach) == Some(Handle::Move) {
+            if by.x.abs() > by.y.abs() {
+                by.y = 0.0;
+            } else {
+                by.x = 0.0;
+            }
+        }
+        by
+    }
+
+    /// A select-mode drag let go: what it took hold of moves (as one undo), as the
     /// select tool does; a drag from empty space selects by window.
     pub(super) fn select_drop(&mut self, drag: Drag, shift: bool, reach: f64) {
         let Some(grab) = self.grabbed(drag.start, reach) else {
@@ -1884,10 +2003,11 @@ impl CutCraftApp {
                 .window(Rect::new(drag.start, drag.end), drag.end.x < drag.start.x);
             return self.select(ids, shift);
         };
-        // a vector or model not yet picked is picked, on its own, as it is dragged
+        // a vector or model not yet picked is picked, on its own (a vector with its
+        // group, as a click picks it), as it is dragged
         match grab {
             Grab::Vector(id) => {
-                self.doc.selection = [id].into();
+                self.select([id], false);
                 self.doc.selected_components.clear();
             }
             Grab::Component(id) => {
@@ -1896,7 +2016,7 @@ impl CutCraftApp {
             }
             Grab::Selection => {}
         }
-        let by = drag.end - drag.start;
+        let by = self.select_move_by(drag, shift || drag.constrain, reach);
         let params =
             serde_json::json!({ "relative": true, "x": by.x, "y": by.y, "anchor": "bottom_left" });
         if let Err(e) = self.apply("move", &params) {
@@ -2053,6 +2173,8 @@ impl CutCraftApp {
         }
         if !modes.handled {
             None
+        } else if self.doc.inside_group.is_some() {
+            Some(INSIDE_GROUP.into())
         } else if self.nothing_drawn() {
             Some(EMPTY_SHEET_STEP.into())
         } else if self.doc.selection.is_empty() {
@@ -2082,7 +2204,8 @@ impl CutCraftApp {
             ),
             "draw_polyline" => Some(
                 "Click the next point (drag for a curved span); click the first point to close it, \
-                 or right-click, Space or Escape to finish it open; Backspace takes a point back"
+                 or double-click, right-click, Space or Escape to finish it open; Backspace takes a point back; \
+                 or type the next one (20, x,y or 90A 20L) and press Enter"
                     .into(),
             ),
             "draw_rectangle" => drag("Draw Rectangle: drag from one corner to the opposite one"),
@@ -2664,15 +2787,27 @@ impl CutCraftApp {
             self.finish_polyline(false);
             return;
         }
-        let pressed = ui
-            .input(|i| i.pointer.press_origin())
-            .map(|q| canvas.transform.to_job(q));
-        // where the menu opened, for guides inserted from it
+        // where the menu opened: kept while it stays open, since egui forgets the press
+        // once the button is up, and used for what it was opened on and for guides
+        // inserted from it
         if canvas.response().secondary_clicked() {
-            self.menu_at = pressed;
+            self.menu_at = canvas
+                .response()
+                .interact_pointer_pos()
+                .map(|q| canvas.transform.to_job(q));
         }
+        let pressed = self.menu_at;
         let guide =
             pressed.and_then(|at| self.doc.guides.iter().position(|g| g.distance(at) <= reach));
+        // the menu acts on what was right-clicked: a vector not yet selected is picked
+        // first (with its group), one already selected keeps the selection as it is
+        if canvas.response().secondary_clicked()
+            && guide.is_none()
+            && let Some(id) = pressed.and_then(|at| self.doc.pick(at, reach))
+            && !self.doc.selection.contains(&id)
+        {
+            self.select([id], false);
+        }
         let node_target = pressed
             .filter(|_| self.view_tool == Some(ViewTool::NodeEdit))
             .and_then(|at| self.node_target(at, reach));
@@ -2943,7 +3078,9 @@ impl CutCraftApp {
         scale: f32,
         pointer: Option<Point>,
     ) -> (Option<Gesture>, Option<Snap>, Vec<Snap>) {
-        let snapping = self.drawing_tool().is_some() || self.view_tool == Some(ViewTool::NodeEdit);
+        // drawing, node editing and measuring snap (Measure reads from one snap to another)
+        let snapping = self.drawing_tool().is_some()
+            || matches!(self.view_tool, Some(ViewTool::NodeEdit | ViewTool::Measure));
         if !snapping || ui.input(|i| i.modifiers.shift) {
             return (gesture, None, vec![]);
         }
@@ -3071,11 +3208,12 @@ impl CutCraftApp {
         let orange = egui::Color32::from_rgb(240, 130, 0);
         let painter = ui.painter_at(canvas.area);
         let hover = canvas.cursor();
+        let picked_snap = self.picked_snap();
         for (i, at, kind) in self.doc.constraint_marks() {
             if !self.doc.shown(self.doc.constraints[i].vector) {
                 continue;
             }
-            let picked = self.picked_constraint == Some(i);
+            let picked = picked_snap == Some(i);
             let hovered = hover.is_some_and(|p| p.distance(at) <= reach);
             let colour = if picked { orange } else { blue };
             let screen = canvas.transform.to_screen(at);
@@ -3101,12 +3239,27 @@ impl CutCraftApp {
                     ui.ctx(),
                     &format!(
                         "This point stays on the {} it was snapped to, even when that moves. \
-                         Click the mark and press Delete to let it move freely.",
+                         Click the mark (which picks its shape too) and press Delete to let \
+                         it move freely.",
                         kind.label().to_lowercase()
                     ),
                 );
             }
         }
+    }
+
+    /// The picked snap mark (an index into the job's constraints), while it still is: the
+    /// selection, the tool and the job as they were when it was picked, and its point
+    /// still kept.
+    pub(super) fn picked_snap(&self) -> Option<usize> {
+        let picked = self.picked_constraint.as_ref()?;
+        if picked.selection != self.doc.selection
+            || picked.tool != self.view_tool
+            || picked.revision != self.history.revision()
+        {
+            return None;
+        }
+        self.doc.constraints.iter().position(|c| *c == picked.snap)
     }
 
     /// The snap mark (a point kept on its snap) within `reach` of `at`, nearest first.
@@ -3124,13 +3277,12 @@ impl CutCraftApp {
     /// Delete with a snap mark picked: that point is let go, so it moves freely. False when
     /// none is picked.
     pub(super) fn release_picked_snap(&mut self) -> bool {
-        let Some(i) = self.picked_constraint.take() else {
+        let Some(i) = self.picked_snap() else {
+            self.picked_constraint = None;
             return false;
         };
+        self.picked_constraint = None;
         let mut kept = self.doc.constraints.clone();
-        if i >= kept.len() {
-            return false;
-        }
         let gone = kept.remove(i);
         let mut c = Change::builder(&self.doc);
         c.set_constraints(kept);
@@ -3148,10 +3300,11 @@ impl CutCraftApp {
     /// so what is made from them keeps them there. A polyline gathers its points' snaps
     /// from its first click; anything else keeps those of its last click or drag.
     pub(super) fn place_on_snaps(&mut self, gesture: Option<Gesture>, placed: &[Snap]) {
+        // a measurement makes nothing to keep on its snaps
         let placing = matches!(
             gesture,
             Some(Gesture::Click { .. } | Gesture::Dropped { .. })
-        );
+        ) && self.view_tool != Some(ViewTool::Measure);
         if !placing {
             return;
         }
@@ -3174,6 +3327,10 @@ impl CutCraftApp {
     }
 
     /// Edit ▸ Options: the sections; a change is saved and applied at once.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the one Options window, with the extras some pages show under their settings"
+    )]
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
         let mut open = self.options_window;
         let fields = self.options_categories();
@@ -3202,8 +3359,10 @@ impl CutCraftApp {
                 .map_or_else(|| id.to_owned(), |(_, label)| label.clone())
         };
         let capture = self.capture.clone();
+        let web_api_state = self.web_api_state().clone();
         let search = &mut self.shortcut_search;
         let mut shortcut_edit = None;
+        let mut web_api_pressed = None;
         let show_advanced = &mut self.show_advanced;
         let page = &mut self.options_page;
         *page = (*page).min(fields.len().saturating_sub(1));
@@ -3252,6 +3411,13 @@ impl CutCraftApp {
                     if crate::form::show(ui, one, &mut values, &look) {
                         changed = serde_json::from_value::<crate::options::Options>(values).ok();
                     }
+                    if category.key == "web_api" {
+                        web_api_pressed = super::web_api::options_section(
+                            ui,
+                            &web_api_state,
+                            &self.options.web_api,
+                        );
+                    }
                     if category.key == super::shortcuts_page::CATEGORY {
                         shortcut_edit = super::shortcuts_page::show(
                             ui,
@@ -3274,6 +3440,9 @@ impl CutCraftApp {
         self.options_window = open;
         if let Some(options) = changed {
             self.options_changed(ctx, options);
+        }
+        if let Some(pressed) = web_api_pressed {
+            self.web_api_pressed(pressed);
         }
         // after the page's settings, so they don't put back the shortcuts as they were
         if let Some(edit) = shortcut_edit {
@@ -3302,6 +3471,72 @@ impl CutCraftApp {
     }
 
     /// Options changed in the Options window: what they change, done, and kept.
+    /// Save Toolpaths' question when the files would replace G-code from an earlier save:
+    /// Replace, Archive (kept aside) or Cancel, with the answer kept as the default if asked.
+    fn earlier_question(&mut self, ctx: &egui::Context) {
+        use crate::options::EarlierGcode;
+        const SHOWN: usize = 8;
+        let Some(ask) = self.earlier_ask.as_mut() else {
+            return;
+        };
+        let mut answer: Option<Option<EarlierGcode>> = None;
+        egui::Modal::new(egui::Id::unique("earlier_gcode")).show(ctx, |ui| {
+            ui.set_width(ui.spacing().interact_size.x * 11.0);
+            ui.heading("Replace the earlier G-code?");
+            ui.label(if ask.sending {
+                "These files from an earlier send are on the machine, where the new ones go:"
+            } else {
+                "These files from an earlier save are where the new ones go:"
+            });
+            for file in ask.earlier.iter().take(SHOWN) {
+                ui.label(format!("• {}", super::file_name(file)));
+            }
+            if ask.earlier.len() > SHOWN {
+                ui.label(format!("and {} more", ask.earlier.len() - SHOWN));
+            }
+            ui.add_space(ui.spacing().item_spacing.y);
+            ui.checkbox(&mut ask.remember, "Do this every time")
+                .on_hover_hint(
+                    "Keep this answer and stop asking. Edit ▸ Options ▸ Confirmations ▸ G-code \
+                     from an earlier save changes it",
+                );
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui
+                    .button("Replace")
+                    .on_hover_hint(
+                        "Delete the earlier files, older numbered ones too, and save the new \
+                         ones: nothing old is left to run by mistake",
+                    )
+                    .clicked()
+                {
+                    answer = Some(Some(EarlierGcode::Replace));
+                }
+                if ui
+                    .button("Archive")
+                    .on_hover_hint(
+                        "Move the earlier files into a dated folder under Archive beside \
+                         them, then save the new ones",
+                    )
+                    .clicked()
+                {
+                    answer = Some(Some(EarlierGcode::Archive));
+                }
+                if ui
+                    .button("Cancel")
+                    .on_hover_hint("Save nothing and leave the earlier files as they are")
+                    .clicked()
+                {
+                    answer = Some(None);
+                }
+            });
+        });
+        if let Some(choice) = answer {
+            let remember = ask.remember;
+            self.answer_earlier(choice, remember);
+        }
+    }
+
     fn options_changed(&mut self, ctx: &egui::Context, options: crate::options::Options) {
         options.apply_to(&mut self.display);
         ctx.set_theme(options.appearance.theme.preference());
@@ -3315,7 +3550,6 @@ impl CutCraftApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
         }
-        self.recent.truncate(options.recent_count());
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
             self.playback_speed = options.toolpaths.preview_speed();
         }
@@ -3356,12 +3590,14 @@ impl CutCraftApp {
             }),
             _ => None,
         };
-        let changer = self.machines.active().is_none_or(|m| !m.slots.is_empty());
+        let changer = self.has_tool_changer();
+        // `None` while the checks run, or once they were cancelled
         let found = match &plan {
-            Ok(plan) => self.save_checks(plan, form.changes).to_vec(),
-            Err(_) => vec![],
+            Ok(plan) => self.save_checks(plan, form.changes).map(<[_]>::to_vec),
+            Err(_) => Some(vec![]),
         };
-        let errors = Self::refused(&found).is_some();
+        let mut again = false;
+        let errors = found.as_deref().is_some_and(|f| Self::refused(f).is_some());
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong("Machine and post-processor");
@@ -3413,11 +3649,14 @@ impl CutCraftApp {
                 );
             ui.separator();
             files_section(ui, &self.doc, &plan, split);
-            checks_section(ui, &found);
+            again = self.checks_or_waiting(ui, found.as_deref());
             ui.add_space(ui.spacing().item_spacing.y);
-            let ready = plan.is_ok() && !errors;
+            let ready = plan.is_ok() && !errors && found.is_some();
             (save, send, manage) = self.save_buttons(ui, ready, errors);
         });
+        if again {
+            self.check_again();
+        }
         if let Some(n) = machine_changed {
             self.machines.active = n;
             form.post = None;
@@ -3426,6 +3665,22 @@ impl CutCraftApp {
         }
         self.pressed(&form, (save, send, manage));
         self.save_form = open.then_some(form);
+    }
+
+    /// Save Toolpaths' checks before cutting: what they found, or that they are running or
+    /// were cancelled, with Check Again; whether it was pressed.
+    fn checks_or_waiting(
+        &self,
+        ui: &mut egui::Ui,
+        found: Option<&[cut_craft_core::preflight::Finding]>,
+    ) -> bool {
+        if let Some(found) = found {
+            checks_section(ui, found);
+            return false;
+        }
+        ui.separator();
+        ui.strong("Checks before cutting");
+        self.checks_waiting(ui)
     }
 
     /// Does what Save Toolpaths' buttons asked (as [`Self::save_buttons`] says).
@@ -3635,6 +3890,102 @@ impl CutCraftApp {
         self.part_labels_window = open;
     }
 
+    /// Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Cutting window): the job's
+    /// light step, loops and way back, with pictures. A change is an edit of the job, so it
+    /// can be undone and marks the toolpaths it shapes out of date; Use as My Default keeps
+    /// it for new jobs, Reset to My Defaults takes that back.
+    pub(super) fn clearing_window(&mut self, ctx: &egui::Context) {
+        let asked = super::cutting::clearing_window_id();
+        if ctx
+            .data_mut(|d| d.remove_temp::<bool>(asked))
+            .unwrap_or(false)
+        {
+            self.clearing_window = true;
+        }
+        if !self.clearing_window {
+            return;
+        }
+        let mut open = true;
+        // the open form's bit, else a common 1/4" one, for the sizes and pictures
+        let diameter = self
+            .form
+            .as_ref()
+            .and_then(|f| f.params["tool"]["diameter"].as_f64())
+            .filter(|d| *d > 0.0)
+            .unwrap_or(6.35);
+        let units = self.doc.job.units;
+        let mut clearing = self.doc.job.clearing;
+        let mine = self.options.default_job.map_or_default(|j| j.clearing);
+        let (mut keep, mut reset) = (false, false);
+        let id = egui::Id::unique("clearing_settings");
+        cut_craft_bug_report::dialog(
+            ctx,
+            id,
+            "Clearing Settings",
+            dialog_size(ctx),
+            &mut open,
+            |ui| {
+                ui.label(
+                "How the light-cut clearing styles cut, for this whole job: saved with it, so it \
+                 cuts the same on any computer.",
+            );
+                // where they are seen without scrolling
+                ui.horizontal(|ui| {
+                    keep = ui
+                        .add_enabled(clearing != mine, egui::Button::new("Use as My Default"))
+                        .on_hover_hint("New jobs start with these settings")
+                        .clicked();
+                    reset = ui
+                        .add_enabled(clearing != mine, egui::Button::new("Reset to My Defaults"))
+                        .on_hover_hint("Back to the settings new jobs start with")
+                        .clicked();
+                });
+                ui.separator();
+                super::cutting::clearing_settings(ui, &mut clearing, diameter, units);
+            },
+        );
+        if keep {
+            self.options
+                .default_job
+                .get_or_insert_with(cut_craft_core::document::Job::default)
+                .clearing = clearing;
+            self.save_options();
+        }
+        if reset {
+            clearing = mine;
+        }
+        // shown as a slider is dragged, made one edit when it is let go
+        let dragging = ctx.input(|i| i.pointer.any_down()) && !reset;
+        if clearing != self.doc.job.clearing {
+            if dragging {
+                self.clearing_before.get_or_insert(self.doc.job.clearing);
+                self.doc.job.clearing = clearing;
+            } else {
+                self.set_clearing(clearing);
+            }
+        }
+        if !dragging && let Some(before) = self.clearing_before.take() {
+            let now = std::mem::replace(&mut self.doc.job.clearing, before);
+            self.set_clearing(now);
+        }
+        self.clearing_window = open;
+    }
+
+    /// The job's Clearing Settings become `clearing`, as an edit that can be undone.
+    pub(super) fn set_clearing(&mut self, clearing: cut_craft_core::entry::ClearingSettings) {
+        if clearing == self.doc.job.clearing {
+            return;
+        }
+        let mut job = self.doc.job;
+        job.clearing = clearing;
+        let mut c = cut_craft_core::Change::builder(&self.doc);
+        c.set_job(job);
+        let change = c.finish();
+        if let Err(e) = self.history.apply(&mut self.doc, change) {
+            self.status.set_message(&e.to_string());
+        }
+    }
+
     /// Export as STL: how the model is triangulated (kept with the options), Triangulate to
     /// see the triangle count and error, and Save STL… to write it.
     pub(super) fn stl_window(&mut self, ctx: &egui::Context) {
@@ -3695,10 +4046,13 @@ impl CutCraftApp {
     }
 
     fn save_stl(&mut self, triangles: &[[cut_craft_core::glam::DVec3; 3]]) {
-        let Some(path) = file_dialog().add_filter("STL", &["stl"]).save_file() else {
+        let Some(path) = file_dialog()
+            .add_filter("STL", &["stl"])
+            .save_file()
+            .and_then(|path| saving_path(&path, &["stl"]))
+        else {
             return;
         };
-        let path = path.with_extension("stl");
         let result = std::fs::write(&path, fmt_export_as_stl::binary_stl(triangles));
         self.status.set_message(&result.map_or_else(
             |e| format!("{}: {e}", path.display()),
@@ -3832,10 +4186,18 @@ impl CutCraftApp {
         shift: bool,
         tolerance: f64,
     ) {
-        // a snap mark: picked, for Delete to let its point go
-        self.picked_constraint = self.kept_snap_at(at, tolerance);
-        if let Some(i) = self.picked_constraint {
-            let kind = self.doc.constraints[i].to.kind();
+        // a snap mark: picked, with its vector, for Delete to let its point go
+        self.picked_constraint = None;
+        if let Some(i) = self.kept_snap_at(at, tolerance) {
+            let snap = self.doc.constraints[i];
+            self.select([snap.vector], shift);
+            self.picked_constraint = Some(super::PickedSnap {
+                snap,
+                selection: self.doc.selection.clone(),
+                tool: self.view_tool,
+                revision: self.history.revision(),
+            });
+            let kind = snap.to.kind();
             self.status.set_message(&format!(
                 "Snap picked: this point is kept on the {}. Press Delete to let it go.",
                 kind.label().to_lowercase()
@@ -3868,6 +4230,10 @@ impl CutCraftApp {
             (component, false) => self.doc.selected_components = component.into_iter().collect(),
             (None, true) => {}
         }
+        // a plain click on a picture or component, which are in no group, steps out
+        if !shift && (picture.is_some() || component.is_some()) {
+            self.doc.inside_group = None;
+        }
         // inside a closed shape, away from any line, picture or component: the shape and
         // its holes, as one part
         let part = if hit.is_none() && picture.is_none() && component.is_none() {
@@ -3882,7 +4248,7 @@ impl CutCraftApp {
             }
             // Shift-clicking a part already picked takes it away
             if shift && part.iter().all(|id| ids.contains(id)) {
-                for id in part.iter().flat_map(|&id| self.doc.group_members(id)) {
+                for id in part.iter().flat_map(|&id| self.picked_with(id)) {
                     ids.remove(&id);
                 }
             } else {
@@ -3893,7 +4259,7 @@ impl CutCraftApp {
             // a grouped vector brings or takes its whole group
             let mut ids = self.doc.selection.clone();
             if let Some(id) = hit {
-                let members = self.doc.group_members(id);
+                let members = self.picked_with(id);
                 if ids.contains(&id) {
                     for m in &members {
                         ids.remove(m);
@@ -3908,11 +4274,90 @@ impl CutCraftApp {
         }
     }
 
-    /// Selection is view state: applied directly, never recorded for undo.
-    /// Picking a grouped vector picks its whole group.
-    pub(super) fn select(&mut self, ids: impl IntoIterator<Item = EntityId>, add: bool) {
+    /// The vectors a click on `id` picks: its whole group, or, stepped inside a group, the
+    /// one item in it that holds `id`.
+    pub(super) fn picked_with(&self, id: EntityId) -> Vec<EntityId> {
+        self.doc
+            .pick_inside(id, self.doc.inside_group)
+            .unwrap_or_else(|| self.doc.group_members(id))
+    }
+
+    /// A double-click in the 2D view with nothing in hand, at `at`: on a group, steps inside
+    /// it (picking the item clicked); on text, opens Edit Text on it; off everything while
+    /// inside a group, steps out one level.
+    pub(super) fn double_click_2d(&mut self, at: cut_craft_core::geometry::Point, reach: f64) {
+        let inside = self.doc.inside_group;
+        let Some(hit) = self.doc.pick(at, reach) else {
+            if let Some(group) = inside {
+                self.step_out_of_group(group);
+            }
+            return;
+        };
+        let Some(group) = self.doc.group_to_enter(hit, inside) else {
+            return;
+        };
+        let text = self
+            .doc
+            .texts
+            .get(&group)
+            .is_some_and(|t| t.get("text").is_some());
+        if text {
+            // the text picked whole, in the group it is in, and Edit Text opened on it
+            self.doc.inside_group = self.doc.group_parents.get(&group).copied();
+            let letters = self.doc.members_under(group);
+            self.select(letters, false);
+            self.start_command("draw_text");
+            return;
+        }
+        self.doc.inside_group = Some(group);
+        self.select([hit], false);
+        self.status.set_message(INSIDE_GROUP);
+    }
+
+    /// Steps out of the group stepped into once it is gone (undone, deleted, ungrouped).
+    fn forget_gone_group(&mut self) {
         let doc = &self.doc;
-        let whole = ids.into_iter().flat_map(|id| doc.group_members(id));
+        if let Some(group) = doc.inside_group
+            && !doc
+                .vectors
+                .keys()
+                .any(|&v| doc.group_chain(v).contains(&group))
+        {
+            self.doc.inside_group = None;
+        }
+    }
+
+    /// Leaves group `group` (stepped inside it) for the group around it, if any.
+    pub(super) fn step_out_of_group(&mut self, group: u64) {
+        let around = self.doc.group_parents.get(&group).copied();
+        self.doc.inside_group = around;
+        let members = self.doc.members_under(group);
+        self.select(members, false);
+        self.status.set_message(if around.is_some() {
+            "Stepped out to the group around it"
+        } else {
+            "Stepped out of the group: a click picks whole groups again"
+        });
+    }
+
+    /// Selection is view state: applied directly, never recorded for undo.
+    /// Picking a grouped vector picks its whole group, or, stepped inside a group, the one
+    /// item in it (a group inside it, whole, or the vector alone).
+    pub(super) fn select(&mut self, ids: impl IntoIterator<Item = EntityId>, add: bool) {
+        let ids: Vec<EntityId> = ids.into_iter().collect();
+        // picking something outside the group stepped into steps out of it
+        let inside = self.doc.inside_group;
+        if inside.is_some()
+            && ids
+                .iter()
+                .any(|&id| self.doc.pick_inside(id, inside).is_none())
+        {
+            self.doc.inside_group = None;
+        }
+        let doc = &self.doc;
+        let whole = ids
+            .into_iter()
+            .flat_map(|id| doc.pick_inside(id, doc.inside_group).unwrap_or_default());
         let mut c = Change::builder(doc);
         if add {
             c.select(doc.selection.iter().copied().chain(whole));
@@ -4024,7 +4469,8 @@ fn tool_changes_section(ui: &mut egui::Ui, changes: &mut files::ToolChanges, has
         ui.radio_value(changes, ToolChanges::ToolChanger, "Tool changer (ATC)")
             .on_hover_hint("One file; the machine's tool changer changes the tools")
             .on_disabled_hover_text(
-                "This machine has no tool changer: add its slots in Machine Configuration",
+                "No tool changer is set up: pick or add your machine, and give it the tool \
+                 changer's slots in Machine Configuration",
             );
     });
     ui.radio_value(
@@ -4039,7 +4485,18 @@ fn tool_changes_section(ui: &mut egui::Ui, changes: &mut files::ToolChanges, has
     );
 }
 
-/// Save Toolpaths' files: what goes in each, and why there is a file for each tool.
+/// What Save Toolpaths says while tiling is on, with `tiles` tiles.
+pub(super) fn tiling_on(tiles: usize) -> String {
+    let s = if tiles == 1 { "" } else { "s" };
+    format!(
+        "Tiling on: {tiles} tile{s}. Each tile is saved as a file of its own, the name you \
+         give with _tile1 to _tile{tiles} added (a tile with nothing to cut gets none). \
+         Toolpaths ▸ Toolpath Tiling turns it off"
+    )
+}
+
+/// Save Toolpaths' files: what goes in each, why there is a file for each tool, and that
+/// each is saved once per tile while tiling is on.
 fn files_section(
     ui: &mut egui::Ui,
     doc: &cut_craft_core::document::Document,
@@ -4047,6 +4504,10 @@ fn files_section(
     split: Option<&str>,
 ) {
     let warn = ui.visuals().warn_fg_color;
+    // tiling on: each file is saved per tile, never under the name typed alone
+    if let Some(tiling) = doc.tiling {
+        ui.colored_label(warn, tiling_on(tiling.tiles(doc.job.area()).len()));
+    }
     if let Some(why) = split
         && plan.as_ref().is_ok_and(|p| p.len() > 1)
     {

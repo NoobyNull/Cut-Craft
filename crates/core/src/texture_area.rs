@@ -51,6 +51,25 @@ impl Default for Tiling {
 pub struct Texture {
     pub seed: EntityId,
     pub tiling: Tiling,
+    /// The closed vectors it was clipped to, in job mm, moved with the component (none: its
+    /// whole box is tiled). Added after the first texture areas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rings: Vec<Vec<Point>>,
+}
+
+impl Texture {
+    /// The same, its clip rings carried by `t` as the component is.
+    #[must_use]
+    pub fn transformed(&self, t: &glam::DAffine2) -> Self {
+        Self {
+            rings: self
+                .rings
+                .iter()
+                .map(|ring| ring.iter().map(|&p| t.transform_point2(p)).collect())
+                .collect(),
+            ..self.clone()
+        }
+    }
 }
 
 /// The box round a component's shaped cells.
@@ -139,9 +158,10 @@ pub fn tiled(
     }))
 }
 
-/// `area` (a texture area component) tiled again over its own box, its tiles the same size,
-/// as the texture areas keep their tiles when resized. None when it is no texture area
-/// or its seed is gone; the result keeps its name, combine, level, group and visibility.
+/// `area` (a texture area component) tiled again over its own box, inside its clip rings
+/// when it has them, its tiles the same size, as the texture areas keep their tiles when
+/// resized. None when it is no texture area or its seed is gone; the result keeps its name,
+/// combine, level, group, visibility, shaping and colour.
 #[must_use]
 pub fn retiled(
     area: &Component,
@@ -154,9 +174,11 @@ pub fn retiled(
         &area.name,
         area.combine,
         area.extent(),
-        &[],
+        &texture.rings,
         &texture.tiling,
     )?;
+    again.shaping = area.shaping.clone();
+    again.colour = area.colour;
     again.visible = area.visible;
     again.level = area.level;
     again.group.clone_from(&area.group);

@@ -2,7 +2,7 @@
 //! tests run them without dialogs.
 
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::file::{load_job, save_job, write_atomic};
+use cut_craft_core::file::{load_job_noting, save_job, write_atomic};
 use cut_craft_core::toolpath::ToolDatabase;
 use cut_craft_core::{Change, History, Registry};
 use cut_craft_post::Post;
@@ -14,6 +14,9 @@ pub struct Session {
     pub path: Option<PathBuf>,
     /// History revision at the last save or open.
     saved: u64,
+    /// Settings in the opened file that this version does not know (a newer one added
+    /// them): saving from here leaves them out.
+    pub newer_settings: Vec<String>,
 }
 
 impl Session {
@@ -42,12 +45,13 @@ impl Session {
         Self {
             path: None,
             saved: u64::MAX,
+            newer_settings: vec![],
         }
     }
 
     pub fn save(&mut self, doc: &Document, history: &History, path: &Path) -> Result<(), String> {
         write_atomic(path, &save_job(doc))
-            .map_err(|e| format!("could not save {}: {e}", path.display()))?;
+            .map_err(|e| crate::messages::could_not_save(path, &e))?;
         self.path = Some(path.to_owned());
         self.saved = history.revision();
         Ok(())
@@ -56,8 +60,10 @@ impl Session {
     /// The opened job with a fresh history; the session now points at it.
     pub fn open(&mut self, path: &Path) -> Result<(Document, History), String> {
         let bytes = read(path)?;
-        let doc = load_job(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        let (doc, newer_settings) =
+            load_job_noting(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
         let history = History::default();
+        self.newer_settings = newer_settings;
         self.path = Some(path.to_owned());
         self.saved = history.revision();
         Ok((doc, history))
@@ -252,6 +258,267 @@ pub fn save_files(
         .collect()
 }
 
+/// `path` with `extension` on the end, unless its name already ends with it: a name typed
+/// with a dot of its own (`sign v1.5`) keeps it (`sign v1.5.nc`).
+pub fn with_extension_added(path: &Path, extension: &str) -> PathBuf {
+    if path
+        .extension()
+        .is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case(extension))
+    {
+        return path.to_owned();
+    }
+    let mut name = path.as_os_str().to_owned();
+    name.push(format!(".{extension}"));
+    PathBuf::from(name)
+}
+
+/// A name from a save dialog with one of `extensions` on its end: kept as it is when it
+/// already ends with one of them, else the first is added, so a name typed with a dot of
+/// its own (`plaque v1.2`) keeps it (`plaque v1.2.ccjob`) rather than losing what follows.
+pub fn named_for_saving(path: &Path, extensions: &[&str]) -> PathBuf {
+    let has = path.extension().is_some_and(|e| {
+        let e = e.to_string_lossy();
+        extensions.iter().any(|x| e.eq_ignore_ascii_case(x))
+    });
+    match extensions.first() {
+        Some(first) if !has => with_extension_added(path, first),
+        _ => path.to_owned(),
+    }
+}
+
+/// Whether saving to `named` would replace a file the save dialog never asked about: the
+/// extension was added to the name typed (`dialog`) and a file of that name is there already.
+pub fn replaces_unasked(dialog: &Path, named: &Path) -> bool {
+    dialog != named && named.exists()
+}
+
+/// This run's own recovery copy in `dir`, `recovery-<run>.ccjob`, and the lock that marks
+/// it as in use for as long as the returned file is kept open: another window started
+/// meanwhile leaves it alone. Lock files of runs that have ended, with no copy left, are
+/// tidied away. Where the folder cannot lock files (some network or FUSE folders), the copy
+/// is still kept, with no lock: other windows go by whether the run is still going. `None`
+/// only when the folder cannot be made.
+pub fn claim_recovery(dir: &Path, run: &str) -> Option<(PathBuf, Option<std::fs::File>)> {
+    claim_recovery_locking(dir, run, |lock| lock.try_lock().is_ok())
+}
+
+/// [`claim_recovery`], locking with `lock` (whether it took the lock).
+fn claim_recovery_locking(
+    dir: &Path,
+    run: &str,
+    lock: impl Fn(&std::fs::File) -> bool,
+) -> Option<(PathBuf, Option<std::fs::File>)> {
+    std::fs::create_dir_all(dir).ok()?;
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        let stale = path.extension().is_some_and(|e| e == "lock")
+            && is_recovery(&path)
+            && !path.with_extension("ccjob").exists()
+            && !recovery_in_use(&path);
+        if stale {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    let lock = std::fs::File::create(dir.join(format!("recovery-{run}.lock")))
+        .ok()
+        .filter(|file| lock(file));
+    let own = dir.join(format!("recovery-{run}.ccjob"));
+    if own.exists() {
+        // an ended run that had the same number left it: kept aside to be recovered
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis());
+        let _ = std::fs::rename(&own, dir.join(format!("recovery-{run}-{stamp}.ccjob")));
+    }
+    Some((own, lock))
+}
+
+/// Whether `path` is named like a recovery copy or its lock (`recovery…`).
+fn is_recovery(path: &Path) -> bool {
+    path.file_stem()
+        .is_some_and(|s| s.to_string_lossy().starts_with("recovery"))
+}
+
+/// Whether the run a recovery lock file belongs to is still running (it holds the lock).
+fn recovery_in_use(lock: &Path) -> bool {
+    let Ok(file) = std::fs::File::open(lock) else {
+        return false;
+    };
+    match file.try_lock() {
+        Err(std::fs::TryLockError::WouldBlock) => true,
+        // a folder that cannot lock files: whether the run named on it is still going
+        Err(std::fs::TryLockError::Error(_)) => lock
+            .file_stem()
+            .and_then(|s| s.to_str()?.strip_prefix("recovery-")?.parse::<u32>().ok())
+            .is_some_and(process_running),
+        Ok(()) => false,
+    }
+}
+
+/// Whether process `pid` is running, where the system says (Linux's `/proc`); elsewhere
+/// taken as ended.
+fn process_running(pid: u32) -> bool {
+    cfg!(target_os = "linux") && Path::new(&format!("/proc/{pid}")).exists()
+}
+
+/// A recovery copy in `dir` left by a run that ended without saving or closing its job (a
+/// crash), the newest first; not `own`, and not one a window still running keeps. A copy
+/// with no lock (an older version's `recovery.ccjob`) counts as left behind.
+pub fn orphaned_recovery(dir: &Path, own: &Path) -> Option<PathBuf> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p != own && p.extension().is_some_and(|e| e == "ccjob") && is_recovery(p))
+        .filter(|p| !recovery_in_use(&p.with_extension("lock")))
+        .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
+/// Whether the file `name` is one a save as `stem`.`extension` writes: that name itself, or
+/// a numbered, tiled or sided file beside it (`sign_1_Profile.nc`, `sign_tile2.nc`,
+/// `sign_Top.nc`).
+pub fn of_earlier_save(name: &str, stem: &str, extension: &str) -> bool {
+    let Some(rest) = name
+        .strip_suffix(&format!(".{extension}"))
+        .and_then(|n| n.strip_prefix(stem))
+    else {
+        return false;
+    };
+    if rest.is_empty() {
+        return true;
+    }
+    let Some(rest) = rest.strip_prefix('_') else {
+        return false;
+    };
+    let mut words = rest.split('_');
+    let first = words.next().unwrap_or_default();
+    let digits = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit());
+    (digits(first) && words.next().is_some())
+        || first.strip_prefix("tile").is_some_and(digits)
+        || first == "Top"
+        || first == "Bottom"
+}
+
+/// The G-code files an earlier save to `path` left in its folder: `path` itself and the
+/// numbered, tiled and sided files [`save_files`] writes beside it (`sign_1_Profile.nc`,
+/// `sign_tile2.nc`, `sign_Top.nc`), with the same extension. Other files are left out.
+pub fn earlier_save(path: &Path) -> Vec<PathBuf> {
+    let (Some(dir), Some(stem), Some(extension)) = (
+        path.parent(),
+        path.file_stem().map(|s| s.to_string_lossy().into_owned()),
+        path.extension().map(|e| e.to_string_lossy().into_owned()),
+    ) else {
+        return vec![];
+    };
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let ours = |name: &str| of_earlier_save(name, &stem, &extension);
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return vec![];
+    };
+    let mut found: Vec<PathBuf> = read
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| ours(&e.file_name().to_string_lossy()))
+        .map(|e| e.path())
+        .collect();
+    found.sort();
+    found
+}
+
+/// Moves `files` (an earlier save to `path`) into a new folder beside `path`,
+/// `Archive/<its stem> <when>` (with ` (2)`, ` (3)`… added when one of that name is
+/// already there, so two archives in the same second never mix); that folder.
+pub fn archive(
+    files: &[PathBuf],
+    path: &Path,
+    when: chrono::NaiveDateTime,
+) -> Result<PathBuf, String> {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let base = format!("{stem} {}", when.format("%Y-%m-%d %H%M%S"));
+    let folder = new_folder(&dir.join("Archive"), &base)?;
+    move_into(files, &folder)?;
+    Ok(folder)
+}
+
+/// Moves `files` (an earlier save to `path`) into a new hidden folder beside `path`, kept
+/// until the new save is written: then [`std::fs::remove_dir_all`] it, or
+/// [`put_back`] them if the save fails. That folder.
+pub fn set_aside(files: &[PathBuf], path: &Path) -> Result<PathBuf, String> {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let folder = new_folder(dir, &format!(".{stem} replacing"))?;
+    move_into(files, &folder)?;
+    Ok(folder)
+}
+
+/// Puts `files` (moved into `folder` by [`archive`] or [`set_aside`]) back where they
+/// were, over anything a failed save left in their place, after taking away the other
+/// files that save wrote beside `path`; then removes `folder` when it is empty.
+pub fn put_back(files: &[PathBuf], folder: &Path, path: &Path) -> Result<(), String> {
+    for partial in earlier_save(path) {
+        if !files.contains(&partial) {
+            let _ = std::fs::remove_file(partial);
+        }
+    }
+    for file in files {
+        let from = folder.join(file.file_name().unwrap_or_default());
+        if from.exists() {
+            move_file(&from, file).map_err(|e| format!("{}: {e}", from.display()))?;
+        }
+    }
+    let _ = std::fs::remove_dir(folder);
+    Ok(())
+}
+
+/// A new, empty folder `<parent>/<name>`, or `<name> (2)`, `<name> (3)`… when taken.
+fn new_folder(parent: &Path, name: &str) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    for n in 1u32.. {
+        let folder = if n == 1 {
+            parent.join(name)
+        } else {
+            parent.join(format!("{name} ({n})"))
+        };
+        match std::fs::create_dir(&folder) {
+            Ok(()) => return Ok(folder),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(format!("{}: {e}", folder.display())),
+        }
+    }
+    Err(format!("{}: no free name", parent.display()))
+}
+
+/// Moves each of `files` into `folder`; if one cannot be moved, those already moved go
+/// back and the folder is removed.
+fn move_into(files: &[PathBuf], folder: &Path) -> Result<(), String> {
+    for (n, file) in files.iter().enumerate() {
+        let to = folder.join(file.file_name().unwrap_or_default());
+        if let Err(e) = move_file(file, &to) {
+            for back in &files[..n] {
+                let _ = move_file(&folder.join(back.file_name().unwrap_or_default()), back);
+            }
+            let _ = std::fs::remove_dir(folder);
+            return Err(format!("{}: {e}", file.display()));
+        }
+    }
+    Ok(())
+}
+
+fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::rename(from, to)
+        .or_else(|_| std::fs::copy(from, to).and_then(|_| std::fs::remove_file(from)))
+}
+
 pub use cut_craft_core::file::config_dir;
 
 /// Opens `path` (a folder, or a file such as a PDF to print) with the platform's own
@@ -324,16 +591,27 @@ fn file_uri(path: &Path) -> String {
 }
 
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
-/// other gets `_1`, and it keeps counting past names that `exists` says are taken.
+/// other gets `_1`, and it keeps counting past names that `exists` says are taken. Only a
+/// short number counts up: a year (`Smith-2024`) or a date (`order_20241115`,
+/// `order_2024-11-15`, `15-11-2024`) on the end of the name is part of it, so it gets `_1`
+/// after it.
 pub fn incremented(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
     let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("untitled");
+    let counter = |at: usize| {
+        let digits = &stem[at + 1..];
+        let n = digits
+            .parse::<u64>()
+            .ok()
+            .filter(|n| digits.len() <= 4 && !(1900..=2099).contains(n))?;
+        let sep = stem[at..].chars().next()?;
+        (!ends_with_year_and_month(&stem[..at], sep) || digits.len() > 2 || !(1..=31).contains(&n))
+            .then_some(n)
+    };
     let (base, mut n) = match stem.rfind(['_', '-']) {
-        Some(at) if stem[at + 1..].parse::<u64>().is_ok() => {
-            (&stem[..=at], stem[at + 1..].parse::<u64>().unwrap_or(0))
-        }
+        Some(at) if counter(at).is_some() => (&stem[..=at], counter(at).unwrap_or(0)),
         _ => (stem, 0),
     };
     let base = if n == 0 && !base.ends_with(['_', '-']) {
@@ -351,6 +629,26 @@ pub fn incremented(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
             return next;
         }
     }
+}
+
+/// Whether `text` ends with a year, `sep` and a month (`order_2024-11` with `-`), so that a
+/// day after it is the end of a date, not a counter.
+fn ends_with_year_and_month(text: &str, sep: char) -> bool {
+    let Some((before, month)) = text.rsplit_once(sep) else {
+        return false;
+    };
+    let (front, year) = before
+        .len()
+        .checked_sub(4)
+        .and_then(|at| before.split_at_checked(at))
+        .unwrap_or(("", ""));
+    (1..=2).contains(&month.len())
+        && month.parse::<u8>().is_ok_and(|m| (1..=12).contains(&m))
+        && year.len() == 4
+        && year
+            .parse::<u16>()
+            .is_ok_and(|y| (1900..=2099).contains(&y))
+        && !front.ends_with(|c: char| c.is_ascii_digit())
 }
 
 pub fn tool_database_path() -> Option<PathBuf> {
@@ -471,6 +769,9 @@ pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
 
 /// How many jobs the start page lists.
 pub const RECENT_COUNT: usize = 4;
+/// How many recent files are kept, whatever Options lists: its largest list size, so
+/// making the list smaller and larger again loses none.
+pub const RECENT_KEPT: usize = 20;
 
 /// Toolpath templates: the toolpaths' settings, without their moves or vectors.
 pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";
@@ -479,17 +780,49 @@ pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";
 pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::EntityId]) -> Vec<u8> {
     let toolpaths: Vec<_> = ids
         .iter()
-        .filter_map(|id| doc.toolpaths.get(id))
-        .map(|t| cut_craft_core::toolpath::Toolpath {
-            moves: vec![],
-            vectors: vec![],
-            power: vec![],
-            drill_bank: None,
-            fallbacks: vec![],
-            ..t.clone()
+        .filter_map(|id| Some((id, doc.toolpaths.get(id)?)))
+        .map(|(id, t)| {
+            let mut t = cut_craft_core::toolpath::Toolpath {
+                moves: vec![],
+                vectors: vec![],
+                power: vec![],
+                drill_bank: None,
+                fallbacks: vec![],
+                ..t.clone()
+            };
+            // like its vectors, the picture it carved is this job's: another job's own
+            // picture is carved instead
+            drop_job_ids(&mut t.params);
+            // its id here, so a Merged or Array Copy toolpath saved with it still names it
+            // once both are loaded into another job (at other ids)
+            if let Some(params) = t.params.as_object_mut() {
+                params.insert(TEMPLATE_ID.into(), serde_json::json!(id.0));
+            }
+            t
         })
         .collect();
     serde_json::to_vec_pretty(&toolpaths).expect("toolpaths serialise")
+}
+
+/// The key a template keeps each toolpath's id under, in its settings.
+const TEMPLATE_ID: &str = "template_id";
+
+/// Each id in `params` naming another toolpath: a Merged toolpath's `sources`, and an
+/// Array Copy's `sources` and `only` (the one it copies).
+fn named_toolpaths(params: &mut serde_json::Value) -> Vec<&mut serde_json::Value> {
+    let Some(params) = params.as_object_mut() else {
+        return vec![];
+    };
+    params
+        .iter_mut()
+        .flat_map(|(key, value)| match key.as_str() {
+            "sources" => value
+                .as_array_mut()
+                .map_or_else(Vec::new, |ids| ids.iter_mut().collect()),
+            "only" if value.is_u64() => vec![value],
+            _ => vec![],
+        })
+        .collect()
 }
 
 /// A template's toolpaths added, empty, ready to be edited and calculated on vectors.
@@ -500,8 +833,53 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
         return Err("the template holds no toolpaths".into());
     }
     let mut c = Change::builder(doc);
-    for t in toolpaths {
-        c.add_toolpath(t);
+    // the template's ids, and where those toolpaths are now
+    let mut moved = std::collections::BTreeMap::new();
+    let mut added = vec![];
+    for mut t in toolpaths {
+        let was = t
+            .params
+            .as_object_mut()
+            .and_then(|p| p.remove(TEMPLATE_ID))
+            .and_then(|id| id.as_u64());
+        added.push((c.add_toolpath(t.clone()), t));
+        if let Some(was) = was {
+            moved.insert(was, added.last().map(|(id, _)| *id).expect("just added"));
+        }
+    }
+    // a Merged or Array Copy toolpath names the template's own toolpaths at their new ids;
+    // one it named that the template left out (or an older template's) is of the job it
+    // was saved from, so it names none of this job's
+    for (id, mut t) in added {
+        let names = named_toolpaths(&mut t.params);
+        if names.is_empty() {
+            continue;
+        }
+        let mut lost = false;
+        for name in names {
+            if let Some(now) = name.as_u64().and_then(|was| moved.get(&was)) {
+                *name = serde_json::json!(now.0);
+            } else {
+                *name = serde_json::Value::Null;
+                lost = true;
+            }
+        }
+        if let Some(sources) = t.params.get_mut("sources").and_then(|s| s.as_array_mut()) {
+            sources.retain(|s| !s.is_null());
+        }
+        if lost {
+            if t.params.get("only").is_some_and(serde_json::Value::is_null)
+                && let Some(params) = t.params.as_object_mut()
+            {
+                params.remove("only");
+            }
+            c.note(format!(
+                "{} came without the toolpaths it was made from: tick the ones to use in the \
+                 toolpath list, then calculate it",
+                t.name
+            ));
+        }
+        c.replace_toolpath(id, t);
     }
     Ok(c.finish())
 }
@@ -537,8 +915,26 @@ pub fn load_form_settings(
     let (Some(saved), Some(params)) = (file["settings"].as_object(), params.as_object_mut()) else {
         return Err("the file holds no settings".into());
     };
-    merge_settings(params, saved);
+    let mut saved = saved.clone();
+    // the picture a toolpath was made from belongs to its job: the form keeps its own
+    for key in JOB_IDS {
+        saved.remove(key);
+    }
+    merge_settings(params, &saved);
     Ok(())
+}
+
+/// Settings naming something of the job they were saved in (the picture a Photo V-Carve or
+/// Sketch Carving carved), left out of templates and settings files.
+const JOB_IDS: [&str; 1] = ["bitmap"];
+
+/// `params` without the settings that name something of their job ([`JOB_IDS`]).
+fn drop_job_ids(params: &mut serde_json::Value) {
+    if let Some(params) = params.as_object_mut() {
+        for key in JOB_IDS {
+            params.remove(key);
+        }
+    }
 }
 
 /// `saved`'s values put into the `params` the form has, group by group, so a setting a
@@ -591,6 +987,29 @@ fn read(path: &Path) -> Result<Vec<u8>, String> {
 }
 
 #[cfg(test)]
+mod recovery_tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_that_cannot_lock_files_still_keeps_a_recovery_copy() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-no-locks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (own, lock) = claim_recovery_locking(&dir, "12", |_| false).expect("a copy is kept");
+        assert_eq!(own, dir.join("recovery-12.ccjob"));
+        assert!(lock.is_none());
+        // with no lock held, another window goes by whether the run is still going
+        std::fs::write(&own, b"work").unwrap();
+        let ours = dir.join("recovery-ours.ccjob");
+        if cfg!(target_os = "linux") {
+            assert!(process_running(std::process::id()));
+            assert!(!process_running(u32::MAX));
+        }
+        assert_eq!(orphaned_recovery(&dir, &ours), Some(own));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
+
+#[cfg(test)]
 mod increment_tests {
     use super::incremented;
     use std::path::{Path, PathBuf};
@@ -616,10 +1035,162 @@ mod increment_tests {
             PathBuf::from("/j/sign_3.ccjob")
         );
     }
+
+    #[test]
+    fn increment_leaves_a_year_or_date_on_the_end_of_the_name_alone() {
+        let none = |_: &Path| false;
+        assert_eq!(
+            incremented(Path::new("/j/Smith-2024.ccjob"), none),
+            PathBuf::from("/j/Smith-2024_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/order_20241115.ccjob"), none),
+            PathBuf::from("/j/order_20241115_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/order_2024-11-15.ccjob"), none),
+            PathBuf::from("/j/order_2024-11-15_1.ccjob"),
+            "a date written with dashes"
+        );
+        assert_eq!(
+            incremented(Path::new("/j/Smith 2024_11_05.ccjob"), none),
+            PathBuf::from("/j/Smith 2024_11_05_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/order_15-11-2024.ccjob"), none),
+            PathBuf::from("/j/order_15-11-2024_1.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/order_2024-11-15_1.ccjob"), none),
+            PathBuf::from("/j/order_2024-11-15_2.ccjob"),
+            "the counter after a date keeps counting"
+        );
+        assert_eq!(
+            incremented(Path::new("/j/Smith_2024_1.ccjob"), none),
+            PathBuf::from("/j/Smith_2024_2.ccjob"),
+            "a counter after a year keeps counting"
+        );
+        assert_eq!(
+            incremented(Path::new("/j/sign_999.ccjob"), none),
+            PathBuf::from("/j/sign_1000.ccjob"),
+            "a counter it made itself keeps counting"
+        );
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_earlier_save_is_the_file_and_the_numbered_tiled_and_sided_ones_beside_it() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-earlier-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ours = [
+            "sign.nc",
+            "sign_1_Profile.nc",
+            "sign_3_Old-Vcarve.nc",
+            "sign_tile2.nc",
+            "sign_Top.nc",
+            "sign_2_Pocket_Bottom_tile1.nc",
+        ];
+        let others = [
+            "sign_2024.nc",
+            "signs.nc",
+            "sign_1_Profile.tap",
+            "sign v2.nc",
+            "sign_notes.nc",
+        ];
+        for name in ours.iter().chain(&others) {
+            std::fs::write(dir.join(name), "G0").unwrap();
+        }
+        let mut found: Vec<String> = super::earlier_save(&dir.join("sign.nc"))
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        found.sort();
+        let mut want: Vec<String> = ours.iter().map(|s| (*s).to_owned()).collect();
+        want.sort();
+        assert_eq!(found, want);
+        // archived: moved into a dated folder under Archive, the others left
+        let when = chrono::NaiveDate::from_ymd_opt(2026, 11, 15)
+            .and_then(|d| d.and_hms_opt(7, 54, 22))
+            .unwrap();
+        let path = dir.join("sign.nc");
+        let folder = super::archive(&super::earlier_save(&path), &path, when).unwrap();
+        assert_eq!(folder, dir.join("Archive").join("sign 2026-11-15 075422"));
+        for name in ours {
+            assert!(
+                !dir.join(name).exists() && folder.join(name).exists(),
+                "{name}"
+            );
+        }
+        for name in others {
+            assert!(dir.join(name).exists(), "{name}");
+        }
+        assert_eq!(
+            super::earlier_save(&dir.join("sign.nc")),
+            Vec::<std::path::PathBuf>::new()
+        );
+        // archived again in the same second: a folder of its own, the first one kept
+        std::fs::write(&path, "second").unwrap();
+        let again = super::archive(&super::earlier_save(&path), &path, when).unwrap();
+        assert_eq!(
+            again,
+            dir.join("Archive").join("sign 2026-11-15 075422 (2)")
+        );
+        assert_eq!(
+            std::fs::read_to_string(folder.join("sign.nc")).unwrap(),
+            "G0"
+        );
+        assert_eq!(
+            std::fs::read_to_string(again.join("sign.nc")).unwrap(),
+            "second"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_extension_goes_on_the_end_of_a_typed_name_with_a_dot() {
+        let added = |typed: &str| super::with_extension_added(std::path::Path::new(typed), "nc");
+        assert_eq!(added("sign v1.5"), std::path::Path::new("sign v1.5.nc"));
+        assert_eq!(added("sign.nc"), std::path::Path::new("sign.nc"));
+        assert_eq!(added("sign.NC"), std::path::Path::new("sign.NC"));
+        assert_eq!(added("sign"), std::path::Path::new("sign.nc"));
+    }
+
+    #[test]
+    fn a_saved_name_keeps_its_dots_and_asks_before_replacing_a_file_it_was_not_given() {
+        let named =
+            |typed: &str| super::named_for_saving(std::path::Path::new(typed), &["ccjob", "ajob"]);
+        assert_eq!(
+            named("Sign 2.5in walnut"),
+            std::path::Path::new("Sign 2.5in walnut.ccjob")
+        );
+        assert_eq!(
+            named("plaque v1.2"),
+            std::path::Path::new("plaque v1.2.ccjob")
+        );
+        assert_eq!(named("old.ajob"), std::path::Path::new("old.ajob"));
+        assert_eq!(named("sign.CCJOB"), std::path::Path::new("sign.CCJOB"));
+        let dir = std::env::temp_dir().join(format!("cut-craft-named-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("sign.ccjob"), "kept").unwrap();
+        // the dialog asked about the name typed, not the one the extension made
+        assert!(super::replaces_unasked(
+            &dir.join("sign"),
+            &dir.join("sign.ccjob")
+        ));
+        assert!(!super::replaces_unasked(
+            &dir.join("sign.ccjob"),
+            &dir.join("sign.ccjob")
+        ));
+        assert!(!super::replaces_unasked(
+            &dir.join("new"),
+            &dir.join("new.ccjob")
+        ));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn form_settings_load_back_into_the_same_form_only() {
         let saved = serde_json::json!({ "max_cut_depth": 2.5, "gone": 1 });
@@ -676,6 +1247,100 @@ mod tests {
         assert_eq!(loaded.name, "Profile");
         assert_eq!(loaded.moves, vec![]);
         assert!(super::load_toolpath_template(&doc, b"[]").is_err());
+    }
+
+    #[test]
+    fn a_template_s_merged_toolpath_merges_the_template_s_own_toolpaths() {
+        use cut_craft_core::document::EntityId;
+        let last = |doc: &Document, n: usize| -> Vec<EntityId> {
+            let ids: Vec<EntityId> = doc.toolpaths.keys().copied().collect();
+            ids[ids.len() - n..].to_vec()
+        };
+        let mut doc = cut_craft_core::testing::three_toolpaths();
+        for t in doc.toolpaths.values_mut() {
+            t.params = serde_json::json!({ "name": t.name });
+        }
+        let [a, b, m] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        doc.toolpaths.get_mut(&m).unwrap().params["sources"] = serde_json::json!([a.0, b.0]);
+        // all three: the merged one names the two saved with it, at their new ids
+        let bytes = super::toolpath_template(&doc, &[a, b, m]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        doc.apply(&change).unwrap();
+        let [a2, b2, m2] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        assert_eq!(
+            doc.toolpaths[&m2].params["sources"],
+            serde_json::json!([a2.0, b2.0])
+        );
+        assert!(doc.toolpaths[&m2].params.get("template_id").is_none());
+        // the merged one alone: what it merged is not in the template, so it names nothing
+        // of this job, and says so
+        let bytes = super::toolpath_template(&doc, &[m]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("tick")),
+            "{:?}",
+            change.notes
+        );
+        doc.apply(&change).unwrap();
+        let loaded = doc.toolpaths.values().last().unwrap();
+        assert_eq!(loaded.params["sources"], serde_json::json!([]));
+        // an Array Copy's one source likewise
+        let mut doc = cut_craft_core::testing::three_toolpaths();
+        for t in doc.toolpaths.values_mut() {
+            t.params = serde_json::json!({ "name": t.name });
+        }
+        let [a, _, m] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        doc.toolpaths.get_mut(&m).unwrap().params["only"] = serde_json::json!(a.0);
+        let bytes = super::toolpath_template(&doc, &[a, m]);
+        doc.apply(&super::load_toolpath_template(&doc, &bytes).unwrap())
+            .unwrap();
+        let [a2, m2] = last(&doc, 2)[..] else {
+            unreachable!()
+        };
+        assert_eq!(doc.toolpaths[&m2].params["only"], serde_json::json!(a2.0));
+    }
+
+    #[test]
+    fn templates_and_saved_settings_leave_out_the_picture_a_toolpath_was_made_from() {
+        // a Photo V-Carve made from picture 7 of its job
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        let id = *doc.toolpaths.keys().next().unwrap();
+        doc.toolpaths.get_mut(&id).unwrap().params["bitmap"] = serde_json::json!(7);
+        let bytes = super::toolpath_template(&doc, &[id]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        doc.apply(&change).unwrap();
+        let loaded = doc.toolpaths.values().last().unwrap();
+        assert_eq!(
+            loaded.params.get("bitmap"),
+            None,
+            "another job carves its own picture"
+        );
+        // settings saved from its Edit form, loaded into a new form
+        let saved = super::form_settings(
+            "photo_vcarve_toolpath",
+            "Photo V-Carve",
+            &serde_json::json!({ "name": "Face", "bitmap": 7 }),
+        );
+        let mut params = serde_json::json!({ "name": "Photo V-Carve", "bitmap": null });
+        super::load_form_settings(
+            "photo_vcarve_toolpath",
+            "Photo V-Carve",
+            &mut params,
+            &saved,
+        )
+        .unwrap();
+        assert_eq!(params["name"], "Face");
+        assert_eq!(
+            params["bitmap"],
+            serde_json::Value::Null,
+            "the form's own picture"
+        );
     }
 
     /// Four shown toolpaths (End Mill, End Mill, V-Bit, End Mill) and a hidden one.

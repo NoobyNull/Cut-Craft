@@ -41,7 +41,21 @@ fn jobs_from_a_newer_version_are_refused_with_a_reason() {
     assert_eq!(err, LoadError::NewerVersion(99));
     assert_eq!(
         err.to_string(),
-        "this job was saved by a newer version (format 99; this build reads up to 1)"
+        "this job was saved by a newer version of Cut Craft (format 99; this build reads up \
+         to 1). Update Cut Craft (Help ▸ Check for Updates) to open it"
+    );
+}
+
+#[test]
+fn a_job_cut_short_is_damaged_not_another_kind_of_file() {
+    let whole = save_job(&sample_document());
+    let cut_short = &whole[..whole.len() / 2];
+    let err = load_job(cut_short).unwrap_err();
+    assert!(matches!(err, LoadError::Damaged(_)), "{err:?}");
+    let told = err.to_string();
+    assert!(
+        told.contains("damaged") && told.contains("backup"),
+        "says what to do: {told}"
     );
 }
 
@@ -73,4 +87,21 @@ fn an_atomic_write_replaces_the_file_whole_and_leaves_no_temp_behind() {
     assert!(write_atomic(&path.join("under-a-file"), b"x").is_err());
     assert_eq!(std::fs::read(&path).unwrap(), b"second");
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn settings_a_newer_version_added_are_named_rather_than_dropped_silently() {
+    use cut_craft_core::file::load_job_noting;
+    let mut json: serde_json::Value =
+        serde_json::from_slice(&save_job(&sample_document())).unwrap();
+    json["document"]["hologram"] = serde_json::json!(true);
+    json["document"]["job"]["glitter"] = serde_json::json!(3);
+    let (doc, unknown) = load_job_noting(&serde_json::to_vec(&json).unwrap()).unwrap();
+    assert_eq!(doc, sample_document());
+    assert_eq!(unknown, ["job.glitter", "hologram"]);
+    let (_, unknown) = load_job_noting(&save_job(&sample_document())).unwrap();
+    assert!(
+        unknown.is_empty(),
+        "its own files know every setting: {unknown:?}"
+    );
 }

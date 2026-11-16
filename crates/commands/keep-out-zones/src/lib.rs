@@ -16,7 +16,8 @@ pub struct KeepOutZones;
 #[serde(rename_all = "snake_case")]
 pub enum Action {
     /// The zones become the selected closed vectors, grown by the clearance, in place of
-    /// any there were
+    /// any there were. The zones removed are counted in red below. Once there are zones the
+    /// form opens on Add Selection instead
     #[default]
     #[schemars(title = "Create from Selection")]
     Create,
@@ -69,6 +70,19 @@ impl Command for KeepOutZones {
         }
     }
 
+    /// Adds to the zones once there are some, so a second clamp does not replace the first.
+    fn initial_params(doc: &Document) -> Params {
+        let action = if doc.keep_out.is_empty() {
+            Action::Create
+        } else {
+            Action::Add
+        };
+        Params {
+            action,
+            ..Params::default()
+        }
+    }
+
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let zones = match p.action {
             Action::Clear => vec![],
@@ -113,6 +127,14 @@ impl Command for KeepOutZones {
             }
         };
         let mut c = Change::builder(doc);
+        let removed = doc.keep_out.len();
+        if p.action == Action::Create && removed > 0 {
+            let zones = if removed == 1 { "zone" } else { "zones" };
+            c.note(format!(
+                "The {removed} keep-out {zones} there were have been removed and replaced. \
+                 Undo, then choose Add Selection to keep them"
+            ));
+        }
         c.set_keep_out(zones);
         Ok(c.finish())
     }
@@ -187,5 +209,32 @@ mod tests {
         run_on::<KeepOutZones>(&mut doc, &make(Action::Create, "Vise"));
         assert_eq!(doc.keep_out.len(), count);
         assert!(doc.keep_out.iter().all(|z| z.name.starts_with("Vise")));
+    }
+
+    #[test]
+    fn the_form_adds_once_there_are_zones_and_a_replace_says_how_many_went() {
+        let mut doc = sample_document();
+        assert_eq!(KeepOutZones::initial_params(&doc).action, Action::Create);
+        run_on::<KeepOutZones>(&mut doc, &Params::default());
+        let count = doc.keep_out.len();
+        assert_eq!(KeepOutZones::initial_params(&doc).action, Action::Add);
+        let change = KeepOutZones::run(&doc, &Params::default()).unwrap();
+        assert!(
+            change
+                .notes
+                .iter()
+                .any(|n| n.contains(&format!("{count} keep-out zones")) && n.contains("removed")),
+            "{:?}",
+            change.notes
+        );
+        let added = KeepOutZones::run(
+            &doc,
+            &Params {
+                action: Action::Add,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        assert!(added.notes.is_empty(), "{:?}", added.notes);
     }
 }

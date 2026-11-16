@@ -393,7 +393,8 @@ pub struct Home {
     /// Where the tool starts and ends, up the job
     #[schemars(title = "Y", extend("x-unit" = "mm"))]
     pub y: f64,
-    /// How high above the material it waits
+    /// How high above the material it waits. Left at the clearance, it follows Clearance
+    /// (Z1) when that is changed, so the start and end moves never travel lower
     #[schemars(title = "Z Gap above Material", extend("x-unit" = "mm"), range(min = 0))]
     pub z: f64,
 }
@@ -447,6 +448,10 @@ pub struct Job {
     /// Home / Start Position; unset, X0 Y0 at the clearance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub home: Option<Home>,
+    /// How adaptive and trochoidal clearing cut, and raster rows coming back (Clearing
+    /// Settings; added with them, older jobs get the defaults)
+    #[serde(default)]
+    pub clearing: crate::entry::ClearingSettings,
 }
 
 fn default_clearance() -> f64 {
@@ -557,7 +562,7 @@ impl Default for Job {
             datum: Datum::BottomLeft,
             offset: Point::ZERO,
             resolution: Resolution::Standard,
-            // pine, as Toolpaths ▸ Materials has it
+            // pine, as Toolpaths ▸ Preview Colors has it
             colour: [214, 160, 102],
             machined_area: MachinedArea::MaterialColor,
             lithophane_light: 0.5,
@@ -567,6 +572,7 @@ impl Default for Job {
             model_position: ModelPosition::default(),
             plunge: None,
             home: None,
+            clearing: crate::entry::ClearingSettings::default(),
         }
     }
 }
@@ -601,9 +607,19 @@ pub struct Document {
     /// Bitmaps picked in the 2D view, in pick order; view state like `selection`.
     #[serde(default)]
     pub selected_bitmaps: Selection,
-    /// Which group each grouped vector is in; picking one picks the group (added with groups).
+    /// Which group each grouped vector is in (the innermost, when groups hold groups);
+    /// picking one picks its outermost group (added with groups).
     #[serde(default)]
     pub vector_groups: BTreeMap<EntityId, u64>,
+    /// Groups inside groups: the group each held group is in (added with nested groups;
+    /// older files have none). Grouping text with something keeps the text's own group
+    /// here, so it stays editable text.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub group_parents: BTreeMap<u64, u64>,
+    /// The group stepped inside (double-click a group): view state like `selection`, never
+    /// saved. A click there picks one item in it instead of the whole group.
+    #[serde(skip)]
+    pub inside_group: Option<u64>,
     /// Edit ▸ Notes: free text kept with the job, printed by posts as `[FILE_NOTES]`; notes
     /// starting with "." open by themselves when the job is opened.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -651,6 +667,10 @@ pub struct Document {
     /// Toolpath tiling: toolpaths saved in tiles for a machine smaller than the job.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tiling: Option<crate::tiling::Tiling>,
+    /// The tiling settings kept while tiling is off, so turning it on again starts from
+    /// them (added with keeping them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tiling_kept: Option<crate::tiling::Tiling>,
     /// Guide lines dragged out of the 2D view's rulers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
@@ -796,6 +816,8 @@ impl Default for Document {
             selected_components: Selection::new(),
             selected_bitmaps: Selection::new(),
             vector_groups: BTreeMap::new(),
+            group_parents: BTreeMap::new(),
+            inside_group: None,
             notes: String::new(),
             texts: BTreeMap::new(),
             levels: crate::component::default_levels(),
@@ -812,6 +834,7 @@ impl Default for Document {
             constraints: vec![],
             material_checked: false,
             tiling: None,
+            tiling_kept: None,
             bottom_side: false,
             other_side: SheetObjects::default(),
         }
@@ -923,26 +946,145 @@ impl Document {
             .copied()
     }
 
-    /// The vectors picked together with `id`: its group's, or `id` alone.
+    /// The level a new 3D component goes on: the level of the component picked in the
+    /// component tree, else the top shown level (else the first).
+    pub fn new_component_level(&self) -> u64 {
+        let first = self.levels.keys().next().copied().unwrap_or(0);
+        let picked = self
+            .selected_components
+            .iter()
+            .rev()
+            .find_map(|id| self.components.get(id))
+            .map(|k| {
+                if self.levels.contains_key(&k.level) {
+                    k.level
+                } else {
+                    first
+                }
+            });
+        picked
+            .or_else(|| {
+                self.levels
+                    .iter()
+                    .rev()
+                    .find(|(_, l)| l.visible)
+                    .map(|(&id, _)| id)
+            })
+            .unwrap_or(first)
+    }
+
+    /// The groups vector `id` is in, innermost first, outermost last; empty when it is in
+    /// none.
+    pub fn group_chain(&self, id: EntityId) -> Vec<u64> {
+        let mut chain = Vec::new();
+        let mut at = self.vector_groups.get(&id).copied();
+        while let Some(group) = at {
+            if chain.contains(&group) {
+                break; // a damaged file's loop: stop rather than spin
+            }
+            chain.push(group);
+            at = self.group_parents.get(&group).copied();
+        }
+        chain
+    }
+
+    /// The outermost group vector `id` is in: the one a click picks whole.
+    pub fn top_group(&self, id: EntityId) -> Option<u64> {
+        self.group_chain(id).last().copied()
+    }
+
+    /// The text group vector `id` belongs to, when it is a letter of editable text (even
+    /// inside a bigger group).
+    pub fn text_group(&self, id: EntityId) -> Option<u64> {
+        self.group_chain(id)
+            .into_iter()
+            .find(|g| self.texts.contains_key(g))
+    }
+
+    /// The part name vector `id` belongs to: the nearest named group around it.
+    pub fn part_name(&self, id: EntityId) -> Option<&str> {
+        self.group_chain(id)
+            .iter()
+            .find_map(|g| self.part_names.get(g))
+            .map(String::as_str)
+    }
+
+    /// The vectors picked together with `id`: its outermost group's, or `id` alone.
     pub fn group_members(&self, id: EntityId) -> Vec<EntityId> {
-        match self.vector_groups.get(&id) {
-            Some(group) => self
-                .vector_groups
-                .iter()
-                .filter(|(v, g)| *g == group && self.vectors.contains_key(v))
-                .map(|(&v, _)| v)
-                .collect(),
+        match self.top_group(id) {
+            Some(group) => self.members_under(group),
             None => vec![id],
         }
     }
 
-    /// The vectors in group `group`.
+    /// The vectors in group `group` itself (not those in groups inside it).
     pub fn group_members_of(&self, group: u64) -> Vec<EntityId> {
         self.vector_groups
             .iter()
             .filter(|(v, g)| **g == group && self.vectors.contains_key(v))
             .map(|(&v, _)| v)
             .collect()
+    }
+
+    /// Every vector in group `group`, including those in groups inside it.
+    pub fn members_under(&self, group: u64) -> Vec<EntityId> {
+        self.vector_groups
+            .keys()
+            .filter(|v| self.vectors.contains_key(v))
+            .filter(|&&v| self.group_chain(v).contains(&group))
+            .copied()
+            .collect()
+    }
+
+    /// The vectors a click on `id` picks while stepped inside group `inside` (`None`: not
+    /// inside any): the item one level down in `inside` that holds `id` (a group inside it,
+    /// whole, or `id` alone). `None` when `id` is not in `inside`.
+    pub fn pick_inside(&self, id: EntityId, inside: Option<u64>) -> Option<Vec<EntityId>> {
+        let Some(inside) = inside else {
+            return Some(self.group_members(id));
+        };
+        let chain = self.group_chain(id);
+        let at = chain.iter().position(|&g| g == inside)?;
+        Some(match at.checked_sub(1) {
+            Some(below) => self.members_under(chain[below]),
+            None => vec![id],
+        })
+    }
+
+    /// The outermost group around vector `id` whose every member is selected: what the
+    /// selection holds of `id` as one item. `None` when `id` is picked on its own.
+    pub fn picked_group(&self, id: EntityId) -> Option<u64> {
+        self.group_chain(id).into_iter().rev().find(|&g| {
+            self.members_under(g)
+                .iter()
+                .all(|m| self.selection.contains(m))
+        })
+    }
+
+    /// The groups around vector `id` (innermost first) that lie wholly among `set`: the
+    /// grouping a copy of `set` keeps.
+    pub fn chain_within(
+        &self,
+        id: EntityId,
+        set: &std::collections::BTreeSet<EntityId>,
+    ) -> Vec<u64> {
+        self.group_chain(id)
+            .into_iter()
+            .take_while(|&g| self.members_under(g).iter().all(|m| set.contains(m)))
+            .collect()
+    }
+
+    /// The group a double-click on `id` steps into from `inside` (`None`: not inside any):
+    /// the group one level down that holds `id`. `None` when `id` is a lone item there.
+    pub fn group_to_enter(&self, id: EntityId, inside: Option<u64>) -> Option<u64> {
+        let chain = self.group_chain(id);
+        match inside {
+            None => chain.last().copied(),
+            Some(inside) => {
+                let at = chain.iter().position(|&g| g == inside)?;
+                chain.get(at.checked_sub(1)?).copied()
+            }
+        }
     }
 
     /// A group number no vector uses yet.
@@ -956,6 +1098,7 @@ impl Document {
         self.vector_groups
             .values()
             .copied()
+            .chain(self.group_parents.iter().flat_map(|(&a, &b)| [a, b]))
             .chain(stored)
             .max()
             .map_or(1, |g| g + 1)
@@ -968,6 +1111,30 @@ impl Document {
             .rev()
             .find_map(|id| self.bitmaps.get(id))
             .or_else(|| self.bitmaps.values().next_back())
+    }
+
+    /// The picture a picture toolpath carves: the one it was `made_from` when it has one
+    /// (an error once that is deleted), else [`Self::chosen_bitmap`]; with its id, to keep.
+    pub fn toolpath_bitmap(
+        &self,
+        made_from: Option<EntityId>,
+    ) -> Result<(EntityId, &Bitmap), crate::CommandError> {
+        if let Some(id) = made_from {
+            return self.bitmaps.get(&id).map(|b| (id, b)).ok_or_else(|| {
+                crate::CommandError::Failed(
+                    "the picture this toolpath was made from has been deleted. Import it \
+                     again and make a new toolpath from it"
+                        .into(),
+                )
+            });
+        }
+        self.selected_bitmaps
+            .iter()
+            .rev()
+            .find_map(|id| self.bitmaps.get_key_value(id))
+            .or_else(|| self.bitmaps.iter().next_back())
+            .map(|(&id, b)| (id, b))
+            .ok_or_else(|| crate::CommandError::Failed("import the picture first".into()))
     }
 
     /// The newest bitmap under `at`, for picking in the 2D view.
@@ -1029,6 +1196,30 @@ impl Document {
             .filter(move |&id| self.layer_of(id) == layer)
     }
 
+    /// Where else vectors sit on `layer`: the names of the other sheets (and "the other
+    /// side" of a double-sided job) holding some. A layer is the whole job's, but each sheet
+    /// not shown keeps its own vectors, so a layer empty here may not be empty.
+    pub fn layer_used_elsewhere(&self, layer: LayerId) -> Vec<String> {
+        let first = self.layers.first().map(|l| l.id);
+        let uses = |objects: &SheetObjects| {
+            objects
+                .vectors
+                .values()
+                .any(|v| v.layer.or(first) == Some(layer))
+        };
+        let mut found: Vec<String> = self
+            .sheets
+            .iter()
+            .enumerate()
+            .filter(|&(i, sheet)| i != self.active_sheet && uses(&sheet.objects))
+            .map(|(_, sheet)| sheet.name.clone())
+            .collect();
+        if uses(&self.other_side) {
+            found.push("the other side".to_owned());
+        }
+        found
+    }
+
     /// On a visible layer: drawn in the views.
     pub fn shown(&self, id: EntityId) -> bool {
         self.layer(self.layer_of(id)).is_some_and(|l| l.visible)
@@ -1062,6 +1253,81 @@ impl Document {
             .filter(|id| keep(&self.vectors[id]))
             .map(|&id| (id, self.vectors[&id].clone()))
             .unzip()
+    }
+
+    /// The selected vectors as the items a user sees: a group's selected members are one
+    /// item, and with `nest`, a closed vector also takes in the items lying inside it (a
+    /// part and its holes). Items come in the order their first member was picked.
+    pub fn selected_items(&self, nest: bool) -> Vec<Vec<EntityId>> {
+        let mut items: Vec<Vec<EntityId>> = Vec::new();
+        let mut by_group: BTreeMap<u64, usize> = BTreeMap::new();
+        let mut whole: BTreeMap<u64, bool> = BTreeMap::new();
+        for &id in &self.selection {
+            // the outermost group picked whole is the item (inside a group, one item in it)
+            let item = self.group_chain(id).into_iter().rev().find(|&g| {
+                *whole.entry(g).or_insert_with(|| {
+                    self.members_under(g)
+                        .iter()
+                        .all(|m| self.selection.contains(m))
+                })
+            });
+            if let Some(g) = item {
+                if let Some(&at) = by_group.get(&g) {
+                    items[at].push(id);
+                    continue;
+                }
+                by_group.insert(g, items.len());
+            }
+            items.push(vec![id]);
+        }
+        if !nest || items.len() < 2 {
+            return items;
+        }
+        let bounds = |item: &[EntityId]| {
+            item.iter()
+                .map(|id| self.vectors[id].bounds())
+                .reduce(Rect::union)
+                .expect("an item has a member")
+        };
+        let boxes: Vec<Rect> = items.iter().map(|i| bounds(i)).collect();
+        // a lone closed vector is an outline other items can sit inside
+        let rings: Vec<Option<Vec<Point>>> = items
+            .iter()
+            .map(|i| match i.as_slice() {
+                [id] if self.vectors[id].closed => Some(self.vectors[id].flatten(0.01)),
+                _ => None,
+            })
+            .collect();
+        let area = |r: Rect| r.size().x * r.size().y;
+        // each item's tightest outline around it
+        let parent: Vec<Option<usize>> = (0..items.len())
+            .map(|a| {
+                (0..items.len())
+                    .filter(|&b| b != a && area(boxes[b]) > area(boxes[a]))
+                    .filter(|&b| {
+                        rings[b].as_ref().is_some_and(|ring| {
+                            boxes[b].contains_rect(boxes[a])
+                                && inside(
+                                    std::slice::from_ref(ring),
+                                    self.vectors[&items[a][0]].start,
+                                )
+                        })
+                    })
+                    .min_by(|&x, &y| area(boxes[x]).total_cmp(&area(boxes[y])))
+            })
+            .collect();
+        let root = |mut a: usize| {
+            while let Some(p) = parent[a] {
+                a = p;
+            }
+            a
+        };
+        let mut merged: Vec<Vec<EntityId>> = vec![Vec::new(); items.len()];
+        for (a, item) in items.iter().enumerate() {
+            merged[root(a)].extend(item);
+        }
+        merged.retain(|i| !i.is_empty());
+        merged
     }
 
     /// Bounds of everything selected, or `None` when nothing is.

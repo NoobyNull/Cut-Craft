@@ -1,5 +1,6 @@
 //! Align Objects: the selected vectors lined up on an edge or the centre of the selection, or
-//! centred in the material. Ten commands that differ only in where each path moves to.
+//! centred in the material. Ten commands that differ only in where each item moves to; a
+//! group (a word of text, say) moves as one piece.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;

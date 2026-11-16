@@ -57,6 +57,9 @@ pub(super) fn shortcut_text(text: &str) -> String {
         .iter()
         .find(|(windows, _)| *windows == text)
         .map_or(text, |(_, mac)| mac);
+    if text.is_empty() {
+        return String::new();
+    }
     let parts: Vec<&str> = text.split('+').map(str::trim).collect();
     let Some((key, held)) = parts.split_last() else {
         return text.to_owned();
@@ -86,8 +89,17 @@ pub(super) fn shortcut_text(text: &str) -> String {
     out
 }
 
-/// Shortcuts whose Mac spelling differs from Windows': Redo is ⇧⌘Z on a Mac.
-const MAC_KEYS: [(&str, &str); 1] = [("Ctrl+Y", "Ctrl+Shift+Z")];
+/// Shortcuts whose Mac spelling differs from Windows': Redo is ⇧⌘Z on a Mac. Quick
+/// Engrave's Ctrl+Q has none there, as ⌘Q quits every Mac app ([`SYSTEM_KEYS`]).
+const MAC_KEYS: [(&str, &str); 2] = [("Ctrl+Y", "Ctrl+Shift+Z"), ("Ctrl+Q", "")];
+
+/// Keys the Mac keeps for itself: ⌘Q quits before Cut Craft sees it.
+const SYSTEM_KEYS: [&str; 1] = ["Ctrl+Q"];
+
+/// Whether the Mac takes `keys` for itself, so no Cut Craft action can have them there.
+pub(super) fn kept_by_the_mac(keys: KeyboardShortcut) -> bool {
+    SYSTEM_KEYS.iter().any(|k| shortcut::parse(k) == Some(keys))
+}
 
 /// The Mac's own keys for what `bindings` already binds, to go with them: the delete key (which
 /// is egui's Backspace) for Del, ⇧⌘Z for Redo, and ⌘, for Options as every Mac app's settings.
@@ -279,6 +291,17 @@ mod tests {
         assert_eq!(shortcut_text("E"), "E");
         assert_eq!(shortcut_text("Ctrl+Y"), "⇧⌘Z", "Redo, as Mac apps have it");
         assert_eq!(shortcut_text(""), "");
+        assert_eq!(
+            shortcut_text("Ctrl+Q"),
+            "",
+            "⌘Q is the Mac's Quit: no shortcut shown"
+        );
+    }
+
+    #[test]
+    fn the_macs_quit_key_runs_no_tool() {
+        assert!(kept_by_the_mac(sc(Modifiers::COMMAND, Key::Q)));
+        assert!(!kept_by_the_mac(sc(Modifiers::COMMAND, Key::Z)));
     }
 
     fn sc(mods: Modifiers, key: Key) -> KeyboardShortcut {

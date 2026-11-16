@@ -142,6 +142,17 @@ impl Material {
         }
     }
 
+    /// Whether this is a block of `job`'s size, thickness and place: false once Job Setup
+    /// has changed them since it was made.
+    pub fn covers(&self, job: &Job) -> bool {
+        let close = |a: f64, b: f64| (a - b).abs() <= self.cell;
+        let area = job.area();
+        (self.origin - area.min).length() < 1e-9
+            && (self.bottom + job.thickness).abs() < 1e-9
+            && close(self.columns as f64 * self.cell, job.width)
+            && close(self.rows as f64 * self.cell, job.height)
+    }
+
     /// The material with its other side's cuts on its underside, the other side's point
     /// for each of this side's being where `turn` takes it; a cell cut through from both
     /// sides is left empty (NaN, top and underside). Unchanged without an other side.
@@ -344,7 +355,11 @@ impl Material {
     /// Takes away the piece of material at `p`: every cell joined to it, side to side,
     /// without a cut right through between (the preview's double-click on a part or the
     /// waste cut free of it). Taken cells hold NaN, which the views leave out. Returns how
-    /// many cells went; none when `p` is off the material, cut through or already gone.
+    /// many cells went; none when `p` is off the material, cut through or already gone, or
+    /// when nothing is cut free there: the piece would be all the material left and runs to
+    /// the material's edge (an uncut block, a pocket, a part held by tabs to the waste), even
+    /// after other pieces were taken. A part cut free of the waste can still be taken once
+    /// the waste is gone.
     pub fn remove_piece(&mut self, p: Point) -> usize {
         let (column, row) = (
             ((p.x - self.origin.x) / self.cell).floor(),
@@ -360,14 +375,15 @@ impl Material {
         // through means at the underside, to within a hair
         let solid = |h: f64| !h.is_nan() && h > self.bottom + 1e-9;
         let mut stack = vec![(column, row)];
-        let mut removed = 0;
+        let mut piece = vec![];
+        let mut seen = vec![false; self.heights.len()];
         while let Some((c, r)) = stack.pop() {
-            let height = &mut self.heights[r * self.columns + c];
-            if !solid(*height) {
+            let i = r * self.columns + c;
+            if seen[i] || !solid(self.heights[i]) {
                 continue;
             }
-            *height = f64::NAN;
-            removed += 1;
+            seen[i] = true;
+            piece.push(i);
             if c > 0 {
                 stack.push((c - 1, r));
             }
@@ -381,7 +397,21 @@ impl Material {
                 stack.push((c, r + 1));
             }
         }
-        removed
+        // all that is left and running to the material's edge: the block or the waste with
+        // whatever is still held to it (by tabs, or not cut through), never cut free of it,
+        // whatever was taken before
+        let left = self.heights.iter().filter(|&&h| solid(h)).count();
+        let at_edge = piece.iter().any(|&i| {
+            let (c, r) = (i % self.columns, i / self.columns);
+            c == 0 || r == 0 || c + 1 == self.columns || r + 1 == self.rows
+        });
+        if piece.len() == left && at_edge {
+            return 0;
+        }
+        for &i in &piece {
+            self.heights[i] = f64::NAN;
+        }
+        piece.len()
     }
 
     /// Removes what the tool following `toolpath` cuts away.
@@ -494,11 +524,22 @@ impl Material {
             return;
         }
         // the material is nowhere above its top, 0
-        let (columns, rows) = self.swept(a, b, tool.reach_below(-a.z.min(b.z)));
+        let reach = tool.reach_below(-a.z.min(b.z));
+        let (columns, rows) = self.swept(a, b, reach);
+        // a bit narrower than a cell can pass between centres: then it also cuts each cell
+        // its tip passes through, as deep as the tip goes there
+        let thin = reach < self.cell * std::f64::consts::FRAC_1_SQRT_2;
         let last = first + band.len() / self.columns;
         for row in rows.start.max(first)..rows.end.min(last) {
             for column in columns.clone() {
-                if let Some(z) = lowest_edge(tool, a, b, self.centre(column, row)) {
+                let mut lowest = lowest_edge(tool, a, b, self.centre(column, row));
+                if thin {
+                    let corner = self.origin + Point::new(column as f64, row as f64) * self.cell;
+                    if let Some(z) = tip_through(a, b, corner, corner + self.cell) {
+                        lowest = Some(lowest.map_or(z, |edge| edge.min(z)));
+                    }
+                }
+                if let Some(z) = lowest {
                     let i = (row - first) * self.columns + column;
                     let (height, z) = (&mut band[i], z.max(self.bottom));
                     // a piece already taken away (NaN) stays away
@@ -649,7 +690,9 @@ fn lowest_edge(tool: &Tool, a: DVec3, b: DVec3, centre: Point) -> Option<f64> {
     };
     Some(match tool.shape {
         // z is linear in t, so a flat end (untapered) is lowest at one end of the covered span
-        ToolShape::EndMill | ToolShape::SurfacingBit if tool.reach() <= tool.diameter / 2.0 => {
+        ToolShape::EndMill | ToolShape::SurfacingBit | ToolShape::Laser
+            if tool.reach() <= tool.diameter / 2.0 =>
+        {
             a.lerp(b, t0).z.min(a.lerp(b, t1).z)
         }
         // a level move is lowest where it passes closest
@@ -658,6 +701,24 @@ fn lowest_edge(tool: &Tool, a: DVec3, b: DVec3, centre: Point) -> Option<f64> {
         }
         _ => lowest(t0, t1, edge),
     })
+}
+
+/// The lowest the tip goes while moving straight from `a` to `b` within the square from
+/// `lo` to `hi`; `None` if it never passes over that square.
+fn tip_through(a: DVec3, b: DVec3, lo: Point, hi: Point) -> Option<f64> {
+    let (mut t0, mut t1) = (0.0_f64, 1.0_f64);
+    for (start, step, lo, hi) in [(a.x, b.x - a.x, lo.x, hi.x), (a.y, b.y - a.y, lo.y, hi.y)] {
+        if step == 0.0 {
+            if start < lo || start > hi {
+                return None;
+            }
+        } else {
+            let (enter, leave) = ((lo - start) / step, (hi - start) / step);
+            t0 = t0.max(enter.min(leave));
+            t1 = t1.min(enter.max(leave));
+        }
+    }
+    (t0 <= t1).then(|| a.lerp(b, t0).z.min(a.lerp(b, t1).z))
 }
 
 /// The least of a convex `f` over `[lo, hi]`, by golden-section search; the ends are checked

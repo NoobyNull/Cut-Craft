@@ -2,9 +2,9 @@
 //! checks are Cut Craft's own.
 
 use crate::component::placed_model;
-use crate::document::Document;
+use crate::document::{Document, EntityId};
 use crate::drag_knife;
-use crate::geometry::Path;
+use crate::geometry::{Path, Point, inside, polyline_distance};
 use crate::reach::{self, Fix, Side, too_deep};
 use crate::toolpath::{MoveKind, Toolpath};
 
@@ -16,6 +16,12 @@ const PROFILE: &str = "profile_toolpath";
 
 /// The Pocket strategy, which clears inside its shapes.
 const POCKET: &str = "pocket_toolpath";
+
+/// The Inlay strategy, whose inserts and holes are cut out with no tabs.
+const INLAY: &str = "inlay_toolpath";
+
+/// The Drilling strategy, which goes straight down at each hole's centre.
+const DRILLING: &str = "drilling_toolpath";
 
 /// How close to the material's bottom a cut must reach to count as right through, mm.
 const THROUGH: f64 = 1e-3;
@@ -58,10 +64,106 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
     if let Some(loose) = comes_loose(doc, toolpath, deepest) {
         found.push(loose);
     }
+    if toolpath.strategy == DRILLING {
+        let holes: Vec<Path> = toolpath
+            .vectors
+            .iter()
+            .filter_map(|id| doc.vectors.get(id))
+            .filter(|v| v.closed)
+            .cloned()
+            .collect();
+        found.extend(drill_sizes(name, tool, &holes, units));
+    }
     if let Some(missed) = missed_spots(doc, toolpath, left) {
         found.push(missed);
     }
     found.extend(fell_back(toolpath, units));
+    found.extend(past_material(doc, toolpath));
+    found
+}
+
+/// Made by Array Copy Toolpath.
+const ARRAY_COPY: &str = "array_copy_toolpath";
+
+/// How far past the material's edge the centre of a cut may go: a part cut out right at
+/// the edge has its profile a tool radius outside it.
+pub fn edge_allowance(toolpath: &Toolpath) -> f64 {
+    toolpath.tool.diameter.max(0.0) / 2.0 + 0.1
+}
+
+/// An array of copies that runs off the material (copies are put up and to the right of
+/// the first, however much room there is).
+pub fn past_material(doc: &Document, toolpath: &Toolpath) -> Option<String> {
+    if toolpath.strategy != ARRAY_COPY || doc.job.rotary.is_some() {
+        return None;
+    }
+    let area = doc.job.area();
+    let allowance = edge_allowance(toolpath);
+    let off = toolpath
+        .moves
+        .iter()
+        .filter(|m| m.kind != MoveKind::Rapid)
+        .any(|m| {
+            let at = m.to.truncate();
+            at.x < area.min.x - allowance
+                || at.y < area.min.y - allowance
+                || at.x > area.max.x + allowance
+                || at.y > area.max.y + allowance
+        });
+    off.then(|| {
+        format!(
+            "{} cuts past the edge of the material: some of its copies are off it. Use fewer \
+             rows or columns, or less space between them",
+            toolpath.name
+        )
+    })
+}
+
+/// What Drilling's bit does to `holes` not its size, a sentence each: it drills straight down
+/// at each centre, so every hole comes out the bit's width, whatever was drawn. A bit wider
+/// than a hole spoils it; a hole much wider than the bit wants a Pocket or Profile instead.
+/// `name` is the toolpath's, or the form's.
+pub fn drill_sizes(
+    name: &str,
+    tool: &crate::toolpath::Tool,
+    holes: &[Path],
+    units: crate::document::Units,
+) -> Vec<String> {
+    let bit = tool.diameter;
+    // a hole drawn within this of the bit is taken as its size
+    let near = (bit * 0.05).max(0.1);
+    let sizes: Vec<f64> = holes
+        .iter()
+        .map(|h| {
+            let size = h.bounds().size();
+            size.x.max(size.y)
+        })
+        .collect();
+    let width = units.length(bit, 1);
+    let mut found = vec![];
+    let small: Vec<f64> = sizes.iter().copied().filter(|s| bit - s > near).collect();
+    if let Some(smallest) = small.iter().copied().reduce(f64::min) {
+        found.push(format!(
+            "{name}: {} ({width}) is bigger than {} of the holes drawn (the smallest is {} across), \
+             so it drills them {width} wide: pick a smaller bit, or check the holes are \
+             meant to be that size",
+            tool.name,
+            small.len(),
+            units.length(smallest, 1),
+        ));
+    }
+    let big: Vec<f64> = sizes.iter().copied().filter(|s| s - bit > near).collect();
+    if let Some(largest) = big.iter().copied().reduce(f64::max) {
+        let are = if big.len() == 1 { "is" } else { "are" };
+        found.push(format!(
+            "{name}: {} of the holes drawn {are} wider than {} ({width}; the largest is {} across), \
+             and Drilling only goes straight down, so they come out {width} wide: use a \
+             Pocket or a Profile (Inside) toolpath for a hole wider than the bit",
+            big.len(),
+            tool.name,
+            units.length(largest, 1),
+        ));
+    }
     found
 }
 
@@ -221,8 +323,28 @@ fn finished_after(doc: &Document, toolpath: &Toolpath) -> bool {
 fn comes_loose(doc: &Document, toolpath: &Toolpath, deepest: f64) -> Option<String> {
     let params = &toolpath.params;
     let through = doc.job.thickness > 0.0 && deepest + THROUGH >= doc.job.thickness;
-    if toolpath.strategy != PROFILE || held_by_tabs(params) || !through {
+    if toolpath.strategy == INLAY && through {
+        return inlay_loose(
+            &toolpath.name,
+            params["inlay_type"].as_str().unwrap_or_default(),
+        );
+    }
+    if toolpath.strategy != PROFILE || !through {
         return None;
+    }
+    if held_by_tabs(params) {
+        let untabbed = shapes_without_placed_tabs(doc, &toolpath.vectors, params);
+        let shapes = outer_shapes(doc, &toolpath.vectors).len();
+        let has = if untabbed == 1 { "has" } else { "have" };
+        return (untabbed > 0).then(|| {
+            format!(
+                "{} cuts right through, and {untabbed} of its {shapes} shapes {has} no tab: \
+                 tabs placed by hand go on the shape nearest each click, so that piece \
+                 comes loose and can move into the cutter. Click on it in Edit Tabs to add \
+                 one, or spread the tabs automatically",
+                toolpath.name
+            )
+        });
     }
     // along the line itself, only a closed shape is cut out
     let closed = toolpath
@@ -238,6 +360,86 @@ fn comes_loose(doc: &Document, toolpath: &Toolpath, deepest: f64) -> Option<Stri
          the piece down another way: tape, screws or a vacuum table",
         toolpath.name
     ))
+}
+
+/// What comes loose when an Inlay toolpath of `inlay_type` (its form's value) cuts right
+/// through the material, as a sentence; `None` for a pocket, which keeps its floor. Inlay
+/// has no tabs, so the insert (or a hole's waste) is held only by what holds the material.
+pub fn inlay_loose(name: &str, inlay_type: &str) -> Option<String> {
+    let piece = match inlay_type {
+        "male_straight" | "male_stepped" => "the insert",
+        "female_hole" => "the waste inside the hole",
+        _ => return None,
+    };
+    Some(format!(
+        "{name} cuts right through the material, and inlays have no tabs, so {piece} comes \
+         loose and can move into the cutter. Hold it down (tape, screws or a vacuum table), \
+         or make the Cut Depth a little less than the material and cut the thin skin left \
+         by hand"
+    ))
+}
+
+/// The closed shapes among `vectors` that are not inside another of them: the pieces a
+/// through-cut frees (a shape inside another is a hole, cut out as waste). Each with its
+/// index in `vectors`.
+fn outer_shapes(doc: &Document, vectors: &[EntityId]) -> Vec<usize> {
+    let rings: Vec<Option<Vec<Point>>> = vectors
+        .iter()
+        .map(|id| {
+            doc.vectors
+                .get(id)
+                .filter(|v| v.closed)
+                .map(|v| v.flatten(0.05))
+        })
+        .collect();
+    (0..rings.len())
+        .filter(|&i| {
+            rings[i].as_ref().is_some_and(|ring| {
+                let at = ring[0];
+                !rings.iter().enumerate().any(|(j, other)| {
+                    j != i
+                        && other
+                            .as_ref()
+                            .is_some_and(|o| inside(std::slice::from_ref(o), at))
+                })
+            })
+        })
+        .collect()
+}
+
+/// With a profile's tabs placed by hand, how many of the shapes it frees got none: each
+/// clicked tab goes on the vector nearest it (as the profile places them), so a shape
+/// nearest no click is cut out with nothing holding it. 0 for tabs spread automatically.
+pub fn shapes_without_placed_tabs(
+    doc: &Document,
+    vectors: &[EntityId],
+    params: &serde_json::Value,
+) -> usize {
+    if params["tabs"] == "none" || params["tab"]["spacing"] != "placed" {
+        return 0;
+    }
+    let clicks: Vec<Point> =
+        serde_json::from_value(params["tab_points"].clone()).unwrap_or_default();
+    let lines: Vec<Vec<Point>> = vectors
+        .iter()
+        .map(|id| {
+            doc.vectors
+                .get(id)
+                .map_or_else(Vec::new, |v| v.flatten(0.05))
+        })
+        .collect();
+    let nearest = |at: Point| {
+        (0..lines.len())
+            .filter(|&i| !lines[i].is_empty())
+            .min_by(|&a, &b| {
+                polyline_distance(&lines[a], at).total_cmp(&polyline_distance(&lines[b], at))
+            })
+    };
+    let tabbed: Vec<usize> = clicks.iter().filter_map(|&c| nearest(c)).collect();
+    outer_shapes(doc, vectors)
+        .into_iter()
+        .filter(|i| !tabbed.contains(i))
+        .count()
 }
 
 /// Whether a profile's settings leave tabs that hold the piece: tabs on, and either sized
@@ -425,6 +627,111 @@ mod tests {
             ..profile(&[1], "outside", "none", 20.0)
         };
         assert!(!loose(&problems(&doc, &pocket)));
+    }
+
+    #[test]
+    fn a_drill_not_the_size_of_the_holes_drawn_is_flagged() {
+        use crate::geometry::Path;
+        let doc = crate::testing::document_with(vec![
+            Path::circle(Point::new(20.0, 20.0), 1.5),
+            Path::circle(Point::new(40.0, 20.0), 5.0),
+            Path::circle(Point::new(60.0, 20.0), 3.0),
+        ]);
+        let ids: Vec<_> = doc.vectors.keys().copied().collect();
+        let bit = |diameter: f64| Tool {
+            name: "Drill".into(),
+            diameter,
+            flute_length: 30.0,
+            ..Tool::default()
+        };
+        let drilling = |tool: Tool, vectors: &[EntityId]| Toolpath {
+            name: "Drilling 1".into(),
+            vectors: vectors.to_vec(),
+            ..toolpath(tool, "drilling_toolpath", 5.0)
+        };
+        let found = problems(&doc, &drilling(bit(6.0), &ids));
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(
+            found[0].contains("bigger than 1 of the holes") && found[0].contains("3.0 mm"),
+            "{found:?}"
+        );
+        assert!(
+            found[1].contains("1 of the holes") && found[1].contains("10.0 mm"),
+            "{found:?}"
+        );
+        assert!(found[1].contains("Pocket"), "says what to use: {found:?}");
+        // the right bit for the 6 mm hole: nothing to say
+        assert_eq!(
+            problems(&doc, &drilling(bit(6.0), &ids[2..])),
+            Vec::<String>::new()
+        );
+        // only Drilling is judged so
+        let pocket = Toolpath {
+            strategy: POCKET.into(),
+            ..drilling(bit(6.0), &ids)
+        };
+        assert!(!problems(&doc, &pocket).iter().any(|f| f.contains("holes")));
+    }
+
+    #[test]
+    fn an_inlay_cut_out_right_through_comes_loose() {
+        let mut doc = crate::testing::sample_document();
+        doc.job.thickness = 6.0;
+        let inlay = |kind: &str, depth: f64| Toolpath {
+            name: "Inlay 1".into(),
+            params: serde_json::json!({ "inlay_type": kind }),
+            vectors: vec![crate::document::EntityId(1)],
+            ..toolpath(Tool::default(), "inlay_toolpath", depth)
+        };
+        for kind in ["male_straight", "male_stepped", "female_hole"] {
+            assert!(loose(&problems(&doc, &inlay(kind, 6.0))), "{kind}");
+            assert!(
+                !loose(&problems(&doc, &inlay(kind, 5.0))),
+                "{kind} short of it"
+            );
+        }
+        // a pocket for the insert has a floor
+        assert!(!loose(&problems(&doc, &inlay("female_pocket", 6.0))));
+    }
+
+    #[test]
+    fn a_shape_left_without_a_clicked_tab_comes_loose() {
+        let mut doc = crate::testing::sample_document();
+        doc.job.thickness = 20.0;
+        // squares 1 and 2, tabs placed by hand on the first only
+        let mut placed = profile(&[1, 2], "outside", "flat", 20.0);
+        placed.params["tab"] = serde_json::json!({ "spacing": "placed" });
+        placed.params["tab_points"] = serde_json::json!([[20.0, 10.0], [30.0, 20.0]]);
+        let found = problems(&doc, &placed);
+        assert!(loose(&found), "{found:?}");
+        assert!(
+            found.iter().any(|f| f.contains("1 of its 2 shapes")),
+            "says how many: {found:?}"
+        );
+        assert_eq!(
+            shapes_without_placed_tabs(&doc, &placed.vectors, &placed.params),
+            1
+        );
+        // a tab on the second too holds both
+        placed.params["tab_points"] = serde_json::json!([[20.0, 10.0], [65.0, 40.0]]);
+        assert!(!loose(&problems(&doc, &placed)));
+        // a hole inside a shape is waste, and needs no tab of its own
+        let mut c = crate::Change::builder(&doc);
+        let hole = c.add(crate::geometry::Path::polyline(
+            &[
+                crate::geometry::Point::new(15.0, 15.0),
+                crate::geometry::Point::new(25.0, 15.0),
+                crate::geometry::Point::new(25.0, 25.0),
+            ],
+            true,
+        ));
+        doc.apply(&c.finish()).unwrap();
+        placed.vectors.push(hole);
+        assert!(!loose(&problems(&doc, &placed)));
+        // spread automatically, every shape gets its own
+        placed.params["tab"] = serde_json::json!({ "spacing": "automatic" });
+        placed.params["tab_points"] = serde_json::json!([]);
+        assert!(!loose(&problems(&doc, &placed)));
     }
 
     /// A pocket (or profile) of the sample document's first square, cut with `tool`.

@@ -3,7 +3,10 @@
 //! Text may hold variables, `!!name!!`, each filled from a column of the data file or from a
 //! counter. Plates fill the material inside the margins, one per row of data; when they need
 //! more than one sheet of material each sheet's plates go on a layer of their own. The
-//! template's toolpaths are made again for each sheet, shifted onto its plates.
+//! template's toolpaths are made again for each sheet, shifted onto its plates. Every sheet
+//! is laid on the same material, for its own board, so only Sheet 1's layer and toolpaths
+//! are left shown: show the next sheet's (and hide the last) to save and cut it. The
+//! template's own toolpaths are hidden.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
@@ -288,8 +291,7 @@ impl Command for PlateProduction {
                 run: Box::new(move |d: &Document| {
                     let mut c = Change::builder(d);
                     if new_layer {
-                        let layer = c.add_layer(&format!("Sheet {}", sheet + 1));
-                        c.set_current_layer(layer);
+                        sheet_layer(&mut c, sheet);
                     }
                     for id in &copied {
                         c.add(d.vectors[id].transformed(&shift));
@@ -355,6 +357,19 @@ impl Command for PlateProduction {
     }
 }
 
+/// Sheet `sheet`'s layer (counting from 0), made current. Each sheet of plates is laid on
+/// the same material, for its own board: only the first is shown, the rest hidden until cut.
+fn sheet_layer(c: &mut cut_craft_core::ChangeBuilder, sheet: usize) {
+    let name = format!("Sheet {}", sheet + 1);
+    let layer = c.add_layer(&name);
+    c.set_current_layer(layer);
+    if sheet > 0 {
+        let mut hidden = cut_craft_core::document::Layer::new(layer, &name);
+        hidden.visible = false;
+        c.replace_layer(hidden);
+    }
+}
+
 /// The template's toolpaths once per sheet of plates: each toolpath whose vectors are in
 /// `template`, its moves shifted onto every plate of the sheet (`spots`: each plate's sheet
 /// and place, `bounds` the template's box), its vectors the plates' copies (`made`), named
@@ -372,7 +387,15 @@ fn sheet_toolpaths(
     let sheets = spots.iter().map(|s| s.0).max().map_or(1, |s| s + 1);
     let mut c = Change::builder(after);
     let of_template = |t: &&Toolpath| t.vectors.iter().any(|v| template.contains(v));
-    for t in doc.toolpaths.values().filter(of_template) {
+    for (&id, t) in doc.toolpaths.iter().filter(|(_, t)| of_template(t)) {
+        // the template's own cut, where the template is, is not one of the plates
+        c.replace_toolpath(
+            id,
+            Toolpath {
+                visible: false,
+                ..t.clone()
+            },
+        );
         let cuts_text = made
             .iter()
             .any(|m| m.text && m.template.iter().any(|v| t.vectors.contains(v)));
@@ -403,6 +426,9 @@ fn sheet_toolpaths(
                 moves,
                 power,
                 stale: cuts_text,
+                // the sheets after the first are cut on boards of their own, one at a time:
+                // saving what is shown cuts only the first
+                visible: t.visible && sheet == 0,
                 drill_bank: t.drill_bank.as_ref().map(|b| b.copied(&placed)),
                 fallbacks: vec![],
                 ..t.clone()
@@ -869,6 +895,38 @@ mod tests {
         assert!(shift.z.abs() < 1e-9 && (t.moves[2].to - moves[2].to - shift).length() < 1e-9);
         let second = t.moves[moves.len() + 1].to - moves[1].to;
         assert!(second != shift && second.z.abs() < 1e-9);
+        // the template's own cut is not one of the plates
+        assert!(
+            doc.toolpaths
+                .values()
+                .filter(|t| t.name == "Profile")
+                .all(|t| !t.visible)
+        );
+        // a second sheet of plates, on the same material, is left hidden to cut on its own
+        let mut small = without.clone();
+        small.job.width = 100.0;
+        small.job.height = 50.0;
+        let mut q = PlateProduction::initial_params(&small);
+        q.data.file = data_file("sheets", "name\nI\nH\nO\n");
+        run_on::<PlateProduction>(&mut small, &q);
+        let shown = |name: &str| {
+            small
+                .toolpaths
+                .values()
+                .find(|t| t.name.starts_with(name))
+                .unwrap_or_else(|| panic!("{name}"))
+                .visible
+        };
+        assert!(shown("S1 - ") && !shown("S2 - "), "only Sheet 1 is saved");
+        let layer = |name: &str| {
+            small
+                .layers
+                .iter()
+                .find(|l| l.name == name)
+                .unwrap()
+                .visible
+        };
+        assert!(layer("Sheet 1") && !layer("Sheet 2"));
         // without the option, only the vectors
         let mut doc = without;
         p.create_toolpaths = false;

@@ -16,6 +16,8 @@ cut-craft-updater = { path = "../updater" }
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
 cut-craft-scripting = { path = "../scripting" }
+# Options ▸ Web API: the local HTTP server scripts drive Cut Craft through
+cut-craft-web-api = { path = "../web-api" }
 eframe.workspace = true
 egui.workspace = true
 # Help Contents: the help pages are Markdown, shown in the app

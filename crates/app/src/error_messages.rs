@@ -148,3 +148,46 @@ fn a_step_is_found_as_a_word_of_its_own() {
     );
     assert!(!says_what_to_do("The tool is too big for the shapes."));
 }
+
+/// The app's own status-bar errors about files the person picked, as they read for an
+/// example of each cause.
+fn status_messages() -> Vec<String> {
+    use crate::messages;
+    use std::io::{Error, ErrorKind};
+    let path = std::path::Path::new("/somewhere/job.crv");
+    let mut out = vec![];
+    for kind in [
+        ErrorKind::PermissionDenied,
+        ErrorKind::NotFound,
+        ErrorKind::StorageFull,
+        ErrorKind::Other,
+    ] {
+        let e = Error::new(kind, "os error 13");
+        out.push(messages::could_not_save(path, &e));
+        out.push(messages::could_not_read(path, &e));
+        out.push(messages::cannot_keep_words(path, &e));
+    }
+    out.push(messages::could_not_save_picture(
+        path,
+        &"unsupported format",
+    ));
+    out.push(messages::not_a_machine_package(path));
+    out
+}
+
+#[test]
+fn the_apps_file_errors_read_as_sentences_and_say_what_to_do() {
+    for message in status_messages() {
+        assert!(message.starts_with(|c: char| c.is_uppercase()), "{message}");
+        assert!(message.ends_with(['.', '!', '?']), "{message}");
+        assert!(
+            says_what_to_do(message.split(". ").nth(1).unwrap_or("")),
+            "{message}"
+        );
+        assert!(!message.contains("os error"), "no raw OS text: {message}");
+        assert!(
+            !message.contains("line 1 column"),
+            "no raw parser text: {message}"
+        );
+    }
+}

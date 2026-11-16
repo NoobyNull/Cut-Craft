@@ -1,6 +1,7 @@
 //! Edit Picture: a picture's contrast, brightness and gamma, inverted if asked, and a border
-//! that fades its edges to white. Pictures are kept in grey,
-//! so there is no separate Grayscale step.
+//! that fades its edges to white. A colour picture has its colours changed the same way, so a
+//! colour trace sees the edit too. Tracing in black and white uses the picture's grey, so
+//! there is no separate Grayscale step.
 
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::{Document, EntityId};
@@ -55,6 +56,9 @@ pub struct Border {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The picture to change
+    /// (the one right-clicked or picked: never shown on the form, so it cannot be changed
+    /// to another by mistake)
+    #[schemars(skip)]
     pub bitmap: EntityId,
     #[schemars(title = "Picture", extend("x-section" = true))]
     pub tones: Tones,
@@ -94,14 +98,14 @@ impl Command for EditPicture {
         }
     }
 
-    /// The picture picked first.
+    /// The picture picked first, or else the newest, as the other picture tools pick.
     fn initial_params(doc: &Document) -> Params {
         let bitmap = doc
             .selected_bitmaps
             .iter()
             .copied()
             .find(|id| doc.bitmaps.contains_key(id))
-            .or_else(|| doc.bitmaps.keys().next().copied())
+            .or_else(|| doc.bitmaps.keys().next_back().copied())
             .unwrap_or(EntityId(1));
         Params {
             bitmap,
@@ -173,9 +177,21 @@ fn edited(picture: &Bitmap, params: &Params) -> Bitmap {
         .enumerate()
         .map(|(i, &tone)| adjust(i, f64::from(tone)) as f32)
         .collect();
+    // and each colour of a colour picture, three to a pixel
+    let rgb = picture
+        .rgb
+        .iter()
+        .enumerate()
+        .map(|(i, &level)| {
+            (adjust(i / 3, f64::from(level) / 255.0) * 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8
+        })
+        .collect();
     Bitmap {
         grey,
         depth,
+        rgb,
         ..picture.clone()
     }
 }
@@ -274,6 +290,32 @@ mod tests {
             assert!(g[0] > 200, "{shape:?}: the corner is nearly white");
             assert_eq!(g[5 * 20 + 9], 0, "{shape:?}: the middle is untouched");
         }
+    }
+
+    #[test]
+    fn a_colour_picture_has_its_colours_edited_too() {
+        let mut doc = picture();
+        doc.bitmaps.get_mut(&EntityId(1)).unwrap().rgb = [0, 128, 255].repeat(200);
+        cut_craft_core::testing::run_on::<EditPicture>(
+            &mut doc,
+            &with(Tones {
+                invert: true,
+                ..Params::default().tones
+            }),
+        );
+        let b = &doc.bitmaps[&EntityId(1)];
+        assert_eq!(b.rgb.len(), 600);
+        assert_eq!(b.rgb[..3], [255, 127, 0], "each colour inverted");
+    }
+
+    #[test]
+    fn with_none_picked_it_edits_the_newest_picture_like_the_other_picture_tools() {
+        let mut doc = picture();
+        let mut c = Change::builder(&doc);
+        let newer = c.add_bitmap(doc.bitmaps[&EntityId(1)].clone());
+        doc.apply(&c.finish()).unwrap();
+        doc.selected_bitmaps.clear();
+        assert_eq!(EditPicture::initial_params(&doc).bitmap, newer);
     }
 
     #[test]

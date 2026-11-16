@@ -168,14 +168,21 @@ impl CutCraftApp {
         let source = self.preview_source();
         let cuts: Vec<(u32, cut_craft_core::toolpath::Toolpath)> = ids
             .iter()
-            .filter_map(|&id| Some((super::preview_mark(id), source.toolpaths.get(&id)?.clone())))
+            .filter_map(|&id| Some((self.preview_mark(id), source.toolpaths.get(&id)?.clone())))
             .collect();
         drop(source);
         let what = match &cuts[..] {
             [(_, one)] => format!("Previewing {}", one.name),
             _ => format!("Previewing {} toolpaths", cuts.len()),
         };
-        let last = cuts.last().map(|(_, t)| t.name.clone());
+        // the same split as the progress title: the one toolpath's name, else how many
+        let done = match &cuts[..] {
+            [] => None,
+            [(_, one)] => Some(format!("Previewed {}", one.name)),
+            _ => Some(format!("Previewed {} toolpaths", cuts.len())),
+        };
+        let tools: Vec<cut_craft_core::toolpath::Tool> =
+            cuts.iter().map(|(_, t)| t.tool.clone()).collect();
         self.in_background(
             &what,
             move || {
@@ -191,14 +198,20 @@ impl CutCraftApp {
                 material
             },
             move |app, material| {
+                let fine_bit = crate::display::fine_bit_note(&tools, material.cell);
                 app.simulation = Some(material);
                 app.kept_playback = None;
                 (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
                 if app.display.auto_open_3d {
                     app.view = super::View::ThreeD;
                 }
-                if let Some(name) = last {
-                    app.status.set_message(&format!("Previewed {name}"));
+                // one line, so the fine-bit note never hides what was previewed
+                let message = match (done, fine_bit) {
+                    (Some(done), Some(note)) => Some(format!("{done}. {note}")),
+                    (done, note) => done.or(note),
+                };
+                if let Some(message) = message {
+                    app.status.set_message(&message);
                 }
                 then(app);
             },

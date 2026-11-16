@@ -94,6 +94,12 @@ pub enum Edit {
         before: Option<u64>,
         after: Option<u64>,
     },
+    /// Puts a group inside another group or takes it out (`None`).
+    SetGroupParent {
+        group: u64,
+        before: Option<u64>,
+        after: Option<u64>,
+    },
     /// Moves a vector between layers; `None` is "not on any layer" (added or removed).
     SetLayer {
         id: EntityId,
@@ -143,10 +149,15 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
-    /// Turns toolpath tiling on (with its settings) or off.
+    /// Turns toolpath tiling on (with its settings) or off, and the settings kept while it
+    /// is off.
     SetTiling {
         before: Option<crate::tiling::Tiling>,
         after: Option<crate::tiling::Tiling>,
+        #[serde(default)]
+        kept_before: Option<crate::tiling::Tiling>,
+        #[serde(default)]
+        kept_after: Option<crate::tiling::Tiling>,
     },
     /// Replaces the guide lines.
     SetGuides {
@@ -247,9 +258,16 @@ impl Edit {
                 before: after,
                 after: before,
             },
-            Self::SetTiling { before, after } => Self::SetTiling {
+            Self::SetTiling {
+                before,
+                after,
+                kept_before,
+                kept_after,
+            } => Self::SetTiling {
                 before: after,
                 after: before,
+                kept_before: kept_after,
+                kept_after: kept_before,
             },
             Self::SetGuides { before, after } => Self::SetGuides {
                 before: after,
@@ -301,6 +319,15 @@ impl Edit {
                 before: after,
                 after: before,
             },
+            Self::SetGroupParent {
+                group,
+                before,
+                after,
+            } => Self::SetGroupParent {
+                group,
+                before: after,
+                after: before,
+            },
             Self::SetLevel { id, before, after } => Self::SetLevel {
                 id,
                 before: after,
@@ -327,6 +354,8 @@ pub enum ApplyError {
     LayerInUse(LayerId),
     /// The level was changed by something else.
     LevelConflict(u64),
+    /// The group was put in or taken out of another group by something else.
+    GroupConflict(u64),
 }
 
 impl fmt::Display for ApplyError {
@@ -334,6 +363,7 @@ impl fmt::Display for ApplyError {
         match self {
             Self::Missing(id) => write!(f, "entity {} does not exist", id.0),
             Self::Exists(id) => write!(f, "entity {} already exists", id.0),
+            Self::GroupConflict(g) => write!(f, "group {g} was changed by something else"),
             Self::Conflict(id) => write!(f, "entity {} was changed by something else", id.0),
             Self::JobConflict => f.write_str("the job setup was changed by something else"),
             Self::MissingLayer(id) => write!(f, "layer {} does not exist", id.0),
@@ -406,11 +436,22 @@ impl Change {
         c.finish()
     }
 
-    /// Transforms each selected path and component by `f(its bounds)`; the shared core of
-    /// move, scale, rotate, mirror and align. Nothing selected is an error; identity
+    /// Transforms each selected item (a lone path, or a group's selected paths together) and
+    /// component by `f(its bounds)`; the shared core of move, scale, rotate, mirror and align. Nothing selected is an error; identity
     /// transforms make no edit.
     pub fn transform_selected(
         doc: &Document,
+        f: impl Fn(Rect) -> DAffine2,
+    ) -> Result<Self, CommandError> {
+        Self::transform_items(doc, &doc.selected_items(false), f)
+    }
+
+    /// [`Self::transform_selected`] with the selected vectors taken as `items` (see
+    /// [`Document::selected_items`]): every member of an item gets the one transform
+    /// worked out from the whole item's bounds.
+    pub fn transform_items(
+        doc: &Document,
+        items: &[Vec<EntityId>],
         f: impl Fn(Rect) -> DAffine2,
     ) -> Result<Self, CommandError> {
         let components: Vec<_> = doc
@@ -423,11 +464,19 @@ impl Change {
             return Err(CommandError::NothingSelected);
         }
         let mut c = Self::builder(doc);
-        for &id in &doc.selection {
-            let path = &doc.vectors[&id];
-            let t = f(path.bounds());
+        for item in items {
+            let Some(bounds) = item
+                .iter()
+                .map(|id| doc.vectors[id].bounds())
+                .reduce(Rect::union)
+            else {
+                continue;
+            };
+            let t = f(bounds);
             if t != DAffine2::IDENTITY {
-                c.replace(id, path.transformed(&t));
+                for id in item {
+                    c.replace(*id, doc.vectors[id].transformed(&t));
+                }
             }
         }
         for id in components {
@@ -458,10 +507,7 @@ impl Change {
         })
     }
 
-    /// Spaces the selected paths evenly along x (`vertical` false) or y: the first and last
-    /// stay put and the others move so the gaps between their extents are equal, keeping
-    /// their order and their other coordinate.
-    /// Spaces the selected objects evenly along x (or y when `vertical`) in `sequence`: the
+    /// Spaces the selected objects (a group counts as one) evenly along x (or y when `vertical`) in `sequence`: the
     /// outermost stay put; or with `inside_last`, the last one picked stays and the others
     /// are spread inside it, the same gap at its edges as between them.
     pub fn space_selected(
@@ -477,12 +523,18 @@ impl Change {
                 (r.min.x, r.max.x)
             }
         };
-        let mut items: Vec<(EntityId, f64, f64)> = doc
-            .selection
-            .iter()
-            .map(|&id| {
-                let (lo, hi) = along(doc.vectors[&id].bounds());
-                (id, lo, hi)
+        // a group spaces as one object
+        let mut items: Vec<(Vec<EntityId>, f64, f64)> = doc
+            .selected_items(false)
+            .into_iter()
+            .map(|item| {
+                let bounds = item
+                    .iter()
+                    .map(|id| doc.vectors[id].bounds())
+                    .reduce(Rect::union)
+                    .expect("an item has a member");
+                let (lo, hi) = along(bounds);
+                (item, lo, hi)
             })
             .collect();
         let frame = if inside_last { items.pop() } else { None };
@@ -514,7 +566,7 @@ impl Change {
             None => ((end - start - sizes) / (items.len() - 1) as f64, start),
         };
         let mut c = Self::builder(doc);
-        for &(id, lo, hi) in &items {
+        for (item, lo, hi) in &items {
             let by = at - lo;
             if by.abs() > 1e-12 {
                 let shift = if vertical {
@@ -522,10 +574,12 @@ impl Change {
                 } else {
                     Point::new(by, 0.0)
                 };
-                c.replace(
-                    id,
-                    doc.vectors[&id].transformed(&DAffine2::from_translation(shift)),
-                );
+                for &id in item {
+                    c.replace(
+                        id,
+                        doc.vectors[&id].transformed(&DAffine2::from_translation(shift)),
+                    );
+                }
             }
             at += hi - lo + gap;
         }
@@ -543,10 +597,15 @@ impl Change {
     pub fn copy_selected_grouped(doc: &Document, transforms: &[DAffine2]) -> Self {
         let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
         let mut c = Self::builder(doc);
-        let all = c.copies(doc, &originals, transforms);
-        let group = doc.next_group();
+        let all = c.copies_grouped(doc, &originals, transforms, true);
+        let group = c.next_group();
+        // each item (a group, kept whole with any inside it, or a lone vector) goes in it
         for &id in &all {
-            c.set_group(id, Some(group));
+            match c.top_group_now(id) {
+                Some(top) if top != group => c.set_group_parent(top, Some(group)),
+                Some(_) => {}
+                None => c.set_group(id, Some(group)),
+            }
         }
         c.select(all);
         c.finish()
@@ -570,17 +629,40 @@ impl Change {
     }
 
     /// Replaces `remove` with `add`, selecting what was added: the shape of every boolean,
-    /// offset or join result.
+    /// offset or join result. The results go on the layer of the first original removed (the
+    /// current layer when nothing is), and a result identical to an original just keeps it.
     pub fn swap(
         doc: &Document,
         remove: impl IntoIterator<Item = EntityId>,
         add: Vec<Path>,
     ) -> Self {
         let mut c = Self::builder(doc);
-        for id in remove {
+        let mut removing: Vec<EntityId> = remove.into_iter().collect();
+        let layer = removing.first().map(|&id| doc.layer_of(id));
+        // a result the same as an original keeps the original, its id, layer and group
+        let ids: Vec<Option<EntityId>> = add
+            .iter()
+            .map(|p| {
+                let at = removing.iter().position(|id| doc.vectors[id] == *p)?;
+                Some(removing.remove(at))
+            })
+            .collect();
+        for id in removing {
             c.remove(id);
         }
-        let ids: Vec<EntityId> = add.into_iter().map(|p| c.add(p)).collect();
+        let ids: Vec<EntityId> = add
+            .into_iter()
+            .zip(ids)
+            .map(|(p, kept)| {
+                kept.unwrap_or_else(|| {
+                    let id = c.add(p);
+                    if let Some(layer) = layer {
+                        c.move_to_layer(id, layer);
+                    }
+                    id
+                })
+            })
+            .collect();
         c.select(ids);
         c.finish()
     }
@@ -653,36 +735,99 @@ impl Change {
     }
 
     /// `self` with the toolpaths it leaves out of date marked stale: those made from a vector
-    /// it changes or removes, and, when it changes the model, those that cut the model. The
-    /// marks are edits of the change, so undoing it undoes them.
+    /// it changes or removes, those copying (Merged, Array Copy) a toolpath it removes, cuts
+    /// differently or leaves out of date, those carving a picture it moves or alters, when it changes the model those that cut the model, and when
+    /// it changes the material's thickness, where the model sits, or the rotary or
+    /// double-sided set-up, every toolpath (they bake those in when calculated). The marks
+    /// are edits of the change, so undoing it undoes them.
     #[must_use]
     pub fn marking_stale(mut self, doc: &Document) -> Self {
         let mut model = false;
+        let mut clearing = false;
+        let mut material = false;
         let mut vectors = std::collections::BTreeSet::new();
         let mut made = std::collections::BTreeSet::new();
+        // toolpaths this change takes away or makes cut differently
+        let mut recut = std::collections::BTreeSet::new();
+        // pictures this change moves, alters or takes away
+        let mut pictures = std::collections::BTreeSet::new();
         for edit in &self.edits {
             match edit {
                 Edit::Replace { id, .. } | Edit::Remove { id, .. } => {
                     vectors.insert(*id);
                 }
+                Edit::ReplaceBitmap { id, .. } | Edit::RemoveBitmap { id, .. } => {
+                    pictures.insert(*id);
+                }
                 Edit::AddComponent { .. }
                 | Edit::RemoveComponent { .. }
                 | Edit::ReplaceComponent { .. }
                 | Edit::SetLevel { .. } => model = true,
-                Edit::AddToolpath { id, .. }
-                | Edit::RemoveToolpath { id, .. }
-                | Edit::ReplaceToolpath { id, .. } => {
+                Edit::SetJob { before, after } => {
+                    clearing |= before.clearing != after.clearing;
+                    model |= before.resolution != after.resolution;
+                    material |= before.thickness != after.thickness
+                        || before.model_position != after.model_position
+                        || before.rotary != after.rotary
+                        || before.double_sided != after.double_sided;
+                }
+                Edit::AddToolpath { id, .. } => {
                     made.insert(*id);
+                }
+                Edit::RemoveToolpath { id, .. } => {
+                    made.insert(*id);
+                    recut.insert(*id);
+                }
+                Edit::ReplaceToolpath { id, before, after } => {
+                    made.insert(*id);
+                    // shown, hidden or renamed, it cuts the same
+                    if before.moves != after.moves
+                        || before.tool != after.tool
+                        || before.power != after.power
+                    {
+                        recut.insert(*id);
+                    }
                 }
                 _ => {}
             }
         }
         let picks_again = self.picks_again(doc);
-        for (&id, toolpath) in &doc.toolpaths {
-            let outdated = (model && toolpath.reads_model())
-                || toolpath.vectors.iter().any(|v| vectors.contains(v))
-                || picks_again.contains(&id);
-            if outdated && !toolpath.stale && !made.contains(&id) {
+        let mut outdated: std::collections::BTreeSet<EntityId> = doc
+            .toolpaths
+            .iter()
+            .filter(|&(id, toolpath)| {
+                material
+                    || (model && toolpath.reads_model())
+                    || (clearing && toolpath.reads_clearing())
+                    || toolpath.vectors.iter().any(|v| vectors.contains(v))
+                    || picture_of(toolpath).is_some_and(|b| pictures.contains(&b))
+                    || picks_again.contains(id)
+            })
+            .map(|(&id, _)| id)
+            .collect();
+        // a Merged or Array Copy toolpath copies the moves of its sources: out of date once
+        // one of them cuts differently or goes, or is itself out of date
+        loop {
+            let more: Vec<EntityId> = doc
+                .toolpaths
+                .iter()
+                .filter(|(id, _)| !outdated.contains(id))
+                .filter(|(_, t)| {
+                    sources_of(t)
+                        .iter()
+                        .any(|s| recut.contains(s) || outdated.contains(s))
+                })
+                .map(|(&id, _)| id)
+                .collect();
+            if more.is_empty() {
+                break;
+            }
+            outdated.extend(more);
+        }
+        self.keep_copies_behind_stale(doc, &outdated, &recut);
+        for id in outdated {
+            let toolpath = &doc.toolpaths[&id];
+            if !toolpath.stale && !made.contains(&id) {
                 let after = Toolpath {
                     stale: true,
                     ..toolpath.clone()
@@ -695,6 +840,57 @@ impl Change {
             }
         }
         self
+    }
+
+    /// Marks out of date each Merged or Array Copy toolpath this change makes again while a
+    /// source of it is still out of date, or is cut again only after it: it holds old moves.
+    fn keep_copies_behind_stale(
+        &mut self,
+        doc: &Document,
+        outdated: &std::collections::BTreeSet<EntityId>,
+        recut: &std::collections::BTreeSet<EntityId>,
+    ) {
+        let mut last = std::collections::BTreeMap::new();
+        for (i, edit) in self.edits.iter().enumerate() {
+            if let Edit::AddToolpath { id, .. }
+            | Edit::RemoveToolpath { id, .. }
+            | Edit::ReplaceToolpath { id, .. } = edit
+            {
+                last.insert(*id, i);
+            }
+        }
+        let still_stale = |s: EntityId, edits: &[Edit]| match last.get(&s) {
+            Some(&i) => match &edits[i] {
+                Edit::AddToolpath { toolpath, .. } => toolpath.stale,
+                Edit::ReplaceToolpath { after, .. } => after.stale,
+                _ => false,
+            },
+            None => doc
+                .toolpaths
+                .get(&s)
+                .is_some_and(|t| t.stale || outdated.contains(&s)),
+        };
+        let behind: Vec<usize> = last
+            .values()
+            .copied()
+            .filter(|&i| match &self.edits[i] {
+                Edit::AddToolpath { toolpath: t, .. } | Edit::ReplaceToolpath { after: t, .. } => {
+                    !t.stale
+                        && sources_of(t).iter().any(|&s| {
+                            still_stale(s, &self.edits)
+                                || last.get(&s).is_some_and(|&j| j > i && recut.contains(&s))
+                        })
+                }
+                _ => false,
+            })
+            .collect();
+        for i in behind {
+            if let Edit::AddToolpath { toolpath: t, .. } | Edit::ReplaceToolpath { after: t, .. } =
+                &mut self.edits[i]
+            {
+                t.stale = true;
+            }
+        }
     }
 
     /// The job this change sets, if it sets one: lets a view show a job before it is applied.
@@ -881,7 +1077,12 @@ impl Document {
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
             Edit::SetConstraints { after, .. } => self.constraints.clone_from(after),
             Edit::SetToolpathGroups { after, .. } => self.toolpath_groups.clone_from(after),
-            Edit::SetTiling { after, .. } => self.tiling = *after,
+            Edit::SetTiling {
+                after, kept_after, ..
+            } => {
+                self.tiling = *after;
+                self.tiling_kept = *kept_after;
+            }
             _ => unreachable!("only settings come here"),
         }
     }
@@ -981,6 +1182,19 @@ impl Document {
                     None => self.vector_groups.remove(id),
                 };
             }
+            Edit::SetGroupParent {
+                group,
+                before,
+                after,
+            } => {
+                if self.group_parents.get(group) != before.as_ref() {
+                    return Err(ApplyError::GroupConflict(*group));
+                }
+                match after {
+                    Some(parent) => self.group_parents.insert(*group, *parent),
+                    None => self.group_parents.remove(group),
+                };
+            }
             Edit::SetLayer { id, before, after } => {
                 if self.vector_layers.get(id) != before.as_ref() {
                     return Err(ApplyError::Conflict(*id));
@@ -1008,7 +1222,8 @@ impl Document {
                 if self.layers.get(*index) != Some(layer) {
                     return Err(ApplyError::LayerConflict(layer.id));
                 }
-                let holds_vectors = self.vectors_on(layer.id).next().is_some();
+                let holds_vectors = self.vectors_on(layer.id).next().is_some()
+                    || !self.layer_used_elsewhere(layer.id).is_empty();
                 if holds_vectors || self.layers.len() == 1 || self.current_layer == layer.id {
                     return Err(ApplyError::LayerInUse(layer.id));
                 }
@@ -1075,6 +1290,30 @@ fn insert_new<T>(
     }
     map.insert(id, value);
     Ok(())
+}
+
+/// How far `t` moves things, when all it does is move them.
+fn shift_of(t: &DAffine2) -> Option<Point> {
+    (t.matrix2 == glam::DMat2::IDENTITY).then_some(t.translation)
+}
+
+/// Text settings `text` for its letters moved by `by`: its anchor, and the curve it was laid
+/// on, go with them. `None` for another tool's settings moved anywhere (a dimension's name
+/// their tool under `command`): they point at what was measured, which the copy is not at.
+fn shifted_text(text: &serde_json::Value, by: Point) -> Option<serde_json::Value> {
+    if text.get("command").is_some() && by != Point::ZERO {
+        return None;
+    }
+    let mut text = text.clone();
+    if let (Some(x), Some(y)) = (text["anchor"]["x"].as_f64(), text["anchor"]["y"].as_f64()) {
+        text["anchor"] = serde_json::json!({ "x": x + by.x, "y": y + by.y });
+    }
+    let curve = text.get("on_curve").and_then(|o| o.get("curve"));
+    if let Some(curve) = curve.and_then(|c| serde_json::from_value::<Path>(c.clone()).ok()) {
+        let moved = curve.transformed(&DAffine2::from_translation(by));
+        text["on_curve"]["curve"] = serde_json::to_value(moved).expect("paths serialise");
+    }
+    Some(text)
 }
 
 /// `id` as a change has left it (`pending`, where `None` is removed), else as in `doc`.
@@ -1149,22 +1388,105 @@ pub struct ChangeBuilder<'a> {
 
 impl ChangeBuilder<'_> {
     /// Adds a copy of each of `originals` under each of `transforms`, on its original's
-    /// layer: the originals then the copies, in order.
+    /// layer: the originals then the copies, in order. Each copy of a group is a group of its
+    /// own with the original's part name, and stays text when it is only moved.
     pub fn copies(
         &mut self,
         doc: &Document,
         originals: &[EntityId],
         transforms: &[DAffine2],
     ) -> Vec<EntityId> {
+        self.copies_grouped(doc, originals, transforms, true)
+    }
+
+    fn copies_grouped(
+        &mut self,
+        doc: &Document,
+        originals: &[EntityId],
+        transforms: &[DAffine2],
+        regroup: bool,
+    ) -> Vec<EntityId> {
         let mut all = originals.to_vec();
+        let set: std::collections::BTreeSet<EntityId> = originals.iter().copied().collect();
+        let chains: Vec<Vec<u64>> = originals
+            .iter()
+            .map(|&id| {
+                if regroup {
+                    doc.chain_within(id, &set)
+                } else {
+                    Vec::new()
+                }
+            })
+            .collect();
         for t in transforms {
-            for &id in originals {
-                let copy = self.add(doc.vectors[&id].transformed(t));
+            let paths = originals
+                .iter()
+                .zip(&chains)
+                .map(|(id, chain)| (doc.vectors[id].transformed(t), chain.clone()))
+                .collect();
+            let copies = self.add_regrouped(paths, &doc.texts, &doc.part_names, shift_of(t));
+            for (&id, &copy) in originals.iter().zip(&copies) {
                 self.move_to_layer(copy, doc.layer_of(id));
-                all.push(copy);
             }
+            all.extend(copies);
         }
         all
+    }
+
+    /// Adds `paths`, each with the groups it was in where it came from, innermost first
+    /// (empty: none). Each of those groups becomes one new group here, held in the new
+    /// group of the next one out, with its part name from `names` and, when the copy is
+    /// only moved (by `shift`), its text settings from `texts`, moved with it. A dimension's
+    /// copy is plain curves unless it lies on the original (Paste).
+    pub fn add_regrouped(
+        &mut self,
+        paths: Vec<(Path, Vec<u64>)>,
+        texts: &BTreeMap<u64, serde_json::Value>,
+        names: &BTreeMap<u64, String>,
+        shift: Option<Point>,
+    ) -> Vec<EntityId> {
+        let mut new_groups: BTreeMap<u64, u64> = BTreeMap::new();
+        let mut ids = Vec::with_capacity(paths.len());
+        for (path, chain) in paths {
+            let id = self.add(path);
+            let mut inner: Option<u64> = None;
+            for old in chain {
+                let g = if let Some(&g) = new_groups.get(&old) {
+                    g
+                } else {
+                    let g = self.next_group();
+                    new_groups.insert(old, g);
+                    self.set_part_name(g, names.get(&old).cloned());
+                    let text = shift.and_then(|by| shifted_text(texts.get(&old)?, by));
+                    self.set_text(g, text);
+                    g
+                };
+                // putting the vector or group in it claims the number for this change
+                match inner {
+                    None => self.set_group(id, Some(g)),
+                    Some(inner) => self.set_group_parent(inner, Some(g)),
+                }
+                inner = Some(g);
+            }
+            ids.push(id);
+        }
+        ids
+    }
+
+    /// A group number neither the document nor this change uses yet.
+    pub fn next_group(&self) -> u64 {
+        let given = self
+            .edits
+            .iter()
+            .filter_map(|e| match e {
+                Edit::SetGroup { after, .. } => *after,
+                Edit::SetGroupParent { group, after, .. } => Some(after.unwrap_or(0).max(*group)),
+                Edit::SetText { group, .. } | Edit::SetPartName { group, .. } => Some(*group),
+                _ => None,
+            })
+            .max()
+            .map_or(0, |g| g + 1);
+        self.doc.next_group().max(given)
     }
 
     /// Current path of `id` as seen by this change so far.
@@ -1228,18 +1550,36 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    /// `toolpath` with its rapids routed round the keep-out zones, and when clipping is on,
-    /// what would cut into one left out (laser toolpaths, whose power runs move for move, as
-    /// they are; drill banks, whose hits are their moves, not clipped).
+    /// `toolpath` with its rapids routed round the keep-out zones (a laser's with the laser
+    /// off), and when clipping is on, what would cut into one left out (laser toolpaths,
+    /// whose power runs move for move, and drill banks, whose hits are their moves, not
+    /// clipped).
     fn kept_out(&self, mut toolpath: Toolpath) -> Toolpath {
         let zones = self.doc.keep_out_zones();
-        if !zones.is_empty() && toolpath.power.is_empty() {
-            if self.doc.clip_keep_out && toolpath.drill_bank.is_none() {
+        if !zones.is_empty() {
+            // a laser's lines are not clipped (its power goes with each move), only its
+            // rapids routed round
+            let laser = !toolpath.power.is_empty();
+            if self.doc.clip_keep_out && toolpath.drill_bank.is_none() && !laser {
                 let radius = toolpath.tool.diameter / 2.0;
                 let safe = self.doc.job.clearance;
                 toolpath.moves = crate::keep_out::clip(&zones, &toolpath.moves, radius, safe);
             }
             let (moves, origin, _) = crate::keep_out::route_indexed(&zones, &toolpath.moves);
+            // the ways round are rapids, with the laser off; every other move keeps its power
+            if laser {
+                toolpath.power = moves
+                    .iter()
+                    .zip(&origin)
+                    .map(|(m, &o)| {
+                        if m.kind == crate::toolpath::MoveKind::Rapid {
+                            0.0
+                        } else {
+                            toolpath.power.get(o).copied().unwrap_or(0.0)
+                        }
+                    })
+                    .collect();
+            }
             // a drill bank's plunges keep their moves, and the ways round that lead to them
             if let Some(bank) = &mut toolpath.drill_bank {
                 let at = |old: usize| origin.partition_point(|&o| o < old);
@@ -1295,6 +1635,22 @@ impl ChangeBuilder<'_> {
         });
     }
 
+    /// The toolpaths `ids` hidden, those shown: ones a Merged or Array Copy toolpath now
+    /// cuts, so saving the shown toolpaths does not cut them twice.
+    pub fn hide_toolpaths(&mut self, ids: &[EntityId]) {
+        for &id in ids {
+            if let Some(shown) = self.toolpath(id).filter(|t| t.visible).cloned() {
+                self.replace_toolpath(
+                    id,
+                    Toolpath {
+                        visible: false,
+                        ..shown
+                    },
+                );
+            }
+        }
+    }
+
     pub fn add_component(&mut self, component: Component) -> EntityId {
         let id = EntityId(self.next_id);
         self.next_id += 1;
@@ -1304,6 +1660,13 @@ impl ChangeBuilder<'_> {
             component: Box::new(component),
         });
         id
+    }
+
+    /// Adds a component made from scratch on the level new components go on
+    /// ([`Document::new_component_level`]).
+    pub fn add_new_component(&mut self, mut component: Component) -> EntityId {
+        component.level = self.doc.new_component_level();
+        self.add_component(component)
     }
 
     pub fn add_bitmap(&mut self, bitmap: Bitmap) -> EntityId {
@@ -1397,6 +1760,62 @@ impl ChangeBuilder<'_> {
                 id,
                 before,
                 after: group,
+            });
+        }
+    }
+
+    /// The outermost group vector `id` is in, as this change has left it.
+    pub fn top_group_now(&self, id: EntityId) -> Option<u64> {
+        let group_of = |id: EntityId| {
+            self.edits
+                .iter()
+                .rev()
+                .find_map(|e| match e {
+                    Edit::SetGroup { id: i, after, .. } if *i == id => Some(*after),
+                    _ => None,
+                })
+                .unwrap_or_else(|| self.doc.vector_groups.get(&id).copied())
+        };
+        let parent_of = |g: u64| {
+            self.edits
+                .iter()
+                .rev()
+                .find_map(|e| match e {
+                    Edit::SetGroupParent { group, after, .. } if *group == g => Some(*after),
+                    _ => None,
+                })
+                .unwrap_or_else(|| self.doc.group_parents.get(&g).copied())
+        };
+        let mut at = group_of(id)?;
+        let mut seen = vec![at];
+        while let Some(parent) = parent_of(at) {
+            if seen.contains(&parent) {
+                break;
+            }
+            seen.push(parent);
+            at = parent;
+        }
+        Some(at)
+    }
+
+    /// Puts group `group` inside group `parent`, or takes it out of any (`None`).
+    pub fn set_group_parent(&mut self, group: u64, parent: Option<u64>) {
+        let before = self
+            .edits
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                Edit::SetGroupParent {
+                    group: g, after, ..
+                } if *g == group => Some(*after),
+                _ => None,
+            })
+            .unwrap_or_else(|| self.doc.group_parents.get(&group).copied());
+        if before != parent {
+            self.edits.push(Edit::SetGroupParent {
+                group,
+                before,
+                after: parent,
             });
         }
     }
@@ -1559,10 +1978,31 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    pub fn set_tiling(&mut self, after: Option<crate::tiling::Tiling>) {
-        if self.doc.tiling != after {
-            let before = self.doc.tiling;
-            self.edits.push(Edit::SetTiling { before, after });
+    /// Turns tiling on with `settings`, or off keeping them for when it is turned on again
+    /// (not kept when it was never on and they are the defaults: nothing to keep).
+    pub fn set_tiling_with(&mut self, on: bool, settings: crate::tiling::Tiling) {
+        if on {
+            self.set_tiling_kept(Some(settings), None);
+        } else {
+            let worth = self.doc.tiling.is_some()
+                || self.doc.tiling_kept.is_some()
+                || settings != crate::tiling::Tiling::default();
+            self.set_tiling_kept(None, worth.then_some(settings));
+        }
+    }
+
+    fn set_tiling_kept(
+        &mut self,
+        after: Option<crate::tiling::Tiling>,
+        kept_after: Option<crate::tiling::Tiling>,
+    ) {
+        if self.doc.tiling != after || self.doc.tiling_kept != kept_after {
+            self.edits.push(Edit::SetTiling {
+                before: self.doc.tiling,
+                after,
+                kept_before: self.doc.tiling_kept,
+                kept_after,
+            });
         }
     }
 
@@ -1702,11 +2142,14 @@ impl ChangeBuilder<'_> {
                 id,
                 path: v.path.clone(),
             });
-            if v.layer.is_some() {
+            // a layer gone while the sheet was put away (from an older version): its vectors
+            // come onto the first layer, rather than the sheet never opening again
+            let layer = v.layer.filter(|&l| doc.layer(l).is_some());
+            if layer.is_some() {
                 self.edits.push(Edit::SetLayer {
                     id,
                     before: None,
-                    after: v.layer,
+                    after: layer,
                 });
             }
             if v.group.is_some() {
@@ -1751,6 +2194,21 @@ impl ChangeBuilder<'_> {
             unit_guess: None,
         }
     }
+}
+
+/// The toolpaths `toolpath` copies its moves from: a Merged or Array Copy toolpath's
+/// `sources`.
+pub(crate) fn sources_of(toolpath: &Toolpath) -> Vec<EntityId> {
+    toolpath
+        .params
+        .get("sources")
+        .and_then(|s| serde_json::from_value(s.clone()).ok())
+        .unwrap_or_default()
+}
+
+/// The picture a Photo V-Carve or Sketch Carving toolpath was made from: its `bitmap`.
+fn picture_of(toolpath: &Toolpath) -> Option<EntityId> {
+    serde_json::from_value(toolpath.params.get("bitmap")?.clone()).ok()?
 }
 
 /// Undo/redo stacks of applied changes.

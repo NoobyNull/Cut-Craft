@@ -223,7 +223,8 @@ impl Command for Sculpt {
         let after = match &brush {
             Some(brush) => pressed(&before, p, brush),
             None => sculpted(&before, p),
-        };
+        }
+        .hand_edited();
         let mut c = Change::builder(doc);
         if let [one] = ids.as_slice() {
             c.replace_component(*one, after);

@@ -46,7 +46,8 @@ pub struct Params {
     /// fastest; TrueType fonts work too
     #[schemars(schema_with = "font_choices")]
     pub font: String,
-    /// The height of a capital letter; smaller parts get smaller text
+    /// The height of a capital letter; smaller parts get smaller text. Text under 2 mm
+    /// (0.08 in) cannot be engraved legibly, so a smaller height is made that tall
     #[schemars(title = "Text height", extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
 }
@@ -101,6 +102,7 @@ impl Command for EngravePartNames {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("text height", p.height)?;
+        let height = p.height.max(SMALLEST);
         let parts = chosen(doc);
         if parts.is_empty() {
             return Err(CommandError::Failed(
@@ -132,7 +134,7 @@ impl Command for EngravePartNames {
         let mut group = doc.next_group();
         let (mut made, mut small) = (Vec::new(), Vec::new());
         for (part, text) in parts.iter().zip(&texts) {
-            let Some((height, anchor, paths)) = fitted(&font, text, p.height, part.bounds) else {
+            let Some((height, anchor, paths)) = fitted(&font, text, height, part.bounds) else {
                 small.push(part.number.to_string());
                 continue;
             };
@@ -149,10 +151,18 @@ impl Command for EngravePartNames {
             c.set_text(group, Some(spec));
             group += 1;
         }
+        let fix = "Choose Number only, or a narrower single-line font: text under 2 mm \
+                   (0.08 in) cannot be engraved";
         if made.is_empty() {
-            return Err(CommandError::Failed(
-                "The parts are too small for text. Set a smaller text height.".into(),
-            ));
+            return Err(CommandError::Failed(format!(
+                "The parts are too small for text. {fix}."
+            )));
+        }
+        if p.height < SMALLEST {
+            c.note(
+                "Text under 2 mm (0.08 in) cannot be engraved legibly, so the names are made \
+                 that tall.",
+            );
         }
         c.note(format!(
             "The names are on the {LAYER} layer. To cut them, select that layer's vectors and \
@@ -160,7 +170,7 @@ impl Command for EngravePartNames {
         ));
         if !small.is_empty() {
             c.note(format!(
-                "Too small for text, so not named: part {}.",
+                "Too small for text, so not named: part {}. {fix}.",
                 small.join(", ")
             ));
         }
@@ -269,10 +279,31 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(e.contains("too small"), "{e}");
+        assert!(!e.contains("smaller text height"), "that cannot help: {e}");
+        assert!(e.contains("Number only"), "{e}");
         let e = EngravePartNames::run(&Document::default(), &boxes())
             .unwrap_err()
             .to_string();
         assert!(e.contains("no parts"), "{e}");
+    }
+
+    #[test]
+    fn text_asked_for_under_2_mm_is_made_2_mm_and_says_so() {
+        let mut doc = document_with(vec![square(0.0, 0.0, 200.0)]);
+        doc.selection.clear();
+        let tiny = Params {
+            height: 1.0,
+            ..boxes()
+        };
+        let change = EngravePartNames::run(&doc, &tiny).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("2 mm")),
+            "{:?}",
+            change.notes
+        );
+        doc.apply(&change).unwrap();
+        let text = doc.texts.values().next().unwrap();
+        assert!((text["height"].as_f64().unwrap() - SMALLEST).abs() < 1e-9);
     }
 
     #[test]

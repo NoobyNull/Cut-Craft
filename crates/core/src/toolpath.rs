@@ -36,12 +36,17 @@ pub enum ToolShape {
     /// cutter): cuts like an end mill, but only sideways, never plunging into the material
     #[schemars(title = "Surfacing Bit")]
     SurfacingBit,
+    /// A laser, for the laser toolpaths: its diameter is the kerf (the width it burns), its
+    /// feed rate the speed it moves at. It has no pass depth or flutes: Laser Cut / Fill
+    /// sets how many passes it makes
+    Laser,
 }
 
 impl ToolShape {
-    /// Flat bottomed: an end mill or a surfacing bit, which cut the same shape.
+    /// Flat bottomed: an end mill or a surfacing bit, which cut the same shape (and a
+    /// laser, whose burn the preview shows as a flat cut its kerf wide).
     pub fn is_flat(self) -> bool {
-        matches!(self, Self::EndMill | Self::SurfacingBit)
+        matches!(self, Self::EndMill | Self::SurfacingBit | Self::Laser)
     }
 }
 
@@ -186,6 +191,13 @@ pub struct Tool {
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
     pub flutes: u32,
+    /// A drill (a twist or brad-point bit, as a vendor's tool library lists them): it cuts
+    /// only straight down, so a toolpath form other than Drilling says so in red when it is
+    /// picked, and the checks before cutting warn of it. Ticked as Drill only beside the
+    /// Tool Type in the Tool Database (added with drills from tool libraries)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[schemars(skip)]
+    pub drill_only: bool,
     /// Its tool number, for the post's `[T]` on a machine without a tool changer, and the
     /// holder Load by Tool Number puts it in; 0 for none (added with tool numbers)
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -196,6 +208,11 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub passes: Vec<f64>,
+    /// The cut depth the passes set by hand were set for (0 when not known, as in jobs made
+    /// before it was kept): a deeper cut later goes on below it at the pass depth
+    #[serde(default, skip_serializing_if = "is_nothing")]
+    #[schemars(skip)]
+    pub passes_for: f64,
     /// How thick the last pass is (Edit Passes' Last Pass Thickness), the passes above it
     /// even at the pass depth; 0 for all passes even
     #[serde(default, skip_serializing_if = "is_nothing")]
@@ -353,6 +370,7 @@ impl Tool {
             ToolShape::ThreadMill => "Thread Mills",
             ToolShape::FormTool => "Form Tools",
             ToolShape::SurfacingBit => "Surfacing Bits",
+            ToolShape::Laser => "Lasers",
         };
         format!("{maker}/{kind}")
     }
@@ -489,7 +507,7 @@ impl Tool {
     }
 
     /// Its passes (negative z) down to `depth`: those set by hand that are above it (none of
-    /// them: one pass), or even
+    /// them: one pass), going on at the pass depth below the depth they were set for, or even
     /// ones at the pass depth over all but a set last pass, then `depth` itself.
     pub fn pass_depths(&self, depth: f64) -> Vec<f64> {
         let mut set: Vec<f64> = self
@@ -501,6 +519,21 @@ impl Tool {
         if !self.passes.is_empty() {
             set.sort_by(f64::total_cmp);
             set.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+            // set for a shallower cut, they stop where that cut did: the rest goes on at the
+            // pass depth, so making the cut deeper later never ends in one heavy pass
+            let set_for = self.passes_for;
+            if set_for > 0.0 && depth > set_for + 1e-6 && self.pass_depth > 0.0 {
+                if set.last().is_none_or(|&d| d < set_for - 1e-6) {
+                    set.push(set_for);
+                }
+                let below = set_for;
+                let rest = pass_depths(depth - below, self.pass_depth);
+                return set
+                    .iter()
+                    .map(|d| -d)
+                    .chain(rest.into_iter().map(|z| z - below))
+                    .collect();
+            }
             return set.iter().map(|d| -d).chain([-depth]).collect();
         }
         if self.last_pass > 0.0 && self.last_pass < depth {
@@ -593,7 +626,7 @@ impl Tool {
             }
         }
         Some(match self.shape {
-            ToolShape::EndMill | ToolShape::SurfacingBit => 0.0,
+            ToolShape::EndMill | ToolShape::SurfacingBit | ToolShape::Laser => 0.0,
             ToolShape::BallNose => radius - (radius * radius - r * r).max(0.0).sqrt(),
             ToolShape::VBit => r / (self.angle.to_radians() / 2.0).tan(),
             ToolShape::RadiusedEndMill => {
@@ -640,8 +673,10 @@ impl Default for Tool {
             neck_length: 0.0,
             shank_length: 0.0,
             flutes: default_flutes(),
+            drill_only: false,
             number: 0,
             passes: vec![],
+            passes_for: 0.0,
             last_pass: 0.0,
             group: String::new(),
             notes: String::new(),
@@ -673,6 +708,30 @@ impl Tool {
             flute_length: 12.7,
             ..Self::default()
         }
+    }
+
+    /// A laser with a 0.15 mm kerf moving at 1500 mm/min: what the laser toolpaths start
+    /// with, and a starter tool.
+    pub fn laser() -> Self {
+        Self {
+            name: "Laser (0.15 mm kerf)".into(),
+            shape: ToolShape::Laser,
+            diameter: 0.15,
+            pass_depth: 0.0,
+            stepover: 0.0,
+            feed_rate: 1500.0,
+            plunge_rate: 1500.0,
+            spindle_speed: 0.0,
+            flutes: 1,
+            ..Self::default()
+        }
+    }
+
+    /// Whether it is a laser: the Laser tool type, or a laser toolpath's tool from before
+    /// lasers were a tool type (an end mill named as a laser, with no spindle).
+    pub fn is_laser(&self) -> bool {
+        self.shape == ToolShape::Laser
+            || (self.spindle_speed == 0.0 && self.name.to_lowercase().starts_with("laser"))
     }
 }
 
@@ -710,6 +769,12 @@ pub struct ToolDatabase {
     /// [`crate::tool_copies`] (added with one shape per bit)
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub joined: std::collections::BTreeMap<String, crate::tool_copies::JoinedCopy>,
+    /// Tools renamed, by their old name: the name each has now. A job saved before the
+    /// rename still names the old one; it takes the new name when it opens
+    /// ([`Self::renamed_now`]), so the tool changer slot the tool is loaded in is found
+    /// (added with renaming in jobs)
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub renamed: std::collections::BTreeMap<String, String>,
 }
 
 /// The top-level group the catalogues are imported into, apart from My Tools.
@@ -780,6 +845,8 @@ impl ToolDatabase {
             },
             // flattens the spoilboard: wide, and stepping over most of its width
             Tool::surfacing_bit(),
+            // burns rather than cuts: for the laser toolpaths
+            Tool::laser(),
         ];
         for tool in &mut tools {
             let set = if tool.name.contains(" in ") {
@@ -801,6 +868,22 @@ impl ToolDatabase {
             ],
             ..Self::default()
         }
+    }
+
+    /// A database from before lasers were a tool type, with no laser in My Tools: the
+    /// starter laser added (in `Metric Tools/Lasers`), so the laser toolpaths have one to
+    /// pick. Whether it was added.
+    pub fn add_laser_if_none(&mut self) -> bool {
+        if self.my_tools().any(|t| t.shape == ToolShape::Laser) {
+            return false;
+        }
+        let mut laser = Tool::laser();
+        while self.tools.iter().any(|t| t.name == laser.name) {
+            laser.name.push_str(" 2");
+        }
+        laser.group = format!("Metric Tools/{}", shape_group(ToolShape::Laser));
+        self.tools.push(laser);
+        true
     }
 
     /// Whether `tool` sits in a read-only catalogue (its group is in one of
@@ -827,6 +910,36 @@ impl ToolDatabase {
 
     pub fn get(&self, name: &str) -> Option<&Tool> {
         self.index_of(name).map(|i| &self.tools[i])
+    }
+
+    /// Keeps that the tool `from` is now called `to`: an earlier rename to `from` now
+    /// leads to `to`, and renaming back forgets it.
+    pub fn note_renamed(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        for now in self.renamed.values_mut() {
+            if now == from {
+                to.clone_into(now);
+            }
+        }
+        self.renamed.insert(from.to_owned(), to.to_owned());
+        self.renamed.retain(|old, now| old != now);
+    }
+
+    /// The name `tool` (a toolpath's copy) has now, when its tool was renamed: only while
+    /// no tool has the old name again and the renamed one is still the same size and
+    /// shape, so a new bit given the old name is never mistaken for it.
+    pub fn renamed_now(&self, tool: &Tool) -> Option<&str> {
+        let now = self.renamed.get(&tool.name)?;
+        if self.tools.iter().any(|t| t.name == tool.name) {
+            return None;
+        }
+        let renamed = self.tools.iter().find(|t| t.name == *now)?;
+        let same = renamed.shape == tool.shape
+            && (renamed.diameter - tool.diameter).abs() < 1e-6
+            && (renamed.angle - tool.angle).abs() < 1e-6;
+        same.then_some(now.as_str())
     }
 
     /// Where the tool `name` is: in My Tools when it is there, else in a catalogue (a tool
@@ -1026,6 +1139,7 @@ pub fn shape_group(shape: ToolShape) -> &'static str {
         ToolShape::ThreadMill => "Thread Mills",
         ToolShape::FormTool => "Form Tools",
         ToolShape::SurfacingBit => "Surfacing Bits",
+        ToolShape::Laser => "Lasers",
     }
 }
 
@@ -1141,6 +1255,17 @@ impl Toolpath {
     pub fn reads_model(&self) -> bool {
         MODEL_STRATEGIES.contains(&self.strategy.as_str())
             || self.params["project_onto_model"].as_bool() == Some(true)
+    }
+
+    /// Whether the job's Clearing Settings shape it: adaptive and raster pockets, and
+    /// anything cut in trochoidal loops.
+    pub fn reads_clearing(&self) -> bool {
+        let pocket = self.strategy == "pocket_toolpath"
+            && matches!(
+                self.params["strategy"].as_str(),
+                Some("adaptive" | "raster")
+            );
+        pocket || self.params["motion"].as_str() == Some("trochoidal")
     }
 
     /// Estimated machining time in minutes: each move's length at its rate (rapids at
@@ -1335,6 +1460,39 @@ fn nothing_beyond_the_reach_below_a_height_is_that_low() {
         v.reach_below(1.0) < 1.0,
         "a shallow V-carve touches little: {}",
         v.reach_below(1.0)
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn passes_set_by_hand_never_leave_a_step_deeper_than_the_pass_depth() {
+    let tool = Tool {
+        pass_depth: 3.0,
+        passes: vec![2.0, 4.0, 6.0],
+        passes_for: 6.0,
+        ..Tool::default()
+    };
+    // as set, down to the depth they were set for
+    assert_eq!(tool.pass_depths(6.0), [-2.0, -4.0, -6.0]);
+    // the cut made deeper later: what is left below them goes in pass-depth steps, not
+    // one 12 mm pass
+    let deeper = tool.pass_depths(18.0);
+    assert_eq!(&deeper[..3], [-2.0, -4.0, -6.0]);
+    assert_eq!(*deeper.last().unwrap(), -18.0);
+    let steps: Vec<f64> = deeper.windows(2).map(|w| w[0] - w[1]).collect();
+    assert!(steps.iter().all(|&s| s <= 3.0 + 1e-9), "{deeper:?}");
+    // one hand-set pass at 0.5 over an 8 mm V-carve fill
+    let shallow = Tool {
+        pass_depth: 2.0,
+        passes: vec![0.5],
+        passes_for: 1.0,
+        ..Tool::default()
+    };
+    let fill = shallow.pass_depths(8.0);
+    assert_eq!(fill[0], -0.5);
+    assert!(
+        fill.windows(2).all(|w| w[0] - w[1] <= 2.0 + 1e-9),
+        "{fill:?}"
     );
 }
 
@@ -2025,5 +2183,36 @@ mod projection {
             .unwrap_err()
             .to_string();
         assert!(why.contains("3D model"), "{why}");
+    }
+}
+
+#[cfg(test)]
+mod renamed_tools {
+    use super::*;
+
+    #[test]
+    fn a_rename_is_followed_to_the_last_name_and_not_to_a_new_bit_of_the_old_name() {
+        let mut db = ToolDatabase::starter();
+        let six = db.get("6 mm End Mill").unwrap().clone();
+        let at = db.index_of("6 mm End Mill").unwrap();
+        db.tools[at].name = "Spiral".into();
+        db.note_renamed("6 mm End Mill", "Spiral");
+        db.tools[at].name = "Spiral 6".into();
+        db.note_renamed("Spiral", "Spiral 6");
+        assert_eq!(db.renamed_now(&six), Some("Spiral 6"));
+        // a different bit under the old name is not the renamed one
+        let mut other = six.clone();
+        other.diameter = 3.0;
+        assert_eq!(db.renamed_now(&other), None);
+        // renamed back: its own name is not renamed, the names between lead back to it
+        db.tools[at].name = "6 mm End Mill".into();
+        db.note_renamed("Spiral 6", "6 mm End Mill");
+        assert_eq!(db.renamed_now(&six), None);
+        assert!(
+            !db.renamed.contains_key("6 mm End Mill"),
+            "{:?}",
+            db.renamed
+        );
+        assert_eq!(db.renamed["Spiral"], "6 mm End Mill");
     }
 }

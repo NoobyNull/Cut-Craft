@@ -23,15 +23,17 @@ pub struct Params {
     /// (negative) or up
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
-    /// Point of the selection placed at X/Y (absolute moves only)
+    /// Point of the selection placed at X/Y; shown with Relative not ticked
+    #[schemars(extend("x-show-when" = {"relative": "false"}))]
     pub anchor: Anchor,
     /// Relative moves: the X/Y offset turned by the angle below, so X runs along it
     #[serde(default)]
     #[schemars(title = "Relative rotated", extend("x-show-when" = {"relative": true}))]
     pub rotated: bool,
-    /// The angle the offset is turned by, anticlockwise from the X axis
+    /// The angle the offset is turned by, anticlockwise from the X axis; shown with Relative
+    /// and Relative rotated ticked
     #[serde(default)]
-    #[schemars(extend("x-unit" = "deg", "x-show-when" = {"rotated": true}))]
+    #[schemars(extend("x-unit" = "deg", "x-show-when" = {"relative": true, "rotated": true}))]
     pub angle: f64,
 }
 

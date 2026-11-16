@@ -36,13 +36,16 @@ pub struct Params {
     /// Space the copies by how many there are, or by the distance between them
     pub spacing: Spacing,
     /// How many copies on each vector, when spacing by count
-    #[schemars(range(min = 1))]
+    #[schemars(range(min = 1), extend("x-show-when" = {"spacing": "count"}))]
     pub copies: u32,
     /// Between copies, when spacing by distance
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-show-when" = {"spacing": "distance"}))]
     #[schemars(extend("x-dim" = "L"))]
     pub distance: f64,
-    /// Stretch or shrink the distance a little so copies land on both ends
+    /// Spacing by distance: stretch or shrink the distance a little so copies land on both
+    /// ends
+    #[schemars(extend("x-show-when" = {"spacing": "distance"}))]
     pub force_even_spacing: bool,
     /// Turn each copy to follow the vector, as if the object travelled along it facing +X
     pub align_to_vector: bool,

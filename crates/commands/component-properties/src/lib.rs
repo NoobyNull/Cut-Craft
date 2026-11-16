@@ -14,6 +14,9 @@ pub struct ComponentProperties;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The component these settings belong to
+    /// (the one right-clicked or picked: never shown on the form, so it cannot be changed
+    /// to another by mistake)
+    #[schemars(skip)]
     pub component: EntityId,
     /// What the component is called in the component tree
     pub name: String,
@@ -35,14 +38,15 @@ pub struct Params {
     pub fade: Fade,
     #[schemars(extend("x-section" = true))]
     pub tilt: Tilt,
-    /// Make the shape and base height, fade and tilt permanent, then reset them
+    /// Make the shape and base height, fade and tilt permanent, then reset them: after
+    /// Apply the form goes back to 100 % with this unticked, so it bakes only once
     pub bake: bool,
     /// How the 3D view colours it
     #[schemars(extend("x-widget" = "drop-down"))]
     #[serde(default)]
     pub appearance: Appearance,
-    /// Its colour, with Solid Color
-    #[schemars(extend("x-kind" = "colour"))]
+    /// Its colour, with Solid Color (greyed with Same as Parent)
+    #[schemars(extend("x-kind" = "colour", "x-enable-when" = {"appearance": "solid_color"}))]
     #[serde(default = "solid")]
     pub colour: [u8; 3],
 }

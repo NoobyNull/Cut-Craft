@@ -58,12 +58,16 @@ pub struct Field {
     pub diagram: Option<String>,
 }
 
-/// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`),
-/// judged on the form's top-level parameters: the forms change with what is chosen.
-#[derive(Debug, PartialEq)]
+/// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`,
+/// a value written as text, a bool or a number),
+/// judged on the form's top-level parameters: the forms change with what is chosen. A rule
+/// naming more than one key holds when every one of them does.
+#[derive(Clone, Debug, PartialEq)]
 pub struct When {
     pub key: String,
     pub values: Vec<String>,
+    /// Further keys and their values that must hold too.
+    pub also: Vec<(String, Vec<String>)>,
     /// Shown when the value is one of `values`; else hidden then.
     pub show: bool,
 }
@@ -79,30 +83,68 @@ impl When {
     }
 
     fn from_rule(rule: &Value, show: bool) -> Option<Self> {
-        let (key, values) = rule.as_object()?.iter().next()?;
-        let values = match values {
-            Value::Array(list) => list
-                .iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect(),
-            one => vec![one.as_str()?.to_owned()],
-        };
+        // a tick box's rule may be written as a bool or as "true" / "false", a count's as a
+        // number or as text
+        let text = value_text;
+        let mut rules = rule.as_object()?.iter().map(|(key, values)| {
+            let values = match values {
+                Value::Array(list) => list.iter().filter_map(text).collect(),
+                one => vec![text(one)?],
+            };
+            Some((key.clone(), values))
+        });
+        let (key, values) = rules.next()??;
         Some(Self {
-            key: key.clone(),
+            key,
             values,
+            also: rules.collect::<Option<_>>()?,
             show,
         })
     }
 
-    /// Whether the field shows, given the form's top-level `params`.
+    /// Whether the rule holds for a field inside a section: on the section's own settings
+    /// (`local`) when its key is one of them (Job Setup's datum offset greyed by the datum's
+    /// own tick), else on the form's top-level ones.
+    pub fn judged(&self, local: &Value, top: &Value) -> bool {
+        if local.get(&self.key).is_some() {
+            self.shown(local)
+        } else {
+            self.shown(top)
+        }
+    }
+
+    /// Whether the field shows, given the form's top-level `params`. A key with dots reads
+    /// a setting inside another (`tool.shape`: the form's tool's shape), and `count` after a
+    /// list how many it holds (`tools.count`: how many tools the form has; none when the
+    /// list is not there).
     pub fn shown(&self, params: &Value) -> bool {
-        // a tick box reads as "true" or "false"
-        let value = match &params[&self.key] {
-            Value::Bool(ticked) => Some(ticked.to_string()),
-            value => value.as_str().map(String::from),
+        let holds = |key: &String, values: &[String]| {
+            let mut setting = params;
+            let mut count = None;
+            for part in key.split('.') {
+                match (setting, part) {
+                    (Value::Array(list), "count") => count = Some(Value::from(list.len())),
+                    // a list not there holds none
+                    (Value::Null, "count") => count = Some(Value::from(0)),
+                    _ => setting = &setting[part],
+                }
+            }
+            // a tick box reads as "true" or "false", a number as its digits ("1", not "1.0")
+            let value = value_text(count.as_ref().unwrap_or(setting));
+            value.is_some_and(|v| values.contains(&v))
         };
-        let is = value.is_some_and(|v| self.values.contains(&v));
+        let is = holds(&self.key, &self.values) && self.also.iter().all(|(k, v)| holds(k, v));
         is == self.show
+    }
+}
+
+/// How a rule or a setting reads when they are compared: a tick box as "true" or "false", a
+/// number as its digits (1 and 1.0 both "1"), text as it is.
+fn value_text(v: &Value) -> Option<String> {
+    match v {
+        Value::Bool(ticked) => Some(ticked.to_string()),
+        Value::Number(n) => n.as_f64().map(|n| n.to_string()),
+        v => v.as_str().map(String::from),
     }
 }
 
@@ -256,11 +298,23 @@ pub enum Widget {
     },
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Choice {
     pub value: String,
     pub label: String,
     pub help: Option<String>,
+    /// Only offered while another choice says so (the variant's `x-show-when` /
+    /// `x-hide-when`), judged on the params round the field.
+    pub when: Option<When>,
+}
+
+/// The `options` offered with `around` as it is: those whose rule holds.
+pub fn offered(options: &[Choice], around: &Value) -> Vec<Choice> {
+    options
+        .iter()
+        .filter(|o| o.when.as_ref().is_none_or(|w| w.shown(around)))
+        .cloned()
+        .collect()
 }
 
 /// Edits `params` through its fields; true when anything changed.
@@ -460,7 +514,7 @@ fn grid(
                     .as_ref()
                     .filter(|_| own)
                     .and_then(|template| (look.picture)(&icon_path(template, &params[&f.key])));
-                let enabled = f.enabled.as_ref().is_none_or(|w| w.shown(top));
+                let enabled = f.enabled.as_ref().is_none_or(|w| w.judged(params, top));
                 ui.add_enabled_ui(enabled, |ui| {
                     ui.horizontal(|ui| {
                         if let Some(picture) = picture {
@@ -488,6 +542,11 @@ fn grid(
                         percent_when: Some(w),
                         ..
                     } => serde_json::json!({ &w.key: params[&w.key] }),
+                    // a choice offered only while another says so reads the form's settings,
+                    // its own section's first
+                    Kind::Choice(options, _) if options.iter().any(|o| o.when.is_some()) => {
+                        within(params, top)
+                    }
                     _ => Value::Null,
                 };
                 let edited = ui.add_enabled_ui(enabled, |ui| {
@@ -503,6 +562,16 @@ fn grid(
             }
         });
     changed
+}
+
+/// The form's top-level settings `top` with those of the section being drawn (`local`) laid
+/// over them, so a rule reads a setting as [`When::judged`] does.
+fn within(local: &Value, top: &Value) -> Value {
+    let mut all = top.clone();
+    if let (Some(all), Some(local)) = (all.as_object_mut(), local.as_object()) {
+        all.extend(local.iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
+    all
 }
 
 fn hover(label: egui::Response, help: Option<&String>) {
@@ -563,6 +632,38 @@ pub fn shown_in(unit: &str, units: Units) -> Option<(f64, &'static str)> {
     }
 }
 
+/// One arrow click's step and how much a one-point drag changes a number shown in `unit`
+/// (`integer`: a whole number), kept to `range`: the unit's own step, but small enough that a
+/// short range (a few micrometres shown in inches) takes several clicks, and a drag a tenth of
+/// a step a point (a whole number at least one), so an inch job never moves inches for a nudge of the mouse.
+fn feel(unit: Option<&str>, integer: bool, range: std::ops::RangeInclusive<f64>) -> (f64, f64) {
+    let mut step = cut_craft_bug_report::number::step_for(unit.unwrap_or_default(), integer);
+    let span = range.end() - range.start();
+    if !integer && span.is_finite() && span > 0.0 && step > span / 5.0 {
+        step = 10f64.powf((span / 5.0).log10().floor());
+    }
+    // whole numbers drag at least one a point
+    let speed = if integer {
+        (step / 10.0).max(1.0)
+    } else {
+        step / 10.0
+    };
+    (step, speed)
+}
+
+/// The decimal places `step` needs.
+fn decimals(step: f64) -> usize {
+    let places = (-step.log10()).ceil().max(0.0);
+    // at most 15 places: a whole number of them
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "0..=15"
+    )]
+    let places = places.min(15.0) as usize;
+    places
+}
+
 /// A section's picture for its value: `{}` stands for the value, `{name}` for its field `name`.
 pub fn icon_path(template: &str, value: &Value) -> String {
     named(
@@ -585,15 +686,13 @@ fn named(template: &str, fields: &Value) -> String {
     path
 }
 
-/// The units a form itself sets (Job Setup's), found anywhere in its params.
+/// The units a form itself sets: Job Setup's, beside its sizes. A tool picked on a toolpath
+/// form carries its own units too (a metric bit in an inch job), but they are the bit's, never
+/// the form's: the form stays in the job's units.
 pub fn units_chosen(params: &Value) -> Option<Units> {
-    match params {
-        Value::Object(map) => map
-            .get("units")
-            .and_then(|u| serde_json::from_value(u.clone()).ok())
-            .or_else(|| map.values().find_map(units_chosen)),
-        _ => None,
-    }
+    [&params["units"], &params["size"]["units"]]
+        .into_iter()
+        .find_map(|u| serde_json::from_value(u.clone()).ok())
 }
 
 /// Edits `value`; `around` holds the fields beside it, for pictures named by them.
@@ -625,14 +724,22 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
                 return slide(ui, lo..=hi, *integer, factor, unit.as_deref(), value);
             }
             let mut n = value.as_f64().unwrap_or_default() / factor;
+            let range = min.map_or(f64::NEG_INFINITY, |m| m / factor)
+                ..=max.map_or(f64::INFINITY, |m| m / factor);
+            // steps and drags that fit the unit shown (an inch job drags in thousandths)
+            let (step, speed) = feel(unit.as_deref(), *integer && factor == 1.0, range.clone());
             // a sum typed in (calculation edit boxes) is worked out
             let material = look.material.clone();
             let mut drag = Number::new(&mut n)
                 .custom_parser(move |text| cut_craft_core::calc::evaluate(text, &material))
-                .range(
-                    min.map_or(f64::NEG_INFINITY, |m| m / factor)
-                        ..=max.map_or(f64::INFINITY, |m| m / factor),
-                );
+                .range(range)
+                .step(step)
+                .speed(speed)
+                .trim_zeros();
+            if step < 0.001 {
+                // a few micrometres in inches: enough places to see them
+                drag = drag.max_decimals(decimals(step) + 1);
+            }
             if let Some(unit) = unit {
                 drag = drag.suffix(format!(" {unit}"));
             }
@@ -705,7 +812,18 @@ fn choose(
     around: &Value,
     look: &Look,
 ) -> bool {
-    let current = value.as_str().unwrap_or_default().to_owned();
+    let mut current = value.as_str().unwrap_or_default().to_owned();
+    let all = options;
+    let options = &offered(all, around)[..];
+    // a pick a rule now hides (Profile Pass: First, then Adaptive chosen) becomes the first
+    // one offered, so a choice is always shown picked
+    let hidden = !options.is_empty()
+        && all.iter().any(|o| o.value == current)
+        && !options.iter().any(|o| o.value == current);
+    if hidden {
+        current.clone_from(&options[0].value);
+        *value = Value::String(current.clone());
+    }
     let picked = match widget {
         Widget::Auto if options.len() <= MOST_RADIOS => {
             // stacked, so their size does not depend on the width the layout gives them
@@ -753,7 +871,7 @@ fn choose(
             *value = Value::String(v);
             true
         }
-        _ => false,
+        _ => hidden,
     }
 }
 
@@ -1670,6 +1788,7 @@ fn choices(s: &Value) -> Option<Vec<Choice>> {
         help: about
             .and_then(|o| o["description"].as_str())
             .map(String::from),
+        when: about.and_then(When::from_schema),
     };
     match s["enum"].as_array() {
         Some(values) => values
@@ -1768,6 +1887,60 @@ mod tests {
     }
 
     #[test]
+    fn laser_forms_show_only_the_settings_of_the_strategy_picked() {
+        let f = fields(&schema("laser_cut_fill_toolpath"));
+        let shown = |key, strategy: &str| {
+            let params = serde_json::json!({ "strategy": strategy });
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&params))
+        };
+        for hatch in ["stepover", "hatch_angle", "cross_hatch", "outline"] {
+            assert!(shown(hatch, "hatch_fill"), "{hatch}");
+            assert!(
+                !shown(hatch, "cut_outside") && !shown(hatch, "cut_on"),
+                "{hatch}"
+            );
+        }
+        assert!(shown("allowance", "cut_outside") && shown("allowance", "cut_inside"));
+        assert!(!shown("allowance", "hatch_fill") && !shown("allowance", "cut_on"));
+        let f = fields(&schema("laser_picture_toolpath"));
+        let shown = |key, strategy: &str| {
+            let params = serde_json::json!({ "strategy": strategy });
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&params))
+        };
+        for lines in ["line_angle", "line_spacing"] {
+            assert!(shown(lines, "raster") && shown(lines, "hatch"), "{lines}");
+            assert!(!shown(lines, "selected"), "{lines}");
+        }
+    }
+
+    #[test]
+    fn finishing_shows_its_rest_machining_settings_only_with_two_tools_or_more() {
+        let f = fields(&schema("3d_finishing_toolpath"));
+        let tools = |n: usize| serde_json::json!({ "tools": vec![serde_json::json!({}); n] });
+        for key in ["minimum_detail", "boundary_offset"] {
+            let rest = field(&f, key);
+            assert_eq!(rest.group.as_deref(), Some("Rest Machining"), "{key}");
+            let shown = |n| rest.when.as_ref().is_none_or(|w| w.shown(&tools(n)));
+            assert!(!shown(1), "{key}: one tool has nothing to rest machine");
+            assert!(shown(2) && shown(3), "{key}");
+            // one of a set, edited on its own: cut after the tools before it
+            let later = serde_json::json!({ "tools": [], "after": [{}] });
+            assert!(rest.when.as_ref().is_none_or(|w| w.shown(&later)), "{key}");
+        }
+        assert_eq!(field(&f, "boundary_offset").label, "Rest overlap");
+        assert_eq!(
+            field(&f, "machining_boundary_offset").label,
+            "Boundary Offset"
+        );
+    }
+
+    #[test]
     fn embellishs_settings_start_with_one_style_list_and_have_a_new_design_button() {
         let f = fields(&schema("embellish"));
         assert_eq!(keys(&f)[0], "style");
@@ -1854,6 +2027,169 @@ mod tests {
             assert!(when.shown(&serde_json::json!({ "percent": true })));
             assert!(!when.shown(&serde_json::json!({ "percent": false })));
         }
+    }
+
+    #[test]
+    fn number_boxes_step_and_drag_in_amounts_that_fit_the_unit_shown() {
+        use cut_craft_bug_report::number::nudged;
+        // 3D finishing accuracy, 1..20 µm, in an inch job: one click is not the whole range
+        let (lo, hi) = (1.0 / 25_400.0, 20.0 / 25_400.0);
+        let (step, speed) = feel(Some("in"), false, lo..=hi);
+        let once = nudged(5.0 / 25_400.0, step, true, &(lo..=hi)) * 25_400.0;
+        assert!(once < 10.0, "5 µm went to {once} µm in one click");
+        assert!(speed <= step);
+        // a cut depth in inches drags in thousandths, not inches
+        let (step, speed) = feel(Some("in"), false, 0.0..=f64::INFINITY);
+        assert!((step - 0.01).abs() < 1e-12);
+        assert!(speed <= 0.001 + 1e-12, "{speed} in a point");
+        let (_, speed) = feel(Some("mm"), false, 0.0..=f64::INFINITY);
+        assert!(speed <= 0.01 + 1e-12, "{speed} mm a point");
+        // whole numbers still drag one a point
+        assert_eq!(feel(None, true, 1.0..=100.0), (1.0, 1.0));
+    }
+
+    #[test]
+    fn show_rules_written_as_numbers_or_bools_hide_their_fields() {
+        let f = fields(&schema("segment_3d_model"));
+        let when = field(&f, "position")
+            .when
+            .as_ref()
+            .expect("Position has a rule");
+        assert!(when.shown(&serde_json::json!({ "cuts": 1 })));
+        assert!(!when.shown(&serde_json::json!({ "cuts": 3 })));
+        let f = fields(&schema("extrude_and_weave"));
+        let when = field(&f, "weave_by")
+            .when
+            .as_ref()
+            .expect("Weave by has a rule");
+        assert!(!when.shown(&serde_json::json!({ "weave": false })));
+        // every rule in every form is read, none dropped
+        for (id, schema) in every_form() {
+            for s in rule_holders(&schema) {
+                for key in [
+                    "x-show-when",
+                    "x-hide-when",
+                    "x-enable-when",
+                    "x-percent-when",
+                ] {
+                    if let Some(rule) = s.get(key) {
+                        assert!(When::from_rule(rule, true).is_some(), "{id}: {key} {rule}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every object in `schema`, where a rule may sit.
+    fn rule_holders(schema: &Value) -> Vec<&Value> {
+        let mut found = vec![schema];
+        match schema {
+            Value::Object(map) => map.values().for_each(|v| found.extend(rule_holders(v))),
+            Value::Array(list) => list.iter().for_each(|v| found.extend(rule_holders(v))),
+            _ => {}
+        }
+        found
+    }
+
+    #[test]
+    fn fields_used_only_with_a_tick_are_greyed_without_it() {
+        let live = |f: &[Field], key, local: Value, top: Value| {
+            field(f, key)
+                .enabled
+                .as_ref()
+                .expect("greyed by a rule")
+                .judged(&local, &top)
+        };
+        let job = fields(&schema("job_setup"));
+        let Kind::Group(datum) = &field(&job, "datum").kind else {
+            panic!("the datum section");
+        };
+        for key in ["x", "y"] {
+            // judged on the datum section's own tick, not the form's top level
+            let top = serde_json::json!({ "datum": {} });
+            let ticked = serde_json::json!({ "use_offset": true });
+            let unticked = serde_json::json!({ "use_offset": false });
+            assert!(live(datum, key, ticked, top.clone()));
+            assert!(!live(datum, key, unticked, top));
+        }
+        let flute = fields(&schema("fluting_toolpath"));
+        let percent = serde_json::json!({ "use_ramp_percent": true });
+        let length = serde_json::json!({ "use_ramp_percent": false });
+        assert!(live(&flute, "ramp_percent", Value::Null, percent.clone()));
+        assert!(!live(&flute, "ramp_length", Value::Null, percent));
+        assert!(live(&flute, "ramp_length", Value::Null, length));
+        let ramp_percent = field(&flute, "ramp_percent");
+        assert_eq!(ramp_percent.label, "Ramp percent");
+        assert!(matches!(&ramp_percent.kind, Kind::Number { unit: Some(u), .. } if u == "%"));
+        let weave = fields(&schema("extrude_and_weave"));
+        let scale = serde_json::json!({ "scale_to_exact_height": false });
+        assert!(!live(&weave, "height", Value::Null, scale));
+        let component = fields(&schema("component_properties"));
+        let parent = serde_json::json!({ "appearance": "same_as_parent" });
+        let solid = serde_json::json!({ "appearance": "solid_color" });
+        assert!(!live(&component, "colour", Value::Null, parent));
+        assert!(live(&component, "colour", Value::Null, solid));
+    }
+
+    #[test]
+    fn job_setups_datum_x_and_y_follow_the_datum_sections_own_tick_when_drawn() {
+        // the rule's key sits inside the datum section, not at the form's top level, so
+        // drawing the form must judge it there
+        let job = fields(&schema("job_setup"));
+        let colours = |use_offset: bool| {
+            let mut params = registry()
+                .get("job_setup")
+                .map(cut_craft_core::DynCommand::default_params)
+                .expect("Job Setup's form");
+            params["datum"]["use_offset"] = Value::Bool(use_offset);
+            let ctx = egui::Context::default();
+            let picture = |_: &str| None;
+            let look = Look {
+                units: Units::Mm,
+                picture: &picture,
+                material: cut_craft_core::calc::Values::default(),
+                tool: None,
+                group_end: None,
+                materials: None,
+            };
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| show(ui, &job, &mut params, &look));
+                });
+            });
+            out.textures_delta.clear();
+            let texts: Vec<(String, egui::Color32)> = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Text(t) => Some((t.galley.text().to_owned(), t.fallback_color)),
+                    _ => None,
+                })
+                .collect();
+            let tick = texts
+                .iter()
+                .position(|(t, _)| t == "Use offset")
+                .expect("the datum section's Use offset tick is drawn");
+            let after = |label: &str| {
+                texts[tick..]
+                    .iter()
+                    .find(|(t, _)| t == label)
+                    .unwrap_or_else(|| panic!("{label} drawn after Use offset: {texts:?}"))
+                    .1
+            };
+            (texts[tick].1, after("X"), after("Y"))
+        };
+        let (live, x, y) = colours(true);
+        assert_eq!((x, y), (live, live), "ticked: X and Y can be edited");
+        let (live, x, y) = colours(false);
+        assert!(x != live && y != live, "unticked: X and Y are greyed");
+    }
+
+    #[test]
+    fn interactive_vector_trim_shows_no_at_position_to_type() {
+        // the click on the canvas says where: typed X and Y would trim nothing
+        let f = fields(&schema("interactive_vector_trim"));
+        assert_eq!(keys(&f), ["reach", "rejoin_trimmed_sections"]);
     }
 
     #[test]
@@ -2003,7 +2339,7 @@ mod tests {
 
     /// Numbers with no unit that are measurements of something other than the job's
     /// lengths, each with why it does not change with mm / inches.
-    const UNITLESS_BY_FORM: [(&str, &str, &str); 7] = [
+    const UNITLESS_BY_FORM: [(&str, &str, &str); 8] = [
         ("arrange_toolpaths", "order", "toolpath ids, not lengths"),
         (
             "sketch_carving_toolpath",
@@ -2023,6 +2359,7 @@ mod tests {
         ("materials", "lithophane_light", "a share of the light"),
         ("Options", "rapid_rate", "set with its own feed-rate units"),
         ("Options", "scale_factor", "a multiplier"),
+        ("Options", "web_api.port", "a network port number"),
     ];
 
     #[test]
@@ -2244,6 +2581,97 @@ mod tests {
     }
 
     #[test]
+    fn chamfer_shows_angle_for_a_ball_nose_and_overcut_for_a_v_bit() {
+        // a V-bit's slope is half its angle, and only a V-bit's point is moved by an overcut
+        let f = fields(&schema("chamfer_toolpath"));
+        let with = |shape: &str| serde_json::json!({ "tool": { "shape": shape } });
+        let shown = |key: &str, shape: &str| {
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&with(shape)))
+        };
+        assert!(!shown("angle", "v_bit"));
+        assert!(shown("angle", "ball_nose"));
+        assert!(shown("overcut", "v_bit"));
+        assert!(!shown("overcut", "ball_nose"));
+    }
+
+    #[test]
+    fn a_choice_can_be_offered_only_while_another_says_so() {
+        // Pocket's Profile Pass: First only for Raster, adaptive clearing always goes round last
+        let f = fields(&schema("pocket_toolpath"));
+        let Kind::Choice(options, _) = &field(&f, "profile_pass").kind else {
+            panic!("a choice")
+        };
+        let offered = |strategy: &str| -> Vec<String> {
+            let params = serde_json::json!({ "strategy": strategy });
+            offered(options, &params)
+                .into_iter()
+                .map(|o| o.value)
+                .collect()
+        };
+        assert_eq!(offered("raster"), ["first", "last", "none"]);
+        assert_eq!(offered("adaptive"), ["last", "none"]);
+        let first = options.iter().find(|o| o.value == "first").unwrap();
+        assert!(
+            !first
+                .help
+                .as_deref()
+                .unwrap_or_default()
+                .contains("raster lines")
+                || first.when.is_some()
+        );
+    }
+
+    #[test]
+    fn a_pockets_form_offers_first_for_raster_and_never_leaves_a_hidden_pick() {
+        // the form judges a choice's rule on the form's own settings, as drawn
+        let f = fields(&schema("pocket_toolpath"));
+        let pocket = |strategy: &str, pass: &str| {
+            let mut params = registry()
+                .get("pocket_toolpath")
+                .map(cut_craft_core::DynCommand::default_params)
+                .expect("Pocket's form");
+            params["strategy"] = Value::String(strategy.into());
+            params["profile_pass"] = Value::String(pass.into());
+            let texts = drawn(&f, &mut params, Units::Mm);
+            (texts, params["profile_pass"].clone())
+        };
+        let (raster, pass) = pocket("raster", "first");
+        assert!(raster.iter().any(|t| t == "First"), "{raster:?}");
+        assert_eq!(pass, "first", "a Raster pocket keeps First");
+        let (adaptive, pass) = pocket("adaptive", "first");
+        assert!(!adaptive.iter().any(|t| t == "First"), "{adaptive:?}");
+        assert_eq!(
+            pass, "last",
+            "First switched to Adaptive shows as Last, which it cuts"
+        );
+    }
+
+    #[test]
+    fn quick_engraves_old_passes_show_only_while_above_one() {
+        // a job saved when Passes repeated the pattern keeps a pass count the bit's passes
+        // cannot go below, so it shows until set back to 1
+        let f = fields(&schema("quick_engrave_toolpath"));
+        let drawn_with = |passes: u32| {
+            let mut params = registry()
+                .get("quick_engrave_toolpath")
+                .map(cut_craft_core::DynCommand::default_params)
+                .expect("Quick Engrave's form");
+            params["passes"] = passes.into();
+            drawn(&f, &mut params, Units::Mm)
+        };
+        let label = "Passes at Least";
+        assert!(
+            drawn_with(3).iter().any(|t| t == label),
+            "{:?}",
+            drawn_with(3)
+        );
+        assert!(!drawn_with(1).iter().any(|t| t == label));
+    }
+
+    #[test]
     fn marked_groups_are_sections_and_marked_arrays_are_colours() {
         let schema = serde_json::json!({
             "type": "object",
@@ -2332,12 +2760,30 @@ mod tests {
                 value: v.into(),
                 label: v.into(),
                 help: None,
+                when: None,
             })
             .into();
         let nearest = |x, y| nearest_corner(&options, vec2(x, y)).map(|c| c.value.as_str());
         assert_eq!(nearest(0.9, 0.2), Some("top_right"));
         assert_eq!(nearest(0.4, 0.6), Some("centre"));
         assert_eq!(nearest(0.1, 0.8), Some("bottom_left"));
+    }
+
+    #[test]
+    fn properties_forms_do_not_show_the_internal_id_of_what_they_change() {
+        // the right-click menu fills the id in: a number box for it could point the form
+        // at a different item
+        for (id, key) in [
+            ("toolpath_properties", "toolpath"),
+            ("layer_properties", "layer"),
+            ("component_properties", "component"),
+            ("smooth_selected_components", "component"),
+            ("bitmap_properties", "bitmap"),
+            ("edit_picture", "bitmap"),
+        ] {
+            let f = fields(&schema(id));
+            assert!(!keys(&f).contains(&key), "{id} shows {key}");
+        }
     }
 
     #[test]
@@ -2390,6 +2836,7 @@ mod tests {
                 value: (*v).into(),
                 label: crate::gui::title_case(v),
                 help: None,
+                when: None,
             })
             .collect();
         let ctx = egui::Context::default();
@@ -2476,6 +2923,23 @@ mod tests {
         let job_setup = serde_json::json!({ "size": { "width": 10.0, "units": "Inch" } });
         assert_eq!(units_chosen(&job_setup), Some(Units::Inch));
         assert_eq!(units_chosen(&serde_json::json!({ "width": 1.0 })), None);
+    }
+
+    #[test]
+    fn a_metric_tool_leaves_an_inch_jobs_toolpath_form_in_inches() {
+        // a Profile form in an inch job with a 6 mm end mill picked: the bit's own units are
+        // the bit's, so cut depth, allowance and leads stay in the job's inches
+        let tool = cut_craft_core::toolpath::Tool {
+            units: Units::Mm,
+            ..Default::default()
+        };
+        let profile = serde_json::json!({
+            "cut_depth": 6.35,
+            "allowance": 0.0,
+            "tool": serde_json::to_value(&tool).expect("a tool serializes"),
+            "tools": [serde_json::to_value(&tool).expect("a tool serializes")],
+        });
+        assert_eq!(units_chosen(&profile), None);
     }
 
     #[test]
@@ -2718,6 +3182,40 @@ mod tests {
             }
         }
         assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    #[test]
+    fn settings_that_do_nothing_in_the_current_mode_are_hidden() {
+        let shown = |id: &str, key: &str, params: Value| {
+            let f = fields(&schema(id));
+            field(&f, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(&params))
+        };
+        let count = serde_json::json!({ "spacing": "count" });
+        let distance = serde_json::json!({ "spacing": "distance" });
+        assert!(shown("copy_along_vectors", "copies", count.clone()));
+        assert!(!shown("copy_along_vectors", "copies", distance.clone()));
+        for key in ["distance", "force_even_spacing"] {
+            assert!(shown("copy_along_vectors", key, distance.clone()), "{key}");
+            assert!(!shown("copy_along_vectors", key, count.clone()), "{key}");
+        }
+        let relative = |r: bool| serde_json::json!({ "relative": r, "rotated": true });
+        assert!(!shown("move", "anchor", relative(true)));
+        assert!(shown("move", "anchor", relative(false)));
+        assert!(
+            !shown("move", "rotated", relative(false)),
+            "a tick box rule as a bool"
+        );
+        assert!(shown("move", "angle", relative(true)));
+        assert!(
+            !shown("move", "angle", relative(false)),
+            "the angle only turns relative moves"
+        );
+        let sharp = |k: bool| serde_json::json!({ "keep_sharp_corners": k });
+        assert!(shown("fit_curves_to_vectors", "max_angle", sharp(true)));
+        assert!(!shown("fit_curves_to_vectors", "max_angle", sharp(false)));
     }
 
     #[test]

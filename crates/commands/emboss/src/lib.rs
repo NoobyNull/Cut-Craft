@@ -1,6 +1,7 @@
 //! Emboss Component: the selected component made much lower while its surface detail stays:
 //! its broad shape (a blur of it) is scaled to the new height, the detail on top of that is
-//! kept, then smoothed.
+//! kept, then smoothed. Several selected components are embossed as one, and the space
+//! between them stays empty.
 
 use cut_craft_core::component::{Component, chosen_or_baked};
 use cut_craft_core::document::Document;
@@ -84,7 +85,7 @@ impl Command for Emboss {
         for id in ids {
             c.remove_component(id);
         }
-        c.add_component(part);
+        c.add_component(part.hand_edited());
         Ok(c.finish())
     }
 }
@@ -168,6 +169,34 @@ mod tests {
         let at = |x: f64| k.height_at(Point::new(x, 26.0)).unwrap();
         let ripple = (at(26.0) - at(27.05)).abs();
         assert!(ripple > 0.2, "detail kept: {ripple}");
+    }
+
+    #[test]
+    fn two_selected_parts_get_no_trench_round_them() {
+        let mut doc = domed();
+        let bump = Component::from_fn(
+            "bump",
+            Combine::Add,
+            Rect::new(Point::new(2.0, 2.0), Point::new(8.0, 8.0)),
+            0.2,
+            |_| Some(4.0),
+        );
+        let mut c = Change::builder(&doc);
+        c.add_component(bump);
+        doc.apply(&c.finish()).unwrap();
+        doc.selected_components = doc.components.keys().copied().collect();
+        run_on::<Emboss>(&mut doc, &Params::default());
+        let k = doc.components.values().next().unwrap();
+        assert!(
+            k.height_at(Point::new(10.0, 20.0)).is_none(),
+            "between the parts there is nothing"
+        );
+        assert!(
+            k.height_at(Point::new(9.0, 5.0)).is_none(),
+            "no trench dug just outside a part"
+        );
+        let top = k.height_at(Point::new(5.0, 5.0)).unwrap();
+        assert!(top > 0.0, "the part is still there: {top}");
     }
 
     #[test]

@@ -61,6 +61,9 @@ pub(super) struct Setup {
     pub sheet: [f64; 3],
     /// Whether a crash's log may be offered to send (`Ask` until answered).
     pub crash_logs: CrashLogs,
+    /// The job new files start with now: asked again, only its size, thickness and units
+    /// change, so the rest set in Job Setup (Set as Default) is kept.
+    pub base: Job,
 }
 
 impl Setup {
@@ -74,7 +77,36 @@ impl Setup {
             inches: false,
             sheet: [BED_MM[0], BED_MM[1], THICKNESS_MM],
             crash_logs: CrashLogs::Ask,
+            base: Job::default(),
         }
+    }
+
+    /// Asked again: the answers as they stand now, so only what is changed changes. The
+    /// machine in use (one from the list, or My Machine with its working area and
+    /// controller), the units and material new jobs start with, and the crash-report answer.
+    pub fn again(options: &crate::options::Options, machines: &Machines) -> Self {
+        let mut setup = Self::new();
+        if let Some(machine) = machines.active() {
+            if machine.name == MY_MACHINE {
+                setup.maker = Maker::NotListed;
+                setup.bed = [machine.width, machine.height];
+                setup.controller = Controller::ALL
+                    .into_iter()
+                    .find(|c| c.label() == machine.controller)
+                    .unwrap_or_default();
+                setup.inches = machine.inches;
+            } else if let Some(i) = setup.catalogue.iter().position(|m| m.name == machine.name) {
+                setup.maker = Maker::Named(setup.catalogue[i].manufacturer.clone());
+                setup.pick_model(i);
+            }
+        }
+        if let Some(job) = options.default_job {
+            setup.base = job;
+            setup.inches = job.units == Units::Inch;
+            setup.sheet = [job.width, job.height, job.thickness];
+        }
+        setup.crash_logs = options.bug_reports.crash_logs;
+        setup
     }
 
     /// The models of the maker picked, by catalogue index.
@@ -175,14 +207,15 @@ impl Setup {
         }
     }
 
-    /// The job new files start with.
+    /// The job new files start with: the size, thickness and units answered, the rest as
+    /// it was kept before.
     pub fn job(&self) -> Job {
         Job {
             width: self.sheet[0],
             height: self.sheet[1],
             thickness: self.sheet[2],
             units: if self.inches { Units::Inch } else { Units::Mm },
-            ..Job::default()
+            ..self.base
         }
     }
 }
@@ -233,12 +266,16 @@ impl CutCraftApp {
     /// The options kept between runs, read at start (after the machines, which decide
     /// whether first-time setup is shown).
     pub(super) fn load_options(&mut self) {
-        let (options, tampered) = crate::options::Options::load_checked();
+        let crate::options::Read {
+            options,
+            tampered,
+            unread,
+        } = crate::options::Options::load_checked();
         self.options = options;
         self.options.apply();
         self.playback_speed = self.options.toolpaths.preview_speed();
-        if tampered {
-            self.status.set_message(crate::options::TAMPERED);
+        if let Some(message) = crate::options::load_message(&unread, tampered) {
+            self.status.set_message(&message);
         }
         self.options_path = crate::options::Options::path();
         self.options.apply_to(&mut self.display);
@@ -248,9 +285,10 @@ impl CutCraftApp {
         self.tip_at_startup();
     }
 
-    /// Help ▸ Run First-Time Setup Again, or the first run: the questions shown.
+    /// Help ▸ Run First-Time Setup Again, or the first run: the questions shown, starting
+    /// from the answers given before.
     pub(super) fn open_first_run(&mut self) {
-        self.first_run = Some(Setup::new());
+        self.first_run = Some(Setup::again(&self.options, &self.machines));
     }
 
     /// The setup window, while it is open.
@@ -461,17 +499,44 @@ impl CutCraftApp {
         ));
     }
 
-    /// The machine set up, made active: added, or the one of that name already here.
+    /// The machine set up, made active: added, or the one of that name already here. My
+    /// Machine (one not listed) already here takes the working area, units and controller
+    /// answered now, so setting it up again corrects it. Its posts change only with the
+    /// controller or units: the old controller's own posts give way to the new one's, and
+    /// its default to the new one's, but posts added in Machine Configuration are kept.
     fn add_set_up_machine(&mut self, machine: Machine) {
         let at = self
             .machines
             .machines
             .iter()
             .position(|m| m.name == machine.name);
-        self.machines.active = at.unwrap_or_else(|| {
+        self.machines.active = if let Some(i) = at {
+            if machine.name == MY_MACHINE {
+                let mine = &mut self.machines.machines[i];
+                if mine.controller != machine.controller || mine.inches != machine.inches {
+                    let old = Controller::ALL
+                        .into_iter()
+                        .find(|c| c.label() == mine.controller)
+                        .map_or_else(Vec::new, |c| c.posts(mine.inches).0);
+                    let mut posts = machine.posts;
+                    for post in std::mem::take(&mut mine.posts) {
+                        if !old.contains(&post) && !posts.contains(&post) {
+                            posts.push(post);
+                        }
+                    }
+                    mine.posts = posts;
+                    mine.default_post = machine.default_post;
+                }
+                mine.width = machine.width;
+                mine.height = machine.height;
+                mine.inches = machine.inches;
+                mine.controller = machine.controller;
+            }
+            i
+        } else {
             self.machines.machines.push(machine);
             self.machines.machines.len() - 1
-        });
+        };
         self.machines_changed("Machine set up");
     }
 

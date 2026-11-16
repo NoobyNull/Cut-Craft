@@ -440,17 +440,18 @@ pub struct ToolpathSettings {
     #[schemars(title = "2D solid preview color", extend("x-kind" = "colour"))]
     pub solid_2d_preview_color: [u8; 3],
     /// Saved toolpaths leave out cutting points this close to the line past them, for
-    /// shorter files; 0 keeps every point. Profile, pocket and other 2D toolpaths
+    /// shorter files; 0 keeps every point, 0.1 mm is the most. The keep-out zones are
+    /// checked on what is saved. Profile, pocket and other 2D toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_2d: f64,
     /// The same for 3D roughing, finishing, texture, moulding and the like
     #[serde(default = "tolerance")]
-    #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_3d: f64,
     /// The same for V-carving, prism, inlay and chamfer toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_vcarve: f64,
     /// How many times faster than the machine a toolpath preview plays when it starts: 1
     /// plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the
@@ -465,7 +466,9 @@ pub struct ToolpathSettings {
     pub keep_out_labels: bool,
     /// Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
     /// made. On: it is made with the part under the zone left uncut, the tool lifting over
-    /// the zone, as if the zone were cut out of whatever is under it
+    /// the zone, as if the zone were cut out of whatever is under it. Either way, moves
+    /// across a zone go round it. Laser and drill bank toolpaths are never clipped: move the
+    /// part or the zone for those
     #[serde(default)]
     #[schemars(title = "Clip toolpaths at keep-out zones")]
     pub clip_at_keep_out_zones: bool,
@@ -510,6 +513,10 @@ fn tolerance() -> f64 {
     0.002_54
 }
 
+/// The most a toolpath tolerance can be, mm (the form's limit, and a hand-edited file's):
+/// far below a keep-out zone's clearance or a cut's accuracy.
+pub const MAX_TOLERANCE: f64 = 0.1;
+
 impl ToolpathSettings {
     /// The tolerance for a toolpath of this family.
     pub fn tolerance(&self, family: cut_craft_core::simplify::Family) -> f64 {
@@ -519,6 +526,7 @@ impl ToolpathSettings {
             Family::ThreeD => self.tolerance_3d,
             Family::VCarve => self.tolerance_vcarve,
         }
+        .clamp(0.0, MAX_TOLERANCE)
     }
 
     /// `doc` with each toolpath's cuts thinned to its tolerance, ready to save.
@@ -571,6 +579,12 @@ pub struct Confirmations {
     #[serde(default = "ask_to_recalculate")]
     #[schemars(title = "Ask to recalculate out-of-date toolpaths")]
     pub ask_to_recalculate: bool,
+    /// Saving toolpaths where an earlier save of the same name left G-code: ask, replace it
+    /// (the older numbered files go too, so none is left to run by mistake), or archive it
+    /// (moved into a dated folder under Archive beside it) and add the new files
+    #[serde(default)]
+    #[schemars(title = "G-code from an earlier save")]
+    pub earlier_gcode: EarlierGcode,
 }
 
 impl Default for Confirmations {
@@ -582,6 +596,7 @@ impl Default for Confirmations {
             cutting_checks: CuttingChecks::default(),
             material_left: material_left(),
             ask_to_recalculate: ask_to_recalculate(),
+            earlier_gcode: EarlierGcode::default(),
         }
     }
 }
@@ -599,6 +614,18 @@ impl Confirmations {
     pub fn left(&self) -> f64 {
         self.material_left.clamp(0.0, 10.0)
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EarlierGcode {
+    /// Ask each time: Replace or Archive
+    #[default]
+    Ask,
+    /// Replace the earlier files
+    Replace,
+    /// Move the earlier files into a dated folder under Archive, then add the new ones
+    Archive,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -628,7 +655,8 @@ pub enum CuttingChecks {
 /// General settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct General {
-    /// How many files File ▸ Recent Files and the start page list
+    /// How many files File ▸ Recent Files and the start page list. Up to 20 are always
+    /// remembered, so a smaller number only hides the rest until it is raised again
     #[schemars(range(min = 1, max = 20))]
     pub recent_file_list_size: u32,
     /// Read every icon at startup, so none shows a loading spinner the first time it is
@@ -1203,9 +1231,41 @@ pub const WARNING_MORE: &str = "They set how hard Cut Craft works your computer 
     it cuts. Leave them alone unless you know why you are changing one; Reset to defaults puts \
     them all back.";
 
+/// What reading the options file found: the options, whether the advanced ones were
+/// changed outside Cut Craft, and the settings that could not be read.
+#[derive(Debug, Default)]
+pub struct Read {
+    pub options: Options,
+    pub tampered: bool,
+    /// Each setting left at its default, as `section ▸ setting` (or the section, or
+    /// `everything`); empty when the whole file was read.
+    pub unread: Vec<String>,
+}
+
+/// What the status bar says when some settings could not be read.
+pub fn unread_message(unread: &[String]) -> String {
+    format!(
+        "Some settings could not be read, so they are back to their defaults: {}. Your old \
+         settings file is kept beside the new one as options.json.bak. Set them again in \
+         Edit ▸ Options.",
+        unread.join(", ")
+    )
+}
+
 /// What the status bar says when the advanced settings were changed outside Cut Craft.
 pub const TAMPERED: &str = "Advanced settings were changed outside Cut Craft, so they were put \
     back to their safe defaults. Change them in Edit ▸ Options ▸ Advanced.";
+
+/// What the status bar says after the options are read: what could not be read, and that
+/// the advanced settings were put back, both when both happened; nothing when all was well.
+pub fn load_message(unread: &[String], tampered: bool) -> Option<String> {
+    match (unread.is_empty(), tampered) {
+        (true, false) => None,
+        (true, true) => Some(TAMPERED.to_owned()),
+        (false, false) => Some(unread_message(unread)),
+        (false, true) => Some(format!("{} {TAMPERED}", unread_message(unread))),
+    }
+}
 
 /// Help ▸ Check for Updates, and the check at startup.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1232,6 +1292,62 @@ impl Default for Updates {
             last_check: None,
             skipped_version: None,
         }
+    }
+}
+
+/// Options ▸ Web API: lets a script, a test or Claude drive Cut Craft over HTTP, the way you
+/// do with the mouse. Off until switched on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct WebApi {
+    /// Let programs on this computer drive Cut Craft: select vectors, run tools, press any
+    /// button. Calls from this computer need nothing more; other computers need the access
+    /// token. The status bar shows WEB API Running in green while it is listening, or in red if
+    /// it could not start and why
+    #[serde(default)]
+    #[schemars(title = "Turn on the Web API")]
+    pub enabled: bool,
+    /// Also answer other computers on your network, not only this one (listens on 0.0.0.0).
+    /// Every call then needs the access token shown below. Calls travel unencrypted, so only
+    /// use this on a home or workshop network you trust
+    #[serde(default)]
+    #[schemars(title = "Allow other computers on my network")]
+    pub allow_network: bool,
+    /// The number programs call it on, the 7340 in localhost:7340. Pick another if a different
+    /// program already uses this one
+    #[serde(default = "web_api_port")]
+    #[schemars(title = "Port", range(min = 1024, max = 65535))]
+    pub port: u16,
+    /// The access token calls must send while other computers are allowed; made the first
+    /// time the Web API is switched on.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[schemars(skip)]
+    pub token: String,
+}
+
+fn web_api_port() -> u16 {
+    cut_craft_web_api::DEFAULT_PORT
+}
+
+impl Default for WebApi {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            allow_network: false,
+            port: web_api_port(),
+            token: String::new(),
+        }
+    }
+}
+
+impl WebApi {
+    /// What the server runs with, or `None` while it is switched off.
+    pub fn server_settings(&self) -> Option<cut_craft_web_api::Settings> {
+        self.enabled.then(|| cut_craft_web_api::Settings {
+            allow_network: self.allow_network,
+            port: self.port,
+            // this computer's own programs need no token; open to the network, every call does
+            token: self.allow_network.then(|| self.token.clone()),
+        })
     }
 }
 
@@ -1279,6 +1395,12 @@ pub struct Appearance {
     #[serde(default)]
     #[schemars(title = "Use the desktop's title bar")]
     pub system_title_bar: bool,
+    /// The colors vectors, toolpaths and rapid moves are drawn in. Standard: as Cut Craft
+    /// has always drawn them. Color-blind friendly: colors told apart by how light or dark
+    /// they are, not only by their hue. My own colors: pick each one below, for each theme
+    #[serde(default)]
+    #[schemars(title = "Vector and toolpath colors")]
+    pub line_colors: LinePalette,
     /// The 2D view's colors while the light theme is on
     #[serde(default = "CanvasColours::light")]
     #[schemars(title = "2D view in the light theme")]
@@ -1308,6 +1430,7 @@ impl Default for Appearance {
         Self {
             theme: Theme::default(),
             system_title_bar: false,
+            line_colors: LinePalette::default(),
             light_2d: CanvasColours::light(),
             dark_2d: CanvasColours::dark(),
             grid_point_size: grid_point_size(),
@@ -1322,6 +1445,25 @@ impl Appearance {
         if dark { &self.dark_2d } else { &self.light_2d }
     }
 
+    /// The colours the 2D view draws vectors, toolpaths and rapid moves in (vectors in the
+    /// 3D view too), for the dark theme or the light one, as [`Self::line_colors`] says.
+    pub fn lines(&self, dark: bool) -> Lines {
+        let (visuals, own) = if dark {
+            (egui::Visuals::dark(), &self.dark_2d)
+        } else {
+            (egui::Visuals::light(), &self.light_2d)
+        };
+        match self.line_colors {
+            LinePalette::Standard => Lines::standard(&visuals),
+            LinePalette::ColorBlind => Lines::colour_blind(dark),
+            LinePalette::MyOwn => Lines {
+                vector: own.vector_color,
+                toolpath: own.toolpath_color,
+                rapid: own.rapid_color,
+            },
+        }
+    }
+
     /// What egui's text and control sizes are multiplied by, kept between 80% and 200%.
     pub fn text_scale(&self) -> f32 {
         #[expect(clippy::cast_precision_loss, reason = "80 to 200")]
@@ -1332,6 +1474,10 @@ impl Appearance {
 
 /// The colors of the 2D view's material sheet and of the snap grid's points over it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "the names options.json has kept them under"
+)]
 pub struct CanvasColours {
     /// The material sheet the drawing sits on
     #[schemars(title = "Sheet color", extend("x-kind" = "colour"))]
@@ -1339,6 +1485,26 @@ pub struct CanvasColours {
     /// The snap grid's points: pick one that stands out from the sheet color
     #[schemars(title = "Grid color", extend("x-kind" = "colour"))]
     pub grid_color: [u8; 3],
+    /// Your drawing's lines, the shapes toolpaths are made from
+    #[schemars(
+        title = "Vector color",
+        extend("x-kind" = "colour", "x-show-when" = {"appearance.line_colors": "my_own"})
+    )]
+    pub vector_color: [u8; 3],
+    /// Where the bit cuts: pick one that looks different from the vector color, lighter or
+    /// darker as well as another hue
+    #[schemars(
+        title = "Toolpath color",
+        extend("x-kind" = "colour", "x-show-when" = {"appearance.line_colors": "my_own"})
+    )]
+    pub toolpath_color: [u8; 3],
+    /// The bit's quick moves above the material, and its plunges and lifts, when the
+    /// Toolpath Drawing menu shows them
+    #[schemars(
+        title = "Rapid move color",
+        extend("x-kind" = "colour", "x-show-when" = {"appearance.line_colors": "my_own"})
+    )]
+    pub rapid_color: [u8; 3],
 }
 
 impl CanvasColours {
@@ -1355,9 +1521,61 @@ impl CanvasColours {
     /// The sheet in the theme's field colour, the grid as near it as stays easy to see.
     fn of(visuals: &egui::Visuals) -> Self {
         let sheet = rgb(visuals.widgets.inactive.bg_fill);
+        let lines = Lines::standard(visuals);
         Self {
             sheet_color: sheet,
             grid_color: contrasting(sheet, rgb(visuals.text_color())),
+            vector_color: lines.vector,
+            toolpath_color: lines.toolpath,
+            rapid_color: lines.rapid,
+        }
+    }
+}
+
+/// Which colours vectors, toolpaths and rapid moves are drawn in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LinePalette {
+    /// Vectors in the text color, toolpaths orange, rapid moves red: as Cut Craft has
+    /// always drawn them
+    #[default]
+    Standard,
+    /// Vectors black (white in the dark theme), toolpaths deep orange, rapid moves pink:
+    /// told apart by how light or dark they are as well as by their hue
+    #[schemars(title = "Color-blind friendly")]
+    ColorBlind,
+    /// The vector, toolpath and rapid move colors you pick for each theme below
+    #[schemars(title = "My own colors")]
+    MyOwn,
+}
+
+/// The colours the views draw vectors, toolpaths and rapid moves in, `[r, g, b]`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Lines {
+    pub vector: [u8; 3],
+    pub toolpath: [u8; 3],
+    pub rapid: [u8; 3],
+}
+
+impl Lines {
+    /// The theme's own: text, warning and error colours, as the views always drew them.
+    fn standard(visuals: &egui::Visuals) -> Self {
+        Self {
+            vector: rgb(visuals.text_color()),
+            toolpath: rgb(visuals.warn_fg_color),
+            rapid: rgb(visuals.error_fg_color),
+        }
+    }
+
+    /// From Okabe and Ito's colour-blind safe colours: vermillion toolpaths and reddish
+    /// purple rapids (one warm, one blue-ish to a red-green colour-blind eye) against black
+    /// or white vectors, far apart in lightness so hue is not needed to tell them apart.
+    /// Blue is left to the selection.
+    fn colour_blind(dark: bool) -> Self {
+        Self {
+            vector: if dark { [255, 255, 255] } else { [0, 0, 0] },
+            toolpath: [213, 94, 0],
+            rapid: [204, 121, 167],
         }
     }
 }
@@ -1522,6 +1740,9 @@ pub struct Options {
     #[schemars(title = "Bug Reports", extend("x-section" = true))]
     pub bug_reports: BugReports,
     #[serde(default)]
+    #[schemars(title = "Web API", extend("x-section" = true))]
+    pub web_api: WebApi,
+    #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub advanced: Advanced,
     /// Snapping Options (F4): what the pointer snaps to, nudge distances and rotate snap
@@ -1542,7 +1763,8 @@ pub struct Options {
     #[schemars(skip)]
     pub stl: fmt_export_as_stl::Settings,
     /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
-    /// own starting job until then.
+    /// own starting job until then. Set as Default changes only what is on its form, so the
+    /// clearing kept by Clearing Settings' Use as My Default stays.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub default_job: Option<cut_craft_core::document::Job>,
@@ -1671,6 +1893,7 @@ impl Default for Options {
             space_mouse: SpaceMouse::default(),
             updates: Updates::default(),
             bug_reports: BugReports::default(),
+            web_api: WebApi::default(),
             default_job: None,
             first_run_done: false,
             next_tip: 0,
@@ -1691,23 +1914,44 @@ impl Options {
 
     /// The options kept in the config folder; the defaults when there are none.
     pub fn load() -> Self {
-        Self::load_checked().0
+        Self::load_checked().options
     }
 
-    /// [`Self::load`], and whether the advanced settings had been changed outside Cut Craft
-    /// (and so were put back to their defaults).
-    pub fn load_checked() -> (Self, bool) {
-        path().and_then(|p| std::fs::read(p).ok()).map_or_else(
-            || (Self::default(), false),
-            |bytes| Self::from_bytes(&bytes),
-        )
+    /// [`Self::load`], and what could not be read of it: whether the advanced settings had
+    /// been changed outside Cut Craft (and so were put back to their defaults), and the
+    /// settings left at their defaults. A file with settings left out is first copied to
+    /// `options.json.bak`, so saving the defaults over it loses nothing.
+    pub fn load_checked() -> Read {
+        let Some(path) = path() else {
+            return Read::default();
+        };
+        let Ok(bytes) = std::fs::read(&path) else {
+            return Read::default();
+        };
+        let read = Self::read_bytes(&bytes);
+        if !read.unread.is_empty() {
+            let _ = std::fs::write(path.with_extension("json.bak"), &bytes);
+        }
+        read
     }
 
     /// Options read from a file's bytes, the advanced ones only if their check matches; the
     /// defaults for a file that is not options at all.
+    #[cfg(test)]
     pub fn from_bytes(bytes: &[u8]) -> (Self, bool) {
+        let read = Self::read_bytes(bytes);
+        (read.options, read.tampered)
+    }
+
+    /// [`Self::from_bytes`], naming what could not be read. A setting this version cannot
+    /// read (one from a newer version, or a hand edit gone wrong) goes back to its default
+    /// on its own: the page it is on, and the rest of the file, are kept.
+    pub fn read_bytes(bytes: &[u8]) -> Read {
         let Ok(mut file) = serde_json::from_slice::<serde_json::Value>(bytes) else {
-            return (Self::default(), false);
+            return Read {
+                unread: vec!["everything".to_owned()],
+                ..Read::default()
+            };
         };
         let seal = file
             .as_object_mut()
@@ -1719,8 +1963,33 @@ impl Options {
             .and_then(serde_json::Value::as_object_mut)
             .and_then(|a| a.remove("grid_color"))
             .and_then(|g| serde_json::from_value::<[u8; 3]>(g).ok());
-        let Ok(mut options) = serde_json::from_value::<Self>(file) else {
-            return (Self::default(), false);
+        // each theme's colours from before line colours: the theme's own filled in
+        if let Some(appearance) = file
+            .get_mut("appearance")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            for (key, theme) in [
+                ("light_2d", CanvasColours::light()),
+                ("dark_2d", CanvasColours::dark()),
+            ] {
+                let Some(saved) = appearance
+                    .get_mut(key)
+                    .and_then(serde_json::Value::as_object_mut)
+                else {
+                    continue;
+                };
+                if let serde_json::Value::Object(defaults) =
+                    serde_json::to_value(theme).expect("colours serialise")
+                {
+                    for (name, value) in defaults {
+                        saved.entry(name).or_insert(value);
+                    }
+                }
+            }
+        }
+        let (mut options, unread) = match serde_json::from_value::<Self>(file.clone()) {
+            Ok(options) => (options, vec![]),
+            Err(_) => Self::read_each(file),
         };
         if let Some(grid) = old_grid.filter(|g| *g != old_grid_color()) {
             options.appearance.light_2d.grid_color = grid;
@@ -1729,7 +1998,45 @@ impl Options {
         if tampered {
             options.advanced = Advanced::default();
         }
-        (options, tampered)
+        Read {
+            options,
+            tampered,
+            unread,
+        }
+    }
+
+    /// A file that does not read whole, read setting by setting onto the defaults: each
+    /// section kept if it reads, else each of its settings that does; and what was left out.
+    fn read_each(file: serde_json::Value) -> (Self, Vec<String>) {
+        let reads = |v: &serde_json::Value| serde_json::from_value::<Self>(v.clone()).is_ok();
+        let mut kept = serde_json::to_value(Self::default()).expect("options serialise");
+        let mut unread = vec![];
+        let serde_json::Value::Object(sections) = file else {
+            return (Self::default(), vec!["everything".to_owned()]);
+        };
+        for (section, value) in sections {
+            let mut trial = kept.clone();
+            trial[&section] = value.clone();
+            if reads(&trial) {
+                kept = trial;
+                continue;
+            }
+            let (Some(settings), true) = (value.as_object(), kept[&section].is_object()) else {
+                unread.push(section);
+                continue;
+            };
+            for (name, setting) in settings {
+                let mut trial = kept.clone();
+                trial[&section][name] = setting.clone();
+                if reads(&trial) {
+                    kept = trial;
+                } else {
+                    unread.push(format!("{section} ▸ {name}"));
+                }
+            }
+        }
+        let options = serde_json::from_value(kept).unwrap_or_default();
+        (options, unread)
     }
 
     /// These options with one page (`general`, `advanced`…) back to its defaults, as its
@@ -1788,6 +2095,16 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_file_both_unreadable_and_tampered_says_both() {
+        let unread = vec!["Display".to_owned()];
+        let both = load_message(&unread, true).unwrap();
+        assert!(both.contains("Display"), "{both}");
+        assert!(both.contains(TAMPERED), "{both}");
+        assert_eq!(load_message(&[], true).as_deref(), Some(TAMPERED));
+        assert_eq!(load_message(&unread, false), Some(unread_message(&unread)));
+        assert_eq!(load_message(&[], false), None);
+    }
     #[test]
     fn tilting_pans_as_set_and_reset_puts_back_cut_crafts_own_shortcuts() {
         assert!((Tilt::default().pan(-3.0) + 3.0).abs() < f32::EPSILON);
@@ -1920,6 +2237,7 @@ mod tests {
                 "SpaceMouse",
                 "Updates",
                 "Bug Reports",
+                "Web API",
                 "Advanced"
             ]
         );
@@ -1979,6 +2297,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_tolerance_is_never_more_than_a_tenth_of_a_millimetre() {
+        use cut_craft_core::simplify::Family;
+        let mut t = Options::default().toolpaths;
+        t.tolerance_2d = 5.0;
+        t.tolerance_3d = 1.0;
+        t.tolerance_vcarve = 25.4;
+        for family in [Family::TwoD, Family::ThreeD, Family::VCarve] {
+            assert!((t.tolerance(family) - MAX_TOLERANCE).abs() < 1e-12);
+        }
+        let schema = serde_json::to_value(schemars::schema_for!(ToolpathSettings)).unwrap();
+        for field in ["tolerance_2d", "tolerance_3d", "tolerance_vcarve"] {
+            assert_eq!(schema["properties"][field]["maximum"], 0.1, "{field}");
+        }
+    }
+
     /// `o` as saved to a file, read back.
     fn saved(o: &Options) -> Vec<u8> {
         static FILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -1990,6 +2324,37 @@ mod tests {
         let bytes = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(path);
         bytes
+    }
+
+    #[test]
+    fn a_setting_that_cannot_be_read_loses_only_itself_and_is_named() {
+        let mut o = Options::default();
+        o.controls
+            .shortcuts
+            .insert("pan".to_owned(), vec!["Mouse Back".to_owned()]);
+        o.default_job = Some(cut_craft_core::document::Job {
+            width: 300.0,
+            ..Default::default()
+        });
+        o.appearance.system_title_bar = true;
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        // a theme a newer version knows, and a section of the wrong kind
+        file["appearance"]["theme"] = "neon".into();
+        file["favourites"] = 7.into();
+        let read = Options::read_bytes(&serde_json::to_vec(&file).unwrap());
+        assert_eq!(read.options.controls, o.controls, "the shortcuts kept");
+        assert_eq!(read.options.default_job, o.default_job);
+        assert!(
+            read.options.appearance.system_title_bar,
+            "the rest of it kept"
+        );
+        assert_eq!(read.options.appearance.theme, Theme::default());
+        assert_eq!(read.unread, ["appearance ▸ theme", "favourites"]);
+        assert!(!read.tampered);
+        // a file that reads whole names nothing
+        assert_eq!(Options::read_bytes(&saved(&o)).unread, [] as [String; 0]);
+        // and one that is not options at all names the lot
+        assert_eq!(Options::read_bytes(b"{ not json").unread, ["everything"]);
     }
 
     #[test]
@@ -2364,6 +2729,131 @@ mod tests {
         let reset = o.reset("appearance");
         assert_eq!(reset.appearance.dark_2d, CanvasColours::dark());
         assert_eq!(reset.appearance.light_2d, CanvasColours::light());
+    }
+
+    #[test]
+    fn standard_line_colours_are_the_theme_s_own() {
+        // what the 2D view always drew: vectors in the text colour, toolpaths in the warning
+        // colour, rapid moves in the error colour
+        let a = Appearance::default();
+        assert_eq!(a.line_colors, LinePalette::Standard);
+        for (dark, v) in [
+            (false, egui::Visuals::light()),
+            (true, egui::Visuals::dark()),
+        ] {
+            let lines = a.lines(dark);
+            assert_eq!(lines.vector, rgb(v.text_color()), "dark {dark}");
+            assert_eq!(lines.toolpath, rgb(v.warn_fg_color), "dark {dark}");
+            assert_eq!(lines.rapid, rgb(v.error_fg_color), "dark {dark}");
+        }
+    }
+
+    #[test]
+    fn colour_blind_lines_differ_in_brightness_not_only_hue() {
+        // issue from 0.6.11: a colour-blind user could not tell vectors from toolpaths,
+        // the dark theme's grey vectors and orange toolpaths being as bright as each other
+        let a = Appearance {
+            line_colors: LinePalette::ColorBlind,
+            ..Appearance::default()
+        };
+        for dark in [false, true] {
+            let (lines, sheet) = (a.lines(dark), a.canvas(dark).sheet_color);
+            let pairs = [
+                ("vector and toolpath", lines.vector, lines.toolpath, 3.0),
+                ("vector and sheet", lines.vector, sheet, 4.5),
+                ("toolpath and sheet", lines.toolpath, sheet, 2.5),
+                ("rapid and sheet", lines.rapid, sheet, 2.0),
+            ];
+            for (what, a, b, least) in pairs {
+                assert!(
+                    contrast_of(a, b) >= least,
+                    "dark {dark}: {what} {a:?} {b:?} only {:.2}",
+                    contrast_of(a, b)
+                );
+            }
+        }
+        // the standard dark theme's are the pair the report was about
+        let standard = Appearance::default().lines(true);
+        assert!(contrast_of(standard.vector, standard.toolpath) < 2.0);
+    }
+
+    #[test]
+    fn my_own_line_colours_are_used_only_once_chosen() {
+        let mut a = Appearance::default();
+        a.light_2d.toolpath_color = [1, 2, 3];
+        a.dark_2d.vector_color = [4, 5, 6];
+        a.dark_2d.rapid_color = [7, 8, 9];
+        assert_ne!(a.lines(false).toolpath, [1, 2, 3], "still standard");
+        a.line_colors = LinePalette::ColorBlind;
+        assert_ne!(
+            a.lines(false).toolpath,
+            [1, 2, 3],
+            "still the colour-blind set"
+        );
+        a.line_colors = LinePalette::MyOwn;
+        assert_eq!(a.lines(false).toolpath, [1, 2, 3]);
+        assert_eq!(a.lines(true).vector, [4, 5, 6]);
+        assert_eq!(a.lines(true).rapid, [7, 8, 9]);
+        // my own start as the standard ones, so picking it changes nothing until edited
+        let fresh = Appearance {
+            line_colors: LinePalette::MyOwn,
+            ..Appearance::default()
+        };
+        assert_eq!(fresh.lines(true), Appearance::default().lines(true));
+        assert_eq!(fresh.lines(false), Appearance::default().lines(false));
+    }
+
+    #[test]
+    fn options_saved_before_line_colours_keep_their_2d_colours() {
+        // 0.6.11 saved each theme's sheet and grid colours, nothing more
+        let mut file = serde_json::to_value(Options::default()).unwrap();
+        file["appearance"]["dark_2d"] =
+            serde_json::json!({ "sheet_color": [9, 9, 9], "grid_color": [200, 200, 200] });
+        file["appearance"]["light_2d"] =
+            serde_json::json!({ "sheet_color": [250, 250, 250], "grid_color": [1, 1, 1] });
+        file["appearance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("line_colors");
+        let read = Options::read_bytes(file.to_string().as_bytes());
+        assert!(read.unread.is_empty(), "{:?}", read.unread);
+        let a = read.options.appearance;
+        assert_eq!(a.line_colors, LinePalette::Standard);
+        assert_eq!(a.dark_2d.sheet_color, [9, 9, 9]);
+        assert_eq!(a.light_2d.grid_color, [1, 1, 1]);
+        // each theme's line colours start as that theme's own
+        let (dark, light) = (CanvasColours::dark(), CanvasColours::light());
+        assert_eq!(a.dark_2d.vector_color, dark.vector_color);
+        assert_eq!(a.dark_2d.toolpath_color, dark.toolpath_color);
+        assert_eq!(a.light_2d.rapid_color, light.rapid_color);
+        assert_ne!(dark.vector_color, light.vector_color);
+    }
+
+    #[test]
+    fn my_own_line_colours_show_only_once_chosen() {
+        let schema = serde_json::to_value(schemars::schema_for!(Options)).unwrap();
+        let fields = crate::form::fields(&schema);
+        let appearance = fields.iter().find(|f| f.key == "appearance").unwrap();
+        let crate::form::Kind::Group(inner) = &appearance.kind else {
+            panic!("a section");
+        };
+        let palette = inner.iter().find(|f| f.key == "line_colors");
+        assert!(palette.is_some(), "the choice is on the Appearance page");
+        let light = inner.iter().find(|f| f.key == "light_2d").unwrap();
+        let crate::form::Kind::Group(colours) = &light.kind else {
+            panic!("a section");
+        };
+        let toolpath = colours.iter().find(|f| f.key == "toolpath_color").unwrap();
+        let sheet = colours.iter().find(|f| f.key == "sheet_color").unwrap();
+        let mut options = Options::default();
+        let shown = |f: &crate::form::Field, o: &Options| {
+            let values = serde_json::to_value(o).unwrap();
+            f.when.as_ref().is_none_or(|w| w.shown(&values))
+        };
+        assert!(!shown(toolpath, &options));
+        assert!(shown(sheet, &options), "the sheet's colour always shows");
+        options.appearance.line_colors = LinePalette::MyOwn;
+        assert!(shown(toolpath, &options));
     }
 
     #[test]

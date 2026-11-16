@@ -158,17 +158,45 @@ impl Library {
     }
 
     /// Install Post-Processor: a copy of `file` in the custom folder, once it is seen to
-    /// parse; its entry.
+    /// parse; its entry. A post whose name is already listed (one installed before, or one
+    /// of Cut Craft's own) is kept beside it as a copy, named with a copy number and when it
+    /// was installed: `Mine (mm) (copy 1) (11/15/26 075422) (*.nc)`.
     pub fn install(&self, file: &Path) -> Result<Entry, String> {
+        self.install_at(file, chrono::Local::now().naive_local())
+    }
+
+    /// [`Library::install`], installed at `now`.
+    pub fn install_at(&self, file: &Path, now: chrono::NaiveDateTime) -> Result<Entry, String> {
         let text = std::fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
         let post = Post::parse(&text).map_err(|e| format!("{}: {e}", file.display()))?;
-        let stem = file
-            .file_stem()
-            .map_or_else(|| "post".into(), |s| s.to_string_lossy().into_owned());
+        let taken: Vec<String> = self.entries().into_iter().map(|e| e.name).collect();
+        let (name, text) = if taken.contains(&post.name) {
+            let when = now.format("%m/%d/%y %H%M%S");
+            let (base, kind) = match post.name.rfind(" (*.") {
+                Some(at) => post.name.split_at(at),
+                None => (post.name.as_str(), ""),
+            };
+            let copy = |n: usize| format!("{base} (copy {n})");
+            let mut n = 1;
+            while taken.iter().any(|t| t.starts_with(&copy(n))) {
+                n += 1;
+            }
+            let name = format!("{} ({when}){kind}", copy(n));
+            let renamed = with_name(&text, &name);
+            (name, renamed)
+        } else {
+            (post.name, text)
+        };
+        let stem = if name.contains("(copy ") {
+            name.replace(" (*.", " ").replace(['(', ')', '/'], "")
+        } else {
+            file.file_stem()
+                .map_or_else(|| "post".into(), |s| s.to_string_lossy().into_owned())
+        };
         let path = Self::free_path(self.dir()?, &stem);
         std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(Entry {
-            name: post.name,
+            name,
             source: Source::Custom(path),
             broken: None,
         })
@@ -335,6 +363,51 @@ mod tests {
             err.contains("cut-craft-src-"),
             "a broken post is refused, naming the file: {err}"
         );
+        let _ = std::fs::remove_file(&src);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_post_installed_under_a_name_already_listed_is_kept_as_a_dated_copy() {
+        let (lib, dir) = library("install-twice");
+        let src = std::env::temp_dir().join(format!("cut-craft-twice-{}.pp", std::process::id()));
+        std::fs::write(
+            &src,
+            BUILT_IN[0]
+                .1
+                .replace("Cut Craft FluidNC ATC (mm)", "Mine (mm)"),
+        )
+        .unwrap();
+        let at = |h, m, s| {
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 15)
+                .and_then(|d| d.and_hms_opt(h, m, s))
+                .unwrap()
+        };
+        assert_eq!(
+            lib.install_at(&src, at(7, 54, 22)).unwrap().name,
+            "Mine (mm) (*.nc)"
+        );
+        let copy = lib.install_at(&src, at(7, 54, 22)).unwrap();
+        assert_eq!(copy.name, "Mine (mm) (copy 1) (11/15/26 075422) (*.nc)");
+        assert!(
+            lib.load(&copy.name).is_ok(),
+            "the copy is listed under its name"
+        );
+        let next = lib.install_at(&src, at(8, 0, 1)).unwrap();
+        assert_eq!(next.name, "Mine (mm) (copy 2) (11/15/26 080001) (*.nc)");
+        // a post named like one of Cut Craft's own never takes its place
+        let own = lib.entries().last().unwrap().name.clone();
+        std::fs::write(&src, with_name(BUILT_IN[0].1, &own)).unwrap();
+        let named = lib.install_at(&src, at(9, 0, 0)).unwrap().name;
+        assert_ne!(named, own);
+        assert!(named.contains("(copy 1)"), "{named}");
+        let firsts: Vec<String> = lib
+            .entries()
+            .into_iter()
+            .map(|e| e.name)
+            .filter(|n| *n == own)
+            .collect();
+        assert_eq!(firsts.len(), 1, "one post with each name");
         let _ = std::fs::remove_file(&src);
         let _ = std::fs::remove_dir_all(dir);
     }

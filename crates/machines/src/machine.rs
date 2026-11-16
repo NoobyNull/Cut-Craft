@@ -143,12 +143,16 @@ pub struct Machines {
 }
 
 impl Machines {
-    /// The machines kept at `path`; none when there is no file or it cannot be read.
-    pub fn load(path: &Path) -> Self {
-        std::fs::read(path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default()
+    /// The machines kept at `path`; none when there is no file yet. A file that cannot be
+    /// read or understood (half written, edited by hand, or from a newer Cut Craft) is an
+    /// error naming it, so it is never taken for no machines and saved over.
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        };
+        serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
@@ -308,9 +312,21 @@ mod tests {
         m.machines[0].drill_bank =
             Some(cut_craft_core::drill_bank::DrillBank::new(5, 3, 32.0, 5.0));
         m.save(&path).unwrap();
-        assert_eq!(Machines::load(&path), m);
+        assert_eq!(Machines::load(&path), Ok(m));
         let _ = std::fs::remove_file(&path);
-        assert_eq!(Machines::load(&path), Machines::default());
+        assert_eq!(Machines::load(&path), Ok(Machines::default()));
+    }
+
+    #[test]
+    fn a_machines_file_that_cannot_be_read_is_an_error_not_no_machines() {
+        let path = std::env::temp_dir().join(format!(
+            "cut-craft-machines-broken-{}.json",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"{\"machines\": [{\"width\": \"wide\"}]}").unwrap();
+        let e = Machines::load(&path).unwrap_err();
+        assert!(e.contains(&path.display().to_string()), "{e}");
+        let _ = std::fs::remove_file(&path);
     }
 }
 

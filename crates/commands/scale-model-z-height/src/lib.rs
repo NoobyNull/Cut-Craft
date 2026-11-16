@@ -1,7 +1,8 @@
 //! Scale Model Z Height: stretches or squashes the model to a new height, scaling every
-//! visible component's heights by the same factor.
+//! visible component's heights, base heights and tilts, and the shown levels' base heights,
+//! by the same factor. Components on hidden levels are left as they are.
 
-use cut_craft_core::component::{Combine, model_at_resolution};
+use cut_craft_core::component::{Combine, model_at_resolution, shown_components};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -64,19 +65,46 @@ impl Command for ScaleModelZHeight {
         }
         let factor = p.height / now;
         let mut c = Change::builder(doc);
-        // a multiplying component is a factor, not a height
-        for (&id, component) in doc
-            .components
-            .iter()
-            .filter(|(_, k)| k.visible && k.combine != Combine::Multiply)
-        {
+        // the components the model is made of; a multiplying one is a factor, not a height
+        for id in shown_components(doc) {
+            let component = &doc.components[&id];
+            if component.combine == Combine::Multiply {
+                continue;
+            }
             let mut scaled = component.clone();
             for h in scaled.heights.iter_mut().filter(|h| !h.is_nan()) {
                 *h *= factor;
             }
+            if let Some(before) = &mut scaled.unsculpted {
+                for h in before.iter_mut().filter(|h| !h.is_nan()) {
+                    *h *= factor;
+                }
+            }
+            // its own base height and tilt scale with it, so the whole model does
+            scaled.shaping.base_height *= factor;
+            if let Some(tilt) = &mut scaled.shaping.tilt {
+                tilt.angle = (tilt.angle.to_radians().tan() * factor).atan().to_degrees();
+            }
             c.replace_component(id, scaled);
         }
-        Ok(c.finish())
+        for (&id, level) in doc.levels.iter().filter(|(_, l)| l.visible) {
+            let mut scaled = level.clone();
+            scaled.base_height *= factor;
+            c.set_level(id, Some(scaled));
+        }
+        let mut change = c.finish();
+        let mut after = doc.clone();
+        if after.apply(&change).is_ok() {
+            let reached = model_height(&after);
+            if (reached - p.height).abs() > 0.01 * p.height.max(1.0) {
+                change.notes.push(format!(
+                    "The model reached {:.0} % of the height asked for: multiplying \
+                     components or clipping do not scale. Run the tool again to get closer.",
+                    reached / p.height * 100.0
+                ));
+            }
+        }
+        Ok(change)
     }
 }
 
@@ -101,5 +129,52 @@ mod tests {
         doc.apply(&change).unwrap();
         assert!((model_height(&doc) - before * 2.0).abs() < 1e-6);
         assert!((ScaleModelZHeight::initial_params(&doc).height - before * 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn base_heights_scale_too_so_the_height_is_reached() {
+        let mut doc = domed();
+        let id = *doc.components.keys().next().unwrap();
+        doc.components.get_mut(&id).unwrap().shaping.base_height = 3.0;
+        doc.levels.get_mut(&0).unwrap().base_height = 1.0;
+        let before = model_height(&doc);
+        let p = Params {
+            height: before * 2.0,
+        };
+        let change = ScaleModelZHeight::run(&doc, &p).unwrap();
+        assert!(change.notes.is_empty(), "{:?}", change.notes);
+        doc.apply(&change).unwrap();
+        let now = model_height(&doc);
+        assert!(
+            (now - before * 2.0).abs() < 1e-6,
+            "{now} vs {}",
+            before * 2.0
+        );
+    }
+
+    #[test]
+    fn components_on_hidden_levels_are_left_alone() {
+        use cut_craft_core::component::Level;
+        let mut doc = domed();
+        let mut on_hidden = doc.components.values().next().unwrap().clone();
+        on_hidden.level = 1;
+        let mut c = Change::builder(&doc);
+        c.set_level(
+            1,
+            Some(Level {
+                visible: false,
+                ..Level::default()
+            }),
+        );
+        c.add_component(on_hidden.clone());
+        doc.apply(&c.finish()).unwrap();
+        let p = Params { height: 20.0 };
+        let change = ScaleModelZHeight::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        let kept = doc.components.values().last().unwrap();
+        assert!(cut_craft_core::component::same_heights(
+            &kept.heights,
+            &on_hidden.heights
+        ));
     }
 }

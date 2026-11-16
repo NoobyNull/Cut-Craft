@@ -11,6 +11,8 @@
 //! same for every depth of a straight-walled cut. Our own code: the idea is the general one
 //! (hold the engagement near a target), no other program's code was used.
 
+mod channels;
+
 use crate::geometry::{Path, Point};
 use crate::polygon::{self, Corners};
 use crate::toolpath::cut_points;
@@ -51,13 +53,34 @@ pub fn engagement_for(bite: f64, radius: f64) -> f64 {
 }
 
 /// The pieces that clear `c`: empty when there is nothing to clear.
+///
+/// Narrow channels are swept first, in loops wall to wall along them ([`channels`]); the
+/// rest is cleared with the bit steering to hold its bite.
 pub fn clear(c: &Clearing) -> Vec<Piece> {
-    let Some(mut work) = Work::new(c) else {
-        return vec![];
-    };
-    work.run();
-    work.pieces
+    crate::progress::stage("Adaptive: finding the narrow channels");
+    crate::progress::note(LONGER);
+    let (mut pieces, swept) = crate::progress::part(0, 4, || channels::sweeps(c));
+    crate::progress::stage("Adaptive: clearing the wider areas");
+    crate::progress::note(LONGER);
+    let cleared: Vec<Path> = c.cleared.iter().cloned().chain(swept).collect();
+    if let Some(mut work) = Work::new(&Clearing {
+        cleared: &cleared,
+        ..*c
+    }) {
+        // on from where the sweeps ended, through what they cleared
+        let at = pieces.iter().rev().find_map(|p| match p {
+            Piece::Cut(points) => points.last().copied(),
+            _ => None,
+        });
+        work.run(at);
+        pieces.extend(work.pieces);
+    }
+    pieces
 }
+
+/// What the progress window says while Adaptive works.
+const LONGER: &str = "Adaptive works out every step of the bit, so some areas take longer \
+                      than others: big open areas most of all.";
 
 /// Most cells the material grid has: bigger areas get coarser cells.
 const MOST_CELLS: f64 = 3.0e6;
@@ -198,6 +221,32 @@ impl Grid {
     }
 }
 
+/// Cells to a side of a block of the grid.
+const BLOCK: usize = 8;
+
+/// The grid in square blocks, with how many cells of material each has.
+struct Blocks {
+    nx: usize,
+    count: Vec<u32>,
+}
+
+impl Blocks {
+    fn new(grid: &Grid, material: &[bool]) -> Self {
+        let nx = grid.nx.div_ceil(BLOCK);
+        let ny = grid.ny.div_ceil(BLOCK);
+        let mut count = vec![0; nx * ny];
+        for (k, _) in material.iter().enumerate().filter(|(_, m)| **m) {
+            count[(k / grid.nx / BLOCK) * nx + (k % grid.nx) / BLOCK] += 1;
+        }
+        Self { nx, count }
+    }
+
+    /// Cell `k`'s material is cut.
+    fn take(&mut self, grid: &Grid, k: usize) {
+        self.count[(k / grid.nx / BLOCK) * self.nx + (k % grid.nx) / BLOCK] -= 1;
+    }
+}
+
 /// The clearing as it goes.
 struct Work {
     grid: Grid,
@@ -220,6 +269,18 @@ struct Work {
     climb: bool,
     /// Places a cut was tried from and went nowhere.
     tried: Vec<bool>,
+    /// How many cells of material each block of the grid has, to skip the empty ones.
+    blocks: Blocks,
+    /// Cells of material at the start, and left now: how far the clearing has got.
+    material_at_start: usize,
+    material_left: usize,
+    /// What [`Work::next_from`] has worked out this time round (its round's number per
+    /// cell, then what it found): the material changes between rounds.
+    round: u32,
+    nearest_seen: Vec<u32>,
+    nearest_found: Vec<Option<(i32, i32)>>,
+    route_seen: Vec<u32>,
+    route_from: Vec<usize>,
     pieces: Vec<Piece>,
 }
 
@@ -278,8 +339,18 @@ impl Work {
         let edge = (0..EDGE)
             .map(|n| Point::from_angle(TAU * n as f64 / EDGE as f64))
             .collect();
+        let blocks = Blocks::new(&grid, &material);
+        let material_at_start = material.iter().filter(|&&m| m).count();
         Some(Self {
+            material_at_start,
+            material_left: material_at_start,
             tried: vec![false; grid.len()],
+            blocks,
+            round: 0,
+            nearest_seen: vec![0; grid.len()],
+            nearest_found: vec![None; grid.len()],
+            route_seen: vec![0; grid.len()],
+            route_from: vec![0; grid.len()],
             grid,
             material,
             allowed,
@@ -363,10 +434,69 @@ impl Work {
         for k in under {
             if self.material[k] {
                 self.material[k] = false;
+                self.blocks.take(&self.grid, k);
+                self.material_left -= 1;
                 gone += 1;
             }
         }
         gone
+    }
+
+    /// The offset from cell `k` to the nearest cell of material, if any is within the bit's
+    /// radius and a bite of it (as far as [`Work::next_from`] looks): worked out when first
+    /// asked for in a round, from the blocks with material in them.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss
+    )]
+    fn nearest_material(&mut self, k: usize) -> Option<(i32, i32)> {
+        if self.nearest_seen[k] == self.round {
+            return self.nearest_found[k];
+        }
+        let nx = self.grid.nx as i64;
+        let (ci, cj) = ((k % self.grid.nx) as i64, (k / self.grid.nx) as i64);
+        let reach = ((self.radius + self.bite) / self.grid.cell).ceil() as i64 + 1;
+        let mut best: Option<(i64, (i32, i32))> = None;
+        let b = BLOCK as i64;
+        let (bi0, bi1) = ((ci - reach).max(0) / b, (ci + reach).min(nx - 1) / b);
+        let ny = self.grid.ny as i64;
+        let (bj0, bj1) = ((cj - reach).max(0) / b, (cj + reach).min(ny - 1) / b);
+        for bj in bj0..=bj1 {
+            for bi in bi0..=bi1 {
+                if self.blocks.count[(bj as usize) * self.blocks.nx + bi as usize] == 0 {
+                    continue;
+                }
+                for j in (bj * b)..((bj + 1) * b).min(ny) {
+                    for i in (bi * b)..((bi + 1) * b).min(nx) {
+                        let (di, dj) = (i - ci, j - cj);
+                        let d2 = di * di + dj * dj;
+                        if d2 <= reach * reach
+                            && best.is_none_or(|(d, _)| d2 < d)
+                            && self.material[(j * nx + i) as usize]
+                        {
+                            best = Some((d2, (di as i32, dj as i32)));
+                        }
+                    }
+                }
+            }
+        }
+        let found = best.map(|(_, o)| o);
+        self.nearest_seen[k] = self.round;
+        self.nearest_found[k] = found;
+        found
+    }
+
+    /// How far cell `k` is from the nearest material, if it is within reach.
+    fn gap(&mut self, k: usize) -> Option<f64> {
+        self.nearest_material(k)
+            .map(|(a, b)| f64::from(a).hypot(f64::from(b)) * self.grid.cell)
+    }
+
+    /// Whether the bit fits at cell `k` clear of the material.
+    fn free(&mut self, k: usize) -> bool {
+        let fits = self.radius - 0.5 * self.grid.cell;
+        self.allowed[k] && self.gap(k).is_none_or(|g| g >= fits)
     }
 
     /// The cells whose middles are under the bit with its centre at `p`.
@@ -392,11 +522,23 @@ impl Work {
         Point::from_angle(by).rotate(heading)
     }
 
-    fn run(&mut self) {
+    /// Clears what is left, from `at` (where the bit is, at depth in cleared space) or, with
+    /// no place, from a new start.
+    fn run(&mut self, mut at: Option<Point>) {
         // ponytail: a cap on the work, should the clearing ever fail to make progress
         let most = self.grid.len() * 4;
-        let mut at: Option<Point> = None;
+        let mut reported = 0.0;
         for _ in 0..most {
+            // the bar: a quarter for the sweeps, the rest as the material goes
+            #[expect(clippy::cast_precision_loss, reason = "a fraction for a progress bar")]
+            let done = 1.0 - self.material_left as f64 / self.material_at_start.max(1) as f64;
+            if done - reported >= 0.005 {
+                reported = done;
+                crate::progress::report(0.25 + 0.75 * done);
+            }
+            if crate::progress::cancelled() {
+                break;
+            }
             let start = match at.and_then(|p| self.next_from(p)) {
                 Some(start) => Some(start),
                 None => self.enter(),
@@ -556,16 +698,12 @@ impl Work {
         clippy::many_single_char_names
     )]
     fn next_from(&mut self, at: Point) -> Option<(Point, Point)> {
-        let near = self.grid.nearest(&self.material);
+        // a new round: what was worked out last time is out of date
+        self.round = self.round.wrapping_add(1).max(1);
         let cell = self.grid.cell;
-        let gap = |k: usize| near[k].map(|(a, b)| f64::from(a).hypot(f64::from(b)) * cell);
-        let fits = self.radius - 0.5 * cell;
-        let free: Vec<bool> = (0..self.grid.len())
-            .map(|k| self.allowed[k] && gap(k).is_none_or(|g| g >= fits))
-            .collect();
         let enough = self.enough();
         let place = |w: &mut Self, k: usize| -> bool {
-            if w.tried[k] || !gap(k).is_some_and(|g| g <= w.radius + w.bite) {
+            if w.tried[k] || !w.gap(k).is_some_and(|g| g <= w.radius + w.bite) {
                 return false;
             }
             // enough material in reach to make a cut worth it: not just a scallop
@@ -577,15 +715,16 @@ impl Work {
         };
         // out through the cleared space, nearest first
         let route = self.grid.index(self.grid.at(at)).and_then(|start| {
-            let mut from = vec![usize::MAX; self.grid.len()];
-            from[start] = start;
+            let round = self.round;
+            self.route_seen[start] = round;
+            self.route_from[start] = start;
             let mut queue = std::collections::VecDeque::from([start]);
             let (nx, ny) = (self.grid.nx, self.grid.ny);
             while let Some(k) = queue.pop_front() {
                 if k != start && place(self, k) {
                     let mut cells = vec![k];
                     while *cells.last().expect("a cell") != start {
-                        cells.push(from[*cells.last().expect("a cell")]);
+                        cells.push(self.route_from[*cells.last().expect("a cell")]);
                     }
                     cells.reverse();
                     return Some(cells);
@@ -604,8 +743,9 @@ impl Work {
                     let (a, b) = (i.wrapping_add_signed(di), j.wrapping_add_signed(dj));
                     if a < nx && b < ny {
                         let n = b * nx + a;
-                        if free[n] && from[n] == usize::MAX {
-                            from[n] = k;
+                        if self.route_seen[n] != round && self.free(n) {
+                            self.route_seen[n] = round;
+                            self.route_from[n] = k;
                             queue.push_back(n);
                         }
                     }
@@ -613,11 +753,11 @@ impl Work {
             }
             None
         });
-        let clear = |a: Point, b: Point| {
+        let clear = |w: &mut Self, a: Point, b: Point| {
             let steps = (a.distance(b) / cell).ceil().max(1.0);
             (1..steps as usize).all(|n| {
                 let p = a.lerp(b, n as f64 / steps);
-                self.grid.index(self.grid.at(p)).is_some_and(|k| free[k])
+                w.grid.index(w.grid.at(p)).is_some_and(|k| w.free(k))
             })
         };
         let (to, piece) = if let Some(cells) = route {
@@ -629,7 +769,7 @@ impl Work {
             let mut i = 0;
             while i + 1 < points.len() {
                 let mut j = points.len() - 1;
-                while j > i + 1 && !clear(points[i], points[j]) {
+                while j > i + 1 && !clear(self, points[i], points[j]) {
                     j -= 1;
                 }
                 way.push(points[j]);
@@ -638,8 +778,9 @@ impl Work {
             (*way.last().expect("a place"), Piece::Link(way))
         } else {
             // nowhere reachable at depth: the nearest place at all
-            let mut spots: Vec<(usize, f64)> = (0..self.grid.len())
-                .filter(|&k| free[k])
+            let free: Vec<usize> = (0..self.grid.len()).filter(|&k| self.free(k)).collect();
+            let mut spots: Vec<(usize, f64)> = free
+                .into_iter()
                 .map(|k| (k, self.grid.centre(k).distance_squared(at)))
                 .collect();
             spots.sort_by(|a, b| a.1.total_cmp(&b.1));
@@ -651,7 +792,7 @@ impl Work {
             (to, Piece::Jump(to))
         };
         let k = self.grid.index(self.grid.at(to)).expect("on the grid");
-        let (a, b) = near[k].expect("material in reach");
+        let (a, b) = self.nearest_material(k).expect("material in reach");
         let towards = Point::new(f64::from(a), f64::from(b)).normalize_or(Point::X);
         // material on the right going climb: heading a quarter turn left of it
         let heading = self.turned(towards, FRAC_PI_2);
@@ -940,6 +1081,118 @@ mod tests {
         );
         let region = centre_region(&[slot]);
         check("slot", &region, &clear(&clearing(&region)));
+    }
+
+    #[test]
+    fn a_narrow_channel_is_swept_end_to_end_in_loops_from_wall_to_wall() {
+        let p = Point::new;
+        // 20 mm wide narrowing to 12 over 100 mm: the bit's centre has 7 to 3 mm either side
+        let taper = Path::polyline(
+            &[p(0.0, 0.0), p(100.0, 4.0), p(100.0, 16.0), p(0.0, 20.0)],
+            true,
+        );
+        let region = centre_region(&[taper]);
+        let pieces = clear(&clearing(&region));
+        check("taper", &region, &pieces);
+        // one cut runs nearly the whole length, without a link or a lift
+        let Some(Piece::Cut(sweep)) = pieces.get(1) else {
+            panic!("no sweep first: {:?}", pieces.first());
+        };
+        let (lo, hi) = sweep.iter().fold((f64::MAX, f64::MIN), |(lo, hi), q| {
+            (lo.min(q.x), hi.max(q.x))
+        });
+        assert!(hi - lo > 80.0, "the sweep runs {lo}..{hi}");
+        // its loops touch both walls: wider where the channel is
+        let across = |x: f64| {
+            let near: Vec<f64> = sweep
+                .iter()
+                .filter(|q| (q.x - x).abs() < 1.0)
+                .map(|q| q.y)
+                .collect();
+            near.iter().copied().fold(f64::MIN, f64::max)
+                - near.iter().copied().fold(f64::MAX, f64::min)
+        };
+        assert!(
+            across(15.0) > 2.0 * 6.0,
+            "{} across near the wide end",
+            across(15.0)
+        );
+        assert!(across(85.0) < across(15.0), "loops shrink where it narrows");
+    }
+
+    #[test]
+    fn the_sweeps_loops_reach_wall_to_wall_turning_the_cut_direction() {
+        let p = Point::new;
+        let slot = Path::polyline(
+            &[p(0.0, 0.0), p(80.0, 0.0), p(80.0, 12.0), p(0.0, 12.0)],
+            true,
+        );
+        let region = centre_region(&[slot]);
+        for climb in [true, false] {
+            let c = Clearing {
+                climb,
+                ..clearing(&region)
+            };
+            let pieces = clear(&c);
+            let Some(Piece::Cut(sweep)) = pieces.get(1) else {
+                panic!("no sweep");
+            };
+            // the slot's middle line is y = 6, its loops reach 3 mm either side of it: wall to
+            // wall, never past
+            let loops: Vec<&Point> = sweep.iter().filter(|q| q.x > 20.0 && q.x < 60.0).collect();
+            assert!(loops.len() > 100);
+            for q in &loops {
+                assert!((q.y - 6.0).abs() <= 3.0 + 1e-6, "{q} off the loops");
+            }
+            // D-shaped: straight back across, shorter than a whole circle each loop
+            let along: f64 = sweep
+                .windows(2)
+                .filter(|w| w[0].x > 20.0 && w[1].x < 60.0)
+                .map(|w| w[0].distance(w[1]))
+                .sum();
+            let circles = 40.0 / BITE * TAU * 3.0;
+            assert!(
+                along < 0.92 * circles,
+                "{along} mm against {circles} in circles"
+            );
+            // turning anticlockwise to climb: z of each turn's cross product is positive
+            let turning: f64 = sweep
+                .windows(3)
+                .map(|w| (w[1] - w[0]).perp_dot(w[2] - w[1]))
+                .sum();
+            assert_eq!(turning > 0.0, climb, "climb {climb} turns {turning}");
+        }
+    }
+
+    #[test]
+    fn it_says_which_step_it_is_on_and_that_some_take_longer() {
+        let p = Point::new;
+        let slot = Path::polyline(
+            &[p(0.0, 0.0), p(80.0, 0.0), p(80.0, 12.0), p(0.0, 12.0)],
+            true,
+        );
+        let region = centre_region(&[slot]);
+        let progress = crate::progress::Progress::new();
+        let pieces = progress.track(|| clear(&clearing(&region)));
+        assert_ne!(pieces, vec![]);
+        assert_eq!(progress.stage(), "Adaptive: clearing the wider areas");
+        assert!(
+            progress.note().contains("take longer"),
+            "{}",
+            progress.note()
+        );
+        let done = progress.fraction().unwrap_or(0.0);
+        assert!(done > 0.9, "the bar got to {done}");
+        // asked to stop, it stops where it is
+        let stopped = crate::progress::Progress::new();
+        stopped.cancel();
+        let few = stopped.track(|| clear(&clearing(&region)));
+        assert!(
+            few.len() < pieces.len(),
+            "{} of {}",
+            few.len(),
+            pieces.len()
+        );
     }
 
     #[test]

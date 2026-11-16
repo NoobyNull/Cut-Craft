@@ -1,6 +1,6 @@
 [package]
 name = "cmd-materials"
-description = "Materials"
+description = "Preview Colors"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true

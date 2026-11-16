@@ -1,5 +1,6 @@
 //! Fit Curves to Vectors: the selected vectors redrawn as circular arcs, Béziers or straight
-//! lines within a tolerance, replacing them or added beside them on the current layer.
+//! lines within a tolerance, replacing them on their own layer or added beside them on the
+//! current layer.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::trace::{self, Fit};
@@ -35,6 +36,7 @@ pub struct Params {
     pub keep_sharp_corners: bool,
     /// With Keep Sharp Corners ticked: corners turning more than this stay sharp
     #[schemars(title = "Max. angle", extend("x-unit" = "deg"), range(min = 0, max = 180))]
+    #[schemars(extend("x-show-when" = {"keep_sharp_corners": "true"}))]
     pub max_angle: f64,
     /// Delete the originals; otherwise the fitted vectors are added beside them
     pub replace_selected_vectors: bool,

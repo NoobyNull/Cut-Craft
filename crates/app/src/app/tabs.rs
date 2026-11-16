@@ -27,6 +27,10 @@ pub(super) struct Stock {
     pub units: Units,
     /// The active machine's bed size, mm (0 when not known), for flattening the spoilboard.
     pub bed: [f64; 2],
+    /// The job's Clearing Settings, said in the Cutting window.
+    pub clearing: cut_craft_core::entry::ClearingSettings,
+    /// With tabs placed by hand, how many of the shapes cut out got no tab.
+    pub untabbed: usize,
 }
 
 /// How close to the material's bottom a cut must reach to count as right through, mm.
@@ -46,6 +50,16 @@ pub(super) fn cuts_loose(params: &serde_json::Value, stock: Stock) -> bool {
     let through = stock.thickness > 0.0 && depth + THROUGH >= stock.thickness;
     let closed = side != "on" || stock.closed;
     through && closed && !cut_craft_core::checks::held_by_tabs(params)
+}
+
+/// Whether a Profile Toolpath form's `params` cut right through `stock`.
+fn through(params: &serde_json::Value, stock: Stock) -> bool {
+    let depth = if params["through"] == true {
+        stock.thickness
+    } else {
+        params["depth"].as_f64().unwrap_or_default()
+    };
+    stock.thickness > 0.0 && depth + THROUGH >= stock.thickness
 }
 
 /// The words over Add Tabs when a profile would cut its piece loose.
@@ -90,7 +104,7 @@ pub(super) fn summary(
     );
     let spread = match tab.spacing {
         TabSpacing::Automatic => format!(
-            "about one every {}, at least 3 a shape",
+            "about one every {}, 3 or more a shape (fewer if small)",
             shown(tab.distance, units)
         ),
         TabSpacing::ConstantNumber => format!("{} a shape", tab.number),
@@ -129,6 +143,27 @@ pub(super) fn group_end(
         changed = true;
     }
     if group == "Tabs" {
+        if stock.untabbed > 0 && !cuts_loose(params, stock) && through(params, stock) {
+            ui.colored_label(
+                ui.visuals().warn_fg_color,
+                format!(
+                    "{} of the shapes this cuts out {} no tab, so {} loose. Each tab \
+                     you click goes on the shape nearest it: click on {} in Edit Tabs.",
+                    stock.untabbed,
+                    if stock.untabbed == 1 { "has" } else { "have" },
+                    if stock.untabbed == 1 {
+                        "it comes"
+                    } else {
+                        "they come"
+                    },
+                    if stock.untabbed == 1 {
+                        "it"
+                    } else {
+                        "each one"
+                    },
+                ),
+            );
+        }
         if cuts_loose(params, stock) {
             ui.colored_label(ui.visuals().warn_fg_color, LOOSE);
             if ui
@@ -151,7 +186,7 @@ pub(super) fn group_end(
             ui.data_mut(|d| d.insert_temp(window_id(), true));
         }
     }
-    changed |= super::cutting::group_end(ui, group, params, stock.units);
+    changed |= super::cutting::group_end(ui, group, params, stock.units, &stock.clearing);
     changed |= super::entry::group_end(ui, group, params, stock.units);
     changed | super::surfacing::group_end(ui, group, params, stock)
 }
@@ -188,11 +223,16 @@ impl CutCraftApp {
                             .button("Add Tabs")
                             .on_hover_hint(
                                 "Put the tabs on the selected vectors, as set above, to move \
-                                 by hand",
+                                 by hand (select the vectors first: with none selected, \
+                                 nothing changes)",
                             )
                             .clicked();
                         clear = ui
                             .add_enabled(placed > 0, egui::Button::new("Delete All Tabs"))
+                            .on_hover_hint(
+                                "Take every tab off; they stay placed by hand, so click the \
+                                 vectors to put new ones on",
+                            )
                             .clicked();
                     });
                     ui.label(format!("{placed} tabs placed"));
@@ -207,29 +247,37 @@ impl CutCraftApp {
             if spread.spacing == TabSpacing::Placed {
                 spread.spacing = TabSpacing::ConstantNumber;
             }
-            if add || clear {
+            // tabs added are placed, to move by hand, and turn tabs on; with nothing selected
+            // none are added and the settings stay as they were
+            let on = if tabs == Tabs::None { Tabs::Flat } else { tabs };
+            if add && self.add_tabs(on, spread, tool.diameter) {
                 tab.spacing = TabSpacing::Placed;
-                if tabs == Tabs::None {
-                    tabs = Tabs::Flat;
-                }
+                tabs = on;
             }
+            let Some(form) = self.form.as_mut() else {
+                return;
+            };
+            let params = &mut form.params;
             params["tabs"] = serde_json::to_value(tabs).expect("tabs serialise");
             params["tab"] = serde_json::to_value(tab).expect("tab settings serialise");
             form.dirty |= before != (params["tabs"].clone(), params["tab"].clone());
             if clear {
+                // still placed by hand, on or off as they were: say how to place more
                 params["tab_points"] = serde_json::json!([]);
                 form.dirty = true;
-            }
-            if add {
-                self.add_tabs(tabs, spread, tool.diameter);
+                self.status.set_message(
+                    "All tabs deleted: click the vectors in the 2D view to place new ones, or \
+                     pick another spacing",
+                );
             }
         }
         ui.data_mut(|d| d.insert_temp(id, open));
     }
 
     /// Tabs spread on each selected vector by `tab`'s number or distance (by number when it
-    /// was set to be placed by hand) and placement, in place of those placed before.
-    fn add_tabs(&mut self, tabs: Tabs, tab: TabSettings, tool_diameter: f64) {
+    /// was set to be placed by hand) and placement, in place of those placed before. Whether
+    /// any were added (none with nothing selected).
+    fn add_tabs(&mut self, tabs: Tabs, tab: TabSettings, tool_diameter: f64) -> bool {
         let entry = Entry {
             tabs,
             tab,
@@ -252,7 +300,7 @@ impl CutCraftApp {
         if points.is_empty() {
             self.status
                 .set_message("select the vectors to put the tabs on");
-            return;
+            return false;
         }
         self.status
             .set_message(&format!("{} tabs added", points.len()));
@@ -260,6 +308,7 @@ impl CutCraftApp {
             form.params["tab_points"] = serde_json::json!(points);
             form.dirty = true;
         }
+        true
     }
 }
 
@@ -301,8 +350,8 @@ fn settings(
     ui.label("How many, and where");
     ui.radio_value(&mut tab.spacing, TabSpacing::Automatic, "Automatic")
         .on_hover_hint(
-            "About one every distance below, at least 3 on a shape, and never more than a \
-             third of it in tabs: a safe start",
+            "About one every distance below, 3 or more on a shape, but never more than a \
+             third of it in tabs, so a small shape gets fewer (1 or 2): a safe start",
         );
     egui::Grid::new("tab_spread").num_columns(2).show(ui, |ui| {
         ui.radio_value(&mut tab.spacing, TabSpacing::ConstantNumber, "Number")

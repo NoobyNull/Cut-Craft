@@ -31,9 +31,11 @@ pub enum CutKind {
 /// inside the grid where column + row is odd.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Cut {
-    /// Which crossing across, counted in half cells from the left
+    /// Which crossing across, counted in half cells from the left; column and row must add
+    /// up to an odd number, as at column 1, row 2
     pub column: i32,
-    /// Which crossing up, counted in half cells from the bottom
+    /// Which crossing up, counted in half cells from the bottom; column and row must add up
+    /// to an odd number, as at column 1, row 2
     pub row: i32,
     /// Which way the strands turn back at this crossing
     #[schemars(extend("x-widget" = "row"))]
@@ -79,7 +81,7 @@ fn loops(p: &Params) -> Vec<Vec<At>> {
     // strands pass the lattice points where x + y is odd: crossings inside the grid, bounce
     // points on its edge (never its corners)
     let on_grid = |(x, y): At| (0..=w).contains(&x) && (0..=h).contains(&y);
-    let crossing = |(x, y): At| (1..w).contains(&x) && (1..h).contains(&y) && (x + y) % 2 == 1;
+    let crossing = |at: At| is_crossing(p, at);
     let cut_at = |(x, y): At| {
         p.cuts
             .iter()
@@ -196,8 +198,47 @@ impl Command for CelticWeave {
             ids.push(c.add(Path::polyline(&profile, false)));
         }
         c.select(ids);
+        if let Some(note) = cuts_off_crossings(p) {
+            c.note(note);
+        }
         Ok(c.finish())
     }
+}
+
+/// Whether `(x, y)`, in half cells, is a crossing of the knot grid `p`: inside it, with
+/// x + y odd.
+fn is_crossing(p: &Params, (x, y): At) -> bool {
+    (1..2 * p.columns).contains(&x) && (1..2 * p.rows).contains(&y) && (x + y) % 2 == 1
+}
+
+/// What to say about the cuts that are not on a crossing, so do nothing.
+fn cuts_off_crossings(p: &Params) -> Option<String> {
+    let off: Vec<String> = (1..)
+        .zip(&p.cuts)
+        .filter(|(_, c)| !is_crossing(p, (c.column, c.row)))
+        .map(|(n, _)| n.to_string())
+        .collect();
+    let (last, rest) = off.split_last()?;
+    let which = if rest.is_empty() {
+        format!("Cut {last} is not on a crossing, so it does nothing")
+    } else {
+        format!(
+            "Cuts {} and {last} are not on a crossing, so they do nothing",
+            rest.join(", ")
+        )
+    };
+    let first = (1..2 * p.columns)
+        .flat_map(|x| (1..2 * p.rows).map(move |y| (x, y)))
+        .find(|&at| is_crossing(p, at));
+    Some(match first {
+        Some((x, y)) => format!(
+            "{which}: a crossing's column and row are inside the grid (1 to {} across, 1 to \
+             {} up) and add up to an odd number, such as column {x}, row {y}",
+            2 * p.columns - 1,
+            2 * p.rows - 1
+        ),
+        None => format!("{which}: a one-cell grid has no crossings. Give it more cells"),
+    })
 }
 
 #[cfg(test)]
@@ -223,6 +264,37 @@ mod tests {
     }
 
     cut_craft_core::contract_tests!(CelticWeave);
+
+    #[test]
+    fn a_cut_off_the_crossings_is_named_in_red() {
+        let p = Params {
+            cuts: vec![
+                Cut::default(),
+                Cut {
+                    column: 1,
+                    row: 2,
+                    cut: CutKind::Vertical,
+                },
+                Cut {
+                    column: 9,
+                    row: 2,
+                    cut: CutKind::Vertical,
+                },
+            ],
+            ..Params::default()
+        };
+        let change = CelticWeave::run(&Document::default(), &p).unwrap();
+        assert_eq!(change.notes.len(), 1, "{:?}", change.notes);
+        let note = &change.notes[0];
+        assert!(note.contains("Cuts 1 and 3"), "{note}");
+        assert!(note.contains("column 1, row 2"), "{note}");
+        let fine = Params {
+            cuts: vec![p.cuts[1]],
+            ..Params::default()
+        };
+        let change = CelticWeave::run(&Document::default(), &fine).unwrap();
+        assert_eq!(change.notes, Vec::<String>::new());
+    }
 
     #[test]
     fn every_crossing_is_passed_twice() {

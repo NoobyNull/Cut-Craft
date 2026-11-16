@@ -2,10 +2,11 @@
 //! program) read back as toolpaths, one for each tool it uses, to preview, check and save
 //! again through another post.
 //!
-//! Read: G0 / G1 / G2 / G3 (arcs in the XY plane, by I J centre or R radius), G20 / G21,
-//! G90 / G91, F, S and T with M6. Comments in brackets or after `;` and line numbers are
+//! Read: G0 / G1 / G2 / G3 (arcs by centre or R radius, in the plane G17 / G18 / G19 picks:
+//! XY by I J, XZ by I K, YZ by J K), G20 / G21, G90 / G91, F, S and T with M6. Comments in brackets or after `;` and line numbers are
 //! passed over. Drilling cycles (G81 to G89) are refused with a message, as reading them
-//! wrongly would show holes where none are cut.
+//! wrongly would show holes where none are cut. Rotary axis words (A, B, C) are left out
+//! with a note, so a rotary file is read flat.
 
 use cut_craft_core::document::{Document, Job, ZZero};
 use cut_craft_core::glam::DVec3;
@@ -21,10 +22,19 @@ pub struct Params {
     /// The toolpath's name; with more than one tool in the file, each is named after it and
     /// its tool number
     pub name: String,
-    /// The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt)
+    /// The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt). Straight moves and arcs are
+    /// read, arcs in the XY plane and the upright XZ and YZ ones too (G17, G18, G19); a
+    /// drilling cycle is not. Rotary-axis turns (A, B, C) are left out, with a note in red,
+    /// so a rotary file shows and saves flat
     pub file: String,
     /// The tool the file cuts with: its shape and size draw the preview; the file's own
-    /// feed rate, spindle speed and tool number are used where it gives them
+    /// feed rate (from its first cutting move), plunge rate (from its first straight-down
+    /// plunge), spindle speed and tool number are used where it gives them. A toolpath keeps
+    /// one of each, so a file that cuts at a second feed rate, plunges at a second one or
+    /// changes the spindle speed with one tool is noted in red, as saving it again writes
+    /// every move at those. With more than
+    /// one tool in the file each part's tool is named after its number (`6 mm End Mill (T3
+    /// in the file)`), so saving it again still changes tools between them
     pub tool: Tool,
     /// Which tool's part of the file, counting from 1 in the order they come (0: every
     /// part, a toolpath each)
@@ -77,8 +87,20 @@ impl Command for ImportToolpaths {
             if let Some(number) = part.tool {
                 tool.number = number;
             }
+            // the posts change tools when the name changes: each of the file's tools gets
+            // its own, or a file's T1 and T3 would be saved as one tool, with no change
+            // between them
+            if several {
+                tool.name = match part.tool {
+                    Some(t) => format!("{} (T{t} in the file)", p.tool.name),
+                    None => format!("{} (tool {n} in the file)", p.tool.name),
+                };
+            }
             if let Some(feed) = part.feed {
                 tool.feed_rate = feed;
+            }
+            if let Some(plunge) = part.plunge {
+                tool.plunge_rate = plunge;
             }
             if let Some(speed) = part.spindle {
                 tool.spindle_speed = speed;
@@ -93,6 +115,9 @@ impl Command for ImportToolpaths {
                 part: n,
                 ..p.clone()
             };
+            for note in [part.flattened(), part.rotary_note()].into_iter().flatten() {
+                c.note(format!("{name}: {note}"));
+            }
             c.add_toolpath(made_by::<Self>(&own, name, tool, vec![], part.moves));
             made += 1;
         }
@@ -111,10 +136,118 @@ impl Command for ImportToolpaths {
 pub struct Part {
     /// Its `T` number, if the file gives one.
     pub tool: Option<u32>,
-    /// The first feed rate given, mm/min.
+    /// The feed rate of its first cutting move (sideways, or down at a slant), mm/min.
     pub feed: Option<f64>,
+    /// The feed rate of its first straight-down plunge, mm/min.
+    pub plunge: Option<f64>,
+    /// The first spindle speed given, rpm.
     pub spindle: Option<f64>,
     pub moves: Vec<Move>,
+    /// Every feed rate its straight-down plunges are made at, each once, mm/min.
+    pub plunge_feeds: Vec<f64>,
+    /// Every feed rate its other feed moves (the cuts) are made at, each once, mm/min.
+    pub cut_feeds: Vec<f64>,
+    /// Every spindle speed given with it, each once, rpm.
+    pub speeds: Vec<f64>,
+    /// The rotary axes (A, B, C) its lines turn, each once: not read, so its moves are flat.
+    pub rotary: Vec<char>,
+}
+
+impl Part {
+    /// What is lost when this part becomes one toolpath, which keeps one feed rate, one
+    /// plunge rate and one spindle speed: `None` when the file gives no more than that.
+    #[must_use]
+    pub fn flattened(&self) -> Option<String> {
+        let list = |values: &[f64]| {
+            values
+                .iter()
+                .map(|v| format!("{}", (v * 10.0).round() / 10.0))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let mut dropped = vec![];
+        // one of each is kept: a second plunge feed or cutting feed is lost
+        for (feeds, what) in [(&self.cut_feeds, "cutting"), (&self.plunge_feeds, "plunge")] {
+            if feeds.len() > 1 {
+                dropped.push(format!(
+                    "{} {what} feed rates ({} mm/min)",
+                    feeds.len(),
+                    list(feeds)
+                ));
+            }
+        }
+        if self.speeds.len() > 1 {
+            dropped.push(format!(
+                "{} spindle speeds ({} rpm)",
+                self.speeds.len(),
+                list(&self.speeds)
+            ));
+        }
+        if dropped.is_empty() {
+            return None;
+        }
+        let or_form = |v: Option<f64>| v.map_or("the tool's own".to_owned(), |v| list(&[v]));
+        Some(format!(
+            "the file uses {} with this tool, but a toolpath keeps one feed rate ({}), one \
+             plunge rate ({}) and one spindle speed ({}), so Save Toolpaths writes every move \
+             at those. Check them in the toolpath's tool before saving it again",
+            dropped.join(" and "),
+            or_form(self.feed),
+            or_form(self.plunge),
+            or_form(self.spindle),
+        ))
+    }
+}
+
+impl Part {
+    /// What is left out when the file turns a rotary axis: `None` when it turns none.
+    #[must_use]
+    pub fn rotary_note(&self) -> Option<String> {
+        let axes: Vec<String> = self.rotary.iter().map(char::to_string).collect();
+        let (last, rest) = axes.split_last()?;
+        let named = if rest.is_empty() {
+            last.clone()
+        } else {
+            format!("{} and {last}", rest.join(", "))
+        };
+        Some(format!(
+            "the file turns the rotary axis {named}, which Import Toolpaths cannot read yet: \
+             its turns are left out, so the preview is flat and saving it again would cut it \
+             flat. Make rotary toolpaths in Cut Craft from the drawing instead"
+        ))
+    }
+
+    /// A rotary axis, `letter`, turned with this tool.
+    fn turns(&mut self, letter: char) {
+        if !self.rotary.contains(&letter) {
+            self.rotary.push(letter);
+        }
+    }
+
+    /// A spindle speed, `rpm`, given with this tool.
+    fn spun_at(&mut self, rpm: f64) {
+        self.spindle.get_or_insert(rpm);
+        add_once(&mut self.speeds, rpm);
+    }
+
+    /// `made`, a feed move, made at `f` mm/min: its plunge rate if it goes straight down,
+    /// else its feed rate, unless one was found before.
+    fn fed_at(&mut self, f: f64, made: &[Move]) {
+        if made.iter().all(|m| m.kind == MoveKind::Plunge) {
+            self.plunge.get_or_insert(f);
+            add_once(&mut self.plunge_feeds, f);
+        } else {
+            self.feed.get_or_insert(f);
+            add_once(&mut self.cut_feeds, f);
+        }
+    }
+}
+
+/// `values` with `v` added, unless it is there already.
+fn add_once(values: &mut Vec<f64>, v: f64) {
+    if !values.iter().any(|&w| (w - v).abs() < 1e-6) {
+        values.push(v);
+    }
 }
 
 /// How far an arc's chords may stray from it, mm.
@@ -138,9 +271,12 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
     // the machine's position, in the file's coordinates converted to mm
     let mut at = DVec3::new(home.x, home.y, job.machine_z(home.z));
     let (mut scale, mut absolute, mut motion) = (1.0, true, None::<u32>);
+    let mut plane = Plane::Xy;
     let mut parts = vec![Part::default()];
     // a T picks the next tool; the change itself comes with M6, on its line or later
     let mut next_tool = None;
+    // the feed rate in force (F is modal), mm/min
+    let mut rate = None::<f64>;
     for (line_number, raw) in (1usize..).zip(text.lines()) {
         let words = words(raw).map_err(|e| format!("line {line_number}: {e}"))?;
         // a post that changes tools by hand names the next tool in a comment, then pauses
@@ -161,6 +297,9 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
                     let code = (v * 10.0).round() as i64;
                     match code {
                         0 | 10 | 20 | 30 => motion = Some(u32::try_from(code / 10).unwrap_or(0)),
+                        170 => plane = Plane::Xy,
+                        180 => plane = Plane::Xz,
+                        190 => plane = Plane::Yz,
                         200 => scale = MM_PER_INCH,
                         210 => scale = 1.0,
                         900 => absolute = true,
@@ -189,13 +328,9 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
                         first.tool = Some(v.round() as u32);
                     }
                 }
-                'F' => {
-                    let part = parts.last_mut().expect("a part");
-                    part.feed.get_or_insert(v * scale);
-                }
-                'S' => {
-                    parts.last_mut().expect("a part").spindle.get_or_insert(v);
-                }
+                'F' => rate = Some(v * scale),
+                'A' | 'B' | 'C' => parts.last_mut().expect("a part").turns(letter),
+                'S' => parts.last_mut().expect("a part").spun_at(v),
                 _ => {}
             }
         }
@@ -212,9 +347,12 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
             continue;
         };
         let to = DVec3::new(axis('X', at.x), axis('Y', at.y), axis('Z', at.z));
-        let made = moves_to(at, to, kind, &value, scale)
+        let made = moves_to(at, to, kind, plane, &value, scale)
             .map_err(|e| format!("line {line_number}: {e}"))?;
         let part = parts.last_mut().expect("a part");
+        if let Some(f) = rate.filter(|_| kind != 0 && to != at) {
+            part.fed_at(f, &made);
+        }
         part.moves.extend(made.into_iter().map(|mut m| {
             m.to.z -= bed;
             m
@@ -228,12 +366,52 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
     Ok(parts)
 }
 
-/// The moves of one G0 to G3 (`kind` 0 to 3) from `at` to `to`, an arc's in chords; the
-/// line's words are read by `value` in the file's units, `scale` mm each.
+/// The plane arcs are cut in (G17, G18, G19).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Plane {
+    Xy,
+    Xz,
+    Yz,
+}
+
+impl Plane {
+    /// `p` with the plane's two axes first and the one it turns round last, the pair in the
+    /// order that makes "clockwise" the same seen from that axis's plus end as in XY: Z X
+    /// for G18, Y Z for G19.
+    fn flat(self, p: DVec3) -> DVec3 {
+        match self {
+            Self::Xy => p,
+            Self::Xz => DVec3::new(p.z, p.x, p.y),
+            Self::Yz => DVec3::new(p.y, p.z, p.x),
+        }
+    }
+
+    /// `flat` undone.
+    fn back(self, p: DVec3) -> DVec3 {
+        match self {
+            Self::Xy => p,
+            Self::Xz => DVec3::new(p.y, p.z, p.x),
+            Self::Yz => DVec3::new(p.z, p.x, p.y),
+        }
+    }
+
+    /// The letters giving an arc's centre, in `flat`'s order.
+    fn centre_letters(self) -> (char, char) {
+        match self {
+            Self::Xy => ('I', 'J'),
+            Self::Xz => ('K', 'I'),
+            Self::Yz => ('J', 'K'),
+        }
+    }
+}
+
+/// The moves of one G0 to G3 (`kind` 0 to 3) from `at` to `to`, an arc's in chords in
+/// `plane`; the line's words are read by `value` in the file's units, `scale` mm each.
 fn moves_to(
     at: DVec3,
     to: DVec3,
     kind: u32,
+    plane: Plane,
     value: &impl Fn(char) -> Option<f64>,
     scale: f64,
 ) -> Result<Vec<Move>, String> {
@@ -250,20 +428,24 @@ fn moves_to(
         }
         _ => {
             let clockwise = kind == 2;
-            let centre = match (value('I'), value('J'), value('R')) {
-                (None, None, Some(radius)) => centre_from_radius(at, to, radius * scale, clockwise)
-                    .ok_or("an arc's radius is too small to reach its end")?,
+            let (from, end) = (plane.flat(at), plane.flat(to));
+            let (u, v) = plane.centre_letters();
+            let centre = match (value(u), value(v), value('R')) {
+                (None, None, Some(radius)) => {
+                    centre_from_radius(from, end, radius * scale, clockwise)
+                        .ok_or("an arc's radius is too small to reach its end")?
+                }
                 (i, j, _) => DVec3::new(
-                    at.x + i.unwrap_or(0.0) * scale,
-                    at.y + j.unwrap_or(0.0) * scale,
+                    from.x + i.unwrap_or(0.0) * scale,
+                    from.y + j.unwrap_or(0.0) * scale,
                     0.0,
                 ),
             };
-            arc(at, to, centre, clockwise)
+            arc(from, end, centre, clockwise)
                 .into_iter()
                 .map(|p| Move {
                     kind: MoveKind::Cut,
-                    to: p,
+                    to: plane.back(p),
                 })
                 .collect()
         }
@@ -523,13 +705,98 @@ mod tests {
     }
 
     #[test]
+    fn the_plunge_feed_and_the_cutting_feed_are_read_apart() {
+        // as most posts write it: the plunge's feed first, then the cutting feed
+        let text = "G0 X0 Y0 Z5\nG1 Z-1 F762\nG1 X10 F2540\nY10\nG0 Z5\nX20\nG1 Z-1 F762\n";
+        let p = &parse(text, &job()).unwrap()[0];
+        assert_eq!(p.plunge, Some(762.0));
+        assert_eq!(p.feed, Some(2540.0));
+        assert!(p.flattened().is_none(), "two feeds and a plunge are kept");
+    }
+
+    #[test]
+    fn more_feeds_or_speeds_than_a_toolpath_keeps_are_counted() {
+        let text = "S12000 M3\nG0 X0 Y0 Z5\nG1 Z-1 F500\nG1 X10 F2000\nG1 X20 F1000\n\
+                    S16000\nG1 X30\n";
+        let p = &parse(text, &job()).unwrap()[0];
+        assert_eq!(
+            (p.feed, p.plunge, p.spindle),
+            (Some(2000.0), Some(500.0), Some(12000.0))
+        );
+        let note = p.flattened().unwrap();
+        assert!(note.contains("2000"), "{note}");
+        assert!(note.contains("12000"), "{note}");
+    }
+
+    #[test]
+    fn a_second_cutting_feed_or_plunge_feed_is_noted_even_with_two_feeds_in_all() {
+        // the plunge and the first cut share a feed; a later cut is faster
+        let text = "G0 X0 Y0 Z5\nG1 Z-1 F1000\nG1 X10\nG1 X20 F2000\n";
+        let p = &parse(text, &job()).unwrap()[0];
+        let note = p.flattened().expect("the F2000 cut is noted");
+        assert!(note.contains("2 cutting feed rates (1000, 2000"), "{note}");
+        // plunges at 500, then later at 2000, the cutting feed too
+        let text = "G0 X0 Y0 Z5\nG1 Z-1 F500\nG1 X10 F2000\nG0 Z5\nX20\nG1 Z-1 F2000\n";
+        let p = &parse(text, &job()).unwrap()[0];
+        let note = p.flattened().expect("the second plunge feed is noted");
+        assert!(note.contains("2 plunge feed rates (500, 2000"), "{note}");
+    }
+
+    #[test]
+    fn arcs_in_the_xz_and_yz_planes_stay_in_them() {
+        // G18: an arc in XZ by I and K, round Y; G3 seen from +Y goes down from +x to -x
+        let xz = &parse("G0 X10 Y0 Z0\nG18 G3 X-10 Z0 I-10 K0\n", &job()).unwrap()[0].moves;
+        assert!(xz.len() > 10);
+        for m in &xz[1..] {
+            assert!(m.to.y.abs() < 1e-9, "stays in XZ: {}", m.to);
+            assert!((m.to.x.hypot(m.to.z) - 10.0).abs() < 0.02, "{}", m.to);
+            assert!(m.to.z <= 1e-9, "{}", m.to);
+        }
+        assert!(xz.iter().any(|m| m.to.z < -9.9), "{xz:?}");
+        // G19: in YZ by J and K, round X; by radius too
+        for text in [
+            "G0 X0 Y10 Z0\nG19 G2 Y-10 Z0 J-10 K0\n",
+            "G0 X0 Y10 Z0\nG19 G2 Y-10 Z0 R10\n",
+        ] {
+            let yz = &parse(text, &job()).unwrap()[0].moves;
+            for m in &yz[1..] {
+                assert!(m.to.x.abs() < 1e-9, "{text}: stays in YZ: {}", m.to);
+                assert!(
+                    (m.to.y.hypot(m.to.z) - 10.0).abs() < 0.02,
+                    "{text}: {}",
+                    m.to
+                );
+            }
+            assert!(yz.iter().any(|m| m.to.z.abs() > 9.9), "{text}: {yz:?}");
+        }
+        // and G17 brings XY back
+        let back = &parse("G18\nG17\nG0 X10 Y0 Z0\nG3 X-10 Y0 I-10 J0\n", &job()).unwrap()[0];
+        assert!(back.moves.iter().all(|m| m.to.z.abs() < 1e-9));
+    }
+
+    #[test]
+    fn a_rotary_file_is_read_flat_and_says_so() {
+        let text = "G0 X0 Y0 Z5\nG1 Z-1 F500\nG1 A90\nG1 X10 A45\nG1 B10\n";
+        let parts = parse(text, &job()).unwrap();
+        assert_eq!(parts[0].rotary, ['A', 'B']);
+        let note = parts[0].rotary_note().unwrap();
+        assert!(note.contains("A and B"), "{note}");
+        assert!(note.contains("flat"), "{note}");
+        let flat = parse("G0 X0 Y0 Z5\nG1 Z-1\n", &job()).unwrap();
+        assert!(flat[0].rotary_note().is_none());
+    }
+
+    #[test]
     fn each_tool_change_starts_a_part() {
-        let text = "T1 M6\nS18000 M3\nG0 X0 Y0 Z5\nG1 Z-1 F500\nT2\nM6\nG0 X5 Y5\nG1 Z-1 F800\n";
+        let text = "T1 M6\nS18000 M3\nG0 X0 Y0 Z5\nG1 Z-1 F500\nT2\nM6\nG0 X5 Y5 Z5\nG1 Z-1 F800\n";
         let parts = parse(text, &job()).unwrap();
         assert_eq!(parts.len(), 2);
         assert_eq!((parts[0].tool, parts[1].tool), (Some(1), Some(2)));
         assert_eq!(parts[0].spindle, Some(18000.0));
-        assert_eq!((parts[0].feed, parts[1].feed), (Some(500.0), Some(800.0)));
+        assert_eq!(
+            (parts[0].plunge, parts[1].plunge),
+            (Some(500.0), Some(800.0))
+        );
     }
 
     #[test]
@@ -555,6 +822,30 @@ mod tests {
                 .unwrap_err()
                 .contains("no moves")
         );
+    }
+
+    #[test]
+    fn running_it_sets_the_tools_feed_and_plunge_and_notes_what_it_flattens() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-import-fd-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("rates.nc");
+        std::fs::write(&file, "G0 X0 Y0 Z5\nG1 Z-1 F700\nG1 X10 F2500\nX20 F1200\n").unwrap();
+        let p = Params {
+            file: file.display().to_string(),
+            ..Params::default()
+        };
+        let change = ImportToolpaths::run(&Document::default(), &p).unwrap();
+        let mut after = Document::default();
+        after.apply(&change).unwrap();
+        let tp = after.toolpaths.values().next().unwrap();
+        assert_eq!((tp.tool.feed_rate, tp.tool.plunge_rate), (2500.0, 700.0));
+        assert_eq!(change.notes.len(), 1, "{:?}", change.notes);
+        assert!(
+            change.notes[0].contains("2 cutting feed rates (2500, 1200"),
+            "{:?}",
+            change.notes
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -585,6 +876,17 @@ mod tests {
             .find(|t| t.name == "sign T3")
             .unwrap();
         assert_eq!(t3.tool.number, 3);
+        // each tool its own, so Save Toolpaths changes tools between them
+        let t1 = after
+            .toolpaths
+            .values()
+            .find(|t| t.name == "sign T1")
+            .unwrap();
+        assert_ne!(
+            t1.tool.name, t3.tool.name,
+            "a tool change between the parts"
+        );
+        assert!(t3.tool.name.contains("T3"), "{}", t3.tool.name);
         assert_eq!(
             t3.params["part"], 2,
             "recalculating reads its own part again"

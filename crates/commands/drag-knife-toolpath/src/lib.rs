@@ -61,7 +61,8 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm", "x-dim" = "L"), range(min = 0))]
     #[schemars(extend("x-group" = "Knife"))]
     pub overshoot: f64,
-    /// Equal passes down to the cut depth
+    /// Equal passes down to the cut depth; each pass swivels at its own share of the swivel
+    /// depth, so it never presses deeper turning a corner than it cuts
     #[schemars(range(min = 1))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     pub passes: u32,
@@ -249,7 +250,10 @@ impl Params {
         facing: Point,
     ) -> (Point, Vec<Move>) {
         let (cut, safe) = (how.cut, how.safe);
-        let lift = how.top - self.swivel_depth();
+        // an early pass of several presses only its share of the way down, so it swivels
+        // only the same share of the swivel depth: never deeper than it cuts
+        let portion = ((how.top - cut) / self.cut_depth()).clamp(0.0, 1.0);
+        let lift = how.top - self.swivel_depth() * portion;
         let off = self.blade_offset;
         let tolerance = self.tolerance_angle.to_radians();
         let sharp = self.sharp_angle.to_radians();
@@ -557,6 +561,34 @@ mod tests {
         assert!(
             depths.iter().any(|z| (z + 1.0).abs() < 1e-9)
                 && depths.iter().any(|z| (z + 3.0).abs() < 1e-9)
+        );
+    }
+
+    #[test]
+    fn each_pass_swivels_no_deeper_than_it_cuts() {
+        // 2 mm travel at 50%: 1 mm deep in five passes of 0.2 mm; swivelling at 12.5%
+        let p = Params {
+            passes: 5,
+            ..Params::default()
+        };
+        let t = cut(vec![square(0.0, 0.0, 10.0)], &p);
+        let pass_level = |z: f64| (1..=5).any(|k| (z + 0.2 * f64::from(k)).abs() < 1e-9);
+        let mut deepest = 0.0;
+        for m in t.moves.iter().filter(|m| m.kind != MoveKind::Rapid) {
+            if m.to.z < deepest - 1e-9 {
+                assert!(
+                    pass_level(m.to.z),
+                    "went to {} while the pass cut {deepest}",
+                    m.to.z
+                );
+                deepest = m.to.z;
+            }
+        }
+        assert!((deepest + 1.0).abs() < 1e-9, "{deepest}");
+        // the last pass swivels at the full swivel depth, as a single pass does
+        assert!(
+            t.moves.iter().any(|m| (m.to.z + 0.25).abs() < 1e-9),
+            "swivels 0.25 mm down on the last pass"
         );
     }
 

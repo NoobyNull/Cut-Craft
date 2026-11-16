@@ -146,15 +146,15 @@ say "not implemented yet".
   skip rotary posts. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows
-  its version (the date of its last change). Machine ▸ Update Post-Processor Database opens
-  Post-Processor Management, says how many posts there are (and how many will not load), and
-  checks for a newer Cut Craft, which is how Cut Craft's own posts are updated (custom posts
-  are read from their folder each time).
+  its version (the date of its last change). Aspire's Machine ▸ Update Post-Processor
+  Database is left out on purpose (#511): Cut Craft's own posts come with Cut Craft, so Help ▸
+  Check for Updates brings the newest, and custom posts are read from their folder each time.
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
-  `x-hide-when`). Rotary Z Zero is still labelled Material Surface / Machine Bed, and Flip
-  design is not done.
+  `x-hide-when`). Rotary Z Zero reads Cylinder Surface / Cylinder Axis, with its own
+  pictures (Material Setup too), and the post's `[Z_ORIGIN]` and the job sheet name them
+  the same; Flip design is not done.
 - Save Toolpaths (a form, as Aspire's): the machine and its posts suiting the job (the
   machine's default first, else Cut Craft's own FluidNC posts: tool changer, rotary jobs
   wrapped onto A in inverse time); the selected toolpath, the shown ones to one file, or each
@@ -186,7 +186,7 @@ say "not implemented yet".
   wheel zooms about the cursor, F (or a double-click off the model) fits; Top, Front, Right, Iso, Fit buttons.
   A right-click picks the component under it and opens the 2D/3D view menu headed by its
   name (Cut, Copy, Paste, Duplicate, Delete, Group, Ungroup, Select ▸, Activate Layer of
-  Selection, Text ▸, Convert To Vectors, Join / Close Vectors..., Node Edit Mode, Appearance,
+  Selection, Text ▸ (Convert to Vectors), Join / Close Vectors..., Node Edit Mode, Appearance,
   Component ▸ with Create Vector Boundary, Copy To ▸, Move To ▸; the vector items greyed for a
   component; the components under the click are listed first, the selected ticked, a click
   picking one). In Transform mode (a second double-click on a selected component, or the
@@ -236,7 +236,7 @@ say "not implemented yet".
   save first. Flatpak, macOS, other processors and builds from the source code are told how
   to update by hand instead. Skip This Version quiets the startup check for that version.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
-  Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
+  Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
   (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
   (Aspire's Clipart tab, renamed: folders of your own files, kept between runs, as a tree
   of the folders in them however deep, each with how many files are in it; hidden folders
@@ -252,8 +252,8 @@ say "not implemented yet".
   dropped; a model goes through Orientate 3D Model already placed and levelled. Click picks
   a tile, Ctrl+click adds or removes one, Shift+click picks a range. Right-click (on what is
   picked): Add to Project (several are added one after another, each model's form in
-  turn), Add to Level (one of the job's levels, or a New Level each, named after the
-  file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
+  turn), Add to Level (3D clipart only; one of the job's levels, or a New Level each,
+  named after the file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
   answering `org.freedesktop.FileManager1`, else its folder opened), Add Tag / Remove Tag
   (kept in the config folder's `library-tags.json`, never in the files), Delete from Disk
   (asks first, naming the files; a model's picture goes with it; not to the bin). A Show
@@ -340,7 +340,7 @@ say "not implemented yet".
   Tool types show both names ("Radiused End Mill (bowl / bull nose)").
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
-  (its tip, taper and shank), drill (as an end mill); one tool per material it has cutting data for.
+  (its tip, taper and shank), drill (as an end mill marked Drill only, a tick beside its Tool Type: a toolpath form other than Drilling warns in red when it is picked, and so do the checks before cutting); one tool per material it has cutting data for.
   Form tools and diamond drags are skipped.
 - Checks before cutting (Cut Craft's own; Aspire has none): a toolpath deeper than its tool's
   flute length (or with none set), a 3D finish whose taper cannot reach part of the model, and
@@ -468,8 +468,9 @@ say "not implemented yet".
     tangent lines (T).
   - Text: system TrueType fonts and Vectric single-line `.vfont` fonts (from
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
-    The text is a group that remembers its settings: Draw Text on selected text edits it;
-    Ungroup turns it into curves. With the form open on selected text, two green handles
+    The text is a group that remembers its settings: Draw Text on selected text edits it
+    (so does a double-click on it, inside a group too); grouped with other vectors it stays
+    text; Ungroup on the text itself turns it into curves. With the form open on selected text, two green handles
     above and below it bend the line into an arc (the middle follows the pointer; drag back
     to flatten); Arc angle and Arc rotation are typed too. Each letter stays whole. Not
     done: the red / blue / white handles (rotate, radius, move) and kerning clicks on arched
@@ -564,8 +565,8 @@ say "not implemented yet".
   - Array Copy (rows × columns by gap or offset; symmetry block of mirrors or half turns,
     row / column displacement, Group Copies) and Circular Copy (round the selection's
     middle, the job centre or a point; total or step angle, clockwise positive; Group Copies; turning the
-    copies or not). Copies stay on their originals' layers; copies of grouped vectors are
-    not grouped.
+    copies or not). Copies stay on their originals' layers; each copy of a group is a group
+    of its own (still text when only moved), as are Mirror copies and pasted vectors.
   - Nest Parts (Edit ▸ Nest Selected Objects too): parts (grouped or overlapping vectors)
     packed by their boxes in rows from a chosen corner, along X or Y, a tool diameter plus
     clearance apart and a border in, quarter-turned where that fits better, moved or
@@ -624,8 +625,9 @@ say "not implemented yet".
 - Toolpaths ▸ Templates: save the selected or all visible toolpaths' settings as a
   `.cctpt` template, and load one as empty toolpaths to edit and calculate. The Missing
   Layers dialog is not done.
-- File ▸ Print and Print Preview: the drawing as a PDF opened in the system viewer, which
-  prints it (Aspire's own print window with scale and tiling is not done).
+- File ▸ Print (opens a PDF): the drawing as a PDF opened in the system viewer, which
+  previews and prints it. One item in place of Aspire's Print and Print Preview, which did
+  the same thing here (#511); Aspire's own print window with scale and tiling is not done.
 - Edit ▸ Select ▸ Vector Selector: selects vectors by open / closed, circles, circles of a
   diameter within a tolerance, on all visible layers, the current one or the layers named
   (dialog 949; Z values are not done). Every toolpath form has Associate a Vector Selector
@@ -674,7 +676,9 @@ say "not implemented yet".
   number is the same on the cut list, the labels and the engraved names (`fmt-cut-list`).
   - File ▸ Import ▸ Import Cut List (CSV): rows of name, length, width, quantity and
     material (headings in any order, or none; commas, semicolons or tabs; decimal commas;
-    UTF-8 or Excel's Windows CSV) become named rectangles, length along X, a material's on a
+    UTF-8 or Excel's Windows CSV; sizes in the unit written after the Length and Width
+    headings, `(mm)`, `(cm)` or `(in)`, else the job's units, and a note says which) become
+    named rectangles, length along X, a material's on a
     layer of its name, laid out in rows and selected; Nest Parts then opens on them, set to
     move them. A mistake in the file opens a message naming the row and how to fix it.
   - Edit ▸ Name Part (Design tab, Offset and Layout): the selected parts' name, carried by
@@ -754,10 +758,11 @@ say "not implemented yet".
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
     top or bottom, by count, or a Custom Slice List of each slice's thickness; optional
-    boundary vectors).
+    boundary vectors; each slice on a new level of its own, only the first shown, the
+    originals hidden).
   - Split Component (by a closed vector: "- A" inside, "- B" outside), Emboss Component
     (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
-    component with no wall steeper than the draft angle), Create Cross Section Vector (drag
+    component with no wall steeper than the draft angle, originals hidden), Create Cross Section Vector (drag
     a line; the profile is drawn from it, height 1:1).
   - Extrude and Weave: shapes swept along drive rails (the form's count of vectors picked
     first). Open cross-sections after them are hung across the rail nearest each, where
@@ -812,7 +817,8 @@ say "not implemented yet".
     modes reflect one half or quarter of the job about its middle; Wrapping (rotary jobs)
     brings what runs off one side of the unrolled job round the other, keeping the
     higher part where it meets itself. Older jobs get one level, so their models are
-    unchanged. New components go on the first level. Move Up / Move Down over the tree
+    unchanged. New components go on the level of the component picked in the tree, else
+    the top shown level, and the status bar names it (the level drop-down shows it too). Move Up / Move Down over the tree
     (Aspire's blue arrows) move the picked component within its level, and the level
     menu's Move Level Up / Down move a level with its components (Move Component, Move
     Level); dragging in the tree is not done.
@@ -840,9 +846,10 @@ say "not implemented yet".
   the model's thickness, which a new value scales the model to (Aspire's Set). 3D roughing
   and finishing and the wrapped 3D view place the model by it, refusing a model it pushes
   out of the material. Toolpath forms do not show Aspire's summary of these settings.
-- Toolpaths ▸ Materials (also beside Material Setup): a library of woods, sheet goods,
+- Toolpaths ▸ Preview Colors (also beside Material Setup): a library of woods, sheet goods,
   plastics and metals that sets the material's colour in the 3D view (Job Setup's colour);
-  Custom keeps Job Setup's. Woods show grain on the 3D view's top (lines along X that drift,
+  Custom keeps Job Setup's. Only the look: feeds and speeds follow Job Setup's Material, and
+  picking that Material picks the matching colour here (Hard Maple shows as Maple). Woods show grain on the 3D view's top (lines along X that drift,
   bunch, and move across as the surface goes down, so carvings show rings); the wrapped
   rotary view and the block's sides are plain. Custom is a solid colour of one's own.
   As Aspire's Material Appearance it also sets Machined Area Color: Material Color (cuts
@@ -876,7 +883,10 @@ implemented yet" listed.)
 - Components show in the 2D view as greyscale depth maps (black lowest, white highest, per
   component) and a click on one selects it, as in Aspire; in the 3D view a double-click picks
   the topmost shown component under it (Shift adds or takes away; off the model it fits).
-- Vector groups do not nest. Grouping leaves each member on its own layer; the right-click
+- Vector groups nest: grouping groups (or text) keeps each inside the new group, and Ungroup
+  takes one level apart. A double-click steps inside a group, where a click picks one item to
+  move, size, node edit, delete or edit; the rest fades; Esc or a double-click on empty space
+  steps out (#378). Grouping leaves each member on its own layer; the right-click
   Ungroup ▸ puts them back as they were (onto Original Object Layers) or all onto the
   current layer (Aspire's onto Group's Layer, as Cut Craft's groups have no layer).
 - The Toolpath Drawing toggles (rapids, plunges, retracts, joins) last only for the session;
@@ -886,7 +896,8 @@ implemented yet" listed.)
   while a model is imported.
 - Imported models: a cell over only a near-vertical side takes the height of the top beside
   it (up to 4 cells in), so steep sides leave no spikes; a wider steep band keeps its slope.
-- Lasers are not a tool type in the database (laser features are skipped by decision).
+- Lasers are a tool type in the database (Laser: a kerf and a speed, no pass depth or
+  spindle); the laser toolpath forms pick one with Select… like any other tool.
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (not described in the help), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
   (`docs/ROADMAP.md`, section 6).
@@ -895,5 +906,3 @@ implemented yet" listed.)
 
 ## Differences from Aspire 12 seen on screen
 
-- Aspire's rotary Job Setup calls its Z zero under the material "Cylinder Axis"; ours reuses
-  "Machine Bed" (posts print "Cylinder Axis").

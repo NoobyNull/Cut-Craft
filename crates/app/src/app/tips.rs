@@ -73,6 +73,13 @@ pub(super) const TIPS: &[Tip] = &[
          **View ▸ Show Open Vector Ends** marks the gaps, and **Edit ▸ Join Open Ends** closes \
          them.",
     ),
+    tip(
+        "tips/common_lines.png",
+        "Lines drawn in **red** are common lines: two vectors on the same layer lying exactly \
+         on top of each other, as Paste or a copy that lands on its original leaves them. A \
+         profile would cut that line twice, so delete or move the extra copy.",
+        "design",
+    ),
     plain(
         "tips/tool_database.png",
         "Picking a bit from the **Tool Database** fills in its speeds, feeds and depth per pass \
@@ -80,9 +87,9 @@ pub(super) const TIPS: &[Tip] = &[
     ),
     tip(
         "tips/out_of_date.png",
-        "Changed a shape after making its toolpath? The toolpath is marked out of date, and \
-         Cut Craft offers to recalculate it. Saving or sending an out-of-date toolpath always \
-         stops to ask first.",
+        "Changed a shape, or the material's thickness in Job Setup, after making its toolpath? \
+         The toolpath is marked out of date, and Cut Craft offers to recalculate it. Saving or \
+         sending an out-of-date toolpath always stops to ask first.",
         "toolpaths",
     ),
     tip(
@@ -127,7 +134,8 @@ pub(super) const TIPS: &[Tip] = &[
     plain(
         "tips/snapping.png",
         "Drawing snaps to the grid, guides and the ends and middles of lines. **F4** chooses \
-         what it snaps to, and holding **Shift** while you draw turns snapping off.",
+         what it snaps to, and holding **Shift** while you draw turns snapping off. A shape \
+         stays on what it snapped to until you move it on its own.",
     ),
     plain(
         "tips/undo.png",
@@ -159,7 +167,8 @@ pub(super) const TIPS: &[Tip] = &[
     plain(
         "tips/recovery_copy.png",
         "Cut Craft keeps a recovery copy of unsaved work every 30 seconds. If the power goes \
-         off, your work can be opened again. **Edit ▸ Options ▸ General** sets how often.",
+         off, your work opens again next time, and the copy is kept until you save or close \
+         it. **Edit ▸ Options ▸ General** sets how often.",
     ),
     plain(
         "tips/trace_bitmap.png",
@@ -183,7 +192,9 @@ pub(super) const TIPS: &[Tip] = &[
     plain(
         "tips/first_setup.png",
         "Got a new machine, or set it up wrong the first time? **Help ▸ Run First-Time Setup \
-         Again** asks the starting questions again.",
+         Again** asks the starting questions again, starting from your answers, and corrects \
+         a machine you set up as not listed, keeping the posts you added to it and the rest \
+         of your default job.",
     ),
     tip(
         "tips/keyboard.png",

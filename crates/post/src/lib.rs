@@ -15,6 +15,9 @@ use std::collections::HashMap;
 use std::path::Path;
 
 const MM_PER_INCH: f64 = 25.4;
+/// How far apart, mm, an arc's printed ends may be from its centre before the post nudges
+/// the centre a printed step to bring them closer (controllers allow 0.005 mm or so).
+const CLOSE_ENOUGH: f64 = 0.0005;
 /// Numeric values a post can print; the ones in `LENGTHS` become inches for inch posts
 /// (feed rates are lengths per minute).
 const NUMBERS: &[&str] = &[
@@ -623,6 +626,7 @@ impl Post {
         out.block("HEADER", &v);
 
         let mut previous_tool: Option<&str> = None;
+        let mut previous_speed: Option<f64> = None;
         let mut first_rapid = true;
         // the rate of the feed moves since the last rapid: a new one starts a FIRST_ block,
         // which is where most posts print it
@@ -637,11 +641,39 @@ impl Post {
                 Some(t) if t != toolpath.tool.name => {
                     out.block("TOOLCHANGE", &v);
                     out.block("SPINDLE_ON", &v);
+                    // the new bit has just been zeroed by hand, so the machine's height is
+                    // unknown: print every value again, Z above all, rather than leave the
+                    // first rapid to travel sideways at whatever height the bit was left
+                    out.last.clear();
+                    // lift straight up to the height the last toolpath left at before any
+                    // sideways move: only Z changes, so print X and Y only if the post
+                    // always prints them
+                    v.numbers.insert("X", wrapped("X", at.x));
+                    v.numbers.insert("Y", wrapped("Y", at.y));
+                    v.numbers.insert("Z", doc.job.machine_z(at.z));
+                    out.value("X", &v);
+                    out.value("Y", &v);
+                    out.block("RAPID_MOVE", &v);
                 }
-                Some(_) => out.block("NEW_SEGMENT", &v),
+                Some(_) => {
+                    out.block("NEW_SEGMENT", &v);
+                    // the same bit at another speed (another material, or the speed edited
+                    // between toolpaths): its feeds print on every move, but the spindle
+                    // speed only where the post starts the spindle, so start it again
+                    if previous_speed != Some(toolpath.tool.spindle_speed)
+                        && toolpath.power.is_empty()
+                    {
+                        if out.post.blocks.contains_key("SPINDLE_ON") {
+                            out.block("SPINDLE_ON", &v);
+                        } else {
+                            out.line("[S] M3", &v);
+                        }
+                    }
+                }
                 None => {}
             }
             previous_tool = Some(&toolpath.tool.name);
+            previous_speed = Some(toolpath.tool.spindle_speed);
             let laser = !toolpath.power.is_empty();
             // the laser's power while it is on
             let mut burning: Option<f64> = None;
@@ -692,7 +724,8 @@ impl Post {
                         v.numbers.insert("FI", rate / length);
                         let start = feeding.replace(rate) != Some(rate);
                         if let Step::Arc(_, arc) = step {
-                            v.arc(from, &arc);
+                            let (printed_from, arc) = self.as_printed(from, arc);
+                            v.arc(printed_from, &arc);
                             self.arc_block(&arc, from, start)
                         } else {
                             self.feed_block(kind, start)
@@ -800,6 +833,79 @@ impl Post {
         } else {
             then
         }
+    }
+
+    /// How many millimetres `mm` is once printed as `label`: rounded to the places the post
+    /// prints it to, in its units.
+    fn printed(&self, label: &str, mm: f64) -> f64 {
+        let step = self.printed_step(label);
+        (mm / step).round() * step
+    }
+
+    /// The smallest step, in millimetres, `label` prints in.
+    fn printed_step(&self, label: &str) -> f64 {
+        let format = self
+            .formats
+            .get(label)
+            .cloned()
+            .unwrap_or_else(|| Format::default_for(label));
+        let unit = if self.inches && LENGTHS.contains(&label) {
+            MM_PER_INCH
+        } else {
+            1.0
+        };
+        let places = i32::try_from(format.decimals).unwrap_or(i32::MAX);
+        let multiplier = if format.multiplier.abs() > f64::EPSILON {
+            format.multiplier.abs()
+        } else {
+            1.0
+        };
+        unit / multiplier / 10_f64.powi(places)
+    }
+
+    /// `arc` from `from` as the machine reads it: from where the last move was printed to,
+    /// with its centre moved onto the line halfway between its printed ends and to the
+    /// printed step nearest that keeps both ends the same distance from it. Controllers
+    /// check this (GRBL stops with error 33 past 0.005 mm), and rounding to the places an
+    /// inch post prints could otherwise put a small arc's ends that far apart.
+    fn as_printed(&self, from: DVec3, arc: arcs::Arc) -> (DVec3, arcs::Arc) {
+        let at = |p: DVec3| {
+            cut_craft_core::glam::DVec2::new(self.printed("X", p.x), self.printed("Y", p.y))
+        };
+        let (start, end) = (at(from), at(arc.to));
+        let chord = end - start;
+        let mut centre = arc.centre;
+        if chord.length_squared() > f64::EPSILON {
+            let middle = (start + end) / 2.0;
+            centre -= chord * (centre - middle).dot(chord) / chord.length_squared();
+        }
+        let (si, sj) = (self.printed_step("I"), self.printed_step("J"));
+        let offset = centre - start;
+        let (i, j) = ((offset.x / si).round(), (offset.y / sj).round());
+        let mismatch = |c: cut_craft_core::glam::DVec2| (c.distance(start) - c.distance(end)).abs();
+        let nearest = start + cut_craft_core::glam::DVec2::new(i * si, j * sj);
+        // the nearest rounding unless a step either way matches the ends noticeably better
+        if mismatch(nearest) <= CLOSE_ENOUGH {
+            return (
+                start.extend(from.z),
+                arcs::Arc {
+                    centre: nearest,
+                    ..arc
+                },
+            );
+        }
+        let best = (-1..=1)
+            .flat_map(|a| (-1..=1).map(move |b| (f64::from(a), f64::from(b))))
+            .map(|(a, b)| start + cut_craft_core::glam::DVec2::new((i + a) * si, (j + b) * sj))
+            .min_by(|a, b| mismatch(*a).total_cmp(&mismatch(*b)))
+            .unwrap_or(centre);
+        (
+            start.extend(from.z),
+            arcs::Arc {
+                centre: best,
+                ..arc
+            },
+        )
     }
 
     /// The block for an arc starting at `from`, by its direction and whether it changes
@@ -971,9 +1077,10 @@ impl Post {
 
 fn z_origin(job: &Job) -> &'static str {
     match (job.z_zero, job.rotary) {
-        (ZZero::MaterialSurface, _) => "Material Surface",
+        (ZZero::MaterialSurface, None) => "Material Surface",
         (ZZero::MachineBed, None) => "Machine Bed",
-        // under an unrolled cylinder is its axis
+        // an unrolled cylinder's top is its surface, and under it is its axis
+        (ZZero::MaterialSurface, Some(_)) => "Cylinder Surface",
         (ZZero::MachineBed, Some(_)) => "Cylinder Axis",
     }
 }
@@ -1574,10 +1681,63 @@ begin FOOTER
     }
 
     #[test]
+    fn the_same_tool_at_a_new_spindle_speed_sets_the_new_speed() {
+        let mut fast = toolpath("A", "6 mm");
+        fast.tool.spindle_speed = 18000.0;
+        let mut slow = toolpath("B", "6 mm");
+        slow.tool.spindle_speed = 12000.0;
+        let lines = render(BASIC, vec![fast, slow]);
+        let header = lines.iter().position(|l| l == "S18000 M3");
+        let second = lines.iter().position(|l| l == "S12000 M3");
+        assert!(header.is_some() && second > header, "{lines:#?}");
+        assert!(
+            !lines.contains(&"M0".to_owned()),
+            "no tool change: {lines:#?}"
+        );
+        // the same speed again writes nothing new
+        let lines = render(BASIC, vec![toolpath("A", "6 mm"), toolpath("B", "6 mm")]);
+        assert_eq!(lines.iter().filter(|l| l.ends_with("M3")).count(), 1);
+    }
+
+    #[test]
     fn a_new_tool_uses_the_toolchange_block() {
         let lines = render(BASIC, vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")]);
         assert!(lines.contains(&"(change to 3 mm)".to_owned()), "{lines:#?}");
         assert_eq!(lines.iter().filter(|l| *l == "M0").count(), 1);
+    }
+
+    #[test]
+    fn the_first_rapid_after_a_tool_change_always_says_its_height() {
+        // the bit is set to a new Z zero during the change, so the machine must not be
+        // left to move sideways at whatever height it was zeroed at
+        let job = cut_craft_core::document::Job::default();
+        let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+        let posts: Vec<Post> = BUILT_IN
+            .iter()
+            .filter(|(name, _)| !name.contains("wrap"))
+            .map(|(_, text)| Post::parse(text).unwrap())
+            .flat_map(|p| [p.with_pauses(), p])
+            .collect();
+        for post in &posts {
+            let lines = render_with(post, job, two());
+            let change = lines
+                .iter()
+                .rposition(|l| l.contains("M0") || l.contains("M6"))
+                .unwrap_or_else(|| panic!("a tool change: {lines:#?}"));
+            let rapid = lines[change..]
+                .iter()
+                .find(|l| l.starts_with("G0") && (l.contains('X') || l.contains('Y')))
+                .unwrap_or_else(|| panic!("a rapid after the change: {lines:#?}"));
+            let lifted = lines[change..]
+                .iter()
+                .take_while(|l| *l != rapid)
+                .any(|l| l.starts_with("G0") && l.contains('Z'));
+            assert!(
+                lifted,
+                "{}: no straight lift before the first sideways rapid after the change: {lines:#?}",
+                post.name
+            );
+        }
     }
 
     #[test]
@@ -1691,6 +1851,38 @@ begin FOOTER
             lines.contains(&"G1 X25.400 A91.440 Z12.915".to_owned()),
             "25.4 mm round is 91.44 degrees, 3 mm into a 15.915 radius: {lines:#?}"
         );
+    }
+
+    #[test]
+    fn a_rotary_job_zeroed_on_its_surface_or_its_axis_gets_the_right_z() {
+        use cut_craft_core::document::ZZero;
+        let post = BASIC.replace(
+            "begin HEADER\n",
+            "ROTARY_WRAP_Y = \"A\"\nbegin HEADER\n\"([Z_ORIGIN])\"\n",
+        );
+        let axis = render_for(&post, hundred_round(), vec![toolpath("P", "T")]);
+        let surface = render_for(
+            &post,
+            cut_craft_core::document::Job {
+                z_zero: ZZero::MaterialSurface,
+                ..hundred_round()
+            },
+            vec![toolpath("P", "T")],
+        );
+        assert_eq!(axis[0], "(Cylinder Axis)");
+        assert_eq!(surface[0], "(Cylinder Surface)");
+        // 3 mm deep: below the top of the cylinder, or 3 mm short of its 15.915 radius
+        assert!(
+            surface.contains(&"G1 X25.400 A91.440 Z-3.000".to_owned()),
+            "{surface:#?}"
+        );
+        assert!(
+            axis.contains(&"G1 X25.400 A91.440 Z12.915".to_owned()),
+            "{axis:#?}"
+        );
+        // the 5 mm clearance stays 5 mm above the surface either way
+        assert!(surface.contains(&"G0 Z5.000".to_owned()), "{surface:#?}");
+        assert!(axis.contains(&"G0 Z20.915".to_owned()), "{axis:#?}");
     }
 
     #[test]
@@ -2070,6 +2262,82 @@ begin FOOTER
             .find_map(|l| l.split_whitespace().find(|w| w.starts_with('F')))
             .unwrap();
         assert_eq!(fed, format!("F{plunge:.1}"), "{lines:#?}");
+    }
+
+    /// How far, in mm, the end of each arc in `lines` (in `post`'s units) is from its centre
+    /// further than its start is, with the arc's radius: what GRBL compares (error 33).
+    fn arc_mismatches(lines: &[String], inches: bool) -> Vec<(f64, f64)> {
+        let unit = if inches { MM_PER_INCH } else { 1.0 };
+        let word = |line: &str, letter: char| {
+            line.split_whitespace()
+                .find_map(|w| w.strip_prefix(letter)?.parse::<f64>().ok())
+                .map(|v| v * unit)
+        };
+        let (mut x, mut y) = (0.0, 0.0);
+        let mut out = vec![];
+        for line in lines {
+            let to_x = word(line, 'X').unwrap_or(x);
+            let to_y = word(line, 'Y').unwrap_or(y);
+            if line.starts_with("G2 ") || line.starts_with("G3 ") {
+                let c = (
+                    x + word(line, 'I').unwrap_or(0.0),
+                    y + word(line, 'J').unwrap_or(0.0),
+                );
+                let r0 = f64::hypot(x - c.0, y - c.1);
+                let r1 = f64::hypot(to_x - c.0, to_y - c.1);
+                out.push(((r1 - r0).abs(), r0));
+            }
+            if line.starts_with('G') {
+                (x, y) = (to_x, to_y);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn every_arc_passes_grbls_check_that_its_ends_are_the_same_distance_from_its_centre() {
+        // small arcs at awkward places, where rounding to the printed places matters most:
+        // GRBL stops a job with error 33 when the ends differ by over 0.005 mm and 0.1%
+        let mut seed = 12_345_u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            #[expect(clippy::cast_precision_loss)]
+            let r = (seed >> 11) as f64 / (1_u64 << 53) as f64;
+            r
+        };
+        let mut toolpaths = vec![];
+        for k in 0..3000 {
+            let (cx, cy) = (10.0 + 80.0 * next(), 10.0 + 80.0 * next());
+            let radius = 0.2 + 2.0 * next();
+            let (start, sweep) = (std::f64::consts::TAU * next(), 2.4 + 0.7 * next());
+            let way = if k % 2 == 0 { 1.0 } else { -1.0 };
+            let points: Vec<DVec3> = (0..=24)
+                .map(|i| {
+                    let a = start + way * sweep * f64::from(i) / 24.0;
+                    DVec3::new(cx + radius * a.cos(), cy + radius * a.sin(), -1.0)
+                })
+                .collect();
+            toolpaths.push(cutting(&points));
+        }
+        for (name, text) in BUILT_IN {
+            let post = Post::parse(text).unwrap();
+            if post.arc_limits(false).is_none() {
+                continue;
+            }
+            let lines = render_with(
+                &post,
+                cut_craft_core::document::Job::default(),
+                toolpaths.clone(),
+            );
+            let arcs = arc_mismatches(&lines, post.inches);
+            assert!(arcs.len() >= 3000, "{name}: {} arcs", arcs.len());
+            for (off, radius) in arcs {
+                assert!(
+                    off <= 0.005 || (off <= 0.5 && off <= 0.001 * radius),
+                    "{name}: an arc of radius {radius:.4} mm ends {off:.4} mm off its circle"
+                );
+            }
+        }
     }
 
     #[test]

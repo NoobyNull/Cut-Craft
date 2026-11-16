@@ -233,6 +233,14 @@ pub enum ToLevel {
     New,
 }
 
+/// Whether `files` can go onto a level: 3D clipart only, which comes in as components. A
+/// drawing or picture comes in as vectors or a picture on the current layer, with no level.
+pub fn takes_a_level(files: &[PathBuf]) -> bool {
+    files
+        .iter()
+        .all(|f| preview::MODELS.contains(&preview::extension(f).as_str()))
+}
+
 /// `change` with the components it adds or remakes on `level`.
 pub fn onto_level(mut change: cut_craft_core::Change, level: u64) -> cut_craft_core::Change {
     use cut_craft_core::Edit;
@@ -249,6 +257,25 @@ pub fn onto_level(mut change: cut_craft_core::Change, level: u64) -> cut_craft_c
 }
 
 impl Clipart {
+    /// Closes the Properties window, if it is open (Esc, which reaches the app first);
+    /// false when it was not.
+    pub fn close_properties(&mut self) -> bool {
+        self.properties.take().is_some()
+    }
+
+    /// Opens the Properties window on `file`, as its menu item does.
+    #[cfg(test)]
+    pub fn open_properties(&mut self, file: &Path) {
+        self.properties = Some(properties::Properties::new(
+            file,
+            Kind::Model,
+            None,
+            vec![],
+            &[],
+            None,
+        ));
+    }
+
     /// The library kept in the config folder.
     pub fn load() -> Self {
         let cache = crate::files::clipart_previews_path();
@@ -1280,20 +1307,23 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
     if ui.button(count("Add to Project")).clicked() {
         picked = Some(Picked::AddToProject(files.clone()));
     }
-    ui.menu_button(count("Add to Level"), |ui| {
-        for (id, level) in tile.levels {
-            if ui.button(level).clicked() {
-                picked = Some(Picked::AddToLevel(files.clone(), ToLevel::Existing(*id)));
+    // only 3D clipart becomes components, which is what a level holds
+    if takes_a_level(&files) {
+        ui.menu_button(count("Add to Level"), |ui| {
+            for (id, level) in tile.levels {
+                if ui.button(level).clicked() {
+                    picked = Some(Picked::AddToLevel(files.clone(), ToLevel::Existing(*id)));
+                }
             }
-        }
-        if ui
-            .button("New Level")
-            .on_hover_hint("Each on a new level named after it.")
-            .clicked()
-        {
-            picked = Some(Picked::AddToLevel(files.clone(), ToLevel::New));
-        }
-    });
+            if ui
+                .button("New Level")
+                .on_hover_hint("Each model on a new level named after it.")
+                .clicked()
+            {
+                picked = Some(Picked::AddToLevel(files.clone(), ToLevel::New));
+            }
+        });
+    }
     ui.separator();
     if ui
         .add_enabled(!many, egui::Button::new("Locate"))
@@ -1748,6 +1778,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// Add to Level is offered for 3D clipart only: a drawing or picture adds no component,
+    /// so the new level would stay empty.
+    #[test]
+    fn only_3d_clipart_goes_onto_a_level() {
+        let files = |names: &[&str]| names.iter().map(PathBuf::from).collect::<Vec<_>>();
+        assert!(takes_a_level(&files(&[
+            "eagle.stl",
+            "rose.ccclip",
+            "cup.OBJ"
+        ])));
+        assert!(!takes_a_level(&files(&["logo.svg"])));
+        assert!(!takes_a_level(&files(&["relief.png"])));
+        assert!(!takes_a_level(&files(&["eagle.stl", "plan.dxf"])));
     }
 
     /// Each file is a kind the Show filter picks: a greyscale picture, or one tagged so, is

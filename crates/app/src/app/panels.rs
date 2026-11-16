@@ -34,22 +34,13 @@ impl CutCraftApp {
         };
         match outcome {
             MaterialsOutcome::Apply | MaterialsOutcome::Ok => {
-                self.materials = window.library.clone();
-                self.tools = window.tools.clone();
-                if outcome == MaterialsOutcome::Ok {
-                    self.materials_window = None;
-                }
-                let saved = self.materials_path.as_deref().map_or(Ok(()), |p| {
-                    files::write_creating(p, &self.materials.to_json())
-                });
-                match saved {
-                    Ok(()) => self.tools_changed("Materials Library saved"),
-                    Err(e) => self.status.set_message(&e),
-                }
+                self.materials_kept(outcome == MaterialsOutcome::Ok);
             }
             MaterialsOutcome::Cancel => self.materials_window = None,
             MaterialsOutcome::AddTool => {
-                let mut manager = cut_craft_tool_database::Manager::selecting(&window.tools, "");
+                // on the database as kept: its own edits are kept as the Tool Database's
+                // Select keeps them, the library's stay unkept until its OK
+                let mut manager = cut_craft_tool_database::Manager::selecting(&self.tools, "");
                 manager.library = self.materials.clone();
                 self.open_tool_manager(manager);
                 self.picking = Some(super::PickFor::Material);
@@ -57,21 +48,59 @@ impl CutCraftApp {
         }
     }
 
+    /// The Materials Library's Apply or OK (`close`): its library and its own edits to the
+    /// bits' feeds kept and saved.
+    pub(super) fn materials_kept(&mut self, close: bool) {
+        let Some(window) = &mut self.materials_window else {
+            return;
+        };
+        self.materials = window.library.clone();
+        // the library's own edits onto the database as it is now, not the copy it
+        // opened on: edits in the Tool Database since then stay
+        self.tools = window.tools_onto(&self.tools);
+        window.applied(&self.tools);
+        if close {
+            self.materials_window = None;
+        }
+        // the bits' feeds live in tools.json: saved whatever became of materials.json
+        let library = self.save_materials();
+        self.tools_changed("Materials Library saved");
+        if let Err(e) = library {
+            let tools = if self.status.message == "Materials Library saved" {
+                "the bits' feeds were saved to the tool database".to_owned()
+            } else {
+                self.status.message.clone()
+            };
+            self.status.set_message(&format!("{e}. {tools}"));
+        }
+    }
+
     /// The manager's outcomes that belong to the Materials Library: a bit picked for its Add
     /// Tool goes to its window, and the manager's Materials Library button opens it. True when
     /// the outcome was handled here.
-    fn library_outcome(&mut self, outcome: &cut_craft_tool_database::Outcome) -> bool {
+    pub(super) fn library_outcome(&mut self, outcome: &cut_craft_tool_database::Outcome) -> bool {
         use cut_craft_tool_database::Outcome;
         let Some(manager) = &mut self.tool_manager else {
             return false;
         };
         match (outcome, self.picking) {
             (Outcome::Select(name), Some(super::PickFor::Material)) => {
+                // the picker's own edits (a catalogue bit copied into My Tools, a tool
+                // added or edited) kept as the Tool Database's Select keeps them
+                self.tools = manager.draft.clone();
+                let renamed = manager.take_renamed();
+                for (from, to) in &renamed {
+                    self.tools.note_renamed(from, to);
+                }
+                self.tool_manager = None;
+                self.picking = None;
+                self.tools_kept("Tool database saved", &renamed);
+                self.refresh_form_tool();
                 if let Some(window) = &mut self.materials_window {
-                    window.tools = manager.draft.clone();
+                    window.rebase(&self.tools);
                     window.add_tool(name);
                 }
-                self.picking = None;
+                return true;
             }
             (Outcome::Cancel, Some(super::PickFor::Material)) => self.picking = None,
             (Outcome::MaterialsLibrary, _) => {
@@ -90,10 +119,21 @@ impl CutCraftApp {
         true
     }
 
+    /// The open Tool Database learns which tools the job's toolpaths cut with, so its
+    /// Delete can say when it would take one.
+    fn tool_manager_sees_the_job(&mut self) {
+        if let Some(manager) = &mut self.tool_manager {
+            manager.job_tools.clear();
+            let names = self.doc.toolpaths.values().map(|t| t.tool.name.clone());
+            manager.job_tools.extend(names);
+        }
+    }
+
     /// The Tool Database manager; its edits are kept on Apply or OK.
     pub(super) fn tool_database_window(&mut self, ctx: &egui::Context) {
         use cut_craft_tool_database::Outcome;
         self.materials_library_window(ctx);
+        self.tool_manager_sees_the_job();
         let Some(manager) = &mut self.tool_manager else {
             return;
         };
@@ -121,6 +161,10 @@ impl CutCraftApp {
             Outcome::MaterialsLibrary => {}
             Outcome::Apply | Outcome::Ok | Outcome::Select(_) => {
                 self.tools = manager.draft.clone();
+                let renamed = manager.take_renamed();
+                for (from, to) in &renamed {
+                    self.tools.note_renamed(from, to);
+                }
                 let mut changer = manager.changer.clone();
                 // the Tool Changer window's Select…: the tool goes in that holder
                 if let (Outcome::Select(name), Some(super::PickFor::Holder(slot)), Some(c)) =
@@ -134,7 +178,7 @@ impl CutCraftApp {
                 if matches!(outcome, Outcome::Ok | Outcome::Select(_)) {
                     self.tool_manager = None;
                 }
-                self.tools_changed("Tool database saved");
+                self.tools_kept("Tool database saved", &renamed);
                 self.refresh_form_tool();
                 if let Outcome::Select(name) = &outcome {
                     let picking = self.picking;
@@ -361,7 +405,7 @@ impl CutCraftApp {
     ) {
         let full = ui.available_width();
         let spacing = ui.spacing().item_spacing;
-        let button = edge + 2.0 * ui.spacing().button_padding.x;
+        let button = tool_cell_size(ui.spacing(), edge).x;
         let margin = TOOL_BOX_MARGIN;
         let caption_font = egui::TextStyle::Small.resolve(ui.style());
         let caption_color = ui.visuals().weak_text_color();
@@ -427,19 +471,28 @@ impl CutCraftApp {
                             } else if boxed_row {
                                 ui.add_space(caption_height + spacing.y);
                             }
-                            ui.horizontal_wrapped(|ui| {
-                                for &id in &cluster.tools {
-                                    let response = self.tool_button(ui, id, edge);
-                                    if response.clicked() {
-                                        *clicked = Some(id);
+                            // rows cut by count, never by where the buttons end: a
+                            // hovered button is a fraction wider (see `flyout::per_row`)
+                            let across = crate::flyout::per_row(
+                                width - 2.0 * margin - 2.0,
+                                button,
+                                spacing.x,
+                            );
+                            for tools in cluster.tools.chunks(across) {
+                                ui.horizontal(|ui| {
+                                    for &id in tools {
+                                        let response = self.tool_button(ui, id, edge);
+                                        if response.clicked() {
+                                            *clicked = Some(id);
+                                        }
+                                        if let Some(action) =
+                                            self.tool_menu_on(&response, page, id, false, false)
+                                        {
+                                            *chosen = Some(action);
+                                        }
                                     }
-                                    if let Some(action) =
-                                        self.tool_menu_on(&response, page, id, false, false)
-                                    {
-                                        *chosen = Some(action);
-                                    }
-                                }
-                            });
+                                });
+                            }
                         });
                     });
                 }
@@ -454,9 +507,10 @@ impl CutCraftApp {
         let button = self
             .icon_button(explicit, id, &label, edge)
             .selected(self.status.current_tool == label);
-        let response = ui.add_enabled(self.available(id), button);
+        let available = self.available(id);
+        let response = tool_cell(ui, edge, |ui| ui.add_enabled(available, button));
         self.with_guidance(response, id)
-            .on_disabled_hover_text(format!("{label}: not implemented yet"))
+            .on_disabled_hover_text(self.unavailable_why(id))
     }
 
     /// A flyout's button: its face as [`Self::tool_button`] with an arrow in the corner. A
@@ -489,15 +543,14 @@ impl CutCraftApp {
         let any_available = button.members.iter().any(|m| self.available(m));
         // the tip names the tools the flyout holds too, so they are found without opening it
         let tip = self.tool_tip(id, &tooltip(&about, &others));
-        let response = ui.add_enabled(
-            any_available,
-            self.icon_button(explicit, id, &label, edge)
-                .selected(in_hand),
-        );
+        let face = self
+            .icon_button(explicit, id, &label, edge)
+            .selected(in_hand);
+        let response = tool_cell(ui, edge, |ui| ui.add_enabled(any_available, face));
         super::guide::hover(&response, &tip);
         let response = response
             .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
-            .on_disabled_hover_text(format!("{label}: not implemented yet"));
+            .on_disabled_hover_text(self.unavailable_why(id));
         let r = response.rect;
         flyout_arrow(ui, &response);
         let popup_id = response.id.with("flyout");
@@ -579,7 +632,7 @@ impl CutCraftApp {
             let row = ui.add_enabled(self.available(member), row);
             let row = self
                 .with_guidance(row, member)
-                .on_disabled_hover_text(format!("{name}: not implemented yet"));
+                .on_disabled_hover_text(self.unavailable_why(member));
             if opened && member == button.face {
                 row.request_focus();
             }
@@ -960,6 +1013,7 @@ impl CutCraftApp {
         cut_craft_bug_report::context_menu(response, |ui| {
             let menus = Menus {
                 available: &|id| self.available(id),
+                why: &|id| self.unavailable_why(id),
                 checked: &|_| None,
                 shortcut_of: &|id| self.shortcut_text(id),
                 recent: &[],
@@ -976,7 +1030,15 @@ impl CutCraftApp {
         let Some(l) = self.doc.layer(layer).cloned() else {
             return;
         };
-        let properties = |visible: bool, locked: bool| serde_json::json!({ "layer": l.id, "name": l.name, "visible": visible, "locked": locked });
+        // start from the whole layer, so the eye and lock change only what they show
+        let properties = |visible: bool, locked: bool| {
+            serde_json::to_value(cmd_layer_properties::Params {
+                visible,
+                locked,
+                ..l.clone().into()
+            })
+            .expect("layer properties serialize")
+        };
         let result = match action {
             "toggle_visible" => self.apply("layer_properties", &properties(!l.visible, l.locked)),
             "toggle_locked" => self.apply("layer_properties", &properties(l.visible, !l.locked)),
@@ -1016,8 +1078,13 @@ impl CutCraftApp {
             .collect();
         if self.display.animate_preview {
             self.finish_playback();
-            self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-            self.play(&visible, move |app| app.preview_other_side(visible_only));
+            self.before_preview = Some(super::BeforePreview(
+                self.simulation.clone(),
+                self.preview_side,
+            ));
+            self.play(&visible, true, move |app| {
+                app.preview_other_side(visible_only);
+            });
         } else {
             self.preview_fresh(&visible, move |app| app.preview_other_side(visible_only));
         }
@@ -1030,15 +1097,21 @@ impl CutCraftApp {
             return;
         }
         self.finish_playback();
-        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-        self.play(ids, |_| {});
+        self.before_preview = Some(super::BeforePreview(
+            self.simulation.clone(),
+            self.preview_side,
+        ));
+        self.play(ids, true, |_| {});
     }
 
     /// Cuts `ids` in order into fresh material, as one preview to undo, then `then`.
     fn preview_fresh(&mut self, ids: &[EntityId], then: impl FnOnce(&mut Self) + 'static) {
         self.finish_playback();
         // the preview before stays shown until this one is cut
-        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        self.before_preview = Some(super::BeforePreview(
+            self.simulation.clone(),
+            self.preview_side,
+        ));
         let fresh = Material::new(&self.doc.job, self.display.preview_cells());
         self.preview_in_background(ids, fresh, then);
     }
@@ -1101,23 +1174,29 @@ impl CutCraftApp {
         }
     }
 
-    /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet),
-    /// then `then`. Their moves are laid out off the window's thread, with Cancel should
+    /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet,
+    /// or `fresh`: Preview All and a group start again from uncut material), then `then`.
+    /// Their moves are laid out off the window's thread, with Cancel should
     /// that take a while (millions of moves); the preview before stays shown till then.
-    pub(super) fn play(&mut self, toolpaths: &[EntityId], then: impl FnOnce(&mut Self) + 'static) {
+    pub(super) fn play(
+        &mut self,
+        toolpaths: &[EntityId],
+        fresh: bool,
+        then: impl FnOnce(&mut Self) + 'static,
+    ) {
         self.finish_playback();
         let source = self.preview_source();
         let (list, marks): (Vec<cut_craft_core::toolpath::Toolpath>, Vec<u32>) = toolpaths
             .iter()
-            .filter_map(|&id| Some((source.toolpaths.get(&id)?.clone(), super::preview_mark(id))))
+            .filter_map(|&id| Some((source.toolpaths.get(&id)?.clone(), self.preview_mark(id))))
             .unzip();
         drop(source);
-        let start = self
-            .simulation
-            .clone()
+        let start = (self.simulation.clone())
+            .filter(|m| !fresh && m.covers(&self.doc.job))
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
         // rapids as fast as the Toolpath Summary times them
         let rapid = self.summary.rapid;
+        let revision = self.history.revision();
         let what = match &list[..] {
             [one] => format!("Getting {} ready to preview", one.name),
             _ => format!("Getting {} toolpaths ready to preview", list.len()),
@@ -1131,6 +1210,7 @@ impl CutCraftApp {
             move |app, playback| {
                 app.playback = Some(playback);
                 app.kept_playback = None;
+                app.playback_revision = revision;
                 app.simulation = None;
                 (
                     app.playing,
@@ -1152,6 +1232,8 @@ impl CutCraftApp {
     /// frame, so the window answers (Stop, Esc) however long the toolpath. At the end, the
     /// cut material becomes the preview.
     pub(super) fn advance_playback(&mut self, ctx: &egui::Context) {
+        self.drop_stale_playback();
+        self.drop_preview_of_old_block();
         let Some(playback) = self.playback.as_mut() else {
             self.playback_goal = None;
             return;
@@ -1189,6 +1271,39 @@ impl CutCraftApp {
         }
     }
 
+    /// Once the job has changed (an edit, a recalculation, Undo), a preview's moves are old:
+    /// a playing one stops, keeping what it has cut, and its controls close, so Run or a
+    /// drag never plays the old moves over the job again.
+    fn drop_stale_playback(&mut self) {
+        if self.history.revision() == self.playback_revision
+            || (self.playback.is_none() && self.kept_playback.is_none())
+        {
+            return;
+        }
+        self.finish_playback();
+        self.kept_playback = None;
+        self.status.set_message(
+            "The job changed, so the preview's controls closed: preview again to play it",
+        );
+    }
+
+    /// Once Job Setup changes the block's size, thickness or place, the preview of the old
+    /// block goes (Undo Last Preview's too), so the 3D view shows the new block and the
+    /// next Preview cuts into that.
+    fn drop_preview_of_old_block(&mut self) {
+        let job = self.doc.job;
+        let old = |m: &Material| !m.covers(&job);
+        if self.simulation.as_ref().is_some_and(old)
+            || (self.before_preview.as_ref()).is_some_and(|b| b.0.as_ref().is_some_and(old))
+        {
+            (self.simulation, self.before_preview) = (None, None);
+            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.status.set_message(
+                "Job Setup changed the material, so the preview starts again on the new block",
+            );
+        }
+    }
+
     /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path), and
     /// the playback, so its controls stay to scrub it again.
     pub(super) fn finish_playback(&mut self) {
@@ -1209,19 +1324,24 @@ impl CutCraftApp {
     pub(super) fn preview_toolpath(&mut self, id: EntityId) {
         if self.display.animate_preview {
             self.finish_playback();
-            self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-            self.play(&[id], |_| {});
+            self.before_preview = Some(super::BeforePreview(
+                self.simulation.clone(),
+                self.preview_side,
+            ));
+            self.play(&[id], false, |_| {});
             return;
         }
         self.finish_playback();
         if !self.preview_source().toolpaths.contains_key(&id) {
             return;
         }
-        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-        // cut into the preview so far
-        let start = self
-            .simulation
-            .clone()
+        self.before_preview = Some(super::BeforePreview(
+            self.simulation.clone(),
+            self.preview_side,
+        ));
+        // cut into the preview so far (on a block Job Setup has not changed since)
+        let start = (self.simulation.clone())
+            .filter(|m| m.covers(&self.doc.job))
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
         self.preview_in_background(&[id], start, |_| {});
     }
@@ -1230,7 +1350,7 @@ impl CutCraftApp {
     /// Retract and Stop, the speed, the tool's place along the whole path and close up
     /// (drag to scrub), and how long is left. Over both views, so Stop is always to hand; Esc
     /// stops it too. Once stopped or played through they stay, to scrub it again, with
-    /// Close in place of Stop, till another preview or Reset Preview.
+    /// Close in place of Stop, till another preview, Reset Preview or another job.
     pub(super) fn playback_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath playback bar");
         let kept = self.playback.is_none();
@@ -1238,6 +1358,8 @@ impl CutCraftApp {
             return;
         };
         let (at, length) = (playback.at(), playback.length());
+        // from the playback itself: while it plays there is no finished simulation
+        let fine_bit = crate::display::fine_bit_note(playback.tools(), playback.material().cell);
         let guessed_shank = playback
             .tool()
             .filter(|(_, tool)| tool.shank_diameter.is_nan() || tool.shank_diameter <= 0.0)
@@ -1289,6 +1411,9 @@ impl CutCraftApp {
                 "⚠ {name} has no shank diameter set, so its shank is drawn from a guess: set it \
                  in the Tool Database"
             ));
+        }
+        if let Some(note) = fine_bit {
+            ui.weak(note);
         }
         if (run || goal.is_some()) && kept {
             self.resume_playback();
@@ -1667,19 +1792,24 @@ impl CutCraftApp {
                 view3d::painted(material, |_| Some(rgb(job.fill_colour)))
             }
             MachinedArea::ToolpathColor => {
-                let fills: std::collections::HashMap<u32, Option<[u8; 3]>> = self
-                    .doc
-                    .toolpaths
-                    .iter()
-                    .enumerate()
-                    .map(|(place, (&id, t))| (super::preview_mark(id), t.preview_colour(place)))
-                    .collect();
+                let fills = self.preview_fills();
                 view3d::painted(material, |id| fills.get(&id).copied().flatten().map(rgb))
             }
             MachinedArea::Lithophane => {
                 view3d::lit_through(material, rgb(job.colour), job.lithophane_light)
             }
         }
+    }
+
+    /// Each toolpath's colour in a Toolpath Color preview (none: no fill), by the mark its
+    /// cells take in the preview.
+    pub(super) fn preview_fills(&self) -> std::collections::HashMap<u32, Option<[u8; 3]>> {
+        self.doc
+            .toolpaths
+            .iter()
+            .enumerate()
+            .map(|(place, (&id, t))| (self.preview_mark(id), t.preview_colour(place)))
+            .collect()
     }
 
     /// The model's shape, `cells` across; while Orientate 3D Model shows its model whole,
@@ -1888,13 +2018,15 @@ impl CutCraftApp {
         );
         // the pan buttons (the wheel, to start with) pan, as in the 2D view
         let middle = self.pan_button_down(ui.ctx());
+        // an f typed into a field is a letter, not Fit; F6 types nothing, so it always fits
+        let typing = ui.ctx().egui_wants_keyboard_input();
         let (left, right, ctrl, scroll, fit_key) = ui.input(|i| {
             (
                 i.pointer.primary_down(),
                 i.pointer.secondary_down(),
                 i.modifiers.ctrl,
                 i.smooth_scroll_delta,
-                i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::F6),
+                (i.key_pressed(egui::Key::F) && !typing) || i.key_pressed(egui::Key::F6),
             )
         });
         let (before, rotation) = (
@@ -2889,9 +3021,11 @@ impl CutCraftApp {
             self.kept_playback = None;
         }
         if removed > 0 {
-            self.before_preview = Some(super::BeforePreview(before));
+            self.before_preview = Some(super::BeforePreview(before, self.preview_side));
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-            self.status.set_message("Removed the piece cut free");
+            self.status.set_message(
+                "Removed the piece cut free: Undo Last Preview on the Toolpaths page brings it back",
+            );
         }
         removed > 0
     }
@@ -3232,7 +3366,7 @@ impl CutCraftApp {
                     || self.model_on_material()),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
             wrap: None,
-            // a wood from Toolpaths ▸ Materials shows its grain
+            // a wood from Toolpaths ▸ Preview Colors shows its grain
             grain: cmd_materials::Material::of([r, g, b])
                 .grain()
                 .filter(|_| shown.colour_shaded)
@@ -3458,6 +3592,11 @@ impl CutCraftApp {
             vec![]
         };
         let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
+        // the vectors in the colour the 2D view draws them in (Options ▸ Appearance)
+        let vector = egui::Stroke::new(
+            stroke.width,
+            crate::view2d::colour32(self.options.appearance.lines(ui.visuals().dark_mode).vector),
+        );
         let screen = view3d::screen_of(surface, orbit, framing, fit, None);
         let local = |p: cut_craft_core::geometry::Point, z: f64| {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
@@ -3474,7 +3613,7 @@ impl CutCraftApp {
             let z = view3d::vector_plane(surface, points);
             let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
             for run in in_sight(&line) {
-                painter.add(egui::Shape::line(run, stroke));
+                painter.add(egui::Shape::line(run, vector));
             }
         }
         // the keep-out zones in red, closed, over whatever they cover
@@ -3611,16 +3750,16 @@ impl CutCraftApp {
             ui.weak("Make a toolpath (or tick one in the list) to check it here");
             return;
         }
-        let key = (self.history.revision(), self.machines.active, shown.clone());
-        if self.analysed.as_ref().is_none_or(|(k, _)| *k != key) {
-            let found = self.preflight(&[shown], crate::files::ToolChanges::SeparateFiles);
-            self.analysed = Some((key, found));
-        }
         let found = self
-            .analysed
-            .as_ref()
-            .map_or_else(Vec::new, |(_, f)| f.clone());
+            .save_checks(&[shown], crate::files::ToolChanges::SeparateFiles)
+            .map(<[_]>::to_vec);
         ui.strong("Checks before cutting");
+        let Some(found) = found else {
+            if self.checks_waiting(ui) {
+                self.check_again();
+            }
+            return;
+        };
         if found.is_empty() {
             ui.label("✔ Nothing found that would stop or spoil the cut");
         }
@@ -3657,6 +3796,22 @@ impl CutCraftApp {
                 self.invoke(ui.ctx(), id);
             }
         }
+    }
+
+    /// Where the checks before cutting are not ready: that they are running, or that they
+    /// were cancelled, with Check Again; whether it was pressed.
+    pub(super) fn checks_waiting(&self, ui: &mut egui::Ui) -> bool {
+        if self.checking() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("Checking the toolpaths: a big 3D toolpath takes a little while");
+            });
+            return false;
+        }
+        ui.label("The checks were cancelled, so nothing has been checked yet");
+        ui.button("Check Again")
+            .on_hover_hint("Run the checks before cutting on these toolpaths again")
+            .clicked()
     }
 
     /// What Toolpaths sub-tab `i` shows: Make's strategies (or the favourites, when the page
@@ -3771,7 +3926,8 @@ impl CutCraftApp {
                 ui,
                 picked.len() == 1 && self.available("delete_toolpath"),
                 "Delete",
-                "Delete Toolpath: take the picked toolpath out of the job",
+                "Delete Toolpath: take the picked toolpath out of the job. Del does the same \
+                 just after you click it in the list",
             );
         });
         ui.horizontal_wrapped(|ui| {
@@ -3947,16 +4103,32 @@ impl CutCraftApp {
         self.toolpath_list_body(ui, true);
     }
 
-    /// The toolpath list itself: its heading, buttons (the template ones too with
-    /// `templates`) and the buttons arranging it, then the rows in the order they cut, each
-    /// group's heading over its toolpaths. A click picks a toolpath, Ctrl-click picks several;
-    /// a toolpath dragged onto another goes just before it, in its group, and dragged onto a
-    /// group's name goes in at its end.
+    /// The toolpath list itself (see [`Self::toolpath_list_rows`]). What it changes while
+    /// a form is open beside it is not the form's to take back: the form notes it, and its
+    /// Cancel makes it again after undoing everything since it opened.
+    pub(super) fn toolpath_list_body(&mut self, ui: &mut egui::Ui, templates: bool) {
+        if let Some(form) = self.form.as_mut() {
+            form.in_list = true;
+        }
+        self.toolpath_list_rows(ui, templates);
+        if let Some(form) = self.form.as_mut() {
+            form.in_list = false;
+        }
+        if let Some(form) = self.form_behind.as_mut() {
+            form.in_list = false;
+        }
+    }
+
+    /// The toolpath list's heading, buttons (the template ones too with `templates`) and
+    /// the buttons arranging it, then the rows in the order they cut, each group's heading
+    /// over its toolpaths. A click picks a toolpath, Ctrl-click picks several; a toolpath
+    /// dragged onto another goes just before it, in its group, and dragged onto a group's
+    /// name goes in at its end.
     #[expect(
         clippy::too_many_lines,
         reason = "the list's rows, picking, dragging and menus"
     )]
-    pub(super) fn toolpath_list_body(&mut self, ui: &mut egui::Ui, templates: bool) {
+    fn toolpath_list_rows(&mut self, ui: &mut egui::Ui, templates: bool) {
         use crate::toolpath_order::{self as order, Row, Target};
         cut_craft_bug_report::mark(ui, "Toolpath list");
         ui.strong("Toolpath List");
@@ -3982,6 +4154,10 @@ impl CutCraftApp {
         let mut group_picked = None;
         let mut clicked = None;
         let ctrl = ui.input(|i| i.modifiers.command || i.modifiers.shift);
+        // any press elsewhere hands Del back to the drawing; a row's click takes it below
+        if ui.input(|i| i.pointer.any_pressed()) {
+            self.toolpath_list_clicked = false;
+        }
         let dragging = egui::DragAndDrop::has_payload_of_type::<Vec<EntityId>>(ui.ctx());
         // each toolpath's colour in the preview, when the machined areas take them
         let swatches = self.doc.job.machined_area == MachinedArea::ToolpathColor;
@@ -4034,6 +4210,7 @@ impl CutCraftApp {
                             }
                             // The toolpath menu acts on the row right-clicked, so it selects it
                             if label.secondary_clicked() {
+                                self.toolpath_list_clicked = true;
                                 self.selected_toolpath = Some(id);
                                 self.more_toolpaths.clear();
                                 self.selected_group = None;
@@ -4075,6 +4252,7 @@ impl CutCraftApp {
                 }
             });
         if let Some((id, selected)) = clicked {
+            self.toolpath_list_clicked = true;
             if ctrl {
                 // Ctrl-click: one more picked, or one less
                 if self.selected_toolpath.is_none() {
@@ -4106,14 +4284,7 @@ impl CutCraftApp {
             let groups: Vec<_> = moving.iter().map(|&id| (id, group.clone())).collect();
             self.arrange(Some(to), &groups);
         }
-        if let Some((id, visible)) = shown
-            && let Some(t) = self.doc.toolpaths.get(&id)
-        {
-            let params = serde_json::json!({ "toolpath": id, "name": t.name, "visible": visible });
-            if let Err(e) = self.apply("toolpath_properties", &params) {
-                self.status.set_message(&e);
-            }
-        }
+        // one change, so one Undo takes a tick back
         self.list_properties(shown, coloured);
         if let Some(id) = edit {
             self.selected_toolpath = Some(id);
@@ -4249,6 +4420,10 @@ impl CutCraftApp {
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
                     .on_hover_hint("Cut Craft's version (Help ▸ About)");
                 ui.separator();
+                // the Web API's state, once it is switched on, in a slot of its own width
+                if self.web_api_indicator(ui) {
+                    ui.separator();
+                }
                 if self.screen == Screen::Job {
                     // the job's units, and the one-click way to swap them
                     let (unit, other) = match self.doc.job.units {
@@ -4338,7 +4513,7 @@ fn toolpath_row(
             let mut visible = toolpath.visible;
             if ui
                 .checkbox(&mut visible, "")
-                .on_hover_hint("Show or hide this toolpath")
+                .on_hover_hint("Show or hide this toolpath; Undo takes it back in one step")
                 .changed()
             {
                 ticked = Some(visible);
@@ -4400,7 +4575,7 @@ fn save_part(
         }
     }
     out.save(path)
-        .map_err(|e| format!("could not save {}: {e}", path.display()))
+        .map_err(|e| crate::messages::could_not_save_picture(path, &e))
 }
 
 /// Whether `path` is a mesh, imported through Orientate 3D Model.
@@ -4741,4 +4916,28 @@ fn picked_message(picking: Option<super::PickFor>, name: &str) -> String {
         Some(super::PickFor::Listed(super::ToolList::Tools, _) | super::PickFor::Material)
         | None => format!("Cutting with {name}"),
     }
+}
+
+/// The room a tool button `edge` across takes in a row, whatever state it is in.
+pub(super) fn tool_cell_size(spacing: &egui::style::Spacing, edge: f32) -> egui::Vec2 {
+    let pad = spacing.button_padding;
+    egui::vec2(
+        edge + 2.0 * pad.x,
+        (edge + 2.0 * pad.y).max(spacing.interact_size.y),
+    )
+}
+
+/// Draws a tool button with `add` in a cell of exactly [`tool_cell_size`], so the row around
+/// it never moves. A hovered or pressed button is drawn a fraction of a point bigger (its
+/// border thickens by the theme's line scale, which egui's whole-point margins don't take
+/// back); laid out as it is drawn, that grew the row under the pointer, sent a full row's
+/// last button to the next row, and the page jumped between two layouts while it was hovered.
+fn tool_cell<R>(ui: &mut egui::Ui, edge: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let (_, rect) = ui.allocate_space(tool_cell_size(ui.spacing(), edge));
+    let mut cell = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    add(&mut cell)
 }

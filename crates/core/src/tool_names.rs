@@ -81,6 +81,7 @@ fn value(name: &str, tool: &Tool, material: &str, machine: &str) -> Option<Value
             ToolShape::ThreadMill => "Thread Mill",
             ToolShape::FormTool => "Form Tool",
             ToolShape::SurfacingBit => "Surfacing Bit",
+            ToolShape::Laser => "Laser",
         }),
         "Units" | "Length Units" => text(if inch { "inches" } else { "mm" }),
         "Units Short" | "Length Units Short" => text(if inch { "in" } else { "mm" }),

@@ -58,14 +58,16 @@ pub struct Params {
     #[schemars(extend("x-group" = "Chamfer"))]
     #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/chamfer_shape.png"))]
     pub width: f64,
-    /// Slope from vertical for a ball nose (a V-bit's is half its angle)
+    /// Slope from vertical for a ball nose. Hidden with a V-bit, whose slope is half its
+    /// angle (a 90° V-bit cuts a 45° chamfer)
     #[schemars(extend("x-unit" = "°"), range(min = 0, max = 90))]
-    #[schemars(extend("x-group" = "Chamfer"))]
+    #[schemars(extend("x-group" = "Chamfer", "x-hide-when" = {"tool.shape": "v_bit"}))]
     #[schemars(extend("x-dim" = "A"))]
     pub angle: f64,
-    /// Moves a V-bit's point off the chamfer so its side cuts (makes it cut deeper)
+    /// Moves a V-bit's point off the chamfer so its side cuts (makes it cut deeper); shown
+    /// only with a V-bit
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Chamfer"))]
+    #[schemars(extend("x-group" = "Chamfer", "x-show-when" = {"tool.shape": "v_bit"}))]
     #[schemars(extend("x-dim" = "O"))]
     pub overcut: f64,
     /// Which side of the vectors the chamfer goes

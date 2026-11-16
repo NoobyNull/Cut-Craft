@@ -3,19 +3,23 @@
 
 use super::{
     APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Document,
-    EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key, KeyboardShortcut,
-    LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers, OpenForm,
-    PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS, SECTION_PICTURE_ROWS,
-    SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen, Session,
-    Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
-    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, commit, dialog_size, egui,
-    file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, page_width, rest_section, selector_section, shortcut,
-    show_page, side_tabs, side_tabs_width, summary_table, template_dialog, texture_dialog,
-    tool_picker, toolpath_template_dialog, view3d,
+    EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, KEY_ACTION_NAMES, Key,
+    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers,
+    OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS,
+    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks,
+    SaveForm, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES,
+    ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog,
+    commands, commit, dialog_size, egui, file_dialog, file_name, files, form, form_settings_dialog,
+    gui, job_dialog, menu_items, message_dialog, on_the_desktop, page_width, rest_section,
+    saving_path, selector_section, shortcut, show_page, side_tabs, side_tabs_width, summary_table,
+    template_dialog, texture_dialog, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
+
+/// The buttons of "Save changes?": what each does, rather than Yes and No.
+pub(super) const SAVE: &str = "Save";
+pub(super) const DONT_SAVE: &str = "Don't Save";
 
 impl CutCraftApp {
     #[expect(
@@ -53,6 +57,8 @@ impl CutCraftApp {
             toolpath_subtab: 0,
             toolpath_unfold: None,
             more_toolpaths: std::collections::BTreeSet::new(),
+            toolpath_list_clicked: false,
+            form_behind: None,
             ask_material: true,
             list_height: None,
             first_steps: std::cell::RefCell::default(),
@@ -96,19 +102,23 @@ impl CutCraftApp {
             addons: crate::addons::Addons::new(None),
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
+            machines_unsaved: false,
             posts: cut_craft_machines::Library::new(None),
             machine_window: None,
             first_run: None,
             post_window: None,
             tools: ToolDatabase::starter(),
             tools_path: None,
+            tools_unreadable: None,
             tool_manager: None,
             materials: cut_craft_core::material_library::MaterialLibrary::starter(),
             materials_path: None,
+            materials_unreadable: None,
             materials_window: None,
             picking: None,
             deep_cut: None,
             units_ask: None,
+            earlier_ask: None,
             shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
@@ -134,6 +144,7 @@ impl CutCraftApp {
             updates: crate::update::Updates::default(),
             restart_after_close: None,
             clipboard: vec![],
+            clipboard_from: super::Copied::default(),
             clipboard_components: vec![],
             fit_3d: None,
             handles_3d: vec![],
@@ -157,14 +168,16 @@ impl CutCraftApp {
             snap_window: false,
             job_sheet_window: false,
             part_labels_window: false,
+            clearing_window: false,
+            clearing_before: None,
             stl_window: false,
             stl_result: None,
             layers_on_sheet: false,
             save_form: None,
             machine_files: None,
-            analysed: None,
-            save_checks: None,
+            save_checks: vec![],
             before_preview: None,
+            preview_side: false,
             picked_nodes: Vec::new(),
             node_mirror: [false, false],
             menu_at: None,
@@ -183,6 +196,9 @@ impl CutCraftApp {
             rough_3d: None,
             height_applied_at: None,
             job_epoch: 0,
+            toolpath_keys: super::follow::Keys::default(),
+            preview_marks: std::collections::BTreeMap::new(),
+            tool_note: None,
             stale_known: 0,
             stale_while_form: false,
             recalculate_ask: None,
@@ -206,6 +222,7 @@ impl CutCraftApp {
             playing: false,
             playback_goal: None,
             kept_playback: None,
+            playback_revision: 0,
             close_up: None,
             playback_view: None,
             playback_gpu: None,
@@ -221,14 +238,17 @@ impl CutCraftApp {
             options_window: false,
             options_page: 0,
             show_advanced: false,
+            web_api: super::web_api::WebApi::default(),
             options_goto: None,
             capture: None,
             shortcut_search: String::new(),
             split: None,
             clipart: crate::clipart::Clipart::default(),
             import_queue: std::collections::VecDeque::new(),
+            import_after_setup: None,
             recent_path: None,
             recovery_path: None,
+            recovery_lock: None,
             autosaved: (0, 0.0),
             autosave: None,
             title: String::new(),
@@ -256,7 +276,7 @@ impl CutCraftApp {
             {
                 true
             }
-            "add_clipart_folder" => true,
+            "add_clipart_folder" | "tool_help" | "view_2d" | "view_3d" => true,
             id if id.starts_with(gui::COMMUNITY) => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
             id if id.starts_with(gui::GUIDE) => true,
@@ -298,8 +318,10 @@ impl CutCraftApp {
             "tile_windows_horizontal" | "tile_windows_vertical" | "cascade_windows" => {
                 self.screen == Screen::Job
             }
-            "update_post_processor_database" | "job_sheet_editor" => true,
-            "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
+            "job_sheet_editor" => true,
+            "reset_preview" => {
+                self.simulation.is_some() || self.playback.is_some() || self.kept_playback.is_some()
+            }
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
             id if self.units_checked(id).is_some() => self.screen == Screen::Job,
@@ -326,6 +348,57 @@ impl CutCraftApp {
         }
     }
 
+    /// Why `id` is greyed out, shown on hover: what it waits for (a selection, a toolpath
+    /// picked, something to undo, a job open). "Not implemented yet" only for an action
+    /// nothing runs.
+    pub(super) fn unavailable_why(&self, id: &str) -> String {
+        const PICK: &str = "Pick a toolpath in the Toolpath List first";
+        const SHOWN: &str = "No toolpath is shown: tick one in the Toolpath List first";
+        const PREVIEW: &str = "Preview a toolpath first";
+        let job_first = "Open or start a job first";
+        let why = match id {
+            "undo" => "Nothing to undo yet",
+            "redo" => "Nothing to redo: undo something first",
+            "close" => "No job is open",
+            "zoom_selected" | "activate_layer_of_selection" => "Select something first",
+            "cut" => "Select the vectors or 3D parts to cut first",
+            "copy" => "Select the vectors or 3D parts to copy first",
+            "paste" | "paste_in_place" => "Nothing copied yet: copy something first",
+            "recalculate_toolpath"
+            | "delete_toolpath"
+            | "save_selected_toolpath_as_template"
+            | "edit_toolpath" => PICK,
+            "preview_toolpath" => "Pick a toolpath or a group in the Toolpath List first",
+            "edit_text" => "Select a piece of text first",
+            "save_all_visible_toolpaths_as_template"
+            | "recalculate_visible_toolpaths"
+            | "preview_visible_toolpaths" => SHOWN,
+            "recalculate_all_toolpaths" | "preview_all_toolpaths" | "save_toolpaths" => {
+                "No toolpaths yet: make one first"
+            }
+            "undo_last_preview" => "No preview to undo",
+            "save_shaded_image" => "Preview a toolpath or bring in a 3D model first",
+            "edit_object" | "object_properties" => "Select a shape first",
+            "reset_preview" | "create_component_from_toolpath_preview" => PREVIEW,
+            id if id.starts_with(gui::REIMPORT_MODEL) => {
+                "The model's file is not in the job's folder any more"
+            }
+            id if id.starts_with(EXPORT_LEVEL) => "Export as 3D clipart is not available",
+            id if self.registry.get(id).is_some()
+                || self.registry.exporter(id).is_some()
+                || crate::flyout::variant(id).is_some()
+                || gui::command_action(id).is_some()
+                || BUILT_INS.contains(&id)
+                || self.resolution_checked(id).is_some()
+                || self.units_checked(id).is_some() =>
+            {
+                job_first
+            }
+            _ => return format!("{}: not implemented yet", self.tool_label(id)),
+        };
+        why.to_owned()
+    }
+
     /// Menu items, tool buttons and shortcuts all end up here: built-in actions first, then
     /// the command registry.
     #[expect(clippy::too_many_lines, reason = "the one dispatch of every action")]
@@ -335,6 +408,23 @@ impl CutCraftApp {
         self.show_subtab_of(id);
         // Delete with a snap mark picked lets that point go, rather than deleting vectors
         if id == "delete" && self.release_picked_snap() {
+            return;
+        }
+        // Delete in Node Edit with nodes picked deletes those nodes, not the whole shape
+        if id == "delete"
+            && self.view_tool == Some(super::ViewTool::NodeEdit)
+            && !self.picked_nodes.is_empty()
+        {
+            self.delete_picked_nodes();
+            return;
+        }
+        // Delete just after picking a toolpath in the list deletes that toolpath
+        if id == "delete"
+            && self.toolpath_list_clicked
+            && self.selected_toolpath.is_some()
+            && self.pages.shown(Page::Toolpaths) != Shown::Hidden
+        {
+            self.invoke(ctx, "delete_toolpath");
             return;
         }
         // right-click menu items: a command with params chosen by the menu
@@ -517,8 +607,7 @@ impl CutCraftApp {
             | "paste_in_place"
             | "increment_and_save"
             | "open_application_data_folder"
-            | "print"
-            | "print_preview" => {
+            | "print" => {
                 self.clipboard_or_file_action(ctx, id);
             }
             "keyboard_shortcuts"
@@ -528,6 +617,13 @@ impl CutCraftApp {
             | "help_contents"
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
+            // F1: the open form's help page, else the contents
+            "tool_help" => {
+                let topic = self.form.as_ref().map_or("contents", |f| f.id);
+                self.info = Some(Info::Help(topic));
+            }
+            "view_2d" => self.view = View::TwoD,
+            "view_3d" => self.view = View::ThreeD,
             "first_run_setup" => self.open_first_run(),
             "did_you_know" => self.open_tips(self.options.next_tip),
             "try_sample_project" => self.open_sample(),
@@ -580,6 +676,7 @@ impl CutCraftApp {
             }
             "job_sheet_editor" => self.job_sheet_window = true,
             "part_labels" => self.part_labels_window = true,
+            "clearing_settings" => self.clearing_window = true,
             "create_job_sheet" => self.create_job_sheet(),
             "print_job_sheet" => self.print_job_sheet(),
             "edit_object" => {
@@ -600,15 +697,6 @@ impl CutCraftApp {
             "tile_windows_horizontal" => self.split = Some(super::Split::Stacked),
             "tile_windows_vertical" => self.split = Some(super::Split::SideBySide),
             "cascade_windows" => self.split = None,
-            "update_post_processor_database" => {
-                // custom posts are read from their folder each time they are listed, and
-                // Cut Craft's own come with Cut Craft: an update check brings the newest
-                self.post_window = Some(cut_craft_machines::PostManager::default());
-                let skipped = self.options.updates.skipped_version.clone();
-                self.updates.check(ctx, true, skipped);
-                self.status
-                    .set_message(&post_database_message(&self.posts.entries()));
-            }
             "save_shaded_image" => {
                 if let Some(path) = file_dialog()
                     .add_filter("PNG image", &["png"])
@@ -621,23 +709,29 @@ impl CutCraftApp {
             "preview_all_toolpaths" => self.preview_all(false),
             "preview_visible_toolpaths" => self.preview_all(true),
             "undo_last_preview" => {
-                if let Some(before) = self.before_preview.take() {
-                    self.simulation = before.0;
+                if let Some(super::BeforePreview(material, side)) = self.before_preview.take() {
+                    self.simulation = material;
                     self.kept_playback = None;
                     (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+                    // made before Swap Sides: turned over to the side the job is on now
+                    self.preview_side = side;
+                    self.follow_side();
                     self.status.set_message("Undid the last preview");
                 }
             }
             "reset_preview" => {
-                self.before_preview = None;
-                (
-                    self.simulation,
-                    self.simulation_coarse,
-                    self.fine_3d,
-                    self.surface_gpu,
-                ) = (None, None, None, None);
+                // a playing preview stops first, keeping what it has cut, so Undo Last
+                // Preview brings back what was showing
+                self.finish_playback();
+                self.before_preview = Some(super::BeforePreview(
+                    self.simulation.take(),
+                    self.preview_side,
+                ));
+                (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
                 self.kept_playback = None;
+                self.status
+                    .set_message("Preview reset: Undo Last Preview brings it back");
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
@@ -821,7 +915,7 @@ impl CutCraftApp {
             && let Err(e) = std::fs::write(path, words.join("\n"))
         {
             self.status
-                .set_message(&format!("cannot keep the words in {}: {e}", path.display()));
+                .set_message(&crate::messages::cannot_keep_words(path, &e));
         }
     }
 
@@ -841,7 +935,8 @@ impl CutCraftApp {
         if let Some(path) = brush_dialog()
             .set_file_name(format!("{name}.ccclip"))
             .save_file()
-            && let Err(e) = self.save_brush_to(id, &path.with_extension("ccclip"))
+            && let Some(path) = saving_path(&path, &["ccclip"])
+            && let Err(e) = self.save_brush_to(id, &path)
         {
             self.status.set_message(&e);
         }
@@ -983,14 +1078,7 @@ impl CutCraftApp {
                 Some(path) => self.save_to(&path),
                 None => self.file_action("save_as"),
             },
-            "save_as" => {
-                if let Some(path) = job_dialog()
-                    .set_file_name(format!("untitled.{JOB_EXTENSION}"))
-                    .save_file()
-                {
-                    self.save_to(&path.with_extension(JOB_EXTENSION));
-                }
-            }
+            "save_as" => self.save_as(),
             "import_vectors_bitmap" | "import_component_3d_model" => {
                 let mut dialog = file_dialog();
                 let models = id == "import_component_3d_model";
@@ -1063,8 +1151,8 @@ impl CutCraftApp {
                 if let Some(path) = template_dialog()
                     .set_file_name(format!("template.{TEMPLATE}"))
                     .save_file()
+                    && let Some(path) = saving_path(&path, &[TEMPLATE])
                 {
-                    let path = path.with_extension(TEMPLATE);
                     match cut_craft_core::file::write_atomic(
                         &path,
                         &cut_craft_core::file::save_job(&self.doc),
@@ -1074,7 +1162,7 @@ impl CutCraftApp {
                             .set_message(&format!("Saved template {}", path.display())),
                         Err(e) => self
                             .status
-                            .set_message(&format!("could not save {}: {e}", path.display())),
+                            .set_message(&crate::messages::could_not_save(&path, &e)),
                     }
                 }
             }
@@ -1092,12 +1180,12 @@ impl CutCraftApp {
                 if let Some(path) = toolpath_template_dialog()
                     .set_file_name(format!("toolpaths.{}", files::TOOLPATH_TEMPLATE_EXTENSION))
                     .save_file()
+                    && let Some(path) = saving_path(&path, &[files::TOOLPATH_TEMPLATE_EXTENSION])
                 {
-                    let path = path.with_extension(files::TOOLPATH_TEMPLATE_EXTENSION);
                     let template = files::toolpath_template(&self.doc, &ids);
                     let message = match cut_craft_core::file::write_atomic(&path, &template) {
                         Ok(()) => format!("Saved toolpath template {}", path.display()),
-                        Err(e) => format!("could not save {}: {e}", path.display()),
+                        Err(e) => crate::messages::could_not_save(&path, &e),
                     };
                     self.status.set_message(&message);
                 }
@@ -1155,14 +1243,42 @@ impl CutCraftApp {
         }
     }
 
-    /// The toolpaths of `plan` that pass over a keep-out zone, by name.
-    pub(super) fn not_kept_out(&self, plan: &[Vec<EntityId>]) -> Vec<String> {
+    /// The toolpaths of `plan` in `doc` that pass over a keep-out zone, by name.
+    pub(super) fn not_kept_out(&self, doc: &Document, plan: &[Vec<EntityId>]) -> Vec<String> {
         plan.iter()
             .flatten()
-            .filter_map(|id| self.doc.toolpaths.get(id))
+            .filter_map(|id| doc.toolpaths.get(id))
             .filter(|t| !self.zones_entered(t).is_empty())
             .map(|t| t.name.clone())
             .collect()
+    }
+
+    /// The job with its toolpaths thinned to their tolerances, as they are saved; refused
+    /// when a toolpath of `plan`, as saved, would cut into a keep-out zone.
+    pub(super) fn thinned_for_saving(&self, plan: &[Vec<EntityId>]) -> Result<Document, String> {
+        let thinned = self.options.toolpaths.thinned(&self.doc);
+        // a toolpath that cannot abide by the keep-out zones is not saved; checked on the
+        // moves saved, which the tolerance may have straightened
+        let crossing = self.not_kept_out(&thinned, plan);
+        if !crossing.is_empty() {
+            let clippable = plan
+                .iter()
+                .flatten()
+                .filter_map(|id| thinned.toolpaths.get(id))
+                .any(|t| crossing.contains(&t.name) && can_clip(t));
+            let way = if clippable {
+                format!(", or turn on clipping ({CLIP_SETTING}) and recalculate")
+            } else {
+                " (laser and drill bank toolpaths are not clipped: move the part or the zone)"
+                    .to_owned()
+            };
+            return Err(format!(
+                "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
+                 their clearance are right{way}",
+                crossing.join(", ")
+            ));
+        }
+        Ok(thinned)
     }
 
     /// The names of the keep-out zones `toolpath` cuts into (its cutter's edge reaching
@@ -1182,15 +1298,18 @@ impl CutCraftApp {
     /// Options not allowing it to be clipped there (or it being a laser or drill bank
     /// toolpath, which are not clipped). A clamp is never cut by mistake.
     pub(super) fn keep_out_refusal(&self, change: &Change) -> Option<String> {
+        let mut clippable = false;
         let refused: Vec<String> = change
             .toolpaths_making()
             .filter_map(|t| {
                 let zones = self.zones_entered(t);
+                clippable |= !zones.is_empty() && can_clip(t);
                 (!zones.is_empty())
                     .then(|| format!("{} would cut into {}", t.name, zones.join(" and ")))
             })
             .collect();
-        let way = if self.doc.clip_keep_out {
+        // clipping can't help a laser or drill bank toolpath: they are never clipped
+        let way = if self.doc.clip_keep_out || !clippable {
             "Move the part or the zone (laser and drill bank toolpaths are not clipped)"
         } else {
             &format!(
@@ -1285,23 +1404,153 @@ impl CutCraftApp {
         let Some(path) = dialog.save_file() else {
             return;
         };
-        let path = path.with_extension(&extension);
-        let result = self
-            .write_toolpath_files(form, &post, &path)
-            .and_then(|written| {
-                let done = Self::saved_message(&written, &path);
-                if form.job_sheet {
-                    let folder = path.parent().unwrap_or(std::path::Path::new("."));
-                    let outputs = (written.iter())
-                        .map(|p| (file_name(p), p.is_file()))
-                        .collect();
-                    let sheet = self.job_sheet_with(outputs, folder, &name)?;
-                    return Ok(format!("{done}, with the job sheet {sheet}"));
-                }
-                Ok(done)
-            });
+        let path = files::with_extension_added(&path, &extension);
+        self.save_over_earlier(form, post, path, told);
+    }
+
+    /// Save Toolpaths' Save once the file is named: straight on when no earlier save left
+    /// G-code there, else as Options say (Replace or Archive), or held for the question.
+    pub(super) fn save_over_earlier(
+        &mut self,
+        form: &SaveForm,
+        post: cut_craft_post::Post,
+        path: std::path::PathBuf,
+        told: String,
+    ) {
+        let earlier = files::earlier_save(&path);
+        if earlier.is_empty() {
+            self.finish_save(form, &post, &path, &told, "");
+            return;
+        }
+        match self.options.confirmations.earlier_gcode {
+            crate::options::EarlierGcode::Ask => {
+                self.earlier_ask = Some(super::EarlierAsk {
+                    form: form.clone(),
+                    post,
+                    path,
+                    told,
+                    earlier,
+                    remember: false,
+                    sending: false,
+                });
+            }
+            choice => self.save_with(choice, form, &post, &path, &told, &earlier),
+        }
+    }
+
+    /// The answer to the earlier-save question: `None` saves nothing. `remember` keeps the
+    /// answer as the default (Edit ▸ Options ▸ Confirmations).
+    pub(super) fn answer_earlier(
+        &mut self,
+        choice: Option<crate::options::EarlierGcode>,
+        remember: bool,
+    ) {
+        let Some(ask) = self.earlier_ask.take() else {
+            return;
+        };
+        let Some(choice) = choice else {
+            return self.status.set_message("Toolpaths not saved");
+        };
+        if remember {
+            self.options.confirmations.earlier_gcode = choice;
+            self.save_options();
+        }
+        if ask.sending {
+            return self.send_choosing(&ask.form, ask.post, ask.told, choice);
+        }
+        self.save_with(
+            choice,
+            &ask.form,
+            &ask.post,
+            &ask.path,
+            &ask.told,
+            &ask.earlier,
+        );
+    }
+
+    /// Replaces (deletes) or archives `earlier`, then saves. They are moved aside first
+    /// (into the archive, or a hidden folder for Replace) so the new files never mix with
+    /// them, and put back if the new files cannot be written: a failed save never leaves
+    /// the user with no G-code at all.
+    fn save_with(
+        &mut self,
+        choice: crate::options::EarlierGcode,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+        told: &str,
+        earlier: &[std::path::PathBuf],
+    ) {
+        use crate::options::EarlierGcode;
+        let archiving = choice == EarlierGcode::Archive;
+        let moved = if archiving {
+            files::archive(earlier, path, chrono::Local::now().naive_local())
+        } else {
+            files::set_aside(earlier, path)
+        };
+        let folder = match moved {
+            Ok(folder) => folder,
+            Err(e) => {
+                let doing = if archiving { "archive" } else { "replace" };
+                return self
+                    .status
+                    .set_message(&format!("Not saved: could not {doing} {e}"));
+            }
+        };
+        let done = if archiving {
+            format!("; the earlier files are in {}", folder.display())
+        } else {
+            String::new()
+        };
+        if self.finish_save(form, post, path, told, &done) {
+            if !archiving {
+                let _ = std::fs::remove_dir_all(&folder);
+            }
+            return;
+        }
+        let kept = match files::put_back(earlier, &folder, path) {
+            Ok(()) => "; the earlier files were left as they were".to_owned(),
+            Err(e) => format!(
+                "; the earlier files are in {} (could not put back {e})",
+                folder.display()
+            ),
+        };
+        let message = format!("{}{kept}", self.status.message);
+        self.status.set_message(&message);
+    }
+
+    /// Writes the files (and the job sheet) and says what was saved, then `after` and
+    /// `told`; whether the G-code files were written.
+    fn finish_save(
+        &mut self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+        told: &str,
+        after: &str,
+    ) -> bool {
+        let (_, name) = self.project();
+        let written = match self.write_toolpath_files(form, post, path) {
+            Ok(written) => written,
+            Err(e) => {
+                self.status.set_message(&e);
+                return false;
+            }
+        };
+        let done = Self::saved_message(&written, path, self.doc.tiling.is_some());
+        let result = if form.job_sheet {
+            let folder = path.parent().unwrap_or(std::path::Path::new("."));
+            let outputs = (written.iter())
+                .map(|p| (file_name(p), p.is_file()))
+                .collect();
+            self.job_sheet_with(outputs, folder, &name)
+                .map(|sheet| format!("{done}, with the job sheet {sheet}"))
+        } else {
+            Ok(done)
+        };
         self.status
-            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{after}{told}")));
+        true
     }
 
     /// Save Toolpaths' post and the checks before cutting, asked about when they find
@@ -1325,7 +1574,14 @@ impl CutCraftApp {
                 return None;
             }
         };
-        let found = self.preflight(&plan, form.changes);
+        let Some(found) = self.save_checks(&plan, form.changes).map(<[_]>::to_vec) else {
+            self.status.set_message(if self.checking() {
+                "Still checking the toolpaths before cutting: save again once the checks finish"
+            } else {
+                "The checks before cutting were cancelled: press Check Again, then save"
+            });
+            return None;
+        };
         if let Some(refused) = Self::refused(&found) {
             self.status.set_message(&refused);
             return None;
@@ -1419,10 +1675,16 @@ impl CutCraftApp {
         }
     }
 
+    /// The active machine has a tool changer (slots in Machine Configuration); with no
+    /// machine set up there is none.
+    pub(super) fn has_tool_changer(&self) -> bool {
+        self.machines.active().is_some_and(|m| !m.slots.is_empty())
+    }
+
     /// How tools are changed unless the form says otherwise: by the tool changer when the
     /// active machine has one, else a file for each tool.
     pub(super) fn default_changes(&self) -> files::ToolChanges {
-        if self.machines.active().is_some_and(|m| !m.slots.is_empty()) {
+        if self.has_tool_changer() {
             files::ToolChanges::ToolChanger
         } else {
             files::ToolChanges::SeparateFiles
@@ -1437,7 +1699,7 @@ impl CutCraftApp {
             Some(name) => self.posts.load(name),
             None => self.output_post(),
         }?;
-        let changer = self.machines.active().is_some_and(|m| !m.slots.is_empty());
+        let changer = self.has_tool_changer();
         Ok(match form.changes {
             files::ToolChanges::Pause => post.with_pauses(),
             // changed by hand between files: no tool changer call (M6) for the first tool
@@ -1478,31 +1740,73 @@ impl CutCraftApp {
         Self::by_tool(form, post) && form.mode != files::SaveMode::VisibleToMultipleFiles
     }
 
-    /// The checks before cutting for Save Toolpaths' `plan`, worked out again only when the
-    /// plan, the job or the machine changed.
+    /// The checks before cutting for `plan` (Save Toolpaths', or the Analyse tab's), worked
+    /// out again only when the plan, the job or the machine changed. They run off the
+    /// window's thread, with their progress and Cancel over the window: a 3D finish of
+    /// millions of moves takes a while to check, and the window must keep drawing. `None`
+    /// while they run, or once they were cancelled ([`Self::check_again`] runs them again).
     pub(super) fn save_checks(
         &mut self,
         plan: &[Vec<EntityId>],
         changes: files::ToolChanges,
-    ) -> &[cut_craft_core::preflight::Finding] {
-        let (revision, machine) = (self.history.revision(), self.machines.active);
-        let fresh = self.save_checks.as_ref().is_some_and(|c| {
-            c.plan == plan && c.changes == changes && c.revision == revision && c.machine == machine
-        });
-        if !fresh {
-            self.save_checks = Some(SaveChecks {
-                plan: plan.to_vec(),
-                changes,
-                revision,
-                machine,
-                found: self.preflight(plan, changes),
-            });
+    ) -> Option<&[cut_craft_core::preflight::Finding]> {
+        let key = SaveChecks {
+            plan: plan.to_vec(),
+            changes,
+            revision: self.history.revision(),
+            machine: self.machines.active,
+            found: None,
+        };
+        if !self.save_checks.iter().any(|c| c.same(&key)) {
+            // the Analyse tab's and Save Toolpaths' can both be showing: keep one for each
+            if self.save_checks.len() >= super::KEPT_CHECKS {
+                self.save_checks.remove(0);
+            }
+            self.save_checks.push(key.clone());
+            let doc = self.doc.clone();
+            let mut limits = self.limits();
+            if changes != files::ToolChanges::ToolChanger {
+                limits.slots.clear();
+            }
+            let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
+            let started = key.clone();
+            self.in_background(
+                super::CHECKING,
+                move || {
+                    let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
+                        ids.iter().filter_map(|id| doc.toolpaths.get(id)).collect();
+                    cut_craft_core::preflight::check(&doc, &toolpaths, &limits)
+                },
+                move |app, found| {
+                    if let Some(checks) = app.save_checks.iter_mut().find(|c| c.same(&started)) {
+                        checks.found = Some(found);
+                    }
+                },
+            );
         }
-        &self.save_checks.as_ref().expect("just filled").found
+        self.save_checks
+            .iter()
+            .find(|c| c.same(&key))?
+            .found
+            .as_deref()
+    }
+
+    /// Whether the checks before cutting are running now (else, when [`Self::save_checks`]
+    /// has none, they were cancelled).
+    pub(super) fn checking(&self) -> bool {
+        self.busy
+            .as_ref()
+            .is_some_and(|b| b.what() == super::CHECKING)
+    }
+
+    /// Runs the cancelled checks before cutting again, next time they are asked for.
+    pub(super) fn check_again(&mut self) {
+        self.save_checks.retain(|c| c.found.is_some());
     }
 
     /// What the checks before cutting find in `plan`'s toolpaths, cut in its order on the
     /// active machine; its tool changer's slots are checked only when it changes the tools.
+    #[cfg(test)]
     pub(super) fn preflight(
         &self,
         plan: &[Vec<EntityId>],
@@ -1517,7 +1821,19 @@ impl CutCraftApp {
         if changes != files::ToolChanges::ToolChanger {
             limits.slots.clear();
         }
-        cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits)
+        let mut found = cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits);
+        if changes == files::ToolChanges::ToolChanger && !self.has_tool_changer() {
+            found.push(cut_craft_core::preflight::Finding {
+                severity: cut_craft_core::preflight::Severity::Warning,
+                message: "Tool changer (ATC) is chosen, but the machine has no tool changer \
+                          set up: the file changes tools with M6, which a machine without \
+                          one stops on or ignores, cutting on with the wrong bit. Choose \
+                          Separate file for each tool, or add the tool changer's slots in \
+                          Machine Configuration"
+                    .into(),
+            });
+        }
+        found
     }
 
     /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when
@@ -1543,18 +1859,32 @@ impl CutCraftApp {
         Ok(Self::saved_message(
             &self.write_toolpath_files(form, post, path)?,
             path,
+            self.doc.tiling.is_some(),
         ))
     }
 
-    /// What the status bar says once `written` are saved, beside `path`.
-    fn saved_message(written: &[std::path::PathBuf], path: &std::path::Path) -> String {
-        match written {
+    /// What the status bar says once `written` are saved, beside `path`; `tiled` while
+    /// Toolpath Tiling is on, which names the files by tile.
+    pub(super) fn saved_message(
+        written: &[std::path::PathBuf],
+        path: &std::path::Path,
+        tiled: bool,
+    ) -> String {
+        let saved = match written {
             [one] => format!("Saved toolpaths to {}", one.display()),
             _ => format!(
                 "Saved {} toolpath files beside {}",
                 written.len(),
                 path.display()
             ),
+        };
+        if tiled {
+            format!(
+                "{saved}, one for each tile with something to cut: Toolpath Tiling is on \
+                 (Toolpaths ▸ Toolpath Tiling to turn it off)"
+            )
+        } else {
+            saved
         }
     }
 
@@ -1567,17 +1897,7 @@ impl CutCraftApp {
         path: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, String> {
         let plan = self.plan(form, post)?;
-        // a toolpath that cannot abide by the keep-out zones is not saved
-        let crossing = self.not_kept_out(&plan);
-        if !crossing.is_empty() {
-            return Err(format!(
-                "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
-                 their clearance are right, or turn on clipping ({CLIP_SETTING}) and \
-                 recalculate",
-                crossing.join(", ")
-            ));
-        }
-        let thinned = self.options.toolpaths.thinned(&self.doc);
+        let thinned = self.thinned_for_saving(&plan)?;
         let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
             if self.doc.bottom_side {
                 "Bottom"
@@ -1598,7 +1918,12 @@ impl CutCraftApp {
                     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
                     let extension = path.extension().unwrap_or_default().to_string_lossy();
                     let named = path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
-                    files::save_through(post, &slots, &tiling.tiled(part, tile), &named, job)?;
+                    let in_tile = tiling.tiled(part, tile);
+                    // nothing to cut there: no file to change tools and start the spindle for
+                    if in_tile.toolpaths.is_empty() {
+                        continue;
+                    }
+                    files::save_through(post, &slots, &in_tile, &named, job)?;
                     written.push(named);
                 }
             } else {
@@ -1683,12 +2008,37 @@ impl CutCraftApp {
     /// Reads the machines and finds the custom posts, kept in the config folder.
     pub(super) fn load_machines(&mut self) {
         let dir = files::config_dir();
-        self.machines_path = dir.as_ref().map(|d| d.join("machines.json"));
-        if let Some(path) = &self.machines_path {
-            self.machines = cut_craft_machines::Machines::load(path);
+        if let Some(path) = dir.as_ref().map(|d| d.join("machines.json")) {
+            self.load_machines_at(&path);
         }
-
         self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
+    }
+
+    /// Reads the machines kept at `path`. One that cannot be read is said, copied aside to
+    /// `machines.json.bad`, and never saved over this run: machine changes are not saved
+    /// until it is put right or moved away and Cut Craft is started again.
+    pub(super) fn load_machines_at(&mut self, path: &std::path::Path) {
+        match cut_craft_machines::Machines::load(path) {
+            Ok(machines) => {
+                self.machines = machines;
+                self.machines_path = Some(path.to_owned());
+            }
+            Err(e) => {
+                log::warn!("machines not read: {e}");
+                let aside = path.with_extension("json.bad");
+                let kept = match std::fs::copy(path, &aside) {
+                    Ok(_) => format!("a copy is kept as {}", aside.display()),
+                    Err(_) => "it is left as it is".to_owned(),
+                };
+                self.status.set_message(&format!(
+                    "Your machines could not be read ({e}); {kept}. Machine changes will not \
+                     be saved until it is fixed or moved away and Cut Craft is restarted"
+                ));
+                self.machines = cut_craft_machines::Machines::default();
+                self.machines_path = None;
+                self.machines_unsaved = true;
+            }
+        }
     }
 
     /// The active machine's tool changer was loaded differently: the machines are saved,
@@ -1704,6 +2054,13 @@ impl CutCraftApp {
 
     /// Writes the machines, if they have a file, and reports `done` or the failure.
     pub(super) fn machines_changed(&mut self, done: &str) {
+        if self.machines_unsaved {
+            self.status.set_message(&format!(
+                "{done}, but not saved: the machines file could not be read when Cut Craft \
+                 started, so it is not saved over"
+            ));
+            return;
+        }
         let result = self
             .machines_path
             .as_deref()
@@ -1715,24 +2072,45 @@ impl CutCraftApp {
     /// Install Offline Package: the machines in a package file (`machines/` in the repository)
     /// that are not here already by name.
     pub(super) fn install_package(&mut self, path: &std::path::Path) {
-        let package = std::fs::read(path)
-            .map_err(|e| e.to_string())
-            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
-        let package: cut_craft_machines::Machines = match package {
-            Ok(package) => package,
-            Err(e) => {
-                return self
-                    .status
-                    .set_message(&format!("{}: not a machine package ({e})", path.display()));
-            }
+        let Some(package) = self.read_package(path) else {
+            return;
         };
         let (added, here) = self.machines.install(package);
-        let here = if here > 0 {
-            format!(", {here} already here")
-        } else {
-            String::new()
+        self.machines_changed(&installed_machines(added, here));
+    }
+
+    /// Machine Configuration's Install Offline Package: the package's machines added to the
+    /// machines being edited, kept with Apply or OK like any other edit there.
+    pub(super) fn machine_outcome_install(&mut self, path: &std::path::Path) {
+        let Some(package) = self.read_package(path) else {
+            return;
         };
-        self.machines_changed(&format!("Installed {added} machines{here}"));
+        let Some(window) = self.machine_window.as_mut() else {
+            return self.install_package(path);
+        };
+        let (added, here) = window.draft.install(package);
+        let done = installed_machines(added, here);
+        self.status
+            .set_message(&format!("{done}; Apply or OK keeps them"));
+    }
+
+    /// The machine package at `path`, read; `None` with the status bar saying why not.
+    fn read_package(&mut self, path: &std::path::Path) -> Option<cut_craft_machines::Machines> {
+        let package = std::fs::read(path)
+            .map_err(|e| crate::messages::could_not_read(path, &e))
+            .and_then(|bytes| {
+                serde_json::from_slice(&bytes).map_err(|e| {
+                    log::warn!("{}: not a machine package ({e})", path.display());
+                    crate::messages::not_a_machine_package(path)
+                })
+            });
+        match package {
+            Ok(package) => Some(package),
+            Err(message) => {
+                self.status.set_message(&message);
+                None
+            }
+        }
     }
 
     /// Install Post-Processor: copied into the custom posts. A machine with no posts yet (or
@@ -1753,6 +2131,12 @@ impl CutCraftApp {
                 entry.name, machine.name
             );
             self.machines_changed(&done);
+        } else if entry.name.contains(" (copy ") {
+            self.status.set_message(&format!(
+                "Installed as {}: a post with its name was already listed, so this one is \
+                 kept beside it. Pick it in Machine Configuration to use it",
+                entry.name
+            ));
         } else {
             self.status
                 .set_message(&format!("Installed {}", entry.name));
@@ -1803,6 +2187,12 @@ impl CutCraftApp {
                         }
                     }
                 }
+                MachineOutcome::InstallPackage => {
+                    let dialog = file_dialog().add_filter("Machine package", &["json"]);
+                    if let Some(path) = dialog.pick_file() {
+                        self.machine_outcome_install(&path);
+                    }
+                }
                 MachineOutcome::ManageFiles => {
                     if let Some(machine) = draft.active() {
                         let (name, send_to) = (machine.name.clone(), machine.send_to.clone());
@@ -1828,6 +2218,15 @@ impl CutCraftApp {
                 }
             }
             PostOutcome::Select(name) => {
+                let wraps = self.doc.job.rotary.map(|r| match r.along {
+                    cut_craft_core::document::Along::X => "Y",
+                    cut_craft_core::document::Along::Y => "X",
+                });
+                let picked = self
+                    .posts
+                    .load(&name)
+                    .ok()
+                    .map(|p| p.wraps().map(str::to_owned));
                 // into Machine Configuration's edits when it is open, else the machines
                 let machines = match &mut self.machine_window {
                     Some(window) => &mut window.draft,
@@ -1840,7 +2239,36 @@ impl CutCraftApp {
                 if !machine.posts.contains(&name) {
                     machine.posts.push(name.clone());
                 }
-                let done = format!("{} can save through {name}", machine.name);
+                // the post picked is the one toolpaths save through from now on
+                machine.default_post = Some(name.clone());
+                let mut done = format!("{} now saves through {name}", machine.name);
+                // the default is used only for jobs it suits (flat, or wrapping the same
+                // side): a job it does not suit saves through the machine's first that does
+                if let Some(picked) = picked.filter(|p| p.as_deref() != wraps) {
+                    let kind = match &picked {
+                        None => "flat jobs".to_owned(),
+                        Some(axis) => format!("rotary jobs wrapping {axis} onto A"),
+                    };
+                    let job = if wraps.is_some() {
+                        "this job wraps round"
+                    } else {
+                        "this job is flat"
+                    };
+                    let used = (machine.posts.iter())
+                        .find(|n| self.posts.load(n).is_ok_and(|p| p.wraps() == wraps));
+                    done = match used {
+                        Some(used) => format!(
+                            "{} now saves {kind} through {name}; {job}, so it saves through \
+                             {used}",
+                            machine.name
+                        ),
+                        None => format!(
+                            "{} now saves {kind} through {name}; {job}, and none of its posts \
+                             suits it: add one in Machine Configuration",
+                            machine.name
+                        ),
+                    };
+                }
                 if self.machine_window.is_some() {
                     self.status
                         .set_message(&format!("{done} once Machine Configuration is applied"));
@@ -1911,6 +2339,17 @@ impl CutCraftApp {
                 self.status.set_message(&e);
             }
         } else {
+            // a placing tool opened over a form keeps that form, edits and all, for Esc to go
+            // back to; any other form lets it go
+            if self.placing(id) {
+                if let Some(behind) =
+                    (self.form.take()).filter(|f| f.id != id && !f.new_job && !self.placing(f.id))
+                {
+                    self.form_behind = Some(behind);
+                }
+            } else {
+                self.form_behind = None;
+            }
             self.form = Some(OpenForm {
                 id: cmd.id(),
                 label: meta.label,
@@ -1934,6 +2373,8 @@ impl CutCraftApp {
                 applied: None,
                 remade: None,
                 undo_from: self.history.undo_depth(),
+                list_steps: Vec::new(),
+                in_list: false,
                 way: crate::flyout::DragWay::AsIs,
             });
             // a form shows in its page, so bring an auto-hidden page out
@@ -1975,8 +2416,17 @@ impl CutCraftApp {
         }
         match self.session.save(&self.doc, &self.history, path) {
             Ok(()) => {
-                self.status
-                    .set_message(&format!("Saved {}", path.display()));
+                let mut saved = format!("Saved {}", path.display());
+                // said again as it happens: the opening warning is long gone by now
+                if !self.session.newer_settings.is_empty() {
+                    saved = format!(
+                        "{saved}. Warning: settings this version of Cut Craft does not know \
+                         were left out ({}). Update Cut Craft (Help ▸ Check for Updates) and \
+                         open the original to keep them",
+                        self.session.newer_settings.join(", ")
+                    );
+                }
+                self.status.set_message(&saved);
                 self.remember(path);
                 self.clear_recovery();
             }
@@ -2023,6 +2473,8 @@ impl CutCraftApp {
                     session.path = None;
                 }
                 (self.doc, self.history, self.session) = (doc, history, session);
+                // a fresh history counts its revisions from the start again
+                self.picked_constraint = None;
                 self.screen = Screen::Job;
                 if !template {
                     self.remember(path);
@@ -2030,11 +2482,32 @@ impl CutCraftApp {
                 if self.doc.notes.starts_with('.') {
                     self.start_command("notes");
                 }
+                // a job saved before one of its bits was renamed takes the new name
+                let renamed: Vec<(String, String)> = (self.doc.toolpaths.values())
+                    .filter_map(|t| {
+                        let now = self.tools.renamed_now(&t.tool)?;
+                        Some((t.tool.name.clone(), now.to_owned()))
+                    })
+                    .collect();
+                let mut opened = format!("Opened {}", super::file_name(path));
+                if !self.session.newer_settings.is_empty() {
+                    opened = format!(
+                        "{opened}. Warning: it was saved by a newer version of Cut Craft, and \
+                         this one does not know some of its settings ({}): saving it here \
+                         leaves them out. Update Cut Craft (Help ▸ Check for Updates) to keep \
+                         them",
+                        self.session.newer_settings.join(", ")
+                    );
+                }
+                self.status.set_message(&opened);
+                self.rename_toolpath_tools(&renamed, &opened);
                 true
             }
             Err(e) => {
                 self.status.set_message(&e);
-                if self.recent.iter().any(|p| p == path) {
+                // only a file that has gone leaves Recent Files: a damaged one (perhaps a
+                // sync still going) or one needing a newer Cut Craft stays to try again
+                if !path.exists() && self.recent.iter().any(|p| p == path) {
                     self.recent.retain(|p| p != path);
                     self.save_recent();
                 }
@@ -2053,8 +2526,14 @@ impl CutCraftApp {
         }
     }
 
+    /// The recent files listed: as many as Options lists. More are kept (up to
+    /// [`files::RECENT_KEPT`]), so a smaller list only hides the rest until it grows again.
+    pub(super) fn recent_shown(&self) -> &[std::path::PathBuf] {
+        &self.recent[..self.recent.len().min(self.options.recent_count())]
+    }
+
     pub(super) fn remember(&mut self, path: &std::path::Path) {
-        files::remember(&mut self.recent, path, self.options.recent_count());
+        files::remember(&mut self.recent, path, files::RECENT_KEPT);
         self.save_recent();
     }
 
@@ -2117,18 +2596,84 @@ impl CutCraftApp {
         self.autosaved.0 = self.history.revision();
     }
 
+    /// At startup: this window's recovery copy claimed in the settings folder, and a crashed
+    /// run's work opened if one left any.
+    pub(super) fn start_recovery(&mut self) {
+        if let Some(dir) = files::config_dir() {
+            self.claim_recovery(&dir, &std::process::id().to_string());
+        }
+        self.open_recovery();
+    }
+
+    /// A file named on the command line (Open With, or dragged onto the launcher), handled
+    /// much as if dropped on the window: a job opens; a drawing or picture is imported into
+    /// the open job or, with none open (the start page), into a new one once Job Setup's OK
+    /// has made it.
+    pub(super) fn open_given(&mut self, path: Option<&std::path::Path>) {
+        let Some(path) = path else {
+            return;
+        };
+        if self.screen == Screen::Job || !Self::drop_imports(path) {
+            self.drop_file(path);
+            return;
+        }
+        self.file_action("new");
+        if self.screen == Screen::NewJob {
+            self.import_after_setup = Some(path.to_owned());
+            self.status.set_message(&format!(
+                "Set up the material, then OK makes the job and imports {} into it",
+                file_name(path)
+            ));
+        }
+    }
+
+    /// This window's own recovery copy, in `dir`, named for `run` (the process), and locked
+    /// for as long as the window is open (where the folder can lock files). A folder that
+    /// cannot be written says so in the status bar.
+    pub(super) fn claim_recovery(&mut self, dir: &std::path::Path, run: &str) {
+        if let Some((own, lock)) = files::claim_recovery(dir, run) {
+            (self.recovery_path, self.recovery_lock) = (Some(own), lock);
+        } else {
+            (self.recovery_path, self.recovery_lock) = (None, None);
+            self.status.set_message(&format!(
+                "Warning: unsaved work cannot be copied for recovery, because {} cannot be \
+                 written. Save often",
+                dir.display()
+            ));
+        }
+    }
+
     /// The recovery copy a run that ended badly left, opened as an unsaved job; whether
-    /// there was one. It stays until the job is saved or closed.
+    /// there was one. Another window's copy, still running, is left alone. The work becomes
+    /// this window's copy, kept until the job is saved or closed.
     pub(super) fn open_recovery(&mut self) -> bool {
-        let Some(doc) = self
-            .recovery_path
-            .as_ref()
-            .and_then(|p| std::fs::read(p).ok())
-            .and_then(|bytes| cut_craft_core::file::load_job(&bytes).ok())
+        let Some(own) = self.recovery_path.clone() else {
+            return false;
+        };
+        let Some(left) = own
+            .parent()
+            .and_then(|dir| files::orphaned_recovery(dir, &own))
         else {
             return false;
         };
+        let Some((bytes, doc)) = std::fs::read(&left).ok().and_then(|bytes| {
+            let doc = cut_craft_core::file::load_job(&bytes).ok()?;
+            Some((bytes, doc))
+        }) else {
+            return false;
+        };
         self.reset_job();
+        // kept as this run's copy, so the work is still there if this run ends badly too
+        // before anything is changed (autosave writes it again then)
+        match cut_craft_core::file::write_atomic(&own, &bytes) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&left);
+                let _ = std::fs::remove_file(left.with_extension("lock"));
+            }
+            Err(e) => self
+                .status
+                .set_message(&format!("could not keep the recovery copy: {e}")),
+        }
         self.doc = doc;
         self.session = Session::unsaved();
         self.screen = Screen::Job;
@@ -2141,6 +2686,7 @@ impl CutCraftApp {
     /// Back to nothing: no job, no form, no preview.
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
+        self.picked_constraint = None;
         self.job_epoch += 1;
         if let Some(job) = self.options.default_job {
             self.doc.job = job;
@@ -2154,18 +2700,29 @@ impl CutCraftApp {
             self.surface_gpu,
             self.rough_3d,
         ) = (None, None, None, None, None, None);
+        // the old job's preview playback, its controls and its undo go with it
+        (self.playback, self.kept_playback, self.before_preview) = (None, None, None);
+        (self.playing, self.playback_goal, self.playback_shown) = (false, None, None);
+        (self.playback_view, self.playback_gpu) = (None, None);
+        self.preview_side = self.doc.bottom_side;
         self.clear_recovery();
     }
 
     /// Set as Default in Job Setup: new jobs start with the job its settings make.
     pub(super) fn job_setup_default(&mut self) {
         let Some(form) = &mut self.form else { return };
-        // made on an empty document, so only the job's own settings count
+        // made on an empty document, so only the job's own settings count; it starts from
+        // the default kept now, so what is not on the form (Clearing Settings' Use as My
+        // Default, the preview colours, where the model sits) is kept as it was
+        let mut empty = Document::default();
+        if let Some(job) = self.options.default_job {
+            empty.job = job;
+        }
         let made = self
             .registry
             .get(form.id)
             .expect("only registered commands have forms")
-            .run_json(&Document::default(), &form.params)
+            .run_json(&empty, &form.params)
             .map_err(|e| e.to_string())
             .and_then(|change| {
                 change
@@ -2201,9 +2758,13 @@ impl CutCraftApp {
         match made {
             Ok(()) => {
                 (self.history, self.session) = Default::default();
+                self.picked_constraint = None;
                 self.screen = Screen::Job;
                 self.status.set_message("New job created");
                 "Select".clone_into(&mut self.status.current_tool);
+                if let Some(path) = self.import_after_setup.take() {
+                    self.import_file(&path);
+                }
             }
             Err(e) => {
                 form.error = Some(e);
@@ -2213,6 +2774,7 @@ impl CutCraftApp {
     }
 
     pub(super) fn job_setup_cancel(&mut self) {
+        self.import_after_setup = None;
         self.reset_job();
         "Select".clone_into(&mut self.status.current_tool);
         self.screen = Screen::Start;
@@ -2223,8 +2785,9 @@ impl CutCraftApp {
             return;
         };
         let dialog = file_dialog().add_filter(format.label, format.extensions);
-        if let Some(path) = dialog.save_file() {
-            let path = path.with_extension(format.extensions[0]);
+        if let Some(path) = dialog.save_file()
+            && let Some(path) = saving_path(&path, format.extensions)
+        {
             let result = files::export(&self.registry, id, &self.doc, &path);
             self.status.set_message(
                 &result.map_or_else(|e| e, |()| format!("Exported {}", path.display())),
@@ -2240,30 +2803,87 @@ impl CutCraftApp {
         }
         let answer = message_dialog()
             .set_title(APP_NAME)
-            .set_description(format!(
-                "Save changes to {}?",
-                self.session.title(APP_NAME, &self.history)
+            .set_description(self.save_changes_question())
+            .set_buttons(rfd::MessageButtons::YesNoCancelCustom(
+                SAVE.into(),
+                DONT_SAVE.into(),
+                "Cancel".into(),
             ))
-            .set_buttons(rfd::MessageButtons::YesNoCancel)
             .show();
+        self.discard_answered(&answer)
+    }
+
+    /// File ▸ Save As: the job saved under the name and folder the person picks.
+    fn save_as(&mut self) {
+        let (folder, name) = self.save_as_suggestion();
+        let dialog = job_dialog().set_file_name(name);
+        let dialog = match folder {
+            Some(folder) => dialog.set_directory(folder),
+            None => dialog,
+        };
+        if let Some(path) = dialog.save_file()
+            && let Some(path) = saving_path(&path, &[JOB_EXTENSION])
+        {
+            self.save_to(&path);
+        }
+    }
+
+    /// Where Save As starts: the job's own folder and name when it has a file, else
+    /// `untitled.ccjob` wherever file dialogs open.
+    pub(super) fn save_as_suggestion(&self) -> (Option<std::path::PathBuf>, String) {
+        let Some(path) = &self.session.path else {
+            return (None, format!("untitled.{JOB_EXTENSION}"));
+        };
+        let name = path.file_stem().map_or_else(
+            || "untitled".to_owned(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        (
+            path.parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .map(std::path::Path::to_owned),
+            format!("{name}.{JOB_EXTENSION}"),
+        )
+    }
+
+    /// The question asked before unsaved work is replaced: the job's file name alone.
+    pub(super) fn save_changes_question(&self) -> String {
+        let name = self
+            .session
+            .path
+            .as_deref()
+            .and_then(std::path::Path::file_name)
+            .map_or_else(
+                || "Untitled".to_owned(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+        format!("Save changes to {name}?")
+    }
+
+    /// What the answer at "Save changes?" means: true when the job may be replaced. No only
+    /// lets the work go: the job stays marked unsaved until something actually replaces it,
+    /// so backing out afterwards (a cancelled file picker, a file that will not open) loses
+    /// nothing and is asked about again.
+    pub(super) fn discard_answered(&mut self, answer: &rfd::MessageDialogResult) -> bool {
+        let answer = match answer {
+            rfd::MessageDialogResult::Custom(c) if c == SAVE => &rfd::MessageDialogResult::Yes,
+            rfd::MessageDialogResult::Custom(c) if c == DONT_SAVE => &rfd::MessageDialogResult::No,
+            other => other,
+        };
         match answer {
             rfd::MessageDialogResult::Yes => {
-                match self
-                    .session
-                    .path
-                    .clone()
-                    .or_else(|| job_dialog().save_file())
-                {
-                    Some(path) => self.save_to(&path.with_extension(JOB_EXTENSION)),
+                let path = self.session.path.clone().or_else(|| {
+                    job_dialog()
+                        .save_file()
+                        .and_then(|path| saving_path(&path, &[JOB_EXTENSION]))
+                });
+                match path {
+                    Some(path) => self.save_to(&path),
                     None => return false,
                 }
                 !self.session.is_dirty(&self.history)
             }
-            rfd::MessageDialogResult::No => {
-                // asked once: a repeated close request must not ask again
-                self.session.discard_changes(&self.history);
-                true
-            }
+            rfd::MessageDialogResult::No => true,
             _ => false,
         }
     }
@@ -2588,9 +3208,10 @@ impl CutCraftApp {
                             .find(|(_, f)| {
                                 ext.as_deref().is_some_and(|x| f.extensions.contains(&x))
                             })
-                            .map_or(("export_dxf", path.with_extension("dxf")), |(id, _)| {
-                                (*id, path.clone())
-                            });
+                            .map_or(
+                                ("export_dxf", files::named_for_saving(&path, &["dxf"])),
+                                |(id, _)| (*id, path.clone()),
+                            );
                         files::export(&self.registry, id, &self.doc, &path).map(|()| {
                             self.status
                                 .set_message(&format!("Exported {}", path.display()));
@@ -2937,8 +3558,23 @@ impl CutCraftApp {
         let mut without = self.doc.clone();
         without.apply(&taken).map_err(|e| e.to_string())?;
         let made = cmd.run_json(&without, params).map_err(|e| e.to_string())?;
+        // a shape changed inside a group stays in that group
+        let mut regrouped = Vec::new();
+        if let Some(&group) = self.doc.vector_groups.get(&old) {
+            let mut after = without.clone();
+            after.apply(&made).map_err(|e| e.to_string())?;
+            let mut c = Change::builder(&after);
+            for edit in &made.edits {
+                if let cut_craft_core::Edit::Add { id, .. } = edit {
+                    c.set_group(*id, Some(group));
+                }
+            }
+            regrouped = c.finish().edits;
+        }
         let change = Change {
-            edits: taken.edits.into_iter().chain(made.edits).collect(),
+            edits: (taken.edits.into_iter().chain(made.edits))
+                .chain(regrouped)
+                .collect(),
             notes: made.notes,
             unit_guess: made.unit_guess,
         };
@@ -3186,19 +3822,32 @@ impl CutCraftApp {
         ));
     }
 
-    /// After Swap Sides, a double-sided preview turned over with the job: its other side on
-    /// top, the side that was up underneath.
-    fn turn_preview_over(&mut self) {
+    /// Once the job has turned over (Swap Sides, its undo or its redo), the preview turns
+    /// with it: its other side on top, the side that was up underneath. A side never
+    /// previewed comes up uncut, so the one that was up is kept underneath, not lost.
+    pub(super) fn follow_side(&mut self) {
+        if self.doc.bottom_side == self.preview_side {
+            return;
+        }
+        self.preview_side = self.doc.bottom_side;
+        if self.simulation.is_none() {
+            return;
+        }
         self.finish_playback();
         let Some(mut top) = self.simulation.take() else {
             return;
         };
-        let under = top.other_side.take();
-        self.simulation = under.map(|under| {
-            let mut now_up = std::sync::Arc::unwrap_or_clone(under);
-            now_up.other_side = Some(std::sync::Arc::new(top));
-            now_up
-        });
+        let mut now_up = if let Some(under) = top.other_side.take() {
+            std::sync::Arc::unwrap_or_clone(under)
+        } else {
+            let mut fresh = top.clone();
+            fresh.heights.fill(0.0);
+            fresh.cut_by.fill(0);
+            (fresh.paint, fresh.under) = (vec![], vec![]);
+            fresh
+        };
+        now_up.other_side = Some(std::sync::Arc::new(top));
+        self.simulation = Some(now_up);
         (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
     }
 
@@ -3215,7 +3864,52 @@ impl CutCraftApp {
     pub(super) fn apply(&mut self, id: &str, params: &Value) -> Result<(), String> {
         self.crossings_allowed(id, params)?;
         let change = super::background::command_change(&self.registry, &self.doc, id, params);
-        self.applied(id, params, change)
+        let depth = self.history.undo_depth();
+        self.applied(id, params, change)?;
+        // made in the toolpath list beside an open form: noted, for its Cancel to make again
+        if self.history.undo_depth() > depth
+            && let Some(form) = self.form.as_mut().filter(|f| f.in_list)
+        {
+            form.list_steps.push((id.to_owned(), params.clone()));
+        }
+        Ok(())
+    }
+
+    /// A toolpath list change's settings made to fit the job as it is now, after Cancel took
+    /// back what the form did: the toolpaths it names that are gone are left out (or the
+    /// change, when it was on one of them), and a show/hide keeps each name as it now is.
+    fn list_step_again(&self, id: &str, params: &Value) -> Option<Value> {
+        let toolpaths = &self.doc.toolpaths;
+        let exists = |v: &Value| {
+            v.as_u64()
+                .is_some_and(|n| toolpaths.contains_key(&EntityId(n)))
+        };
+        let mut params = params.clone();
+        if let Some(one) = params.get("toolpath") {
+            let n = one.as_u64().filter(|_| exists(one))?;
+            if id == "toolpath_properties" {
+                params["name"] = Value::from(toolpaths[&EntityId(n)].name.clone());
+            }
+        }
+        if let Some(Value::Array(ids)) = params.get_mut("toolpaths") {
+            ids.retain(exists);
+        }
+        if let Some(Value::Object(groups)) = params.get_mut("groups") {
+            groups.retain(|key, _| {
+                key.parse()
+                    .is_ok_and(|n| toolpaths.contains_key(&EntityId(n)))
+            });
+        }
+        if let Some(Value::Array(order)) = params.get_mut("order") {
+            // every toolpath once, as the order needs: ones it did not name go at the end
+            order.retain(exists);
+            for id in toolpaths.keys() {
+                if !order.iter().any(|v| v.as_u64() == Some(id.0)) {
+                    order.push(Value::from(id.0));
+                }
+            }
+        }
+        Some(params)
     }
 
     /// `change` with the points it placed on snaps kept there: a drawn shape's snapped
@@ -3248,6 +3942,37 @@ impl CutCraftApp {
         change
     }
 
+    /// The level `change`'s new components all went on, for the status bar to name. None
+    /// when it makes no new component, shares them over several levels, sets out levels
+    /// itself (Slice Model, Bake: it says what it showed and hid), or replaces components
+    /// by removing and adding them (Split, Emboss, Sculpt): there is no new component then.
+    pub(super) fn new_components_level(change: &Change) -> Option<u64> {
+        use cut_craft_core::Edit;
+        let mut levels = change.edits.iter().filter_map(|e| match e {
+            Edit::AddComponent { component, .. } => Some(component.level),
+            _ => None,
+        });
+        let first = levels.next()?;
+        let replaces = change
+            .edits
+            .iter()
+            .any(|e| matches!(e, Edit::RemoveComponent { .. } | Edit::SetLevel { .. }));
+        (!replaces && levels.all(|l| l == first)).then_some(first)
+    }
+
+    /// ": new component on level <name>" for the status bar, saying when that level is
+    /// hidden so a new shape that cannot be seen is not taken for lost.
+    fn placed_on(&self, level: u64) -> String {
+        self.doc.levels.get(&level).map_or_else(String::new, |l| {
+            let hidden = if l.visible {
+                ""
+            } else {
+                " (hidden: show the level to see it)"
+            };
+            format!(": new component on level {}{hidden}", l.name)
+        })
+    }
+
     /// What command `id` made with `params` (or why it made nothing) put into the job: onto
     /// the import level, into the picked toolpath group, as one undo; then whatever the
     /// command goes on to do.
@@ -3272,6 +3997,8 @@ impl CutCraftApp {
             None => change,
         };
         let (made, notes) = (change.toolpaths_made(), change.notes.clone());
+        // the level the new components went on, for the status bar
+        let new_level = Self::new_components_level(&change);
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
@@ -3282,8 +4009,22 @@ impl CutCraftApp {
         {
             form.params["replaces"] = made;
         }
+        // Bake made the shaping permanent and reset it: the form shows that reset (100 %,
+        // Bake unticked), so pressing Apply again does not bake it in a second time
+        if id == "component_properties"
+            && params.get("bake") == Some(&Value::Bool(true))
+            && let Ok(p) =
+                serde_json::from_value::<cmd_component_properties::Params>(params.clone())
+            && let Some(k) = self.doc.components.get(&p.component)
+            && let Some(form) = self.form.as_mut().filter(|f| f.id == id)
+            && let Ok(fresh) =
+                serde_json::to_value(cmd_component_properties::Params::of(p.component, k))
+        {
+            form.params = fresh;
+        }
+        let placed = new_level.map_or_else(String::new, |l| self.placed_on(l));
         self.status
-            .set_message(&format!("{} applied", cmd.meta().label));
+            .set_message(&format!("{} applied{placed}", cmd.meta().label));
         // new keep-out zones: the toolpaths are made again round them
         if id == "keep_out_zones" {
             self.keep_out_changed();
@@ -3309,6 +4050,10 @@ impl CutCraftApp {
         // next Apply
         if let Some(form) = self.form.as_mut().filter(|f| f.id == id) {
             form.warning = (!notes.is_empty()).then(|| notes.join("\n"));
+        } else {
+            // a tool with no form: in red at the foot of the tool panel until the next change
+            self.tool_note = (!notes.is_empty())
+                .then(|| (self.job_epoch, self.history.revision(), notes.join("\n")));
         }
         if stale.is_empty() {
             self.warn(&made, &notes);
@@ -3317,9 +4062,8 @@ impl CutCraftApp {
                 app.warn(&made, &notes);
             });
         }
-        if id == "swap_sides" {
-            self.turn_preview_over();
-        }
+        // the preview turns over with the job (follow_side)
+        self.follow_side();
         Ok(())
     }
 
@@ -3347,6 +4091,26 @@ impl CutCraftApp {
             None => t.machining_minutes(s.rapid),
         };
         minutes * s.scale
+    }
+
+    /// Lets go of picked nodes that no longer stand for a node to move: all of them once
+    /// Node Edit is put away, and any whose vector is no longer selected or has no node
+    /// where it was picked any more (after an undo, redo or delete).
+    pub(super) fn prune_picked_nodes(&mut self) {
+        if self.picked_nodes.is_empty() {
+            return;
+        }
+        if self.view_tool != Some(super::ViewTool::NodeEdit) {
+            self.picked_nodes.clear();
+            return;
+        }
+        let doc = &self.doc;
+        self.picked_nodes.retain(|n| {
+            doc.selection.contains(&n.vector)
+                && doc.vectors.get(&n.vector).is_some_and(|path| {
+                    cut_craft_core::nodes::node_near(path, n.at.into(), n.reach.max(1e-3)).is_some()
+                })
+        });
     }
 
     /// Moves the picked nodes by `by`; across a mirror line (H: up and down through the
@@ -3407,6 +4171,60 @@ impl CutCraftApp {
         }
     }
 
+    /// Del in Node Edit: the picked nodes go, each shape's spans either side joined by a
+    /// line, as Delete Point does, in one step to undo. A shape keeps the nodes it needs
+    /// (two, or three when closed); the status bar says when some were kept for that.
+    pub(super) fn delete_picked_nodes(&mut self) {
+        use cut_craft_core::nodes::{delete_node, node_near};
+        let mut c = Change::builder(&self.doc);
+        let vectors: std::collections::BTreeSet<EntityId> =
+            self.picked_nodes.iter().map(|n| n.vector).collect();
+        let (mut deleted, mut kept) = (0, 0);
+        for vector in vectors {
+            let Some(original) = self.doc.vectors.get(&vector) else {
+                continue;
+            };
+            let mut picked: Vec<usize> = (self.picked_nodes.iter())
+                .filter(|n| n.vector == vector)
+                .filter_map(|n| node_near(original, n.at.into(), n.reach.max(1e-3)))
+                .collect();
+            // the last first, so the nodes still to go keep their places
+            picked.sort_unstable_by(|a, b| b.cmp(a));
+            picked.dedup();
+            let mut path = original.clone();
+            for k in picked {
+                match delete_node(&path, k) {
+                    Some(fewer) => {
+                        path = fewer;
+                        deleted += 1;
+                    }
+                    None => kept += 1,
+                }
+            }
+            if path != *original {
+                c.replace(vector, path);
+            }
+        }
+        let change = c.finish();
+        self.picked_nodes.clear();
+        if deleted > 0
+            && let Err(e) = self.history.apply(&mut self.doc, change)
+        {
+            self.status.set_message(&e.to_string());
+            return;
+        }
+        let s = |n: usize| if n == 1 { "" } else { "s" };
+        let mut said = format!("Deleted {deleted} node{}", s(deleted));
+        if kept > 0 {
+            said = format!(
+                "{said}. {kept} node{} kept: a shape needs at least two (three when \
+                 closed). Delete the whole shape instead",
+                s(kept)
+            );
+        }
+        self.status.set_message(&said);
+    }
+
     /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half
     /// with Shift, a tenth with Ctrl + Shift (Matthew's steps); with Ctrl alone, by Snapping Options' Fixed Nudge Distance.
     pub(super) fn nudge(&mut self, ctx: &egui::Context) {
@@ -3437,6 +4255,7 @@ impl CutCraftApp {
             return;
         }
         // node editing with nodes picked: the arrows move those, mirrored across the lines
+        self.prune_picked_nodes();
         if self.view_tool == Some(super::ViewTool::NodeEdit) && !self.picked_nodes.is_empty() {
             self.nudge_nodes(by);
             return;
@@ -3451,12 +4270,8 @@ impl CutCraftApp {
         }
     }
 
-    pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
-        // while a slow job runs, the window only shows its progress; while a shortcut is
-        // being set, the keys and buttons pressed are for it
-        if self.busy.is_some() || self.capture.is_some() {
-            return;
-        }
+    /// Ctrl+X, Ctrl+C and Ctrl+V, which egui gives as clipboard events rather than keys.
+    fn clipboard_keys(&mut self, ctx: &egui::Context) {
         // Ctrl+X, Ctrl+C and Ctrl+V reach egui as clipboard events, never as keys; the system
         // clipboard carries what Copy took, so another Cut Craft window pastes it too
         let (cut, copy, pasted) = ctx.input(|i| {
@@ -3470,6 +4285,14 @@ impl CutCraftApp {
                     _ => (x, c, p),
                 })
         });
+        // each only while Options still gives the action its key (taken away, it does nothing)
+        let bindings = self.bindings(ctx);
+        let bound = |id: &str, key: Key| {
+            let keys = KeyboardShortcut::new(Modifiers::COMMAND, key);
+            bindings.contains(&(id.to_owned(), shortcut::Trigger::Key(keys)))
+        };
+        let (cut, copy) = (cut && bound("cut", Key::X), copy && bound("copy", Key::C));
+        let pasted = pasted.filter(|_| bound("paste", Key::V));
         if !ctx.egui_wants_keyboard_input() && self.screen == Screen::Job {
             if cut && self.available("cut") {
                 self.invoke(ctx, "cut");
@@ -3477,10 +4300,25 @@ impl CutCraftApp {
                 self.invoke(ctx, "copy");
             }
             if let Some(paths) = pasted.and_then(|text| serde_json::from_str(&text).ok()) {
+                // vectors another window copied: what they belonged to there is not known,
+                // and this window's own copied components are not part of them
+                if paths != self.clipboard {
+                    self.clipboard_from = super::Copied::default();
+                    self.clipboard_components.clear();
+                }
                 self.clipboard = paths;
                 self.invoke(ctx, "paste");
             }
         }
+    }
+
+    pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
+        // while a slow job runs, the window only shows its progress; while a shortcut is
+        // being set, the keys and buttons pressed are for it
+        if self.busy.is_some() || self.capture.is_some() {
+            return;
+        }
+        self.clipboard_keys(ctx);
         // node editing with nodes picked: H and V toggle the mirror lines, not Mirror
         if !ctx.egui_wants_keyboard_input()
             && self.view_tool == Some(super::ViewTool::NodeEdit)
@@ -3519,34 +4357,76 @@ impl CutCraftApp {
             self.status
                 .set_message("Preview stopped: what it had cut is kept");
         }
+        // Escape with no form open, stepped inside a group, steps out one level
+        if let Some(group) = self.doc.inside_group
+            && self.form.is_none()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.step_out_of_group(group);
+        }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| {
                 i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Escape))
             })
         {
-            if self.screen == Screen::NewJob {
-                self.job_setup_cancel();
+            // a window in front (Find Tool, the library's Properties) closes alone
+            let in_front = self.search.take().is_some() || self.clipart.close_properties();
+            if !in_front {
+                self.escape_closes();
             }
-            self.form = None;
-            self.search = None;
-            self.view_tool = None;
-            self.pages.done_with(Page::Design);
-            self.pages.done_with(Page::Toolpaths);
         }
         self.nudge(ctx);
-        ctx.input(|i| {
-            if i.key_pressed(Key::F1) {
-                let topic = self.form.as_ref().map_or("contents", |f| f.id);
-                self.info = Some(Info::Help(topic));
+    }
+
+    /// Whether `id` is a placing tool (Transform Objects: Move, Rotate, Set Size, Mirror,
+    /// Distort), which Esc leaves for the form it was opened over.
+    fn placing(&self, id: &str) -> bool {
+        self.registry
+            .get(id)
+            .is_some_and(|c| c.meta().group == "Transform Objects")
+    }
+
+    /// Esc with nothing in front: the open form closes (Import 3D Model's as its Cancel), with
+    /// a new job's setup, the view tool and the pages it opened. A placing tool's form opened
+    /// over another goes back to that one, edits and all; what it placed stays placed (the
+    /// toolpaths it changes are out of date, as after any move).
+    fn escape_closes(&mut self) {
+        let behind = self.form_behind.take();
+        if let Some(mut behind) = behind
+            && self.form.as_ref().is_some_and(|f| self.placing(f.id))
+        {
+            // what was placed is kept: Cancel on the form back now leaves it
+            behind.undo_from = self.history.undo_depth();
+            behind.list_steps.clear();
+            if let Some(placing) = self.form.take().filter(|f| f.page != behind.page) {
+                self.pages.done_with(placing.page);
             }
-            if i.key_pressed(Key::F2) {
-                self.view = View::TwoD;
+            if self.pages.shown(behind.page) == Shown::Hidden {
+                self.pages.open(behind.page);
             }
-            if i.key_pressed(Key::F3) {
-                self.view = View::ThreeD;
-            }
-        });
+            behind.label.clone_into(&mut self.status.current_tool);
+            self.status
+                .set_message(&format!("Back to {}, as you left it", behind.label));
+            self.form = Some(behind);
+            return;
+        }
+        if self.screen == Screen::NewJob {
+            self.job_setup_cancel();
+        }
+        // a form whose buttons are Import and Cancel: Esc is its Cancel
+        if self
+            .form
+            .as_ref()
+            .is_some_and(|f| f.id == "orientate_3d_model")
+        {
+            self.cancel_form();
+        }
+        self.form = None;
+        self.view_tool = None;
+        self.pages.done_with(Page::Design);
+        self.pages.done_with(Page::Toolpaths);
     }
 
     /// Runs the actions whose shortcut was pressed: a key's, or a mouse button's.
@@ -3555,14 +4435,19 @@ impl CutCraftApp {
         // button's can, as it types nothing
         let typing = ctx.egui_wants_keyboard_input();
         let job = self.screen == Screen::Job;
-        let fired: Vec<String> = self
-            .bindings(ctx)
+        let fired: Vec<String> = shortcut::most_specific_first(self.bindings(ctx))
             .into_iter()
             .filter(|(id, _)| id != shortcut::PAN_DRAG)
-            .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))
-            .filter(|(_, trigger)| match trigger {
+            .filter(|(id, _)| job || ["new", "open", "tool_help"].contains(&id.as_str()))
+            .filter(|(id, trigger)| match trigger {
+                // help and the views work from a field being typed in too, as they always did,
+                // while on a function key (which types nothing)
                 shortcut::Trigger::Key(keys) => {
-                    !typing && ctx.input_mut(|i| i.consume_shortcut(keys))
+                    let name = keys.logical_key.name();
+                    let function = name.len() > 1 && name.starts_with('F');
+                    let any_time =
+                        function && ["tool_help", "view_2d", "view_3d"].contains(&id.as_str());
+                    (!typing || any_time) && ctx.input_mut(|i| i.consume_shortcut(keys))
                 }
                 shortcut::Trigger::Mouse(held, button) => ctx.input(|i| {
                     i.pointer.button_pressed(*button) && i.modifiers.matches_exact(*held)
@@ -3608,6 +4493,10 @@ impl CutCraftApp {
         let mut bindings =
             shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts);
         if super::mac::is_mac(ctx) {
+            // ⌘Q quits there: Quick Engrave's Ctrl+Q is no shortcut on a Mac
+            bindings.retain(
+                |(_, t)| !matches!(t, shortcut::Trigger::Key(k) if super::mac::kept_by_the_mac(*k)),
+            );
             let keys: Vec<(String, KeyboardShortcut)> = bindings
                 .iter()
                 .filter_map(|(id, t)| match t {
@@ -3654,7 +4543,13 @@ impl CutCraftApp {
             named
                 .iter()
                 .find(|i| i.action == id)
-                .map_or_else(|| gui::title_case(id), |i| i.name.clone())
+                .map(|i| i.name.clone())
+                .or_else(|| {
+                    (KEY_ACTION_NAMES.iter())
+                        .find(|(a, _)| *a == id)
+                        .map(|(_, name)| (*name).to_owned())
+                })
+                .unwrap_or_else(|| gui::title_case(id))
         };
         actions.extend(
             self.registry
@@ -3689,7 +4584,7 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Menu bar");
         let mut clicked = None;
         let recent: Vec<gui::MenuItem> = self
-            .recent
+            .recent_shown()
             .iter()
             .enumerate()
             .map(|(i, path)| {
@@ -3713,6 +4608,7 @@ impl CutCraftApp {
                         &menu.items,
                         &Menus {
                             available: &|id| self.available(id),
+                            why: &|id| self.unavailable_why(id),
                             checked: &|id| {
                                 self.display
                                     .checked(id)
@@ -3776,7 +4672,7 @@ impl CutCraftApp {
             .frame(false);
             let response = ui
                 .add_enabled(self.available(id), button)
-                .on_disabled_hover_text(format!("{label}: not implemented yet"));
+                .on_disabled_hover_text(self.unavailable_why(id));
             if response.clicked() {
                 clicked = Some(id.to_owned());
             }
@@ -3787,7 +4683,7 @@ impl CutCraftApp {
             ui.weak("None yet");
         }
         let glyph = self.icons.find(RECENT_FILE_ICON, "");
-        for (i, path) in self.recent.iter().enumerate() {
+        for (i, path) in self.recent_shown().iter().enumerate() {
             let name = file_name(path);
             let button = match glyph {
                 Some(glyph) => egui::Button::image_and_text(
@@ -3853,30 +4749,61 @@ impl CutCraftApp {
             self.form_panel(ui);
             return;
         }
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            match tab {
-                "Design" => {
-                    if self.options.favourites.of(Page::Design).1 {
-                        // favourites name every tool, whatever sub-tab it is on
-                        let groups = self.design_groups("Design");
-                        self.tools_or_favourites(ui, &groups, Page::Design);
-                    } else {
-                        self.design_subtabs(ui);
+        // room kept at the foot for a tool's red note, so the icons above never move for it
+        let note = self.tool_note_height(ui);
+        egui::ScrollArea::vertical()
+            .max_height(ui.available_height() - note)
+            .show(ui, |ui| {
+                match tab {
+                    "Design" => {
+                        if self.options.favourites.of(Page::Design).1 {
+                            // favourites name every tool, whatever sub-tab it is on
+                            let groups = self.design_groups("Design");
+                            self.tools_or_favourites(ui, &groups, Page::Design);
+                        } else {
+                            self.design_subtabs(ui);
+                        }
+                    }
+                    "Sheets" => self.sheets_panel(ui),
+                    "Library" => self.clipart_panel(ui),
+                    "Layers" => self.layers_panel(ui),
+                    "Components" => self.component_list(ui),
+                    tab => {
+                        ui.weak(format!("{tab} tools not implemented yet"));
                     }
                 }
-                "Sheets" => self.sheets_panel(ui),
-                "Library" => self.clipart_panel(ui),
-                "Layers" => self.layers_panel(ui),
-                "Components" => self.component_list(ui),
-                tab => {
-                    ui.weak(format!("{tab} tools not implemented yet"));
-                }
-            }
-        });
+            });
+        self.tool_note_label(ui);
         // the hovered tool's guidance, or the tool in hand's, in the room left under the icons
         if tab == "Design" {
             self.tip_box(ui);
         }
+    }
+
+    /// What the last tool with no form warned of (Group turning text into curves), in red,
+    /// while nothing has changed since.
+    pub(super) fn tool_note_label(&self, ui: &mut egui::Ui) {
+        if let Some(note) = self.tool_note() {
+            ui.colored_label(ui.visuals().error_fg_color, note);
+        }
+    }
+
+    /// The red note [`Self::tool_note_label`] shows, if any.
+    pub(super) fn tool_note(&self) -> Option<&str> {
+        let (job, revision, note) = self.tool_note.as_ref()?;
+        ((*job, *revision) == (self.job_epoch, self.history.revision())).then_some(note.as_str())
+    }
+
+    /// How tall [`Self::tool_note_label`] draws at `ui`'s width, with the gap over it.
+    fn tool_note_height(&self, ui: &egui::Ui) -> f32 {
+        self.tool_note().map_or(0.0, |note| {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let colour = egui::Color32::PLACEHOLDER;
+            let galley = ui
+                .painter()
+                .layout(note.to_owned(), font, colour, ui.available_width());
+            galley.size().y + ui.spacing().item_spacing.y
+        })
     }
 
     /// The tool groups a design tab shows: Design has the drawing then the modeling tools.
@@ -4339,7 +5266,7 @@ impl CutCraftApp {
         let close_label = if new_job { "Cancel" } else { "Close" };
         let job_setup = open.id == "job_setup";
         // what the form has done that Cancel would take back
-        let done = self.history.undo_depth() > open.undo_from;
+        let done = self.history.undo_depth() > open.undo_from + open.list_steps.len();
         let (mut apply, mut close, mut default, mut cancel) = (false, false, false, false);
         let (mut save, mut load, mut new_shape) = (false, false, false);
         if open.page == Page::Toolpaths {
@@ -4375,14 +5302,20 @@ impl CutCraftApp {
                 if !new_job {
                     cancel = ui
                         .add_enabled(done, egui::Button::new("Cancel"))
-                        .on_hover_hint("Undo what this tool did since it opened, and close it")
+                        .on_hover_hint(
+                            "Undo what this tool did since it opened, and close it. A change \
+                             made in the toolpath list meanwhile is kept",
+                        )
                         .on_disabled_hover_text("Nothing done yet to take back")
                         .clicked();
                 }
                 if job_setup {
                     default = ui
                         .button("Set as Default")
-                        .on_hover_hint("Start every new job with these settings")
+                        .on_hover_hint(
+                            "Start every new job with these settings (your Clearing \
+                             Settings default is kept)",
+                        )
                         .clicked();
                 }
             });
@@ -4433,10 +5366,11 @@ impl CutCraftApp {
             let Some(path) = dialog
                 .set_file_name(format!("{}.{}", form.label, files::FORM_SETTINGS_EXTENSION))
                 .save_file()
+                .and_then(|path| saving_path(&path, &[files::FORM_SETTINGS_EXTENSION]))
             else {
                 return;
             };
-            self.save_form_settings(&path.with_extension(files::FORM_SETTINGS_EXTENSION));
+            self.save_form_settings(&path);
         } else if let Some(path) = dialog.pick_file() {
             self.load_form_settings(&path);
         }
@@ -4481,7 +5415,7 @@ impl CutCraftApp {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 cancel = ui
                     .button("Cancel")
-                    .on_hover_hint("Close without importing the model")
+                    .on_hover_hint("Close without importing the model (Esc does the same)")
                     .clicked();
                 import = ui
                     .button("Import")
@@ -4519,10 +5453,18 @@ impl CutCraftApp {
     }
 
     /// Cancel on a tool's form: everything done since the form opened is undone (and can be
-    /// redone), and the form closes.
+    /// redone), and the form closes. What was changed in the toolpath list beside it
+    /// meanwhile is not the form's: it is made again after (and Redo then has nothing).
     pub(super) fn cancel_form(&mut self) {
         let Some(form) = self.form.take() else { return };
         while self.history.undo_depth() > form.undo_from && self.history.undo(&mut self.doc) {}
+        for (id, params) in &form.list_steps {
+            if let Some(params) = self.list_step_again(id, params)
+                && let Err(e) = self.apply(id, &params)
+            {
+                self.status.set_message(&e);
+            }
+        }
         self.pages.done_with(form.page);
         self.status
             .set_message(&format!("{} cancelled", form.label));
@@ -4574,6 +5516,14 @@ impl CutCraftApp {
                 ui.colored_label(ui.visuals().warn_fg_color, left_out)
                     .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
             }
+            if let Some(area) = texture_area_note(open.id, &open.params, count) {
+                if count.open > 0 {
+                    ui.colored_label(ui.visuals().error_fg_color, area)
+                } else {
+                    ui.weak(area)
+                }
+                .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
+            }
         }
     }
 
@@ -4587,6 +5537,78 @@ impl CutCraftApp {
             self.form_buttons(ui);
         });
         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+    }
+
+    /// The warning for a toolpath form whose tool is a drill (it cuts only straight down)
+    /// when the toolpath is not Drilling.
+    fn drill_sideways(form: &super::OpenForm) -> Option<String> {
+        let tool = form.params.get("tool")?;
+        if !form.id.ends_with("_toolpath") || tool.get("drill_only") != Some(&Value::Bool(true)) {
+            return None;
+        }
+        let tool = cut_craft_core::toolpath::Tool {
+            name: tool.get("name")?.as_str()?.to_owned(),
+            drill_only: true,
+            ..Default::default()
+        };
+        cut_craft_core::preflight::drill_sideways(form.id, &tool)
+    }
+
+    /// The warning for a toolpath form whose tool is the wrong kind: a router bit on a laser
+    /// toolpath, or a laser on a router's (as soon as it is picked; never refused).
+    fn wrong_kind_of_tool(form: &super::OpenForm) -> Option<String> {
+        if !form.id.ends_with("_toolpath") {
+            return None;
+        }
+        let tool: cut_craft_core::toolpath::Tool =
+            serde_json::from_value(form.params.get("tool")?.clone()).ok()?;
+        let laser_form = super::is_laser_form(form.id);
+        if laser_form && !tool.is_laser() {
+            Some(format!(
+                "{} is not a laser: this toolpath takes its diameter as the kerf and its feed \
+                 as the laser's speed. Select… a Laser from the Tool Database",
+                tool.name
+            ))
+        } else if !laser_form && tool.shape == cut_craft_core::toolpath::ToolShape::Laser {
+            Some(format!(
+                "{} is a laser, which cannot cut this toolpath: Select… a bit",
+                tool.name
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// The warning for a Toolpath Tiling form whose tiles, each with its overlap all round
+    /// (what a tile's file covers), are bigger than the active machine's bed; none when the
+    /// machine's bed size was not given.
+    fn tiles_past_bed(&self, form: &super::OpenForm) -> Option<String> {
+        if form.id != "toolpath_tiling" || form.params["enabled"] != Value::Bool(true) {
+            return None;
+        }
+        // a bed whose size was not given (0) is nothing to check against
+        let machine = self
+            .machines
+            .active()
+            .filter(|m| m.width > 0.0 && m.height > 0.0)?;
+        let tiling: cut_craft_core::tiling::Tiling =
+            serde_json::from_value(form.params["tiling"].clone()).ok()?;
+        let file = tiling.largest_file(self.doc.job.area());
+        if file.x <= machine.width + 1e-9 && file.y <= machine.height + 1e-9 {
+            return None;
+        }
+        let units = self.doc.job.units;
+        let length = |mm: f64| super::trimmed(mm / units.per());
+        Some(format!(
+            "A tile with its overlap is {} × {} {}, bigger than {}'s bed ({} × {}): make the \
+             tiles or the overlap smaller",
+            length(file.x),
+            length(file.y),
+            units.suffix(),
+            machine.name,
+            length(machine.width),
+            length(machine.height),
+        ))
     }
 
     /// Why the open form's last Apply failed, or what it warned of, in red, over its buttons.
@@ -4628,6 +5650,18 @@ impl CutCraftApp {
         let Some(form) = self.form.as_ref() else {
             return;
         };
+        // a drill picked for a toolpath that cuts sideways: said as soon as it is picked
+        if let Some(drill) = Self::drill_sideways(form) {
+            ui.colored_label(ui.visuals().error_fg_color, drill);
+        }
+        // a router bit on a laser toolpath, or a laser on a router's: said as it is picked
+        if let Some(wrong) = Self::wrong_kind_of_tool(form) {
+            ui.colored_label(ui.visuals().error_fg_color, wrong);
+        }
+        // tiles that, with their overlap, will not fit the machine: said as they are set
+        if let Some(past) = self.tiles_past_bed(form) {
+            ui.colored_label(ui.visuals().error_fg_color, past);
+        }
         // what the last Apply made is not quite what was asked: said in red, never a pop-up
         if let Some(warning) = form.warning.as_ref().filter(|_| form.error.is_none()) {
             ui.colored_label(ui.visuals().error_fg_color, warning);
@@ -4718,7 +5752,8 @@ impl CutCraftApp {
                 selector_section(ui, params, &layers, units);
             }
         };
-        let stock = form_stock(&self.doc, units, bed(&self.machines));
+        let bed = self.machines.active().map(|m| [m.width, m.height]);
+        let stock = form_stock(&self.doc, &open.params, units, bed.unwrap_or_default());
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
         };
@@ -4782,12 +5817,13 @@ impl CutCraftApp {
         }
     }
 
-    /// The bits Suggest may pick from: the user's own (not a read-only catalogue's), each
-    /// with whether the tool changer holds it.
+    /// The bits Suggest may pick from: the user's own (not a read-only catalogue's, nor a
+    /// laser), each with whether the tool changer holds it.
     pub(super) fn suggest_candidates(&self) -> Vec<cmd_pocket_toolpath::Candidate> {
         let slots = self.slots();
         self.tools
             .my_tools()
+            .filter(|tool| tool.shape != cut_craft_core::toolpath::ToolShape::Laser)
             .map(|tool| cmd_pocket_toolpath::Candidate {
                 tool: self.pick_tool(&tool.name).unwrap_or_else(|| tool.clone()),
                 loaded: slots
@@ -4860,7 +5896,7 @@ impl CutCraftApp {
             texture_dialog()
                 .set_file_name(format!("texture.{extension}"))
                 .save_file()
-                .map(|path| path.with_extension(extension))
+                .and_then(|path| saving_path(&path, &[extension]))
         } else {
             texture_dialog().pick_file()
         };
@@ -4909,6 +5945,54 @@ impl CutCraftApp {
             .map_err(|e| format!("the form's settings do not read: {e}"))
     }
 
+    /// Set Size with Link XY: the box typed in sets the other, keeping the selection's
+    /// proportions (in Percent, the same share), so the form always shows the size it makes,
+    /// and sizes go by it. Items one by one each keep their own proportions, so there the
+    /// other box (in millimetres) is left as it is.
+    fn link_set_size(&mut self) {
+        let size = self
+            .doc
+            .selection_bounds()
+            .map(cut_craft_core::geometry::Rect::size);
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "set_size") else {
+            return;
+        };
+        let p = &mut form.params;
+        let (Some(mut w), Some(mut h)) = (p["width"].as_f64(), p["height"].as_f64()) else {
+            return;
+        };
+        let seen = form.shown_size.map(|s| (s[0], s[1]));
+        let same = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(1.0);
+        let linked = p["keep_proportions"].as_bool() == Some(true);
+        if linked && let Some((sw, sh)) = seen {
+            // the box typed last is the one sizes go by
+            if same(w, sw) && !same(h, sh) {
+                p["by_height"] = true.into();
+            } else if !same(w, sw) {
+                p["by_height"] = false.into();
+            }
+        }
+        let items = p["mode"].as_str() == Some("scale_items_individually");
+        let ratio = if p["percent"].as_bool() == Some(true) {
+            Some(1.0)
+        } else if items {
+            None
+        } else {
+            size.filter(|s| s.x > 0.0 && s.y > 0.0).map(|s| s.y / s.x)
+        };
+        if let Some(ratio) = ratio.filter(|_| linked) {
+            let height_typed = p["by_height"].as_bool() == Some(true);
+            if height_typed {
+                w = h / ratio;
+                p["width"] = w.into();
+            } else if !same(h, w * ratio) {
+                h = w * ratio;
+                p["height"] = h.into();
+            }
+        }
+        form.shown_size = Some([w, h, 0.0]);
+    }
+
     /// What some forms have under their fields: Texture Toolpath's Load / Save Texture, and
     /// Quick Engrave's Immediate Output.
     fn form_extras(&mut self, ui: &mut egui::Ui, id: &str) {
@@ -4919,6 +6003,7 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
+            "set_size" => self.link_set_size(),
             "relief_from_photo" => {
                 self.depth_section(ui);
                 self.bit_note(ui);
@@ -5151,26 +6236,78 @@ impl CutCraftApp {
     /// Reads the user's Materials Library (the starter list when there is none); a broken
     /// one is reported, kept on disk and not saved over.
     pub(super) fn load_materials(&mut self) {
-        self.materials_path = files::materials_path();
+        self.load_materials_at(files::materials_path());
+    }
+
+    /// [`Self::load_materials`] from `path`.
+    pub(super) fn load_materials_at(&mut self, path: Option<std::path::PathBuf>) {
+        self.materials_path = path;
         if let Some(path) = &self.materials_path {
             match files::load_materials(path) {
                 Ok(lib) => self.materials = lib,
                 Err(e) => {
                     self.status
                         .set_message(&format!("{e}; material changes will not be saved"));
-                    self.materials_path = None;
+                    self.materials_unreadable = self.materials_path.take();
                 }
             }
         }
     }
 
+    /// Writes the Materials Library, if it has a file; an error when it could not be
+    /// written, or when its file could not be read at start and so is not saved over.
+    pub(super) fn save_materials(&self) -> Result<(), String> {
+        if let Some(path) = &self.materials_unreadable {
+            return Err(not_saved("Materials Library", path));
+        }
+        self.materials_path.as_deref().map_or(Ok(()), |p| {
+            files::write_creating(p, &self.materials.to_json())
+        })
+    }
+
+    /// Tools renamed in the Tool Database, (old name, new name): the job's toolpaths that
+    /// cut with them take the new name too (one undoable step), so the file still finds the
+    /// tool changer slot the tool is loaded in under its new name. Nothing is recalculated.
+    /// The status bar says so after `done`.
+    pub(super) fn rename_toolpath_tools(&mut self, renamed: &[(String, String)], done: &str) {
+        let mut change = Change::builder(&self.doc);
+        let mut count = 0;
+        for (&id, toolpath) in &self.doc.toolpaths {
+            let Some((_, to)) = renamed.iter().find(|(from, _)| *from == toolpath.tool.name) else {
+                continue;
+            };
+            let mut after = toolpath.clone();
+            after.tool.name.clone_from(to);
+            if let Some(name) = after.params.pointer_mut("/tool/name") {
+                *name = to.as_str().into();
+            }
+            change.replace_toolpath(id, after);
+            count += 1;
+        }
+        if count == 0 {
+            return;
+        }
+        let what = if count == 1 { "toolpath" } else { "toolpaths" };
+        self.record(
+            Ok(change.finish()),
+            &format!("{done}; {count} {what} use the renamed tool's new name"),
+        );
+    }
+
     /// Reads the user's tool database; a broken one is reported and left untouched on disk.
     pub(super) fn load_tools(&mut self) {
-        self.tools_path = files::tool_database_path();
+        self.load_tools_at(files::tool_database_path());
+    }
+
+    /// [`Self::load_tools`] from `path`.
+    pub(super) fn load_tools_at(&mut self, path: Option<std::path::PathBuf>) {
+        self.tools_path = path;
         if let Some(path) = &self.tools_path {
             match files::load_tools_joining(path) {
                 Ok((tools, report)) => {
                     self.tools = tools;
+                    // a database from before lasers were a tool type gets the starter laser
+                    self.tools.add_laser_if_none();
                     // sizes a bit's copies gave differently, not kept: said once
                     if let Some(first) = report.first() {
                         for line in &report {
@@ -5188,7 +6325,7 @@ impl CutCraftApp {
                 Err(e) => {
                     self.status
                         .set_message(&format!("{e}; tool changes will not be saved"));
-                    self.tools_path = None;
+                    self.tools_unreadable = self.tools_path.take();
                 }
             }
         }
@@ -5300,8 +6437,27 @@ impl CutCraftApp {
         }
     }
 
+    /// [`Self::tools_changed`] after the Tool Database's Apply, OK or Select, with the
+    /// job's toolpaths following the tools `renamed`: the status bar says what became of
+    /// the save (never "saved" when it was not) and then the renamed toolpaths.
+    pub(super) fn tools_kept(&mut self, done: &str, renamed: &[(String, String)]) {
+        self.tools_changed(done);
+        let said = self.status.message.clone();
+        self.rename_toolpath_tools(renamed, &said);
+        // a warning on the renamed toolpaths still leaves the save's outcome said
+        if !self.status.message.starts_with(&said) {
+            let message = format!("{said}. {}", self.status.message);
+            self.status.set_message(&message);
+        }
+    }
+
     /// Writes the tool database, if it has a file, and reports `done` or the failure.
     pub(super) fn tools_changed(&mut self, done: &str) {
+        if let Some(path) = &self.tools_unreadable {
+            let message = not_saved("Tool database", path);
+            self.status.set_message(&message);
+            return;
+        }
         let result = self
             .tools_path
             .as_deref()
@@ -5325,8 +6481,13 @@ impl CutCraftApp {
                 &block,
             );
             let mut c = Change::builder(&self.doc);
-            c.add_component(component);
-            self.record(Ok(c.finish()), "Made a component from the toolpath preview");
+            let id = c.add_new_component(component);
+            let level = c.component(id).map_or(0, |k| k.level);
+            let done = format!(
+                "Made a component from the toolpath preview{}",
+                self.placed_on(level)
+            );
+            self.record(Ok(c.finish()), &done);
         }
     }
 
@@ -5340,6 +6501,21 @@ impl CutCraftApp {
                     .iter()
                     .map(|id| self.doc.vectors[id].clone())
                     .collect();
+                let doc = &self.doc;
+                let picked: std::collections::BTreeSet<EntityId> =
+                    doc.selection.iter().copied().collect();
+                let groups: Vec<Vec<u64>> = doc
+                    .selection
+                    .iter()
+                    .map(|&id| doc.chain_within(id, &picked))
+                    .collect();
+                self.clipboard_from = super::Copied {
+                    layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
+                    job: self.job_epoch,
+                    texts: records_of(&groups, &doc.texts),
+                    names: records_of(&groups, &doc.part_names),
+                    groups,
+                };
                 self.clipboard_components = self
                     .doc
                     .selected_components
@@ -5357,7 +6533,26 @@ impl CutCraftApp {
             // pasted where they were copied from, in this job or another (Paste in Place)
             "paste" | "paste_in_place" => {
                 let mut c = Change::builder(&self.doc);
-                let ids: Vec<_> = self.clipboard.iter().map(|p| c.add(p.clone())).collect();
+                // a copied group pastes as a group of its own, on its layer, text still text
+                let from = &self.clipboard_from;
+                let ids = if from.groups.len() == self.clipboard.len() {
+                    let paths = self.clipboard.iter().cloned().zip(from.groups.clone());
+                    let shift = Some(Point::ZERO);
+                    c.add_regrouped(paths.collect(), &from.texts, &from.names, shift)
+                } else {
+                    self.clipboard.iter().map(|p| c.add(p.clone())).collect()
+                };
+                // on the layer it came from in this job; in another, on the current layer
+                let layers = if from.job == self.job_epoch {
+                    from.layers.as_slice()
+                } else {
+                    &[]
+                };
+                for (&id, layer) in ids.iter().zip(layers) {
+                    if self.doc.layer(*layer).is_some() {
+                        c.move_to_layer(id, *layer);
+                    }
+                }
                 c.select(ids);
                 for k in &self.clipboard_components {
                     c.add_component(k.clone());
@@ -5368,9 +6563,9 @@ impl CutCraftApp {
                 Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
                 None => self.file_action("save_as"),
             },
-            // ponytail: the drawing as a PDF opened in the system viewer, which prints it;
-            // The own print window (scale, tiling) is not done
-            "print" | "print_preview" => {
+            // the drawing as a PDF opened in the system viewer, which previews and prints it
+            // (a print window of our own, with scale and tiling, is not done)
+            "print" => {
                 let path = std::env::temp_dir().join("cut-craft-print.pdf");
                 let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)
                     .and_then(|()| {
@@ -5739,22 +6934,6 @@ fn ask_to_run_unsigned(label: &str) -> bool {
     matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
 }
 
-/// What Update Post-Processor Database says once it has looked through the posts.
-pub(super) fn post_database_message(entries: &[cut_craft_machines::Entry]) -> String {
-    let custom = entries.iter().filter(|e| e.is_custom()).count();
-    let broken = entries.iter().filter(|e| e.broken.is_some()).count();
-    let unreadable = if broken > 0 {
-        format!("; {broken} could not be read: Post-Processor Management shows why")
-    } else {
-        String::new()
-    };
-    format!(
-        "{} post-processors ({custom} of your own){unreadable}; checking for a newer Cut \
-         Craft, which brings its newest post-processors",
-        entries.len()
-    )
-}
-
 /// The size of the box round a model's `faces`.
 fn model_size(faces: &[cmd_orientate_3d_model::Seen]) -> Option<[f64; 3]> {
     let corners = faces.iter().flat_map(|(t, _)| t);
@@ -5770,6 +6949,12 @@ fn model_size(faces: &[cmd_orientate_3d_model::Seen]) -> Option<[f64; 3]> {
 /// then explains how to allow clipping when hovered).
 pub(super) const KEEP_OUT_REFUSED: &str = "Not made, to keep out of a keep-out zone";
 
+/// Whether clipping at keep-out zones can keep `toolpath` out of them: not a laser's (its
+/// power goes with each move) or a drill bank's (its head plunges whole).
+fn can_clip(toolpath: &cut_craft_core::toolpath::Toolpath) -> bool {
+    toolpath.power.is_empty() && toolpath.drill_bank.is_none()
+}
+
 /// Where clipping at keep-out zones is turned on.
 pub(super) const CLIP_SETTING: &str =
     "Edit ▸ Options ▸ Toolpath Settings ▸ Clip toolpaths at keep-out zones";
@@ -5783,13 +6968,15 @@ pub(super) const CLIP_HOW: &str = "Keep-out zones (red outlines, such as clamps)
     instead: Toolpaths ▸ Keep-Out Zones… for the job's, Machine Configuration for the \
     machine's.";
 
-/// The material a profile's tabs are judged against: how thick, and whether a closed shape
-/// is selected.
+/// The material a profile's tabs are judged against: how thick, whether a closed shape
+/// is selected, and how many shapes the form's hand-placed tabs leave out.
 fn form_stock(
     doc: &cut_craft_core::document::Document,
+    params: &Value,
     units: cut_craft_core::document::Units,
     bed: [f64; 2],
 ) -> super::tabs::Stock {
+    let selected: Vec<_> = doc.selection.iter().copied().collect();
     super::tabs::Stock {
         thickness: doc.job.thickness,
         closed: doc
@@ -5798,6 +6985,8 @@ fn form_stock(
             .any(|id| doc.vectors.get(id).is_some_and(|v| v.closed)),
         units,
         bed,
+        clearing: doc.job.clearing,
+        untabbed: cut_craft_core::checks::shapes_without_placed_tabs(doc, &selected, params),
     }
 }
 
@@ -5826,8 +7015,32 @@ fn suggestion_note(s: &cmd_pocket_toolpath::Suggestion, finishing: &str) -> Stri
 pub(super) fn closed_only_toolpath(id: &str, params: &Value) -> bool {
     match id {
         "profile_toolpath" => params["side"].as_str() != Some("on"),
+        // a texture fills closed vectors, but follows any vector used as its pattern
+        "texture_toolpath" => params["use_selected_vectors_as_pattern"] != Value::Bool(true),
         _ => CLOSED_ONLY_TOOLPATHS.contains(&id),
     }
+}
+
+/// What a Texture Toolpath form filling closed vectors will texture when no closed vector is
+/// selected: the whole material, said plainly (in red when vectors are selected but open).
+pub(super) fn texture_area_note(
+    id: &str,
+    params: &Value,
+    count: cut_craft_core::document::VectorCount,
+) -> Option<String> {
+    if id != "texture_toolpath"
+        || params["use_selected_vectors_as_pattern"] == Value::Bool(true)
+        || count.closed > 0
+    {
+        return None;
+    }
+    Some(if count.open > 0 {
+        "Nothing closed is selected, so the whole material will be textured: close the open \
+         vectors, or clear the selection"
+            .to_owned()
+    } else {
+        "Nothing selected: the whole material will be textured".to_owned()
+    })
 }
 
 /// The toolpaths that take only closed vectors from the selection.
@@ -5928,7 +7141,35 @@ fn embellish_sample(params: &Value, entry: &str) -> form::SampleRings {
         .collect()
 }
 
-/// The active machine's bed, width and height (none without a machine).
-fn bed(machines: &cut_craft_machines::Machines) -> [f64; 2] {
-    machines.active().map_or_default(|m| [m.width, m.height])
+/// What Install Offline Package did: `added` machines, `here` already here by name.
+fn installed_machines(added: usize, here: usize) -> String {
+    let here = if here > 0 {
+        format!(", {here} already here")
+    } else {
+        String::new()
+    };
+    format!("Installed {added} machines{here}")
+}
+
+/// The entries of `records` (text settings or part names, by group) for `groups`.
+fn records_of<T: Clone>(
+    groups: &[Vec<u64>],
+    records: &std::collections::BTreeMap<u64, T>,
+) -> std::collections::BTreeMap<u64, T> {
+    groups
+        .iter()
+        .flatten()
+        .filter_map(|g| Some((*g, records.get(g).cloned()?)))
+        .collect()
+}
+
+/// What a save says when `what`'s file, at `path`, could not be read when Cut Craft started:
+/// the changes are kept until it closes, but not written over that file.
+fn not_saved(what: &str, path: &std::path::Path) -> String {
+    format!(
+        "{what} not saved: {} could not be read when Cut Craft started, so it is not written \
+         over. Fix or rename that file, then restart Cut Craft; your changes are kept only \
+         until it closes",
+        path.display()
+    )
 }

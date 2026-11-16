@@ -14,7 +14,10 @@ pub struct InteractiveVectorTrim;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// Click on the piece to cut away
+    /// Where the piece to cut away was clicked: set by the click on the canvas, so not on the
+    /// form
+    #[serde(default)]
+    #[schemars(skip)]
     pub at: Xy,
     /// How near the click must be to a vector
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

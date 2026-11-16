@@ -9,6 +9,7 @@ license-file.workspace = true
 cut-craft-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
+cmd-materials = { path = "../materials" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

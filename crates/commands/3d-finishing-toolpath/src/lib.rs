@@ -34,23 +34,25 @@ pub struct Params {
     pub name: String,
     /// In the order they run, a toolpath each: the first finishes all it can, each later one
     /// only what the tools before it left (rest machining). A ball nose follows curves best;
-    /// its stepover spaces the raster lines
+    /// its stepover spaces the raster lines. Editing a toolpath changes its own bit; to add a
+    /// smaller one after it, make the toolpath again with both here
     #[serde(default)]
     pub tools: Vec<Tool>,
-    /// Rest machining: leave alone unmachined areas smaller across than this
+    /// With two tools or more, each later tool cuts only what the tools before it left:
+    /// areas left smaller across than this are left alone
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Strategy"))]
+    #[schemars(extend("x-group" = "Rest Machining", "x-hide-when" = {"tools.count": [0, 1], "after.count": 0}))]
     pub minimum_detail: f64,
-    /// Rest machining: grow every unmachined area by this before cutting it
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
+    /// With two tools or more: how far each area a later tool cuts reaches past what the
+    /// tools before it left, so its cuts overlap theirs and leave no step
+    #[schemars(title = "Rest overlap", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Rest Machining", "x-hide-when" = {"tools.count": [0, 1], "after.count": 0}))]
     pub boundary_offset: f64,
     /// Where the tool's tip may go
     #[serde(default)]
     #[schemars(title = "Machining Limit Boundary")]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary: MachiningBoundary,
-    /// Grows the machining boundary, so the tool can go on past a raised edge
     /// The level whose components make the boundary
     #[serde(default)]
     #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
@@ -118,8 +120,10 @@ impl Default for Params {
 impl Params {
     /// A toolpath's own params for each tool: that tool after the ones before it, so each
     /// recalculates on its own. Several are named `[1]`, `[2]`... in running order.
+    /// Each keeps its tool as its Tools list, so Edit shows it there and a bit picked there
+    /// is used (one saved with only `tool` uses that until a bit is picked).
     fn each_tool(&self) -> Vec<(Tool, Params)> {
-        if let Some(tool) = &self.tool {
+        if let (Some(tool), true) = (&self.tool, self.tools.is_empty()) {
             return vec![(tool.clone(), self.clone())];
         }
         let several = self.tools.len() > 1;
@@ -133,9 +137,9 @@ impl Params {
                     } else {
                         self.name.clone()
                     },
-                    tools: vec![],
-                    tool: Some(tool.clone()),
-                    after: self.tools[..i].to_vec(),
+                    tools: vec![tool.clone()],
+                    tool: None,
+                    after: [&self.after[..], &self.tools[..i]].concat(),
                     ..self.clone()
                 };
                 (tool.clone(), one)
@@ -266,9 +270,21 @@ fn finish_within(
         p,
         p.name.clone(),
         tool.clone(),
-        vec![],
+        boundary_vectors(doc, p.machining_boundary),
         moves,
     ))
+}
+
+/// The closed vectors a Selected Vector(s) boundary is made from, kept with the toolpath so
+/// recalculating uses them again (and changing them marks it out of date).
+fn boundary_vectors(
+    doc: &Document,
+    limit: MachiningBoundary,
+) -> Vec<cut_craft_core::document::EntityId> {
+    match limit {
+        MachiningBoundary::SelectedVectors => doc.selected_paths(|path| path.closed).0,
+        _ => vec![],
+    }
 }
 
 #[cfg(test)]
@@ -303,6 +319,40 @@ mod tests {
 
     fn ball(name: &str) -> Tool {
         ToolDatabase::starter().get(name).unwrap().clone()
+    }
+
+    #[test]
+    fn the_level_field_says_only_what_the_level_is() {
+        let schema = schemars::schema_for!(Params);
+        let help = schema.as_value()["properties"]["boundary_level"]["description"]
+            .as_str()
+            .unwrap();
+        assert_eq!(help, "The level whose components make the boundary");
+    }
+
+    #[test]
+    fn a_selected_vectors_boundary_is_kept_so_the_toolpath_recalculates() {
+        let mut doc = cut_craft_core::testing::domed();
+        let mut c = cut_craft_core::Change::builder(&doc);
+        let id = c.add(cut_craft_core::testing::square(0.0, 0.0, 10.0));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        let p = Params {
+            machining_boundary: MachiningBoundary::SelectedVectors,
+            ..Params::default()
+        };
+        doc.apply(&FinishingToolpath3d::run(&doc, &p).unwrap())
+            .unwrap();
+        let (&tp, made) = doc.toolpaths.iter().next().unwrap();
+        assert_eq!(made.vectors, [id], "the boundary is what it was made from");
+        // nothing selected now: recalculating still uses the boundary it was made with
+        let mut c = cut_craft_core::Change::builder(&doc);
+        c.select([]);
+        doc.apply(&c.finish()).unwrap();
+        let mut r = cut_craft_core::Registry::default();
+        r.add::<FinishingToolpath3d>();
+        let again = r.recalculate(&doc, tp);
+        assert!(again.is_ok(), "{:?}", again.err());
     }
 
     #[test]
@@ -497,6 +547,43 @@ mod tests {
         );
         assert_eq!(made[0].moves, alone.moves);
         assert_eq!(alone.name, "3D Finishing", "one tool keeps the plain name");
+    }
+
+    #[test]
+    fn edit_shows_a_toolpaths_bit_under_tools_and_uses_the_one_picked_there() {
+        let mut registry = cut_craft_core::Registry::default();
+        registry.add::<FinishingToolpath3d>();
+        let set = Params {
+            tools: vec![ball("6 mm Ball Nose"), ball("3 mm Ball Nose")],
+            ..Params::default()
+        };
+        let (doc, ids) = finished(&domed(), &set);
+        let second: Params = serde_json::from_value(doc.toolpaths[&ids[1]].params.clone()).unwrap();
+        assert_eq!(
+            second.tools,
+            [ball("3 mm Ball Nose")],
+            "its bit, under Tools"
+        );
+        assert_eq!(second.after, [ball("6 mm Ball Nose")]);
+        // a smaller bit picked under Tools in Edit is the one it cuts with
+        let picked = |params: &Params, id| {
+            let mut edited = serde_json::to_value(params).unwrap();
+            edited["tools"] = serde_json::json!([ball("3 mm Ball Nose")]);
+            let change = registry.edit(&doc, id, Some(&edited)).unwrap();
+            let mut doc = doc.clone();
+            doc.apply(&change).unwrap();
+            doc.toolpaths[&id].clone()
+        };
+        let first: Params = serde_json::from_value(doc.toolpaths[&ids[0]].params.clone()).unwrap();
+        let edited = picked(&first, ids[0]);
+        assert_eq!(edited.tool.name, "3 mm Ball Nose");
+        // one saved with only `tool` (an older job) takes the bit picked too
+        let older = Params {
+            tool: Some(ball("6 mm Ball Nose")),
+            tools: vec![],
+            ..first
+        };
+        assert_eq!(picked(&older, ids[0]).tool.name, "3 mm Ball Nose");
     }
 
     #[test]

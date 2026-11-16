@@ -26,6 +26,43 @@ pub enum JobType {
     Rotary,
 }
 
+/// Where Z = 0 is on a rotary job: Job Setup and Material Setup show this in place of
+/// [`ZZero`] (its bed choice is the cylinder's axis there).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RotaryZZero {
+    /// The tool is zeroed on the top of the cylinder: touch the bit off on the highest point
+    /// of the blank. Cut depths go below zero, so a 3 mm deep cut is Z -3. Easiest when the
+    /// blank is round and true; set zero again for each new blank
+    #[default]
+    #[schemars(title = "Cylinder Surface")]
+    CylinderSurface,
+    /// The tool is zeroed on the cylinder's centre line, the rotary axis (touch off on the
+    /// axis, not on the machine bed or the rotary's base). Every Z is a distance from the
+    /// axis, so on a 50 mm blank a 3 mm deep cut is Z 22. Zero stays put when you change
+    /// blanks, and an out-of-round blank still cuts to the right finished size
+    #[schemars(title = "Cylinder Axis")]
+    CylinderAxis,
+}
+
+impl From<ZZero> for RotaryZZero {
+    fn from(z: ZZero) -> Self {
+        match z {
+            ZZero::MaterialSurface => Self::CylinderSurface,
+            ZZero::MachineBed => Self::CylinderAxis,
+        }
+    }
+}
+
+impl From<RotaryZZero> for ZZero {
+    fn from(z: RotaryZZero) -> Self {
+        match z {
+            RotaryZZero::CylinderSurface => Self::MaterialSurface,
+            RotaryZZero::CylinderAxis => Self::MachineBed,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Size {
     /// The material's size across, left to right
@@ -42,7 +79,7 @@ pub struct Size {
         range(min = 0)
     )]
     pub height: f64,
-    /// How thick the material is
+    /// How thick the material is. Changing it after making toolpaths marks them out of date
     #[schemars(
         title = "Thickness (Z)",
         extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),
@@ -75,11 +112,17 @@ pub struct DatumPosition {
     pub position: Datum,
     /// Give that point coordinates other than 0, 0
     pub use_offset: bool,
-    /// The X the datum point is given
-    #[schemars(title = "X", extend("x-unit" = "mm"))]
+    /// The X the datum point is given, with Use offset ticked
+    #[schemars(
+        title = "X",
+        extend("x-unit" = "mm", "x-enable-when" = {"use_offset": "true"})
+    )]
     pub x: f64,
-    /// The Y the datum point is given
-    #[schemars(title = "Y", extend("x-unit" = "mm"))]
+    /// The Y the datum point is given, with Use offset ticked
+    #[schemars(
+        title = "Y",
+        extend("x-unit" = "mm", "x-enable-when" = {"use_offset": "true"})
+    )]
     pub y: f64,
 }
 
@@ -99,13 +142,26 @@ pub struct Params {
         extend("x-icon" = "job_setup/material_size_xyz.png")
     )]
     pub size: Size,
+    /// Where the tool is zeroed in Z: on top of the material, or under it on the machine bed
     #[schemars(
         title = "Z Zero Position",
-        extend("x-section" = true),
+        extend("x-section" = true, "x-hide-when" = {"job_type": "rotary"}),
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
-    /// Which point of the material is the machine's X0, Y0
+    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis. The
+    /// picture shows where. Pick the one you touch the bit off on at the machine: the G-code
+    /// heights depend on it, and a wrong pick cuts too deep or in the air
+    #[schemars(
+        title = "Z Zero Position",
+        extend("x-section" = true, "x-show-when" = {"job_type": "rotary"}),
+        extend("x-icon" = "job_setup/z_zero_{}.png")
+    )]
+    #[serde(default)]
+    pub rotary_z_zero: RotaryZZero,
+    /// Which point of the material is the machine's X0, Y0. Changing it moves only the
+    /// coordinates: the design, toolpaths, pictures, clamp zones and guides stay where they
+    /// are on the material
     #[schemars(
         title = "XY Datum Position",
         extend("x-section" = true),
@@ -133,12 +189,14 @@ pub struct Params {
     )]
     pub resolution: Resolution,
     /// What the material is, from the Materials Library: toolpaths pick their bits' feeds
-    /// and speeds for it (a layer naming its own material overrides it). Left empty, each
+    /// and speeds for it (a layer naming its own material overrides it), and the 3D view
+    /// shows it in the matching colour from Toolpaths ▸ Preview Colors. Left empty, each
     /// bit's own feeds
     #[serde(default)]
     #[schemars(title = "Material", extend("x-kind" = "material"))]
     pub material: String,
-    /// The material's colour in the 3D view
+    /// The material's colour in the 3D view. How the preview colours what the toolpaths cut
+    /// is Toolpaths ▸ Preview Colors, which this leaves as it is
     #[schemars(
         title = "Material Settings",
         extend("x-section" = true),
@@ -195,6 +253,7 @@ impl From<&Job> for Params {
                 units: job.units,
             },
             z_zero: job.z_zero,
+            rotary_z_zero: job.z_zero.into(),
             datum: DatumPosition {
                 position: job.datum,
                 use_offset: job.offset != Point::ZERO,
@@ -271,8 +330,12 @@ impl Command for JobSetup {
             units: p.size.units,
             clearance: p.gaps.clearance,
             plunge: Some(p.gaps.plunge),
-            home: Some(p.home),
-            z_zero: p.z_zero,
+            home: Some(home_for(doc, p)),
+            z_zero: if p.job_type == JobType::Rotary {
+                p.rotary_z_zero.into()
+            } else {
+                p.z_zero
+            },
             datum: p.datum.position,
             offset: if p.datum.use_offset {
                 Point::new(p.datum.x, p.datum.y)
@@ -280,8 +343,14 @@ impl Command for JobSetup {
                 Point::ZERO
             },
             resolution: p.resolution,
-            colour: p.colour,
+            colour: preview_colour(doc, p),
+            // not on this form: kept as Material Setup, Clearing Settings and Toolpaths ▸
+            // Preview Colors set them
             model_position: doc.job.model_position,
+            clearing: doc.job.clearing,
+            machined_area: doc.job.machined_area,
+            fill_colour: doc.job.fill_colour,
+            lithophane_light: doc.job.lithophane_light,
             ..shape
         };
         let mut c = Change::builder(doc);
@@ -310,9 +379,57 @@ impl Command for JobSetup {
     }
 }
 
-/// Vectors, toolpaths and components all shifted by `by`.
+/// The material's colour in the 3D view: the colour picked on the form, or, when only the
+/// Material changed, the matching one from Preview Colors (Walnut's for "Walnut").
+fn preview_colour(doc: &Document, p: &Params) -> [u8; 3] {
+    let material = p.material.trim();
+    if p.colour != doc.job.colour || material == doc.job_material() {
+        return p.colour;
+    }
+    cmd_materials::Material::matching(material)
+        .and_then(cmd_materials::Material::colour)
+        .unwrap_or(p.colour)
+}
+
+/// Home as `p` sets it, but with a Home Z still at the old clearance (never set by hand)
+/// following the clearance up or down: raising Clearance (Z1) to clear tall clamps must
+/// not leave the start and end moves travelling at the old, lower height.
+fn home_for(doc: &Document, p: &Params) -> Home {
+    let mut home = p.home;
+    if (home.z - doc.job.clearance).abs() < 1e-9 {
+        home.z = p.gaps.clearance;
+    }
+    home
+}
+
+/// Everything placed on the material shifted by `by`: vectors, toolpaths, components,
+/// pictures, keep-out (clamp) zones and guides.
 fn move_everything(doc: &Document, c: &mut cut_craft_core::ChangeBuilder, by: Point) {
     let shift = DAffine2::from_translation(by);
+    let zones = doc
+        .keep_out
+        .iter()
+        .map(|z| cut_craft_core::keep_out::KeepOutZone {
+            path: z.path.transformed(&shift),
+            ..z.clone()
+        })
+        .collect();
+    c.set_keep_out(zones);
+    for (&id, bitmap) in &doc.bitmaps {
+        let mut moved = bitmap.clone();
+        moved.rect =
+            cut_craft_core::geometry::Rect::new(bitmap.rect.min + by, bitmap.rect.max + by);
+        c.replace_bitmap(id, moved);
+    }
+    let guides = doc
+        .guides
+        .iter()
+        .map(|g| cut_craft_core::document::Guide {
+            at: g.at + if g.vertical { by.x } else { by.y },
+            ..*g
+        })
+        .collect();
+    c.set_guides(guides);
     for (&id, path) in &doc.vectors {
         c.replace(id, path.transformed(&shift));
     }
@@ -334,7 +451,7 @@ fn move_everything(doc: &Document, c: &mut cut_craft_core::ChangeBuilder, by: Po
 mod tests {
     use super::*;
     use cut_craft_core::component::{Combine, Component};
-    use cut_craft_core::geometry::Rect;
+    use cut_craft_core::geometry::{Path, Rect};
     use cut_craft_core::testing::{after, after_err, run_on, sample_document};
     use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath};
 
@@ -346,6 +463,50 @@ mod tests {
         run_on::<JobSetup>(&mut doc, &with(|p| p.material = " Hard Maple ".into()));
         assert_eq!(doc.job_material(), "Hard Maple");
         assert_eq!(JobSetup::initial_params(&doc).material, "Hard Maple");
+    }
+
+    #[test]
+    fn picking_a_material_shows_it_in_its_colour_unless_a_colour_is_picked_too() {
+        use cmd_materials::Material;
+        let mut doc = sample_document();
+        let walnut = Material::Walnut.colour().unwrap();
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Walnut".into();
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(doc.job.colour, walnut, "the 3D view shows walnut");
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Hard Maple".into();
+        p.colour = [1, 2, 3];
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(
+            doc.job.colour,
+            [1, 2, 3],
+            "a colour picked on the form wins"
+        );
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Titanium Grade 5".into();
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(doc.job.colour, [1, 2, 3], "no preview colour for it: kept");
+    }
+
+    #[test]
+    fn applying_it_keeps_the_preview_colours_set_elsewhere() {
+        use cut_craft_core::document::MachinedArea;
+        let mut doc = sample_document();
+        doc.job.machined_area = MachinedArea::Lithophane;
+        doc.job.fill_colour = [1, 2, 3];
+        doc.job.lithophane_light = 0.9;
+        let mut p = JobSetup::initial_params(&doc);
+        p.size.width += 10.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(
+            (
+                doc.job.machined_area,
+                doc.job.fill_colour,
+                doc.job.lithophane_light
+            ),
+            (MachinedArea::Lithophane, [1, 2, 3], 0.9)
+        );
     }
 
     fn with(change: impl FnOnce(&mut Params)) -> Params {
@@ -406,6 +567,79 @@ mod tests {
         };
         assert_eq!(offset(true), Point::new(10.0, 20.0));
         assert_eq!(offset(false), Point::ZERO);
+    }
+
+    #[test]
+    fn home_z_follows_a_raised_clearance_until_it_is_set_by_hand() {
+        let mut doc = sample_document();
+        // raised in the same dialog, Home Z (shown at the old clearance) goes up with it
+        run_on::<JobSetup>(&mut doc, &with(|p| p.gaps.clearance = 25.0));
+        assert!(
+            (doc.job.home().z - 25.0).abs() < 1e-9,
+            "{:?}",
+            doc.job.home()
+        );
+        // and again later
+        let mut p = JobSetup::initial_params(&doc);
+        p.gaps.clearance = 30.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        assert!((doc.job.home().z - 30.0).abs() < 1e-9);
+        // a Home Z of its own is kept
+        let mut p = JobSetup::initial_params(&doc);
+        p.home.z = 50.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        let mut p = JobSetup::initial_params(&doc);
+        p.gaps.clearance = 10.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        assert!((doc.job.home().z - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_new_datum_moves_clamp_zones_pictures_and_guides_with_the_design() {
+        let mut doc = sample_document();
+        let mut c = Change::builder(&doc);
+        let zone = Path::polyline(
+            &[Point::ZERO, Point::new(50.0, 0.0), Point::new(50.0, 50.0)],
+            true,
+        );
+        c.set_keep_out(vec![cut_craft_core::keep_out::KeepOutZone::new(
+            "Clamp", zone,
+        )]);
+        let picture = c.add_bitmap(cut_craft_core::bitmap::Bitmap {
+            name: "b".into(),
+            columns: 2,
+            rows: 1,
+            grey: vec![0, 255],
+            rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
+            depth: Vec::new(),
+            rgb: Vec::new(),
+        });
+        c.set_guides(vec![
+            cut_craft_core::document::Guide {
+                vertical: true,
+                at: 100.0,
+                locked: false,
+                tilt: 0.0,
+            },
+            cut_craft_core::document::Guide {
+                vertical: false,
+                at: 40.0,
+                locked: false,
+                tilt: 0.0,
+            },
+        ]);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        run_on::<JobSetup>(&mut doc, &with(|p| p.datum.position = Datum::Centre));
+        let moved = Point::new(-300.0, -200.0);
+        assert_eq!(
+            doc.keep_out[0].path.bounds().min,
+            moved,
+            "the clamp stays on the clamp"
+        );
+        assert_eq!(doc.bitmaps[&picture].rect.min, moved);
+        assert!((doc.guides[0].at - (100.0 - 300.0)).abs() < 1e-9);
+        assert!((doc.guides[1].at - (40.0 - 200.0)).abs() < 1e-9);
     }
 
     #[test]
@@ -487,7 +721,7 @@ mod tests {
             p.size.length = 300.0;
             p.size.diameter = 50.0;
             p.orientation = Along::X;
-            p.z_zero = ZZero::MachineBed;
+            p.rotary_z_zero = RotaryZZero::CylinderAxis;
         }));
         let job = doc.job;
         assert_eq!(
@@ -513,6 +747,7 @@ mod tests {
             ),
             (JobType::Rotary, 50.0, 300.0)
         );
+        assert_eq!(reopened.rotary_z_zero, RotaryZZero::CylinderAxis);
     }
 
     #[test]
@@ -586,6 +821,20 @@ mod form_tests {
                 "{round}"
             );
         }
+        // Z zero reads as the cylinder's axis or surface on a rotary job, never the bed
+        assert_eq!(
+            rule(&schema["properties"]["z_zero"], "x-hide-when").as_deref(),
+            Some("\"rotary\"")
+        );
+        let round = &schema["properties"]["rotary_z_zero"];
+        assert_eq!(rule(round, "x-show-when").as_deref(), Some("\"rotary\""));
+        let titles: Vec<&str> = schema["$defs"]["RotaryZZero"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v["title"].as_str())
+            .collect();
+        assert_eq!(titles, ["Cylinder Surface", "Cylinder Axis"]);
         let orientation = &schema["properties"]["orientation"];
         assert_eq!(
             rule(orientation, "x-show-when").as_deref(),

@@ -242,7 +242,8 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "import_vectors_bitmap",
         "Import Vectors or Picture",
         "Bring in a drawing (DXF, SVG or a Vectric job's vectors) or a picture (PNG, JPG, \
-         BMP, GIF or TIFF) to trace, carve round or draw over",
+         BMP, GIF or TIFF) to trace, carve round or draw over. An SVG sized in pixels is \
+         read at 96 pixels per inch, and a note says the size it came in at",
     ),
     (
         "import_vectors",
@@ -277,7 +278,10 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "import_cut_list",
         "Import Cut List",
         "Draw a part for each row of a spreadsheet's cut list (saved as CSV): name, length, \
-         width and how many, ready for Nest Parts",
+         width and how many, ready for Nest Parts. Sizes are in the units after the Length \
+         and Width headings, such as Length (in) or Length (mm), else in the job's units. \
+         The note after importing names the units used for each, so a heading missing its \
+         unit shows up",
     ),
     // the Model sub-tab's exports, which are file formats rather than commands
     (
@@ -300,8 +304,9 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
         "load_template",
         "Load Toolpath Template",
-        "Add the toolpaths saved in a template to this job, ready to pick the vectors each \
-         one cuts and calculate",
+        "Add the toolpaths saved in a template to this job, ready to pick the vectors (or \
+         picture) each one cuts and calculate. A Merged or Array Copy toolpath uses the \
+         toolpaths saved with it; one saved without them says to tick the ones to use",
     ),
     (
         "save_selected_toolpath_as_template",
@@ -330,6 +335,12 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "part_labels",
         "Print Part Labels",
         "Print a label for each named part, to stick on it once it is cut out",
+    ),
+    (
+        "clearing_settings",
+        "Clearing Settings",
+        "How adaptive and trochoidal clearing cut in this job: the light step, the loops, \
+         and whether rows and loops keep climb on the way back",
     ),
     (
         "cut_list",
@@ -1001,7 +1012,6 @@ impl MenuSystem {
                 )],
             )
             .enabled(text),
-            MenuItem::with_action("Convert To Vectors", "convert_text_to_curves").enabled(text),
             MenuItem::separator(),
             MenuItem::form::<cmd_join_close_vectors::JoinCloseVectors>(
                 "Join / Close Vectors...",
@@ -1850,14 +1860,6 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
     let props = cmd_sheet_properties::Params {
         sheet,
         name: s.name.clone(),
-        visible: s.visible,
-    };
-    let shown = |name: &str, visible: bool| {
-        let params = cmd_sheet_properties::Params {
-            visible,
-            ..props.clone()
-        };
-        MenuItem::run::<SheetProperties>(name, &params).enabled(s.visible != visible)
     };
     let send = |name: &str, move_vectors: bool| {
         let params = cmd_send_to_sheet::Params {
@@ -1873,8 +1875,6 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
             &cmd_activate_sheet::Params { sheet },
         )
         .enabled(sheet != doc.active_sheet),
-        shown("Show", true),
-        shown("Hide", false),
         MenuItem::separator(),
         send("Copy Selected Vectors Here", false),
         send("Move Selected Vectors Here", true),
@@ -2013,8 +2013,7 @@ impl MenuSystem {
                         i("Save As Template..."),
                         k("Increment and Save", "Ctrl+Alt+S"),
                         sep(),
-                        i("Print..."),
-                        i("Print Preview"),
+                        a("Print (opens a PDF)...", "print"),
                         sep(),
                         sub(
                             "Import",
@@ -2201,7 +2200,6 @@ impl MenuSystem {
                         i("Post-Processor Management..."),
                         sep(),
                         i("Install Post-Processor..."),
-                        i("Update Post-Processor Database"),
                     ],
                 ),
                 menu(
@@ -2252,7 +2250,8 @@ impl MenuSystem {
                         a("Print Part Labels...", "part_labels"),
                         a("Save Cut List...", "cut_list"),
                         sep(),
-                        i("Materials..."),
+                        a("Clearing Settings...", "clearing_settings"),
+                        a("Preview Colors...", "materials"),
                         sep(),
                         i("Tool Database..."),
                     ],

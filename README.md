@@ -114,8 +114,9 @@ please report them (see [Reporting bugs](#reporting-bugs)).
   toolpaths are stored packed, so a job with a dense 3D toolpath is a fraction of the size it
   was; jobs saved by earlier builds still open.
 - Every file is written whole: a save that fails (a full disk, a crash) leaves the old file as
-  it was. Unsaved work is copied to `recovery.ccjob` in the settings folder every 30 seconds
-  and opened again after a crash; saving or closing the job on purpose removes the copy.
+  it was. Unsaved work is copied to `recovery-<process>.ccjob` in the settings folder every 30
+  seconds and opened again after a crash; saving or closing the job on purpose removes the
+  copy. Each open window keeps its own copy, so a second window never takes the first one's.
 - Import DXF, SVG, pictures (PNG, JPG, GIF, BMP, TIFF) and STL. Export DXF, SVG, PDF, STL and
   grayscale bitmaps, plus a job sheet.
 - Drag files onto the window to open, import or install them (see [the table](#drag-and-drop)).

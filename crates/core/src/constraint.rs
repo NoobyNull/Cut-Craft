@@ -1,8 +1,10 @@
 //! Snaps that stay: a point placed on a snap (the end or middle of a line, the centre of a
 //! circle, where a line touches a curve or meets it square on, a corner of the material)
 //! is kept there. When the thing it snapped to moves or changes, the point follows; when the
-//! shape it is part of is moved on its own, the point is put back on its snap. The person
-//! frees a point by picking its snap mark and pressing Delete.
+//! shape it is part of is reshaped on its own, the point is put back on its snap. A shape
+//! the person moves whole on its own (drag, Move, arrow keys) goes where it is put and lets
+//! go of its snaps. The person also frees a point by picking its snap mark and pressing
+//! Delete.
 //!
 //! Every change goes through [`keeping`] before it is applied (see
 //! [`History::apply`](crate::History::apply)): it adds the edits that keep each constraint,
@@ -10,7 +12,7 @@
 
 use crate::change::{Change, Edit};
 use crate::document::{Document, EntityId};
-use crate::geometry::{Path, Point, Rect, Segment};
+use crate::geometry::{Path, Point, Rect, Segment, polyline_distance};
 use crate::nodes::{move_node, nodes};
 use crate::snap::{SnapKind, material_points, span_mid, touch_and_square};
 use glam::DAffine2;
@@ -165,6 +167,19 @@ fn place(
     }
 }
 
+/// Whether `after` is `before` slid somewhere else, unchanged in shape.
+fn translated(before: &Path, after: &Path) -> bool {
+    let by = after.start - before.start;
+    let (was, now) = (nodes(before), nodes(after));
+    by.length() > TOLERANCE
+        && before.segments.len() == after.segments.len()
+        && was.len() == now.len()
+        && was
+            .iter()
+            .zip(&now)
+            .all(|(a, b)| (*a + by).distance(*b) <= 1e-6)
+}
+
 /// `path` with `pin` moved to `to`.
 fn moved(path: &Path, pin: Pin, to: Point) -> Path {
     match pin {
@@ -288,6 +303,38 @@ impl After {
         }
     }
 
+    /// Lets go of the snaps of a shape the person moved whole on its own (a drag, Move,
+    /// the arrow keys, Align): it goes where it was put rather than springing back. A snap
+    /// still on its anchor after the move (the shape moved with what it snapped to) stays.
+    fn drop_moved(&mut self, change: &Change, made: &[Constraint], notes: &mut Vec<String>) {
+        let moved: BTreeSet<EntityId> = change
+            .edits
+            .iter()
+            .filter_map(|e| match e {
+                Edit::Replace { id, before, after } if translated(before, after) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        if moved.is_empty() {
+            return;
+        }
+        let (vectors, material) = (&self.vectors, self.material);
+        let count = self.constraints.len();
+        self.constraints.retain(|c| {
+            made.contains(c)
+                || !moved.contains(&c.vector)
+                || c.at(vectors).is_some_and(|now| {
+                    place(c, vectors, material, now).is_some_and(|to| to.distance(now) <= 1e-6)
+                })
+        });
+        if self.constraints.len() < count {
+            notes.push(
+                "The moved shape let go of the snap it was drawn from; snap it again to tie it"
+                    .to_owned(),
+            );
+        }
+    }
+
     /// Puts every constraint stirred by the change (or new in it) back on its anchor, over
     /// a few passes for points that follow points; lets go, with a note, of those that
     /// cannot be kept.
@@ -353,6 +400,7 @@ pub fn keeping(doc: &Document, change: Change) -> Change {
     let start = after.vectors.clone();
     let mut notes = vec![];
     after.drop_lost(doc, &mut notes);
+    after.drop_moved(&change, &made, &mut notes);
     after.solve(&made, &mut notes);
     let mut out = change;
     let mut put_back = false;
@@ -387,7 +435,8 @@ pub fn keeping(doc: &Document, change: Change) -> Change {
 /// Constraints for a vector just made from a drawing, from where its points snapped:
 /// `snaps` are the snapped points with what they snapped to. A drawn line's nodes stretch
 /// to stay on their snaps (`stretch`); any other shape is moved whole, by the first of its
-/// points that snapped.
+/// points that snapped. Only snaps on the shape count: one left from a click that drew
+/// nothing is not tied to a shape typed in somewhere else.
 pub fn pins(
     path: &Path,
     vector: EntityId,
@@ -413,7 +462,7 @@ pub fn pins(
             // one snap for each node: the last placed there wins
             out.retain(|c| c.pin != pin);
             out.push(Constraint { vector, pin, to });
-        } else if out.is_empty() && !to.needs_line() {
+        } else if out.is_empty() && !to.needs_line() && lies_on(path, at) {
             let offset = at - path.bounds().center();
             out.push(Constraint {
                 vector,
@@ -423,6 +472,20 @@ pub fn pins(
         }
     }
     out
+}
+
+/// Whether `at` is a point of `path`'s: on its outline or at its middle (a circle drawn
+/// from a snapped centre). The middle is the middle of its box or of its nodes, as a
+/// five-point star or a pentagon drawn from its centre is not centred in its box. A snap
+/// from a click that drew nothing lies elsewhere.
+fn lies_on(path: &Path, at: Point) -> bool {
+    const NEAR: f64 = 1e-3;
+    let points = nodes(path);
+    #[expect(clippy::cast_precision_loss, reason = "a shape's node count")]
+    let mean = points.iter().fold(Point::ZERO, |sum, &q| sum + q) / points.len().max(1) as f64;
+    path.bounds().center().distance(at) <= NEAR
+        || mean.distance(at) <= NEAR
+        || polyline_distance(&path.flatten(NEAR / 10.0), at) <= NEAR
 }
 
 /// `existing` with `made` added: a point snapped again is kept on its new snap only, and
@@ -514,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn a_line_moved_on_its_own_keeps_its_snapped_end_where_it_was() {
+    fn a_line_moved_on_its_own_moves_freely_and_lets_go_of_its_snap() {
         let mut doc = document_with(vec![
             square(10.0, 10.0, 20.0),
             Path::polyline(&[p(0.0, 0.0), p(30.0, 30.0)], false),
@@ -534,19 +597,79 @@ mod tests {
                 to,
             }],
         );
+        move_by(&mut doc, &mut h, line, p(-5.0, 0.0));
+        assert_eq!(
+            nodes(&doc.vectors[&line]),
+            [p(-5.0, 0.0), p(25.0, 30.0)],
+            "moved whole, not stretched"
+        );
+        assert_eq!(doc.constraints, [], "its snap let go");
+        // the square moving no longer drags it
+        move_by(&mut doc, &mut h, sq, p(5.0, 5.0));
+        assert_eq!(nodes(&doc.vectors[&line]), [p(-5.0, 0.0), p(25.0, 30.0)]);
+        // undo brings the tie back with the line
+        h.undo(&mut doc);
+        h.undo(&mut doc);
+        assert_eq!(doc.constraints.len(), 1);
+    }
+
+    #[test]
+    fn a_shape_drawn_from_the_material_corner_moves_where_it_is_put() {
+        let mut doc = document_with(vec![square(0.0, 0.0, 20.0)]);
+        let [sq] = ids(&doc)[..] else { panic!() };
+        let mut h = History::default();
+        constrain(
+            &mut doc,
+            &mut h,
+            vec![Constraint {
+                vector: sq,
+                pin: Pin::Whole {
+                    offset: p(-10.0, -10.0),
+                },
+                to: Anchor::Material { corner: 0 },
+            }],
+        );
+        move_by(&mut doc, &mut h, sq, p(30.0, 40.0));
+        assert_eq!(
+            doc.vectors[&sq].bounds().min,
+            p(30.0, 40.0),
+            "not sprung back"
+        );
+        assert_eq!(doc.constraints, []);
+    }
+
+    #[test]
+    fn a_shape_moved_with_what_it_snapped_to_keeps_its_snap() {
+        let mut doc = document_with(vec![
+            square(10.0, 10.0, 20.0),
+            Path::polyline(&[p(0.0, 0.0), p(30.0, 30.0)], false),
+        ]);
+        let [sq, line] = ids(&doc)[..] else { panic!() };
+        let mut h = History::default();
+        let to = Anchor::End {
+            vector: sq,
+            node: 2,
+        };
+        constrain(
+            &mut doc,
+            &mut h,
+            vec![Constraint {
+                vector: line,
+                pin: Pin::Node { node: 1 },
+                to,
+            }],
+        );
+        let by = DAffine2::from_translation(p(3.0, 4.0));
         let mut b = Change::builder(&doc);
-        b.replace(
-            line,
-            doc.vectors[&line].transformed(&DAffine2::from_translation(p(-5.0, 0.0))),
-        );
-        let change = keeping(&doc, b.finish());
-        assert!(
-            change.notes.iter().any(|n| n.contains("Delete")),
-            "{:?}",
-            change.notes
-        );
+        b.replace(sq, doc.vectors[&sq].transformed(&by));
+        b.replace(line, doc.vectors[&line].transformed(&by));
+        let change = b.finish();
         h.apply(&mut doc, change).unwrap();
-        assert_eq!(nodes(&doc.vectors[&line]), [p(-5.0, 0.0), p(30.0, 30.0)]);
+        assert_eq!(
+            doc.constraints.len(),
+            1,
+            "still on the corner, so still kept"
+        );
     }
 
     #[test]
@@ -806,6 +929,43 @@ mod tests {
             ..old
         };
         assert_eq!(merged(&[old, other], vec![new]), [other, new]);
+    }
+
+    #[test]
+    fn a_shape_is_only_tied_to_snaps_on_it() {
+        let circle = Path::circle(p(50.0, 50.0), 10.0);
+        let to = Anchor::Material { corner: 0 };
+        // a click that drew nothing, far from the circle typed in later: no tie
+        assert_eq!(pins(&circle, EntityId(1), &[(p(0.0, 0.0), to)], false), []);
+        // its centre, a point on its edge: tied
+        for at in [
+            p(50.0, 50.0),
+            p(60.0, 50.0),
+            p(50.0 + 50.0_f64.sqrt(), 50.0 + 50.0_f64.sqrt()),
+        ] {
+            assert_eq!(
+                pins(&circle, EntityId(1), &[(at, to)], false).len(),
+                1,
+                "{at:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_star_is_tied_to_a_snap_at_its_own_middle() {
+        // a five-point star around (50, 50): the middle of its box is lower down
+        let points: Vec<Point> = (0..10)
+            .map(|k| {
+                let r = if k % 2 == 0 { 20.0 } else { 8.0 };
+                let a = std::f64::consts::FRAC_PI_2 + f64::from(k) * std::f64::consts::PI / 5.0;
+                p(50.0 + r * a.cos(), 50.0 + r * a.sin())
+            })
+            .collect();
+        let star = Path::polyline(&points, true);
+        assert!(star.bounds().center().distance(p(50.0, 50.0)) > 0.1);
+        let to = Anchor::Material { corner: 0 };
+        let made = pins(&star, EntityId(1), &[(p(50.0, 50.0), to)], false);
+        assert_eq!(made.len(), 1);
     }
 
     #[test]

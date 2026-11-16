@@ -1,6 +1,7 @@
 - Embellish: a Sequence box and pattern maker say how each repeat is drawn (spaces, flips, turns, random size or lean)
 - Embellish: works along open lines, every style fills a closed shape, plain style names, Reverse, Reset and Apply
-- Embellish: pick one style, fill with borders, new Laurel, Feathers and Chevrons, and press E to edit one
-- Set shortcuts to keys or mouse buttons in Options
-- Each form's button says what it does (Create, Calculate or Apply) and hides when changes show live
-- The 2D grid stands out from the sheet in the dark theme
+- After a tool change the bit lifts straight to safe height before moving, and tiles lift out of a cut before crossing
+- Lines lying on top of each other on one layer (a paste, a copy on its original, shapes edge to edge) show in red
+- Layers keep their material when hidden or locked, and are never deleted while another sheet uses them
+- Edit Passes, tabs, Job Setup, Material Setup, crash recovery and Send to Machine short names fixed so they no longer lose or overwrite work
+- Tool buttons keep one size, so pointing at them no longer makes the page jump

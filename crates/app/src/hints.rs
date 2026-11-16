@@ -25,7 +25,8 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "edit_text",
-        "Edit Text: opens the selected text in its form, to change its words, font or size",
+        "Edit Text: opens the selected text in its form, to change its words, font or size (text \
+         in a group too); double-clicking the text does the same",
     ),
     (
         "align_left",
@@ -45,15 +46,15 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "center_horizontally",
-        "Center Horizontally: moves the selected objects sideways so their centres line up on one vertical line",
+        "Center Horizontally: moves the selected objects sideways so their centres line up on one vertical line. A group, like a word of text, moves as one piece",
     ),
     (
         "center_vertically",
-        "Center Vertically: moves the selected objects up or down so their centres line up on one horizontal line",
+        "Center Vertically: moves the selected objects up or down so their centres line up on one horizontal line. A group, like a word of text, moves as one piece",
     ),
     (
         "center",
-        "Center: moves the selected objects so their centres all sit on one point, the middle of the selection",
+        "Center: moves the selected objects so their centres all sit on one point, the middle of the selection. A group, like a word of text, moves as one piece",
     ),
     (
         "center_horizontally_in_material",
@@ -97,7 +98,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "ungroup_onto_current_layer",
-        "Ungroup onto Current Layer: takes the selected groups apart and moves their vectors onto the layer you are working on",
+        "Ungroup onto Current Layer: takes the selected groups apart one level (groups and text in them come out as they were) and moves their vectors onto the layer you are working on",
+    ),
+    (
+        "merge_visible_layers",
+        "Merge Visible: moves the vectors of every shown, unlocked layer onto this one. This layer is shown and unlocked so the merged work can be edited; locked layers are left as they are",
     ),
     (
         "group_toolpaths",
@@ -129,7 +134,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "select",
-        "Select: puts away the tool in hand, so clicking picks objects, Shift-click adds to the pick and dragging draws a box round them",
+        "Select: puts away the tool in hand, so clicking picks objects, Shift-click adds to the pick, dragging draws a box round them (a slip of a pixel or two is still a click, not a move), and right-clicking an object picks it and opens its menu",
     ),
     (
         "transform",
@@ -137,11 +142,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "node_edit",
-        "Node Edit: shows the points (nodes) a vector is made of, to drag them, or right-click to add, delete or change them",
+        "Node Edit: shows the points (nodes) a vector is made of, to drag them, or right-click to add, delete or change them. Del deletes the nodes picked with a box; picked nodes are let go when you pick another vector, undo or leave Node Edit",
     ),
     (
         "measure_inspect",
-        "Measure: drag between two points to read the distance and angle between them, or click an object to see its size",
+        "Measure: drag between two points to read the distance and angle between them (both ends snap to ends, middles and centres as drawing does; hold Shift to place them freely), or click an object to see its size",
     ),
     (
         "pan",
@@ -157,7 +162,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "zoom_to_drawing",
-        "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material",
+        "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material. In the 3D view F does it too, with the pointer over the view and no text box being typed in; F6 always does",
     ),
     (
         "zoom_to_job",
@@ -186,7 +191,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "save_as",
-        "Save As: saves the job under a new name or in another folder",
+        "Save As: saves the job under a new name or in another folder, starting from its own name and folder",
     ),
     (
         "save_as_template",
@@ -194,7 +199,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "increment_and_save",
-        "Increment and Save: saves the job as a new copy with the next number on its name (Sign 2, Sign 3), keeping the earlier versions",
+        "Increment and Save: saves the job as a new copy with the next number on its name (sign_1, sign_2), keeping the earlier versions. A year or date on the end of the name stays as it is (Smith-2024 becomes Smith-2024_1, order_2024-11-15 becomes order_2024-11-15_1)",
     ),
     (
         "recent_files",
@@ -232,10 +237,9 @@ pub const HINTS: &[(&str, &str)] = &[
         "export_ai",
         "Export as AI: saves the selected vectors as an Illustrator-style file, for drawing programs",
     ),
-    ("print", "Print: prints the 2D view of the job"),
     (
-        "print_preview",
-        "Print Preview: shows how the 2D view will look printed, before you print it",
+        "print",
+        "Print (opens a PDF): opens the 2D view as a PDF in your PDF viewer, to check and print from there",
     ),
     (
         "save_shaded_image",
@@ -251,11 +255,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "recalculate_all_toolpaths",
-        "Recalculate All Toolpaths: works out every toolpath again, after you changed the vectors or the material",
+        "Recalculate All Toolpaths: works out every toolpath again, after you changed the vectors or the material. A merged or copied toolpath is worked out after the toolpaths it copies",
     ),
     (
         "tool_database",
-        "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from",
+        "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it",
     ),
     (
         "tool_changer",
@@ -277,11 +281,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "paste",
-        "Paste: adds the objects on the clipboard to the job, in the middle of the view",
+        "Paste: adds the objects on the clipboard to the job exactly where they were copied from, on their own layer (in another job, on the current layer); a copied group or word of text pastes as a group of its own, still text (a dimension stays a dimension). Lines lying on top of their original show red. Ctrl+V of a copy made in another Cut Craft window brings its vectors only: 3D components paste only in the window they were copied in",
     ),
     (
         "paste_in_place",
-        "Paste in Place: adds the objects on the clipboard to the job exactly where they were copied from",
+        "Paste in Place: adds the objects on the clipboard to the job exactly where they were copied from; a copied group or word of text pastes as a group of its own",
     ),
     (
         "edit_object",
@@ -293,7 +297,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "component_levels",
-        "Component Levels: opens the Components tab, where the 3D model's levels and components are listed",
+        "Component Levels: opens the Components tab, where the 3D model's levels and components are listed. A new component goes on the level of the component picked there, else on the top shown level",
     ),
     (
         "join_straight_line",
@@ -325,11 +329,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "run:space_horizontally:{\"order\":\"left_to_right\",\"inside_last_vector\":false}",
-        "Space Left to Right: spreads the selected objects evenly across, in the order you picked them from the left",
+        "Space Left to Right: spreads the selected objects evenly across, in the order you picked them from the left. A group, like a word of text, counts as one object",
     ),
     (
         "run:space_horizontally:{\"order\":\"right_to_left\",\"inside_last_vector\":false}",
-        "Space Right to Left: spreads the selected objects evenly across, in the order you picked them from the right",
+        "Space Right to Left: spreads the selected objects evenly across, in the order you picked them from the right. A group, like a word of text, counts as one object",
     ),
     (
         "run:space_horizontally:{\"order\":\"as_placed\",\"inside_last_vector\":true}",
@@ -349,7 +353,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "guides_visible",
-        "Guides Visible: shows or hides the guide lines you dragged out of the rulers",
+        "Guides Visible: shows or hides the guide lines you dragged out of the rulers; drag a guide where no shape lies on it to move it, or right-click it for its properties, to lock it or to delete it",
     ),
     (
         "lock_all_existing_guides",
@@ -493,8 +497,17 @@ pub const HINTS: &[(&str, &str)] = &[
         "Model Resolution Highest: the 3D model in the finest detail, for small, detailed carvings; much slower",
     ),
     (
+        "reset_preview",
+        "Reset Preview: clears the preview back to uncut material; Undo Last Preview brings it back",
+    ),
+    (
+        "undo_last_preview",
+        "Undo Last Preview: goes back to the preview as it was before the last Preview or Reset \
+         Preview, once, turned over to the side the job is on now",
+    ),
+    (
         "preview_quality_1",
-        "Preview Quality Standard: toolpath previews in normal detail, quickest to draw",
+        "Preview Quality Standard: toolpath previews in normal detail, quickest to draw; a finer quality draws a small bit's thin cuts truer on a big sheet",
     ),
     (
         "preview_quality_2",
@@ -514,7 +527,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "create_component_from_toolpath_preview",
-        "Create Component from Toolpath Preview: turns the previewed, cut material into a 3D component, to carve on or reuse",
+        "Create Component from Toolpath Preview: turns the previewed, cut material into a 3D component, to carve on or reuse. It goes on the level of the component picked in the tree, else the top shown level, and the status bar names it",
     ),
     (
         "segment_3d_model_file",
@@ -522,7 +535,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "machine_configuration",
-        "Machine Configuration: your machine's size, its post processor and the folder its files go to",
+        "Machine Configuration: your machine's size, its post processor and the folder its files go to. If the saved machines can't be read at start, a copy is kept as machines.json.bad and they are never saved over",
     ),
     (
         "add_machine",
@@ -542,11 +555,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "install_post_processor",
-        "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet",
-    ),
-    (
-        "update_post_processor_database",
-        "Update Post Processor Database: checks for newer post processors and opens the list",
+        "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time",
     ),
     (
         "job_sheet_editor",
@@ -554,7 +563,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "first_run_setup",
-        "First Run Setup: asks about your machine, units and bits again, as when Cut Craft first started",
+        "First Run Setup: asks about your machine, units and material again, starting from your answers, and corrects My Machine (keeping the posts you added)",
     ),
     (
         "options",
@@ -594,7 +603,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "addons",
-        "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft",
+        "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts",
     ),
     (
         "community:0",

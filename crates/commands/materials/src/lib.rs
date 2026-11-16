@@ -1,7 +1,9 @@
-//! Toolpaths ▸ Materials: a library of materials to show the job in. Picking one sets the
+//! Preview Colors: how the 3D view and the toolpath preview colour the job, and nothing
+//! else: feeds and speeds come from Job Setup's Material. Picking a material sets the
 //! material's colour in the 3D view (Job Setup's Material Settings colour), and the 3D view
 //! draws a wood's grain over it; Custom is a solid colour of one's own. It also sets how the
-//! preview colours the areas the toolpaths cut.
+//! preview colours the areas the toolpaths cut. Picking a Material in Job Setup picks the
+//! matching colour here.
 
 use cut_craft_core::document::{Document, Job, MachinedArea};
 use cut_craft_core::{Change, Command, CommandError, Meta};
@@ -83,6 +85,32 @@ impl Material {
         LIBRARY.iter().find(|e| e.0 == self).and_then(|e| e.2)
     }
 
+    /// The preview material for a Materials Library name (Job Setup's Material): "Hard
+    /// Maple" shows as Maple, "Aluminium 6061" as Aluminium. `None` when none looks like it.
+    pub fn matching(name: &str) -> Option<Self> {
+        let name = name.to_lowercase();
+        let words: [(&str, Self); 14] = [
+            ("pine", Self::Pine),
+            ("maple", Self::Maple),
+            ("plywood", Self::BirchPlywood),
+            ("birch", Self::BirchPlywood),
+            ("oak", Self::Oak),
+            ("cedar", Self::Cedar),
+            ("cherry", Self::Cherry),
+            ("mahogany", Self::Mahogany),
+            ("walnut", Self::Walnut),
+            ("mdf", Self::Mdf),
+            ("hdu", Self::HduFoam),
+            ("hdpe", Self::HdpeWhite),
+            ("alumin", Self::Aluminium),
+            ("brass", Self::Brass),
+        ];
+        words
+            .into_iter()
+            .find(|(word, _)| name.contains(word))
+            .map(|(_, m)| m)
+    }
+
     /// The material shown in `colour`, Custom when none is.
     pub fn of(colour: [u8; 3]) -> Self {
         LIBRARY
@@ -94,7 +122,8 @@ impl Material {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// What the job is cut from, as the 3D view shows it
+    /// What the 3D view shows the job as. Only its look: feeds and speeds follow Job Setup's
+    /// Material, which picks the matching colour here
     #[schemars(extend("x-widget" = "drop-down"))]
     pub material: Material,
     /// Custom's solid colour
@@ -159,7 +188,7 @@ impl Command for Materials {
 
     fn meta() -> Meta {
         Meta {
-            label: "Materials",
+            label: "Preview Colors",
             group: "Toolpaths",
             icon: "",
             shortcut: "",

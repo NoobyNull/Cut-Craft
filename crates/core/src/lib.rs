@@ -8,6 +8,7 @@ pub mod calc;
 mod change;
 pub mod checks;
 mod command;
+pub mod common_lines;
 pub mod component;
 pub mod compute;
 pub mod constraint;

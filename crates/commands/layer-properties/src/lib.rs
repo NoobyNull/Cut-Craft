@@ -11,6 +11,9 @@ pub struct LayerProperties;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The layer to change
+    /// (the one right-clicked or picked: never shown on the form, so it cannot be changed
+    /// to another by mistake)
+    #[schemars(skip)]
     pub layer: LayerId,
     /// What the layer is called in the layer list
     pub name: String,

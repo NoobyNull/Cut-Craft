@@ -1,4 +1,5 @@
-//! What happens before the window: the command line (`--version`, `--help`, `--screenshots`),
+//! What happens before the window: the command line (`--version`, `--help`, `--screenshots`,
+//! a file to open),
 //! and a message box when the window can't open, so a start from a desktop launcher never just
 //! does nothing. On Linux that is most often a system library the window needs that the
 //! computer doesn't have; the message names the package to install for the common systems.
@@ -15,8 +16,9 @@ pub enum Start {
     Help,
     /// `--screenshots [DIR]`: the README's pictures (see app/screenshots.rs).
     Screenshots(PathBuf),
-    /// Anything else: the app.
-    App,
+    /// Anything else: the app, opening the file named if there is one (Open With, or a
+    /// file dragged onto the launcher: the desktop entry passes it as `%f`).
+    App(Option<PathBuf>),
 }
 
 /// What the arguments after the program's name ask for.
@@ -28,7 +30,8 @@ pub fn parse(mut args: impl Iterator<Item = String>) -> Start {
             args.next()
                 .map_or_else(|| "docs/screenshots".into(), Into::into),
         ),
-        _ => Start::App,
+        Some(file) if !file.starts_with('-') => Start::App(Some(file.into())),
+        _ => Start::App(None),
     }
 }
 
@@ -40,8 +43,10 @@ pub fn version() -> String {
 /// What `--help` prints.
 pub fn help() -> String {
     format!(
-        "{}\n\nUsage: cut-craft [OPTION]\n\n  \
+        "{}\n\nUsage: cut-craft [OPTION | FILE]\n\n  \
          (nothing)            open Cut Craft\n  \
+         FILE                 open Cut Craft with FILE (a job opens; a drawing is imported\n  \
+                              into a new job, made with Job Setup)\n  \
          -V, --version        print the version and stop\n  \
          -h, --help           print this and stop\n  \
          --screenshots [DIR]  save the README's pictures in DIR (docs/screenshots)\n",
@@ -259,9 +264,15 @@ mod tests {
     }
 
     #[test]
-    fn nothing_or_anything_else_opens_the_app() {
-        assert_eq!(parse(args(&[])), Start::App);
-        assert_eq!(parse(args(&["drawing.ccjob"])), Start::App);
+    fn nothing_opens_the_app_and_a_file_opens_in_it() {
+        assert_eq!(parse(args(&[])), Start::App(None));
+        // Open With and the desktop entry's %f pass the file to open
+        assert_eq!(
+            parse(args(&["drawing.ccjob"])),
+            Start::App(Some("drawing.ccjob".into()))
+        );
+        assert_eq!(parse(args(&["--unknown"])), Start::App(None));
+        assert!(help().contains("FILE"));
     }
 
     #[test]
