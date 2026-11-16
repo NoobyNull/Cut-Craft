@@ -37,9 +37,18 @@ pub fn step_for(unit: &str, integer: bool) -> f64 {
 }
 
 /// `value` moved one `step` up (or down), kept in `range`, without the float dust that adding
-/// tenths leaves (6.35 + 0.1 is 6.45, not 6.449999).
+/// tenths leaves (6.35 + 0.1 is 6.45, not 6.449999). A value between steps goes to the next
+/// step first: 5 mm shown in inches (0.19685 in) goes up to 0.2 in, never 0.20685 in, so a
+/// value converted from the other unit is not carried, slightly off, into every click.
 pub fn nudged(value: f64, step: f64, up: bool, range: &RangeInclusive<f64>) -> f64 {
-    let moved = if up { value + step } else { value - step };
+    let steps = value / step;
+    let on_a_step = (steps - steps.round()).abs() < 1e-6;
+    let moved = match (on_a_step, up) {
+        (true, true) => value + step,
+        (true, false) => value - step,
+        (false, true) => steps.ceil() * step,
+        (false, false) => steps.floor() * step,
+    };
     let clean = (moved * 1e9).round() / 1e9;
     let clean = if clean.is_finite() { clean } else { moved };
     clean.clamp(*range.start(), *range.end())
@@ -394,9 +403,29 @@ mod tests {
     #[test]
     fn a_nudge_leaves_no_float_dust() {
         let any = f64::NEG_INFINITY..=f64::INFINITY;
-        assert_eq!(nudged(6.35, 0.1, true, &any), 6.45);
+        assert_eq!(nudged(6.45, 0.1, true, &any), 6.55);
+        assert_eq!(nudged(6.35, 0.1, true, &any), 6.4);
         assert_eq!(nudged(0.25, 0.01, false, &any), 0.24);
         assert_eq!(nudged(0.3, 0.1, false, &any), 0.2);
+    }
+
+    #[test]
+    fn a_value_between_steps_goes_to_the_next_step_not_a_step_further() {
+        // the 5 mm clearance shown in an inch job is 0.19685 in: clicking up to a quarter
+        // inch must give 0.25 in exactly, not 0.24685 in (G-code Z0.2469)
+        let any = f64::NEG_INFINITY..=f64::INFINITY;
+        let five_mm = 5.0 / 25.4;
+        let mut n = five_mm;
+        for _ in 0..6 {
+            n = nudged(n, 0.01, true, &any);
+        }
+        assert_eq!(n, 0.25);
+        assert_eq!(nudged(five_mm, 0.01, true, &any), 0.2);
+        assert_eq!(nudged(five_mm, 0.01, false, &any), 0.19);
+        // on a step already, a click is one whole step
+        assert_eq!(nudged(0.2, 0.01, true, &any), 0.21);
+        assert_eq!(nudged(0.2, 0.01, false, &any), 0.19);
+        assert_eq!(nudged(-0.125, 0.1, true, &any), -0.1);
     }
 
     #[test]
@@ -472,7 +501,7 @@ mod tests {
     #[test]
     fn clicking_the_arrows_nudges_the_value_by_one_step() {
         let ctx = egui::Context::default();
-        let mut value = 6.35;
+        let mut value = 6.4;
         let rect = frame(&ctx, &mut value, 0.0..=100.0, None, 0.0);
         frame(
             &ctx,
@@ -488,7 +517,7 @@ mod tests {
             Some((up_spot(rect), false)),
             0.15,
         );
-        assert_eq!(value, 6.45);
+        assert_eq!(value, 6.5);
         frame(
             &ctx,
             &mut value,
@@ -503,7 +532,7 @@ mod tests {
             Some((down_spot(rect), false)),
             0.25,
         );
-        assert_eq!(value, 6.35);
+        assert_eq!(value, 6.4);
     }
 
     #[test]
