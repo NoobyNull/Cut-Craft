@@ -1684,6 +1684,60 @@ mod tests {
     }
 
     #[test]
+    fn job_setups_datum_x_and_y_follow_the_datum_sections_own_tick_when_drawn() {
+        // the rule's key sits inside the datum section, not at the form's top level, so
+        // drawing the form must judge it there
+        let job = fields(&schema("job_setup"));
+        let colours = |use_offset: bool| {
+            let mut params = registry()
+                .get("job_setup")
+                .map(cut_craft_core::DynCommand::default_params)
+                .expect("Job Setup's form");
+            params["datum"]["use_offset"] = Value::Bool(use_offset);
+            let ctx = egui::Context::default();
+            let picture = |_: &str| None;
+            let look = Look {
+                units: Units::Mm,
+                picture: &picture,
+                material: cut_craft_core::calc::Values::default(),
+                tool: None,
+                group_end: None,
+                materials: None,
+            };
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| show(ui, &job, &mut params, &look));
+                });
+            });
+            out.textures_delta.clear();
+            let texts: Vec<(String, egui::Color32)> = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Text(t) => Some((t.galley.text().to_owned(), t.fallback_color)),
+                    _ => None,
+                })
+                .collect();
+            let tick = texts
+                .iter()
+                .position(|(t, _)| t == "Use offset")
+                .expect("the datum section's Use offset tick is drawn");
+            let after = |label: &str| {
+                texts[tick..]
+                    .iter()
+                    .find(|(t, _)| t == label)
+                    .unwrap_or_else(|| panic!("{label} drawn after Use offset: {texts:?}"))
+                    .1
+            };
+            (texts[tick].1, after("X"), after("Y"))
+        };
+        let (live, x, y) = colours(true);
+        assert_eq!((x, y), (live, live), "ticked: X and Y can be edited");
+        let (live, x, y) = colours(false);
+        assert!(x != live && y != live, "unticked: X and Y are greyed");
+    }
+
+    #[test]
     fn interactive_vector_trim_shows_no_at_position_to_type() {
         // the click on the canvas says where: typed X and Y would trim nothing
         let f = fields(&schema("interactive_vector_trim"));
