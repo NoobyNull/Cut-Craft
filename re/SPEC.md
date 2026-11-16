@@ -224,7 +224,9 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   **Create** (Cut Out and Clear; Holes; Carve and Engrave; Edges and Inlays; 3D Toolpaths;
   Laser; From Other Toolpaths: Array Copy, Merged; Templates), **Preview** (every preview and
   recalculation as a button of its own), **Analyse** (Save Toolpaths' checks before cutting
-  run live on the shown toolpaths, each with its fix; how many are out of date, with
+  run on the shown toolpaths off the window's thread, with progress and Cancel, then kept
+  until a toolpath, the job or the machine changes; cancelled checks say so and offer Check
+  Again, and Save Toolpaths waits for them; each finding with its fix; how many are out of date, with
   Recalculate All; Toolpath Summary) and **Output** (Save Toolpaths for the Machine…, Machine
   Files, Paperwork for the Job, Big Jobs: Toolpath Tiling). Only the open sub-tab scrolls, so
   the tabs are always there to go back with. With Favourites only on, the favourites stand in

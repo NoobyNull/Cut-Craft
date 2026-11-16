@@ -29,6 +29,13 @@ const MOVE_WORDS: usize = 8;
 const WORKGROUP: u32 = 64;
 /// The most workgroups a dispatch may have along one axis.
 const MOST_GROUPS: u32 = 65_535;
+/// The most cell visits one dispatch is given: a few tens of milliseconds on a desktop
+/// card. One dispatch of a big job (a 7 million cell model dropped on by a tapered bit
+/// reaching 67 cells round, 31 billion visits) runs for seconds, which can stall the
+/// desktop drawn on the same card, or have the driver reset the card.
+const MOST_WORK: f64 = 1.0e8;
+/// Where the `first` item sits in the `Params` uniform, bytes.
+const FIRST_BYTE: usize = 72;
 /// The shaders' "no answer" (the overcut of a move over no cell is minus infinity).
 const NONE: f32 = 1.0e30;
 
@@ -39,6 +46,8 @@ pub struct GpuCompute {
     drop: wgpu::ComputePipeline,
     sweep: wgpu::ComputePipeline,
     overcut: wgpu::ComputePipeline,
+    /// The most cell visits one dispatch is given: [`MOST_WORK`], less in the tests.
+    most_work: f64,
 }
 
 impl GpuCompute {
@@ -61,21 +70,25 @@ impl GpuCompute {
             drop: pipeline("drop_main"),
             sweep: pipeline("sweep_main"),
             overcut: pipeline("overcut_main"),
+            most_work: MOST_WORK,
             device,
             queue,
         }
     }
 
-    /// Runs `pipeline` once over `count` items (`input`, at its binding) with the grid's
-    /// heights, and reads back `out` f32s the kernel wrote, or the grid itself when `out`
-    /// is `None` (the kernel then writes the grid).
+    /// Runs `pipeline` over `count` items (`input`, at its binding) with the grid's heights,
+    /// and reads back `out` f32s the kernel wrote, or the grid itself when `out` is `None`
+    /// (the kernel then writes the grid). Item `i` costs about `cost(i)` cell visits: the
+    /// items go to the card a share at a time ([`shares`]), each share waited for before
+    /// the next, so no one dispatch keeps the card (which also draws the desktop) busy for
+    /// long.
     fn run(
         &self,
         pipeline: &wgpu::ComputePipeline,
         params: &[u8],
         grid: &Material,
         (input_binding, input): (u32, &[u8]),
-        count: usize,
+        (count, cost): (usize, &dyn Fn(usize) -> f64),
         out: Option<usize>,
     ) -> Vec<f32> {
         #[expect(clippy::cast_possible_truncation, reason = "the GPU takes f32")]
@@ -93,7 +106,6 @@ impl GpuCompute {
                 })
         };
         let storage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
-        let params = buffer("compute params", params, wgpu::BufferUsages::UNIFORM);
         let grid = buffer("compute grid", &heights, storage);
         let input = buffer("compute input", input, storage);
         let read = out.map(|n| {
@@ -104,19 +116,49 @@ impl GpuCompute {
                 mapped_at_creation: false,
             })
         });
-        let mut entries = vec![
-            entry(0, &params),
-            entry(if read.is_some() { 1 } else { 2 }, &grid),
-            entry(input_binding, &input),
-        ];
-        if let Some(read) = &read {
-            entries.push(entry(5, read));
+        let wait = || {
+            self.device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .expect("the card finishes");
+        };
+        for share in shares(count, cost, self.most_work) {
+            let mut params = params.to_vec();
+            params[FIRST_BYTE..FIRST_BYTE + 4]
+                .copy_from_slice(&u32::try_from(share.start).expect("fits u32").to_ne_bytes());
+            let params = buffer("compute params", &params, wgpu::BufferUsages::UNIFORM);
+            let mut entries = vec![
+                entry(0, &params),
+                entry(if read.is_some() { 1 } else { 2 }, &grid),
+                entry(input_binding, &input),
+            ];
+            if let Some(read) = &read {
+                entries.push(entry(5, read));
+            }
+            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("compute"),
+                layout: &pipeline.get_bind_group_layout(0),
+                entries: &entries,
+            });
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("compute"),
+                });
+            {
+                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("compute"),
+                    timestamp_writes: None,
+                });
+                pass.set_pipeline(pipeline);
+                pass.set_bind_group(0, &bind_group, &[]);
+                let groups = u32::try_from(share.len())
+                    .expect("fits u32")
+                    .div_ceil(WORKGROUP);
+                pass.dispatch_workgroups(groups.min(MOST_GROUPS), groups.div_ceil(MOST_GROUPS), 1);
+            }
+            self.queue.submit([encoder.finish()]);
+            wait();
         }
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("compute"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &entries,
-        });
         let source = read.as_ref().unwrap_or(&grid);
         let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("compute staging"),
@@ -127,26 +169,14 @@ impl GpuCompute {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("compute"),
+                label: Some("compute readback"),
             });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("compute"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            let groups = u32::try_from(count).expect("fits u32").div_ceil(WORKGROUP);
-            pass.dispatch_workgroups(groups.min(MOST_GROUPS), groups.div_ceil(MOST_GROUPS), 1);
-        }
         encoder.copy_buffer_to_buffer(source, 0, &staging, 0, source.size());
         self.queue.submit([encoder.finish()]);
         staging.slice(..).map_async(wgpu::MapMode::Read, |result| {
             result.expect("the readback maps");
         });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .expect("the card finishes");
+        wait();
         let answers = {
             let view = staging.get_mapped_range(..).expect("mapped");
             view.as_chunks::<4>()
@@ -158,6 +188,37 @@ impl GpuCompute {
         staging.unmap();
         answers
     }
+}
+
+/// `count` items cut into runs of about `most` cell visits each, item `i` costing
+/// `cost(i)`; every run has at least one item. Together they cover every item, in order.
+fn shares(count: usize, cost: &dyn Fn(usize) -> f64, most: f64) -> Vec<std::ops::Range<usize>> {
+    let mut runs = vec![];
+    let (mut start, mut work) = (0, 0.0);
+    for i in 0..count {
+        work += cost(i);
+        if work >= most {
+            runs.push(start..i + 1);
+            (start, work) = (i + 1, 0.0);
+        }
+    }
+    if start < count {
+        runs.push(start..count);
+    }
+    runs
+}
+
+/// About how many cells `cell` wide a tool reaching `reach` looks at round one point.
+fn around(cell: f64, reach: f64) -> f64 {
+    let across = 2.0 * reach / cell + 1.0;
+    across * across
+}
+
+/// About how many cells `cell` wide a move from `a` to `b` looks at, the tool reaching
+/// `reach`.
+fn along(cell: f64, reach: f64, (a, b): (DVec3, DVec3)) -> f64 {
+    let side = |d: f64| (d.abs() + 2.0 * reach) / cell + 1.0;
+    side(b.x - a.x) * side(b.y - a.y)
 }
 
 /// A buffer bound whole at `binding`.
@@ -265,7 +326,7 @@ impl Compute for GpuCompute {
             &params(grid, tool, n, false),
             grid,
             (3, &input),
-            n,
+            (n, &|_| around(grid.cell, tool.reach())),
             Some(n),
         )
         .into_iter()
@@ -287,7 +348,7 @@ impl Compute for GpuCompute {
             &params(grid, tool, n, true),
             grid,
             (3, &[0; 8]),
-            n,
+            (n, &|_| around(grid.cell, tool.reach())),
             Some(n),
         )
         .into_iter()
@@ -309,7 +370,7 @@ impl Compute for GpuCompute {
             &params(grid, tool, n, false),
             grid,
             (4, &move_records(grid, tool, moves)),
-            n,
+            (n, &|i| along(grid.cell, tool.reach(), moves[i])),
             Some(n),
         )
         .into_iter()
@@ -337,7 +398,9 @@ impl Compute for GpuCompute {
             &params(material, tool, pairs.len(), false),
             material,
             (4, &move_records(material, tool, &pairs)),
-            pairs.len(),
+            (pairs.len(), &|i| {
+                along(material.cell, tool.reach(), pairs[i])
+            }),
             None,
         );
         material.heights = heights.into_iter().map(f64::from).collect();
@@ -556,6 +619,80 @@ mod tests {
             eprintln!("{}: everywhere strays {strays:.2e} mm", tool.name);
             assert!(strays <= TOLERANCE, "{}: {strays} mm everywhere", tool.name);
             assert!(cpu_all.iter().any(|&z| z < -1.0), "something to drop into");
+        }
+    }
+
+    #[test]
+    #[expect(clippy::cast_precision_loss, reason = "cell counts")]
+    fn a_big_job_goes_to_the_card_in_short_shares_covering_every_item() {
+        // the lock-up: a 3321 x 2109 cell model dropped on by a 1/64" tapered ball nose
+        // whose 1/4" shank reaches 67 cells round, once over every cell
+        let (columns, rows, cell) = (3321_usize, 2109_usize, 0.0948);
+        let tool = Tool {
+            shape: ToolShape::BallNose,
+            diameter: 0.396_875,
+            taper: 6.3,
+            shank_diameter: 6.35,
+            ..Tool::default()
+        };
+        let count = columns * rows;
+        let cost = |_| around(cell, tool.reach());
+        let total = cost(0) * count as f64;
+        assert!(total > 1.0e10, "the job is big: {total:.1e} visits");
+        let runs = shares(count, &cost, MOST_WORK);
+        assert!(runs.len() > 100, "{} shares", runs.len());
+        assert_eq!(runs.first().map(|r| r.start), Some(0));
+        assert_eq!(runs.last().map(|r| r.end), Some(count));
+        for pair in runs.windows(2) {
+            assert_eq!(pair[0].end, pair[1].start, "no gap, no overlap");
+        }
+        for run in &runs {
+            assert!(cost(0) * run.len() as f64 <= MOST_WORK + cost(0));
+        }
+    }
+
+    #[test]
+    fn an_item_dearer_than_a_share_goes_on_its_own_and_none_is_empty() {
+        assert_eq!(shares(3, &|_| 10.0, 5.0), vec![0..1, 1..2, 2..3]);
+        assert_eq!(shares(5, &|_| 1.0, 2.0), vec![0..2, 2..4, 4..5]);
+        assert_eq!(shares(0, &|_| 1.0, 2.0), vec![]);
+    }
+
+    #[test]
+    fn the_card_gives_the_same_answers_a_share_at_a_time() {
+        let Some(whole) = gpu() else {
+            eprintln!("no GPU: skipped");
+            return;
+        };
+        let Some(mut shared) = gpu() else {
+            return;
+        };
+        // a few cells' visits a dispatch: every kernel runs in many shares
+        shared.most_work = 2000.0;
+        let path = path();
+        let pairs: Vec<(DVec3, DVec3)> = path.windows(2).map(|w| (w[0].to, w[1].to)).collect();
+        for tool in tools() {
+            let grid = relief();
+            let name = &tool.name;
+            let same = |a: &[f64], b: &[f64]| worst(a, b) <= TOLERANCE;
+            assert!(
+                same(
+                    &whole.drop_everywhere(&grid, &tool),
+                    &shared.drop_everywhere(&grid, &tool)
+                ),
+                "{name}: drop"
+            );
+            assert!(
+                same(
+                    &whole.overcut_along(&grid, &tool, &pairs),
+                    &shared.overcut_along(&grid, &tool, &pairs)
+                ),
+                "{name}: overcut"
+            );
+            let (mut a, mut b) = (relief(), relief());
+            whole.cut_along(&mut a, &tool, &path);
+            shared.cut_along(&mut b, &tool, &path);
+            assert!(same(&a.heights, &b.heights), "{name}: cut");
         }
     }
 

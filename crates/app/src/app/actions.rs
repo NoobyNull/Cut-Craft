@@ -173,8 +173,7 @@ impl CutCraftApp {
             layers_on_sheet: false,
             save_form: None,
             machine_files: None,
-            analysed: None,
-            save_checks: None,
+            save_checks: vec![],
             before_preview: None,
             picked_nodes: Vec::new(),
             node_mirror: [false, false],
@@ -233,6 +232,7 @@ impl CutCraftApp {
             options_window: false,
             options_page: 0,
             show_advanced: false,
+            web_api: super::web_api::WebApi::default(),
             options_goto: None,
             capture: None,
             shortcut_search: String::new(),
@@ -1535,7 +1535,14 @@ impl CutCraftApp {
                 return None;
             }
         };
-        let found = self.preflight(&plan, form.changes);
+        let Some(found) = self.save_checks(&plan, form.changes).map(<[_]>::to_vec) else {
+            self.status.set_message(if self.checking() {
+                "Still checking the toolpaths before cutting: save again once the checks finish"
+            } else {
+                "The checks before cutting were cancelled: press Check Again, then save"
+            });
+            return None;
+        };
         if let Some(refused) = Self::refused(&found) {
             self.status.set_message(&refused);
             return None;
@@ -1694,31 +1701,73 @@ impl CutCraftApp {
         Self::by_tool(form, post) && form.mode != files::SaveMode::VisibleToMultipleFiles
     }
 
-    /// The checks before cutting for Save Toolpaths' `plan`, worked out again only when the
-    /// plan, the job or the machine changed.
+    /// The checks before cutting for `plan` (Save Toolpaths', or the Analyse tab's), worked
+    /// out again only when the plan, the job or the machine changed. They run off the
+    /// window's thread, with their progress and Cancel over the window: a 3D finish of
+    /// millions of moves takes a while to check, and the window must keep drawing. `None`
+    /// while they run, or once they were cancelled ([`Self::check_again`] runs them again).
     pub(super) fn save_checks(
         &mut self,
         plan: &[Vec<EntityId>],
         changes: files::ToolChanges,
-    ) -> &[cut_craft_core::preflight::Finding] {
-        let (revision, machine) = (self.history.revision(), self.machines.active);
-        let fresh = self.save_checks.as_ref().is_some_and(|c| {
-            c.plan == plan && c.changes == changes && c.revision == revision && c.machine == machine
-        });
-        if !fresh {
-            self.save_checks = Some(SaveChecks {
-                plan: plan.to_vec(),
-                changes,
-                revision,
-                machine,
-                found: self.preflight(plan, changes),
-            });
+    ) -> Option<&[cut_craft_core::preflight::Finding]> {
+        let key = SaveChecks {
+            plan: plan.to_vec(),
+            changes,
+            revision: self.history.revision(),
+            machine: self.machines.active,
+            found: None,
+        };
+        if !self.save_checks.iter().any(|c| c.same(&key)) {
+            // the Analyse tab's and Save Toolpaths' can both be showing: keep one for each
+            if self.save_checks.len() >= super::KEPT_CHECKS {
+                self.save_checks.remove(0);
+            }
+            self.save_checks.push(key.clone());
+            let doc = self.doc.clone();
+            let mut limits = self.limits();
+            if changes != files::ToolChanges::ToolChanger {
+                limits.slots.clear();
+            }
+            let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
+            let started = key.clone();
+            self.in_background(
+                super::CHECKING,
+                move || {
+                    let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
+                        ids.iter().filter_map(|id| doc.toolpaths.get(id)).collect();
+                    cut_craft_core::preflight::check(&doc, &toolpaths, &limits)
+                },
+                move |app, found| {
+                    if let Some(checks) = app.save_checks.iter_mut().find(|c| c.same(&started)) {
+                        checks.found = Some(found);
+                    }
+                },
+            );
         }
-        &self.save_checks.as_ref().expect("just filled").found
+        self.save_checks
+            .iter()
+            .find(|c| c.same(&key))?
+            .found
+            .as_deref()
+    }
+
+    /// Whether the checks before cutting are running now (else, when [`Self::save_checks`]
+    /// has none, they were cancelled).
+    pub(super) fn checking(&self) -> bool {
+        self.busy
+            .as_ref()
+            .is_some_and(|b| b.what() == super::CHECKING)
+    }
+
+    /// Runs the cancelled checks before cutting again, next time they are asked for.
+    pub(super) fn check_again(&mut self) {
+        self.save_checks.retain(|c| c.found.is_some());
     }
 
     /// What the checks before cutting find in `plan`'s toolpaths, cut in its order on the
     /// active machine; its tool changer's slots are checked only when it changes the tools.
+    #[cfg(test)]
     pub(super) fn preflight(
         &self,
         plan: &[Vec<EntityId>],
