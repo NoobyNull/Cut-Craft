@@ -42,7 +42,7 @@ pub enum Fix {
     Pocket,
     /// A profile: a smaller bit, or V-Carve for sharp corners.
     Profile,
-    /// A 3D finish: a bit with a smaller tip, after this one in the same Tools list.
+    /// A 3D finish: a smaller bit, or one after this one in the same Tools list.
     Finish,
 }
 
@@ -209,8 +209,9 @@ pub fn missed_sentence(name: &str, tool: &Tool, missed: &Missed, fix: Fix, units
         }
         Fix::Profile => "Pick a smaller bit, or cut the sharp corners with V-Carve",
         Fix::Finish => {
-            "Add a smaller ball nose under Tools in this toolpath (it then cuts only what \
-             this one leaves), or pick a smaller bit here"
+            "Pick a smaller bit under Tools, or make a new 3D Finishing toolpath with this \
+             bit then a smaller ball nose under Tools (the smaller one finishes only what \
+             this bit leaves) and delete this one"
         }
     };
     let left = if missed.most > 0.0 {
@@ -513,10 +514,12 @@ mod tests {
         assert!(said.contains("tip and taper"), "{said}");
         assert!(said.contains("up to 2.5 mm"), "{said}");
         assert!(said.contains("smaller bit"), "{said}");
-        // the advice that clears the warning: a later tool in this toolpath's Tools list,
-        // not a separate toolpath (which re-finishes everything and leaves this warning)
+        // the advice that clears the warning, from Edit too: a smaller bit here, or a set
+        // whose later tool cuts what this bit left, not a separate toolpath (which
+        // re-finishes everything and leaves this warning)
         assert!(
-            said.contains("under Tools in this toolpath") && !said.contains("Add a 3D Finishing"),
+            said.contains("this bit then a smaller ball nose under Tools")
+                && !said.contains("Add a 3D Finishing"),
             "{said}"
         );
         let said = missed_sentence("Finish", &ball, &one, Fix::Finish, Units::Inch);

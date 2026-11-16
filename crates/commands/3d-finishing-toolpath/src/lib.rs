@@ -34,7 +34,8 @@ pub struct Params {
     pub name: String,
     /// In the order they run, a toolpath each: the first finishes all it can, each later one
     /// only what the tools before it left (rest machining). A ball nose follows curves best;
-    /// its stepover spaces the raster lines
+    /// its stepover spaces the raster lines. Editing a toolpath changes its own bit; to add a
+    /// smaller one after it, make the toolpath again with both here
     #[serde(default)]
     pub tools: Vec<Tool>,
     /// With two tools or more, each later tool cuts only what the tools before it left:
@@ -119,8 +120,10 @@ impl Default for Params {
 impl Params {
     /// A toolpath's own params for each tool: that tool after the ones before it, so each
     /// recalculates on its own. Several are named `[1]`, `[2]`... in running order.
+    /// Each keeps its tool as its Tools list, so Edit shows it there and a bit picked there
+    /// is used (one saved with only `tool` uses that until a bit is picked).
     fn each_tool(&self) -> Vec<(Tool, Params)> {
-        if let Some(tool) = &self.tool {
+        if let (Some(tool), true) = (&self.tool, self.tools.is_empty()) {
             return vec![(tool.clone(), self.clone())];
         }
         let several = self.tools.len() > 1;
@@ -134,9 +137,9 @@ impl Params {
                     } else {
                         self.name.clone()
                     },
-                    tools: vec![],
-                    tool: Some(tool.clone()),
-                    after: self.tools[..i].to_vec(),
+                    tools: vec![tool.clone()],
+                    tool: None,
+                    after: [&self.after[..], &self.tools[..i]].concat(),
                     ..self.clone()
                 };
                 (tool.clone(), one)
@@ -544,6 +547,43 @@ mod tests {
         );
         assert_eq!(made[0].moves, alone.moves);
         assert_eq!(alone.name, "3D Finishing", "one tool keeps the plain name");
+    }
+
+    #[test]
+    fn edit_shows_a_toolpaths_bit_under_tools_and_uses_the_one_picked_there() {
+        let mut registry = cut_craft_core::Registry::default();
+        registry.add::<FinishingToolpath3d>();
+        let set = Params {
+            tools: vec![ball("6 mm Ball Nose"), ball("3 mm Ball Nose")],
+            ..Params::default()
+        };
+        let (doc, ids) = finished(&domed(), &set);
+        let second: Params = serde_json::from_value(doc.toolpaths[&ids[1]].params.clone()).unwrap();
+        assert_eq!(
+            second.tools,
+            [ball("3 mm Ball Nose")],
+            "its bit, under Tools"
+        );
+        assert_eq!(second.after, [ball("6 mm Ball Nose")]);
+        // a smaller bit picked under Tools in Edit is the one it cuts with
+        let picked = |params: &Params, id| {
+            let mut edited = serde_json::to_value(params).unwrap();
+            edited["tools"] = serde_json::json!([ball("3 mm Ball Nose")]);
+            let change = registry.edit(&doc, id, Some(&edited)).unwrap();
+            let mut doc = doc.clone();
+            doc.apply(&change).unwrap();
+            doc.toolpaths[&id].clone()
+        };
+        let first: Params = serde_json::from_value(doc.toolpaths[&ids[0]].params.clone()).unwrap();
+        let edited = picked(&first, ids[0]);
+        assert_eq!(edited.tool.name, "3 mm Ball Nose");
+        // one saved with only `tool` (an older job) takes the bit picked too
+        let older = Params {
+            tool: Some(ball("6 mm Ball Nose")),
+            tools: vec![],
+            ..first
+        };
+        assert_eq!(picked(&older, ids[0]).tool.name, "3 mm Ball Nose");
     }
 
     #[test]
