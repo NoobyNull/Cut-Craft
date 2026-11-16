@@ -3634,16 +3634,16 @@ impl CutCraftApp {
             ui.weak("Make a toolpath (or tick one in the list) to check it here");
             return;
         }
-        let key = (self.history.revision(), self.machines.active, shown.clone());
-        if self.analysed.as_ref().is_none_or(|(k, _)| *k != key) {
-            let found = self.preflight(&[shown], crate::files::ToolChanges::SeparateFiles);
-            self.analysed = Some((key, found));
-        }
         let found = self
-            .analysed
-            .as_ref()
-            .map_or_else(Vec::new, |(_, f)| f.clone());
+            .save_checks(&[shown], crate::files::ToolChanges::SeparateFiles)
+            .map(<[_]>::to_vec);
         ui.strong("Checks before cutting");
+        let Some(found) = found else {
+            if self.checks_waiting(ui) {
+                self.check_again();
+            }
+            return;
+        };
         if found.is_empty() {
             ui.label("✔ Nothing found that would stop or spoil the cut");
         }
@@ -3680,6 +3680,22 @@ impl CutCraftApp {
                 self.invoke(ui.ctx(), id);
             }
         }
+    }
+
+    /// Where the checks before cutting are not ready: that they are running, or that they
+    /// were cancelled, with Check Again; whether it was pressed.
+    pub(super) fn checks_waiting(&self, ui: &mut egui::Ui) -> bool {
+        if self.checking() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("Checking the toolpaths: a big 3D toolpath takes a little while");
+            });
+            return false;
+        }
+        ui.label("The checks were cancelled, so nothing has been checked yet");
+        ui.button("Check Again")
+            .on_hover_hint("Run the checks before cutting on these toolpaths again")
+            .clicked()
     }
 
     /// What Toolpaths sub-tab `i` shows: Make's strategies (or the favourites, when the page
@@ -4272,6 +4288,10 @@ impl CutCraftApp {
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
                     .on_hover_hint("Cut Craft's version (Help ▸ About)");
                 ui.separator();
+                // the Web API's state, once it is switched on, in a slot of its own width
+                if self.web_api_indicator(ui) {
+                    ui.separator();
+                }
                 if self.screen == Screen::Job {
                     // the job's units, and the one-click way to swap them
                     let (unit, other) = match self.doc.job.units {

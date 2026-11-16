@@ -86,6 +86,8 @@ impl CutCraftApp {
         self.autosave(ctx);
         self.report_bugs(ctx);
         self.space_mouse_input(ctx);
+        // calls from the Web API, run as clicks would be
+        self.web_api_frame(ctx);
         if let Some(mut shots) = self.shots.take() {
             shots.step(self, ctx);
             self.shots = Some(shots);
@@ -3300,6 +3302,10 @@ impl CutCraftApp {
     }
 
     /// Edit ▸ Options: the sections; a change is saved and applied at once.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the one Options window, with the extras some pages show under their settings"
+    )]
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
         let mut open = self.options_window;
         let fields = self.options_categories();
@@ -3328,8 +3334,10 @@ impl CutCraftApp {
                 .map_or_else(|| id.to_owned(), |(_, label)| label.clone())
         };
         let capture = self.capture.clone();
+        let web_api_state = self.web_api_state().clone();
         let search = &mut self.shortcut_search;
         let mut shortcut_edit = None;
+        let mut web_api_pressed = None;
         let show_advanced = &mut self.show_advanced;
         let page = &mut self.options_page;
         *page = (*page).min(fields.len().saturating_sub(1));
@@ -3378,6 +3386,13 @@ impl CutCraftApp {
                     if crate::form::show(ui, one, &mut values, &look) {
                         changed = serde_json::from_value::<crate::options::Options>(values).ok();
                     }
+                    if category.key == "web_api" {
+                        web_api_pressed = super::web_api::options_section(
+                            ui,
+                            &web_api_state,
+                            &self.options.web_api,
+                        );
+                    }
                     if category.key == super::shortcuts_page::CATEGORY {
                         shortcut_edit = super::shortcuts_page::show(
                             ui,
@@ -3400,6 +3415,9 @@ impl CutCraftApp {
         self.options_window = open;
         if let Some(options) = changed {
             self.options_changed(ctx, options);
+        }
+        if let Some(pressed) = web_api_pressed {
+            self.web_api_pressed(pressed);
         }
         // after the page's settings, so they don't put back the shortcuts as they were
         if let Some(edit) = shortcut_edit {
@@ -3544,11 +3562,13 @@ impl CutCraftApp {
             _ => None,
         };
         let changer = self.has_tool_changer();
+        // `None` while the checks run, or once they were cancelled
         let found = match &plan {
-            Ok(plan) => self.save_checks(plan, form.changes).to_vec(),
-            Err(_) => vec![],
+            Ok(plan) => self.save_checks(plan, form.changes).map(<[_]>::to_vec),
+            Err(_) => Some(vec![]),
         };
-        let errors = Self::refused(&found).is_some();
+        let mut again = false;
+        let errors = found.as_deref().is_some_and(|f| Self::refused(f).is_some());
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong("Machine and post-processor");
@@ -3600,11 +3620,14 @@ impl CutCraftApp {
                 );
             ui.separator();
             files_section(ui, &self.doc, &plan, split);
-            checks_section(ui, &found);
+            again = self.checks_or_waiting(ui, found.as_deref());
             ui.add_space(ui.spacing().item_spacing.y);
-            let ready = plan.is_ok() && !errors;
+            let ready = plan.is_ok() && !errors && found.is_some();
             (save, send, manage) = self.save_buttons(ui, ready, errors);
         });
+        if again {
+            self.check_again();
+        }
         if let Some(n) = machine_changed {
             self.machines.active = n;
             form.post = None;
@@ -3613,6 +3636,22 @@ impl CutCraftApp {
         }
         self.pressed(&form, (save, send, manage));
         self.save_form = open.then_some(form);
+    }
+
+    /// Save Toolpaths' checks before cutting: what they found, or that they are running or
+    /// were cancelled, with Check Again; whether it was pressed.
+    fn checks_or_waiting(
+        &self,
+        ui: &mut egui::Ui,
+        found: Option<&[cut_craft_core::preflight::Finding]>,
+    ) -> bool {
+        if let Some(found) = found {
+            checks_section(ui, found);
+            return false;
+        }
+        ui.separator();
+        ui.strong("Checks before cutting");
+        self.checks_waiting(ui)
     }
 
     /// Does what Save Toolpaths' buttons asked (as [`Self::save_buttons`] says).

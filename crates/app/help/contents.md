@@ -7,6 +7,8 @@ a CNC machine cuts them with.
 - [Toolpaths](help:toolpaths): the page down the right. Turn vectors into toolpaths,
   preview them and save them for the machine.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
+- [Web API](help:web_api): let a program or script drive Cut Craft, off until you
+  switch it on in Options.
 
 ## Finding help
 
