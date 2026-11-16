@@ -75,6 +75,8 @@ impl CutCraftApp {
         self.autosave(ctx);
         self.report_bugs(ctx);
         self.space_mouse_input(ctx);
+        // calls from the Web API, run as clicks would be
+        self.web_api_frame(ctx);
         if let Some(mut shots) = self.shots.take() {
             shots.step(self, ctx);
             self.shots = Some(shots);
@@ -3175,6 +3177,10 @@ impl CutCraftApp {
     }
 
     /// Edit ▸ Options: the sections; a change is saved and applied at once.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the one Options window, with the extras some pages show under their settings"
+    )]
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
         let mut open = self.options_window;
         let fields = self.options_categories();
@@ -3203,8 +3209,10 @@ impl CutCraftApp {
                 .map_or_else(|| id.to_owned(), |(_, label)| label.clone())
         };
         let capture = self.capture.clone();
+        let web_api_state = self.web_api_state().clone();
         let search = &mut self.shortcut_search;
         let mut shortcut_edit = None;
+        let mut web_api_pressed = None;
         let show_advanced = &mut self.show_advanced;
         let page = &mut self.options_page;
         *page = (*page).min(fields.len().saturating_sub(1));
@@ -3253,6 +3261,13 @@ impl CutCraftApp {
                     if crate::form::show(ui, one, &mut values, &look) {
                         changed = serde_json::from_value::<crate::options::Options>(values).ok();
                     }
+                    if category.key == "web_api" {
+                        web_api_pressed = super::web_api::options_section(
+                            ui,
+                            &web_api_state,
+                            &self.options.web_api,
+                        );
+                    }
                     if category.key == super::shortcuts_page::CATEGORY {
                         shortcut_edit = super::shortcuts_page::show(
                             ui,
@@ -3275,6 +3290,9 @@ impl CutCraftApp {
         self.options_window = open;
         if let Some(options) = changed {
             self.options_changed(ctx, options);
+        }
+        if let Some(pressed) = web_api_pressed {
+            self.web_api_pressed(pressed);
         }
         // after the page's settings, so they don't put back the shortcuts as they were
         if let Some(edit) = shortcut_edit {

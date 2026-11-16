@@ -223,6 +223,7 @@ impl CutCraftApp {
             options_window: false,
             options_page: 0,
             show_advanced: false,
+            web_api: super::web_api::WebApi::default(),
             options_goto: None,
             capture: None,
             shortcut_search: String::new(),
