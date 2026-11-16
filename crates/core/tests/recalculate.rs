@@ -298,3 +298,57 @@ fn changing_the_material_or_where_the_model_sits_makes_the_toolpaths_stale() {
         }
     }
 }
+
+#[test]
+fn a_merged_or_array_copy_toolpath_is_stale_once_a_toolpath_it_copies_changes() {
+    let (mut doc, tp) = job();
+    // a toolpath made from tp's moves, as Merged and Array Copy are
+    let mut copy = doc.toolpaths[&tp].clone();
+    copy.name = "Copy".into();
+    copy.vectors = vec![];
+    copy.params = serde_json::json!({ "sources": [tp] });
+    let mut c = Change::builder(&doc);
+    c.add_toolpath(copy);
+    let change = c.finish();
+    doc.apply(&change).unwrap();
+    let copy = *doc.toolpaths.keys().last().unwrap();
+    let mut history = History::default();
+    // shown or hidden, the source cuts the same: the copy is not out of date
+    let mut hidden = doc.toolpaths[&tp].clone();
+    hidden.visible = false;
+    let mut c = Change::builder(&doc);
+    c.replace_toolpath(tp, hidden);
+    let change = c.finish();
+    history.apply(&mut doc, change).unwrap();
+    assert!(
+        !doc.toolpaths[&copy].stale,
+        "hiding a source changes no cut"
+    );
+    // the source's vector moves: the source and so the copy are out of date
+    let mut c = Change::builder(&doc);
+    c.replace(
+        EntityId(1),
+        doc.vectors[&EntityId(1)].transformed(&DAffine2::from_translation(Point::new(0.0, 9.0))),
+    );
+    let change = c.finish();
+    history.apply(&mut doc, change).unwrap();
+    assert!(doc.toolpaths[&tp].stale);
+    assert!(doc.toolpaths[&copy].stale, "the copy follows its source");
+    history.undo(&mut doc);
+    assert!(!doc.toolpaths[&copy].stale, "undone with it");
+    // the source recalculated with new moves: the copy still has the old ones
+    let mut source = doc.toolpaths[&tp].clone();
+    source.moves[0].to.x += 5.0;
+    let mut c = Change::builder(&doc);
+    c.replace_toolpath(tp, source);
+    let change = c.finish();
+    history.apply(&mut doc, change).unwrap();
+    assert!(doc.toolpaths[&copy].stale, "a source cut differently");
+    // a source deleted
+    history.undo(&mut doc);
+    let mut c = Change::builder(&doc);
+    c.remove_toolpath(tp);
+    let change = c.finish();
+    history.apply(&mut doc, change).unwrap();
+    assert!(doc.toolpaths[&copy].stale, "a source deleted");
+}

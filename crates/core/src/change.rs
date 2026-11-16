@@ -700,7 +700,8 @@ impl Change {
     }
 
     /// `self` with the toolpaths it leaves out of date marked stale: those made from a vector
-    /// it changes or removes, when it changes the model those that cut the model, and when
+    /// it changes or removes, those copying (Merged, Array Copy) a toolpath it removes, cuts
+    /// differently or leaves out of date, when it changes the model those that cut the model, and when
     /// it changes the material's thickness, where the model sits, or the rotary or
     /// double-sided set-up, every toolpath (they bake those in when calculated). The marks
     /// are edits of the change, so undoing it undoes them.
@@ -711,6 +712,8 @@ impl Change {
         let mut material = false;
         let mut vectors = std::collections::BTreeSet::new();
         let mut made = std::collections::BTreeSet::new();
+        // toolpaths this change takes away or makes cut differently
+        let mut recut = std::collections::BTreeSet::new();
         for edit in &self.edits {
             match edit {
                 Edit::Replace { id, .. } | Edit::Remove { id, .. } => {
@@ -728,22 +731,61 @@ impl Change {
                         || before.rotary != after.rotary
                         || before.double_sided != after.double_sided;
                 }
-                Edit::AddToolpath { id, .. }
-                | Edit::RemoveToolpath { id, .. }
-                | Edit::ReplaceToolpath { id, .. } => {
+                Edit::AddToolpath { id, .. } => {
                     made.insert(*id);
+                }
+                Edit::RemoveToolpath { id, .. } => {
+                    made.insert(*id);
+                    recut.insert(*id);
+                }
+                Edit::ReplaceToolpath { id, before, after } => {
+                    made.insert(*id);
+                    // shown, hidden or renamed, it cuts the same
+                    if before.moves != after.moves
+                        || before.tool != after.tool
+                        || before.power != after.power
+                    {
+                        recut.insert(*id);
+                    }
                 }
                 _ => {}
             }
         }
         let picks_again = self.picks_again(doc);
-        for (&id, toolpath) in &doc.toolpaths {
-            let outdated = material
-                || (model && toolpath.reads_model())
-                || (clearing && toolpath.reads_clearing())
-                || toolpath.vectors.iter().any(|v| vectors.contains(v))
-                || picks_again.contains(&id);
-            if outdated && !toolpath.stale && !made.contains(&id) {
+        let mut outdated: std::collections::BTreeSet<EntityId> = doc
+            .toolpaths
+            .iter()
+            .filter(|&(id, toolpath)| {
+                material
+                    || (model && toolpath.reads_model())
+                    || (clearing && toolpath.reads_clearing())
+                    || toolpath.vectors.iter().any(|v| vectors.contains(v))
+                    || picks_again.contains(id)
+            })
+            .map(|(&id, _)| id)
+            .collect();
+        // a Merged or Array Copy toolpath copies the moves of its sources: out of date once
+        // one of them cuts differently or goes, or is itself out of date
+        loop {
+            let more: Vec<EntityId> = doc
+                .toolpaths
+                .iter()
+                .filter(|(id, _)| !outdated.contains(id))
+                .filter(|(_, t)| {
+                    sources_of(t)
+                        .iter()
+                        .any(|s| recut.contains(s) || outdated.contains(s))
+                })
+                .map(|(&id, _)| id)
+                .collect();
+            if more.is_empty() {
+                break;
+            }
+            outdated.extend(more);
+        }
+        for id in outdated {
+            let toolpath = &doc.toolpaths[&id];
+            if !toolpath.stale && !made.contains(&id) {
                 let after = Toolpath {
                     stale: true,
                     ..toolpath.clone()
@@ -1910,6 +1952,16 @@ impl ChangeBuilder<'_> {
             unit_guess: None,
         }
     }
+}
+
+/// The toolpaths `toolpath` copies its moves from: a Merged or Array Copy toolpath's
+/// `sources`.
+fn sources_of(toolpath: &Toolpath) -> Vec<EntityId> {
+    toolpath
+        .params
+        .get("sources")
+        .and_then(|s| serde_json::from_value(s.clone()).ok())
+        .unwrap_or_default()
 }
 
 /// Undo/redo stacks of applied changes.

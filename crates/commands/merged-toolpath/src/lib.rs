@@ -18,6 +18,7 @@ pub struct MergedToolpath;
 pub struct Params {
     /// What the toolpath is called in the toolpath list. It merges the toolpaths ticked
     /// (shown) in the toolpath list when Apply is pressed: tick them there first
+    /// (it is marked out of date when one of them changes: recalculate it then)
     pub name: String,
     /// The toolpaths to merge (none: the ones shown in the toolpath list when Apply is
     /// pressed). Not on the form: tick the toolpaths to merge in the toolpath list
