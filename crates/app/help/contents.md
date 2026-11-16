@@ -22,6 +22,18 @@ a CNC machine cuts them with.
 - Hover over a greyed-out menu item or tool to see what it is waiting for, such as a
   selection, a toolpath picked in the list, or a job open.
 
+## Printing
+
+**File ▸ Print (opens a PDF)...** opens the 2D view as a PDF in your computer's PDF viewer.
+Check it there, then print from the viewer as you would any PDF. To print what the machine
+operator needs, use **Toolpaths ▸ Print Job Sheet** or **Toolpaths ▸ Print Part Labels** instead.
+
+## Newer post-processors
+
+Cut Craft's own post-processors come with Cut Craft, so **Help ▸ Check for Updates** brings the
+newest ones. Post-processors you added yourself are read from their folder each time, so
+there is nothing to update; see **Machine ▸ Post-Processor Management**.
+
 ## Number fields
 
 Every number field has small up and down arrows on its right. Click one to nudge the value

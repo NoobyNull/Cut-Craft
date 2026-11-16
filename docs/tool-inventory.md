@@ -146,10 +146,9 @@ say "not implemented yet".
   skip rotary posts. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows
-  its version (the date of its last change). Machine ▸ Update Post-Processor Database opens
-  Post-Processor Management, says how many posts there are (and how many will not load), and
-  checks for a newer Cut Craft, which is how Cut Craft's own posts are updated (custom posts
-  are read from their folder each time).
+  its version (the date of its last change). Aspire's Machine ▸ Update Post-Processor
+  Database is left out on purpose (#511): Cut Craft's own posts come with Cut Craft, so Help ▸
+  Check for Updates brings the newest, and custom posts are read from their folder each time.
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
@@ -603,8 +602,9 @@ say "not implemented yet".
 - Toolpaths ▸ Templates: save the selected or all visible toolpaths' settings as a
   `.cctpt` template, and load one as empty toolpaths to edit and calculate. The Missing
   Layers dialog is not done.
-- File ▸ Print and Print Preview: the drawing as a PDF opened in the system viewer, which
-  prints it (Aspire's own print window with scale and tiling is not done).
+- File ▸ Print (opens a PDF): the drawing as a PDF opened in the system viewer, which
+  previews and prints it. One item in place of Aspire's Print and Print Preview, which did
+  the same thing here (#511); Aspire's own print window with scale and tiling is not done.
 - Edit ▸ Select ▸ Vector Selector: selects vectors by open / closed, circles, circles of a
   diameter within a tolerance, on all visible layers, the current one or the layers named
   (dialog 949; Z values are not done). Every toolpath form has Associate a Vector Selector

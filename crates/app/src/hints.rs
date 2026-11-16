@@ -237,10 +237,9 @@ pub const HINTS: &[(&str, &str)] = &[
         "export_ai",
         "Export as AI: saves the selected vectors as an Illustrator-style file, for drawing programs",
     ),
-    ("print", "Print: prints the 2D view of the job"),
     (
-        "print_preview",
-        "Print Preview: shows how the 2D view will look printed, before you print it",
+        "print",
+        "Print (opens a PDF): opens the 2D view as a PDF in your PDF viewer, to check and print from there",
     ),
     (
         "save_shaded_image",
@@ -557,10 +556,6 @@ pub const HINTS: &[(&str, &str)] = &[
     (
         "install_post_processor",
         "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time",
-    ),
-    (
-        "update_post_processor_database",
-        "Update Post Processor Database: checks for newer post processors and opens the list",
     ),
     (
         "job_sheet_editor",
