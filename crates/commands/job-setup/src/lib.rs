@@ -42,7 +42,7 @@ pub struct Size {
         range(min = 0)
     )]
     pub height: f64,
-    /// How thick the material is
+    /// How thick the material is. Changing it after making toolpaths marks them out of date
     #[schemars(
         title = "Thickness (Z)",
         extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),

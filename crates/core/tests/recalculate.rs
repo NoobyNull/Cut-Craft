@@ -264,3 +264,37 @@ fn a_toolpath_following_a_vector_selector_is_stale_once_new_vectors_pass_it() {
     history.undo(&mut doc);
     assert!(!doc.toolpaths[&tp].stale, "undone with it");
 }
+
+#[test]
+fn changing_the_material_or_where_the_model_sits_makes_the_toolpaths_stale() {
+    let set = |doc: &Document, edit: &dyn Fn(&mut cut_craft_core::document::Job)| {
+        let mut job = doc.job;
+        edit(&mut job);
+        let mut c = Change::builder(doc);
+        c.set_job(job);
+        c.finish()
+    };
+    let (doc, tp) = job();
+    let thicker = |j: &mut cut_craft_core::document::Job| j.thickness += 6.0;
+    let moved_model = |j: &mut cut_craft_core::document::Job| j.model_position.gap += 2.0;
+    let recoloured = |j: &mut cut_craft_core::document::Job| j.colour = [1, 2, 3];
+    for (what, edit, stale) in [
+        (
+            "the thickness",
+            &thicker as &dyn Fn(&mut cut_craft_core::document::Job),
+            true,
+        ),
+        ("the model's gap", &moved_model, true),
+        ("only the colour", &recoloured, false),
+    ] {
+        let mut doc = doc.clone();
+        let mut history = History::default();
+        let change = set(&doc, edit);
+        history.apply(&mut doc, change).unwrap();
+        assert_eq!(doc.toolpaths[&tp].stale, stale, "changing {what}");
+        if stale {
+            history.undo(&mut doc);
+            assert!(!doc.toolpaths[&tp].stale, "undone with {what}");
+        }
+    }
+}

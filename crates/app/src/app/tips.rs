@@ -87,9 +87,9 @@ pub(super) const TIPS: &[Tip] = &[
     ),
     tip(
         "tips/out_of_date.png",
-        "Changed a shape after making its toolpath? The toolpath is marked out of date, and \
-         Cut Craft offers to recalculate it. Saving or sending an out-of-date toolpath always \
-         stops to ask first.",
+        "Changed a shape, or the material's thickness in Job Setup, after making its toolpath? \
+         The toolpath is marked out of date, and Cut Craft offers to recalculate it. Saving or \
+         sending an out-of-date toolpath always stops to ask first.",
         "toolpaths",
     ),
     tip(

@@ -700,12 +700,15 @@ impl Change {
     }
 
     /// `self` with the toolpaths it leaves out of date marked stale: those made from a vector
-    /// it changes or removes, and, when it changes the model, those that cut the model. The
-    /// marks are edits of the change, so undoing it undoes them.
+    /// it changes or removes, when it changes the model those that cut the model, and when
+    /// it changes the material's thickness, where the model sits, or the rotary or
+    /// double-sided set-up, every toolpath (they bake those in when calculated). The marks
+    /// are edits of the change, so undoing it undoes them.
     #[must_use]
     pub fn marking_stale(mut self, doc: &Document) -> Self {
         let mut model = false;
         let mut clearing = false;
+        let mut material = false;
         let mut vectors = std::collections::BTreeSet::new();
         let mut made = std::collections::BTreeSet::new();
         for edit in &self.edits {
@@ -717,8 +720,13 @@ impl Change {
                 | Edit::RemoveComponent { .. }
                 | Edit::ReplaceComponent { .. }
                 | Edit::SetLevel { .. } => model = true,
-                Edit::SetJob { before, after } if before.clearing != after.clearing => {
-                    clearing = true;
+                Edit::SetJob { before, after } => {
+                    clearing |= before.clearing != after.clearing;
+                    model |= before.resolution != after.resolution;
+                    material |= before.thickness != after.thickness
+                        || before.model_position != after.model_position
+                        || before.rotary != after.rotary
+                        || before.double_sided != after.double_sided;
                 }
                 Edit::AddToolpath { id, .. }
                 | Edit::RemoveToolpath { id, .. }
@@ -730,7 +738,8 @@ impl Change {
         }
         let picks_again = self.picks_again(doc);
         for (&id, toolpath) in &doc.toolpaths {
-            let outdated = (model && toolpath.reads_model())
+            let outdated = material
+                || (model && toolpath.reads_model())
                 || (clearing && toolpath.reads_clearing())
                 || toolpath.vectors.iter().any(|v| vectors.contains(v))
                 || picks_again.contains(&id);

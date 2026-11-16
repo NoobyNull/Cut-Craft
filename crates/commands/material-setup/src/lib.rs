@@ -16,7 +16,8 @@ pub struct MaterialSetup;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// The material's thickness (flat jobs; a rotary job's size is its diameter)
+    /// The material's thickness (flat jobs; a rotary job's size is its diameter). Changing it,
+    /// or the model's gap, after making toolpaths marks them out of date
     #[schemars(
         title = "Material Thickness",
         extend("x-unit" = "mm", "x-section" = true),
