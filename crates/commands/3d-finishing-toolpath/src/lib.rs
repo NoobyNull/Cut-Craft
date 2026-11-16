@@ -37,13 +37,15 @@ pub struct Params {
     /// its stepover spaces the raster lines
     #[serde(default)]
     pub tools: Vec<Tool>,
-    /// Rest machining: leave alone unmachined areas smaller across than this
+    /// With two tools or more, each later tool cuts only what the tools before it left:
+    /// areas left smaller across than this are left alone
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Strategy"))]
+    #[schemars(extend("x-group" = "Rest Machining", "x-hide-when" = {"tools.count": [0, 1], "after.count": 0}))]
     pub minimum_detail: f64,
-    /// Rest machining: grow every unmachined area by this before cutting it
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
+    /// With two tools or more: how far each area a later tool cuts reaches past what the
+    /// tools before it left, so its cuts overlap theirs and leave no step
+    #[schemars(title = "Rest overlap", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Rest Machining", "x-hide-when" = {"tools.count": [0, 1], "after.count": 0}))]
     pub boundary_offset: f64,
     /// Where the tool's tip may go
     #[serde(default)]

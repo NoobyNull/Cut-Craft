@@ -114,12 +114,23 @@ impl When {
     }
 
     /// Whether the field shows, given the form's top-level `params`. A key with dots reads
-    /// a setting inside another (`tool.shape`: the form's tool's shape).
+    /// a setting inside another (`tool.shape`: the form's tool's shape), and `count` after a
+    /// list how many it holds (`tools.count`: how many tools the form has; none when the
+    /// list is not there).
     pub fn shown(&self, params: &Value) -> bool {
         let holds = |key: &String, values: &[String]| {
-            let setting = key.split('.').fold(params, |at, part| &at[part]);
+            let mut setting = params;
+            let mut count = None;
+            for part in key.split('.') {
+                match (setting, part) {
+                    (Value::Array(list), "count") => count = Some(Value::from(list.len())),
+                    // a list not there holds none
+                    (Value::Null, "count") => count = Some(Value::from(0)),
+                    _ => setting = &setting[part],
+                }
+            }
             // a tick box reads as "true" or "false", a number as its digits ("1", not "1.0")
-            let value = value_text(setting);
+            let value = value_text(count.as_ref().unwrap_or(setting));
             value.is_some_and(|v| values.contains(&v))
         };
         let is = holds(&self.key, &self.values) && self.also.iter().all(|(k, v)| holds(k, v));
@@ -1533,6 +1544,27 @@ mod tests {
         };
         assert!(shown("wavelength", &wavy) && !shown("wavelength", &floral));
         assert!(!shown("gap", &wavy) && shown("gap", &floral));
+    }
+
+    #[test]
+    fn finishing_shows_its_rest_machining_settings_only_with_two_tools_or_more() {
+        let f = fields(&schema("3d_finishing_toolpath"));
+        let tools = |n: usize| serde_json::json!({ "tools": vec![serde_json::json!({}); n] });
+        for key in ["minimum_detail", "boundary_offset"] {
+            let rest = field(&f, key);
+            assert_eq!(rest.group.as_deref(), Some("Rest Machining"), "{key}");
+            let shown = |n| rest.when.as_ref().is_none_or(|w| w.shown(&tools(n)));
+            assert!(!shown(1), "{key}: one tool has nothing to rest machine");
+            assert!(shown(2) && shown(3), "{key}");
+            // one of a set, edited on its own: cut after the tools before it
+            let later = serde_json::json!({ "tools": [], "after": [{}] });
+            assert!(rest.when.as_ref().is_none_or(|w| w.shown(&later)), "{key}");
+        }
+        assert_eq!(field(&f, "boundary_offset").label, "Rest overlap");
+        assert_eq!(
+            field(&f, "machining_boundary_offset").label,
+            "Boundary Offset"
+        );
     }
 
     #[test]
