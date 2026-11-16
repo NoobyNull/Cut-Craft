@@ -14757,3 +14757,17 @@ fn esc_on_import_3d_model_cancels_the_import() {
     );
     let _ = std::fs::remove_file(file);
 }
+
+#[test]
+fn ctrl_c_taken_away_in_options_no_longer_copies() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    let ctrl_c = shortcut::parse_trigger("Ctrl+C").unwrap();
+    h.app.remove_shortcut("copy", ctrl_c);
+    h.frame(vec![Event::Copy]);
+    assert!(h.app.clipboard.is_empty(), "Ctrl+C runs nothing now");
+    h.app.add_shortcut("copy", ctrl_c);
+    h.frame(vec![Event::Copy]);
+    assert!(!h.app.clipboard.is_empty(), "given back, it copies");
+}

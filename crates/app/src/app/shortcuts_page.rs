@@ -228,7 +228,8 @@ pub(super) fn show(
     ui.label(
         "Press Add beside an action, then the key or mouse button to run it with. The \
          thumb buttons (Back and Forward) and the wheel click can be used as well as keys. \
-         Press × on a shortcut to take it away.",
+         Press × on a shortcut to take it away. Ctrl+C, Ctrl+X and Ctrl+V only ever copy, \
+         cut and paste.",
     );
     ui.horizontal(|ui| {
         ui.label("Find");

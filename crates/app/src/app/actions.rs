@@ -3961,12 +3961,8 @@ impl CutCraftApp {
         }
     }
 
-    pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
-        // while a slow job runs, the window only shows its progress; while a shortcut is
-        // being set, the keys and buttons pressed are for it
-        if self.busy.is_some() || self.capture.is_some() {
-            return;
-        }
+    /// Ctrl+X, Ctrl+C and Ctrl+V, which egui gives as clipboard events rather than keys.
+    fn clipboard_keys(&mut self, ctx: &egui::Context) {
         // Ctrl+X, Ctrl+C and Ctrl+V reach egui as clipboard events, never as keys; the system
         // clipboard carries what Copy took, so another Cut Craft window pastes it too
         let (cut, copy, pasted) = ctx.input(|i| {
@@ -3980,6 +3976,14 @@ impl CutCraftApp {
                     _ => (x, c, p),
                 })
         });
+        // each only while Options still gives the action its key (taken away, it does nothing)
+        let bindings = self.bindings(ctx);
+        let bound = |id: &str, key: Key| {
+            let keys = KeyboardShortcut::new(Modifiers::COMMAND, key);
+            bindings.contains(&(id.to_owned(), shortcut::Trigger::Key(keys)))
+        };
+        let (cut, copy) = (cut && bound("cut", Key::X), copy && bound("copy", Key::C));
+        let pasted = pasted.filter(|_| bound("paste", Key::V));
         if !ctx.egui_wants_keyboard_input() && self.screen == Screen::Job {
             if cut && self.available("cut") {
                 self.invoke(ctx, "cut");
@@ -3995,6 +3999,15 @@ impl CutCraftApp {
                 self.invoke(ctx, "paste");
             }
         }
+    }
+
+    pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
+        // while a slow job runs, the window only shows its progress; while a shortcut is
+        // being set, the keys and buttons pressed are for it
+        if self.busy.is_some() || self.capture.is_some() {
+            return;
+        }
+        self.clipboard_keys(ctx);
         // node editing with nodes picked: H and V toggle the mirror lines, not Mirror
         if !ctx.egui_wants_keyboard_input()
             && self.view_tool == Some(super::ViewTool::NodeEdit)

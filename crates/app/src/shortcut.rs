@@ -125,10 +125,14 @@ pub enum Captured {
 pub const RIGHT_REFUSED: &str =
     "The right button opens menus, so it can't be a shortcut. Press another key or button.";
 
+/// Why Ctrl+C, Ctrl+X and Ctrl+V can't be given to another action.
+pub const CLIPBOARD_REFUSED: &str = "Ctrl+C, Ctrl+X and Ctrl+V always copy, cut and paste, \
+    so they can't run anything else. Press another key or button.";
+
 /// The first key or mouse button pressed in `events` while a shortcut is being set: Esc
 /// cancels, the right button is refused, and the left button is left to click the window's
 /// own buttons (such as Cancel). Ctrl+C, Ctrl+X and Ctrl+V reach egui as Copy, Cut and Paste,
-/// so they are turned back into their keys.
+/// never as keys, so they are refused: they can only ever copy, cut and paste.
 pub fn capture(events: &[egui::Event]) -> Option<Captured> {
     events.iter().find_map(|e| match e {
         egui::Event::Key {
@@ -147,9 +151,9 @@ pub fn capture(events: &[egui::Event]) -> Option<Captured> {
             logical(*modifiers),
             *key,
         )))),
-        egui::Event::Copy => Some(ctrl(Key::C)),
-        egui::Event::Cut => Some(ctrl(Key::X)),
-        egui::Event::Paste(_) => Some(ctrl(Key::V)),
+        egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_) => {
+            Some(Captured::Refused(CLIPBOARD_REFUSED))
+        }
         egui::Event::PointerButton {
             button: PointerButton::Secondary,
             pressed: true,
@@ -166,10 +170,6 @@ pub fn capture(events: &[egui::Event]) -> Option<Captured> {
         ))),
         _ => None,
     })
-}
-
-fn ctrl(key: Key) -> Captured {
-    Captured::Trigger(Trigger::Key(KeyboardShortcut::new(Modifiers::COMMAND, key)))
 }
 
 /// The modifiers as a shortcut keeps them: Ctrl (or ⌘ on a Mac) as egui's command.
@@ -366,7 +366,17 @@ mod tests {
                 PointerButton::Middle
             )))
         );
-        assert_eq!(capture(&[egui::Event::Copy]), Some(ctrl(Key::C)));
+    }
+
+    #[test]
+    fn capturing_refuses_ctrl_c_x_and_v() {
+        for e in [
+            egui::Event::Copy,
+            egui::Event::Cut,
+            egui::Event::Paste(String::new()),
+        ] {
+            assert_eq!(capture(&[e]), Some(Captured::Refused(CLIPBOARD_REFUSED)));
+        }
     }
 
     #[test]
