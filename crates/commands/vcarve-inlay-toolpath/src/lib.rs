@@ -2,7 +2,8 @@
 //! the selected shapes; the plug carves round mirrored copies of them, so that turned over it drops
 //! into the pocket leaving the glue gap under it. The plug is cut from a second board (usually a
 //! contrasting wood), so it goes on a sheet of its own in the Sheets list, called Inlay plug: open
-//! that sheet to see or save the Plug toolpath.
+//! that sheet to see or save the Plug toolpath. Only the Pocket shows in this sheet's toolpath
+//! list, and Calculate says where the Plug went.
 
 use cmd_vcarve_engrave_toolpath::{VcarveEngraveToolpath, carve};
 use cut_craft_core::document::{Document, Sheet, StoredVector};
@@ -187,6 +188,10 @@ impl Command for VcarveInlayToolpath {
         let id = c.fresh_id();
         sheets[at].objects.toolpaths.insert(id, toolpath);
         c.set_sheets(sheets, doc.active_sheet);
+        c.note(format!(
+            "The Plug toolpath is on the {PLUG_SHEET} sheet, for the second board: open it in \
+             the Sheets tab to see or save it"
+        ));
         Ok(c.finish())
     }
 }
@@ -338,6 +343,17 @@ mod tests {
             .unwrap();
         assert_eq!(doc.sheets.len(), 2);
         assert_eq!(doc.sheets[1].objects.toolpaths.len(), 2);
+    }
+
+    #[test]
+    fn calculate_says_where_the_plug_went() {
+        // only the Pocket shows in the toolpath list, so the person is told where the Plug is
+        let doc = document_with(vec![square(10.0, 10.0, 20.0)]);
+        let change = VcarveInlayToolpath::run(&doc, &Params::default()).unwrap();
+        assert_eq!(change.notes.len(), 1, "{:?}", change.notes);
+        let note = &change.notes[0];
+        assert!(note.contains("Plug") && note.contains(PLUG_SHEET), "{note}");
+        assert!(note.contains("Sheets tab"), "{note}");
     }
 
     #[test]
