@@ -558,7 +558,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "first_run_setup",
-        "First Run Setup: asks about your machine, units and bits again, as when Cut Craft first started",
+        "First Run Setup: asks about your machine, units and material again, starting from your answers, and corrects My Machine",
     ),
     (
         "options",

@@ -192,7 +192,8 @@ pub(super) const TIPS: &[Tip] = &[
     plain(
         "tips/first_setup.png",
         "Got a new machine, or set it up wrong the first time? **Help ▸ Run First-Time Setup \
-         Again** asks the starting questions again.",
+         Again** asks the starting questions again, starting from your answers, and corrects \
+         a machine you set up as not listed.",
     ),
     tip(
         "tips/keyboard.png",

@@ -77,6 +77,33 @@ impl Setup {
         }
     }
 
+    /// Asked again: the answers as they stand now, so only what is changed changes. The
+    /// machine in use (one from the list, or My Machine with its working area and
+    /// controller), the units and material new jobs start with, and the crash-report answer.
+    pub fn again(options: &crate::options::Options, machines: &Machines) -> Self {
+        let mut setup = Self::new();
+        if let Some(machine) = machines.active() {
+            if machine.name == MY_MACHINE {
+                setup.maker = Maker::NotListed;
+                setup.bed = [machine.width, machine.height];
+                setup.controller = Controller::ALL
+                    .into_iter()
+                    .find(|c| c.label() == machine.controller)
+                    .unwrap_or_default();
+                setup.inches = machine.inches;
+            } else if let Some(i) = setup.catalogue.iter().position(|m| m.name == machine.name) {
+                setup.maker = Maker::Named(setup.catalogue[i].manufacturer.clone());
+                setup.pick_model(i);
+            }
+        }
+        if let Some(job) = options.default_job {
+            setup.inches = job.units == Units::Inch;
+            setup.sheet = [job.width, job.height, job.thickness];
+        }
+        setup.crash_logs = options.bug_reports.crash_logs;
+        setup
+    }
+
     /// The models of the maker picked, by catalogue index.
     pub fn models(&self) -> Vec<usize> {
         match &self.maker {
@@ -248,9 +275,10 @@ impl CutCraftApp {
         self.tip_at_startup();
     }
 
-    /// Help ▸ Run First-Time Setup Again, or the first run: the questions shown.
+    /// Help ▸ Run First-Time Setup Again, or the first run: the questions shown, starting
+    /// from the answers given before.
     pub(super) fn open_first_run(&mut self) {
-        self.first_run = Some(Setup::new());
+        self.first_run = Some(Setup::again(&self.options, &self.machines));
     }
 
     /// The setup window, while it is open.
@@ -461,17 +489,30 @@ impl CutCraftApp {
         ));
     }
 
-    /// The machine set up, made active: added, or the one of that name already here.
+    /// The machine set up, made active: added, or the one of that name already here. My
+    /// Machine (one not listed) already here takes the working area, units and controller
+    /// answered now, so setting it up again corrects it.
     fn add_set_up_machine(&mut self, machine: Machine) {
         let at = self
             .machines
             .machines
             .iter()
             .position(|m| m.name == machine.name);
-        self.machines.active = at.unwrap_or_else(|| {
+        self.machines.active = if let Some(i) = at {
+            if machine.name == MY_MACHINE {
+                let mine = &mut self.machines.machines[i];
+                mine.width = machine.width;
+                mine.height = machine.height;
+                mine.inches = machine.inches;
+                mine.controller = machine.controller;
+                mine.posts = machine.posts;
+                mine.default_post = machine.default_post;
+            }
+            i
+        } else {
             self.machines.machines.push(machine);
             self.machines.machines.len() - 1
-        });
+        };
         self.machines_changed("Machine set up");
     }
 

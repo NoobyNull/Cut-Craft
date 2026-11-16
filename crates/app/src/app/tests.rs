@@ -11656,6 +11656,43 @@ fn first_time_setup_picks_the_machine_units_and_material_for_new_jobs() {
 }
 
 #[test]
+fn first_time_setup_again_starts_from_the_answers_and_corrects_my_machine() {
+    use super::first_run::Maker;
+    use crate::options::CrashLogs;
+    use cut_craft_machines::Controller;
+    let mut h = Harness::at_start();
+    h.app.open_first_run();
+    let setup = h.app.first_run.as_mut().unwrap();
+    setup.pick_maker(Maker::NotListed);
+    setup.bed = [500.0, 300.0];
+    setup.controller = Controller::Mach3;
+    setup.crash_logs = CrashLogs::Send;
+    let setup = h.app.first_run.take().unwrap();
+    h.app.finish_first_run(&setup);
+    // asked again: it starts from what was answered, not from nothing
+    h.app.open_first_run();
+    let setup = h.app.first_run.as_mut().unwrap();
+    assert_eq!(setup.maker, Maker::NotListed);
+    assert_eq!(setup.bed, [500.0, 300.0]);
+    assert_eq!(setup.controller, Controller::Mach3);
+    assert_eq!(
+        setup.crash_logs,
+        CrashLogs::Send,
+        "the crash-report answer kept"
+    );
+    // a corrected working area and controller change My Machine, not only pick it
+    setup.bed = [800.0, 600.0];
+    setup.controller = Controller::Grbl;
+    let setup = h.app.first_run.take().unwrap();
+    h.app.finish_first_run(&setup);
+    assert_eq!(h.app.machines.machines.len(), 1, "not added twice");
+    let machine = h.app.machines.active().unwrap();
+    assert_eq!((machine.width, machine.height), (800.0, 600.0));
+    assert_eq!(machine.post(), Some("Cut Craft GRBL Arcs (mm) (*.nc)"));
+    assert_eq!(h.app.options.bug_reports.crash_logs, CrashLogs::Send);
+}
+
+#[test]
 fn skipping_first_time_setup_keeps_todays_start() {
     let mut h = Harness::at_start();
     h.app.open_first_run();
