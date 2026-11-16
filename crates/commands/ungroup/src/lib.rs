@@ -28,11 +28,18 @@ fn ungroup(doc: &Document, onto_current: bool) -> Result<Change, CommandError> {
     let mut c = Change::builder(doc);
     let mut taken_apart = std::collections::BTreeSet::new();
     for &id in &doc.selection {
-        let group = doc
-            .picked_group(id)
-            .or_else(|| doc.vector_groups.get(&id).copied());
-        if let Some(group) = group {
-            taken_apart.insert(group);
+        match doc.picked_group(id) {
+            Some(group) => {
+                taken_apart.insert(group);
+            }
+            // picked on its own inside a group: only it leaves, for the group around that
+            None => {
+                if let Some(&group) = doc.vector_groups.get(&id) {
+                    // a letter pulled out of text is plain curves; so is the rest of it
+                    c.set_text(group, None);
+                    c.set_group(id, doc.group_parents.get(&group).copied());
+                }
+            }
         }
         if onto_current {
             c.move_to_layer(id, doc.current_layer);
@@ -180,5 +187,33 @@ mod tests {
             .unwrap();
         assert_eq!(doc.group_chain(EntityId(1)), [9]);
         assert_eq!(doc.group_members(EntityId(1)).len(), 3);
+    }
+
+    #[test]
+    fn one_item_picked_inside_a_group_leaves_it_alone() {
+        use cut_craft_core::testing::{document_with, square};
+        let mut doc = document_with(vec![
+            square(0.0, 0.0, 5.0),
+            square(10.0, 0.0, 5.0),
+            square(20.0, 0.0, 5.0),
+        ]);
+        // group 20 holds 1, 2 and group 30 (holding 3), and sits in group 10
+        doc.vector_groups.insert(EntityId(1), 20);
+        doc.vector_groups.insert(EntityId(2), 20);
+        doc.vector_groups.insert(EntityId(3), 30);
+        doc.group_parents.insert(30, 20);
+        doc.group_parents.insert(20, 10);
+        let mut c = Change::builder(&doc);
+        c.select([EntityId(1)]);
+        doc.apply(&c.finish()).unwrap();
+        doc.apply(&Ungroup::run(&doc, &NoParams {}).unwrap())
+            .unwrap();
+        assert_eq!(
+            doc.group_chain(EntityId(1)),
+            [10],
+            "out to the group around"
+        );
+        assert_eq!(doc.group_chain(EntityId(2)), [20, 10], "the rest stays");
+        assert_eq!(doc.group_chain(EntityId(3)), [30, 20, 10]);
     }
 }

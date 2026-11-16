@@ -597,10 +597,15 @@ impl Change {
     pub fn copy_selected_grouped(doc: &Document, transforms: &[DAffine2]) -> Self {
         let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
         let mut c = Self::builder(doc);
-        let all = c.copies_grouped(doc, &originals, transforms, false);
+        let all = c.copies_grouped(doc, &originals, transforms, true);
         let group = c.next_group();
+        // each item (a group, kept whole with any inside it, or a lone vector) goes in it
         for &id in &all {
-            c.set_group(id, Some(group));
+            match c.top_group_now(id) {
+                Some(top) if top != group => c.set_group_parent(top, Some(group)),
+                Some(_) => {}
+                None => c.set_group(id, Some(group)),
+            }
         }
         c.select(all);
         c.finish()
@@ -1757,6 +1762,40 @@ impl ChangeBuilder<'_> {
                 after: group,
             });
         }
+    }
+
+    /// The outermost group vector `id` is in, as this change has left it.
+    pub fn top_group_now(&self, id: EntityId) -> Option<u64> {
+        let group_of = |id: EntityId| {
+            self.edits
+                .iter()
+                .rev()
+                .find_map(|e| match e {
+                    Edit::SetGroup { id: i, after, .. } if *i == id => Some(*after),
+                    _ => None,
+                })
+                .unwrap_or_else(|| self.doc.vector_groups.get(&id).copied())
+        };
+        let parent_of = |g: u64| {
+            self.edits
+                .iter()
+                .rev()
+                .find_map(|e| match e {
+                    Edit::SetGroupParent { group, after, .. } if *group == g => Some(*after),
+                    _ => None,
+                })
+                .unwrap_or_else(|| self.doc.group_parents.get(&g).copied())
+        };
+        let mut at = group_of(id)?;
+        let mut seen = vec![at];
+        while let Some(parent) = parent_of(at) {
+            if seen.contains(&parent) {
+                break;
+            }
+            seen.push(parent);
+            at = parent;
+        }
+        Some(at)
     }
 
     /// Puts group `group` inside group `parent`, or takes it out of any (`None`).

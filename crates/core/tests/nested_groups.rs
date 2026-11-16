@@ -136,3 +136,30 @@ fn a_new_group_number_is_not_one_a_parent_uses() {
     doc.group_parents.insert(7, 30);
     assert!(doc.next_group() > 30);
 }
+
+#[test]
+fn copies_made_one_group_keep_the_text_inside_as_text() {
+    let mut doc = text_and_border();
+    let mut c = Change::builder(&doc);
+    c.select([EntityId(1), EntityId(2), EntityId(3)]);
+    doc.apply(&c.finish()).unwrap();
+    let shift = cut_craft_core::glam::DAffine2::from_translation(cut_craft_core::glam::DVec2::new(
+        200.0, 0.0,
+    ));
+    doc.apply(&Change::copy_selected_grouped(&doc, &[shift]))
+        .unwrap();
+    // the original text is still text, inside the one new group with everything
+    assert_eq!(doc.text_group(EntityId(1)), Some(7));
+    let top = doc.top_group(EntityId(1)).unwrap();
+    assert_ne!(top, 7);
+    assert_eq!(
+        doc.group_members(EntityId(3)).len(),
+        6,
+        "originals and copies"
+    );
+    // the copy's letters are a text of their own (moved, so its settings move with it)
+    let copies: Vec<EntityId> = doc.vectors.keys().copied().filter(|id| id.0 > 4).collect();
+    let copied_texts: std::collections::BTreeSet<_> =
+        copies.iter().filter_map(|&id| doc.text_group(id)).collect();
+    assert_eq!(copied_texts.len(), 1, "{copies:?}");
+}

@@ -2781,6 +2781,24 @@ fn double_clicking_a_group_steps_inside_and_a_click_then_picks_one_item() {
 }
 
 #[test]
+fn a_shape_changed_in_its_own_tool_inside_a_group_stays_in_the_group() {
+    let mut h = Harness::new();
+    two_grouped(&mut h);
+    h.double_click(h.at(10.0, 30.0));
+    let old = *h.app.doc.selection.iter().next().unwrap();
+    let (command, mut params) = h
+        .app
+        .registry
+        .drawn_by(&h.app.doc, &h.app.doc.vectors[&old])
+        .expect("a rectangle the tool drew");
+    params["width"] = Value::from(60.0);
+    h.app.redraw(command, &params, old).unwrap();
+    let made = *h.app.doc.vectors.keys().max().unwrap();
+    assert_ne!(made, old);
+    assert_eq!(h.app.doc.group_members(made).len(), 2, "still in the group");
+}
+
+#[test]
 fn a_double_click_on_empty_space_steps_out_of_the_group() {
     let mut h = Harness::new();
     two_grouped(&mut h);

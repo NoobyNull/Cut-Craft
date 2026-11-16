@@ -3568,8 +3568,23 @@ impl CutCraftApp {
         let mut without = self.doc.clone();
         without.apply(&taken).map_err(|e| e.to_string())?;
         let made = cmd.run_json(&without, params).map_err(|e| e.to_string())?;
+        // a shape changed inside a group stays in that group
+        let mut regrouped = Vec::new();
+        if let Some(&group) = self.doc.vector_groups.get(&old) {
+            let mut after = without.clone();
+            after.apply(&made).map_err(|e| e.to_string())?;
+            let mut c = Change::builder(&after);
+            for edit in &made.edits {
+                if let cut_craft_core::Edit::Add { id, .. } = edit {
+                    c.set_group(*id, Some(group));
+                }
+            }
+            regrouped = c.finish().edits;
+        }
         let change = Change {
-            edits: taken.edits.into_iter().chain(made.edits).collect(),
+            edits: (taken.edits.into_iter().chain(made.edits))
+                .chain(regrouped)
+                .collect(),
             notes: made.notes,
             unit_guess: made.unit_guess,
         };

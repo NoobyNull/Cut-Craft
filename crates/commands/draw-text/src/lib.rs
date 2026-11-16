@@ -619,7 +619,8 @@ impl Command for BreakTextIntoLines {
             .map_err(CommandError::Failed)?;
         let pitch = face.line_pitch * text.spacing.line_pitch * text.height / face.cap_height;
         let mut c = Change::builder(doc);
-        for id in doc.group_members_of(p.group) {
+        // every letter, those in groups made inside the text too
+        for id in doc.members_under(p.group) {
             c.remove(id);
         }
         c.set_text(p.group, None);

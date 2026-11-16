@@ -4224,6 +4224,10 @@ impl CutCraftApp {
             (component, false) => self.doc.selected_components = component.into_iter().collect(),
             (None, true) => {}
         }
+        // a plain click on a picture or component, which are in no group, steps out
+        if !shift && (picture.is_some() || component.is_some()) {
+            self.doc.inside_group = None;
+        }
         // inside a closed shape, away from any line, picture or component: the shape and
         // its holes, as one part
         let part = if hit.is_none() && picture.is_none() && component.is_none() {
