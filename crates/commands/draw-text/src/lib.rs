@@ -623,6 +623,9 @@ impl Command for BreakTextIntoLines {
             c.remove(id);
         }
         c.set_text(p.group, None);
+        // each line stays in the group the text was in
+        let around = doc.group_parents.get(&p.group).copied();
+        c.set_group_parent(p.group, None);
         let mut selected = vec![];
         for (group, (row, line)) in (doc.next_group()..).zip(lines.iter().enumerate()) {
             let anchor =
@@ -649,6 +652,7 @@ impl Command for BreakTextIntoLines {
             for &id in &ids {
                 c.set_group(id, Some(group));
             }
+            c.set_group_parent(group, around);
             c.set_text(
                 group,
                 Some(serde_json::to_value(one).expect("params serialise")),

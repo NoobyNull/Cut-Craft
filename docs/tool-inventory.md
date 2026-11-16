@@ -468,8 +468,9 @@ say "not implemented yet".
     tangent lines (T).
   - Text: system TrueType fonts and Vectric single-line `.vfont` fonts (from
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
-    The text is a group that remembers its settings: Draw Text on selected text edits it;
-    Ungroup turns it into curves. With the form open on selected text, two green handles
+    The text is a group that remembers its settings: Draw Text on selected text edits it
+    (so does a double-click on it, inside a group too); grouped with other vectors it stays
+    text; Ungroup on the text itself turns it into curves. With the form open on selected text, two green handles
     above and below it bend the line into an arc (the middle follows the pointer; drag back
     to flatten); Arc angle and Arc rotation are typed too. Each letter stays whole. Not
     done: the red / blue / white handles (rotate, radius, move) and kerning clicks on arched
@@ -859,7 +860,10 @@ implemented yet" listed.)
 - Components show in the 2D view as greyscale depth maps (black lowest, white highest, per
   component) and a click on one selects it, as in Aspire; in the 3D view a double-click picks
   the topmost shown component under it (Shift adds or takes away; off the model it fits).
-- Vector groups do not nest. Grouping leaves each member on its own layer; the right-click
+- Vector groups nest: grouping groups (or text) keeps each inside the new group, and Ungroup
+  takes one level apart. A double-click steps inside a group, where a click picks one item to
+  move, size, node edit, delete or edit; the rest fades; Esc or a double-click on empty space
+  steps out (#378). Grouping leaves each member on its own layer; the right-click
   Ungroup ▸ puts them back as they were (onto Original Object Layers) or all onto the
   current layer (Aspire's onto Group's Layer, as Cut Craft's groups have no layer).
 - The Toolpath Drawing toggles (rapids, plunges, retracts, joins) last only for the session;

@@ -4352,6 +4352,14 @@ impl CutCraftApp {
             self.status
                 .set_message("Preview stopped: what it had cut is kept");
         }
+        // Escape with no form open, stepped inside a group, steps out one level
+        if let Some(group) = self.doc.inside_group
+            && self.form.is_none()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.step_out_of_group(group);
+        }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| {
@@ -4776,7 +4784,7 @@ impl CutCraftApp {
     }
 
     /// The red note [`Self::tool_note_label`] shows, if any.
-    fn tool_note(&self) -> Option<&str> {
+    pub(super) fn tool_note(&self) -> Option<&str> {
         let (job, revision, note) = self.tool_note.as_ref()?;
         ((*job, *revision) == (self.job_epoch, self.history.revision())).then_some(note.as_str())
     }
@@ -6416,10 +6424,12 @@ impl CutCraftApp {
                     .map(|id| self.doc.vectors[id].clone())
                     .collect();
                 let doc = &self.doc;
-                let groups: Vec<Option<u64>> = doc
+                let picked: std::collections::BTreeSet<EntityId> =
+                    doc.selection.iter().copied().collect();
+                let groups: Vec<Vec<u64>> = doc
                     .selection
                     .iter()
-                    .map(|id| doc.vector_groups.get(id).copied())
+                    .map(|&id| doc.chain_within(id, &picked))
                     .collect();
                 self.clipboard_from = super::Copied {
                     layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
@@ -7038,7 +7048,7 @@ fn installed_machines(added: usize, here: usize) -> String {
 
 /// The entries of `records` (text settings or part names, by group) for `groups`.
 fn records_of<T: Clone>(
-    groups: &[Option<u64>],
+    groups: &[Vec<u64>],
     records: &std::collections::BTreeMap<u64, T>,
 ) -> std::collections::BTreeMap<u64, T> {
     groups

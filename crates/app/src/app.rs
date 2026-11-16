@@ -85,7 +85,8 @@ struct FineKey {
 /// settings and part names.
 #[derive(Default)]
 struct Copied {
-    groups: Vec<Option<u64>>,
+    /// Each copied vector's groups, innermost first: those wholly copied.
+    groups: Vec<Vec<u64>>,
     layers: Vec<LayerId>,
     /// The job they were copied from (`job_epoch`): layer numbers mean nothing in another.
     job: u64,

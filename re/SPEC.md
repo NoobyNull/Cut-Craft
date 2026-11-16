@@ -172,6 +172,12 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 ### Vectors (Drawing tab) [obs]
 - **Create:** Rectangle, Circle, Ellipse, Polygon, Star, Arc, Line/Polyline, Freehand, Text, Text on a Curve, Dimensions, Fillets, Vector Texture.
 - **Edit:** node editing, Join (J), Weld, Subtract, Trim, Overlap, Offset, Extend, Fit Curves, Mirror, Align, Distort, Array Copy, Circular Copy, Copy Along Vectors, Nest Parts, Group/Ungroup, Vector Validator, Vector Unwrapper, Trace Bitmap, Measure (Ctrl+M).
+- **Groups inside groups** (Cut Craft's own choice) [inf]: a group can hold groups, and
+  grouped text stays editable text. A double-click steps inside a group (the rest fades),
+  where a click picks one item in it to move, size, node edit, delete or edit, keeping it in
+  the group; a double-click on text opens Edit Text; Esc or a double-click on empty space
+  steps out. Chosen over turning grouped text into curves, so a beginner never loses
+  editable text by grouping it (#378).
 - **Layers** (`Cm`): name, colour, visible, active, ordering arrows, select-all-on-layer, move objects to a layer, Ctrl+L toggles the dialog.
 - **Sheets:** several material sheets per job. Double-click a sheet in the 2D view to make it active.
 - **Shape-tool interaction**, using Draw Rectangle as the template; every shape tool works the same way:

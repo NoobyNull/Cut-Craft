@@ -1,5 +1,7 @@
-//! Ungroup: the selected vectors leave their groups, onto the layers they are on (grouping
-//! never moves them), or all onto the current layer.
+//! Ungroup: the selected groups come apart one level, onto the layers their vectors are on
+//! (grouping never moves them), or all onto the current layer. A group or text that was
+//! grouped comes back out as it was (text stays editable); ungrouping text itself turns it
+//! into curves.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
@@ -10,7 +12,9 @@ pub struct Ungroup;
 /// Ungroup onto the current layer.
 pub struct UngroupOntoCurrentLayer;
 
-/// The selected vectors out of their groups; `onto_current` moves them to the current layer.
+/// The selected groups taken apart one level: what they held (vectors, and groups inside
+/// them, whole) goes into the group around them, if any. A vector picked on its own inside a
+/// group leaves that group. `onto_current` moves them to the current layer.
 fn ungroup(doc: &Document, onto_current: bool) -> Result<Change, CommandError> {
     if !doc
         .selection
@@ -22,14 +26,30 @@ fn ungroup(doc: &Document, onto_current: bool) -> Result<Change, CommandError> {
         ));
     }
     let mut c = Change::builder(doc);
+    let mut taken_apart = std::collections::BTreeSet::new();
     for &id in &doc.selection {
-        // ungrouping text is Convert Text to Curves: it stops being editable text
-        if let Some(&group) = doc.vector_groups.get(&id) {
-            c.set_text(group, None);
+        let group = doc
+            .picked_group(id)
+            .or_else(|| doc.vector_groups.get(&id).copied());
+        if let Some(group) = group {
+            taken_apart.insert(group);
         }
-        c.set_group(id, None);
         if onto_current {
             c.move_to_layer(id, doc.current_layer);
+        }
+    }
+    for &group in &taken_apart {
+        let around = doc.group_parents.get(&group).copied();
+        // ungrouping text is Convert Text to Curves: it stops being editable text
+        c.set_text(group, None);
+        c.set_group_parent(group, None);
+        for &id in &doc.selection {
+            if doc.vector_groups.get(&id) == Some(&group) {
+                c.set_group(id, around);
+            }
+        }
+        for (&inner, _) in doc.group_parents.iter().filter(|(_, p)| **p == group) {
+            c.set_group_parent(inner, around);
         }
     }
     Ok(c.finish())
@@ -122,5 +142,43 @@ mod tests {
         doc.apply(&UngroupOntoCurrentLayer::run(&doc, &NoParams {}).unwrap())
             .unwrap();
         assert!(doc.vectors.keys().all(|&id| doc.layer_of(id) == layer));
+    }
+
+    #[test]
+    fn ungrouping_gives_back_the_text_inside_as_text() {
+        use cut_craft_core::testing::{document_with, square};
+        let mut doc = document_with(vec![square(0.0, 0.0, 5.0), square(-5.0, -5.0, 20.0)]);
+        doc.vector_groups.insert(EntityId(1), 4);
+        doc.vector_groups.insert(EntityId(2), 9);
+        doc.group_parents.insert(4, 9);
+        doc.texts.insert(4, serde_json::json!({"text": "A"}));
+        doc.apply(&Ungroup::run(&doc, &NoParams {}).unwrap())
+            .unwrap();
+        assert_eq!(doc.group_chain(EntityId(1)), [4], "the text's own group");
+        assert_eq!(doc.text_group(EntityId(1)), Some(4), "still text");
+        assert_eq!(doc.group_chain(EntityId(2)), Vec::<u64>::new());
+        assert!(doc.group_parents.is_empty());
+    }
+
+    #[test]
+    fn ungrouping_a_group_inside_a_group_keeps_it_in_the_outer_one() {
+        use cut_craft_core::testing::{document_with, square};
+        let mut doc = document_with(vec![
+            square(0.0, 0.0, 5.0),
+            square(10.0, 0.0, 5.0),
+            square(20.0, 0.0, 5.0),
+        ]);
+        doc.vector_groups.insert(EntityId(1), 4);
+        doc.vector_groups.insert(EntityId(2), 4);
+        doc.vector_groups.insert(EntityId(3), 9);
+        doc.group_parents.insert(4, 9);
+        // stepped inside group 9, the inner group picked
+        let mut c = Change::builder(&doc);
+        c.select([EntityId(1), EntityId(2)]);
+        doc.apply(&c.finish()).unwrap();
+        doc.apply(&Ungroup::run(&doc, &NoParams {}).unwrap())
+            .unwrap();
+        assert_eq!(doc.group_chain(EntityId(1)), [9]);
+        assert_eq!(doc.group_members(EntityId(1)).len(), 3);
     }
 }

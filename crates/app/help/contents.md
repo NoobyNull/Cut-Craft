@@ -6,6 +6,8 @@ a CNC machine cuts them with.
 - [Design](help:design): the page down the left. Draw and edit vectors, then model in 3D.
 - [Toolpaths](help:toolpaths): the page down the right. Turn vectors into toolpaths,
   preview them and save them for the machine.
+- [Groups](help:groups): step inside a group to change one thing in it; text in a
+  group stays editable.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.

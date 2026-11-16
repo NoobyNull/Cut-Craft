@@ -94,6 +94,12 @@ pub enum Edit {
         before: Option<u64>,
         after: Option<u64>,
     },
+    /// Puts a group inside another group or takes it out (`None`).
+    SetGroupParent {
+        group: u64,
+        before: Option<u64>,
+        after: Option<u64>,
+    },
     /// Moves a vector between layers; `None` is "not on any layer" (added or removed).
     SetLayer {
         id: EntityId,
@@ -313,6 +319,15 @@ impl Edit {
                 before: after,
                 after: before,
             },
+            Self::SetGroupParent {
+                group,
+                before,
+                after,
+            } => Self::SetGroupParent {
+                group,
+                before: after,
+                after: before,
+            },
             Self::SetLevel { id, before, after } => Self::SetLevel {
                 id,
                 before: after,
@@ -339,6 +354,8 @@ pub enum ApplyError {
     LayerInUse(LayerId),
     /// The level was changed by something else.
     LevelConflict(u64),
+    /// The group was put in or taken out of another group by something else.
+    GroupConflict(u64),
 }
 
 impl fmt::Display for ApplyError {
@@ -346,6 +363,7 @@ impl fmt::Display for ApplyError {
         match self {
             Self::Missing(id) => write!(f, "entity {} does not exist", id.0),
             Self::Exists(id) => write!(f, "entity {} already exists", id.0),
+            Self::GroupConflict(g) => write!(f, "group {g} was changed by something else"),
             Self::Conflict(id) => write!(f, "entity {} was changed by something else", id.0),
             Self::JobConflict => f.write_str("the job setup was changed by something else"),
             Self::MissingLayer(id) => write!(f, "layer {} does not exist", id.0),
@@ -1159,6 +1177,19 @@ impl Document {
                     None => self.vector_groups.remove(id),
                 };
             }
+            Edit::SetGroupParent {
+                group,
+                before,
+                after,
+            } => {
+                if self.group_parents.get(group) != before.as_ref() {
+                    return Err(ApplyError::GroupConflict(*group));
+                }
+                match after {
+                    Some(parent) => self.group_parents.insert(*group, *parent),
+                    None => self.group_parents.remove(group),
+                };
+            }
             Edit::SetLayer { id, before, after } => {
                 if self.vector_layers.get(id) != before.as_ref() {
                     return Err(ApplyError::Conflict(*id));
@@ -1371,13 +1402,22 @@ impl ChangeBuilder<'_> {
         regroup: bool,
     ) -> Vec<EntityId> {
         let mut all = originals.to_vec();
+        let set: std::collections::BTreeSet<EntityId> = originals.iter().copied().collect();
+        let chains: Vec<Vec<u64>> = originals
+            .iter()
+            .map(|&id| {
+                if regroup {
+                    doc.chain_within(id, &set)
+                } else {
+                    Vec::new()
+                }
+            })
+            .collect();
         for t in transforms {
             let paths = originals
                 .iter()
-                .map(|id| {
-                    let group = doc.vector_groups.get(id).copied().filter(|_| regroup);
-                    (doc.vectors[id].transformed(t), group)
-                })
+                .zip(&chains)
+                .map(|(id, chain)| (doc.vectors[id].transformed(t), chain.clone()))
                 .collect();
             let copies = self.add_regrouped(paths, &doc.texts, &doc.part_names, shift_of(t));
             for (&id, &copy) in originals.iter().zip(&copies) {
@@ -1388,37 +1428,40 @@ impl ChangeBuilder<'_> {
         all
     }
 
-    /// Adds `paths`, each with the group it had where it came from (`None`: none). Each of
-    /// those groups becomes one new group here, with its part name from `names` and, when the
-    /// copy is only moved (by `shift`), its text settings from `texts`, moved with it. A
-    /// dimension's copy is plain curves unless it lies on the original (Paste).
+    /// Adds `paths`, each with the groups it was in where it came from, innermost first
+    /// (empty: none). Each of those groups becomes one new group here, held in the new
+    /// group of the next one out, with its part name from `names` and, when the copy is
+    /// only moved (by `shift`), its text settings from `texts`, moved with it. A dimension's
+    /// copy is plain curves unless it lies on the original (Paste).
     pub fn add_regrouped(
         &mut self,
-        paths: Vec<(Path, Option<u64>)>,
+        paths: Vec<(Path, Vec<u64>)>,
         texts: &BTreeMap<u64, serde_json::Value>,
         names: &BTreeMap<u64, String>,
         shift: Option<Point>,
     ) -> Vec<EntityId> {
         let mut new_groups: BTreeMap<u64, u64> = BTreeMap::new();
         let mut ids = Vec::with_capacity(paths.len());
-        for (path, group) in paths {
+        for (path, chain) in paths {
             let id = self.add(path);
-            if let Some(old) = group {
-                if let Some(&g) = new_groups.get(&old) {
-                    self.set_group(id, Some(g));
-                    ids.push(id);
-                    continue;
+            let mut inner: Option<u64> = None;
+            for old in chain {
+                let g = if let Some(&g) = new_groups.get(&old) {
+                    g
+                } else {
+                    let g = self.next_group();
+                    new_groups.insert(old, g);
+                    self.set_part_name(g, names.get(&old).cloned());
+                    let text = shift.and_then(|by| shifted_text(texts.get(&old)?, by));
+                    self.set_text(g, text);
+                    g
+                };
+                // putting the vector or group in it claims the number for this change
+                match inner {
+                    None => self.set_group(id, Some(g)),
+                    Some(inner) => self.set_group_parent(inner, Some(g)),
                 }
-                let g = self.next_group();
-                new_groups.insert(old, g);
-                let text = shift.and_then(|by| shifted_text(texts.get(&old)?, by));
-                if let Some(text) = text {
-                    self.set_text(g, Some(text));
-                }
-                if let Some(name) = names.get(&old) {
-                    self.set_part_name(g, Some(name.clone()));
-                }
-                self.set_group(id, Some(g));
+                inner = Some(g);
             }
             ids.push(id);
         }
@@ -1432,6 +1475,7 @@ impl ChangeBuilder<'_> {
             .iter()
             .filter_map(|e| match e {
                 Edit::SetGroup { after, .. } => *after,
+                Edit::SetGroupParent { group, after, .. } => Some(after.unwrap_or(0).max(*group)),
                 Edit::SetText { group, .. } | Edit::SetPartName { group, .. } => Some(*group),
                 _ => None,
             })
@@ -1711,6 +1755,28 @@ impl ChangeBuilder<'_> {
                 id,
                 before,
                 after: group,
+            });
+        }
+    }
+
+    /// Puts group `group` inside group `parent`, or takes it out of any (`None`).
+    pub fn set_group_parent(&mut self, group: u64, parent: Option<u64>) {
+        let before = self
+            .edits
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                Edit::SetGroupParent {
+                    group: g, after, ..
+                } if *g == group => Some(*after),
+                _ => None,
+            })
+            .unwrap_or_else(|| self.doc.group_parents.get(&group).copied());
+        if before != parent {
+            self.edits.push(Edit::SetGroupParent {
+                group,
+                before,
+                after: parent,
             });
         }
     }

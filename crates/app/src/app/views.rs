@@ -30,6 +30,11 @@ const DROPPED_JOBS: [&str; 3] = [
 /// How far beyond the selection's corners its rotation handles sit, in pick reaches.
 const ROTATE_OUT: f64 = 2.5;
 
+/// What the status bar says while stepped inside a group.
+pub(super) const INSIDE_GROUP: &str = "Inside a group: click an item to move, size or change it on \
+     its own, double-click a group in it to go further in or text to edit it; Esc or a \
+     double-click on empty space steps out";
+
 /// How big the selection's handles are, as a share of a row: bigger than a node's, as there
 /// are only a few and they are what a drag takes hold of.
 const SELECTION_HANDLE_SHARE: f32 = 0.55;
@@ -1262,6 +1267,7 @@ impl CutCraftApp {
 
     pub(super) fn view_2d(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "2D view");
+        self.forget_gone_group();
         let job = self.shown_job();
         let mut canvas = Canvas::new(ui, &job, self.camera);
         self.clipart_dropped_2d(ui, &canvas);
@@ -1430,6 +1436,14 @@ impl CutCraftApp {
             placing_tabs,
             joining_ends,
         } = modes;
+        // a double-click with nothing in hand steps into a group, or edits text
+        if handled
+            && canvas.response().double_clicked()
+            && let Some(at) = canvas.cursor()
+        {
+            self.double_click_2d(at, canvas.pick_tolerance(ui));
+            return;
+        }
         // selecting or transforming, a slow click or one the hand shifted a pixel or two is
         // a click, not a move or a resize (a third of the reach is about three pixels)
         let gesture = match gesture {
@@ -1902,7 +1916,7 @@ impl CutCraftApp {
             )
         };
         match grab {
-            Grab::Vector(id) => (self.doc.group_members(id).iter())
+            Grab::Vector(id) => (self.picked_with(id).iter())
                 .filter_map(|m| self.doc.vectors.get(m).cloned())
                 .collect(),
             Grab::Component(id) => vec![boxed(self.doc.components[&id].extent())],
@@ -2157,6 +2171,8 @@ impl CutCraftApp {
         }
         if !modes.handled {
             None
+        } else if self.doc.inside_group.is_some() {
+            Some(INSIDE_GROUP.into())
         } else if self.nothing_drawn() {
             Some(EMPTY_SHEET_STEP.into())
         } else if self.doc.selection.is_empty() {
@@ -4222,7 +4238,7 @@ impl CutCraftApp {
             }
             // Shift-clicking a part already picked takes it away
             if shift && part.iter().all(|id| ids.contains(id)) {
-                for id in part.iter().flat_map(|&id| self.doc.group_members(id)) {
+                for id in part.iter().flat_map(|&id| self.picked_with(id)) {
                     ids.remove(&id);
                 }
             } else {
@@ -4233,7 +4249,7 @@ impl CutCraftApp {
             // a grouped vector brings or takes its whole group
             let mut ids = self.doc.selection.clone();
             if let Some(id) = hit {
-                let members = self.doc.group_members(id);
+                let members = self.picked_with(id);
                 if ids.contains(&id) {
                     for m in &members {
                         ids.remove(m);
@@ -4248,11 +4264,90 @@ impl CutCraftApp {
         }
     }
 
-    /// Selection is view state: applied directly, never recorded for undo.
-    /// Picking a grouped vector picks its whole group.
-    pub(super) fn select(&mut self, ids: impl IntoIterator<Item = EntityId>, add: bool) {
+    /// The vectors a click on `id` picks: its whole group, or, stepped inside a group, the
+    /// one item in it that holds `id`.
+    pub(super) fn picked_with(&self, id: EntityId) -> Vec<EntityId> {
+        self.doc
+            .pick_inside(id, self.doc.inside_group)
+            .unwrap_or_else(|| self.doc.group_members(id))
+    }
+
+    /// A double-click in the 2D view with nothing in hand, at `at`: on a group, steps inside
+    /// it (picking the item clicked); on text, opens Edit Text on it; off everything while
+    /// inside a group, steps out one level.
+    pub(super) fn double_click_2d(&mut self, at: cut_craft_core::geometry::Point, reach: f64) {
+        let inside = self.doc.inside_group;
+        let Some(hit) = self.doc.pick(at, reach) else {
+            if let Some(group) = inside {
+                self.step_out_of_group(group);
+            }
+            return;
+        };
+        let Some(group) = self.doc.group_to_enter(hit, inside) else {
+            return;
+        };
+        let text = self
+            .doc
+            .texts
+            .get(&group)
+            .is_some_and(|t| t.get("text").is_some());
+        if text {
+            // the text picked whole, in the group it is in, and Edit Text opened on it
+            self.doc.inside_group = self.doc.group_parents.get(&group).copied();
+            let letters = self.doc.members_under(group);
+            self.select(letters, false);
+            self.start_command("draw_text");
+            return;
+        }
+        self.doc.inside_group = Some(group);
+        self.select([hit], false);
+        self.status.set_message(INSIDE_GROUP);
+    }
+
+    /// Steps out of the group stepped into once it is gone (undone, deleted, ungrouped).
+    fn forget_gone_group(&mut self) {
         let doc = &self.doc;
-        let whole = ids.into_iter().flat_map(|id| doc.group_members(id));
+        if let Some(group) = doc.inside_group
+            && !doc
+                .vectors
+                .keys()
+                .any(|&v| doc.group_chain(v).contains(&group))
+        {
+            self.doc.inside_group = None;
+        }
+    }
+
+    /// Leaves group `group` (stepped inside it) for the group around it, if any.
+    pub(super) fn step_out_of_group(&mut self, group: u64) {
+        let around = self.doc.group_parents.get(&group).copied();
+        self.doc.inside_group = around;
+        let members = self.doc.members_under(group);
+        self.select(members, false);
+        self.status.set_message(if around.is_some() {
+            "Stepped out to the group around it"
+        } else {
+            "Stepped out of the group: a click picks whole groups again"
+        });
+    }
+
+    /// Selection is view state: applied directly, never recorded for undo.
+    /// Picking a grouped vector picks its whole group, or, stepped inside a group, the one
+    /// item in it (a group inside it, whole, or the vector alone).
+    pub(super) fn select(&mut self, ids: impl IntoIterator<Item = EntityId>, add: bool) {
+        let ids: Vec<EntityId> = ids.into_iter().collect();
+        // picking something outside the group stepped into steps out of it
+        let inside = self.doc.inside_group;
+        if inside.is_some()
+            && ids
+                .iter()
+                .any(|&id| self.doc.pick_inside(id, inside).is_none())
+        {
+            self.doc.inside_group = None;
+        }
+        let doc = &self.doc;
+        let whole = ids
+            .into_iter()
+            .flat_map(|id| doc.pick_inside(id, doc.inside_group).unwrap_or_default());
         let mut c = Change::builder(doc);
         if add {
             c.select(doc.selection.iter().copied().chain(whole));

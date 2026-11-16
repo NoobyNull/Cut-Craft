@@ -607,9 +607,19 @@ pub struct Document {
     /// Bitmaps picked in the 2D view, in pick order; view state like `selection`.
     #[serde(default)]
     pub selected_bitmaps: Selection,
-    /// Which group each grouped vector is in; picking one picks the group (added with groups).
+    /// Which group each grouped vector is in (the innermost, when groups hold groups);
+    /// picking one picks its outermost group (added with groups).
     #[serde(default)]
     pub vector_groups: BTreeMap<EntityId, u64>,
+    /// Groups inside groups: the group each held group is in (added with nested groups;
+    /// older files have none). Grouping text with something keeps the text's own group
+    /// here, so it stays editable text.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub group_parents: BTreeMap<u64, u64>,
+    /// The group stepped inside (double-click a group): view state like `selection`, never
+    /// saved. A click there picks one item in it instead of the whole group.
+    #[serde(skip)]
+    pub inside_group: Option<u64>,
     /// Edit ▸ Notes: free text kept with the job, printed by posts as `[FILE_NOTES]`; notes
     /// starting with "." open by themselves when the job is opened.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -806,6 +816,8 @@ impl Default for Document {
             selected_components: Selection::new(),
             selected_bitmaps: Selection::new(),
             vector_groups: BTreeMap::new(),
+            group_parents: BTreeMap::new(),
+            inside_group: None,
             notes: String::new(),
             texts: BTreeMap::new(),
             levels: crate::component::default_levels(),
@@ -961,26 +973,118 @@ impl Document {
             .unwrap_or(first)
     }
 
-    /// The vectors picked together with `id`: its group's, or `id` alone.
+    /// The groups vector `id` is in, innermost first, outermost last; empty when it is in
+    /// none.
+    pub fn group_chain(&self, id: EntityId) -> Vec<u64> {
+        let mut chain = Vec::new();
+        let mut at = self.vector_groups.get(&id).copied();
+        while let Some(group) = at {
+            if chain.contains(&group) {
+                break; // a damaged file's loop: stop rather than spin
+            }
+            chain.push(group);
+            at = self.group_parents.get(&group).copied();
+        }
+        chain
+    }
+
+    /// The outermost group vector `id` is in: the one a click picks whole.
+    pub fn top_group(&self, id: EntityId) -> Option<u64> {
+        self.group_chain(id).last().copied()
+    }
+
+    /// The text group vector `id` belongs to, when it is a letter of editable text (even
+    /// inside a bigger group).
+    pub fn text_group(&self, id: EntityId) -> Option<u64> {
+        self.group_chain(id)
+            .into_iter()
+            .find(|g| self.texts.contains_key(g))
+    }
+
+    /// The part name vector `id` belongs to: the nearest named group around it.
+    pub fn part_name(&self, id: EntityId) -> Option<&str> {
+        self.group_chain(id)
+            .iter()
+            .find_map(|g| self.part_names.get(g))
+            .map(String::as_str)
+    }
+
+    /// The vectors picked together with `id`: its outermost group's, or `id` alone.
     pub fn group_members(&self, id: EntityId) -> Vec<EntityId> {
-        match self.vector_groups.get(&id) {
-            Some(group) => self
-                .vector_groups
-                .iter()
-                .filter(|(v, g)| *g == group && self.vectors.contains_key(v))
-                .map(|(&v, _)| v)
-                .collect(),
+        match self.top_group(id) {
+            Some(group) => self.members_under(group),
             None => vec![id],
         }
     }
 
-    /// The vectors in group `group`.
+    /// The vectors in group `group` itself (not those in groups inside it).
     pub fn group_members_of(&self, group: u64) -> Vec<EntityId> {
         self.vector_groups
             .iter()
             .filter(|(v, g)| **g == group && self.vectors.contains_key(v))
             .map(|(&v, _)| v)
             .collect()
+    }
+
+    /// Every vector in group `group`, including those in groups inside it.
+    pub fn members_under(&self, group: u64) -> Vec<EntityId> {
+        self.vector_groups
+            .keys()
+            .filter(|v| self.vectors.contains_key(v))
+            .filter(|&&v| self.group_chain(v).contains(&group))
+            .copied()
+            .collect()
+    }
+
+    /// The vectors a click on `id` picks while stepped inside group `inside` (`None`: not
+    /// inside any): the item one level down in `inside` that holds `id` (a group inside it,
+    /// whole, or `id` alone). `None` when `id` is not in `inside`.
+    pub fn pick_inside(&self, id: EntityId, inside: Option<u64>) -> Option<Vec<EntityId>> {
+        let Some(inside) = inside else {
+            return Some(self.group_members(id));
+        };
+        let chain = self.group_chain(id);
+        let at = chain.iter().position(|&g| g == inside)?;
+        Some(match at.checked_sub(1) {
+            Some(below) => self.members_under(chain[below]),
+            None => vec![id],
+        })
+    }
+
+    /// The outermost group around vector `id` whose every member is selected: what the
+    /// selection holds of `id` as one item. `None` when `id` is picked on its own.
+    pub fn picked_group(&self, id: EntityId) -> Option<u64> {
+        self.group_chain(id).into_iter().rev().find(|&g| {
+            self.members_under(g)
+                .iter()
+                .all(|m| self.selection.contains(m))
+        })
+    }
+
+    /// The groups around vector `id` (innermost first) that lie wholly among `set`: the
+    /// grouping a copy of `set` keeps.
+    pub fn chain_within(
+        &self,
+        id: EntityId,
+        set: &std::collections::BTreeSet<EntityId>,
+    ) -> Vec<u64> {
+        self.group_chain(id)
+            .into_iter()
+            .take_while(|&g| self.members_under(g).iter().all(|m| set.contains(m)))
+            .collect()
+    }
+
+    /// The group a double-click on `id` steps into from `inside` (`None`: not inside any):
+    /// the group one level down that holds `id`. `None` when `id` is a lone item there.
+    pub fn group_to_enter(&self, id: EntityId, inside: Option<u64>) -> Option<u64> {
+        let chain = self.group_chain(id);
+        match inside {
+            None => chain.last().copied(),
+            Some(inside) => {
+                let at = chain.iter().position(|&g| g == inside)?;
+                chain.get(at.checked_sub(1)?).copied()
+            }
+        }
     }
 
     /// A group number no vector uses yet.
@@ -994,6 +1098,7 @@ impl Document {
         self.vector_groups
             .values()
             .copied()
+            .chain(self.group_parents.iter().flat_map(|(&a, &b)| [a, b]))
             .chain(stored)
             .max()
             .map_or(1, |g| g + 1)
@@ -1156,8 +1261,17 @@ impl Document {
     pub fn selected_items(&self, nest: bool) -> Vec<Vec<EntityId>> {
         let mut items: Vec<Vec<EntityId>> = Vec::new();
         let mut by_group: BTreeMap<u64, usize> = BTreeMap::new();
+        let mut whole: BTreeMap<u64, bool> = BTreeMap::new();
         for &id in &self.selection {
-            if let Some(&g) = self.vector_groups.get(&id) {
+            // the outermost group picked whole is the item (inside a group, one item in it)
+            let item = self.group_chain(id).into_iter().rev().find(|&g| {
+                *whole.entry(g).or_insert_with(|| {
+                    self.members_under(g)
+                        .iter()
+                        .all(|m| self.selection.contains(m))
+                })
+            });
+            if let Some(g) = item {
                 if let Some(&at) = by_group.get(&g) {
                     items[at].push(id);
                     continue;

@@ -100,8 +100,7 @@ pub fn summary(doc: &Document) -> Value {
 
 /// The name of the part vector `id` belongs to, if it was named.
 fn part_name(doc: &Document, id: EntityId) -> Option<&str> {
-    let group = doc.vector_groups.get(&id)?;
-    doc.part_names.get(group).map(String::as_str)
+    doc.part_name(id)
 }
 
 /// The vectors `pick` names, in the order picked: only those on visible, unlocked layers, as
