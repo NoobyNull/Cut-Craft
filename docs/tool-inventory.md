@@ -154,7 +154,8 @@ say "not implemented yet".
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
   `x-hide-when`). Rotary Z Zero reads Cylinder Surface / Cylinder Axis, with its own
-  pictures (Material Setup too); Flip design is not done.
+  pictures (Material Setup too), and the post's `[Z_ORIGIN]` and the job sheet name them
+  the same; Flip design is not done.
 - Save Toolpaths (a form, as Aspire's): the machine and its posts suiting the job (the
   machine's default first, else Cut Craft's own FluidNC posts: tool changer, rotary jobs
   wrapped onto A in inverse time); the selected toolpath, the shown ones to one file, or each

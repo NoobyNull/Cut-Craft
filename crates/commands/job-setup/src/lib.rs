@@ -31,12 +31,16 @@ pub enum JobType {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RotaryZZero {
-    /// The tool is zeroed on the top of the cylinder
+    /// The tool is zeroed on the top of the cylinder: touch the bit off on the highest point
+    /// of the blank. Cut depths go below zero, so a 3 mm deep cut is Z -3. Easiest when the
+    /// blank is round and true; set zero again for each new blank
     #[default]
     #[schemars(title = "Cylinder Surface")]
     CylinderSurface,
     /// The tool is zeroed on the cylinder's centre line, the rotary axis (touch off on the
-    /// axis, not on the machine bed or the rotary's base)
+    /// axis, not on the machine bed or the rotary's base). Every Z is a distance from the
+    /// axis, so on a 50 mm blank a 3 mm deep cut is Z 22. Zero stays put when you change
+    /// blanks, and an out-of-round blank still cuts to the right finished size
     #[schemars(title = "Cylinder Axis")]
     CylinderAxis,
 }
@@ -145,7 +149,9 @@ pub struct Params {
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
-    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis
+    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis. The
+    /// picture shows where. Pick the one you touch the bit off on at the machine: the G-code
+    /// heights depend on it, and a wrong pick cuts too deep or in the air
     #[schemars(
         title = "Z Zero Position",
         extend("x-section" = true, "x-show-when" = {"job_type": "rotary"}),

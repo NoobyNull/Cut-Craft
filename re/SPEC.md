@@ -162,7 +162,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 ### Job model [obs]
 - **Job type:** Single-sided, Double-sided (both sides in one file, `Sd` subsystem) or Rotary (4th axis, wrapped view).
 - **Material block:** width X, height Y, thickness Z, and units (mm or inch).
-- **Z-zero:** on the material surface or on the machine bed.
+- **Z-zero:** on the material surface or on the machine bed. A rotary job's choices are Cylinder Surface or Cylinder Axis instead [inf: rotary job setup help]; Cut Craft names them so in the post's `[Z_ORIGIN]` and on the job sheet too.
 - **XY datum:** any corner or the centre, with an optional offset. A red square marks it while Job Setup is open.
 - **Design scaling:** when resizing an existing job, choose whether drawings scale with it.
 - **Modeling resolution:** Standard / High (3× slower) / Highest (7× slower), applied over the whole job area.

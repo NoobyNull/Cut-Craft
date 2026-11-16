@@ -1077,9 +1077,10 @@ impl Post {
 
 fn z_origin(job: &Job) -> &'static str {
     match (job.z_zero, job.rotary) {
-        (ZZero::MaterialSurface, _) => "Material Surface",
+        (ZZero::MaterialSurface, None) => "Material Surface",
         (ZZero::MachineBed, None) => "Machine Bed",
-        // under an unrolled cylinder is its axis
+        // an unrolled cylinder's top is its surface, and under it is its axis
+        (ZZero::MaterialSurface, Some(_)) => "Cylinder Surface",
         (ZZero::MachineBed, Some(_)) => "Cylinder Axis",
     }
 }
@@ -1850,6 +1851,38 @@ begin FOOTER
             lines.contains(&"G1 X25.400 A91.440 Z12.915".to_owned()),
             "25.4 mm round is 91.44 degrees, 3 mm into a 15.915 radius: {lines:#?}"
         );
+    }
+
+    #[test]
+    fn a_rotary_job_zeroed_on_its_surface_or_its_axis_gets_the_right_z() {
+        use cut_craft_core::document::ZZero;
+        let post = BASIC.replace(
+            "begin HEADER\n",
+            "ROTARY_WRAP_Y = \"A\"\nbegin HEADER\n\"([Z_ORIGIN])\"\n",
+        );
+        let axis = render_for(&post, hundred_round(), vec![toolpath("P", "T")]);
+        let surface = render_for(
+            &post,
+            cut_craft_core::document::Job {
+                z_zero: ZZero::MaterialSurface,
+                ..hundred_round()
+            },
+            vec![toolpath("P", "T")],
+        );
+        assert_eq!(axis[0], "(Cylinder Axis)");
+        assert_eq!(surface[0], "(Cylinder Surface)");
+        // 3 mm deep: below the top of the cylinder, or 3 mm short of its 15.915 radius
+        assert!(
+            surface.contains(&"G1 X25.400 A91.440 Z-3.000".to_owned()),
+            "{surface:#?}"
+        );
+        assert!(
+            axis.contains(&"G1 X25.400 A91.440 Z12.915".to_owned()),
+            "{axis:#?}"
+        );
+        // the 5 mm clearance stays 5 mm above the surface either way
+        assert!(surface.contains(&"G0 Z5.000".to_owned()), "{surface:#?}");
+        assert!(axis.contains(&"G0 Z20.915".to_owned()), "{axis:#?}");
     }
 
     #[test]
