@@ -527,6 +527,38 @@ pub fn shown_in(unit: &str, units: Units) -> Option<(f64, &'static str)> {
     }
 }
 
+/// One arrow click's step and how much a one-point drag changes a number shown in `unit`
+/// (`integer`: a whole number), kept to `range`: the unit's own step, but small enough that a
+/// short range (a few micrometres shown in inches) takes several clicks, and a drag a tenth of
+/// a step a point (a whole number at least one), so an inch job never moves inches for a nudge of the mouse.
+fn feel(unit: Option<&str>, integer: bool, range: std::ops::RangeInclusive<f64>) -> (f64, f64) {
+    let mut step = cut_craft_bug_report::number::step_for(unit.unwrap_or_default(), integer);
+    let span = range.end() - range.start();
+    if !integer && span.is_finite() && span > 0.0 && step > span / 5.0 {
+        step = 10f64.powf((span / 5.0).log10().floor());
+    }
+    // whole numbers drag at least one a point
+    let speed = if integer {
+        (step / 10.0).max(1.0)
+    } else {
+        step / 10.0
+    };
+    (step, speed)
+}
+
+/// The decimal places `step` needs.
+fn decimals(step: f64) -> usize {
+    let places = (-step.log10()).ceil().max(0.0);
+    // at most 15 places: a whole number of them
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "0..=15"
+    )]
+    let places = places.min(15.0) as usize;
+    places
+}
+
 /// A section's picture for its value: `{}` stands for the value, `{name}` for its field `name`.
 pub fn icon_path(template: &str, value: &Value) -> String {
     named(
@@ -589,14 +621,22 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
                 return slide(ui, lo..=hi, *integer, factor, unit.as_deref(), value);
             }
             let mut n = value.as_f64().unwrap_or_default() / factor;
+            let range = min.map_or(f64::NEG_INFINITY, |m| m / factor)
+                ..=max.map_or(f64::INFINITY, |m| m / factor);
+            // steps and drags that fit the unit shown (an inch job drags in thousandths)
+            let (step, speed) = feel(unit.as_deref(), *integer && factor == 1.0, range.clone());
             // a sum typed in (calculation edit boxes) is worked out
             let material = look.material.clone();
             let mut drag = Number::new(&mut n)
                 .custom_parser(move |text| cut_craft_core::calc::evaluate(text, &material))
-                .range(
-                    min.map_or(f64::NEG_INFINITY, |m| m / factor)
-                        ..=max.map_or(f64::INFINITY, |m| m / factor),
-                );
+                .range(range)
+                .step(step)
+                .speed(speed)
+                .trim_zeros();
+            if step < 0.001 {
+                // a few micrometres in inches: enough places to see them
+                drag = drag.max_decimals(decimals(step) + 1);
+            }
             if let Some(unit) = unit {
                 drag = drag.suffix(format!(" {unit}"));
             }
@@ -1522,6 +1562,25 @@ mod tests {
             assert!(when.shown(&serde_json::json!({ "percent": true })));
             assert!(!when.shown(&serde_json::json!({ "percent": false })));
         }
+    }
+
+    #[test]
+    fn number_boxes_step_and_drag_in_amounts_that_fit_the_unit_shown() {
+        use cut_craft_bug_report::number::nudged;
+        // 3D finishing accuracy, 1..20 µm, in an inch job: one click is not the whole range
+        let (lo, hi) = (1.0 / 25_400.0, 20.0 / 25_400.0);
+        let (step, speed) = feel(Some("in"), false, lo..=hi);
+        let once = nudged(5.0 / 25_400.0, step, true, &(lo..=hi)) * 25_400.0;
+        assert!(once < 10.0, "5 µm went to {once} µm in one click");
+        assert!(speed <= step);
+        // a cut depth in inches drags in thousandths, not inches
+        let (step, speed) = feel(Some("in"), false, 0.0..=f64::INFINITY);
+        assert!((step - 0.01).abs() < 1e-12);
+        assert!(speed <= 0.001 + 1e-12, "{speed} in a point");
+        let (_, speed) = feel(Some("mm"), false, 0.0..=f64::INFINITY);
+        assert!(speed <= 0.01 + 1e-12, "{speed} mm a point");
+        // whole numbers still drag one a point
+        assert_eq!(feel(None, true, 1.0..=100.0), (1.0, 1.0));
     }
 
     #[test]
