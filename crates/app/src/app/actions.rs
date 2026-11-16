@@ -3991,9 +3991,11 @@ impl CutCraftApp {
                 self.invoke(ctx, "copy");
             }
             if let Some(paths) = pasted.and_then(|text| serde_json::from_str(&text).ok()) {
-                // vectors another window copied: what they belonged to there is not known
+                // vectors another window copied: what they belonged to there is not known,
+                // and this window's own copied components are not part of them
                 if paths != self.clipboard {
                     self.clipboard_from = super::Copied::default();
+                    self.clipboard_components.clear();
                 }
                 self.clipboard = paths;
                 self.invoke(ctx, "paste");

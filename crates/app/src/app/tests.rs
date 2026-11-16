@@ -14771,3 +14771,25 @@ fn ctrl_c_taken_away_in_options_no_longer_copies() {
     h.frame(vec![Event::Copy]);
     assert!(!h.app.clipboard.is_empty(), "given back, it copies");
 }
+
+#[test]
+fn ctrl_v_of_another_windows_vectors_leaves_out_this_windows_old_components() {
+    let mut h = Harness::new();
+    let domed = cut_craft_core::testing::domed();
+    let component = domed.components.values().next().unwrap().clone();
+    // copied here earlier: a rectangle and a component
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.app.invoke(&h.ctx, "copy");
+    h.app.clipboard_components = vec![component];
+    let before = h.app.doc.components.len();
+    // another window's circle comes in through the system clipboard
+    let circle = vec![Path::circle(Point::new(50.0, 50.0), 5.0)];
+    h.frame(vec![Event::Paste(serde_json::to_string(&circle).unwrap())]);
+    assert_eq!(h.app.doc.vectors.len(), 2, "the circle is pasted");
+    assert_eq!(
+        h.app.doc.components.len(),
+        before,
+        "no component from this window's old copy comes with it"
+    );
+}
