@@ -822,7 +822,8 @@ pub enum MachiningBoundary {
     #[schemars(title = "Material Boundary")]
     Material,
     /// Inside the selected closed vectors (kept with the toolpath: recalculating uses them
-    /// again, and changing them marks it out of date)
+    /// again, and changing them marks it out of date). Switched to in Edit, select the
+    /// vectors before pressing Calculate
     #[schemars(title = "Selected Vector(s)")]
     SelectedVectors,
     /// Round the visible components on the level named

@@ -420,6 +420,14 @@ impl Registry {
                 .copied()
                 .filter(|v| doc.vectors.contains_key(v))
                 .collect();
+            // made from no vectors, now set to work inside Selected Vector(s) (a 3D
+            // toolpath's boundary switched in Edit): the vectors selected now
+            if toolpath.vectors.is_empty()
+                && settings.get("machining_boundary").and_then(|b| b.as_str())
+                    == Some("selected_vectors")
+            {
+                sources.selection.clone_from(&doc.selection);
+            }
             // a toolpath made from no vectors (3D, rotary, picture) needs none to recalculate
             if sources.selection.is_empty() && !toolpath.vectors.is_empty() {
                 return Err(CommandError::Failed(format!(

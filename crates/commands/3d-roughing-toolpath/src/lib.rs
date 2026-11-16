@@ -626,6 +626,26 @@ mod tests {
     }
 
     #[test]
+    fn switched_to_selected_vectors_in_edit_it_machines_inside_the_vectors_selected_now() {
+        let mut doc = cut_craft_core::testing::domed();
+        doc.apply(&RoughingToolpath3d::run(&doc, &Params::default()).unwrap())
+            .unwrap();
+        let tp = *doc.toolpaths.keys().next().unwrap();
+        let mut c = cut_craft_core::Change::builder(&doc);
+        let id = c.add(cut_craft_core::testing::square(0.0, 0.0, 10.0));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        let mut r = cut_craft_core::Registry::default();
+        r.add::<RoughingToolpath3d>();
+        let mut edited = doc.toolpaths[&tp].params.clone();
+        edited["machining_boundary"] = "selected_vectors".into();
+        let change = r.edit(&doc, tp, Some(&edited));
+        assert!(change.is_ok(), "{:?}", change.err());
+        doc.apply(&change.unwrap()).unwrap();
+        assert_eq!(doc.toolpaths[&tp].vectors, [id], "kept from now on");
+    }
+
+    #[test]
     fn it_clears_down_to_the_allowance_without_touching_it() {
         let doc = domed();
         let toolpath = rough(&Params::default());
