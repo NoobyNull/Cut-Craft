@@ -6818,6 +6818,93 @@ fn the_3d_views_vectors_button_hides_and_shows_them_and_is_remembered() {
 }
 
 #[test]
+fn auto_rotate_spins_the_3d_view_until_a_drag_stops_it() {
+    let mut h = shape_in_3d();
+    // the existing buttons stay where they were
+    let vectors = h.text_at("Vectors").unwrap();
+    let button = h
+        .text_at("Auto-rotate")
+        .expect("an Auto-rotate button on the 3D view");
+    assert!(button.x > vectors.x, "after the existing buttons");
+    assert!(
+        h.text_at("Speed").is_none(),
+        "the speed shows while it spins"
+    );
+    let start = h.app.orbit;
+    h.click(button, Modifiers::NONE);
+    assert!(h.app.spinning_3d.is_some(), "spinning");
+    assert!(h.text_at("Speed").is_some(), "with its speed beside it");
+    assert_eq!(h.text_at("Vectors"), Some(vectors), "nothing moved");
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    let speed = h.app.options.view_3d.spin_speed();
+    let turned = h.app.orbit.yaw - start.yaw;
+    // five frames of a tenth of a second, give or take the click's own frames
+    assert!(
+        turned > 0.4 * speed.to_radians() && turned < 0.8 * speed.to_radians(),
+        "{turned}"
+    );
+    assert!(
+        (h.app.orbit.pitch - start.pitch).abs() < 1e-12,
+        "the tilt kept"
+    );
+    // a drag in the view stops it, and turns the view as a drag always does
+    let area = h.app.view_3d_area.unwrap();
+    h.drag(area.center(), area.center() + vec2(40.0, 0.0));
+    assert!(h.app.spinning_3d.is_none(), "a drag stops it");
+    let still = h.app.orbit;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.app.orbit, still, "and it stays still");
+    assert!(h.text_at("Speed").is_none());
+    // clicking the button again starts it; clicking once more stops it
+    let button = h.text_at("Auto-rotate").unwrap();
+    h.click(button, Modifiers::NONE);
+    assert!(h.app.spinning_3d.is_some());
+    h.click(button, Modifiers::NONE);
+    assert!(h.app.spinning_3d.is_none(), "the button stops it too");
+}
+
+#[test]
+fn the_3d_views_help_shows_auto_rotate_with_its_moving_picture() {
+    let h = Harness::new();
+    assert!(h.app.help_topics().contains(&"view_3d"));
+    assert!(
+        h.app.help_markdown("contents").contains("(help:view_3d)"),
+        "linked from Contents"
+    );
+    let page = h.app.help_markdown("view_3d");
+    assert!(page.contains("Auto-rotate") && page.contains("Speed"));
+    assert!(page.contains("bytes://help/auto-rotate.gif"));
+    assert!(
+        super::help::PICTURES
+            .iter()
+            .any(|(name, bytes)| *name == "auto-rotate.gif" && bytes.starts_with(b"GIF8")),
+        "its picture goes with the app"
+    );
+}
+
+#[test]
+fn auto_rotates_speed_is_kept_with_the_options() {
+    let o = crate::options::Options::default().view_3d;
+    assert!(
+        (o.spin_speed() - 20.0).abs() < 1e-9,
+        "a slow turn to start with"
+    );
+    let wild = crate::options::View3d {
+        spin_speed: 1000.0,
+        ..o.clone()
+    };
+    assert!((wild.spin_speed() - 90.0).abs() < 1e-9);
+    let slow = crate::options::View3d {
+        spin_speed: 0.0,
+        ..o
+    };
+    assert!((slow.spin_speed() - 2.0).abs() < 1e-9);
+}
+
+#[test]
 fn a_vector_behind_the_model_is_not_drawn_over_it() {
     // a tall block on the right half; an outline on the floor left of it
     use cut_craft_core::component::{Combine, Component};

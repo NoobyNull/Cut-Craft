@@ -106,7 +106,23 @@ pub struct View3d {
         range(min = 0.05, max = 2)
     )]
     pub settle_seconds: f64,
+    /// How quickly the 3D view's Auto-rotate button turns the job round, degrees a second:
+    /// slower to look closely, faster for a quick look all round
+    #[serde(default = "spin_speed")]
+    #[schemars(
+        title = "Auto-rotate speed",
+        extend("x-unit" = "°/s"),
+        range(min = 2, max = 90)
+    )]
+    pub spin_speed: f64,
 }
+
+fn spin_speed() -> f64 {
+    SPIN_SPEED
+}
+
+/// Degrees a second Auto-rotate turns the 3D view, until Options says otherwise.
+pub const SPIN_SPEED: f64 = 20.0;
 
 fn click_reach() -> f32 {
     crate::view3d::PICK_REACH
@@ -150,6 +166,11 @@ impl View3d {
     /// Frames a second wanted while moving, kept to the setting's range.
     pub fn fps_wanted(&self) -> f64 {
         self.target_fps.clamp(10.0, 120.0)
+    }
+
+    /// Auto-rotate's degrees a second, kept to the setting's range.
+    pub fn spin_speed(&self) -> f64 {
+        self.spin_speed.clamp(2.0, 90.0)
     }
 
     /// Mesh cells along the job's longer side once the view is still, at most.
@@ -1855,6 +1876,7 @@ impl Default for Options {
                 click_reach: click_reach(),
                 perspective_angle: perspective_angle(),
                 settle_seconds: settle_seconds(),
+                spin_speed: SPIN_SPEED,
             },
             toolpaths: ToolpathSettings {
                 auto_open_3d_view: d.auto_open_3d,

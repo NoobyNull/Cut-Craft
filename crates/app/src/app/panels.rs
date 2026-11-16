@@ -1888,6 +1888,7 @@ impl CutCraftApp {
                     (self.orbit, self.framing) =
                         moved(view, (translate, rotate), seconds, settings, rotation);
                     self.moved_3d = ctx.input(|i| i.time);
+                    self.spinning_3d = None;
                 }
                 Input::Button {
                     number,
@@ -1919,6 +1920,7 @@ impl CutCraftApp {
             if ui.small_button(label).clicked() {
                 self.orbit = orbit;
                 self.framing = self.framing.fitted();
+                self.spinning_3d = None;
             }
         }
         if ui.small_button("Fit").clicked() {
@@ -1939,6 +1941,53 @@ impl CutCraftApp {
         {
             self.show_vectors_3d(!vectors);
         }
+        self.auto_rotate_buttons(ui);
+    }
+
+    /// Auto-rotate, last on the 3D view's row: turns the job round and round about its
+    /// vertical, to see cuts that the lighting or perspective hides, with its speed beside it
+    /// while it spins. Any drag in the view, the view cube or a 3D mouse stops it.
+    fn auto_rotate_buttons(&mut self, ui: &mut egui::Ui) {
+        let spinning = self.spinning_3d.is_some();
+        if ui
+            .selectable_label(spinning, "Auto-rotate")
+            .on_hover_text(
+                "Turn the job round and round to see it from every side. \
+                 Drag in the view, or click here again, to stop",
+            )
+            .clicked()
+        {
+            self.spinning_3d = (!spinning).then(|| ui.input(|i| i.time));
+        }
+        if self.spinning_3d.is_none() {
+            return;
+        }
+        let mut speed = self.options.view_3d.spin_speed();
+        let slider = egui::Slider::new(&mut speed, 2.0..=90.0)
+            .text("Speed")
+            .suffix(" °/s")
+            .fixed_decimals(0);
+        let changed = ui
+            .add(slider)
+            .on_hover_text("How quickly the job turns, degrees a second")
+            .changed();
+        if changed {
+            self.options.view_3d.spin_speed = speed;
+            self.save_options();
+        }
+    }
+
+    /// Turns the 3D view on while Auto-rotate spins it, and asks for the next frame.
+    fn spin_3d(&mut self, ctx: &egui::Context) {
+        let Some(last) = self.spinning_3d else {
+            return;
+        };
+        let now = ctx.input(|i| i.time);
+        self.orbit = self
+            .orbit
+            .spun(now - last, self.options.view_3d.spin_speed());
+        self.spinning_3d = Some(now);
+        ctx.request_repaint();
     }
 
     /// Shows or hides the vectors over the 3D view, kept with the options for next time.
@@ -2059,6 +2108,11 @@ impl CutCraftApp {
         let orbit = self.orbit;
         let pointed = |at: Option<egui::Pos2>| at.and_then(|at| cube.direction_at(orbit, at));
         let hovered = pointed(on_cube.hover_pos());
+        // any drag in the view or on the cube, or a click on the cube, stops Auto-rotate
+        if response.dragged() || on_cube.dragged() || on_cube.clicked() {
+            self.spinning_3d = None;
+        }
+        self.spin_3d(ui.ctx());
         if on_cube.dragged() {
             self.orbit = (self.orbit).dragged_by(on_cube.drag_delta(), area.size(), rotation);
         } else if on_cube.double_clicked() {
