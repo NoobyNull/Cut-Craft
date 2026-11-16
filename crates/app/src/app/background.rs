@@ -176,6 +176,8 @@ impl CutCraftApp {
             _ => format!("Previewing {} toolpaths", cuts.len()),
         };
         let last = cuts.last().map(|(_, t)| t.name.clone());
+        let tools: Vec<cut_craft_core::toolpath::Tool> =
+            cuts.iter().map(|(_, t)| t.tool.clone()).collect();
         self.in_background(
             &what,
             move || {
@@ -191,6 +193,7 @@ impl CutCraftApp {
                 material
             },
             move |app, material| {
+                let fine_bit = crate::display::fine_bit_note(&tools, material.cell);
                 app.simulation = Some(material);
                 app.kept_playback = None;
                 (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
@@ -199,6 +202,9 @@ impl CutCraftApp {
                 }
                 if let Some(name) = last {
                     app.status.set_message(&format!("Previewed {name}"));
+                }
+                if let Some(note) = fine_bit {
+                    app.status.set_message(&note);
                 }
                 then(app);
             },

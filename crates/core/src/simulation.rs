@@ -524,11 +524,22 @@ impl Material {
             return;
         }
         // the material is nowhere above its top, 0
-        let (columns, rows) = self.swept(a, b, tool.reach_below(-a.z.min(b.z)));
+        let reach = tool.reach_below(-a.z.min(b.z));
+        let (columns, rows) = self.swept(a, b, reach);
+        // a bit narrower than a cell can pass between centres: then it also cuts each cell
+        // its tip passes through, as deep as the tip goes there
+        let thin = reach < self.cell * std::f64::consts::FRAC_1_SQRT_2;
         let last = first + band.len() / self.columns;
         for row in rows.start.max(first)..rows.end.min(last) {
             for column in columns.clone() {
-                if let Some(z) = lowest_edge(tool, a, b, self.centre(column, row)) {
+                let mut lowest = lowest_edge(tool, a, b, self.centre(column, row));
+                if thin {
+                    let corner = self.origin + Point::new(column as f64, row as f64) * self.cell;
+                    if let Some(z) = tip_through(a, b, corner, corner + self.cell) {
+                        lowest = Some(lowest.map_or(z, |edge| edge.min(z)));
+                    }
+                }
+                if let Some(z) = lowest {
                     let i = (row - first) * self.columns + column;
                     let (height, z) = (&mut band[i], z.max(self.bottom));
                     // a piece already taken away (NaN) stays away
@@ -690,6 +701,24 @@ fn lowest_edge(tool: &Tool, a: DVec3, b: DVec3, centre: Point) -> Option<f64> {
         }
         _ => lowest(t0, t1, edge),
     })
+}
+
+/// The lowest the tip goes while moving straight from `a` to `b` within the square from
+/// `lo` to `hi`; `None` if it never passes over that square.
+fn tip_through(a: DVec3, b: DVec3, lo: Point, hi: Point) -> Option<f64> {
+    let (mut t0, mut t1) = (0.0_f64, 1.0_f64);
+    for (start, step, lo, hi) in [(a.x, b.x - a.x, lo.x, hi.x), (a.y, b.y - a.y, lo.y, hi.y)] {
+        if step == 0.0 {
+            if start < lo || start > hi {
+                return None;
+            }
+        } else {
+            let (enter, leave) = ((lo - start) / step, (hi - start) / step);
+            t0 = t0.max(enter.min(leave));
+            t1 = t1.min(enter.max(leave));
+        }
+    }
+    (t0 <= t1).then(|| a.lerp(b, t0).z.min(a.lerp(b, t1).z))
 }
 
 /// The least of a convex `f` over `[lo, hi]`, by golden-section search; the ends are checked

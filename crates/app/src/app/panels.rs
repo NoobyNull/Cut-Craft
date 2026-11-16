@@ -1343,6 +1343,9 @@ impl CutCraftApp {
             return;
         };
         let (at, length) = (playback.at(), playback.length());
+        let fine_bit = self.simulation.as_ref().and_then(|m| {
+            crate::display::fine_bit_note(playback.tool().map(|(_, tool)| tool), m.cell)
+        });
         let guessed_shank = playback
             .tool()
             .filter(|(_, tool)| tool.shank_diameter.is_nan() || tool.shank_diameter <= 0.0)
@@ -1394,6 +1397,9 @@ impl CutCraftApp {
                 "⚠ {name} has no shank diameter set, so its shank is drawn from a guess: set it \
                  in the Tool Database"
             ));
+        }
+        if let Some(note) = fine_bit {
+            ui.weak(note);
         }
         if (run || goal.is_some()) && kept {
             self.resume_playback();

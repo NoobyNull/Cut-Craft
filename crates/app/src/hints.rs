@@ -498,7 +498,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "preview_quality_1",
-        "Preview Quality Standard: toolpath previews in normal detail, quickest to draw",
+        "Preview Quality Standard: toolpath previews in normal detail, quickest to draw; a finer quality draws a small bit's thin cuts truer on a big sheet",
     ),
     (
         "preview_quality_2",

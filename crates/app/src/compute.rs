@@ -487,6 +487,8 @@ mod tests {
         };
         vec![
             shaped("end mill", ToolShape::EndMill, 6.0),
+            // narrower than a cell: it passes between centres
+            shaped("fine end mill", ToolShape::EndMill, 0.4),
             shaped("ball nose", ToolShape::BallNose, 6.0),
             Tool {
                 angle: 90.0,
@@ -581,6 +583,12 @@ mod tests {
     fn every_shader_function_ends_in_a_return_so_directx_builds_it() {
         let module = naga::front::wgsl::parse_str(include_str!("compute.wgsl"))
             .unwrap_or_else(|e| panic!("{e}"));
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .unwrap_or_else(|e| panic!("{e:?}"));
         let unended: Vec<&str> = module
             .functions
             .iter()

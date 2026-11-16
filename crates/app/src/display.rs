@@ -147,9 +147,43 @@ impl Display {
     }
 }
 
+/// A word under the preview when a bit is narrower than two of its `cell`-wide squares:
+/// its thin cuts can show broken or dotted, so a finer quality draws them truer.
+pub fn fine_bit_note<'a>(
+    tools: impl IntoIterator<Item = &'a cut_craft_core::toolpath::Tool>,
+    cell: f64,
+) -> Option<String> {
+    let tool = tools.into_iter().find(|t| t.diameter < 2.0 * cell)?;
+    Some(format!(
+        "⚠ {} is narrower than two of the preview's squares, so its thin cuts may \
+         show broken or dotted (the toolpath itself is fine): pick a finer Toolpaths ▸ \
+         Preview Simulation Quality and preview again",
+        tool.name
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_bit_under_two_cells_wide_gets_a_note_and_a_wider_one_none() {
+        use cut_craft_core::toolpath::Tool;
+        let fine = Tool {
+            name: "1/16 End Mill".into(),
+            diameter: 1.6,
+            ..Tool::default()
+        };
+        let wide = Tool {
+            diameter: 6.0,
+            ..Tool::default()
+        };
+        assert_eq!(fine_bit_note([&wide], 2.44), None);
+        let note = fine_bit_note([&wide, &fine], 2.44).expect("1.6 mm under 4.88 mm");
+        assert!(note.contains("1/16 End Mill"), "{note}");
+        assert!(note.contains("Preview Simulation Quality"), "{note}");
+        assert_eq!(fine_bit_note([&fine], 0.5), None, "finer squares draw it");
+    }
 
     #[test]
     fn toggles_turn_over_and_report_their_state() {

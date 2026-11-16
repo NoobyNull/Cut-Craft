@@ -783,3 +783,27 @@ fn after_one_piece_is_removed_a_part_held_by_tabs_still_is_not() {
         "the waste stays"
     );
 }
+
+#[test]
+fn a_bit_narrower_than_a_cell_still_cuts_every_cell_its_tip_passes_through() {
+    // 2 mm cells, centres at odd millimetres; a 0.8 mm bit along y = x + 1 passes
+    // 0.71 mm from every centre, so it covers none of them
+    let job = Job {
+        width: 100.0,
+        height: 100.0,
+        ..Job::default()
+    };
+    let mut m = Material::new(&job, 50);
+    let tool = Tool {
+        diameter: 0.8,
+        ..Tool::default()
+    };
+    m.cut(&with_tool(
+        tool,
+        &[(10.0, 11.0, 2.0), (10.0, 11.0, -1.0), (40.0, 41.0, -1.0)],
+    ));
+    for x in [12.0, 20.5, 30.0, 38.0] {
+        assert_eq!(depth_at(&m, x, x + 1.0), -1.0, "under the tip at x = {x}");
+    }
+    assert_eq!(depth_at(&m, 30.0, 25.0), 0.0, "well away from the cut");
+}
