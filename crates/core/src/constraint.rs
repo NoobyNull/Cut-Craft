@@ -475,10 +475,16 @@ pub fn pins(
 }
 
 /// Whether `at` is a point of `path`'s: on its outline or at its middle (a circle drawn
-/// from a snapped centre). A snap from a click that drew nothing lies elsewhere.
+/// from a snapped centre). The middle is the middle of its box or of its nodes, as a
+/// five-point star or a pentagon drawn from its centre is not centred in its box. A snap
+/// from a click that drew nothing lies elsewhere.
 fn lies_on(path: &Path, at: Point) -> bool {
     const NEAR: f64 = 1e-3;
+    let points = nodes(path);
+    #[expect(clippy::cast_precision_loss, reason = "a shape's node count")]
+    let mean = points.iter().fold(Point::ZERO, |sum, &q| sum + q) / points.len().max(1) as f64;
     path.bounds().center().distance(at) <= NEAR
+        || mean.distance(at) <= NEAR
         || polyline_distance(&path.flatten(NEAR / 10.0), at) <= NEAR
 }
 
@@ -943,6 +949,23 @@ mod tests {
                 "{at:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_star_is_tied_to_a_snap_at_its_own_middle() {
+        // a five-point star around (50, 50): the middle of its box is lower down
+        let points: Vec<Point> = (0..10)
+            .map(|k| {
+                let r = if k % 2 == 0 { 20.0 } else { 8.0 };
+                let a = std::f64::consts::FRAC_PI_2 + f64::from(k) * std::f64::consts::PI / 5.0;
+                p(50.0 + r * a.cos(), 50.0 + r * a.sin())
+            })
+            .collect();
+        let star = Path::polyline(&points, true);
+        assert!(star.bounds().center().distance(p(50.0, 50.0)) > 0.1);
+        let to = Anchor::Material { corner: 0 };
+        let made = pins(&star, EntityId(1), &[(p(50.0, 50.0), to)], false);
+        assert_eq!(made.len(), 1);
     }
 
     #[test]

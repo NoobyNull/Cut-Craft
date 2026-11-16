@@ -510,6 +510,43 @@ fn a_click_that_draws_nothing_does_not_tie_a_typed_in_circle_to_its_snap() {
 }
 
 #[test]
+fn a_star_drawn_from_a_snapped_circle_centre_follows_the_circle() {
+    let mut h = Harness::new();
+    let circle = serde_json::json!({ "center": { "x": 50.0, "y": 50.0 }, "radius": 10.0 });
+    h.app.apply("draw_circle", &circle).unwrap();
+    h.app.form = None;
+    let circle = *h.app.doc.vectors.keys().next().unwrap();
+    h.app.invoke(&h.ctx, "draw_star");
+    h.frame(vec![]);
+    let near = 2.0 / f64::from(h.app.view_transform.unwrap().scale);
+    // a five-point star: its middle is not the middle of its box
+    h.drag(h.at(50.0 + near, 50.0 - near), h.at(50.0, 80.0));
+    h.app.form = None;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.vectors.len(), 2, "a star is drawn");
+    let star = *h.app.doc.vectors.keys().last().unwrap();
+    assert_eq!(
+        h.app.doc.constraints.len(),
+        1,
+        "tied to the circle's centre"
+    );
+    let middle = |h: &Harness| {
+        let points = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&star]);
+        let sum = points.iter().fold(Point::new(0.0, 0.0), |a, &b| a + b);
+        #[expect(clippy::cast_precision_loss, reason = "a star's ten nodes")]
+        let count = points.len() as f64;
+        sum / count
+    };
+    assert!(middle(&h).distance(Point::new(50.0, 50.0)) < 1e-6);
+    move_vector(&mut h, circle, Point::new(5.0, 5.0));
+    assert!(
+        middle(&h).distance(Point::new(55.0, 55.0)) < 1e-6,
+        "the star followed the circle: {:?}",
+        middle(&h)
+    );
+}
+
+#[test]
 fn a_polyline_click_snaps_to_an_end_marked_and_named_under_a_crosshair() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);
