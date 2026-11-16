@@ -1,8 +1,9 @@
-//! Create Texture Area: the selected component tiled over the selected closed vectors (or the
-//! whole job) with spacing, alternate-row and -column shifts and reflections in each group of
-//! four, as one new component; the tile is hidden. The component remembers its tile and
-//! settings and the shape of the vectors it fills: opening the form on it edits it in place,
-//! and moving or resizing it tiles its new box inside that shape, moved and sized with it.
+//! Create Texture Area: the component picked in the component tree tiled over the selected
+//! closed vectors (or the whole job) with spacing, alternate-row and -column shifts and
+//! reflections in each group of four, as one new component; the tile is hidden. The
+//! component remembers its tile and settings and the shape of the vectors it fills: opening
+//! the form with it picked edits it, and moving or resizing it tiles its new box inside that
+//! shape, moved and sized with it.
 
 use cut_craft_core::component::Combine;
 use cut_craft_core::document::{Document, EntityId};
@@ -82,9 +83,10 @@ impl Command for TextureArea {
         }
     }
 
-    /// On a texture area, its own settings, so the form edits it.
+    /// On a texture area picked in the component tree, its own settings, so the form edits
+    /// it.
     fn initial_params(doc: &Document) -> Params {
-        let Some(id) = doc.chosen_component() else {
+        let Some(id) = picked(doc) else {
             return Params::default();
         };
         let k = &doc.components[&id];
@@ -114,8 +116,12 @@ impl Command for TextureArea {
             let texture = k.texture.as_ref().expect("filtered above");
             (texture.seed, k.extent(), texture.rings.clone())
         } else {
-            let Some(id) = doc.chosen_component() else {
-                return Err(CommandError::Failed("select a component to tile".into()));
+            let Some(id) = picked(doc) else {
+                return Err(CommandError::Failed(
+                    "select the component to tile in the component tree, and the closed \
+                     vectors to fill (none: the whole job)"
+                        .into(),
+                ));
             };
             let (_, boundary) = doc.selected_paths(|path| path.closed);
             let rings: Vec<_> = boundary
@@ -165,6 +171,16 @@ impl Command for TextureArea {
     }
 }
 
+/// The component picked in the component tree (the last picked of several); not the newest
+/// when none is, so the tool never tiles or edits one nobody chose.
+fn picked(doc: &Document) -> Option<EntityId> {
+    doc.selected_components
+        .iter()
+        .rev()
+        .find(|id| doc.components.contains_key(id))
+        .copied()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,6 +204,8 @@ mod tests {
         c.add_component(k);
         let change = c.finish();
         doc.apply(&change).unwrap();
+        // picked in the component tree, as the tile
+        doc.selected_components = doc.components.keys().copied().collect();
         doc
     }
 
@@ -256,6 +274,21 @@ mod tests {
         assert!(
             k.height_at(Point::new(16.0, 4.0)).is_none(),
             "outside the square"
+        );
+    }
+
+    #[test]
+    fn the_tile_must_be_picked_and_only_a_picked_texture_area_is_edited() {
+        let mut doc = ramp();
+        textured(&mut doc, &Params::default());
+        // nothing picked: the newest component (the texture area) is not edited
+        doc.selected_components.clear();
+        let p = TextureArea::initial_params(&doc);
+        assert_eq!(p.replaces, None, "not editing an area nobody picked");
+        let why = TextureArea::run(&doc, &p).unwrap_err().to_string();
+        assert!(
+            why.to_lowercase().contains("select the component to tile"),
+            "{why}"
         );
     }
 
