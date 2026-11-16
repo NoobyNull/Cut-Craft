@@ -3907,19 +3907,34 @@ impl CutCraftApp {
                 if !save.is_empty() {
                     self.save_button(ui, true);
                 }
-                if ui
-                    .add_enabled(
-                        self.available("machine_files"),
-                        egui::Button::new(self.tool_label("machine_files")),
-                    )
-                    .on_hover_hint(gui::about("machine_files").unwrap_or_default())
-                    .on_disabled_hover_text(
-                        "Give the machine a folder or web address to send to in Machine \
-                         Configuration first",
-                    )
-                    .clicked()
-                {
+                let (mut files, mut view) = (false, false);
+                ui.horizontal_wrapped(|ui| {
+                    files = ui
+                        .add_enabled(
+                            self.available("machine_files"),
+                            egui::Button::new(self.tool_label("machine_files")),
+                        )
+                        .on_hover_hint(gui::about("machine_files").unwrap_or_default())
+                        .on_disabled_hover_text(
+                            "Give the machine a folder or web address to send to in Machine \
+                             Configuration first",
+                        )
+                        .clicked();
+                    // beside Machine Files, so nothing under it moves
+                    view = ui
+                        .add_enabled(
+                            self.available("save_toolpaths"),
+                            egui::Button::new(VIEW_GCODE),
+                        )
+                        .on_hover_hint(VIEW_GCODE_ABOUT)
+                        .on_disabled_hover_text(SAVE_NEEDS)
+                        .clicked();
+                });
+                if files {
                     self.invoke(ui.ctx(), "machine_files");
+                }
+                if view {
+                    self.view_gcode(self.default_save_form());
                 }
                 ui.add_space(ui.spacing().item_spacing.y);
                 self.tool_groups(ui, &rest, Page::Toolpaths);
@@ -4852,6 +4867,11 @@ fn faces_geometry(
     });
     geometry
 }
+
+/// View G-code: what saving would write, shown in a window (Output tab, Save Toolpaths).
+pub(super) const VIEW_GCODE: &str = "View G-code…";
+pub(super) const VIEW_GCODE_ABOUT: &str = "Read the G-code saving would write, through the \
+     machine's post-processor, without saving a file. Copy it from there if you need it";
 
 /// The Save Toolpaths button under the toolpath list.
 pub(super) const SAVE_FOR_MACHINE: &str = "Save Toolpaths for the Machine…";

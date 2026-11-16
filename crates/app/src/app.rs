@@ -11,6 +11,7 @@ mod entry;
 mod first_run;
 mod fit_import;
 mod follow;
+mod gcode_view;
 mod guide;
 mod help;
 #[cfg(test)]
@@ -1223,6 +1224,16 @@ struct CutCraftApp {
     units_ask: Option<units_ask::UnitsAsk>,
     /// Save Toolpaths held for the question about G-code an earlier save left there.
     earlier_ask: Option<EarlierAsk>,
+    /// View G-code's window, while open.
+    gcode_view: Option<gcode_view::GcodeView>,
+    /// Save Toolpaths held for the question about what the checks before cutting found.
+    save_anyway: Option<gcode_view::SaveAnyway>,
+    /// Save or Send pressed in Save Toolpaths, waiting for its window to close.
+    save_after: Option<gcode_view::SaveAfter>,
+    /// Save Toolpaths' form, opened again once its save has asked all it asks.
+    form_back: Option<SaveForm>,
+    /// Save Anyway was answered: the next save goes on despite what the checks found.
+    checks_accepted: bool,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.

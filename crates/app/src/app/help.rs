@@ -43,6 +43,10 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
         include_bytes!("../../help/pictures/web-api-docs.png"),
     ),
     (
+        "view-gcode.png",
+        include_bytes!("../../help/pictures/view-gcode.png"),
+    ),
+    (
         "auto-rotate.gif",
         include_bytes!("../../help/pictures/auto-rotate.gif"),
     ),

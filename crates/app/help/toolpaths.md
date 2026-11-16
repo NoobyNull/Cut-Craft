@@ -179,6 +179,32 @@ small ball nose) takes a little while: a few seconds on a fast computer, longer 
 one. They run in the background with a progress window that says which step they are on,
 and Cut Craft keeps drawing while they work. Cancel (or Esc) stops them; the tab then says
 nothing has been checked yet, with a Check Again button, and Save Toolpaths and Send to
-Machine wait until the checks have run. They run again only when a toolpath, the job or
+Machine wait until the checks have run. When the checks find something that is not a Must
+fix, Save Toolpaths asks over Cut Craft's window whether to save anyway, listing what they
+found: Save Anyway goes on to name the file, Don't Save saves nothing. While the save asks
+its questions and you name the file, the Save Toolpaths window steps aside so nothing hides
+behind it, and comes back afterwards. They run again only when a toolpath, the job or
 the machine changes, so going back to the tab is instant. See also
 [Save Toolpaths](help:save_toolpaths) and [Toolpath Summary](help:toolpath_summary).
+
+## Looking at the G-code (View G-code)
+
+Sometimes you only want to read the G-code, not save it: to check a feed rate, see where the
+tool changes are, or copy a few lines into a forum post. **View G-code…** on the Output tab
+(beside Machine Files), and in the Save Toolpaths window, shows the G-code saving would
+write, in a window of its own, without saving a file.
+
+![The View G-code window over the Output tab: the post-processor, the file, its lines numbered, and Copy All, Save Toolpaths… and Refresh](bytes://help/view-gcode.png)
+
+1. Make your toolpaths and tick the ones you want in the toolpath list.
+2. Open the **Output** tab and press **View G-code…**.
+3. The window says which post-processor made it (the machine's default, or the one picked
+   in Save Toolpaths), the file's name and how many lines it has. Each line is numbered.
+4. When saving would make several files (one per tool, or one per tile), pick which to read
+   from **File**.
+5. **Copy All** copies the file's G-code to paste somewhere else. **Save Toolpaths…** opens
+   Save Toolpaths with the same choices, to check the toolpaths and save the files.
+   **Refresh** makes the G-code again after you change a toolpath.
+
+Nothing is saved, and the checks before cutting don't run, until you save. See also
+[Save Toolpaths](help:save_toolpaths) and Checks before cutting, above.

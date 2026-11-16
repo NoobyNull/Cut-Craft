@@ -24,7 +24,7 @@ impl CutCraftApp {
     /// machine's files. Files an earlier send left there (the same names, and old numbered,
     /// tile and side files) are replaced or archived as Options say, or asked about.
     pub(super) fn send_toolpaths(&mut self, form: &SaveForm) {
-        let Some((post, told)) = self.ready_to_save(form) else {
+        let Some((post, told)) = self.ready_to_save(form, true) else {
             return;
         };
         let choice = self.options.confirmations.earlier_gcode;
