@@ -162,7 +162,7 @@ impl Tiling {
                 let mut drilled = vec![];
                 let mut hits = vec![];
                 for hit in &bank.hits {
-                    if !tile.contains(hit.head) {
+                    if !past_edges(tile, tile, area).contains(hit.head) {
                         continue;
                     }
                     let from = drilled.len();
@@ -198,7 +198,7 @@ impl Tiling {
             } else {
                 tile
             };
-            let clipped = clip(&toolpath.moves, over, safe);
+            let clipped = clip(&toolpath.moves, past_edges(over, tile, area), safe);
             // a laser's power goes with each move it was set for; none on the moves added
             if !toolpath.power.is_empty() {
                 toolpath.power = clipped
@@ -217,6 +217,25 @@ impl Tiling {
         }
         out
     }
+}
+
+/// `over` (`tile`, or it with its overlap) run on out without end wherever `tile` is at an
+/// edge of the material `area`: a cut past the material's edge (an outside profile's
+/// centreline, a lead-in) is in the tile at that edge, never left out of every tile.
+fn past_edges(over: Rect, tile: Rect, area: Rect) -> Rect {
+    const FAR: f64 = 1e9;
+    let at = |a: f64, b: f64| (a - b).abs() < 1e-9;
+    let out = |edge: bool, far: f64, own: f64| if edge { far } else { own };
+    Rect::new(
+        Point::new(
+            out(at(tile.min.x, area.min.x), -FAR, over.min.x),
+            out(at(tile.min.y, area.min.y), -FAR, over.min.y),
+        ),
+        Point::new(
+            out(at(tile.max.x, area.max.x), FAR, over.max.x),
+            out(at(tile.max.y, area.max.y), FAR, over.max.y),
+        ),
+    )
 }
 
 /// The parts of `moves` over `area`, joined by rapids at `safe` height and plunges down:
@@ -541,6 +560,54 @@ mod tests {
             .iter()
             .map(|m| m.to.x);
         assert!((far.fold(f64::MIN, f64::max) - (tiles[0].max.x + 3.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cuts_past_the_material_s_edge_go_in_the_tile_at_that_edge() {
+        use crate::testing::with_toolpath;
+        let mut doc = with_toolpath();
+        let area = doc.job.area();
+        // an outside profile's centreline, 5 mm out past the left and the top edges
+        let cut = |x: f64, y: f64| Move {
+            kind: MoveKind::Cut,
+            to: DVec3::new(x, y, -1.0),
+        };
+        let (left, top) = (area.min.x - 5.0, area.max.y + 5.0);
+        doc.toolpaths.values_mut().next().unwrap().moves = vec![
+            cut(left, area.min.y + 10.0),
+            cut(left, top),
+            cut(area.max.x - 10.0, top),
+        ];
+        let cut_length = |tiling: &Tiling| -> f64 {
+            tiling
+                .tiles(area)
+                .iter()
+                .map(|&tile| {
+                    let tiled = tiling.cut_to(&doc, tile, false);
+                    let t = tiled.toolpaths.values().next().unwrap();
+                    t.moves
+                        .windows(2)
+                        .filter(|pair| pair[1].kind == MoveKind::Cut)
+                        .map(|pair| pair[0].to.distance(pair[1].to))
+                        .sum::<f64>()
+                })
+                .sum()
+        };
+        let whole = (top - area.min.y - 10.0) + (area.max.x - 10.0 - left);
+        for layout in [Layout::Individual, Layout::FeedX, Layout::FeedY] {
+            let tiling = Tiling {
+                layout,
+                width: area.size().x / 2.0,
+                height: area.size().y / 2.0,
+                overlap: 0.0,
+                ..Tiling::default()
+            };
+            assert!(
+                (cut_length(&tiling) - whole).abs() < 1e-6,
+                "{layout:?}: {} of {whole}",
+                cut_length(&tiling)
+            );
+        }
     }
 
     #[test]

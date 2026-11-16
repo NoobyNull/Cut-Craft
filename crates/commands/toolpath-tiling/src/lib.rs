@@ -3,6 +3,8 @@
 //! one file per tile, each moved to the job's lower-left corner. Where a cut runs off a
 //! tile the tool lifts straight up before moving across to where it comes back in; a
 //! laser keeps each line's own power, and a drill bank drills only the holes of its tile.
+//! A cut past the material's edge (an outside profile's centreline, a lead-in) goes in the
+//! tile at that edge, so nothing is left out of every tile.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::tiling::Tiling;
