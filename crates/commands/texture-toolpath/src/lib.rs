@@ -20,7 +20,8 @@ pub struct TextureToolpath;
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
-    /// Cut along the selected vectors instead of a random pattern inside them
+    /// Cut along the selected vectors instead of a random pattern inside them. Off, the
+    /// pattern fills the selected closed vectors, or the whole material when none are selected
     #[schemars(extend("x-group" = "Texture"))]
     pub use_selected_vectors_as_pattern: bool,
     /// For a pattern: dip in and out along each vector instead of cutting it at one depth
@@ -278,12 +279,13 @@ impl Command for TextureToolpath {
             let (ids, paths) = doc.selected_paths(|path| path.closed);
             // nothing selected: the whole material
             let paths = if ids.is_empty() {
+                let a = doc.job.area();
                 vec![Path::polyline(
                     &[
-                        Point::new(0.0, 0.0),
-                        Point::new(doc.job.width, 0.0),
-                        Point::new(doc.job.width, doc.job.height),
-                        Point::new(0.0, doc.job.height),
+                        a.min,
+                        Point::new(a.max.x, a.min.y),
+                        a.max,
+                        Point::new(a.min.x, a.max.y),
                     ],
                     true,
                 )]
@@ -336,6 +338,29 @@ mod tests {
             .iter()
             .filter(|m| m.kind != MoveKind::Rapid)
             .map(|m| m.to)
+    }
+
+    #[test]
+    fn nothing_selected_textures_the_material_wherever_the_datum_is() {
+        let mut doc = Document::default();
+        doc.job.datum = cut_craft_core::document::Datum::Centre;
+        let area = doc.job.area();
+        let change = TextureToolpath::run(&doc, &Params::default()).unwrap();
+        doc.apply(&change).unwrap();
+        let t = doc.toolpaths.values().next().unwrap();
+        let (mut lowest, mut highest) = (f64::INFINITY, f64::NEG_INFINITY);
+        for at in cuts(t) {
+            assert!(
+                area.contains(at.truncate()),
+                "{at} is off the material {area:?}"
+            );
+            lowest = lowest.min(at.x);
+            highest = highest.max(at.x);
+        }
+        assert!(
+            lowest < area.min.x + 10.0 && highest > area.max.x - 10.0,
+            "all of it"
+        );
     }
 
     #[test]
