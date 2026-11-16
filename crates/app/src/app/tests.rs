@@ -15831,3 +15831,35 @@ fn a_laser_cutting_into_a_keep_out_zone_is_not_told_to_turn_on_clipping() {
     let why = h.app.keep_out_refusal(&c.finish()).expect("refused");
     assert!(why.contains("Clip toolpaths"), "{why}");
 }
+
+#[test]
+fn a_tile_and_its_overlap_bigger_than_the_bed_is_said_in_red() {
+    let mut h = Harness::new();
+    h.app.machines.machines.push(cut_craft_machines::Machine {
+        name: "Small".into(),
+        width: 300.0,
+        height: 300.0,
+        ..cut_craft_machines::Machine::default()
+    });
+    h.app.machines.active = h.app.machines.machines.len() - 1;
+    h.app.invoke(&h.ctx, "toolpath_tiling");
+    let form = h.app.form.as_mut().unwrap();
+    form.params["enabled"] = serde_json::json!(true);
+    form.params["tiling"]["width"] = serde_json::json!(300.0);
+    form.params["tiling"]["height"] = serde_json::json!(300.0);
+    form.params["tiling"]["overlap"] = serde_json::json!(3.0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let red = |h: &Harness| {
+        h.texts()
+            .iter()
+            .any(|t| t.contains("bigger than Small's bed"))
+    };
+    assert!(red(&h), "the tile with its overlap is 306 across");
+    let form = h.app.form.as_mut().unwrap();
+    form.params["tiling"]["width"] = serde_json::json!(290.0);
+    form.params["tiling"]["height"] = serde_json::json!(290.0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(!red(&h));
+}

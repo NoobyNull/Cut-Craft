@@ -36,7 +36,9 @@ pub struct Tiling {
     #[schemars(title = "Tile height", extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
     /// How far each tile's cuts run past its edges (at least the tool's radius for V-carving).
-    /// Laser toolpaths have none: their tiles meet edge to edge, so no seam burns twice
+    /// Each tile file's zero is at the start of its overlap, so a file covers the tile and
+    /// the overlap on both sides, and nothing in it goes below zero. Laser toolpaths have
+    /// none: their tiles meet edge to edge, so no seam burns twice
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub overlap: f64,
     /// Put the part-size tile first rather than last
@@ -124,6 +126,20 @@ impl Tiling {
         Rect::new(tile.min - grow, tile.max + grow)
     }
 
+    /// What a file of `tile` covers on the machine: the tile with its overlap, whose start
+    /// is the file's zero.
+    pub fn file_size(&self, tile: Rect) -> Point {
+        self.reach(tile).size()
+    }
+
+    /// The biggest any tile's file covers on the machine (see [`Self::file_size`]).
+    pub fn largest_file(&self, area: Rect) -> Point {
+        self.tiles(area)
+            .into_iter()
+            .map(|t| self.file_size(t))
+            .fold(Point::ZERO, |a, b| Point::new(a.x.max(b.x), a.y.max(b.y)))
+    }
+
     /// The active tile, if one is picked and there is one of that number.
     pub fn active_tile(&self, area: Rect) -> Option<Rect> {
         let i = usize::try_from(self.active.checked_sub(1)?).ok()?;
@@ -138,21 +154,22 @@ impl Tiling {
     }
 
     /// `doc` with each toolpath's moves cut to `tile` (with the overlap) and moved so the
-    /// tile sits where the job's lower-left corner is.
+    /// start of the tile's overlap sits where the job's lower-left corner is: nothing in a
+    /// tile file goes below zero for its overlap.
     pub fn tiled(&self, doc: &Document, tile: Rect) -> Document {
         self.cut_to(doc, tile, true)
     }
 
     /// `doc` with each toolpath's moves cut to `tile` (with the overlap), and when `moved`
-    /// moved so the tile sits where the job's lower-left corner is.
+    /// moved so the start of the tile's overlap sits where the job's lower-left corner is.
     fn cut_to(&self, doc: &Document, tile: Rect, moved: bool) -> Document {
         let area = doc.job.area();
+        let reach = self.reach(tile);
         let shift = if moved {
-            tile.min - area.min
+            reach.min - area.min
         } else {
             Point::ZERO
         };
-        let reach = self.reach(tile);
         let by = DVec3::new(shift.x, shift.y, 0.0);
         let mut out = doc.clone();
         for toolpath in out.toolpaths.values_mut() {
@@ -608,6 +625,42 @@ mod tests {
                 cut_length(&tiling)
             );
         }
+    }
+
+    #[test]
+    fn each_tile_file_starts_at_its_overlap_so_nothing_goes_below_zero() {
+        let mut doc = crate::testing::with_toolpath();
+        let a = doc.job.area();
+        let cut = |x: f64| Move {
+            kind: MoveKind::Cut,
+            to: DVec3::new(a.min.x + x, a.min.y + 10.0, -1.0),
+        };
+        // a cut along X from just before the second tile's start
+        doc.toolpaths.values_mut().next().unwrap().moves = vec![cut(98.0), cut(140.0)];
+        let t = Tiling {
+            layout: Layout::FeedX,
+            width: 100.0,
+            overlap: 3.0,
+            ..Tiling::default()
+        };
+        let second = t.tiles(a)[1];
+        let tiled = t.tiled(&doc, second);
+        let xs: Vec<f64> = tiled
+            .toolpaths
+            .values()
+            .next()
+            .unwrap()
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut)
+            .map(|m| m.to.x - a.min.x)
+            .collect();
+        assert!(xs.iter().all(|&x| x >= -1e-9), "none below zero: {xs:?}");
+        assert!(
+            (xs[0] - 43.0).abs() < 1e-9,
+            "the tile's start is at the overlap: {xs:?}"
+        );
+        assert_eq!(t.file_size(second), Point::new(106.0, a.size().y));
     }
 
     #[test]

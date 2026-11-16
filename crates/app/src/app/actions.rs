@@ -5414,6 +5414,33 @@ impl CutCraftApp {
         cut_craft_core::preflight::drill_sideways(form.id, &tool)
     }
 
+    /// The warning for a Toolpath Tiling form whose tiles, each with its overlap all round
+    /// (what a tile's file covers), are bigger than the active machine's bed.
+    fn tiles_past_bed(&self, form: &super::OpenForm) -> Option<String> {
+        if form.id != "toolpath_tiling" || form.params["enabled"] != Value::Bool(true) {
+            return None;
+        }
+        let machine = self.machines.active()?;
+        let tiling: cut_craft_core::tiling::Tiling =
+            serde_json::from_value(form.params["tiling"].clone()).ok()?;
+        let file = tiling.largest_file(self.doc.job.area());
+        if file.x <= machine.width + 1e-9 && file.y <= machine.height + 1e-9 {
+            return None;
+        }
+        let units = self.doc.job.units;
+        let length = |mm: f64| super::trimmed(mm / units.per());
+        Some(format!(
+            "A tile with its overlap is {} × {} {}, bigger than {}'s bed ({} × {}): make the \
+             tiles or the overlap smaller",
+            length(file.x),
+            length(file.y),
+            units.suffix(),
+            machine.name,
+            length(machine.width),
+            length(machine.height),
+        ))
+    }
+
     /// Why the open form's last Apply failed, or what it warned of, in red, over its buttons.
     fn form_error(&self, ui: &mut egui::Ui) {
         let Some(form) = self.form.as_ref() else {
@@ -5422,6 +5449,10 @@ impl CutCraftApp {
         // a drill picked for a toolpath that cuts sideways: said as soon as it is picked
         if let Some(drill) = Self::drill_sideways(form) {
             ui.colored_label(ui.visuals().error_fg_color, drill);
+        }
+        // tiles that, with their overlap, will not fit the machine: said as they are set
+        if let Some(past) = self.tiles_past_bed(form) {
+            ui.colored_label(ui.visuals().error_fg_color, past);
         }
         // what the last Apply made is not quite what was asked: said in red, never a pop-up
         if let Some(warning) = form.warning.as_ref().filter(|_| form.error.is_none()) {
