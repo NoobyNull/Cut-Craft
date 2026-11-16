@@ -4245,6 +4245,10 @@ impl CutCraftApp {
         let mut bindings =
             shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts);
         if super::mac::is_mac(ctx) {
+            // ⌘Q quits there: Quick Engrave's Ctrl+Q is no shortcut on a Mac
+            bindings.retain(
+                |(_, t)| !matches!(t, shortcut::Trigger::Key(k) if super::mac::kept_by_the_mac(*k)),
+            );
             let keys: Vec<(String, KeyboardShortcut)> = bindings
                 .iter()
                 .filter_map(|(id, t)| match t {

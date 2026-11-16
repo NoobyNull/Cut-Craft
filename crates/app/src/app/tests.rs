@@ -14923,3 +14923,21 @@ fn a_greyed_item_says_what_it_waits_for_not_that_it_is_missing() {
             .contains("No job is open")
     );
 }
+
+#[test]
+fn on_a_mac_quick_engrave_has_no_cmd_q() {
+    let h = Harness::new();
+    h.ctx.set_os(egui::os::OperatingSystem::Mac);
+    let quit = shortcut::parse_trigger("Ctrl+Q").unwrap();
+    assert!(
+        !h.app.bindings(&h.ctx).iter().any(|(_, t)| *t == quit),
+        "⌘Q is the Mac's Quit"
+    );
+    h.ctx.set_os(egui::os::OperatingSystem::Windows);
+    assert!(
+        h.app
+            .bindings(&h.ctx)
+            .contains(&("quick_engrave_toolpath".to_owned(), quit)),
+        "Ctrl+Q elsewhere"
+    );
+}
