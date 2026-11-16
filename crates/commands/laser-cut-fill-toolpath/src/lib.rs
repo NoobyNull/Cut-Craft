@@ -66,7 +66,8 @@ pub struct Params {
     #[schemars(extend("x-group" = "Fill"))]
     #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub outline: bool,
-    /// The laser: its diameter is the kerf, its feed rate the move speed
+    /// The laser, a Laser in the Tool Database (Select… picks another): its diameter is the
+    /// kerf, its feed rate the move speed
     pub tool: Tool,
 }
 
@@ -87,16 +88,9 @@ impl Default for Params {
     }
 }
 
-/// A laser as a tool: its diameter is the kerf.
+/// A laser as a tool (the Tool Database's starter laser): its diameter is the kerf.
 pub fn laser() -> Tool {
-    Tool {
-        name: "Laser (0.15 mm kerf)".into(),
-        diameter: 0.15,
-        feed_rate: 1500.0,
-        plunge_rate: 1500.0,
-        spindle_speed: 0.0,
-        ..Tool::default()
-    }
+    Tool::laser()
 }
 
 /// `moves` with the laser's `power` on its cuts only, what a laser toolpath holds: off on

@@ -5473,6 +5473,31 @@ impl CutCraftApp {
         cut_craft_core::preflight::drill_sideways(form.id, &tool)
     }
 
+    /// The warning for a toolpath form whose tool is the wrong kind: a router bit on a laser
+    /// toolpath, or a laser on a router's (as soon as it is picked; never refused).
+    fn wrong_kind_of_tool(form: &super::OpenForm) -> Option<String> {
+        if !form.id.ends_with("_toolpath") {
+            return None;
+        }
+        let tool: cut_craft_core::toolpath::Tool =
+            serde_json::from_value(form.params.get("tool")?.clone()).ok()?;
+        let laser_form = super::is_laser_form(form.id);
+        if laser_form && !tool.is_laser() {
+            Some(format!(
+                "{} is not a laser: this toolpath takes its diameter as the kerf and its feed \
+                 as the laser's speed. Select… a Laser from the Tool Database",
+                tool.name
+            ))
+        } else if !laser_form && tool.shape == cut_craft_core::toolpath::ToolShape::Laser {
+            Some(format!(
+                "{} is a laser, which cannot cut this toolpath: Select… a bit",
+                tool.name
+            ))
+        } else {
+            None
+        }
+    }
+
     /// The warning for a Toolpath Tiling form whose tiles, each with its overlap all round
     /// (what a tile's file covers), are bigger than the active machine's bed; none when the
     /// machine's bed size was not given.
@@ -5513,6 +5538,10 @@ impl CutCraftApp {
         // a drill picked for a toolpath that cuts sideways: said as soon as it is picked
         if let Some(drill) = Self::drill_sideways(form) {
             ui.colored_label(ui.visuals().error_fg_color, drill);
+        }
+        // a router bit on a laser toolpath, or a laser on a router's: said as it is picked
+        if let Some(wrong) = Self::wrong_kind_of_tool(form) {
+            ui.colored_label(ui.visuals().error_fg_color, wrong);
         }
         // tiles that, with their overlap, will not fit the machine: said as they are set
         if let Some(past) = self.tiles_past_bed(form) {
@@ -5672,12 +5701,13 @@ impl CutCraftApp {
         }
     }
 
-    /// The bits Suggest may pick from: the user's own (not a read-only catalogue's), each
-    /// with whether the tool changer holds it.
+    /// The bits Suggest may pick from: the user's own (not a read-only catalogue's, nor a
+    /// laser), each with whether the tool changer holds it.
     pub(super) fn suggest_candidates(&self) -> Vec<cmd_pocket_toolpath::Candidate> {
         let slots = self.slots();
         self.tools
             .my_tools()
+            .filter(|tool| tool.shape != cut_craft_core::toolpath::ToolShape::Laser)
             .map(|tool| cmd_pocket_toolpath::Candidate {
                 tool: self.pick_tool(&tool.name).unwrap_or_else(|| tool.clone()),
                 loaded: slots
@@ -6139,6 +6169,8 @@ impl CutCraftApp {
             match files::load_tools_joining(path) {
                 Ok((tools, report)) => {
                     self.tools = tools;
+                    // a database from before lasers were a tool type gets the starter laser
+                    self.tools.add_laser_if_none();
                     // sizes a bit's copies gave differently, not kept: said once
                     if let Some(first) = report.first() {
                         for line in &report {

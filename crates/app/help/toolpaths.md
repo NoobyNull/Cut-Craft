@@ -66,6 +66,13 @@ down. Its Drill only tick sits beside its Tool Type in the Tool Database, to see
 Picked for any toolpath but Drilling, the form says so in red at its foot, and the checks
 before saving warn of it too.
 
+A laser is a tool type of its own in the Tool Database (Laser, under Metric Tools ▸
+Lasers): its Kerf is the width it burns and its Speed how fast it moves; it has no pass
+depth, flutes or spindle. The Laser Cut / Fill and Laser Picture forms start with it and
+read it as "Laser, 0.15 mm kerf, 1500 mm/min"; Select… there picks another laser. A router
+bit picked on a laser form, or a laser on a router's toolpath, is said in red at the
+form's foot. A tool database saved before lasers were a tool type gets the starter laser.
+
 When one file changes tools (a pause to change the bit by hand, or a tool changer), the
 first move after the change lifts the new bit straight up to the safe height, and only
 then moves across to the next cut. You set Z zero for the new bit during the pause, so

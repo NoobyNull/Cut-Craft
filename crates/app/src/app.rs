@@ -2052,6 +2052,11 @@ pub(crate) const KNIFE_LINE: &str = "Drag knife: zero Z with the blade tip touch
                                      material. It presses in by the Pressure, a share of the \
                                      Spring Travel, so no flute length is needed";
 
+/// Whether the form `id` is a laser toolpath's, whose tool is a laser.
+pub(crate) fn is_laser_form(id: &str) -> bool {
+    id.starts_with("laser_") && id.ends_with("_toolpath")
+}
+
 /// A toolpath form's tool, kept short: its name (with its tool changer holder), its size and
 /// pass in one line, Select… to pick it in the Tool Database (where the tool changer's
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
@@ -2078,6 +2083,13 @@ fn tool_picker(
             ui.strong(held_name(current, slots));
             if id == cut_craft_core::drag_knife::STRATEGY {
                 ui.label(KNIFE_LINE);
+            } else if is_laser_form(id) && tool.is_laser() {
+                // a laser from before lasers were a tool type reads as the laser it is
+                let laser = Tool {
+                    shape: cut_craft_core::toolpath::ToolShape::Laser,
+                    ..tool.clone()
+                };
+                ui.label(tool_line(&laser, None, units));
             } else {
                 ui.label(tool_line(tool, passes, units));
             }
@@ -2101,10 +2113,13 @@ fn tool_picker(
     ui.horizontal(|ui| {
         let select = ui
             .button("Select…")
-            .on_hover_hint(
+            .on_hover_hint(if is_laser_form(id) {
+                "Pick the laser this toolpath burns with in the Tool Database (its Lasers): it \
+                 brings its own kerf and speed"
+            } else {
                 "Pick the bit this toolpath cuts with in the Tool Database: it brings its own \
-                 feeds, speeds and pass depth",
-            )
+                 feeds, speeds and pass depth"
+            })
             .clicked();
         let edit = ui
             .button("Edit…")
@@ -2365,6 +2380,14 @@ fn tool_line(tool: &Tool, passes: Option<f64>, units: cut_craft_core::document::
     use cut_craft_core::toolpath::ToolShape;
     let length = |mm: f64| format!("{} {}", trimmed(mm / units.per()), units.suffix());
     let across = length(tool.diameter);
+    // a laser burns: its kerf and how fast it moves, no pass
+    if tool.shape == ToolShape::Laser {
+        return format!(
+            "Laser, {across} kerf, {} {}/min",
+            trimmed(tool.feed_rate / units.per()),
+            units.suffix()
+        );
+    }
     let line = match tool.shape {
         ToolShape::EndMill => format!("{across} end mill"),
         ToolShape::BallNose => format!("{across} ball nose"),
@@ -2375,6 +2398,7 @@ fn tool_line(tool: &Tool, passes: Option<f64>, units: cut_craft_core::document::
         ToolShape::ThreadMill => format!("{across} thread mill"),
         ToolShape::FormTool => format!("{across} form tool"),
         ToolShape::SurfacingBit => format!("{across} surfacing bit"),
+        ToolShape::Laser => unreachable!("said above"),
     };
     let pass = length(tool.pass_depth);
     let line = format!("{line}, {pass} a pass");

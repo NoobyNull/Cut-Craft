@@ -12991,6 +12991,10 @@ fn suggest_takes_bits_from_my_tools_only() {
         !names.iter().any(|n| n.starts_with("Vendor")),
         "a read-only catalogue's bit is not suggested: {names:?}"
     );
+    assert!(
+        !names.iter().any(|n| *n == Tool::laser().name),
+        "nor a laser: {names:?}"
+    );
 }
 
 #[test]
@@ -15968,4 +15972,62 @@ fn each_tile_is_numbered_in_the_2d_view_as_its_file_is() {
     let one = h.text_at("Tile 1").expect("the left tile is numbered");
     let two = h.text_at("Tile 2").expect("the right tile is numbered");
     assert!(one.x < two.x, "numbered from the left");
+}
+
+#[test]
+fn a_laser_form_shows_its_laser_from_the_tool_database_and_says_when_a_bit_is_picked() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "laser_cut_fill_toolpath");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let texts = h.texts();
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "Laser, 0.15 mm kerf, 1500 mm/min"),
+        "{texts:?}"
+    );
+    assert!(!texts.iter().any(|t| t.contains("end mill")), "{texts:?}");
+    assert!(
+        !texts.iter().any(|t| t.contains("Not in the Tool Database")),
+        "the laser is in it"
+    );
+    assert!(!texts.iter().any(|t| t.contains("is not a laser")));
+    // a router bit picked here is said in red, never refused
+    h.app.choose_tool("6 mm End Mill");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.contains("6 mm End Mill is not a laser")),
+        "{:?}",
+        h.texts()
+    );
+    // and a laser on a router's toolpath
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.frame(vec![]);
+    h.app.choose_tool(&Tool::laser().name);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.contains("is a laser, which cannot cut this toolpath")),
+        "{:?}",
+        h.texts()
+    );
+}
+
+#[test]
+fn a_laser_reads_as_its_kerf_and_speed_in_the_jobs_units() {
+    use cut_craft_core::document::Units;
+    assert_eq!(
+        tool_line(&Tool::laser(), Some(2.0), Units::Mm),
+        "Laser, 0.15 mm kerf, 1500 mm/min"
+    );
+    assert_eq!(
+        tool_line(&Tool::laser(), None, Units::Inch),
+        "Laser, 0.006 in kerf, 59.055 in/min"
+    );
 }

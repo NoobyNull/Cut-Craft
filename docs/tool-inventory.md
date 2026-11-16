@@ -869,7 +869,8 @@ implemented yet" listed.)
   while a model is imported.
 - Imported models: a cell over only a near-vertical side takes the height of the top beside
   it (up to 4 cells in), so steep sides leave no spikes; a wider steep band keeps its slope.
-- Lasers are not a tool type in the database (laser features are skipped by decision).
+- Lasers are a tool type in the database (Laser: a kerf and a speed, no pass depth or
+  spindle); the laser toolpath forms pick one with Select… like any other tool.
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (not described in the help), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
   (`docs/ROADMAP.md`, section 6).

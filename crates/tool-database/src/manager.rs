@@ -150,12 +150,14 @@ pub fn picture_path(tool: &Tool) -> &'static str {
         // ponytail: no thread mill or form tool picture is drawn yet, so none shows
         ToolShape::ThreadMill => "tool_database/thread_mill.png",
         ToolShape::FormTool => "tool_database/form_tool.png",
+        // ponytail: no laser picture is drawn yet, so none shows
+        ToolShape::Laser => "tool_database/laser.png",
     }
 }
 
 /// The Tool Type list: each type's trade name with what woodworkers call it, so either
 /// one finds it.
-const SHAPES: [(ToolShape, &str); 7] = [
+const SHAPES: [(ToolShape, &str); 8] = [
     (ToolShape::EndMill, "End Mill (flat / straight bit)"),
     (ToolShape::BallNose, "Ball Nose (core box)"),
     (ToolShape::VBit, "V-Bit (engraving / chamfer)"),
@@ -169,6 +171,7 @@ const SHAPES: [(ToolShape, &str); 7] = [
         ToolShape::SurfacingBit,
         "Surfacing Bit (spoilboard bit / fly cutter)",
     ),
+    (ToolShape::Laser, "Laser (for the laser toolpaths)"),
 ];
 const TAPERED_BALL: &str = "Tapered Ball Nose (cone ball nose)";
 
@@ -1364,6 +1367,20 @@ fn split(width: f32, gap: f32) -> Option<(f32, f32)> {
 /// The tool's shape: drawn from its sizes, each typed on its dimension line, then what the
 /// drawing does not show (flutes, a thread mill's tooth).
 fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
+    // a laser has no bit to draw: only the width it burns
+    if tool.shape == ToolShape::Laser {
+        egui::Grid::new("tool_geometry")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Kerf").on_hover_hint(
+                    "The width the laser burns (its diameter): Cut Outside and Cut Inside \
+                     keep half of it off the line",
+                );
+                length(ui, &mut tool.diameter, tool.units);
+                ui.end_row();
+            });
+        return;
+    }
     crate::profile::editor(ui, tool);
     egui::Grid::new("tool_geometry")
         .num_columns(2)
@@ -1397,6 +1414,10 @@ fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
 }
 
 fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
+    if tool.shape == ToolShape::Laser {
+        ui.weak(LASER_CUTTING);
+        return;
+    }
     egui::Grid::new("tool_cutting")
         .num_columns(2)
         .show(ui, |ui| {
@@ -1445,17 +1466,25 @@ pub(crate) fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
     changed
 }
 
+/// What a laser's Cutting Parameters say: it has none of a bit's.
+pub const LASER_CUTTING: &str = "A laser has no pass depth or stepover: Laser Cut / Fill \
+                                 sets its passes and power, Laser Picture its line spacing";
+
 fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
+    let laser = tool.shape == ToolShape::Laser;
     egui::Grid::new("tool_feeds").num_columns(2).show(ui, |ui| {
-        ui.label("Spindle Speed");
-        ui.add(
-            Number::new(&mut tool.spindle_speed)
-                .range(0.0..=f64::MAX)
-                .suffix(" r.p.m."),
-        );
-        ui.end_row();
+        // a laser has no spindle or plunge: only how fast it moves
+        if !laser {
+            ui.label("Spindle Speed");
+            ui.add(
+                Number::new(&mut tool.spindle_speed)
+                    .range(0.0..=f64::MAX)
+                    .suffix(" r.p.m."),
+            );
+            ui.end_row();
+        }
         // the rate units beside the feed rate
-        ui.label("Feed Rate");
+        ui.label(if laser { "Speed" } else { "Feed Rate" });
         ui.horizontal(|ui| {
             rate(ui, &mut tool.feed_rate, tool.rate_units);
             egui::ComboBox::from_id_salt("tool_rate_units")
@@ -1469,9 +1498,11 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
                 .on_hover_hint("Rate Units");
         });
         ui.end_row();
-        ui.label("Plunge Rate");
-        rate(ui, &mut tool.plunge_rate, tool.rate_units);
-        ui.end_row();
+        if !laser {
+            ui.label("Plunge Rate");
+            rate(ui, &mut tool.plunge_rate, tool.rate_units);
+            ui.end_row();
+        }
     });
     // the feed per tooth, to check against the cutter maker's figure
     if let Some(load) = tool.chip_load() {

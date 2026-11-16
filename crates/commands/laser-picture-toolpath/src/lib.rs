@@ -54,7 +54,8 @@ pub struct Params {
     #[schemars(extend("x-group" = "Picture"))]
     #[schemars(extend("x-hide-when" = {"strategy": "selected"}))]
     pub line_angle: f64,
-    /// The laser: its diameter is the kerf, its feed rate the move speed
+    /// The laser, a Laser in the Tool Database (Select… picks another): its diameter is the
+    /// kerf, its feed rate the move speed
     pub tool: Tool,
 }
 

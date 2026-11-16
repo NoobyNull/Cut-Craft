@@ -243,7 +243,7 @@ fn params(grid: &Material, tool: &Tool, count: usize, centres: bool) -> Vec<u8> 
     };
     let half_angle_slope = (tool.angle.to_radians() / 2.0).tan();
     let shape = match tool.shape {
-        ToolShape::EndMill | ToolShape::SurfacingBit => 0,
+        ToolShape::EndMill | ToolShape::SurfacingBit | ToolShape::Laser => 0,
         ToolShape::BallNose => 1,
         ToolShape::VBit => 2,
         ToolShape::RadiusedEndMill => 3,
