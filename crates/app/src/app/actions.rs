@@ -318,7 +318,7 @@ impl CutCraftApp {
             "tile_windows_horizontal" | "tile_windows_vertical" | "cascade_windows" => {
                 self.screen == Screen::Job
             }
-            "update_post_processor_database" | "job_sheet_editor" => true,
+            "job_sheet_editor" => true,
             "reset_preview" => {
                 self.simulation.is_some() || self.playback.is_some() || self.kept_playback.is_some()
             }
@@ -607,8 +607,7 @@ impl CutCraftApp {
             | "paste_in_place"
             | "increment_and_save"
             | "open_application_data_folder"
-            | "print"
-            | "print_preview" => {
+            | "print" => {
                 self.clipboard_or_file_action(ctx, id);
             }
             "keyboard_shortcuts"
@@ -698,15 +697,6 @@ impl CutCraftApp {
             "tile_windows_horizontal" => self.split = Some(super::Split::Stacked),
             "tile_windows_vertical" => self.split = Some(super::Split::SideBySide),
             "cascade_windows" => self.split = None,
-            "update_post_processor_database" => {
-                // custom posts are read from their folder each time they are listed, and
-                // Cut Craft's own come with Cut Craft: an update check brings the newest
-                self.post_window = Some(cut_craft_machines::PostManager::default());
-                let skipped = self.options.updates.skipped_version.clone();
-                self.updates.check(ctx, true, skipped);
-                self.status
-                    .set_message(&post_database_message(&self.posts.entries()));
-            }
             "save_shaded_image" => {
                 if let Some(path) = file_dialog()
                     .add_filter("PNG image", &["png"])
@@ -6500,9 +6490,9 @@ impl CutCraftApp {
                 Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
                 None => self.file_action("save_as"),
             },
-            // ponytail: the drawing as a PDF opened in the system viewer, which prints it;
-            // The own print window (scale, tiling) is not done
-            "print" | "print_preview" => {
+            // the drawing as a PDF opened in the system viewer, which previews and prints it
+            // (a print window of our own, with scale and tiling, is not done)
+            "print" => {
                 let path = std::env::temp_dir().join("cut-craft-print.pdf");
                 let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)
                     .and_then(|()| {
@@ -6867,22 +6857,6 @@ fn ask_to_run_unsigned(label: &str) -> bool {
         ))
         .show();
     matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
-}
-
-/// What Update Post-Processor Database says once it has looked through the posts.
-pub(super) fn post_database_message(entries: &[cut_craft_machines::Entry]) -> String {
-    let custom = entries.iter().filter(|e| e.is_custom()).count();
-    let broken = entries.iter().filter(|e| e.broken.is_some()).count();
-    let unreadable = if broken > 0 {
-        format!("; {broken} could not be read: Post-Processor Management shows why")
-    } else {
-        String::new()
-    };
-    format!(
-        "{} post-processors ({custom} of your own){unreadable}; checking for a newer Cut \
-         Craft, which brings its newest post-processors",
-        entries.len()
-    )
 }
 
 /// The size of the box round a model's `faces`.

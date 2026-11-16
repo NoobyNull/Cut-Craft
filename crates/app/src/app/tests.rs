@@ -6217,8 +6217,6 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
     }
     assert!(h.app.machine_window.is_some() && h.app.post_window.is_some());
     assert!(h.text_at("Associated Post-Processors").is_some());
-    // Cut Craft's own posts come with Cut Craft: updating them is an update check
-    assert!(h.app.available("update_post_processor_database"));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -6315,7 +6313,7 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-    const ASKS: [&str; 31] = [
+    const ASKS: [&str; 30] = [
         "save_shaded_image",
         "import_toolpaths_file",
         // opens the browser
@@ -6338,7 +6336,6 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "save_all_visible_toolpaths_as_template",
         "load_template",
         "print",
-        "print_preview",
         "install_post_processor",
         "install_offline_package",
         // opens the browser
@@ -10577,21 +10574,6 @@ fn import_toolpaths_opens_its_form_on_the_file_and_adds_its_toolpaths() {
     assert_eq!(toolpath.name, "nameplate");
     assert_eq!(toolpath.tool.feed_rate, 600.0, "the file's feed rate");
     std::fs::remove_dir_all(&dir).ok();
-}
-
-#[test]
-fn update_post_processor_database_says_what_it_found() {
-    let entries = h_posts();
-    let message = super::actions::post_database_message(&entries);
-    assert!(
-        message.contains(&format!("{} post-processors", entries.len())),
-        "{message}"
-    );
-    assert!(message.contains("newer Cut Craft"), "{message}");
-}
-
-fn h_posts() -> Vec<cut_craft_machines::Entry> {
-    cut_craft_machines::Library::new(None).entries()
 }
 
 /// Print Job Sheet's page names the job's file, the active machine, its post and its tool
@@ -16633,4 +16615,31 @@ fn undo_last_preview_after_swap_sides_brings_the_preview_back_turned_over_with_t
     h.frame(vec![]);
     assert!(!h.app.doc.bottom_side);
     assert_eq!(h.app.simulation.as_ref().map(|m| &m.heights), Some(&up));
+}
+
+/// #511: Machine has no "Update Post-Processor Database" (it only ran Cut Craft's own update
+/// check), and File has one print item that says it opens a PDF, not Print and Print Preview
+/// doing the same thing.
+#[test]
+fn print_is_one_honest_item_and_no_post_database_update() {
+    fn actions(items: &[crate::gui::MenuItem], out: &mut Vec<(String, String)>) {
+        for item in items {
+            out.push((item.name.clone(), item.action.clone()));
+            actions(&item.children, out);
+        }
+    }
+    let h = Harness::new();
+    let mut all = Vec::new();
+    for menu in &h.app.current_menus().menus {
+        actions(&menu.items, &mut all);
+    }
+    assert!(
+        !all.iter()
+            .any(|(_, a)| a == "update_post_processor_database")
+    );
+    assert!(!all.iter().any(|(_, a)| a == "print_preview"));
+    let prints: Vec<_> = all.iter().filter(|(_, a)| a == "print").collect();
+    assert_eq!(prints.len(), 1, "{prints:?}");
+    assert_eq!(prints[0].0, "Print (opens a PDF)...");
+    assert!(h.app.available("print"));
 }
