@@ -1659,7 +1659,7 @@ mod tests {
 
     /// Numbers with no unit that are measurements of something other than the job's
     /// lengths, each with why it does not change with mm / inches.
-    const UNITLESS_BY_FORM: [(&str, &str, &str); 7] = [
+    const UNITLESS_BY_FORM: [(&str, &str, &str); 8] = [
         ("arrange_toolpaths", "order", "toolpath ids, not lengths"),
         (
             "sketch_carving_toolpath",
@@ -1679,6 +1679,7 @@ mod tests {
         ("materials", "lithophane_light", "a share of the light"),
         ("Options", "rapid_rate", "set with its own feed-rate units"),
         ("Options", "scale_factor", "a multiplier"),
+        ("Options", "web_api.port", "a network port number"),
     ];
 
     #[test]

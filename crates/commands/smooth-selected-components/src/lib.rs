@@ -92,7 +92,7 @@ impl Command for SmoothSelectedComponents {
             }
         }
         let mut c = Change::builder(doc);
-        c.replace_component(id, smooth);
+        c.replace_component(id, smooth.hand_edited());
         Ok(c.finish())
     }
 }

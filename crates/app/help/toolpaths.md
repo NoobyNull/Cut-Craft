@@ -34,6 +34,11 @@ the places the post prints, inch posts included: controllers such as GRBL stop t
 (error 33, invalid arc target) when they are not. Pick a post without arcs (GRBL Straight,
 say) only if your controller cannot cut arcs.
 
+When one file changes tools (a pause to change the bit by hand, or a tool changer), the
+first move after the change lifts the new bit straight up to the safe height, and only
+then moves across to the next cut. You set Z zero for the new bit during the pause, so
+the machine never travels sideways at the height the bit was left at.
+
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the
 job, so the job cuts the same on any computer, whatever that computer's own defaults are;

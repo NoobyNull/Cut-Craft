@@ -152,30 +152,83 @@ impl Tiling {
             Point::ZERO
         };
         let reach = self.reach(tile);
+        let by = DVec3::new(shift.x, shift.y, 0.0);
         let mut out = doc.clone();
         for toolpath in out.toolpaths.values_mut() {
+            if let Some(bank) = toolpath.drill_bank.take() {
+                // a drill bank plunges the whole head at once: a hit is in the tile whose
+                // area holds its reference drill (not the overlap, or it drills twice)
+                let mut drilled = vec![];
+                let mut hits = vec![];
+                for hit in &bank.hits {
+                    if !tile.contains(hit.head) {
+                        continue;
+                    }
+                    let from = drilled.len();
+                    let own = toolpath
+                        .moves
+                        .get(hit.start..hit.end.min(toolpath.moves.len()))
+                        .unwrap_or_default();
+                    drilled.extend(own.iter().map(|m| Move {
+                        to: m.to - by,
+                        ..*m
+                    }));
+                    hits.push(crate::drill_bank::BankHit {
+                        start: from,
+                        end: drilled.len(),
+                        head: hit.head - shift,
+                        drills: hit.drills.clone(),
+                    });
+                }
+                toolpath.moves = drilled;
+                toolpath.power.clear();
+                toolpath.drill_bank = Some(crate::drill_bank::BankToolpath { hits, ..bank });
+                continue;
+            }
             let safe = toolpath
                 .moves
                 .iter()
                 .map(|m| m.to.z)
                 .fold(f64::MIN, f64::max);
-            toolpath.moves = clip(&toolpath.moves, reach, safe)
+            let clipped = clip(&toolpath.moves, reach, safe);
+            // a laser's power goes with each move it was set for; none on the moves added
+            if !toolpath.power.is_empty() {
+                toolpath.power = clipped
+                    .iter()
+                    .map(|&(_, from)| {
+                        from.and_then(|i| toolpath.power.get(i))
+                            .copied()
+                            .unwrap_or(0.0)
+                    })
+                    .collect();
+            }
+            toolpath.moves = clipped
                 .into_iter()
-                .map(|m| Move {
-                    to: m.to - DVec3::new(shift.x, shift.y, 0.0),
-                    ..m
-                })
+                .map(|(m, _)| Move { to: m.to - by, ..m })
                 .collect();
         }
         out
     }
 }
 
-/// The parts of `moves` over `area`, joined by rapids at `safe` height and plunges down.
-fn clip(moves: &[Move], area: Rect, safe: f64) -> Vec<Move> {
-    let mut out: Vec<Move> = vec![];
+/// The parts of `moves` over `area`, joined by rapids at `safe` height and plunges down:
+/// straight up where a part leaves, across, and straight down where the next comes in.
+/// Each with the index in `moves` of the move it is (part of), `None` for those added.
+fn clip(moves: &[Move], area: Rect, safe: f64) -> Vec<(Move, Option<usize>)> {
+    let mut out: Vec<(Move, Option<usize>)> = vec![];
     let mut at: Option<DVec3> = None;
-    for pair in moves.windows(2) {
+    let rise = |out: &mut Vec<(Move, Option<usize>)>| {
+        if let Some(last) = out.last().map(|(m, _)| m.to).filter(|p| p.z < safe) {
+            out.push((
+                Move {
+                    kind: MoveKind::Rapid,
+                    to: DVec3::new(last.x, last.y, safe),
+                },
+                None,
+            ));
+        }
+    };
+    for (i, pair) in moves.windows(2).enumerate() {
         let (a, b) = (pair[0].to, pair[1].to);
         let Some((t0, t1)) = clip_segment(a, b, area) else {
             at = None;
@@ -183,27 +236,33 @@ fn clip(moves: &[Move], area: Rect, safe: f64) -> Vec<Move> {
         };
         let (enter, leave) = (a.lerp(b, t0), a.lerp(b, t1));
         if at.is_none_or(|p| p.distance(enter) > 1e-9) {
-            out.push(Move {
-                kind: MoveKind::Rapid,
-                to: DVec3::new(enter.x, enter.y, safe),
-            });
-            out.push(Move {
-                kind: MoveKind::Plunge,
-                to: enter,
-            });
+            // never across at the depth the last part left at
+            rise(&mut out);
+            out.push((
+                Move {
+                    kind: MoveKind::Rapid,
+                    to: DVec3::new(enter.x, enter.y, safe),
+                },
+                None,
+            ));
+            out.push((
+                Move {
+                    kind: MoveKind::Plunge,
+                    to: enter,
+                },
+                None,
+            ));
         }
-        out.push(Move {
-            kind: pair[1].kind,
-            to: leave,
-        });
+        out.push((
+            Move {
+                kind: pair[1].kind,
+                to: leave,
+            },
+            Some(i + 1),
+        ));
         at = (t1 >= 1.0).then_some(leave);
     }
-    if let Some(last) = out.last().map(|m| m.to) {
-        out.push(Move {
-            kind: MoveKind::Rapid,
-            to: DVec3::new(last.x, last.y, safe),
-        });
-    }
+    rise(&mut out);
     out
 }
 
@@ -316,6 +375,112 @@ mod tests {
     }
 
     #[test]
+    fn a_cut_that_leaves_the_tile_lifts_straight_up_before_moving_across() {
+        // a rectangle's pass crossing the tile edge: out at the bottom, back in at the top
+        let at = |kind, x, y, z| Move {
+            kind,
+            to: DVec3::new(x, y, z),
+        };
+        let moves = vec![
+            at(MoveKind::Rapid, 300.0, 100.0, 5.0),
+            at(MoveKind::Plunge, 300.0, 100.0, -6.0),
+            at(MoveKind::Cut, 500.0, 100.0, -6.0),
+            at(MoveKind::Cut, 500.0, 300.0, -6.0),
+            at(MoveKind::Cut, 300.0, 300.0, -6.0),
+            at(MoveKind::Cut, 300.0, 100.0, -6.0),
+        ];
+        let tile = Rect::new(Point::ZERO, Point::new(403.0, 500.0));
+        let clipped: Vec<Move> = clip(&moves, tile, 5.0)
+            .into_iter()
+            .map(|(m, _)| m)
+            .collect();
+        for pair in clipped.windows(2) {
+            if pair[1].kind == MoveKind::Rapid && pair[0].to.z < 5.0 {
+                let (a, b) = (pair[0].to, pair[1].to);
+                assert!(
+                    (a.x - b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9,
+                    "a rapid out of a cut goes straight up first: {a} to {b}"
+                );
+            }
+        }
+        assert_eq!(
+            clipped.last().unwrap().to.z,
+            5.0,
+            "ends up at the safe height"
+        );
+    }
+
+    #[test]
+    fn a_tile_keeps_each_moves_laser_power_and_only_its_own_drill_hits() {
+        use crate::testing::with_toolpath;
+        let mut doc = with_toolpath();
+        let area = doc.job.area();
+        let y = area.center().y;
+        let (left, right) = (area.min.x + 10.0, area.max.x - 10.0);
+        let t = doc.toolpaths.values_mut().next().unwrap();
+        let at = |kind, x: f64, z| Move {
+            kind,
+            to: DVec3::new(x, y, z),
+        };
+        t.moves = vec![
+            at(MoveKind::Rapid, left, 5.0),
+            at(MoveKind::Plunge, left, -1.0),
+            at(MoveKind::Cut, right, -1.0),
+        ];
+        t.power = vec![0.0, 0.2, 0.9];
+        let tiling = Tiling {
+            width: area.size().x / 2.0,
+            height: area.size().y,
+            overlap: 0.0,
+            ..Tiling::default()
+        };
+        let tiles = tiling.tiles(area);
+        let second = tiling.tiled(&doc, tiles[1]);
+        let t2 = second.toolpaths.values().next().unwrap();
+        assert_eq!(t2.power.len(), t2.moves.len());
+        for (m, &p) in t2.moves.iter().zip(&t2.power) {
+            let want = if m.kind == MoveKind::Cut { 0.9 } else { 0.0 };
+            assert!((p - want).abs() < 1e-9, "{m:?} at {p}");
+        }
+        // a drill bank: one hit in each half
+        let t = doc.toolpaths.values_mut().next().unwrap();
+        t.power.clear();
+        let hole = |x: f64| {
+            [
+                at(MoveKind::Rapid, x, 5.0),
+                at(MoveKind::Plunge, x, -3.0),
+                at(MoveKind::Rapid, x, 5.0),
+            ]
+        };
+        t.moves = hole(left).into_iter().chain(hole(right)).collect();
+        t.drill_bank = Some(crate::drill_bank::BankToolpath {
+            hits: vec![
+                crate::drill_bank::BankHit {
+                    start: 0,
+                    end: 3,
+                    head: Point::new(left, y),
+                    drills: vec![],
+                },
+                crate::drill_bank::BankHit {
+                    start: 3,
+                    end: 6,
+                    head: Point::new(right, y),
+                    drills: vec![],
+                },
+            ],
+            ..Default::default()
+        });
+        let second = tiling.tiled(&doc, tiles[1]);
+        let t2 = second.toolpaths.values().next().unwrap();
+        let bank = t2.drill_bank.as_ref().unwrap();
+        assert_eq!(bank.hits.len(), 1, "only the hit in this tile");
+        let shift = tiles[1].min - area.min;
+        assert_eq!(bank.hits[0].head, Point::new(right, y) - shift);
+        assert_eq!((bank.hits[0].start, bank.hits[0].end), (0, 3));
+        assert!((t2.moves[1].to.x - (right - shift.x)).abs() < 1e-9);
+    }
+
+    #[test]
     fn individual_tiles_split_both_ways_the_part_tile_last() {
         let t = Tiling {
             width: 400.0,
@@ -388,7 +553,10 @@ mod tests {
             ..Tiling::default()
         };
         let second = t.tiles(area())[1];
-        let clipped = clip(&moves, t.reach(second), 5.0);
+        let clipped: Vec<Move> = clip(&moves, t.reach(second), 5.0)
+            .into_iter()
+            .map(|(m, _)| m)
+            .collect();
         let cuts: Vec<f64> = clipped
             .iter()
             .filter(|m| m.kind == MoveKind::Cut)

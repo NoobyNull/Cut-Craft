@@ -7,6 +7,8 @@ a CNC machine cuts them with.
 - [Toolpaths](help:toolpaths): the page down the right. Turn vectors into toolpaths,
   preview them and save them for the machine.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
+- [Web API](help:web_api): let a program or script drive Cut Craft, off until you
+  switch it on in Options.
 
 ## Finding help
 
@@ -38,7 +40,7 @@ A number field takes a sum as well as a number, worked out when it is entered:
 - **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options
 - **F11** the designing layout, **F12** the machining layout
 - **Esc** closes the open form
-- **E** edits the selected shape (or Create Shape component) in the tool that made it
+- **E** edits the selected shape (or Create Shape component) in the tool that made it. Once a Create Shape component has been sculpted, smoothed, embossed or cut back with Replace Below or Reset, it is kept as you left it: E no longer remakes it from its settings, so your hand work is never thrown away
 - Help ▸ Keyboard Shortcuts lists the rest.
 
 ## Updates

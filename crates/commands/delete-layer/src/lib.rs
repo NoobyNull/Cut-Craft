@@ -39,6 +39,15 @@ impl Command for DeleteLayer {
                 "a job keeps at least one layer. Add another layer before deleting this one".into(),
             ));
         }
+        let elsewhere = doc.layer_used_elsewhere(p.layer);
+        if !elsewhere.is_empty() {
+            let name = &existing_layer(doc, p.layer)?.name;
+            return Err(CommandError::Failed(format!(
+                "{name} also holds vectors on {}. Delete them there, or move them to another \
+                 layer, before deleting the layer",
+                elsewhere.join(", ")
+            )));
+        }
         let mut c = Change::builder(doc);
         for id in doc.vectors_on(p.layer) {
             c.remove(id);

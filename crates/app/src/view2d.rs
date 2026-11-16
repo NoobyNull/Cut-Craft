@@ -724,19 +724,8 @@ impl Canvas {
                 .map(|p| t.to_screen(p))
                 .collect()
         };
-        let normal = Stroke::new(datum.width, visuals.text_color());
         let selected = visuals.selection.stroke;
-        for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
-            // selected vectors dashed, selected groups solid
-            if doc.selection.contains(id) && doc.vector_groups.contains_key(id) {
-                painter.add(Shape::line(screen(path), selected));
-            } else if doc.selection.contains(id) {
-                painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
-            } else {
-                painter.add(Shape::line(screen(path), normal));
-            }
-        }
-
+        paint_vectors(&painter, ui, doc, stamp, &screen, (dash, gap));
         self.paint_guides_and_zones(&painter, ui, doc, display, (dash, gap));
         self.paint_outlines(&painter, doc, selected, (dash, gap));
         self.paint_toolpaths(&painter, ui, doc, highlighted, display);
@@ -798,6 +787,59 @@ impl Canvas {
 
 /// How faint a dragged component is drawn where it was, out of 255.
 const MOVING_FADE: u8 = 70;
+
+/// The shown vectors: selected ones dashed (selected groups solid), then their common lines
+/// (spans lying on another span of the same layer) over them in red, for attention.
+fn paint_vectors(
+    painter: &egui::Painter,
+    ui: &egui::Ui,
+    doc: &Document,
+    stamp: Stamp,
+    screen: &dyn Fn(&Path) -> Vec<Pos2>,
+    (dash, gap): (f32, f32),
+) {
+    let visuals = ui.visuals();
+    let width = visuals.widgets.noninteractive.fg_stroke.width;
+    let normal = Stroke::new(width, visuals.text_color());
+    let selected = visuals.selection.stroke;
+    for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
+        if doc.selection.contains(id) && doc.vector_groups.contains_key(id) {
+            painter.add(Shape::line(screen(path), selected));
+        } else if doc.selection.contains(id) {
+            painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
+        } else {
+            painter.add(Shape::line(screen(path), normal));
+        }
+    }
+    let red = Stroke::new(2.0 * width, visuals.error_fg_color);
+    painter.extend(
+        common_lines(ui.ctx(), doc, stamp)
+            .iter()
+            .map(|span| Shape::line(screen(span), red)),
+    );
+}
+
+/// The job's common lines (see [`cut_craft_core::common_lines`]) as paths, found again only
+/// when the job has changed since they were last drawn.
+fn common_lines(ctx: &egui::Context, doc: &Document, stamp: Stamp) -> std::sync::Arc<Vec<Path>> {
+    type Kept = (Stamp, usize, std::sync::Arc<Vec<Path>>);
+    let key = egui::Id::unique("common lines");
+    let size = doc.vectors.len();
+    if let Some((at, n, spans)) = ctx.data(|d| d.get_temp::<Kept>(key))
+        && at == stamp
+        && n == size
+    {
+        return spans;
+    }
+    let spans: std::sync::Arc<Vec<Path>> = std::sync::Arc::new(
+        cut_craft_core::common_lines::common_lines(doc)
+            .iter()
+            .map(cut_craft_core::common_lines::Span::path)
+            .collect(),
+    );
+    ctx.data_mut(|d| d.insert_temp::<Kept>(key, (stamp, size, spans.clone())));
+    spans
+}
 
 /// Which job and which change of it the 2D view draws: what it keeps of the job (its
 /// models' pictures) is checked again only when this changes.

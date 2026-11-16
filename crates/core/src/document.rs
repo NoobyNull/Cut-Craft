@@ -393,7 +393,8 @@ pub struct Home {
     /// Where the tool starts and ends, up the job
     #[schemars(title = "Y", extend("x-unit" = "mm"))]
     pub y: f64,
-    /// How high above the material it waits
+    /// How high above the material it waits. Left at the clearance, it follows Clearance
+    /// (Z1) when that is changed, so the start and end moves never travel lower
     #[schemars(title = "Z Gap above Material", extend("x-unit" = "mm"), range(min = 0))]
     pub z: f64,
 }
@@ -1032,6 +1033,30 @@ impl Document {
             .keys()
             .copied()
             .filter(move |&id| self.layer_of(id) == layer)
+    }
+
+    /// Where else vectors sit on `layer`: the names of the other sheets (and "the other
+    /// side" of a double-sided job) holding some. A layer is the whole job's, but each sheet
+    /// not shown keeps its own vectors, so a layer empty here may not be empty.
+    pub fn layer_used_elsewhere(&self, layer: LayerId) -> Vec<String> {
+        let first = self.layers.first().map(|l| l.id);
+        let uses = |objects: &SheetObjects| {
+            objects
+                .vectors
+                .values()
+                .any(|v| v.layer.or(first) == Some(layer))
+        };
+        let mut found: Vec<String> = self
+            .sheets
+            .iter()
+            .enumerate()
+            .filter(|&(i, sheet)| i != self.active_sheet && uses(&sheet.objects))
+            .map(|(_, sheet)| sheet.name.clone())
+            .collect();
+        if uses(&self.other_side) {
+            found.push("the other side".to_owned());
+        }
+        found
     }
 
     /// On a visible layer: drawn in the views.

@@ -72,7 +72,10 @@ impl Command for DeleteItems {
             Which::Empty if p.items == Items::Layers => doc
                 .layers
                 .iter()
-                .filter(|l| doc.vectors_on(l.id).next().is_none())
+                .filter(|l| {
+                    doc.vectors_on(l.id).next().is_none()
+                        && doc.layer_used_elsewhere(l.id).is_empty()
+                })
                 .map(|l| u64::from(l.id.0))
                 .collect(),
             Which::Empty => {

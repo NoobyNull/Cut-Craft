@@ -7,3 +7,14 @@ and press **Create**. Once drawn, the shape changes as you change the form, so t
 nothing more to press; **New Shape** leaves it as it is to type another. Tools that change
 what is selected say **Apply**, toolpaths say **Calculate**. **Close** (or Esc) puts the
 tool away, keeping what is there; **Cancel** takes back what the tool did.
+
+On the **Layers** tab, the eye shows or hides a layer and the padlock locks it against
+changes. Neither touches anything else about the layer: its name and its material (set
+with right-click ▸ Rename, which toolpaths use to pick feeds and speeds) stay as they are.
+A layer belongs to the whole job, so one that is empty on this sheet may hold work on
+another: Delete ▸ Empty leaves it, Delete Layer tells you which sheet still uses it, and
+Merge Visible brings the other sheets' vectors onto the layer it merges into.
+
+Hover over a tool's button to see what it does, and what to do next, in the box under the
+buttons. The buttons stay where they are while you hover; tools that do one job different
+ways sit together in a box named for that job.

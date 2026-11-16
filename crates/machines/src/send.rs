@@ -32,7 +32,7 @@ pub struct SendTo {
     /// machine has none (toolpaths are only saved where the user picks).
     pub folder: String,
     /// Names cut to 8 letters (and spaces dropped), for controllers that read only short
-    /// names off their card.
+    /// names off their card. Files sent together that would share a name are numbered.
     pub short_names: bool,
     /// The folder each project's files went to, by the project (its file, or "" for one
     /// not saved yet), so a project keeps its folder and two projects never share one.
@@ -151,6 +151,39 @@ pub fn safe_file_name(name: &str, short: bool) -> String {
         }
         _ => safe_name(name, short),
     }
+}
+
+/// `names` (already made safe) with any that clash made different, so files sent together
+/// never overwrite each other: cut to 8 letters, `Sign front.nc` and `Sign front_tile2.nc`
+/// would both be `Signfron.nc`. A clash gets a number, inside the 8 letters with `short`
+/// (`Signfro2.nc`), else after the name (`Sign front 2.nc`). Cards ignore letter case, so
+/// this does too.
+pub fn distinct_names(names: &[String], short: bool) -> Vec<String> {
+    let mut taken: Vec<String> = vec![];
+    names
+        .iter()
+        .map(|name| {
+            let (stem, ext) = match name.rsplit_once('.') {
+                Some((stem, ext)) if !stem.is_empty() => (stem, format!(".{ext}")),
+                _ => (name.as_str(), String::new()),
+            };
+            let mut candidate = name.clone();
+            let mut n = 1;
+            while taken.iter().any(|t| t.eq_ignore_ascii_case(&candidate)) {
+                n += 1;
+                let number = n.to_string();
+                candidate = if short {
+                    let room = 8usize.saturating_sub(number.len());
+                    let kept: String = stem.chars().take(room).collect();
+                    format!("{kept}{number}{ext}")
+                } else {
+                    format!("{stem} {number}{ext}")
+                };
+            }
+            taken.push(candidate.clone());
+            candidate
+        })
+        .collect()
 }
 
 /// One thing in a folder of the machine's.
@@ -352,6 +385,25 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn files_sent_together_never_share_a_name() {
+        let short: Vec<String> = ["Sign front.nc", "Sign front_tile2.nc", "Sign front_t3.nc"]
+            .iter()
+            .map(|n| safe_file_name(n, true))
+            .collect();
+        assert_eq!(short[0], short[1], "the 8 letters alone clash");
+        let names = distinct_names(&short, true);
+        assert_eq!(names, ["Signfron.nc", "Signfro2.nc", "Signfro3.nc"]);
+        assert!(
+            names
+                .iter()
+                .all(|n| n.split('.').next().unwrap().len() <= 8)
+        );
+        // letter case doesn't make a name different on a card
+        let mixed = vec!["A.nc".to_owned(), "a.nc".to_owned(), "b.nc".to_owned()];
+        assert_eq!(distinct_names(&mixed, false), ["A.nc", "a 2.nc", "b.nc"]);
     }
 
     #[test]

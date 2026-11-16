@@ -34,6 +34,7 @@ mod trace_window;
 mod units_ask;
 mod updates;
 mod views;
+mod web_api;
 
 use crate::files::{self, Session};
 use crate::form::{self, Field};
@@ -1361,6 +1362,8 @@ struct CutCraftApp {
     /// Show advanced settings is ticked: the Advanced category lists. Off at every start, so
     /// reaching them is always a deliberate step.
     show_advanced: bool,
+    /// Options ▸ Web API: the server, if it is listening, and the calls waiting to run.
+    web_api: web_api::WebApi,
     /// The Options category to show when the window next draws, by its key (Help ▸
     /// Keyboard Shortcuts' Change Shortcuts opens Mouse and Shortcuts).
     options_goto: Option<&'static str>,
@@ -1948,8 +1951,7 @@ fn tool_picker(
         Some(tool) => {
             // The Passes: how many the cut depth takes, as set in Edit Passes
             #[expect(clippy::cast_precision_loss, reason = "a small count")]
-            let passes = top["depth"]
-                .as_f64()
+            let passes = passes::cut_depth(top)
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
             ui.strong(held_name(current, slots));

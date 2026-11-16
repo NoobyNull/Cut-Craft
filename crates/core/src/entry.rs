@@ -531,7 +531,9 @@ pub enum TabSpacing {
     /// A tab about every this far
     ConstantDistance,
     /// Where clicked: with the form open, click a vector in the 2D view to add a tab there,
-    /// click a tab to take it off
+    /// click a tab to take it off. Each tab goes on the shape nearest it, so give every
+    /// shape cut out at least one: the form and Checks before cutting warn about any left
+    /// without
     Placed,
 }
 

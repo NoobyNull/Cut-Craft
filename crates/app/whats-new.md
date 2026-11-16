@@ -1,4 +1,5 @@
-- Adaptive sweeps narrow channels end to end in D-shaped loops, and works about 15 times faster with each step shown
-- Clearing Settings (light step, Keep climb or Alternate) are saved in the job, with pictures
-- Pocket can leave a thin skim for one clean edge pass, at full depth when the flutes reach
-- Raster rows step over along the wall instead of lifting; inch arc posts no longer trip GRBL error 33
+- After a tool change the bit lifts straight to safe height before moving, and tiles lift out of a cut before crossing
+- Lines lying on top of each other on one layer (a paste, a copy on its original, shapes edge to edge) show in red
+- Layers keep their material when hidden or locked, and are never deleted while another sheet uses them
+- Edit Passes, tabs, Job Setup, Material Setup, crash recovery and Send to Machine short names fixed so they no longer lose or overwrite work
+- Tool buttons keep one size, so pointing at them no longer makes the page jump

@@ -1013,7 +1013,8 @@ impl Document {
                 if self.layers.get(*index) != Some(layer) {
                     return Err(ApplyError::LayerConflict(layer.id));
                 }
-                let holds_vectors = self.vectors_on(layer.id).next().is_some();
+                let holds_vectors = self.vectors_on(layer.id).next().is_some()
+                    || !self.layer_used_elsewhere(layer.id).is_empty();
                 if holds_vectors || self.layers.len() == 1 || self.current_layer == layer.id {
                     return Err(ApplyError::LayerInUse(layer.id));
                 }
@@ -1707,11 +1708,14 @@ impl ChangeBuilder<'_> {
                 id,
                 path: v.path.clone(),
             });
-            if v.layer.is_some() {
+            // a layer gone while the sheet was put away (from an older version): its vectors
+            // come onto the first layer, rather than the sheet never opening again
+            let layer = v.layer.filter(|&l| doc.layer(l).is_some());
+            if layer.is_some() {
                 self.edits.push(Edit::SetLayer {
                     id,
                     before: None,
-                    after: v.layer,
+                    after: layer,
                 });
             }
             if v.group.is_some() {

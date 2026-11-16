@@ -277,7 +277,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "paste",
-        "Paste: adds the objects on the clipboard to the job, in the middle of the view",
+        "Paste: adds the objects on the clipboard to the job exactly where they were copied from; lines lying on top of their original show red",
     ),
     (
         "paste_in_place",

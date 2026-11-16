@@ -1,0 +1,25 @@
+[package]
+name = "cut-craft-web-api"
+description = "Options ▸ Web API: a small local HTTP server that hands requests to the app, which runs them like clicks"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+# the access token: random bytes from the operating system
+getrandom = "0.3"
+log = "0.4"
+serde.workspace = true
+serde_json.workspace = true
+# a plain HTTP server on its own thread; no async runtime
+tiny_http = "0.12"
+# the docs page at /docs: Swagger UI, its files carried in the program (no internet needed)
+utoipa-swagger-ui = { version = "10", default-features = false, features = ["vendored"] }
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+schemars.workspace = true
+
+[lints]
+workspace = true

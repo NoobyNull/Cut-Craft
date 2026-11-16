@@ -73,6 +73,13 @@ pub(super) const TIPS: &[Tip] = &[
          **View ▸ Show Open Vector Ends** marks the gaps, and **Edit ▸ Join Open Ends** closes \
          them.",
     ),
+    tip(
+        "tips/common_lines.png",
+        "Lines drawn in **red** are common lines: two vectors on the same layer lying exactly \
+         on top of each other, as Paste or a copy that lands on its original leaves them. A \
+         profile would cut that line twice, so delete or move the extra copy.",
+        "design",
+    ),
     plain(
         "tips/tool_database.png",
         "Picking a bit from the **Tool Database** fills in its speeds, feeds and depth per pass \
@@ -159,7 +166,8 @@ pub(super) const TIPS: &[Tip] = &[
     plain(
         "tips/recovery_copy.png",
         "Cut Craft keeps a recovery copy of unsaved work every 30 seconds. If the power goes \
-         off, your work can be opened again. **Edit ▸ Options ▸ General** sets how often.",
+         off, your work opens again next time, and the copy is kept until you save or close \
+         it. **Edit ▸ Options ▸ General** sets how often.",
     ),
     plain(
         "tips/trace_bitmap.png",

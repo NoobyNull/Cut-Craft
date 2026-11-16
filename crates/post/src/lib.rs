@@ -640,6 +640,19 @@ impl Post {
                 Some(t) if t != toolpath.tool.name => {
                     out.block("TOOLCHANGE", &v);
                     out.block("SPINDLE_ON", &v);
+                    // the new bit has just been zeroed by hand, so the machine's height is
+                    // unknown: print every value again, Z above all, rather than leave the
+                    // first rapid to travel sideways at whatever height the bit was left
+                    out.last.clear();
+                    // lift straight up to the height the last toolpath left at before any
+                    // sideways move: only Z changes, so print X and Y only if the post
+                    // always prints them
+                    v.numbers.insert("X", wrapped("X", at.x));
+                    v.numbers.insert("Y", wrapped("Y", at.y));
+                    v.numbers.insert("Z", doc.job.machine_z(at.z));
+                    out.value("X", &v);
+                    out.value("Y", &v);
+                    out.block("RAPID_MOVE", &v);
                 }
                 Some(_) => out.block("NEW_SEGMENT", &v),
                 None => {}
@@ -1655,6 +1668,40 @@ begin FOOTER
         let lines = render(BASIC, vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")]);
         assert!(lines.contains(&"(change to 3 mm)".to_owned()), "{lines:#?}");
         assert_eq!(lines.iter().filter(|l| *l == "M0").count(), 1);
+    }
+
+    #[test]
+    fn the_first_rapid_after_a_tool_change_always_says_its_height() {
+        // the bit is set to a new Z zero during the change, so the machine must not be
+        // left to move sideways at whatever height it was zeroed at
+        let job = cut_craft_core::document::Job::default();
+        let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+        let posts: Vec<Post> = BUILT_IN
+            .iter()
+            .filter(|(name, _)| !name.contains("wrap"))
+            .map(|(_, text)| Post::parse(text).unwrap())
+            .flat_map(|p| [p.with_pauses(), p])
+            .collect();
+        for post in &posts {
+            let lines = render_with(post, job, two());
+            let change = lines
+                .iter()
+                .rposition(|l| l.contains("M0") || l.contains("M6"))
+                .unwrap_or_else(|| panic!("a tool change: {lines:#?}"));
+            let rapid = lines[change..]
+                .iter()
+                .find(|l| l.starts_with("G0") && (l.contains('X') || l.contains('Y')))
+                .unwrap_or_else(|| panic!("a rapid after the change: {lines:#?}"));
+            let lifted = lines[change..]
+                .iter()
+                .take_while(|l| *l != rapid)
+                .any(|l| l.starts_with("G0") && l.contains('Z'));
+            assert!(
+                lifted,
+                "{}: no straight lift before the first sideways rapid after the change: {lines:#?}",
+                post.name
+            );
+        }
     }
 
     #[test]
