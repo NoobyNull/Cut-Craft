@@ -121,8 +121,9 @@ pub struct Params {
         )
     )]
     pub side: Side,
-    /// Which way round closed shapes are cut: climb is clockwise round a part, anticlockwise
-    /// round a hole
+    /// Which way round closed shapes are cut: climb is clockwise round a part (and along a
+    /// closed shape's line), anticlockwise round a hole; an open line is cut the way it was
+    /// drawn
     #[serde(default)]
     #[schemars(skip)]
     pub direction: Direction,
@@ -501,7 +502,9 @@ fn cuts(centre_line: &[Path], vectors: &[Path], p: &Params) -> Vec<Cut> {
             // goes, clockwise a hole in it: outside the vectors the waste is outside outlines
             // and inside holes, inside them the other way round
             let waste_inside = offset && (winding(&points) > 0.0) == (p.side == Side::Inside);
-            let points = if offset {
+            // along a closed line, climb runs clockwise as round a part; an open line runs the
+            // way it was drawn
+            let points = if path.closed {
                 p.direction.orient(points, waste_inside)
             } else {
                 points
@@ -1031,6 +1034,29 @@ mod tests {
             )
             .unwrap();
             assert_eq!(anticlockwise(&tp), expect, "{side:?} {direction:?}");
+        }
+    }
+
+    #[test]
+    fn on_the_line_climb_runs_clockwise_round_a_closed_shape_however_it_was_drawn() {
+        let drawn = square(0.0, 0.0, 10.0);
+        let mut backwards = cut_points(&drawn);
+        backwards.reverse();
+        let backwards = Path::polyline(&backwards, true);
+        for shape in [drawn, backwards] {
+            for (direction, expect) in [(Direction::Climb, false), (Direction::Conventional, true)]
+            {
+                let tp = made_toolpath::<ProfileToolpath>(
+                    vec![shape.clone()],
+                    &Params {
+                        side: Side::On,
+                        direction,
+                        ..plain()
+                    },
+                )
+                .unwrap();
+                assert_eq!(anticlockwise(&tp), expect, "{direction:?}");
+            }
         }
     }
 

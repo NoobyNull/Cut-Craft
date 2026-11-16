@@ -516,7 +516,8 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
                 (
                     "climb",
                     "Climb",
-                    "The cutter's edge meets the material head on",
+                    "The cutter's edge meets the material head on: clockwise round a part or \
+                     along a closed line (an open line runs the way it was drawn)",
                 ),
                 ("conventional", "Conventional", "The other way round"),
             ],
