@@ -1,7 +1,8 @@
 //! Create Texture Area: the selected component tiled over the selected closed vectors (or the
 //! whole job) with spacing, alternate-row and -column shifts and reflections in each group of
 //! four, as one new component; the tile is hidden. The component remembers its tile and
-//! settings: opening the form on it edits it in place, and resizing it tiles its new box.
+//! settings and the shape of the vectors it fills: opening the form on it edits it in place,
+//! and moving or resizing it tiles its new box inside that shape, moved and sized with it.
 
 use cut_craft_core::component::Combine;
 use cut_craft_core::document::{Document, EntityId};
@@ -111,7 +112,7 @@ impl Command for TextureArea {
         let (seed_id, area, rings) = if let Some((_, k)) = editing {
             // an existing texture area: its own box, its tile
             let texture = k.texture.as_ref().expect("filtered above");
-            (texture.seed, k.extent(), vec![])
+            (texture.seed, k.extent(), texture.rings.clone())
         } else {
             let Some(id) = doc.chosen_component() else {
                 return Err(CommandError::Failed("select a component to tile".into()));
@@ -146,6 +147,7 @@ impl Command for TextureArea {
         made.texture = Some(Texture {
             seed: seed_id,
             tiling,
+            rings,
         });
         let mut c = Change::builder(doc);
         if let Some((id, old)) = editing {
@@ -255,6 +257,54 @@ mod tests {
             k.height_at(Point::new(16.0, 4.0)).is_none(),
             "outside the square"
         );
+    }
+
+    #[test]
+    fn a_vector_shaped_area_keeps_its_shape_when_edited_and_moved() {
+        use cut_craft_core::geometry::Path;
+        use cut_craft_core::glam::{DAffine2, DVec2};
+        let mut doc = ramp();
+        let mut c = Change::builder(&doc);
+        // a triangle: its box's upper left corner is outside it
+        let corners = [
+            Point::new(0.0, 0.0),
+            Point::new(30.0, 0.0),
+            Point::new(30.0, 30.0),
+        ];
+        let id = c.add(Path::polyline(&corners, true));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        textured(&mut doc, &Params::default());
+        let area = *doc.components.keys().last().unwrap();
+        let outside = Point::new(3.0, 27.0);
+        assert!(doc.components[&area].height_at(outside).is_none());
+        // edited: still a triangle
+        doc.selected_components = [area].into_iter().collect();
+        let p = Params {
+            spacing_x: 10.0,
+            ..TextureArea::initial_params(&doc)
+        };
+        run_on::<TextureArea>(&mut doc, &p);
+        assert!(
+            doc.components[&area].height_at(outside).is_none(),
+            "editing keeps the shape"
+        );
+        assert!(
+            doc.components[&area]
+                .height_at(Point::new(27.0, 3.0))
+                .is_some()
+        );
+        // moved 5 mm right: the triangle moves with it
+        let change =
+            Change::transform_selected(&doc, |_| DAffine2::from_translation(DVec2::new(5.0, 0.0)))
+                .unwrap();
+        doc.apply(&change).unwrap();
+        let k = &doc.components[&area];
+        assert!(
+            k.height_at(outside + Point::new(5.0, 0.0)).is_none(),
+            "moving keeps the shape"
+        );
+        assert!(k.height_at(Point::new(32.0, 3.0)).is_some());
     }
 
     #[test]

@@ -652,7 +652,7 @@ impl Component {
         out.shaping = self.shaping.transformed(t);
         out.level = self.level;
         out.group.clone_from(&self.group);
-        out.texture.clone_from(&self.texture);
+        out.texture = self.texture.as_ref().map(|k| k.transformed(t));
         out
     }
 
