@@ -1393,6 +1393,9 @@ struct CutCraftApp {
     /// A preview stopped or played to its end, kept so its controls stay to scrub it back
     /// and forth, till another preview, Reset Preview or another job.
     kept_playback: Option<cut_craft_core::playback::Playback>,
+    /// The job's history revision when the playing (or kept) preview was laid out: once
+    /// the job changes, its moves are old, so it stops and its controls close.
+    playback_revision: u64,
     /// A playing preview's material as the 3D view draws it, and the GPU's surface of it,
     /// kept by what they were made from (the playback's revision, the detail and the job's
     /// revision; for the GPU, its wrap and sides too) so a paused preview is not made again

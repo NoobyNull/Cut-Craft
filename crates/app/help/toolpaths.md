@@ -15,7 +15,9 @@ takes to watch at the chosen speed. A finishing toolpath with a small bit can ta
 so speed it up, drag Progress on, or press Stop (or Esc) to keep what is cut so far. Once
 stopped or played to the end the controls stay, so you can scrub back over it, until
 another preview, Reset Preview, or Close. New, Open and Close on the File menu clear the
-preview, its controls and Undo Last Preview, so nothing of the old job shows in the next. Going back starts from the nearest point saved
+preview, its controls and Undo Last Preview, so nothing of the old job shows in the next. Any
+change to the job (an edit, a recalculation, Undo) stops a playing preview where it is and
+closes the controls, as its moves are out of date: preview again to play the new ones. Going back starts from the nearest point saved
 while it played, so it is quick once played through. A jump is cut across all the
 computer's cores, and the 3D view keeps its full detail while the preview plays (it is
 redrawn a few times a second; the tool moves smoothly in between). If a bit has no shank

@@ -217,6 +217,7 @@ impl CutCraftApp {
             playing: false,
             playback_goal: None,
             kept_playback: None,
+            playback_revision: 0,
             close_up: None,
             playback_view: None,
             playback_gpu: None,

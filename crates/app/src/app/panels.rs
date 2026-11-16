@@ -1148,6 +1148,7 @@ impl CutCraftApp {
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
         // rapids as fast as the Toolpath Summary times them
         let rapid = self.summary.rapid;
+        let revision = self.history.revision();
         let what = match &list[..] {
             [one] => format!("Getting {} ready to preview", one.name),
             _ => format!("Getting {} toolpaths ready to preview", list.len()),
@@ -1161,6 +1162,7 @@ impl CutCraftApp {
             move |app, playback| {
                 app.playback = Some(playback);
                 app.kept_playback = None;
+                app.playback_revision = revision;
                 app.simulation = None;
                 (
                     app.playing,
@@ -1182,6 +1184,7 @@ impl CutCraftApp {
     /// frame, so the window answers (Stop, Esc) however long the toolpath. At the end, the
     /// cut material becomes the preview.
     pub(super) fn advance_playback(&mut self, ctx: &egui::Context) {
+        self.drop_stale_playback();
         let Some(playback) = self.playback.as_mut() else {
             self.playback_goal = None;
             return;
@@ -1217,6 +1220,22 @@ impl CutCraftApp {
         if playback.finished() {
             self.finish_playback();
         }
+    }
+
+    /// Once the job has changed (an edit, a recalculation, Undo), a preview's moves are old:
+    /// a playing one stops, keeping what it has cut, and its controls close, so Run or a
+    /// drag never plays the old moves over the job again.
+    fn drop_stale_playback(&mut self) {
+        if self.history.revision() == self.playback_revision
+            || (self.playback.is_none() && self.kept_playback.is_none())
+        {
+            return;
+        }
+        self.finish_playback();
+        self.kept_playback = None;
+        self.status.set_message(
+            "The job changed, so the preview's controls closed: preview again to play it",
+        );
     }
 
     /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path), and

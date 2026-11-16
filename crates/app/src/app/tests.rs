@@ -15588,3 +15588,33 @@ fn reset_preview_is_there_while_a_stopped_previews_controls_are() {
         "its controls can be cleared"
     );
 }
+
+#[test]
+fn a_change_to_the_job_closes_a_stopped_previews_controls() {
+    let mut h = playing_preview();
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    assert!(h.text_at("Progress").is_some(), "kept to scrub");
+    let cut = h.app.simulation.clone();
+    h.rectangle(60.0, 60.0, 10.0, 10.0);
+    h.frame(vec![]);
+    assert!(
+        h.app.kept_playback.is_none(),
+        "its old moves not played again"
+    );
+    assert!(h.text_at("Progress").is_none(), "no old controls");
+    assert_eq!(
+        h.app.simulation.as_ref().map(|m| &m.heights),
+        cut.as_ref().map(|m| &m.heights),
+        "what was cut stays shown"
+    );
+}
+
+#[test]
+fn a_change_to_the_job_stops_a_playing_preview_keeping_what_is_cut() {
+    let mut h = playing_preview();
+    h.rectangle(60.0, 60.0, 10.0, 10.0);
+    h.frame(vec![]);
+    assert!(h.app.playback.is_none() && h.app.kept_playback.is_none());
+    assert!(h.app.simulation.is_some(), "kept as far as it went");
+    assert!(h.text_at("Progress").is_none());
+}
