@@ -846,8 +846,9 @@ struct PickedSnap {
     snap: cut_craft_core::constraint::Constraint,
     selection: cut_craft_core::selection::Selection,
     tool: Option<ViewTool>,
-    /// The undo history's depth: an edit, undo or redo since lets it go
-    depth: usize,
+    /// The undo history's revision, which never repeats: an edit, undo or redo since lets
+    /// it go, even one that leaves the history as deep as it was
+    revision: u64,
 }
 
 /// A 2D view tool that takes the left button from drawing and selecting.

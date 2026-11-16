@@ -660,6 +660,39 @@ fn a_picked_snap_mark_is_let_go_when_the_selection_changes() {
 }
 
 #[test]
+fn a_picked_snap_mark_is_let_go_by_undo_then_redo() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    let near = 2.0 / f64::from(h.app.view_transform.unwrap().scale);
+    h.click(h.at(60.0, 60.0), Modifiers::SHIFT);
+    h.click(h.at(30.0 + near, 20.0 - near), Modifiers::NONE);
+    h.app.finish_polyline(false);
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "select");
+    h.app.doc.selection.clear();
+    h.frame(vec![]);
+    h.click(h.at(30.0, 20.0), Modifiers::NONE);
+    assert_eq!(h.app.picked_snap(), Some(0));
+    let picked_with = h.app.doc.selection.clone();
+    // undone and redone: the history is as deep as it was, and the same things are picked
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    h.app.invoke(&h.ctx, "redo");
+    h.frame(vec![]);
+    h.app.doc.selection = picked_with;
+    assert_eq!(h.app.picked_snap(), None, "the mark is no longer picked");
+    h.app.invoke(&h.ctx, "delete");
+    assert_eq!(
+        h.app.doc.vectors.len(),
+        1,
+        "Delete deletes the selection: {}",
+        h.app.status.message
+    );
+}
+
+#[test]
 fn a_rectangle_drawn_from_a_snapped_corner_moves_whole_with_it() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);

@@ -2282,6 +2282,8 @@ impl CutCraftApp {
                     session.path = None;
                 }
                 (self.doc, self.history, self.session) = (doc, history, session);
+                // a fresh history counts its revisions from the start again
+                self.picked_constraint = None;
                 self.screen = Screen::Job;
                 if !template {
                     self.remember(path);
@@ -2487,6 +2489,7 @@ impl CutCraftApp {
     /// Back to nothing: no job, no form, no preview.
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
+        self.picked_constraint = None;
         self.job_epoch += 1;
         if let Some(job) = self.options.default_job {
             self.doc.job = job;
@@ -2547,6 +2550,7 @@ impl CutCraftApp {
         match made {
             Ok(()) => {
                 (self.history, self.session) = Default::default();
+                self.picked_constraint = None;
                 self.screen = Screen::Job;
                 self.status.set_message("New job created");
                 "Select".clone_into(&mut self.status.current_tool);

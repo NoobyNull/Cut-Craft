@@ -3228,7 +3228,7 @@ impl CutCraftApp {
         let picked = self.picked_constraint.as_ref()?;
         if picked.selection != self.doc.selection
             || picked.tool != self.view_tool
-            || picked.depth != self.history.undo_depth()
+            || picked.revision != self.history.revision()
         {
             return None;
         }
@@ -4124,7 +4124,7 @@ impl CutCraftApp {
                 snap,
                 selection: self.doc.selection.clone(),
                 tool: self.view_tool,
-                depth: self.history.undo_depth(),
+                revision: self.history.revision(),
             });
             let kind = snap.to.kind();
             self.status.set_message(&format!(
