@@ -403,7 +403,8 @@ mod tests {
     #[test]
     fn a_nudge_leaves_no_float_dust() {
         let any = f64::NEG_INFINITY..=f64::INFINITY;
-        assert_eq!(nudged(6.45, 0.1, true, &any), 6.55);
+        assert_eq!(nudged(6.3, 0.1, true, &any), 6.4);
+        assert_eq!(nudged(0.7, 0.1, true, &any), 0.8);
         assert_eq!(nudged(6.35, 0.1, true, &any), 6.4);
         assert_eq!(nudged(0.25, 0.01, false, &any), 0.24);
         assert_eq!(nudged(0.3, 0.1, false, &any), 0.2);
