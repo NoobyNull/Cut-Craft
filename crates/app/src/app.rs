@@ -1074,6 +1074,9 @@ struct CutCraftApp {
     /// A toolpath row was the last thing clicked: Del deletes the picked toolpath, not the
     /// drawing's selection. Any other click hands Del back to the drawing.
     toolpath_list_clicked: bool,
+    /// The form a placing tool (Move, Rotate, Set Size: Transform Objects) was opened over,
+    /// with its edits: Esc on the placing tool's form goes back to it.
+    form_behind: Option<OpenForm>,
     /// Whether the first click on the Toolpaths page of a job that has not had Material
     /// Setup opens it (tests leave it off).
     ask_material: bool,

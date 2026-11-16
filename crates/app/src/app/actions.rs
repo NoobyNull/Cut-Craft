@@ -58,6 +58,7 @@ impl CutCraftApp {
             toolpath_unfold: None,
             more_toolpaths: std::collections::BTreeSet::new(),
             toolpath_list_clicked: false,
+            form_behind: None,
             ask_material: true,
             list_height: None,
             first_steps: std::cell::RefCell::default(),
@@ -2179,6 +2180,17 @@ impl CutCraftApp {
                 self.status.set_message(&e);
             }
         } else {
+            // a placing tool opened over a form keeps that form, edits and all, for Esc to go
+            // back to; any other form lets it go
+            if self.placing(id) {
+                if let Some(behind) =
+                    (self.form.take()).filter(|f| f.id != id && !f.new_job && !self.placing(f.id))
+                {
+                    self.form_behind = Some(behind);
+                }
+            } else {
+                self.form_behind = None;
+            }
             self.form = Some(OpenForm {
                 id: cmd.id(),
                 label: meta.label,
@@ -4075,9 +4087,37 @@ impl CutCraftApp {
         });
     }
 
+    /// Whether `id` is a placing tool (Transform Objects: Move, Rotate, Set Size, Mirror,
+    /// Distort), which Esc leaves for the form it was opened over.
+    fn placing(&self, id: &str) -> bool {
+        self.registry
+            .get(id)
+            .is_some_and(|c| c.meta().group == "Transform Objects")
+    }
+
     /// Esc with nothing in front: the open form closes (Import 3D Model's as its Cancel), with
-    /// a new job's setup, the view tool and the pages it opened.
+    /// a new job's setup, the view tool and the pages it opened. A placing tool's form opened
+    /// over another goes back to that one, edits and all; what it placed stays placed (the
+    /// toolpaths it changes are out of date, as after any move).
     fn escape_closes(&mut self) {
+        let behind = self.form_behind.take();
+        if let Some(mut behind) = behind
+            && self.form.as_ref().is_some_and(|f| self.placing(f.id))
+        {
+            // what was placed is kept: Cancel on the form back now leaves it
+            behind.undo_from = self.history.undo_depth();
+            if let Some(placing) = self.form.take().filter(|f| f.page != behind.page) {
+                self.pages.done_with(placing.page);
+            }
+            if self.pages.shown(behind.page) == Shown::Hidden {
+                self.pages.open(behind.page);
+            }
+            behind.label.clone_into(&mut self.status.current_tool);
+            self.status
+                .set_message(&format!("Back to {}, as you left it", behind.label));
+            self.form = Some(behind);
+            return;
+        }
         if self.screen == Screen::NewJob {
             self.job_setup_cancel();
         }

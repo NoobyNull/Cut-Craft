@@ -14814,3 +14814,23 @@ fn esc_closes_only_the_window_in_front_of_the_form() {
     h.frame(vec![escape()]);
     assert!(h.app.form.is_none());
 }
+
+#[test]
+fn esc_from_a_move_opened_over_a_form_goes_back_to_it_with_its_edits() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Edited");
+    h.frame(vec![]);
+    // a stray M: Move takes the form's place
+    h.frame(vec![key(Key::M)]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("move"));
+    h.frame(vec![escape()]);
+    let form = h.app.form.as_ref().expect("the toolpath's form is back");
+    assert_eq!(form.id, "profile_toolpath");
+    assert_eq!(form.params["name"], "Edited", "with its edits");
+    // Esc again closes it, as ever
+    h.frame(vec![escape()]);
+    assert!(h.app.form.is_none());
+}
