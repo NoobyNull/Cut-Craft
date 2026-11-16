@@ -16,7 +16,9 @@ pub struct ToolpathTiling;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// Save the toolpaths as tiles, one file each
+    /// Save the toolpaths as tiles, one file each (ticked while the job is tiled). While it
+    /// is on, Save Toolpaths writes one file for each tile, numbered after the name given
+    /// (tile1, tile2…), in place of that name
     #[schemars(title = "Tile toolpaths")]
     pub enabled: bool,
     /// How the job is split into tiles
@@ -38,8 +40,9 @@ impl Command for ToolpathTiling {
     }
 
     fn initial_params(doc: &Document) -> Params {
+        // as the job has it: opened just to look, OK leaves tiling as it was
         Params {
-            enabled: true,
+            enabled: doc.tiling.is_some(),
             tiling: doc.tiling.unwrap_or_default(),
         }
     }
@@ -75,6 +78,20 @@ mod tests {
         );
         let off = after::<ToolpathTiling>(&Params::default());
         assert!(off.tiling.is_none());
+    }
+
+    #[test]
+    fn the_form_opens_showing_whether_tiling_is_on() {
+        let off = Document::default();
+        assert!(
+            !ToolpathTiling::initial_params(&off).enabled,
+            "OK on a look does not turn it on"
+        );
+        let on = after::<ToolpathTiling>(&Params {
+            enabled: true,
+            tiling: Tiling::default(),
+        });
+        assert!(ToolpathTiling::initial_params(&on).enabled);
     }
 
     #[test]

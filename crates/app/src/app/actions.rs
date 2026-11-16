@@ -1521,7 +1521,7 @@ impl CutCraftApp {
                 return false;
             }
         };
-        let done = Self::saved_message(&written, path);
+        let done = Self::saved_message(&written, path, self.doc.tiling.is_some());
         let result = if form.job_sheet {
             let folder = path.parent().unwrap_or(std::path::Path::new("."));
             let outputs = (written.iter())
@@ -1843,18 +1843,32 @@ impl CutCraftApp {
         Ok(Self::saved_message(
             &self.write_toolpath_files(form, post, path)?,
             path,
+            self.doc.tiling.is_some(),
         ))
     }
 
-    /// What the status bar says once `written` are saved, beside `path`.
-    fn saved_message(written: &[std::path::PathBuf], path: &std::path::Path) -> String {
-        match written {
+    /// What the status bar says once `written` are saved, beside `path`; `tiled` while
+    /// Toolpath Tiling is on, which names the files by tile.
+    pub(super) fn saved_message(
+        written: &[std::path::PathBuf],
+        path: &std::path::Path,
+        tiled: bool,
+    ) -> String {
+        let saved = match written {
             [one] => format!("Saved toolpaths to {}", one.display()),
             _ => format!(
                 "Saved {} toolpath files beside {}",
                 written.len(),
                 path.display()
             ),
+        };
+        if tiled {
+            format!(
+                "{saved}, one for each tile: Toolpath Tiling is on (Toolpaths ▸ Toolpath \
+                 Tiling to turn it off)"
+            )
+        } else {
+            saved
         }
     }
 

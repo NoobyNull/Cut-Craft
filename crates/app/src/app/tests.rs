@@ -8578,6 +8578,7 @@ fn a_double_clicked_tile_is_previewed_alone() {
     // two tiles side by side, then the right-hand one double-clicked
     h.app.invoke(&h.ctx, "toolpath_tiling");
     let form = h.app.form.as_mut().unwrap();
+    form.params["enabled"] = serde_json::json!(true);
     form.params["tiling"]["width"] = serde_json::json!(area.size().x / 2.0);
     form.params["tiling"]["height"] = serde_json::json!(area.size().y);
     form.params["tiling"]["overlap"] = serde_json::json!(0.0);
@@ -15779,4 +15780,19 @@ fn cancel_on_a_form_keeps_a_reorder_made_in_the_toolpath_list_while_it_was_open(
         1,
         "only what the form did after it is undone"
     );
+}
+
+#[test]
+fn saving_while_tiling_is_on_says_so() {
+    let path = std::path::Path::new("sign.nc");
+    let tiles = [
+        std::path::PathBuf::from("sign_tile1.nc"),
+        std::path::PathBuf::from("sign_tile2.nc"),
+    ];
+    let said = CutCraftApp::saved_message(&tiles, path, true);
+    assert!(said.contains("Toolpath Tiling is on"), "{said}");
+    let one = CutCraftApp::saved_message(&tiles[..1], path, true);
+    assert!(one.contains("Toolpath Tiling is on"), "{one}");
+    let plain = CutCraftApp::saved_message(&[path.to_path_buf()], path, false);
+    assert_eq!(plain, "Saved toolpaths to sign.nc");
 }
