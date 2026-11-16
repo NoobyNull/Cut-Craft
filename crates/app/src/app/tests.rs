@@ -15071,3 +15071,27 @@ fn ticking_a_toolpath_off_in_the_list_is_one_undo_step() {
     h.app.invoke(&h.ctx, "undo");
     assert!(h.app.doc.toolpaths[&id].visible, "one undo shows it again");
 }
+
+#[test]
+fn a_rotary_job_s_z_zero_reads_cylinder_axis_not_machine_bed() {
+    use cut_craft_core::document::{Along, Job};
+    for form in ["material_setup", "job_setup"] {
+        let mut h = Harness::new();
+        h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
+        h.app.invoke(&h.ctx, form);
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        assert!(h.text_at("Cylinder Axis").is_some(), "{form}");
+        assert!(h.text_at("Machine Bed").is_none(), "{form}");
+        // a flat job keeps the bed
+        h.app.form = None;
+        h.app.doc.job = Job::default();
+        h.app.invoke(&h.ctx, form);
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        assert!(h.text_at("Machine Bed").is_some(), "{form}");
+        assert!(h.text_at("Cylinder Axis").is_none(), "{form}");
+    }
+}

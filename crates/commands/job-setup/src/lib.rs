@@ -26,6 +26,39 @@ pub enum JobType {
     Rotary,
 }
 
+/// Where Z = 0 is on a rotary job: Job Setup and Material Setup show this in place of
+/// [`ZZero`] (its bed choice is the cylinder's axis there).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RotaryZZero {
+    /// The tool is zeroed on the top of the cylinder
+    #[default]
+    #[schemars(title = "Cylinder Surface")]
+    CylinderSurface,
+    /// The tool is zeroed on the cylinder's centre line, the rotary axis (touch off on the
+    /// axis, not on the machine bed or the rotary's base)
+    #[schemars(title = "Cylinder Axis")]
+    CylinderAxis,
+}
+
+impl From<ZZero> for RotaryZZero {
+    fn from(z: ZZero) -> Self {
+        match z {
+            ZZero::MaterialSurface => Self::CylinderSurface,
+            ZZero::MachineBed => Self::CylinderAxis,
+        }
+    }
+}
+
+impl From<RotaryZZero> for ZZero {
+    fn from(z: RotaryZZero) -> Self {
+        match z {
+            RotaryZZero::CylinderSurface => Self::MaterialSurface,
+            RotaryZZero::CylinderAxis => Self::MachineBed,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Size {
     /// The material's size across, left to right
@@ -105,12 +138,21 @@ pub struct Params {
         extend("x-icon" = "job_setup/material_size_xyz.png")
     )]
     pub size: Size,
+    /// Where the tool is zeroed in Z: on top of the material, or under it on the machine bed
     #[schemars(
         title = "Z Zero Position",
-        extend("x-section" = true),
+        extend("x-section" = true, "x-hide-when" = {"job_type": "rotary"}),
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
+    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis
+    #[schemars(
+        title = "Z Zero Position",
+        extend("x-section" = true, "x-show-when" = {"job_type": "rotary"}),
+        extend("x-icon" = "job_setup/z_zero_{}.png")
+    )]
+    #[serde(default)]
+    pub rotary_z_zero: RotaryZZero,
     /// Which point of the material is the machine's X0, Y0. Changing it moves only the
     /// coordinates: the design, toolpaths, pictures, clamp zones and guides stay where they
     /// are on the material
@@ -203,6 +245,7 @@ impl From<&Job> for Params {
                 units: job.units,
             },
             z_zero: job.z_zero,
+            rotary_z_zero: job.z_zero.into(),
             datum: DatumPosition {
                 position: job.datum,
                 use_offset: job.offset != Point::ZERO,
@@ -280,7 +323,11 @@ impl Command for JobSetup {
             clearance: p.gaps.clearance,
             plunge: Some(p.gaps.plunge),
             home: Some(home_for(doc, p)),
-            z_zero: p.z_zero,
+            z_zero: if p.job_type == JobType::Rotary {
+                p.rotary_z_zero.into()
+            } else {
+                p.z_zero
+            },
             datum: p.datum.position,
             offset: if p.datum.use_offset {
                 Point::new(p.datum.x, p.datum.y)
@@ -605,7 +652,7 @@ mod tests {
             p.size.length = 300.0;
             p.size.diameter = 50.0;
             p.orientation = Along::X;
-            p.z_zero = ZZero::MachineBed;
+            p.rotary_z_zero = RotaryZZero::CylinderAxis;
         }));
         let job = doc.job;
         assert_eq!(
@@ -631,6 +678,7 @@ mod tests {
             ),
             (JobType::Rotary, 50.0, 300.0)
         );
+        assert_eq!(reopened.rotary_z_zero, RotaryZZero::CylinderAxis);
     }
 
     #[test]
@@ -704,6 +752,20 @@ mod form_tests {
                 "{round}"
             );
         }
+        // Z zero reads as the cylinder's axis or surface on a rotary job, never the bed
+        assert_eq!(
+            rule(&schema["properties"]["z_zero"], "x-hide-when").as_deref(),
+            Some("\"rotary\"")
+        );
+        let round = &schema["properties"]["rotary_z_zero"];
+        assert_eq!(rule(round, "x-show-when").as_deref(), Some("\"rotary\""));
+        let titles: Vec<&str> = schema["$defs"]["RotaryZZero"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v["title"].as_str())
+            .collect();
+        assert_eq!(titles, ["Cylinder Surface", "Cylinder Axis"]);
         let orientation = &schema["properties"]["orientation"];
         assert_eq!(
             rule(orientation, "x-show-when").as_deref(),

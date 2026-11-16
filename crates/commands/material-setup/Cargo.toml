@@ -14,6 +14,7 @@ cmd-scale-model-z-height = { path = "../scale-model-z-height" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }
+serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -153,8 +153,8 @@ say "not implemented yet".
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
-  `x-hide-when`). Rotary Z Zero is still labelled Material Surface / Machine Bed, and Flip
-  design is not done.
+  `x-hide-when`). Rotary Z Zero reads Cylinder Surface / Cylinder Axis, with its own
+  pictures (Material Setup too); Flip design is not done.
 - Save Toolpaths (a form, as Aspire's): the machine and its posts suiting the job (the
   machine's default first, else Cut Craft's own FluidNC posts: tool changer, rotary jobs
   wrapped onto A in inverse time); the selected toolpath, the shown ones to one file, or each
@@ -875,5 +875,3 @@ implemented yet" listed.)
 
 ## Differences from Aspire 12 seen on screen
 
-- Aspire's rotary Job Setup calls its Z zero under the material "Cylinder Axis"; ours reuses
-  "Machine Bed" (posts print "Cylinder Axis").

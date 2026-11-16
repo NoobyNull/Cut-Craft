@@ -650,9 +650,16 @@ I[js + "xy_datum_top_right.svg"] = lambda: datum(42, 10)
 I[js + "xy_datum_centre.svg"] = lambda: datum(24, 24)
 I[js + "z_zero_material_surface.svg"] = lambda: [line(2, 44, 46, 44, DARK, 2.5), slab(6, 26, 30, 14, 8), arrow(44, 6, 44, 17, ACC), line(36, 18, 47, 18, ACC, 2.5)]
 I[js + "z_zero_machine_bed.svg"] = lambda: [line(2, 44, 46, 44, ACC, 4), slab(6, 26, 30, 14, 8), arrow(44, 28, 44, 41, ACC)]
+I[js + "z_zero_cylinder_surface.svg"] = lambda: [*cylinder(), line(2, 30, 46, 30, GREY, 1.5, "4 2"), arrow(44, 4, 44, 16, ACC), line(30, 19, 47, 19, ACC, 2.5)]
+I[js + "z_zero_cylinder_axis.svg"] = lambda: [*cylinder(), line(2, 30, 46, 30, ACC, 3, "4 2"), arrow(44, 6, 44, 27, ACC)]
 I[js + "material_size_xyz.svg"] = lambda: [slab(5, 22, 28, 12, 10), darrow(5, 40, 33, 40, RED, 2), darrow(40, 22, 40, 34, TP, 2), darrow(5, 18, 15, 8, INK, 2)]
 I[js + "single_sided_job.svg"] = lambda: [slab(5, 24, 32, 12, 9), solid("M5,24 L14,15 H46 L37,24 Z", "#ffd19a"), path("M5,24 L14,15 H46 L37,24 Z", ACC, 2.5)]
 I[js + "double_sided_job.svg"] = lambda: [slab(5, 20, 32, 12, 9), path("M5,32 H37", ACC, 3), path("M5,20 L14,11 H46 L37,20 Z", ACC, 2.5), curved_arrow(42, 36, 6, 200, 450, INK, 2.5, 5)]
+def cylinder():
+    """A rotary job's cylinder lying along X, its axis at y = 30."""
+    return [path("M10,20 H36 A5,10 0 0 1 36,40 H10 A5,10 0 0 1 10,20 Z", WOODD, 2.5, WOOD), ell(10, 30, 5, 10, WOODD, 2.5, "#e2bd83")]
+
+
 I[js + "rotary_job.svg"] = lambda: [path("M10,14 H36 A5,10 0 0 1 36,34 H10 A5,10 0 0 1 10,14 Z", WOODD, 2.5, WOOD), ell(10, 24, 5, 10, WOODD, 2.5, "#e2bd83"),
                                     line(2, 24, 46, 24, GREY, 1.5, "4 2"), curved_arrow(40, 24, 9, 290, 430, ACC, 2.5, 5)]
 
