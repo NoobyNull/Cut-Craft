@@ -440,17 +440,18 @@ pub struct ToolpathSettings {
     #[schemars(title = "2D solid preview color", extend("x-kind" = "colour"))]
     pub solid_2d_preview_color: [u8; 3],
     /// Saved toolpaths leave out cutting points this close to the line past them, for
-    /// shorter files; 0 keeps every point. Profile, pocket and other 2D toolpaths
+    /// shorter files; 0 keeps every point, 0.1 mm is the most. The keep-out zones are
+    /// checked on what is saved. Profile, pocket and other 2D toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_2d: f64,
     /// The same for 3D roughing, finishing, texture, moulding and the like
     #[serde(default = "tolerance")]
-    #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_3d: f64,
     /// The same for V-carving, prism, inlay and chamfer toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_vcarve: f64,
     /// How many times faster than the machine a toolpath preview plays when it starts: 1
     /// plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the
@@ -510,6 +511,10 @@ fn tolerance() -> f64 {
     0.002_54
 }
 
+/// The most a toolpath tolerance can be, mm (the form's limit, and a hand-edited file's):
+/// far below a keep-out zone's clearance or a cut's accuracy.
+pub const MAX_TOLERANCE: f64 = 0.1;
+
 impl ToolpathSettings {
     /// The tolerance for a toolpath of this family.
     pub fn tolerance(&self, family: cut_craft_core::simplify::Family) -> f64 {
@@ -519,6 +524,7 @@ impl ToolpathSettings {
             Family::ThreeD => self.tolerance_3d,
             Family::VCarve => self.tolerance_vcarve,
         }
+        .clamp(0.0, MAX_TOLERANCE)
     }
 
     /// `doc` with each toolpath's cuts thinned to its tolerance, ready to save.
@@ -2078,6 +2084,22 @@ mod tests {
             (2, 11),
             "2D thinned, 3D kept whole at 0"
         );
+    }
+
+    #[test]
+    fn a_tolerance_is_never_more_than_a_tenth_of_a_millimetre() {
+        use cut_craft_core::simplify::Family;
+        let mut t = Options::default().toolpaths;
+        t.tolerance_2d = 5.0;
+        t.tolerance_3d = 1.0;
+        t.tolerance_vcarve = 25.4;
+        for family in [Family::TwoD, Family::ThreeD, Family::VCarve] {
+            assert!((t.tolerance(family) - MAX_TOLERANCE).abs() < 1e-12);
+        }
+        let schema = serde_json::to_value(schemars::schema_for!(ToolpathSettings)).unwrap();
+        for field in ["tolerance_2d", "tolerance_3d", "tolerance_vcarve"] {
+            assert_eq!(schema["properties"][field]["maximum"], 0.1, "{field}");
+        }
     }
 
     /// `o` as saved to a file, read back.

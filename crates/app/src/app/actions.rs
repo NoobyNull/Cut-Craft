@@ -1239,14 +1239,32 @@ impl CutCraftApp {
         }
     }
 
-    /// The toolpaths of `plan` that pass over a keep-out zone, by name.
-    pub(super) fn not_kept_out(&self, plan: &[Vec<EntityId>]) -> Vec<String> {
+    /// The toolpaths of `plan` in `doc` that pass over a keep-out zone, by name.
+    pub(super) fn not_kept_out(&self, doc: &Document, plan: &[Vec<EntityId>]) -> Vec<String> {
         plan.iter()
             .flatten()
-            .filter_map(|id| self.doc.toolpaths.get(id))
+            .filter_map(|id| doc.toolpaths.get(id))
             .filter(|t| !self.zones_entered(t).is_empty())
             .map(|t| t.name.clone())
             .collect()
+    }
+
+    /// The job with its toolpaths thinned to their tolerances, as they are saved; refused
+    /// when a toolpath of `plan`, as saved, would cut into a keep-out zone.
+    pub(super) fn thinned_for_saving(&self, plan: &[Vec<EntityId>]) -> Result<Document, String> {
+        let thinned = self.options.toolpaths.thinned(&self.doc);
+        // a toolpath that cannot abide by the keep-out zones is not saved; checked on the
+        // moves saved, which the tolerance may have straightened
+        let crossing = self.not_kept_out(&thinned, plan);
+        if !crossing.is_empty() {
+            return Err(format!(
+                "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
+                 their clearance are right, or turn on clipping ({CLIP_SETTING}) and \
+                 recalculate",
+                crossing.join(", ")
+            ));
+        }
+        Ok(thinned)
     }
 
     /// The names of the keep-out zones `toolpath` cuts into (its cutter's edge reaching
@@ -1795,17 +1813,7 @@ impl CutCraftApp {
         path: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, String> {
         let plan = self.plan(form, post)?;
-        // a toolpath that cannot abide by the keep-out zones is not saved
-        let crossing = self.not_kept_out(&plan);
-        if !crossing.is_empty() {
-            return Err(format!(
-                "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
-                 their clearance are right, or turn on clipping ({CLIP_SETTING}) and \
-                 recalculate",
-                crossing.join(", ")
-            ));
-        }
-        let thinned = self.options.toolpaths.thinned(&self.doc);
+        let thinned = self.thinned_for_saving(&plan)?;
         let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
             if self.doc.bottom_side {
                 "Bottom"

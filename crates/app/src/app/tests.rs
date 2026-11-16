@@ -15095,3 +15095,32 @@ fn a_rotary_job_s_z_zero_reads_cylinder_axis_not_machine_bed() {
         assert!(h.text_at("Cylinder Axis").is_none(), "{form}");
     }
 }
+
+#[test]
+fn the_keep_out_check_at_saving_checks_the_moves_that_are_saved() {
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::keep_out::KeepOutZone;
+    use cut_craft_core::toolpath::{Move, MoveKind};
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::with_toolpath();
+    let id = EntityId(1);
+    let toolpath = h.app.doc.toolpaths.get_mut(&id).unwrap();
+    toolpath.tool.diameter = 6.0;
+    let at = |kind, x: f64, y: f64| Move {
+        kind,
+        to: DVec3::new(x, y, -1.0),
+    };
+    // a cut bowed 0.09 mm away from a clamp: thinned, it runs straight and 0.05 mm into it
+    toolpath.moves = vec![
+        at(MoveKind::Plunge, 0.0, 0.0),
+        at(MoveKind::Cut, 5.0, 0.09),
+        at(MoveKind::Cut, 10.0, 0.0),
+    ];
+    let clamp = cut_craft_core::testing::square(4.9, -3.5, 0.55);
+    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", clamp)];
+    h.app.options.toolpaths.tolerance_2d = 0.1;
+    let plan = vec![vec![id]];
+    assert_eq!(h.app.not_kept_out(&h.app.doc, &plan), [] as [String; 0]);
+    let why = h.app.thinned_for_saving(&plan).unwrap_err();
+    assert!(why.contains("keep-out zone"), "{why}");
+}

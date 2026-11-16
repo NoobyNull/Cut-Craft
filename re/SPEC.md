@@ -752,7 +752,7 @@ What was found, and what Cut Craft does where Aspire's behaviour is not known.
 - The `*_HELICAL_ARC_PLUNGE_MOVE` blocks are never written (arcs are fitted to Cut moves only).
 - Z2 and home are applied at post time; the 3D toolpath preview still shows the plunge from
   the clearance.
-- The toolpath tolerance is not a user setting yet.
+- The toolpath tolerances (2D, 3D, V-Carve) are Edit ▸ Options ▸ Toolpath Settings, at most 0.1 mm: saving thins each toolpath to its tolerance, and the keep-out check runs on the thinned moves that are saved.
 
 ### Profile order, start points, nesting and sharp corners
 
