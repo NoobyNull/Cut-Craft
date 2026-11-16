@@ -15549,3 +15549,42 @@ fn previewing_a_group_played_starts_from_uncut_material() {
     let playing = h.app.playback.as_ref().expect("it plays");
     assert_eq!(playing.material().heights[0], top, "old cuts gone");
 }
+
+#[test]
+fn a_new_job_drops_the_old_jobs_preview_playback_and_its_undo() {
+    // playing, then a new job
+    let mut h = playing_preview();
+    h.app.reset_job();
+    assert!(h.app.playback.is_none() && h.app.kept_playback.is_none());
+    assert!(!h.app.playing && h.app.playback_goal.is_none());
+    assert!(
+        !h.app.available("undo_last_preview"),
+        "no old preview to undo"
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.app.simulation.is_none(),
+        "the old job's cuts not played in"
+    );
+    assert!(h.text_at("Progress").is_none(), "no old controls");
+    // stopped, then a new job
+    let mut h = playing_preview();
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    assert!(h.app.available("reset_preview"));
+    h.app.reset_job();
+    h.frame(vec![]);
+    assert!(h.app.kept_playback.is_none() && h.text_at("Progress").is_none());
+}
+
+#[test]
+fn reset_preview_is_there_while_a_stopped_previews_controls_are() {
+    let mut h = playing_preview();
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    h.app.simulation = None;
+    assert!(h.app.kept_playback.is_some());
+    assert!(
+        h.app.available("reset_preview"),
+        "its controls can be cleared"
+    );
+}

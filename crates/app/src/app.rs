@@ -1391,7 +1391,7 @@ struct CutCraftApp {
     /// cut a little each frame until it gets there, or Stop.
     playback_goal: Option<f64>,
     /// A preview stopped or played to its end, kept so its controls stay to scrub it back
-    /// and forth, till another preview or Reset Preview.
+    /// and forth, till another preview, Reset Preview or another job.
     kept_playback: Option<cut_craft_core::playback::Playback>,
     /// A playing preview's material as the 3D view draws it, and the GPU's surface of it,
     /// kept by what they were made from (the playback's revision, the detail and the job's

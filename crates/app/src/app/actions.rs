@@ -313,7 +313,9 @@ impl CutCraftApp {
                 self.screen == Screen::Job
             }
             "update_post_processor_database" | "job_sheet_editor" => true,
-            "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
+            "reset_preview" => {
+                self.simulation.is_some() || self.playback.is_some() || self.kept_playback.is_some()
+            }
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
             id if self.units_checked(id).is_some() => self.screen == Screen::Job,
@@ -2654,6 +2656,10 @@ impl CutCraftApp {
             self.surface_gpu,
             self.rough_3d,
         ) = (None, None, None, None, None, None);
+        // the old job's preview playback, its controls and its undo go with it
+        (self.playback, self.kept_playback, self.before_preview) = (None, None, None);
+        (self.playing, self.playback_goal, self.playback_shown) = (false, None, None);
+        (self.playback_view, self.playback_gpu) = (None, None);
         self.clear_recovery();
     }
 

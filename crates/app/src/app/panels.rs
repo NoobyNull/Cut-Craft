@@ -1260,7 +1260,7 @@ impl CutCraftApp {
     /// Retract and Stop, the speed, the tool's place along the whole path and close up
     /// (drag to scrub), and how long is left. Over both views, so Stop is always to hand; Esc
     /// stops it too. Once stopped or played through they stay, to scrub it again, with
-    /// Close in place of Stop, till another preview or Reset Preview.
+    /// Close in place of Stop, till another preview, Reset Preview or another job.
     pub(super) fn playback_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath playback bar");
         let kept = self.playback.is_none();
