@@ -161,7 +161,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "zoom_to_drawing",
-        "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material",
+        "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material. In the 3D view F does it too, with the pointer over the view and no text box being typed in; F6 always does",
     ),
     (
         "zoom_to_job",

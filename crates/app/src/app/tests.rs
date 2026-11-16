@@ -3607,6 +3607,41 @@ fn a_double_click_in_the_3d_view_picks_the_component_under_it() {
 }
 
 #[test]
+fn typing_f_in_a_text_field_does_not_fit_the_3d_view_but_f6_still_does() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let over = h.app.fit_3d.expect("the 3D view has been drawn").center();
+    let zoomed = h.app.framing.zoomed_about(egui::Vec2::ZERO, 2.0);
+    let typing = |h: &mut Harness, k: Key| {
+        h.ctx
+            .memory_mut(|m| m.request_focus(egui::Id::unique("a text field")));
+        h.frame(vec![Event::PointerMoved(over), key(k)]);
+    };
+    h.app.framing = zoomed;
+    typing(&mut h, Key::F);
+    assert_eq!(
+        h.app.framing, zoomed,
+        "an f typed in a field leaves the view"
+    );
+    typing(&mut h, Key::F6);
+    assert_eq!(
+        h.app.framing,
+        zoomed.fitted(),
+        "F6 types nothing, so it fits"
+    );
+    h.app.framing = zoomed;
+    h.frame(vec![Event::PointerMoved(over), key(Key::F)]);
+    assert_eq!(
+        h.app.framing,
+        zoomed.fitted(),
+        "F fits when nothing is typed in"
+    );
+}
+
+#[test]
 fn right_clicking_a_component_in_the_3d_view_picks_it_and_opens_its_menu() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::domed();

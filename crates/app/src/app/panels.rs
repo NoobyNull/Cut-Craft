@@ -2004,13 +2004,15 @@ impl CutCraftApp {
         );
         // the pan buttons (the wheel, to start with) pan, as in the 2D view
         let middle = self.pan_button_down(ui.ctx());
+        // an f typed into a field is a letter, not Fit; F6 types nothing, so it always fits
+        let typing = ui.ctx().egui_wants_keyboard_input();
         let (left, right, ctrl, scroll, fit_key) = ui.input(|i| {
             (
                 i.pointer.primary_down(),
                 i.pointer.secondary_down(),
                 i.modifiers.ctrl,
                 i.smooth_scroll_delta,
-                i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::F6),
+                (i.key_pressed(egui::Key::F) && !typing) || i.key_pressed(egui::Key::F6),
             )
         });
         let (before, rotation) = (
