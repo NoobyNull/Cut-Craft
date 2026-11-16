@@ -8,7 +8,10 @@
 //! A cut past the material's edge (an outside profile's centreline, a lead-in) goes in the
 //! tile at that edge, so nothing is left out of every tile. A toolpath with nothing to cut
 //! in a tile is left out of that tile's file (no tool change or spindle start for it), and a
-//! tile with nothing to cut at all gets no file.
+//! tile with nothing to cut at all gets no file. Each tile is numbered in the 2D view as
+//! its file is named. Saving again where an earlier save left tile files (from another
+//! layout too, or from before tiling was turned off) asks to Replace or Archive them, as
+//! Edit ▸ Options ▸ Confirmations sets.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::tiling::Tiling;

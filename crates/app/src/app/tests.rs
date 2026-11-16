@@ -15903,3 +15903,19 @@ fn a_tile_with_nothing_to_cut_gets_no_file() {
     assert!(!dir.join("sign_tile2.nc").exists());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn each_tile_is_numbered_in_the_2d_view_as_its_file_is() {
+    let mut h = Harness::new();
+    let area = h.app.doc.job.area();
+    h.app.doc.tiling = Some(cut_craft_core::tiling::Tiling {
+        width: area.size().x / 2.0,
+        height: area.size().y,
+        ..Default::default()
+    });
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let one = h.text_at("Tile 1").expect("the left tile is numbered");
+    let two = h.text_at("Tile 2").expect("the right tile is numbered");
+    assert!(one.x < two.x, "numbered from the left");
+}
