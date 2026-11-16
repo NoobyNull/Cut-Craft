@@ -4136,14 +4136,7 @@ impl CutCraftApp {
             let groups: Vec<_> = moving.iter().map(|&id| (id, group.clone())).collect();
             self.arrange(Some(to), &groups);
         }
-        if let Some((id, visible)) = shown
-            && let Some(t) = self.doc.toolpaths.get(&id)
-        {
-            let params = serde_json::json!({ "toolpath": id, "name": t.name, "visible": visible });
-            if let Err(e) = self.apply("toolpath_properties", &params) {
-                self.status.set_message(&e);
-            }
-        }
+        // one change, so one Undo takes a tick back
         self.list_properties(shown, coloured);
         if let Some(id) = edit {
             self.selected_toolpath = Some(id);
@@ -4368,7 +4361,7 @@ fn toolpath_row(
             let mut visible = toolpath.visible;
             if ui
                 .checkbox(&mut visible, "")
-                .on_hover_hint("Show or hide this toolpath")
+                .on_hover_hint("Show or hide this toolpath; Undo takes it back in one step")
                 .changed()
             {
                 ticked = Some(visible);

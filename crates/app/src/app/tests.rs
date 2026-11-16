@@ -14970,3 +14970,42 @@ fn baking_component_properties_resets_the_form_so_apply_again_does_not_bake_twic
         "not baked a second time"
     );
 }
+
+#[test]
+fn ticking_a_toolpath_off_in_the_list_is_one_undo_step() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let params = h
+        .app
+        .registry
+        .get("drilling_toolpath")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    h.app.apply("drilling_toolpath", &params).unwrap();
+    let (&id, t) = h.app.doc.toolpaths.iter().next().unwrap();
+    let name = t.name.clone();
+    h.app.invoke(&h.ctx, "show_toolpaths_tab");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = h.text_at(&name).expect("the toolpath in the list");
+    let depth = h.app.history.undo_depth();
+    // the tick box: the small square just left of the name
+    let tick = (h.shapes.iter())
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Rect(r)
+                if (r.rect.center().y - at.y).abs() < 4.0
+                    && r.rect.max.x < at.x
+                    && r.rect.width() < 20.0 =>
+            {
+                Some(r.rect.center())
+            }
+            _ => None,
+        })
+        .max_by(|a, b| a.x.total_cmp(&b.x))
+        .expect("the tick box");
+    h.click(tick, Modifiers::NONE);
+    assert!(!h.app.doc.toolpaths[&id].visible, "hidden");
+    assert_eq!(h.app.history.undo_depth(), depth + 1, "one step to undo");
+    h.app.invoke(&h.ctx, "undo");
+    assert!(h.app.doc.toolpaths[&id].visible, "one undo shows it again");
+}
