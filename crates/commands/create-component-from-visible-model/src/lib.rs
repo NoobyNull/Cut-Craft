@@ -1,8 +1,9 @@
 //! Create Component from Visible Model: a new component holding the model the visible
 //! components make, with shape only where they have it; they are hidden, so the model looks
-//! the same.
+//! the same. It goes on the lowest shown level, the level's Base Height not added twice;
+//! components on hidden levels are left as they are.
 
-use cut_craft_core::component::{Combine, Component, model_shape_at_resolution};
+use cut_craft_core::component::{model_component, model_shape_at_resolution, shown_components};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
@@ -22,26 +23,19 @@ impl Command for CreateComponentFromVisibleModel {
     }
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
-        if !doc.components.values().any(|k| k.visible) {
+        let shown = shown_components(doc);
+        if shown.is_empty() {
             return Err(CommandError::Failed(
                 "there is no visible model. Show a component, or create one with a modelling tool"
                     .into(),
             ));
         }
-        let made = Component::from_material(
-            "Visible Model",
-            Combine::Add,
-            &model_shape_at_resolution(doc),
-        );
+        let made = model_component(doc, "Visible Model", &model_shape_at_resolution(doc));
         let mut c = Change::builder(doc);
-        for (&id, component) in doc.components.iter().filter(|(_, k)| k.visible) {
-            c.replace_component(
-                id,
-                cut_craft_core::component::Component {
-                    visible: false,
-                    ..component.clone()
-                },
-            );
+        for id in shown {
+            let mut k = doc.components[&id].clone();
+            k.visible = false;
+            c.replace_component(id, k);
         }
         c.add_component(made);
         Ok(c.finish())
@@ -56,6 +50,18 @@ mod tests {
     use cut_craft_core::testing::two_components;
 
     cut_craft_core::contract_tests!(CreateComponentFromVisibleModel, two_components);
+
+    #[test]
+    fn a_level_base_height_is_not_added_twice() {
+        let mut doc = two_components();
+        doc.levels.get_mut(&0).unwrap().base_height = 2.0;
+        let middle = Point::new(20.0, 20.0);
+        let before = model_at_resolution(&doc).at(middle).unwrap();
+        let change = CreateComponentFromVisibleModel::run(&doc, &NoParams {}).unwrap();
+        doc.apply(&change).unwrap();
+        let after = model_at_resolution(&doc).at(middle).unwrap();
+        assert!((after - before).abs() < 1e-9, "{before} {after}");
+    }
 
     #[test]
     fn the_new_component_has_shape_only_where_the_model_has() {

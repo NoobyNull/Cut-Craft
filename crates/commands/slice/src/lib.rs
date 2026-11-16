@@ -90,7 +90,8 @@ impl Command for Slice {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        if !doc.components.values().any(|c| c.visible) {
+        let shown = shown_components(doc);
+        if shown.is_empty() {
             return Err(CommandError::Failed(
                 "there is no visible model to slice. Show a component, or create one with a modelling tool".into(),
             ));
@@ -126,7 +127,7 @@ impl Command for Slice {
             }
         };
         let mut c = Change::builder(doc);
-        for id in shown_components(doc) {
+        for id in shown {
             let mut k = doc.components[&id].clone();
             k.visible = false;
             c.replace_component(id, k);

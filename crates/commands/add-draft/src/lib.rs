@@ -5,7 +5,7 @@
 //! takes their place; show them again to compare).
 
 use cut_craft_core::component::{
-    Combine, Component, model_at_resolution, model_shape_at_resolution, shown_components,
+    model_at_resolution, model_component, model_shape_at_resolution, shown_components,
 };
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta};
@@ -47,7 +47,8 @@ impl Command for AddDraft {
                 "set the draft angle above 0° and at most 45°".into(),
             ));
         }
-        if !doc.components.values().any(|c| c.visible) {
+        let shown = shown_components(doc);
+        if shown.is_empty() {
             return Err(CommandError::Failed(
                 "there is no visible model to add draft to. Show a component, or create one with a modelling tool".into(),
             ));
@@ -110,12 +111,12 @@ impl Command for AddDraft {
         }
         let name = format!("Draft {}°", p.draft_angle);
         let mut c = Change::builder(doc);
-        for id in shown_components(doc) {
+        for id in shown {
             let mut k = doc.components[&id].clone();
             k.visible = false;
             c.replace_component(id, k);
         }
-        c.add_component(Component::from_material(&name, Combine::Add, &model));
+        c.add_component(model_component(doc, &name, &model));
         Ok(c.finish())
     }
 }
@@ -123,6 +124,7 @@ impl Command for AddDraft {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cut_craft_core::component::{Combine, Component};
     use cut_craft_core::geometry::{Point, Rect};
     use cut_craft_core::testing::{domed, run_on};
 

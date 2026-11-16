@@ -495,6 +495,21 @@ pub fn model_shape_at_resolution(doc: &Document) -> Material {
     model_shape(doc, cells_across_at_resolution(doc))
 }
 
+/// Level `level`'s shown components combined alone, at the job's modeling resolution: NaN
+/// where none is, and without the level's own base height, combine mode, clipping or mirror,
+/// which the level puts on whatever is on it. A component holding this, put on that level,
+/// makes the model the components made.
+pub fn level_shape_at_resolution(doc: &Document, level: u64) -> Material {
+    let mut alone = doc.clone();
+    let on = doc.level_components(level);
+    for (id, c) in &mut alone.components {
+        c.visible = c.visible && on.contains(id);
+        c.level = level;
+    }
+    alone.levels = [(level, Level::default())].into();
+    model_shape_at_resolution(&alone)
+}
+
 /// How many cells across the job the modeling resolution gives.
 #[expect(
     clippy::cast_possible_truncation,
@@ -747,6 +762,27 @@ pub fn shown_components(doc: &Document) -> Vec<EntityId> {
         })
         .map(|(&id, _)| id)
         .collect()
+}
+
+/// A new component holding `model` (heights as the whole model has them, NaN where nothing
+/// is), for a tool that builds one from the model and hides what it came from: put on the
+/// lowest shown level (one with no clipping or mirror, when there is one), with that level's
+/// base height taken off so the level does not add it a second time.
+pub fn model_component(doc: &Document, name: &str, model: &Material) -> Component {
+    let mut k = Component::from_material(name, Combine::Add, model);
+    let shown = || doc.levels.iter().filter(|(_, l)| l.visible);
+    let plain = shown().find(|(_, l)| l.clip.is_empty() && l.mirror == Mirror::Off);
+    if let Some((&id, level)) = plain.or_else(|| shown().next()) {
+        k.level = id;
+        for h in &mut k.heights {
+            // the level gives combine(0, h + base): undo it
+            *h = match level.combine {
+                Combine::Subtract => -*h - level.base_height,
+                _ => *h - level.base_height,
+            };
+        }
+    }
+    k
 }
 
 /// What a "selected components" tool works on: the selected components (else the newest

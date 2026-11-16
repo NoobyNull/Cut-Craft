@@ -2,7 +2,7 @@
 //! offset's radius in 3D; the components it came from are hidden. Only the shape grows: the
 //! empty job round it stays empty.
 
-use cut_craft_core::component::{Combine, Component, model_shape_at_resolution};
+use cut_craft_core::component::{model_component, model_shape_at_resolution, shown_components};
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
@@ -55,11 +55,9 @@ impl Command for OffsetModel {
                 "set distance to something other than 0".into(),
             ));
         }
-        let visible: Vec<_> = doc
-            .components
-            .iter()
-            .filter(|(_, c)| c.visible)
-            .map(|(&id, c)| (id, c.clone()))
+        let visible: Vec<_> = shown_components(doc)
+            .into_iter()
+            .map(|id| (id, doc.components[&id].clone()))
             .collect();
         if visible.is_empty() {
             return Err(CommandError::Failed(
@@ -127,7 +125,7 @@ impl Command for OffsetModel {
             k.visible = false;
             c.replace_component(id, k);
         }
-        c.add_component(Component::from_material("Offset", Combine::Add, &out));
+        c.add_component(model_component(doc, "Offset", &out));
         Ok(c.finish())
     }
 }
