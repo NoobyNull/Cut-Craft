@@ -11693,6 +11693,53 @@ fn first_time_setup_again_starts_from_the_answers_and_corrects_my_machine() {
 }
 
 #[test]
+fn first_time_setup_again_keeps_the_posts_added_to_my_machine() {
+    use super::first_run::Maker;
+    use crate::options::CrashLogs;
+    use cut_craft_machines::Controller;
+    let mut h = Harness::at_start();
+    h.app.open_first_run();
+    let setup = h.app.first_run.as_mut().unwrap();
+    setup.pick_maker(Maker::NotListed);
+    setup.controller = Controller::Mach3;
+    let setup = h.app.first_run.take().unwrap();
+    h.app.finish_first_run(&setup);
+    // a post added and made the default in Machine Configuration
+    let extra = "Cut Craft GRBL Arcs (mm) (*.nc)".to_owned();
+    let mine = h.app.machines.machines.first_mut().unwrap();
+    mine.posts.push(extra.clone());
+    mine.default_post = Some(extra.clone());
+    // asked again only to change the crash-report answer
+    h.app.open_first_run();
+    let setup = h.app.first_run.as_mut().unwrap();
+    setup.crash_logs = CrashLogs::Send;
+    let setup = h.app.first_run.take().unwrap();
+    h.app.finish_first_run(&setup);
+    let machine = h.app.machines.active().unwrap();
+    assert!(machine.posts.contains(&extra), "{:?}", machine.posts);
+    assert_eq!(machine.post(), Some(extra.as_str()), "the default kept");
+    // a new controller brings its posts and default, and still keeps the one added
+    h.app.open_first_run();
+    let setup = h.app.first_run.as_mut().unwrap();
+    setup.controller = Controller::FluidNc;
+    let setup = h.app.first_run.take().unwrap();
+    h.app.finish_first_run(&setup);
+    let machine = h.app.machines.active().unwrap();
+    let (stock, default) = Controller::FluidNc.posts(false);
+    assert_eq!(machine.default_post.as_deref(), Some(default.as_str()));
+    assert!(stock.iter().all(|p| machine.posts.contains(p)));
+    assert!(machine.posts.contains(&extra), "{:?}", machine.posts);
+    let (mach3, _) = Controller::Mach3.posts(false);
+    assert!(
+        mach3
+            .iter()
+            .all(|p| !machine.posts.contains(p) || stock.contains(p)),
+        "the old controller's own posts go: {:?}",
+        machine.posts
+    );
+}
+
+#[test]
 fn skipping_first_time_setup_keeps_todays_start() {
     let mut h = Harness::at_start();
     h.app.open_first_run();

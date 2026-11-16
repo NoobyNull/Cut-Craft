@@ -498,7 +498,9 @@ impl CutCraftApp {
 
     /// The machine set up, made active: added, or the one of that name already here. My
     /// Machine (one not listed) already here takes the working area, units and controller
-    /// answered now, so setting it up again corrects it.
+    /// answered now, so setting it up again corrects it. Its posts change only with the
+    /// controller or units: the old controller's own posts give way to the new one's, and
+    /// its default to the new one's, but posts added in Machine Configuration are kept.
     fn add_set_up_machine(&mut self, machine: Machine) {
         let at = self
             .machines
@@ -508,12 +510,24 @@ impl CutCraftApp {
         self.machines.active = if let Some(i) = at {
             if machine.name == MY_MACHINE {
                 let mine = &mut self.machines.machines[i];
+                if mine.controller != machine.controller || mine.inches != machine.inches {
+                    let old = Controller::ALL
+                        .into_iter()
+                        .find(|c| c.label() == mine.controller)
+                        .map_or_else(Vec::new, |c| c.posts(mine.inches).0);
+                    let mut posts = machine.posts;
+                    for post in std::mem::take(&mut mine.posts) {
+                        if !old.contains(&post) && !posts.contains(&post) {
+                            posts.push(post);
+                        }
+                    }
+                    mine.posts = posts;
+                    mine.default_post = machine.default_post;
+                }
                 mine.width = machine.width;
                 mine.height = machine.height;
                 mine.inches = machine.inches;
                 mine.controller = machine.controller;
-                mine.posts = machine.posts;
-                mine.default_post = machine.default_post;
             }
             i
         } else {
