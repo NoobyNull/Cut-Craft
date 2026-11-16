@@ -701,7 +701,7 @@ impl Change {
 
     /// `self` with the toolpaths it leaves out of date marked stale: those made from a vector
     /// it changes or removes, those copying (Merged, Array Copy) a toolpath it removes, cuts
-    /// differently or leaves out of date, when it changes the model those that cut the model, and when
+    /// differently or leaves out of date, those carving a picture it moves or alters, when it changes the model those that cut the model, and when
     /// it changes the material's thickness, where the model sits, or the rotary or
     /// double-sided set-up, every toolpath (they bake those in when calculated). The marks
     /// are edits of the change, so undoing it undoes them.
@@ -714,10 +714,15 @@ impl Change {
         let mut made = std::collections::BTreeSet::new();
         // toolpaths this change takes away or makes cut differently
         let mut recut = std::collections::BTreeSet::new();
+        // pictures this change moves, alters or takes away
+        let mut pictures = std::collections::BTreeSet::new();
         for edit in &self.edits {
             match edit {
                 Edit::Replace { id, .. } | Edit::Remove { id, .. } => {
                     vectors.insert(*id);
+                }
+                Edit::ReplaceBitmap { id, .. } | Edit::RemoveBitmap { id, .. } => {
+                    pictures.insert(*id);
                 }
                 Edit::AddComponent { .. }
                 | Edit::RemoveComponent { .. }
@@ -760,6 +765,7 @@ impl Change {
                     || (model && toolpath.reads_model())
                     || (clearing && toolpath.reads_clearing())
                     || toolpath.vectors.iter().any(|v| vectors.contains(v))
+                    || picture_of(toolpath).is_some_and(|b| pictures.contains(&b))
                     || picks_again.contains(id)
             })
             .map(|(&id, _)| id)
@@ -1978,6 +1984,11 @@ fn sources_of(toolpath: &Toolpath) -> Vec<EntityId> {
         .get("sources")
         .and_then(|s| serde_json::from_value(s.clone()).ok())
         .unwrap_or_default()
+}
+
+/// The picture a Photo V-Carve or Sketch Carving toolpath was made from: its `bitmap`.
+fn picture_of(toolpath: &Toolpath) -> Option<EntityId> {
+    serde_json::from_value(toolpath.params.get("bitmap")?.clone()).ok()?
 }
 
 /// Undo/redo stacks of applied changes.

@@ -31,6 +31,11 @@ pub enum Strategy {
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
+    /// The picture it was made from (none: the one picked last, else the newest). Not on
+    /// the form: recalculating carves this picture again, whichever is picked
+    #[schemars(skip)]
+    #[serde(default)]
+    pub bitmap: Option<cut_craft_core::document::EntityId>,
     /// Below the material surface where the carving is (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
@@ -69,6 +74,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             name: "Photo V-Carve".into(),
+            bitmap: None,
             start_depth: 0.0,
             max_carving_depth: 1.0,
             stepover_retract: 0.5,
@@ -179,12 +185,13 @@ impl Command for PhotoVcarveToolpath {
         }
         ensure_positive("max carving depth", p.max_carving_depth)?;
         ensure_positive("line spacing", p.line_spacing_percent)?;
-        // the bitmap picked last, else the newest
-        let Some(bitmap) = doc.chosen_bitmap() else {
+        // the picture it was made from, else the one picked last, else the newest
+        if doc.bitmaps.is_empty() {
             return Err(CommandError::Failed(
                 "import the picture to carve first".into(),
             ));
-        };
+        }
+        let (picture, bitmap) = doc.toolpath_bitmap(p.bitmap)?;
         let groove = 2.0 * p.max_carving_depth * (p.tool.angle.to_radians() / 2.0).tan();
         let spacing = groove * p.line_spacing_percent / 100.0;
         let size = bitmap.rect.max - bitmap.rect.min;
@@ -247,8 +254,13 @@ impl Command for PhotoVcarveToolpath {
             moves = project_onto_model(doc, &p.tool, &moves)?;
         }
         let mut c = Change::builder(doc);
+        // the picture kept, so recalculating carves it whichever is picked then
+        let settings = Params {
+            bitmap: Some(picture),
+            ..p.clone()
+        };
         c.add_toolpath(made_by::<Self>(
-            p,
+            &settings,
             p.name.clone(),
             p.tool.clone(),
             ids,
@@ -288,6 +300,47 @@ mod tests {
         let change = PhotoVcarveToolpath::run(&doc, p).unwrap();
         doc.apply(&change).unwrap();
         doc.toolpaths.into_values().next().unwrap().moves
+    }
+
+    #[test]
+    fn recalculating_uses_the_picture_it_was_made_from_not_the_newest() {
+        let mut doc = with_picture();
+        doc.apply(&PhotoVcarveToolpath::run(&doc, &Params::default()).unwrap())
+            .unwrap();
+        let (&tp, made) = doc.toolpaths.iter().next().unwrap();
+        let first = made.moves.clone();
+        // another picture imported, and picked
+        let mut c = Change::builder(&doc);
+        let other = c.add_bitmap(Bitmap {
+            name: "other".into(),
+            columns: 2,
+            rows: 1,
+            grey: vec![255, 0],
+            rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
+            depth: Vec::new(),
+            rgb: Vec::new(),
+        });
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        doc.selected_bitmaps = [other].into();
+        let mut r = cut_craft_core::Registry::default();
+        r.add::<PhotoVcarveToolpath>();
+        let mut again = doc.clone();
+        again.apply(&r.recalculate(&doc, tp).unwrap()).unwrap();
+        assert_eq!(again.toolpaths[&tp].moves, first, "the same picture carved");
+        // that picture changed: the toolpath is out of date
+        let first_picture = *doc.bitmaps.keys().next().unwrap();
+        let mut moved = doc.bitmaps[&first_picture].clone();
+        moved.rect.min.x += 1.0;
+        moved.rect.max.x += 1.0;
+        let mut c = Change::builder(&doc);
+        c.replace_bitmap(first_picture, moved);
+        let change = c.finish().marking_stale(&doc);
+        doc.apply(&change).unwrap();
+        assert!(
+            doc.toolpaths[&tp].stale,
+            "out of date once its picture moves"
+        );
     }
 
     #[test]

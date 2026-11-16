@@ -976,6 +976,30 @@ impl Document {
             .or_else(|| self.bitmaps.values().next_back())
     }
 
+    /// The picture a picture toolpath carves: the one it was `made_from` when it has one
+    /// (an error once that is deleted), else [`Self::chosen_bitmap`]; with its id, to keep.
+    pub fn toolpath_bitmap(
+        &self,
+        made_from: Option<EntityId>,
+    ) -> Result<(EntityId, &Bitmap), crate::CommandError> {
+        if let Some(id) = made_from {
+            return self.bitmaps.get(&id).map(|b| (id, b)).ok_or_else(|| {
+                crate::CommandError::Failed(
+                    "the picture this toolpath was made from has been deleted. Import it \
+                     again and make a new toolpath from it"
+                        .into(),
+                )
+            });
+        }
+        self.selected_bitmaps
+            .iter()
+            .rev()
+            .find_map(|id| self.bitmaps.get_key_value(id))
+            .or_else(|| self.bitmaps.iter().next_back())
+            .map(|(&id, b)| (id, b))
+            .ok_or_else(|| crate::CommandError::Failed("import the picture first".into()))
+    }
+
     /// The newest bitmap under `at`, for picking in the 2D view.
     pub fn pick_bitmap(&self, at: Point) -> Option<EntityId> {
         self.bitmaps

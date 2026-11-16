@@ -15,7 +15,7 @@ pub struct SketchCarvingToolpath;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
-    /// The newest bitmap
+    /// A picture: the one picked last, else the newest
     #[default]
     Bitmap,
     /// The 3D model: its hollows are the lines
@@ -36,6 +36,11 @@ pub enum Boundary {
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
+    /// The picture it was made from (for a Bitmap source; none: the one picked last, else the newest). Not on
+    /// the form: recalculating carves this picture again, whichever is picked
+    #[schemars(skip)]
+    #[serde(default)]
+    pub bitmap: Option<cut_craft_core::document::EntityId>,
     /// Where the sketch lines come from
     #[schemars(extend("x-group" = "Sketch"))]
     pub source: Source,
@@ -68,6 +73,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             name: "Sketch Carving".into(),
+            bitmap: None,
             source: Source::Bitmap,
             start_depth: 0.0,
             cut_depth: 1.0,
@@ -157,12 +163,13 @@ impl Params {
     fn darkness(&self, doc: &Document, cell: f64) -> Result<Grid, CommandError> {
         Ok(match self.source {
             Source::Bitmap => {
-                // the bitmap picked last, else the newest
-                let Some(bitmap) = doc.chosen_bitmap() else {
+                // the picture it was made from, else the one picked last, else the newest
+                if doc.bitmaps.is_empty() {
                     return Err(CommandError::Failed(
                         "import the picture to sketch first".into(),
                     ));
-                };
+                }
+                let (_, bitmap) = doc.toolpath_bitmap(self.bitmap)?;
                 Grid::sample(bitmap.rect, cell, |q| bitmap.darkness(q).unwrap_or(0.0))
             }
             Source::Model => {
@@ -269,8 +276,16 @@ impl Command for SketchCarvingToolpath {
             ));
         }
         let mut c = Change::builder(doc);
+        // the picture kept, so recalculating sketches it whichever is picked then
+        let settings = Params {
+            bitmap: match p.source {
+                Source::Bitmap => Some(doc.toolpath_bitmap(p.bitmap)?.0),
+                Source::Model => None,
+            },
+            ..p.clone()
+        };
         c.add_toolpath(made_by::<Self>(
-            p,
+            &settings,
             p.name.clone(),
             p.tool.clone(),
             sketch.ids,
@@ -407,6 +422,49 @@ mod tests {
         let mut doc = doc.clone();
         doc.apply(&change).unwrap();
         doc.toolpaths.into_values().next().unwrap().moves
+    }
+
+    #[test]
+    fn recalculating_uses_the_picture_it_was_made_from_not_the_newest() {
+        let mut doc = with_picture();
+        doc.apply(&SketchCarvingToolpath::run(&doc, &Params::default()).unwrap())
+            .unwrap();
+        let (&tp, made) = doc.toolpaths.iter().next().unwrap();
+        let first = made.moves.clone();
+        // another picture imported, and picked
+        let mut c = Change::builder(&doc);
+        let other = c.add_bitmap(Bitmap {
+            name: "other".into(),
+            columns: 40,
+            rows: 40,
+            grey: (0..40 * 40)
+                .map(|i| if (5..7).contains(&(i % 40)) { 0 } else { 255 })
+                .collect(),
+            rect: Rect::new(Point::ZERO, Point::new(40.0, 40.0)),
+            depth: Vec::new(),
+            rgb: Vec::new(),
+        });
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        doc.selected_bitmaps = [other].into();
+        let mut r = cut_craft_core::Registry::default();
+        r.add::<SketchCarvingToolpath>();
+        let mut again = doc.clone();
+        again.apply(&r.recalculate(&doc, tp).unwrap()).unwrap();
+        assert_eq!(again.toolpaths[&tp].moves, first, "the same picture carved");
+        // that picture changed: the toolpath is out of date
+        let first_picture = *doc.bitmaps.keys().next().unwrap();
+        let mut moved = doc.bitmaps[&first_picture].clone();
+        moved.rect.min.x += 1.0;
+        moved.rect.max.x += 1.0;
+        let mut c = Change::builder(&doc);
+        c.replace_bitmap(first_picture, moved);
+        let change = c.finish().marking_stale(&doc);
+        doc.apply(&change).unwrap();
+        assert!(
+            doc.toolpaths[&tp].stale,
+            "out of date once its picture moves"
+        );
     }
 
     #[test]
