@@ -15748,3 +15748,35 @@ fn a_previewed_toolpath_s_cuts_keep_its_colour_through_a_reorder() {
         "previewing the Pocket again marks its cells the same"
     );
 }
+
+#[test]
+fn cancel_on_a_form_keeps_a_reorder_made_in_the_toolpath_list_while_it_was_open() {
+    let mut h = named_toolpaths();
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    let circle = |x: f64| serde_json::json!({ "center": { "x": x, "y": 150.0 }, "radius": 20.0 });
+    h.app.apply("draw_circle", &circle(100.0)).unwrap();
+    // the Pocket moved down in the toolpath list beside the form
+    h.app.selected_toolpath = Some(EntityId(1));
+    h.frame(vec![]);
+    let down = *h
+        .texts_at("Move Down")
+        .last()
+        .expect("the list's Move Down");
+    h.click(down, Modifiers::NONE);
+    assert_eq!(h.app.doc.toolpaths[&EntityId(2)].name, "Pocket");
+    assert!(h.app.form.is_some(), "the form is still open");
+    h.app.apply("draw_circle", &circle(200.0)).unwrap();
+    assert_eq!(h.app.doc.vectors.len(), 2);
+    h.app.cancel_form();
+    assert_eq!(
+        h.app.doc.toolpaths[&EntityId(2)].name,
+        "Pocket",
+        "the reorder is kept"
+    );
+    assert_eq!(
+        h.app.doc.vectors.len(),
+        1,
+        "only what the form did after it is undone"
+    );
+}

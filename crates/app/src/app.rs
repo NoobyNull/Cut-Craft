@@ -1044,7 +1044,8 @@ struct OpenForm {
     /// While a value is dragged, the undo depth after its last step and the shape and
     /// settings from before that step: the next step takes it back first.
     dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
-    /// How many changes could be undone when it opened: Cancel undoes back to there.
+    /// How many changes could be undone when it opened: Cancel undoes back to there. A change
+    /// made in the toolpath list while it is open moves this past it, so Cancel keeps it.
     undo_from: usize,
     /// How its drag is read: another way for a toolbox variant (Draw Circle from Edge).
     way: crate::flyout::DragWay,

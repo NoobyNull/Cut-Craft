@@ -4037,16 +4037,32 @@ impl CutCraftApp {
         self.toolpath_list_body(ui, true);
     }
 
-    /// The toolpath list itself: its heading, buttons (the template ones too with
-    /// `templates`) and the buttons arranging it, then the rows in the order they cut, each
-    /// group's heading over its toolpaths. A click picks a toolpath, Ctrl-click picks several;
-    /// a toolpath dragged onto another goes just before it, in its group, and dragged onto a
-    /// group's name goes in at its end.
+    /// The toolpath list itself (see [`Self::toolpath_list_rows`]). What it changes while
+    /// a form is open beside it is not the form's to take back: Cancel on that form stops
+    /// short of it, undoing only what the form did after.
+    pub(super) fn toolpath_list_body(&mut self, ui: &mut egui::Ui, templates: bool) {
+        let open = self.form.as_ref().map(|f| (f.id, f.undo_from));
+        let depth = self.history.undo_depth();
+        self.toolpath_list_rows(ui, templates);
+        let after = self.history.undo_depth();
+        if let Some(form) = self.form.as_mut()
+            && open == Some((form.id, form.undo_from))
+            && after > depth
+        {
+            form.undo_from = after;
+        }
+    }
+
+    /// The toolpath list's heading, buttons (the template ones too with `templates`) and
+    /// the buttons arranging it, then the rows in the order they cut, each group's heading
+    /// over its toolpaths. A click picks a toolpath, Ctrl-click picks several; a toolpath
+    /// dragged onto another goes just before it, in its group, and dragged onto a group's
+    /// name goes in at its end.
     #[expect(
         clippy::too_many_lines,
         reason = "the list's rows, picking, dragging and menus"
     )]
-    pub(super) fn toolpath_list_body(&mut self, ui: &mut egui::Ui, templates: bool) {
+    fn toolpath_list_rows(&mut self, ui: &mut egui::Ui, templates: bool) {
         use crate::toolpath_order::{self as order, Row, Target};
         cut_craft_bug_report::mark(ui, "Toolpath list");
         ui.strong("Toolpath List");

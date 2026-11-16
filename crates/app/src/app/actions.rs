@@ -5177,7 +5177,11 @@ impl CutCraftApp {
                 if !new_job {
                     cancel = ui
                         .add_enabled(done, egui::Button::new("Cancel"))
-                        .on_hover_hint("Undo what this tool did since it opened, and close it")
+                        .on_hover_hint(
+                            "Undo what this tool did since it opened, and close it. A change \
+                             made in the toolpath list meanwhile is kept, with what the tool \
+                             did before it",
+                        )
                         .on_disabled_hover_text("Nothing done yet to take back")
                         .clicked();
                 }
@@ -5300,8 +5304,9 @@ impl CutCraftApp {
         }
     }
 
-    /// Cancel on a tool's form: everything done since the form opened is undone (and can be
-    /// redone), and the form closes.
+    /// Cancel on a tool's form: everything done since the form opened (or since the toolpath
+    /// list beside it last changed the job) is undone (and can be redone), and the form
+    /// closes.
     pub(super) fn cancel_form(&mut self) {
         let Some(form) = self.form.take() else { return };
         while self.history.undo_depth() > form.undo_from && self.history.undo(&mut self.doc) {}
