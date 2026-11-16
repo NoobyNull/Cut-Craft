@@ -753,3 +753,33 @@ fn material_not_cut_free_is_not_removed() {
     assert_eq!(m.remove_piece(Point::new(10.0, 10.0)), 0);
     assert!(m.heights.iter().all(|h| !h.is_nan()));
 }
+
+#[test]
+fn after_one_piece_is_removed_a_part_held_by_tabs_still_is_not() {
+    let mut m = material();
+    // part A cut right free round (15, 15)..(40, 40)
+    m.cut(&toolpath(&[
+        (15.0, 15.0, -25.0),
+        (40.0, 15.0, -25.0),
+        (40.0, 40.0, -25.0),
+        (15.0, 40.0, -25.0),
+        (15.0, 15.0, -25.0),
+    ]));
+    // part B round (60, 60)..(90, 90), its last side left short: held to the waste by a tab
+    m.cut(&toolpath(&[
+        (60.0, 60.0, -25.0),
+        (90.0, 60.0, -25.0),
+        (90.0, 90.0, -25.0),
+        (60.0, 90.0, -25.0),
+        (60.0, 72.0, -25.0),
+    ]));
+    assert!(m.remove_piece(Point::new(27.0, 27.0)) > 0, "A is cut free");
+    // B and the waste are all that is left: neither B nor the waste is taken
+    assert_eq!(m.remove_piece(Point::new(75.0, 75.0)), 0);
+    assert_eq!(m.remove_piece(Point::new(5.0, 95.0)), 0);
+    assert!(!m.at(Point::new(75.0, 75.0)).unwrap().is_nan(), "B stays");
+    assert!(
+        !m.at(Point::new(5.0, 95.0)).unwrap().is_nan(),
+        "the waste stays"
+    );
+}

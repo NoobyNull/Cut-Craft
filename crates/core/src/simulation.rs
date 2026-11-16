@@ -356,8 +356,10 @@ impl Material {
     /// without a cut right through between (the preview's double-click on a part or the
     /// waste cut free of it). Taken cells hold NaN, which the views leave out. Returns how
     /// many cells went; none when `p` is off the material, cut through or already gone, or
-    /// when nothing is cut free there: the piece would be all the material left, with none
-    /// taken away before (an uncut block, a pocket, a profile held by tabs).
+    /// when nothing is cut free there: the piece would be all the material left and runs to
+    /// the material's edge (an uncut block, a pocket, a part held by tabs to the waste), even
+    /// after other pieces were taken. A part cut free of the waste can still be taken once
+    /// the waste is gone.
     pub fn remove_piece(&mut self, p: Point) -> usize {
         let (column, row) = (
             ((p.x - self.origin.x) / self.cell).floor(),
@@ -395,9 +397,15 @@ impl Material {
                 stack.push((c, r + 1));
             }
         }
+        // all that is left and running to the material's edge: the block or the waste with
+        // whatever is still held to it (by tabs, or not cut through), never cut free of it,
+        // whatever was taken before
         let left = self.heights.iter().filter(|&&h| solid(h)).count();
-        let taken_before = self.heights.iter().any(|h| h.is_nan());
-        if piece.len() == left && !taken_before {
+        let at_edge = piece.iter().any(|&i| {
+            let (c, r) = (i % self.columns, i / self.columns);
+            c == 0 || r == 0 || c + 1 == self.columns || r + 1 == self.rows
+        });
+        if piece.len() == left && at_edge {
             return 0;
         }
         for &i in &piece {
