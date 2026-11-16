@@ -162,6 +162,38 @@ impl CutCraftApp {
             .collect()
     }
 
+    /// Reset: `id` back to Cut Craft's own shortcuts. One another action has taken since is
+    /// asked about first, as adding it would be ("already runs … Move it here?"); until
+    /// then `id` keeps the rest of its own.
+    fn reset_shortcuts(&mut self, id: &str) {
+        let own: Vec<Trigger> = (self.default_bindings().into_iter())
+            .filter(|(a, _)| a == id)
+            .map(|(_, t)| t)
+            .collect();
+        let others: Vec<(String, Trigger)> =
+            shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts)
+                .into_iter()
+                .filter(|(a, _)| a != id)
+                .collect();
+        let clash = own
+            .iter()
+            .find_map(|&t| shortcut::clash(&others, t, id).map(|other| (t, other.to_owned())));
+        let Some((taken, other)) = clash else {
+            self.options.controls.shortcuts.remove(id);
+            self.save_options();
+            return;
+        };
+        let free: Vec<Trigger> = (own.iter().copied())
+            .filter(|&t| shortcut::clash(&others, t, id).is_none())
+            .collect();
+        self.set_shortcuts(id, &free);
+        self.capture = Some(ShortcutCapture {
+            id: id.to_owned(),
+            refused: None,
+            clash: Some((taken, other)),
+        });
+    }
+
     /// Does what the person did in the list.
     pub(super) fn apply_shortcut_edit(&mut self, edit: Edit) {
         match edit {
@@ -174,10 +206,7 @@ impl CutCraftApp {
             }
             Edit::Cancel => self.capture = None,
             Edit::Remove(id, t) => self.remove_shortcut(&id, t),
-            Edit::Reset(id) => {
-                self.options.controls.shortcuts.remove(&id);
-                self.save_options();
-            }
+            Edit::Reset(id) => self.reset_shortcuts(&id),
             Edit::Move => {
                 if let Some(ShortcutCapture {
                     id,
@@ -306,7 +335,10 @@ fn row_buttons(ui: &mut egui::Ui, row: &Row, capture: Option<&ShortcutCapture>) 
     if row.changed
         && ui
             .button("Reset")
-            .on_hover_text("Back to Cut Craft's own shortcut for this")
+            .on_hover_text(
+                "Back to Cut Craft's own shortcut for this. If another action has that key \
+                 now, you are asked whether to move it back here",
+            )
             .clicked()
     {
         edit = Some(Edit::Reset(row.id.clone()));

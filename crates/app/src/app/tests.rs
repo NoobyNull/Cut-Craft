@@ -14834,3 +14834,30 @@ fn esc_from_a_move_opened_over_a_form_goes_back_to_it_with_its_edits() {
     h.frame(vec![escape()]);
     assert!(h.app.form.is_none());
 }
+
+#[test]
+fn reset_asks_before_taking_back_a_key_another_action_now_has() {
+    use super::shortcuts_page::Edit;
+    let mut h = Harness::new();
+    let ctrl_z = shortcut::parse_trigger("Ctrl+Z").unwrap();
+    h.app.remove_shortcut("undo", ctrl_z);
+    h.app.add_shortcut("draw_circle", ctrl_z);
+    h.app.apply_shortcut_edit(Edit::Reset("undo".into()));
+    let clash = h.app.capture.as_ref().and_then(|c| c.clash.clone());
+    assert_eq!(
+        clash,
+        Some((ctrl_z, "draw_circle".to_owned())),
+        "asked, as adding the key would"
+    );
+    assert!(
+        !h.app.shortcuts_of("undo").contains(&ctrl_z),
+        "not two actions on one key meanwhile"
+    );
+    h.app.apply_shortcut_edit(Edit::Move);
+    assert!(h.app.shortcuts_of("undo").contains(&ctrl_z));
+    assert!(!h.app.shortcuts_of("draw_circle").contains(&ctrl_z));
+    assert!(
+        !h.app.options.controls.shortcuts.contains_key("undo"),
+        "undo is back to its own"
+    );
+}
