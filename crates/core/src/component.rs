@@ -485,17 +485,25 @@ impl Component {
 }
 
 /// The model at the job's modeling resolution.
+pub fn model_at_resolution(doc: &Document) -> Material {
+    model(doc, cells_across_at_resolution(doc))
+}
+
+/// [`model_shape`] at the job's modeling resolution: NaN where no shown component is, so a
+/// component made from it has shape only where the model has.
+pub fn model_shape_at_resolution(doc: &Document) -> Material {
+    model_shape(doc, cells_across_at_resolution(doc))
+}
+
+/// How many cells across the job the modeling resolution gives.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "a cell count"
 )]
-pub fn model_at_resolution(doc: &Document) -> Material {
+fn cells_across_at_resolution(doc: &Document) -> usize {
     let longest = doc.job.width.max(doc.job.height);
-    model(
-        doc,
-        ((longest / doc.job.model_cell()).ceil() as usize).max(1),
-    )
+    ((longest / doc.job.model_cell()).ceil() as usize).max(1)
 }
 
 impl Component {
@@ -742,8 +750,8 @@ pub fn shown_components(doc: &Document) -> Vec<EntityId> {
 }
 
 /// What a "selected components" tool works on: the selected components (else the newest
-/// one), and the single component they make: the one itself, or several baked together over
-/// the job. Removing the returned ids and adding the component replaces them.
+/// one), and the single component they make: the one itself, or several baked together (with
+/// no shape where none of them is). Removing the returned ids and adding the component replaces them.
 pub fn chosen_or_baked(doc: &Document) -> Option<(Vec<EntityId>, Component)> {
     let mut ids: Vec<EntityId> = doc
         .selected_components
@@ -762,8 +770,9 @@ pub fn chosen_or_baked(doc: &Document) -> Option<(Vec<EntityId>, Component)> {
             for (id, c) in &mut only.components {
                 c.visible = ids.contains(id);
             }
+            // nothing where none of them is, so the tool works on their shape alone
             let baked =
-                Component::from_material("Baked", Combine::Add, &model_at_resolution(&only));
+                Component::from_material("Baked", Combine::Add, &model_shape_at_resolution(&only));
             Some((ids, baked))
         }
     }
