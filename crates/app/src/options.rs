@@ -1222,6 +1222,27 @@ pub const WARNING_MORE: &str = "They set how hard Cut Craft works your computer 
     it cuts. Leave them alone unless you know why you are changing one; Reset to defaults puts \
     them all back.";
 
+/// What reading the options file found: the options, whether the advanced ones were
+/// changed outside Cut Craft, and the settings that could not be read.
+#[derive(Debug, Default)]
+pub struct Read {
+    pub options: Options,
+    pub tampered: bool,
+    /// Each setting left at its default, as `section ▸ setting` (or the section, or
+    /// `everything`); empty when the whole file was read.
+    pub unread: Vec<String>,
+}
+
+/// What the status bar says when some settings could not be read.
+pub fn unread_message(unread: &[String]) -> String {
+    format!(
+        "Some settings could not be read, so they are back to their defaults: {}. Your old \
+         settings file is kept beside the new one as options.json.bak. Set them again in \
+         Edit ▸ Options.",
+        unread.join(", ")
+    )
+}
+
 /// What the status bar says when the advanced settings were changed outside Cut Craft.
 pub const TAMPERED: &str = "Advanced settings were changed outside Cut Craft, so they were put \
     back to their safe defaults. Change them in Edit ▸ Options ▸ Advanced.";
@@ -1711,23 +1732,44 @@ impl Options {
 
     /// The options kept in the config folder; the defaults when there are none.
     pub fn load() -> Self {
-        Self::load_checked().0
+        Self::load_checked().options
     }
 
-    /// [`Self::load`], and whether the advanced settings had been changed outside Cut Craft
-    /// (and so were put back to their defaults).
-    pub fn load_checked() -> (Self, bool) {
-        path().and_then(|p| std::fs::read(p).ok()).map_or_else(
-            || (Self::default(), false),
-            |bytes| Self::from_bytes(&bytes),
-        )
+    /// [`Self::load`], and what could not be read of it: whether the advanced settings had
+    /// been changed outside Cut Craft (and so were put back to their defaults), and the
+    /// settings left at their defaults. A file with settings left out is first copied to
+    /// `options.json.bak`, so saving the defaults over it loses nothing.
+    pub fn load_checked() -> Read {
+        let Some(path) = path() else {
+            return Read::default();
+        };
+        let Ok(bytes) = std::fs::read(&path) else {
+            return Read::default();
+        };
+        let read = Self::read_bytes(&bytes);
+        if !read.unread.is_empty() {
+            let _ = std::fs::write(path.with_extension("json.bak"), &bytes);
+        }
+        read
     }
 
     /// Options read from a file's bytes, the advanced ones only if their check matches; the
     /// defaults for a file that is not options at all.
+    #[cfg(test)]
     pub fn from_bytes(bytes: &[u8]) -> (Self, bool) {
+        let read = Self::read_bytes(bytes);
+        (read.options, read.tampered)
+    }
+
+    /// [`Self::from_bytes`], naming what could not be read. A setting this version cannot
+    /// read (one from a newer version, or a hand edit gone wrong) goes back to its default
+    /// on its own: the page it is on, and the rest of the file, are kept.
+    pub fn read_bytes(bytes: &[u8]) -> Read {
         let Ok(mut file) = serde_json::from_slice::<serde_json::Value>(bytes) else {
-            return (Self::default(), false);
+            return Read {
+                unread: vec!["everything".to_owned()],
+                ..Read::default()
+            };
         };
         let seal = file
             .as_object_mut()
@@ -1739,8 +1781,9 @@ impl Options {
             .and_then(serde_json::Value::as_object_mut)
             .and_then(|a| a.remove("grid_color"))
             .and_then(|g| serde_json::from_value::<[u8; 3]>(g).ok());
-        let Ok(mut options) = serde_json::from_value::<Self>(file) else {
-            return (Self::default(), false);
+        let (mut options, unread) = match serde_json::from_value::<Self>(file.clone()) {
+            Ok(options) => (options, vec![]),
+            Err(_) => Self::read_each(file),
         };
         if let Some(grid) = old_grid.filter(|g| *g != old_grid_color()) {
             options.appearance.light_2d.grid_color = grid;
@@ -1749,7 +1792,45 @@ impl Options {
         if tampered {
             options.advanced = Advanced::default();
         }
-        (options, tampered)
+        Read {
+            options,
+            tampered,
+            unread,
+        }
+    }
+
+    /// A file that does not read whole, read setting by setting onto the defaults: each
+    /// section kept if it reads, else each of its settings that does; and what was left out.
+    fn read_each(file: serde_json::Value) -> (Self, Vec<String>) {
+        let reads = |v: &serde_json::Value| serde_json::from_value::<Self>(v.clone()).is_ok();
+        let mut kept = serde_json::to_value(Self::default()).expect("options serialise");
+        let mut unread = vec![];
+        let serde_json::Value::Object(sections) = file else {
+            return (Self::default(), vec!["everything".to_owned()]);
+        };
+        for (section, value) in sections {
+            let mut trial = kept.clone();
+            trial[&section] = value.clone();
+            if reads(&trial) {
+                kept = trial;
+                continue;
+            }
+            let (Some(settings), true) = (value.as_object(), kept[&section].is_object()) else {
+                unread.push(section);
+                continue;
+            };
+            for (name, setting) in settings {
+                let mut trial = kept.clone();
+                trial[&section][name] = setting.clone();
+                if reads(&trial) {
+                    kept = trial;
+                } else {
+                    unread.push(format!("{section} ▸ {name}"));
+                }
+            }
+        }
+        let options = serde_json::from_value(kept).unwrap_or_default();
+        (options, unread)
     }
 
     /// These options with one page (`general`, `advanced`…) back to its defaults, as its
@@ -2010,6 +2091,37 @@ mod tests {
         let bytes = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(path);
         bytes
+    }
+
+    #[test]
+    fn a_setting_that_cannot_be_read_loses_only_itself_and_is_named() {
+        let mut o = Options::default();
+        o.controls
+            .shortcuts
+            .insert("pan".to_owned(), vec!["Mouse Back".to_owned()]);
+        o.default_job = Some(cut_craft_core::document::Job {
+            width: 300.0,
+            ..Default::default()
+        });
+        o.appearance.system_title_bar = true;
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        // a theme a newer version knows, and a section of the wrong kind
+        file["appearance"]["theme"] = "neon".into();
+        file["favourites"] = 7.into();
+        let read = Options::read_bytes(&serde_json::to_vec(&file).unwrap());
+        assert_eq!(read.options.controls, o.controls, "the shortcuts kept");
+        assert_eq!(read.options.default_job, o.default_job);
+        assert!(
+            read.options.appearance.system_title_bar,
+            "the rest of it kept"
+        );
+        assert_eq!(read.options.appearance.theme, Theme::default());
+        assert_eq!(read.unread, ["appearance ▸ theme", "favourites"]);
+        assert!(!read.tampered);
+        // a file that reads whole names nothing
+        assert_eq!(Options::read_bytes(&saved(&o)).unread, [] as [String; 0]);
+        // and one that is not options at all names the lot
+        assert_eq!(Options::read_bytes(b"{ not json").unread, ["everything"]);
     }
 
     #[test]

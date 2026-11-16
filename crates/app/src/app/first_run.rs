@@ -260,11 +260,18 @@ impl CutCraftApp {
     /// The options kept between runs, read at start (after the machines, which decide
     /// whether first-time setup is shown).
     pub(super) fn load_options(&mut self) {
-        let (options, tampered) = crate::options::Options::load_checked();
+        let crate::options::Read {
+            options,
+            tampered,
+            unread,
+        } = crate::options::Options::load_checked();
         self.options = options;
         self.options.apply();
         self.playback_speed = self.options.toolpaths.preview_speed();
-        if tampered {
+        if !unread.is_empty() {
+            self.status
+                .set_message(&crate::options::unread_message(&unread));
+        } else if tampered {
             self.status.set_message(crate::options::TAMPERED);
         }
         self.options_path = crate::options::Options::path();
