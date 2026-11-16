@@ -352,3 +352,35 @@ fn a_merged_or_array_copy_toolpath_is_stale_once_a_toolpath_it_copies_changes() 
     history.apply(&mut doc, change).unwrap();
     assert!(doc.toolpaths[&copy].stale, "a source deleted");
 }
+
+/// Test strategy: makes nothing.
+struct Nothing;
+
+impl Command for Nothing {
+    const ID: &'static str = "nothing";
+    type Params = NoParams;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Nothing",
+            group: "Test",
+            icon: "",
+            shortcut: "",
+        }
+    }
+
+    fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
+        Ok(Change::builder(doc).finish())
+    }
+}
+
+#[test]
+fn a_toolpath_that_makes_nothing_again_is_explained_in_plain_words() {
+    let (mut doc, tp) = job();
+    doc.toolpaths.get_mut(&tp).unwrap().strategy = Nothing::ID.into();
+    let mut r = Registry::default();
+    r.add::<Nothing>();
+    let why = r.recalculate(&doc, tp).unwrap_err().to_string();
+    assert!(!why.contains('`') && !why.contains("nothing"), "{why}");
+    assert!(why.contains("Centres"), "names the toolpath: {why}");
+}

@@ -438,7 +438,11 @@ impl Registry {
                 _ => None,
             })
             .ok_or_else(|| {
-                CommandError::Failed(format!("`{}` did not make a toolpath", toolpath.strategy))
+                CommandError::Failed(format!(
+                    "{} could not be made again: what it was made from is no longer there. \
+                     Delete it and make it again",
+                    toolpath.name
+                ))
             })?;
         let mut fresh = fresh;
         crate::rest::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
