@@ -1,6 +1,8 @@
 //! Create Texture Area: the component picked in the component tree tiled over the selected
 //! closed vectors (or the whole job) with spacing, alternate-row and -column shifts and
-//! reflections in each group of four, as one new component; the tile is hidden. The
+//! reflections in each group of four, as one new component; the tile is hidden. Pick the
+//! tile in the tree last, after the vectors (a plain click on a vector lets go of the tree's
+//! pick), or pick the tile first and then open this tool: it keeps that tile. The
 //! component remembers its tile and settings and the shape of the vectors it fills: opening
 //! the form with it picked edits it, and moving or resizing it tiles its new box inside that
 //! shape, moved and sized with it.
@@ -41,6 +43,11 @@ pub struct Params {
     #[schemars(skip)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replaces: Option<EntityId>,
+    /// The component picked in the tree as the form opened: still the tile after a plain
+    /// click on a vector to fill lets go of the tree's pick.
+    #[schemars(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile: Option<EntityId>,
 }
 
 impl Default for Params {
@@ -54,6 +61,7 @@ impl Default for Params {
             name: "Texture Area".into(),
             combine: Combine::Add,
             replaces: None,
+            tile: None,
         }
     }
 }
@@ -84,14 +92,17 @@ impl Command for TextureArea {
     }
 
     /// On a texture area picked in the component tree, its own settings, so the form edits
-    /// it.
+    /// it; on another component, that component as the tile.
     fn initial_params(doc: &Document) -> Params {
         let Some(id) = picked(doc) else {
             return Params::default();
         };
         let k = &doc.components[&id];
         let Some(texture) = &k.texture else {
-            return Params::default();
+            return Params {
+                tile: Some(id),
+                ..Params::default()
+            };
         };
         let t = &texture.tiling;
         Params {
@@ -103,6 +114,7 @@ impl Command for TextureArea {
             name: k.name.clone(),
             combine: k.combine,
             replaces: Some(id),
+            tile: None,
         }
     }
 
@@ -116,10 +128,12 @@ impl Command for TextureArea {
             let texture = k.texture.as_ref().expect("filtered above");
             (texture.seed, k.extent(), texture.rings.clone())
         } else {
-            let Some(id) = picked(doc) else {
+            let tile = p.tile.filter(|id| doc.components.contains_key(id));
+            let Some(id) = picked(doc).or(tile) else {
                 return Err(CommandError::Failed(
-                    "select the component to tile in the component tree, and the closed \
-                     vectors to fill (none: the whole job)"
+                    "select the component to tile in the component tree last, after the \
+                     closed vectors to fill (none: the whole job), as clicking a vector lets \
+                     go of the component; or pick the tile, then open this tool"
                         .into(),
                 ));
             };
@@ -290,6 +304,38 @@ mod tests {
             why.to_lowercase().contains("select the component to tile"),
             "{why}"
         );
+    }
+
+    #[test]
+    fn the_tile_picked_as_the_form_opens_is_kept_when_a_vector_is_clicked_after() {
+        let mut doc = ramp();
+        // the tile picked in the tree, then the form opened
+        let p = TextureArea::initial_params(&doc);
+        let tile = *doc.components.keys().next().unwrap();
+        assert_eq!(p.tile, Some(tile));
+        // a plain click on the vector to fill drops the tree's pick
+        let mut c = Change::builder(&doc);
+        let id = c.add(square(0.0, 0.0, 15.0));
+        c.select([id]);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        doc.selected_components.clear();
+        let k = textured(&mut doc, &p);
+        assert!(k.height_at(Point::new(14.0, 14.0)).is_some());
+        assert!(
+            k.height_at(Point::new(16.0, 4.0)).is_none(),
+            "the square only"
+        );
+    }
+
+    #[test]
+    fn with_no_tile_the_message_says_to_pick_it_last() {
+        let mut doc = ramp();
+        doc.selected_components.clear();
+        let why = TextureArea::run(&doc, &Params::default())
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("last"), "{why}");
     }
 
     #[test]
