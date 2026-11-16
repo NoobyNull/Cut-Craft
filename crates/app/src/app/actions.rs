@@ -3842,6 +3842,11 @@ impl CutCraftApp {
             None => change,
         };
         let (made, notes) = (change.toolpaths_made(), change.notes.clone());
+        // the level the last component it made went on, for the status bar
+        let new_level = change.edits.iter().rev().find_map(|e| match e {
+            cut_craft_core::Edit::AddComponent { component, .. } => Some(component.level),
+            _ => None,
+        });
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
@@ -3865,8 +3870,19 @@ impl CutCraftApp {
         {
             form.params = fresh;
         }
+        let placed =
+            new_level
+                .and_then(|l| self.doc.levels.get(&l))
+                .map_or_else(String::new, |level| {
+                    let hidden = if level.visible {
+                        ""
+                    } else {
+                        " (hidden: show the level to see it)"
+                    };
+                    format!(": new component on level {}{hidden}", level.name)
+                });
         self.status
-            .set_message(&format!("{} applied", cmd.meta().label));
+            .set_message(&format!("{} applied{placed}", cmd.meta().label));
         // new keep-out zones: the toolpaths are made again round them
         if id == "keep_out_zones" {
             self.keep_out_changed();

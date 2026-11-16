@@ -372,7 +372,7 @@ impl Command for CreateShape {
                 c.replace_component(id, component);
             }
             None => {
-                c.add_component(component);
+                c.add_new_component(component);
             }
         }
         Ok(c.finish())
@@ -436,6 +436,24 @@ mod tests {
             shape(vec![square(0.0, 0.0, 40.0)], &p).is_err(),
             "needs its profile"
         );
+    }
+
+    #[test]
+    fn a_new_shape_goes_on_the_top_shown_level() {
+        use cut_craft_core::component::Level;
+        let mut doc = document_with(vec![square(0.0, 0.0, 40.0)]);
+        let mut c = Change::builder(&doc);
+        c.set_level(
+            1,
+            Some(Level {
+                name: "Level 2".into(),
+                ..Level::default()
+            }),
+        );
+        doc.apply(&c.finish()).unwrap();
+        let change = CreateShape::run(&doc, &Params::default()).unwrap();
+        doc.apply(&change).unwrap();
+        assert_eq!(doc.components.values().last().unwrap().level, 1);
     }
 
     #[test]

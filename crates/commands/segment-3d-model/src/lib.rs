@@ -392,7 +392,7 @@ impl Command for Segment3dModel {
                     *z = f64::NAN;
                 }
             }
-            c.add_component(k);
+            c.add_new_component(k);
             left += h.x - l.x + p.gap;
         }
         Ok(c.finish())

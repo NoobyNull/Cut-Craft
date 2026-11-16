@@ -28,7 +28,7 @@ impl Command for AddZeroPlane {
             |_| Some(0.0),
         );
         let mut c = Change::builder(doc);
-        c.add_component(plane);
+        c.add_new_component(plane);
         Ok(c.finish())
     }
 }

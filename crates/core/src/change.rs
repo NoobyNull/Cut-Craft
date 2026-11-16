@@ -1578,6 +1578,13 @@ impl ChangeBuilder<'_> {
         id
     }
 
+    /// Adds a component made from scratch on the level new components go on
+    /// ([`Document::new_component_level`]).
+    pub fn add_new_component(&mut self, mut component: Component) -> EntityId {
+        component.level = self.doc.new_component_level();
+        self.add_component(component)
+    }
+
     pub fn add_bitmap(&mut self, bitmap: Bitmap) -> EntityId {
         let id = EntityId(self.next_id);
         self.next_id += 1;

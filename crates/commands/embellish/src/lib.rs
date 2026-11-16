@@ -786,7 +786,7 @@ impl Command for Embellish {
                     c.replace_component(id, part);
                 }
                 None => {
-                    c.add_component(part);
+                    c.add_new_component(part);
                 }
             }
         }

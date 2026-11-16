@@ -929,6 +929,33 @@ impl Document {
             .copied()
     }
 
+    /// The level a new 3D component goes on: the level of the component picked in the
+    /// component tree, else the top shown level (else the first).
+    pub fn new_component_level(&self) -> u64 {
+        let first = self.levels.keys().next().copied().unwrap_or(0);
+        let picked = self
+            .selected_components
+            .iter()
+            .rev()
+            .find_map(|id| self.components.get(id))
+            .map(|k| {
+                if self.levels.contains_key(&k.level) {
+                    k.level
+                } else {
+                    first
+                }
+            });
+        picked
+            .or_else(|| {
+                self.levels
+                    .iter()
+                    .rev()
+                    .find(|(_, l)| l.visible)
+                    .map(|(&id, _)| id)
+            })
+            .unwrap_or(first)
+    }
+
     /// The vectors picked together with `id`: its group's, or `id` alone.
     pub fn group_members(&self, id: EntityId) -> Vec<EntityId> {
         match self.vector_groups.get(&id) {

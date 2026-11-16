@@ -495,8 +495,11 @@ impl CutCraftApp {
                 }
             });
         });
-        // new components go on the first level
-        let level = doc.levels.values().next().map_or("", |l| l.name.as_str());
+        // the level new components go on: the picked component's, else the top shown one
+        let level = doc
+            .levels
+            .get(&doc.new_component_level())
+            .map_or("", |l| l.name.as_str());
         drop_down(ui, "view/component_levels.png", level, &mut |ui| {
             bordered(ui, |ui| {
                 for (&id, l) in doc.levels.iter().rev() {

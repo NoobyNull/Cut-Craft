@@ -793,7 +793,8 @@ say "not implemented yet".
     modes reflect one half or quarter of the job about its middle; Wrapping (rotary jobs)
     brings what runs off one side of the unrolled job round the other, keeping the
     higher part where it meets itself. Older jobs get one level, so their models are
-    unchanged. New components go on the first level. Move Up / Move Down over the tree
+    unchanged. New components go on the level of the component picked in the tree, else
+    the top shown level, and the status bar names it (the level drop-down shows it too). Move Up / Move Down over the tree
     (Aspire's blue arrows) move the picked component within its level, and the level
     menu's Move Level Up / Down move a level with its components (Move Component, Move
     Level); dragging in the tree is not done.

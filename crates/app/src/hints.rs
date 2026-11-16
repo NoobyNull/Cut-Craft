@@ -297,7 +297,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "component_levels",
-        "Component Levels: opens the Components tab, where the 3D model's levels and components are listed",
+        "Component Levels: opens the Components tab, where the 3D model's levels and components are listed. A new component goes on the level of the component picked there, else on the top shown level",
     ),
     (
         "join_straight_line",

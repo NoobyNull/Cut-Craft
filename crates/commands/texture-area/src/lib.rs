@@ -165,7 +165,7 @@ impl Command for TextureArea {
             let mut hidden = seed.clone();
             hidden.visible = false;
             c.replace_component(seed_id, hidden);
-            c.add_component(made);
+            c.add_new_component(made);
         }
         Ok(c.finish())
     }

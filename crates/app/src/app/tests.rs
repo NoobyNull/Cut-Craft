@@ -15424,3 +15424,16 @@ fn a_smaller_recent_file_list_only_hides_the_rest_until_it_grows_again() {
     h.app.options.general.recent_file_list_size = 9;
     assert_eq!(h.app.recent_shown().len(), 9, "all nine back");
 }
+
+#[test]
+fn the_status_bar_names_the_level_a_new_component_went_on() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let shape = h.app.registry.get("create_shape").unwrap().default_params();
+    h.app.apply("create_shape", &shape).unwrap();
+    assert!(
+        h.app.status.message.contains("on level Level 1"),
+        "{}",
+        h.app.status.message
+    );
+}
