@@ -16031,3 +16031,30 @@ fn a_laser_reads_as_its_kerf_and_speed_in_the_jobs_units() {
         "Laser, 0.006 in kerf, 59.055 in/min"
     );
 }
+
+#[test]
+fn save_toolpaths_says_tiling_is_on_and_how_many_tiles() {
+    let mut h = named_toolpaths();
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(!h.texts().iter().any(|t| t.starts_with("Tiling on")));
+    h.app.save_form = None;
+    let area = h.app.doc.job.area();
+    let tiling = cut_craft_core::tiling::Tiling {
+        width: area.size().x / 2.0,
+        height: area.size().y,
+        ..cut_craft_core::tiling::Tiling::default()
+    };
+    h.app.doc.tiling = Some(tiling);
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("Tiling on: 2 tiles") && t.contains("_tile2")),
+        "{:?}",
+        h.texts()
+    );
+}

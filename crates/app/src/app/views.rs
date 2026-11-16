@@ -4374,7 +4374,18 @@ fn tool_changes_section(ui: &mut egui::Ui, changes: &mut files::ToolChanges, has
     );
 }
 
-/// Save Toolpaths' files: what goes in each, and why there is a file for each tool.
+/// What Save Toolpaths says while tiling is on, with `tiles` tiles.
+pub(super) fn tiling_on(tiles: usize) -> String {
+    let s = if tiles == 1 { "" } else { "s" };
+    format!(
+        "Tiling on: {tiles} tile{s}. Each tile is saved as a file of its own, the name you \
+         give with _tile1 to _tile{tiles} added (a tile with nothing to cut gets none). \
+         Toolpaths ▸ Toolpath Tiling turns it off"
+    )
+}
+
+/// Save Toolpaths' files: what goes in each, why there is a file for each tool, and that
+/// each is saved once per tile while tiling is on.
 fn files_section(
     ui: &mut egui::Ui,
     doc: &cut_craft_core::document::Document,
@@ -4382,6 +4393,10 @@ fn files_section(
     split: Option<&str>,
 ) {
     let warn = ui.visuals().warn_fg_color;
+    // tiling on: each file is saved per tile, never under the name typed alone
+    if let Some(tiling) = doc.tiling {
+        ui.colored_label(warn, tiling_on(tiling.tiles(doc.job.area()).len()));
+    }
     if let Some(why) = split
         && plan.as_ref().is_ok_and(|p| p.len() > 1)
     {

@@ -25,8 +25,9 @@ pub struct ToolpathTiling;
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// Save the toolpaths as tiles, one file each (ticked while the job is tiled). While it
-    /// is on, Save Toolpaths writes one file for each tile, numbered after the name given
-    /// (tile1, tile2…), in place of that name
+    /// is on, Save Toolpaths says "Tiling on" with how many tiles, and writes one file for
+    /// each tile, numbered after the name given (tile1, tile2…), in place of that name.
+    /// Unticked, the tile settings are kept for when it is ticked again
     #[schemars(title = "Tile toolpaths")]
     pub enabled: bool,
     /// How the job is split into tiles
@@ -49,9 +50,10 @@ impl Command for ToolpathTiling {
 
     fn initial_params(doc: &Document) -> Params {
         // as the job has it: opened just to look, OK leaves tiling as it was
+        // turned off, it keeps the settings it had for when it is turned on again
         Params {
             enabled: doc.tiling.is_some(),
-            tiling: doc.tiling.unwrap_or_default(),
+            tiling: doc.tiling.or(doc.tiling_kept).unwrap_or_default(),
         }
     }
 
@@ -61,7 +63,7 @@ impl Command for ToolpathTiling {
             ensure_positive("tile height", p.tiling.height)?;
         }
         let mut c = Change::builder(doc);
-        c.set_tiling(p.enabled.then_some(p.tiling));
+        c.set_tiling_with(p.enabled, p.tiling);
         Ok(c.finish())
     }
 }
@@ -100,6 +102,38 @@ mod tests {
             tiling: Tiling::default(),
         });
         assert!(ToolpathTiling::initial_params(&on).enabled);
+    }
+
+    #[test]
+    fn turned_off_it_keeps_its_tile_sizes_for_turning_on_again() {
+        let small = Tiling {
+            width: 300.0,
+            height: 250.0,
+            ..Tiling::default()
+        };
+        let on = after::<ToolpathTiling>(&Params {
+            enabled: true,
+            tiling: small,
+        });
+        let off_params = Params {
+            enabled: false,
+            ..ToolpathTiling::initial_params(&on)
+        };
+        let change = ToolpathTiling::run(&on, &off_params).unwrap();
+        let mut off = on.clone();
+        off.apply(&change).unwrap();
+        assert!(off.tiling.is_none());
+        let reopened = ToolpathTiling::initial_params(&off);
+        assert!(!reopened.enabled);
+        assert_eq!(reopened.tiling, small, "the sizes are kept");
+        // and undo puts it back exactly
+        let mut undone = off.clone();
+        undone.apply(&change.inverse()).unwrap();
+        assert_eq!(undone, on);
+        // opened just to look on a job never tiled, OK changes nothing
+        let never = Document::default();
+        let look = ToolpathTiling::run(&never, &ToolpathTiling::initial_params(&never)).unwrap();
+        assert!(look.is_empty());
     }
 
     #[test]

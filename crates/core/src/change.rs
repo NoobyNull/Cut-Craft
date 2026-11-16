@@ -143,10 +143,15 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
-    /// Turns toolpath tiling on (with its settings) or off.
+    /// Turns toolpath tiling on (with its settings) or off, and the settings kept while it
+    /// is off.
     SetTiling {
         before: Option<crate::tiling::Tiling>,
         after: Option<crate::tiling::Tiling>,
+        #[serde(default)]
+        kept_before: Option<crate::tiling::Tiling>,
+        #[serde(default)]
+        kept_after: Option<crate::tiling::Tiling>,
     },
     /// Replaces the guide lines.
     SetGuides {
@@ -247,9 +252,16 @@ impl Edit {
                 before: after,
                 after: before,
             },
-            Self::SetTiling { before, after } => Self::SetTiling {
+            Self::SetTiling {
+                before,
+                after,
+                kept_before,
+                kept_after,
+            } => Self::SetTiling {
                 before: after,
                 after: before,
+                kept_before: kept_after,
+                kept_after: kept_before,
             },
             Self::SetGuides { before, after } => Self::SetGuides {
                 before: after,
@@ -1042,7 +1054,12 @@ impl Document {
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
             Edit::SetConstraints { after, .. } => self.constraints.clone_from(after),
             Edit::SetToolpathGroups { after, .. } => self.toolpath_groups.clone_from(after),
-            Edit::SetTiling { after, .. } => self.tiling = *after,
+            Edit::SetTiling {
+                after, kept_after, ..
+            } => {
+                self.tiling = *after;
+                self.tiling_kept = *kept_after;
+            }
             _ => unreachable!("only settings come here"),
         }
     }
@@ -1856,10 +1873,31 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    pub fn set_tiling(&mut self, after: Option<crate::tiling::Tiling>) {
-        if self.doc.tiling != after {
-            let before = self.doc.tiling;
-            self.edits.push(Edit::SetTiling { before, after });
+    /// Turns tiling on with `settings`, or off keeping them for when it is turned on again
+    /// (not kept when it was never on and they are the defaults: nothing to keep).
+    pub fn set_tiling_with(&mut self, on: bool, settings: crate::tiling::Tiling) {
+        if on {
+            self.set_tiling_kept(Some(settings), None);
+        } else {
+            let worth = self.doc.tiling.is_some()
+                || self.doc.tiling_kept.is_some()
+                || settings != crate::tiling::Tiling::default();
+            self.set_tiling_kept(None, worth.then_some(settings));
+        }
+    }
+
+    fn set_tiling_kept(
+        &mut self,
+        after: Option<crate::tiling::Tiling>,
+        kept_after: Option<crate::tiling::Tiling>,
+    ) {
+        if self.doc.tiling != after || self.doc.tiling_kept != kept_after {
+            self.edits.push(Edit::SetTiling {
+                before: self.doc.tiling,
+                after,
+                kept_before: self.doc.tiling_kept,
+                kept_after,
+            });
         }
     }
 

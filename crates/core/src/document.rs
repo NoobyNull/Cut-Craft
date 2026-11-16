@@ -657,6 +657,10 @@ pub struct Document {
     /// Toolpath tiling: toolpaths saved in tiles for a machine smaller than the job.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tiling: Option<crate::tiling::Tiling>,
+    /// The tiling settings kept while tiling is off, so turning it on again starts from
+    /// them (added with keeping them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tiling_kept: Option<crate::tiling::Tiling>,
     /// Guide lines dragged out of the 2D view's rulers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
@@ -818,6 +822,7 @@ impl Default for Document {
             constraints: vec![],
             material_checked: false,
             tiling: None,
+            tiling_kept: None,
             bottom_side: false,
             other_side: SheetObjects::default(),
         }
