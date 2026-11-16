@@ -109,14 +109,19 @@ pub struct Params {
     #[schemars(extend("x-unit" = "°"), range(min = 0, max = 90))]
     #[schemars(extend("x-group" = "Strategy"))]
     pub raster_angle: f64,
-    /// Zig zag down from the level above over the ramp distance instead of plunging (Z level)
+    /// Zig zag down from the level above over the ramp distance instead of plunging. Z Level
+    /// only: 3D Raster does not ramp
     #[serde(default)]
-    #[schemars(extend("x-group" = "Ramp Plunge Moves"))]
+    #[schemars(extend(
+        "x-group" = "Ramp Plunge Moves",
+        "x-show-when" = {"strategy": "z_level"}
+    ))]
     pub ramp_plunge_moves: bool,
     #[serde(default = "ramp_distance")]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend(
         "x-group" = "Ramp Plunge Moves",
+        "x-show-when" = {"strategy": "z_level"},
         "x-enable-when" = {"ramp_plunge_moves": "true"}
     ))]
     /// How far along the cut each zig zag ramp runs
@@ -570,6 +575,20 @@ mod tests {
         let change = RoughingToolpath3d::run(&doc, params).unwrap();
         doc.apply(&change).unwrap();
         doc.toolpaths.into_values().next().unwrap()
+    }
+
+    #[test]
+    fn ramping_is_offered_only_for_z_level_which_ramps() {
+        let schema = schemars::schema_for!(Params);
+        for key in ["ramp_plunge_moves", "ramp_distance"] {
+            assert_eq!(
+                schema.as_value()["properties"][key]["x-show-when"],
+                schemars::json_schema!({"strategy": "z_level"})
+                    .as_value()
+                    .clone(),
+                "{key}"
+            );
+        }
     }
 
     #[test]
