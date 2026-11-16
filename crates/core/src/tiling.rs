@@ -35,7 +35,8 @@ pub struct Tiling {
     /// Tile height (along Y)
     #[schemars(title = "Tile height", extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
-    /// How far each tile's cuts run past its edges (at least the tool's radius for V-carving)
+    /// How far each tile's cuts run past its edges (at least the tool's radius for V-carving).
+    /// Laser toolpaths have none: their tiles meet edge to edge, so no seam burns twice
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub overlap: f64,
     /// Put the part-size tile first rather than last
@@ -190,7 +191,14 @@ impl Tiling {
                 .iter()
                 .map(|m| m.to.z)
                 .fold(f64::MIN, f64::max);
-            let clipped = clip(&toolpath.moves, reach, safe);
+            // a laser's tiles meet edge to edge: run on into the overlap, it would burn the
+            // seam twice, once from each side
+            let over = if toolpath.power.is_empty() {
+                reach
+            } else {
+                tile
+            };
+            let clipped = clip(&toolpath.moves, over, safe);
             // a laser's power goes with each move it was set for; none on the moves added
             if !toolpath.power.is_empty() {
                 toolpath.power = clipped
@@ -478,6 +486,61 @@ mod tests {
         assert_eq!(bank.hits[0].head, Point::new(right, y) - shift);
         assert_eq!((bank.hits[0].start, bank.hits[0].end), (0, 3));
         assert!((t2.moves[1].to.x - (right - shift.x)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_laser_toolpath_is_burned_once_along_a_seam_with_no_overlap() {
+        use crate::testing::with_toolpath;
+        let mut doc = with_toolpath();
+        let area = doc.job.area();
+        let y = area.center().y;
+        let t = doc.toolpaths.values_mut().next().unwrap();
+        let at = |kind, x: f64, z| Move {
+            kind,
+            to: DVec3::new(x, y, z),
+        };
+        t.moves = vec![
+            at(MoveKind::Rapid, area.min.x + 10.0, 5.0),
+            at(MoveKind::Plunge, area.min.x + 10.0, 0.0),
+            at(MoveKind::Cut, area.max.x - 10.0, 0.0),
+        ];
+        t.power = vec![0.0, 0.0, 0.8];
+        let tiling = Tiling {
+            width: area.size().x / 2.0,
+            height: area.size().y,
+            overlap: 3.0,
+            ..Tiling::default()
+        };
+        let tiles = tiling.tiles(area);
+        let burned = |n: usize| -> f64 {
+            let cut = tiling.cut_to(&doc, tiles[n], false);
+            let t = cut.toolpaths.values().next().unwrap();
+            t.moves
+                .windows(2)
+                .zip(&t.power[1..])
+                .filter(|(_, p)| **p > 0.0)
+                .map(|(pair, _)| pair[0].to.distance(pair[1].to))
+                .sum()
+        };
+        let whole = area.size().x - 20.0;
+        assert!(
+            (burned(0) + burned(1) - whole).abs() < 1e-6,
+            "the seam burned once: {} + {} of {whole}",
+            burned(0),
+            burned(1)
+        );
+        // a router's cut still runs on into the overlap
+        doc.toolpaths.values_mut().next().unwrap().power.clear();
+        let routed = tiling.cut_to(&doc, tiles[0], false);
+        let far = routed
+            .toolpaths
+            .values()
+            .next()
+            .unwrap()
+            .moves
+            .iter()
+            .map(|m| m.to.x);
+        assert!((far.fold(f64::MIN, f64::max) - (tiles[0].max.x + 3.0)).abs() < 1e-9);
     }
 
     #[test]
