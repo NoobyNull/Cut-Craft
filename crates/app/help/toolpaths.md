@@ -88,6 +88,8 @@ the old name back), so the file still gives the bit its slot's tool number.
 If the Tool Database's or Materials Library's file (tools.json, materials.json) cannot be
 read when Cut Craft starts, it is left as it is: changes are kept until Cut Craft closes but
 not saved, and each OK says "not saved". Fix or rename that file, then restart.
+The Materials Library can stay open while you use the Tool Database: its OK adds only its
+own feeds and materials, so tools added, deleted or changed there meanwhile stay as they are.
 
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the

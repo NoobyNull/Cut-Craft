@@ -35,7 +35,10 @@ impl CutCraftApp {
         match outcome {
             MaterialsOutcome::Apply | MaterialsOutcome::Ok => {
                 self.materials = window.library.clone();
-                self.tools = window.tools.clone();
+                // the library's own edits onto the database as it is now, not the copy it
+                // opened on: edits in the Tool Database since then stay
+                self.tools = window.tools_onto(&self.tools);
+                window.applied(&self.tools);
                 if outcome == MaterialsOutcome::Ok {
                     self.materials_window = None;
                 }

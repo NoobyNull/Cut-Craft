@@ -41,6 +41,9 @@ pub struct MaterialsWindow {
     /// The tools, whose feeds and speeds for the materials are edited here too.
     pub tools: ToolDatabase,
     pub pick: Option<MaterialPick>,
+    /// The tools as the window opened on them: what it changed is told from them, so its
+    /// OK keeps edits made in the Tool Database meanwhile.
+    opened_on: ToolDatabase,
 }
 
 /// The window's share of the screen when it first opens.
@@ -52,7 +55,48 @@ impl MaterialsWindow {
             library: library.clone(),
             tools: tools.clone(),
             pick: None,
+            opened_on: tools.clone(),
         }
+    }
+
+    /// `now`, the tool database as it is (the Tool Database may have changed it while this
+    /// window was open), with this window's own edits made to it: each bit's feeds for the
+    /// materials and classes, and the Material list. Tools added, deleted or edited
+    /// elsewhere meanwhile stay as they are.
+    #[must_use]
+    pub fn tools_onto(&self, now: &ToolDatabase) -> ToolDatabase {
+        let mut out = now.clone();
+        for tool in &mut out.tools {
+            let (Some(mine), Some(before)) =
+                (self.tools.get(&tool.name), self.opened_on.get(&tool.name))
+            else {
+                continue;
+            };
+            if mine.materials != before.materials {
+                tool.materials.clone_from(&mine.materials);
+            }
+            if mine.class_feeds != before.class_feeds {
+                tool.class_feeds.clone_from(&mine.class_feeds);
+            }
+        }
+        let had = |list: &[String], m: &str| list.iter().any(|n| n.eq_ignore_ascii_case(m));
+        out.materials
+            .retain(|m| had(&self.tools.materials, m) || !had(&self.opened_on.materials, m));
+        for m in &self.tools.materials {
+            if !had(&self.opened_on.materials, m) && !had(&out.materials, m) {
+                out.materials.push(m.clone());
+            }
+        }
+        if self.tools.material != self.opened_on.material {
+            out.material.clone_from(&self.tools.material);
+        }
+        out
+    }
+
+    /// After Apply: the window goes on from `tools`, the database as saved.
+    pub fn applied(&mut self, tools: &ToolDatabase) {
+        self.tools = tools.clone();
+        self.opened_on = tools.clone();
     }
 
     /// The picked material's name, when one is picked.
@@ -503,6 +547,44 @@ mod tests {
         let tool = w.tools.get(&bit).unwrap();
         assert!(!tool.materials.iter().any(|d| d.material == "Black Cherry"));
         assert!(w.library.get("Black Cherry").is_none());
+    }
+
+    #[test]
+    fn its_feeds_go_onto_the_tool_database_as_it_is_now_not_as_it_was_when_it_opened() {
+        let mut w = window();
+        let bit = w.tools.tools[0].name.clone();
+        w.pick = Some(MaterialPick::Material(at(&w, "Hard Maple")));
+        w.add_tool(&bit);
+        // the Tool Database, opened on its own while the library was open: a tool deleted,
+        // one added and a bit's own feed changed
+        let mut now = ToolDatabase::starter();
+        let gone = now.tools.remove(1).name;
+        let mut added = now.tools[0].clone();
+        added.name = "A New Bit".into();
+        now.tools.push(added);
+        now.tools[0].feed_rate = 1234.0;
+        let merged = w.tools_onto(&now);
+        assert!(
+            merged.get(&gone).is_none(),
+            "the deleted tool stays deleted"
+        );
+        assert!(merged.get("A New Bit").is_some(), "the added tool stays");
+        let tool = merged.get(&bit).unwrap();
+        assert_eq!(tool.feed_rate, 1234.0, "the Tool Database's own edit stays");
+        assert!(
+            tool.materials.iter().any(|d| d.material == "Hard Maple"),
+            "the library's feeds are added"
+        );
+        assert!(merged.materials.iter().any(|m| m == "Hard Maple"));
+        // after Apply it goes on from the database as saved
+        w.applied(&merged);
+        now = merged.clone();
+        now.tools[0].materials.clear();
+        let again = w.tools_onto(&now);
+        assert!(
+            again.get(&bit).unwrap().materials.is_empty(),
+            "a later Tool Database edit is not undone by the next OK"
+        );
     }
 
     #[test]
