@@ -350,6 +350,14 @@ impl CutCraftApp {
         if id == "delete" && self.release_picked_snap() {
             return;
         }
+        // Delete in Node Edit with nodes picked deletes those nodes, not the whole shape
+        if id == "delete"
+            && self.view_tool == Some(super::ViewTool::NodeEdit)
+            && !self.picked_nodes.is_empty()
+        {
+            self.delete_picked_nodes();
+            return;
+        }
         // Delete just after picking a toolpath in the list deletes that toolpath
         if id == "delete"
             && self.toolpath_list_clicked
@@ -3852,6 +3860,60 @@ impl CutCraftApp {
             }
             Err(e) => self.status.set_message(&e.to_string()),
         }
+    }
+
+    /// Del in Node Edit: the picked nodes go, each shape's spans either side joined by a
+    /// line, as Delete Point does, in one step to undo. A shape keeps the nodes it needs
+    /// (two, or three when closed); the status bar says when some were kept for that.
+    pub(super) fn delete_picked_nodes(&mut self) {
+        use cut_craft_core::nodes::{delete_node, node_near};
+        let mut c = Change::builder(&self.doc);
+        let vectors: std::collections::BTreeSet<EntityId> =
+            self.picked_nodes.iter().map(|n| n.vector).collect();
+        let (mut deleted, mut kept) = (0, 0);
+        for vector in vectors {
+            let Some(original) = self.doc.vectors.get(&vector) else {
+                continue;
+            };
+            let mut picked: Vec<usize> = (self.picked_nodes.iter())
+                .filter(|n| n.vector == vector)
+                .filter_map(|n| node_near(original, n.at.into(), n.reach.max(1e-3)))
+                .collect();
+            // the last first, so the nodes still to go keep their places
+            picked.sort_unstable_by(|a, b| b.cmp(a));
+            picked.dedup();
+            let mut path = original.clone();
+            for k in picked {
+                match delete_node(&path, k) {
+                    Some(fewer) => {
+                        path = fewer;
+                        deleted += 1;
+                    }
+                    None => kept += 1,
+                }
+            }
+            if path != *original {
+                c.replace(vector, path);
+            }
+        }
+        let change = c.finish();
+        self.picked_nodes.clear();
+        if deleted > 0
+            && let Err(e) = self.history.apply(&mut self.doc, change)
+        {
+            self.status.set_message(&e.to_string());
+            return;
+        }
+        let s = |n: usize| if n == 1 { "" } else { "s" };
+        let mut said = format!("Deleted {deleted} node{}", s(deleted));
+        if kept > 0 {
+            said = format!(
+                "{said}. {kept} node{} kept: a shape needs at least two (three when \
+                 closed). Delete the whole shape instead",
+                s(kept)
+            );
+        }
+        self.status.set_message(&said);
     }
 
     /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half

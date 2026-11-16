@@ -14700,3 +14700,32 @@ fn del_after_picking_a_toolpath_in_the_list_deletes_that_toolpath_not_the_vector
     assert_eq!(h.app.doc.toolpaths.len(), 1);
     assert!(h.app.doc.vectors.is_empty(), "Del is the drawing's again");
 }
+
+#[test]
+fn del_in_node_edit_deletes_the_picked_nodes_not_the_shape() {
+    use cut_craft_core::geometry::Rect as JobRect;
+    use cut_craft_core::nodes::nodes;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.app.invoke(&h.ctx, "node_edit");
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    // the top right corner picked, as a box round it picks it
+    let corner = JobRect::new(Point::new(25.0, 25.0), Point::new(35.0, 35.0));
+    h.app.picked_nodes = h.app.nodes_in(corner);
+    assert_eq!(h.app.picked_nodes.len(), 1);
+    h.frame(vec![key(Key::Delete)]);
+    let path = h.app.doc.vectors.get(&id).expect("the shape is kept");
+    assert_eq!(nodes(path).len(), 3, "the picked corner went");
+    assert!(h.app.picked_nodes.is_empty());
+    // two more picked: the shape can lose no more than it can, and says so
+    let all = JobRect::new(Point::new(0.0, 0.0), Point::new(40.0, 40.0));
+    h.app.picked_nodes = h.app.nodes_in(all);
+    h.frame(vec![key(Key::Delete)]);
+    let path = h.app.doc.vectors.get(&id).expect("still kept");
+    assert_eq!(nodes(path).len(), 3, "a closed shape keeps three nodes");
+    assert!(
+        h.app.status.message.contains("needs"),
+        "{}",
+        h.app.status.message
+    );
+}
