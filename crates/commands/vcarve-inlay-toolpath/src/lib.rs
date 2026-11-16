@@ -1,9 +1,11 @@
 //! V-Carve Inlay Toolpath (V-bit carved inlay): two V-carvings that fit together. The pocket carves
 //! the selected shapes; the plug carves round mirrored copies of them, so that turned over it drops
-//! into the pocket leaving the glue gap under it.
+//! into the pocket leaving the glue gap under it. The plug is cut from a second board (usually a
+//! contrasting wood), so it goes on a sheet of its own in the Sheets list, called Inlay plug: open
+//! that sheet to see or save the Plug toolpath.
 
 use cmd_vcarve_engrave_toolpath::{VcarveEngraveToolpath, carve};
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, Sheet, StoredVector};
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::{DAffine2, DVec2};
 use cut_craft_core::polygon::{self, Corners};
@@ -14,13 +16,16 @@ use serde::{Deserialize, Serialize};
 
 pub struct VcarveInlayToolpath;
 
+/// The sheet the plug is put on.
+pub const PLUG_SHEET: &str = "Inlay plug";
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PlugBoundary {
     /// Only round the shapes, the surface clearance plus the boundary offset out from them
     #[default]
     VectorOffset,
-    /// From the shapes out to the edges of the material
+    /// From the shapes out to the edges of the plug's board (the Inlay plug sheet)
     SheetLimits,
 }
 
@@ -43,7 +48,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Inlay"))]
     #[schemars(extend("x-dim" = "G2"))]
     pub surface_clearance: f64,
-    /// How far round the shapes the plug's surface is cleared
+    /// How far round the shapes the plug's surface is cleared, on the Inlay plug sheet
     #[schemars(extend("x-group" = "Boundary"))]
     pub plug_boundary: PlugBoundary,
     /// Extra material cut away round the plug
@@ -118,7 +123,7 @@ impl Command for VcarveInlayToolpath {
         // turned over, the plug's top sits the glue gap above the pocket floor and its
         // material the surface clearance above the pocket's surface
         let plug = carving("Plug", p.pocket_depth - p.glue_gap, p.surface_clearance);
-        // ponytail: one sheet, so the plug is mirrored across the job's centre line; plug sheets later
+        // mirrored across the job's centre line, so that turned over it lies over the pocket
         let mirror = DAffine2::from_translation(DVec2::new(doc.job.width, 0.0))
             * DAffine2::from_scale(DVec2::new(-1.0, 1.0));
         let mirrored: Vec<Path> = shapes.iter().map(|s| s.transformed(&mirror)).collect();
@@ -145,7 +150,6 @@ impl Command for VcarveInlayToolpath {
         let plug_paths: Vec<Path> = mirrored.iter().chain(&boundary).cloned().collect();
         let safe = doc.job.clearance;
         let mut c = Change::builder(doc);
-        let plug_ids = plug_paths.iter().map(|path| c.add(path.clone())).collect();
         c.add_toolpath(made_by::<VcarveEngraveToolpath>(
             &pocket,
             pocket.name.clone(),
@@ -153,15 +157,48 @@ impl Command for VcarveInlayToolpath {
             ids,
             carve(&shapes, &pocket, safe),
         ));
-        c.add_toolpath(made_by::<VcarveEngraveToolpath>(
+        // the plug is cut from another board, so it goes on a sheet of its own (the one an
+        // earlier inlay made, else a new one sized as this)
+        let mut sheets = c.sheets().to_vec();
+        let at = plug_sheet(&mut sheets, doc);
+        let layer = Some(doc.current_layer);
+        let plug_ids = plug_paths
+            .iter()
+            .map(|path| {
+                let id = c.fresh_id();
+                sheets[at].objects.vectors.insert(
+                    id,
+                    StoredVector {
+                        path: path.clone(),
+                        layer,
+                        group: None,
+                    },
+                );
+                id
+            })
+            .collect();
+        let toolpath = made_by::<VcarveEngraveToolpath>(
             &plug,
             plug.name.clone(),
             p.tool.clone(),
             plug_ids,
             carve(&plug_paths, &plug, safe),
-        ));
+        );
+        let id = c.fresh_id();
+        sheets[at].objects.toolpaths.insert(id, toolpath);
+        c.set_sheets(sheets, doc.active_sheet);
         Ok(c.finish())
     }
+}
+
+/// Where in `sheets` the plug goes: the Inlay plug sheet an earlier inlay made, else a new one
+/// sized as the active sheet.
+fn plug_sheet(sheets: &mut Vec<Sheet>, doc: &Document) -> usize {
+    let found = (0..sheets.len()).find(|&i| i != doc.active_sheet && sheets[i].name == PLUG_SHEET);
+    found.unwrap_or_else(|| {
+        sheets.push(Sheet::new(PLUG_SHEET, doc.job));
+        sheets.len() - 1
+    })
 }
 
 #[cfg(test)]
@@ -181,11 +218,18 @@ mod tests {
         doc
     }
 
+    /// The toolpath named so, on the design's sheet or the plug's.
     fn toolpath<'a>(doc: &'a Document, ends_with: &str) -> &'a Toolpath {
         doc.toolpaths
             .values()
+            .chain(doc.sheets.iter().flat_map(|s| s.objects.toolpaths.values()))
             .find(|t| t.name.ends_with(ends_with))
             .unwrap()
+    }
+
+    /// A vector on the plug's sheet.
+    fn plug_vector(doc: &Document, id: cut_craft_core::document::EntityId) -> &Path {
+        &doc.sheets[1].objects.vectors[&id].path
     }
 
     fn carved(doc: &Document, t: &Toolpath) -> Material {
@@ -197,8 +241,7 @@ mod tests {
     #[test]
     fn makes_a_pocket_and_a_plug_as_v_carvings_that_recalculate() {
         let doc = inlaid(&Params::default());
-        assert_eq!(doc.toolpaths.len(), 2);
-        for t in doc.toolpaths.values() {
+        for t in [toolpath(&doc, "Pocket"), toolpath(&doc, "Plug")] {
             assert_eq!(t.strategy, "vcarve_engrave_toolpath");
         }
         assert_eq!(toolpath(&doc, "Pocket").params["flat_depth"], 5.0);
@@ -217,13 +260,13 @@ mod tests {
             "the mirrored square and its boundary"
         );
         let w = doc.job.width;
-        let mirrored = doc.vectors[&plug.vectors[0]].bounds();
+        let mirrored = plug_vector(&doc, plug.vectors[0]).bounds();
         assert!(
             mirrored.min.distance(Point::new(w - 30.0, 10.0)) < 1e-9,
             "{mirrored:?}"
         );
         assert!(
-            doc.vectors[&plug.vectors[1]]
+            plug_vector(&doc, plug.vectors[1])
                 .bounds()
                 .contains_rect(mirrored)
         );
@@ -263,6 +306,38 @@ mod tests {
             "{:?}",
             plug.at(floor)
         );
+    }
+
+    #[test]
+    fn the_plug_goes_on_its_own_sheet_called_inlay_plug() {
+        let mut doc = document_with(vec![square(10.0, 10.0, 20.0)]);
+        doc.apply(&VcarveInlayToolpath::run(&doc, &Params::default()).unwrap())
+            .unwrap();
+        assert_eq!(
+            doc.toolpaths.len(),
+            1,
+            "only the pocket on the design's sheet"
+        );
+        assert!(toolpath(&doc, "Pocket").name.ends_with("Pocket"));
+        assert_eq!(doc.sheets.len(), 2);
+        let sheet = &doc.sheets[1];
+        assert_eq!(sheet.name, "Inlay plug");
+        assert_eq!(sheet.objects.toolpaths.len(), 1);
+        let plug = sheet.objects.toolpaths.values().next().unwrap();
+        assert!(plug.name.ends_with("Plug"));
+        assert_eq!(
+            sheet.objects.vectors.len(),
+            2,
+            "the mirrored square and its boundary"
+        );
+        for id in &plug.vectors {
+            assert!(sheet.objects.vectors.contains_key(id));
+        }
+        // a second inlay's plug joins the same plug sheet
+        doc.apply(&VcarveInlayToolpath::run(&doc, &Params::default()).unwrap())
+            .unwrap();
+        assert_eq!(doc.sheets.len(), 2);
+        assert_eq!(doc.sheets[1].objects.toolpaths.len(), 2);
     }
 
     #[test]

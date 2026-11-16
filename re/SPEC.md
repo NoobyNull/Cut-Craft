@@ -417,7 +417,7 @@ percentages and passes get no letter.
 - **Pocket Depth** is the most the pocket goes down. **Glue Gap**: between the plug's top and the pocket floor once fitted; more than 0 and less than the pocket depth. **Surface Clearance**: between the plug's material and the pocket's surface; more than 0 and less than the material thickness.
 - **Plug Outer Boundary:** Sheet Limits (cut to the sheet edge) or Vector Offset (only round the shapes), widened by a Boundary Offset (negative ignored). **Plug Destination Sheet:** the same sheet places the plug mirrored; another sheet mirrors and centres it there.
 - The pocket form later allows a Start Depth (into an existing pocket). Optional clearance tools clear the flat areas, leaving an allowance for the V-bit.
-- **[inf]** Geometry Cut Craft uses: pocket = V-carve to flat depth D; plug = V-carve of (boundary − mirrored shapes) starting at D − glue gap, going a further surface clearance down. Turned over, its walls then lie on the pocket's. Cut Craft has one sheet, so it mirrors across the job's centre line; clearance tools are not done yet.
+- **[inf]** Geometry Cut Craft uses: pocket = V-carve to flat depth D; plug = V-carve of (boundary − mirrored shapes) starting at D − glue gap, going a further surface clearance down. Turned over, its walls then lie on the pocket's. Cut Craft puts the plug on its own sheet, Inlay plug (made the first time, reused after), mirrored across the job's centre line; clearance tools are not done yet.
 
 ### Prism Carving [obs] (help: Prism Carving Toolpath)
 - An angled tool profiles round the selected shapes at the Start Depth plus Prism Depth, leaving a raised bevel ("hand carved" look). Usually paired with a profile or pocket to cut round the shapes.
