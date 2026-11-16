@@ -23,7 +23,8 @@ pub enum Spacing {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// What the toolpath is called in the toolpath list
+    /// What the toolpath is called in the toolpath list. It copies the toolpaths ticked
+    /// (shown) in the toolpath list when Apply is pressed: tick them there first
     pub name: String,
     /// The toolpaths to copy (none: the ones shown in the toolpath list when Apply is
     /// pressed). Not on the form: tick the toolpaths to copy in the toolpath list
@@ -160,7 +161,10 @@ impl Command for ArrayCopyToolpath {
                     power.extend_from_slice(&source.power);
                 }
             }
+            // saved with the toolpaths it copied, so hiding them (the grid counts the
+            // original as its first copy) does not change what recalculating copies
             let one = Params {
+                sources: named.clone(),
                 only: Some(*id),
                 ..p.clone()
             };
@@ -263,6 +267,11 @@ mod tests {
             schema.as_value()["properties"].get("sources").is_none(),
             "no id list"
         );
+        let name = schema.as_value()["properties"]["name"]["description"].as_str();
+        assert!(
+            name.is_some_and(|h| h.contains("ticked")),
+            "the form says which toolpaths it copies: {name:?}"
+        );
         assert_eq!(ArrayCopyToolpath::initial_params(&doc).sources, []);
         let once = array(&doc, &Params::default())[0].moves.len();
         let doubled = Params {
@@ -339,6 +348,22 @@ mod tests {
         assert_eq!(made.len(), 2);
         assert!(made.iter().any(|t| t.tool.name == "Other"));
         assert!(made.iter().all(|t| t.params["only"].is_number()));
+    }
+
+    #[test]
+    fn a_saved_array_still_copies_its_source_after_the_source_is_hidden() {
+        let mut doc = with_profile();
+        let made = array(&doc, &Params::default());
+        let saved: Params = serde_json::from_value(made[0].params.clone()).unwrap();
+        // the grid counts the original as its first copy, so its source is usually hidden
+        let mut hidden = doc.toolpaths[&EntityId(1)].clone();
+        hidden.visible = false;
+        let mut c = Change::builder(&doc);
+        c.replace_toolpath(EntityId(1), hidden);
+        doc.apply(&c.finish()).unwrap();
+        let again = array(&doc, &saved);
+        assert_eq!(again.len(), 1, "recalculating still makes the array");
+        assert_eq!(again[0].moves, made[0].moves);
     }
 
     #[test]
