@@ -257,6 +257,25 @@ pub fn onto_level(mut change: cut_craft_core::Change, level: u64) -> cut_craft_c
 }
 
 impl Clipart {
+    /// Closes the Properties window, if it is open (Esc, which reaches the app first);
+    /// false when it was not.
+    pub fn close_properties(&mut self) -> bool {
+        self.properties.take().is_some()
+    }
+
+    /// Opens the Properties window on `file`, as its menu item does.
+    #[cfg(test)]
+    pub fn open_properties(&mut self, file: &Path) {
+        self.properties = Some(properties::Properties::new(
+            file,
+            Kind::Model,
+            None,
+            vec![],
+            &[],
+            None,
+        ));
+    }
+
     /// The library kept in the config folder.
     pub fn load() -> Self {
         let cache = crate::files::clipart_previews_path();

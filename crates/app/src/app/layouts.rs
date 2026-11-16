@@ -129,7 +129,7 @@ impl CutCraftApp {
                         }
                     });
             });
-        // Escape closes it from `shortcuts`, with whatever else is open
+        // Escape closes it (and only it) from `shortcuts`
         if let Some(id) = picked {
             self.search = None;
             self.invoke(ctx, id);

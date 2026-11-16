@@ -39,7 +39,7 @@ A number field takes a sum as well as a number, worked out when it is entered:
 - **F11** the designing layout, **F12** the machining layout
 - **Ctrl+Alt+S** Increment and Save: a new numbered copy (sign_1), leaving the file you opened as it was. **Ctrl+S** saves over it
 - **Ctrl+Y** redoes; on a Mac **⇧⌘Z** does too, as in other Mac apps
-- **Esc** closes the open form (on Import 3D Model's form it is Cancel: the model is not imported); pressed while dragging in the 2D or 3D view, it cancels the drag (a guide being pulled out of a ruler too) and changes nothing
+- **Esc** closes a small window in front (Find Tool, a library file's Properties) on its own, else the open form (on Import 3D Model's form it is Cancel: the model is not imported); pressed while dragging in the 2D or 3D view, it cancels the drag (a guide being pulled out of a ruler too) and changes nothing
 - **E** edits the selected shape (or Create Shape component) in the tool that made it. Once a Create Shape component has been sculpted, smoothed, embossed or cut back with Replace Below or Reset, it is kept as you left it: E no longer remakes it from its settings, so your hand work is never thrown away
 - Help ▸ Keyboard Shortcuts lists the rest.
 

@@ -14793,3 +14793,24 @@ fn ctrl_v_of_another_windows_vectors_leaves_out_this_windows_old_components() {
         "no component from this window's old copy comes with it"
     );
 }
+
+#[test]
+fn esc_closes_only_the_window_in_front_of_the_form() {
+    let mut h = Harness::new();
+    h.app.start_command("draw_circle");
+    h.app.invoke(&h.ctx, "find_tool");
+    h.frame(vec![]);
+    h.frame(vec![escape()]);
+    assert!(h.app.search.is_none(), "Find Tool closes");
+    assert!(h.app.form.is_some(), "the form behind it stays");
+    // the library's Properties window, in front of the form
+    h.app
+        .clipart
+        .open_properties(std::path::Path::new("bird.stl"));
+    h.frame(vec![escape()]);
+    assert!(!h.app.clipart.close_properties(), "Properties closed");
+    assert!(h.app.form.is_some(), "the form behind it stays");
+    // nothing in front: Esc closes the form
+    h.frame(vec![escape()]);
+    assert!(h.app.form.is_none());
+}

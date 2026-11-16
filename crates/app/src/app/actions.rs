@@ -4054,22 +4054,11 @@ impl CutCraftApp {
                 i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Escape))
             })
         {
-            if self.screen == Screen::NewJob {
-                self.job_setup_cancel();
+            // a window in front (Find Tool, the library's Properties) closes alone
+            let in_front = self.search.take().is_some() || self.clipart.close_properties();
+            if !in_front {
+                self.escape_closes();
             }
-            // a form whose buttons are Import and Cancel: Esc is its Cancel
-            if self
-                .form
-                .as_ref()
-                .is_some_and(|f| f.id == "orientate_3d_model")
-            {
-                self.cancel_form();
-            }
-            self.form = None;
-            self.search = None;
-            self.view_tool = None;
-            self.pages.done_with(Page::Design);
-            self.pages.done_with(Page::Toolpaths);
         }
         self.nudge(ctx);
         ctx.input(|i| {
@@ -4084,6 +4073,26 @@ impl CutCraftApp {
                 self.view = View::ThreeD;
             }
         });
+    }
+
+    /// Esc with nothing in front: the open form closes (Import 3D Model's as its Cancel), with
+    /// a new job's setup, the view tool and the pages it opened.
+    fn escape_closes(&mut self) {
+        if self.screen == Screen::NewJob {
+            self.job_setup_cancel();
+        }
+        // a form whose buttons are Import and Cancel: Esc is its Cancel
+        if self
+            .form
+            .as_ref()
+            .is_some_and(|f| f.id == "orientate_3d_model")
+        {
+            self.cancel_form();
+        }
+        self.form = None;
+        self.view_tool = None;
+        self.pages.done_with(Page::Design);
+        self.pages.done_with(Page::Toolpaths);
     }
 
     /// Runs the actions whose shortcut was pressed: a key's, or a mouse button's.
