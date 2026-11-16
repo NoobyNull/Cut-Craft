@@ -1904,7 +1904,7 @@ mod tests {
     }
 
     /// Units a number may be shown in that are not lengths, so never change with mm / inches.
-    const NOT_LENGTHS: [&str; 13] = [
+    const NOT_LENGTHS: [&str; 14] = [
         "%",
         "min",
         "MB",
@@ -1915,6 +1915,8 @@ mod tests {
         "days",
         "px",
         "frames/s",
+        // a turning speed (the 3D view's Auto-rotate)
+        "°/s",
         "×",
         "kerf widths",
         // a printed line's width in points, the same whatever the job's units

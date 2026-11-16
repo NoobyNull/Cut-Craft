@@ -25,6 +25,10 @@ pub const FIELD_OF_VIEW: f64 = std::f64::consts::FRAC_PI_4;
 /// left out: they have no area to click.
 const EDGE_ON: f64 = 1e-6;
 
+/// The longest step, seconds, that Auto-rotate turns the view by in one frame: long enough
+/// for a slow computer to keep the set speed, short enough not to jump after a pause.
+pub const SPIN_LONGEST_STEP: f64 = 1.0;
+
 /// Where the view looks from: `yaw` turns the job about the vertical, `pitch` tilts it from
 /// straight down (0) through side on (a right angle) to straight up from below (half a
 /// turn), and `roll` turns the picture about the line of sight (0 keeps the job's up up),
@@ -91,6 +95,19 @@ impl Orbit {
             DVec3::new(-turn(by.y, size.y), turn(by.x, size.x), 0.0),
             rotation,
         )
+    }
+
+    /// Spun about the job's vertical for `seconds` at `degrees_per_second` (the 3D view's
+    /// Auto-rotate), the tilt kept: a pause longer than [`SPIN_LONGEST_STEP`] (a hidden
+    /// window, a slow frame) turns no further than that step, so the job never jumps.
+    #[must_use]
+    pub fn spun(self, seconds: f64, degrees_per_second: f64) -> Self {
+        use std::f64::consts::{PI, TAU};
+        let turn = seconds.clamp(0.0, SPIN_LONGEST_STEP) * degrees_per_second.to_radians();
+        Self {
+            yaw: (self.yaw + turn + PI).rem_euclid(TAU) - PI,
+            ..self
+        }
     }
 
     /// Turned about the screen's axes as [`Orbit::turned`] says, freely, or as a turntable
@@ -1698,6 +1715,23 @@ fn wrapped_quads(m: &Material, wrap: Wrap, light: DVec3) -> Vec<([DVec3; 4], f64
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spinning_turns_the_job_about_its_vertical_and_keeps_the_tilt() {
+        let start = Orbit::default();
+        let spun = start.spun(0.2, 30.0);
+        assert!((spun.yaw - start.yaw - 6f64.to_radians()).abs() < 1e-9);
+        assert!((spun.pitch - start.pitch).abs() < 1e-12, "the tilt is kept");
+        // a long pause (the window hidden, a slow frame) is not a jump
+        let jumped = start.spun(30.0, 30.0);
+        assert!((jumped.yaw - start.yaw).abs() <= SPIN_LONGEST_STEP * 30f64.to_radians() + 1e-9);
+        // round and round without growing without end
+        let mut o = start;
+        for _ in 0..10_000 {
+            o = o.spun(0.1, 90.0);
+        }
+        assert!(o.yaw.abs() <= std::f64::consts::TAU, "{}", o.yaw);
+    }
 
     #[test]
     fn a_lithophane_is_white_where_nothing_is_left_and_the_material_where_it_is_whole() {

@@ -1401,6 +1401,8 @@ struct CutCraftApp {
     ghost_gpu: Option<ModelGpu>,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
+    /// While Auto-rotate spins the 3D view: when it last turned it (input time, seconds).
+    spinning_3d: Option<f64>,
     /// Picks the 3D view's detail while it moves from how quickly frames come (Options ▸
     /// Adjust detail to keep the view smooth).
     pacer: crate::frame_rate::Pacer,

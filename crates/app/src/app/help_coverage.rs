@@ -227,7 +227,12 @@ pub(super) fn gaps(app: &CutCraftApp) -> Vec<Gap> {
     let tools = app
         .help_topics()
         .into_iter()
-        .filter(|t| !matches!(*t, "contents" | "design" | "toolpaths" | "tips" | "web_api"))
+        .filter(|t| {
+            !matches!(
+                *t,
+                "contents" | "design" | "toolpaths" | "tips" | "web_api" | "view_3d"
+            )
+        })
         .map(String::from)
         .chain(app.registry.iter().map(|c| c.id().to_owned()));
     for id in tools {

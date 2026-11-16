@@ -9,6 +9,7 @@ const CONTENTS: &str = include_str!("../../help/contents.md");
 const DESIGN: &str = include_str!("../../help/design.md");
 const TOOLPATHS: &str = include_str!("../../help/toolpaths.md");
 const WEB_API: &str = include_str!("../../help/web-api.md");
+const VIEW_3D: &str = include_str!("../../help/view-3d.md");
 
 /// The help's own pictures, by the `bytes://help/` name its pages show them by.
 pub(super) const PICTURES: &[(&str, &[u8])] = &[
@@ -31,6 +32,10 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "web-api-docs.png",
         include_bytes!("../../help/pictures/web-api-docs.png"),
+    ),
+    (
+        "auto-rotate.gif",
+        include_bytes!("../../help/pictures/auto-rotate.gif"),
     ),
 ];
 
@@ -153,13 +158,21 @@ impl CutCraftApp {
             "toolpaths" => "Toolpaths page".into(),
             "tips" => "Did You Know?".into(),
             "web_api" => "Web API".into(),
+            "view_3d" => "3D View".into(),
             id => self.tool_label(id),
         }
     }
 
     /// Every help page: Contents, the two tool pages, the tips, and each of the tools.
     pub(super) fn help_topics(&self) -> Vec<&'static str> {
-        let mut topics = vec!["contents", "design", "toolpaths", "tips", "web_api"];
+        let mut topics = vec![
+            "contents",
+            "design",
+            "toolpaths",
+            "tips",
+            "web_api",
+            "view_3d",
+        ];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
         }
@@ -192,6 +205,7 @@ impl CutCraftApp {
             "toolpaths" => tools_page(Page::Toolpaths, TOOLPATHS),
             "tips" => super::tips::markdown(),
             "web_api" => WEB_API.to_owned(),
+            "view_3d" => VIEW_3D.to_owned(),
             id => {
                 let (page, name) = match self.page_of(id) {
                     Page::Design => ("design", "Design"),
