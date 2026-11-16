@@ -17002,3 +17002,41 @@ fn print_is_one_honest_item_and_no_post_database_update() {
     assert_eq!(prints[0].0, "Print (opens a PDF)...");
     assert!(h.app.available("print"));
 }
+
+#[test]
+fn view_gcode_closes_when_saving_starts_so_it_cannot_cover_the_file_dialog() {
+    use super::panels::VIEW_GCODE;
+    let mut h = ready_for_output();
+    h.click(h.text_at(VIEW_GCODE).unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.gcode_view.is_some());
+    // its Save Toolpaths… opens the form, and the G-code window gives way to it
+    h.click(h.text_at("Save Toolpaths…").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.save_form.is_some());
+    assert!(h.app.gcode_view.is_none(), "closed for the save");
+    // opened again from the form, then Save pressed there: closed before the save runs
+    h.app.view_gcode(one_file_form());
+    let form = h.app.save_form.clone().unwrap();
+    let post = h.app.form_post(&form).unwrap();
+    h.app.save_checks = vec![super::SaveChecks {
+        plan: h.app.plan(&form, &post).unwrap(),
+        changes: form.changes,
+        revision: h.app.history.revision(),
+        machine: h.app.machines.active,
+        found: Some(vec![cut_craft_core::preflight::Finding {
+            severity: cut_craft_core::preflight::Severity::Warning,
+            message: "Air cutting".to_owned(),
+        }]),
+    }];
+    h.app.save_after = Some(super::gcode_view::SaveAfter::new(form, false));
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(h.app.save_anyway.is_some(), "the save is asking");
+    assert!(
+        h.app.gcode_view.is_none(),
+        "with the G-code window out of the way"
+    );
+}

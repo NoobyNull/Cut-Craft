@@ -229,6 +229,8 @@ impl CutCraftApp {
         } else if refresh {
             self.view_gcode(form);
         } else if save {
+            // its window would sit over the file dialog the save opens
+            self.gcode_view = None;
             self.save_form = Some(form);
         }
     }
@@ -246,6 +248,8 @@ impl CutCraftApp {
                 return;
             };
             self.form_back = Some(after.form.clone());
+            // a window of its own too: nothing may cover the save's dialog and questions
+            self.gcode_view = None;
             if after.sending {
                 self.send_toolpaths(&after.form);
             } else {
