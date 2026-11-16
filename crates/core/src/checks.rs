@@ -78,7 +78,45 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
         found.push(missed);
     }
     found.extend(fell_back(toolpath, units));
+    found.extend(past_material(doc, toolpath));
     found
+}
+
+/// Made by Array Copy Toolpath.
+const ARRAY_COPY: &str = "array_copy_toolpath";
+
+/// How far past the material's edge the centre of a cut may go: a part cut out right at
+/// the edge has its profile a tool radius outside it.
+pub fn edge_allowance(toolpath: &Toolpath) -> f64 {
+    toolpath.tool.diameter.max(0.0) / 2.0 + 0.1
+}
+
+/// An array of copies that runs off the material (copies are put up and to the right of
+/// the first, however much room there is).
+pub fn past_material(doc: &Document, toolpath: &Toolpath) -> Option<String> {
+    if toolpath.strategy != ARRAY_COPY || doc.job.rotary.is_some() {
+        return None;
+    }
+    let area = doc.job.area();
+    let allowance = edge_allowance(toolpath);
+    let off = toolpath
+        .moves
+        .iter()
+        .filter(|m| m.kind != MoveKind::Rapid)
+        .any(|m| {
+            let at = m.to.truncate();
+            at.x < area.min.x - allowance
+                || at.y < area.min.y - allowance
+                || at.x > area.max.x + allowance
+                || at.y > area.max.y + allowance
+        });
+    off.then(|| {
+        format!(
+            "{} cuts past the edge of the material: some of its copies are off it. Use fewer \
+             rows or columns, or less space between them",
+            toolpath.name
+        )
+    })
 }
 
 /// What Drilling's bit does to `holes` not its size, a sentence each: it drills straight down

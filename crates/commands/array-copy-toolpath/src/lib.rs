@@ -33,7 +33,8 @@ pub struct Params {
     #[schemars(skip)]
     #[serde(default)]
     pub sources: Vec<EntityId>,
-    /// How many copies up the job, counting the first
+    /// How many copies up the job, counting the first. Copies that would go past the
+    /// material's edge are still made, with a warning saying how many rows and columns fit
     #[schemars(range(min = 1))]
     pub rows: u32,
     /// How many copies across the job, counting the first
@@ -83,6 +84,61 @@ fn visible(doc: &Document, strategy: &str) -> Vec<EntityId> {
         .filter(|(_, t)| t.visible && t.strategy != strategy)
         .map(|(&id, _)| id)
         .collect()
+}
+
+/// What to say when copies of `bounds`, `step` apart, run off the material: how many rows
+/// and columns fit. A cut's centre may go `slack` past the edge (a tool radius, as a part
+/// cut out right at the edge does).
+fn past_edge(
+    doc: &Document,
+    p: &Params,
+    (bounds, step): (Rect, Point),
+    slack: f64,
+) -> Option<String> {
+    if doc.job.rotary.is_some() {
+        return None;
+    }
+    let area = doc.job.area();
+    let fit = |count: u32, low: f64, high: f64, step: f64, min: f64, max: f64| {
+        (0..count)
+            .take_while(|&i| {
+                let by = f64::from(i) * step;
+                low + by >= min - slack && high + by <= max + slack
+            })
+            .count()
+    };
+    let columns = fit(
+        p.columns,
+        bounds.min.x,
+        bounds.max.x,
+        step.x,
+        area.min.x,
+        area.max.x,
+    );
+    let rows = fit(
+        p.rows,
+        bounds.min.y,
+        bounds.max.y,
+        step.y,
+        area.min.y,
+        area.max.y,
+    );
+    let wanted = (p.columns as usize, p.rows as usize);
+    (columns < wanted.0 || rows < wanted.1).then(|| {
+        let plural = |n: usize, what: &str| {
+            if n == 1 {
+                format!("1 {what}")
+            } else {
+                format!("{n} {what}s")
+            }
+        };
+        format!(
+            "Some copies go past the edge of the material: {} and {} fit. Use fewer, or \
+             less space between them",
+            plural(columns, "column"),
+            plural(rows, "row")
+        )
+    })
 }
 
 impl Command for ArrayCopyToolpath {
@@ -141,6 +197,13 @@ impl Command for ArrayCopyToolpath {
             Spacing::Gap => size + Point::new(p.x, p.y),
         };
         let mut c = Change::builder(doc);
+        let slack = sources
+            .iter()
+            .map(|(_, t)| cut_craft_core::checks::edge_allowance(t))
+            .fold(0.0, f64::max);
+        if let Some(note) = past_edge(doc, p, (bounds, step), slack) {
+            c.note(note);
+        }
         // ponytail: one array toolpath per source, so each tool's copies run together (the
         // "minimize tool changes"); copy by copy would need a toolpath per copy and source
         for (id, source) in sources
@@ -398,6 +461,37 @@ mod tests {
         let mut shown = doc.clone();
         shown.apply(&again).unwrap();
         assert!(shown.toolpaths[&EntityId(1)].visible);
+    }
+
+    #[test]
+    fn copies_past_the_material_edge_are_made_and_warned_of_with_what_fits() {
+        // the material is 600 x 400: 10 mm parts 20 mm apart fit 30 across, 20 up
+        let doc = with_profile();
+        let p = Params {
+            rows: 25,
+            columns: 2,
+            ..Params::default()
+        };
+        let change = ArrayCopyToolpath::run(&doc, &p).unwrap();
+        let note = change.notes.join(" ");
+        assert!(
+            note.contains("edge of the material") && note.contains("20 rows"),
+            "{note}"
+        );
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        let made = after
+            .toolpaths
+            .values()
+            .find(|t| t.strategy == ArrayCopyToolpath::ID)
+            .unwrap();
+        let why = cut_craft_core::checks::problems(&after, made).join(" ");
+        assert!(
+            why.contains("edge of the material"),
+            "checked on save: {why}"
+        );
+        let fits = ArrayCopyToolpath::run(&doc, &Params::default()).unwrap();
+        assert!(fits.notes.is_empty(), "{:?}", fits.notes);
     }
 
     #[test]
