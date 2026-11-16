@@ -14662,3 +14662,41 @@ fn a_shift_shortcut_set_in_options_beats_the_plain_keys_own() {
         "M is still Move"
     );
 }
+
+#[test]
+fn del_after_picking_a_toolpath_in_the_list_deletes_that_toolpath_not_the_vectors() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "show_toolpaths_tab");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let name = h.app.doc.toolpaths.values().next().unwrap().name.clone();
+    let row = h.text_at(&name).expect("the toolpath's row");
+    h.click(row, Modifiers::NONE);
+    assert!(h.app.selected_toolpath.is_some(), "picked in the list");
+    assert!(
+        !h.app.doc.selection.is_empty(),
+        "the rectangle is still selected"
+    );
+    h.frame(vec![key_with(Key::Delete, Modifiers::NONE)]);
+    assert!(h.app.doc.toolpaths.is_empty(), "the picked toolpath went");
+    assert_eq!(h.app.doc.vectors.len(), 1, "the drawing is kept");
+    // a click in the drawing after that: Del deletes the vectors again
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.frame(vec![]);
+    let row = h.text_at(&name).expect("the toolpath's row");
+    h.click(row, Modifiers::NONE);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.click(Pos2::new(640.0, 400.0), Modifiers::NONE);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.frame(vec![key_with(Key::Delete, Modifiers::NONE)]);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert!(h.app.doc.vectors.is_empty(), "Del is the drawing's again");
+}

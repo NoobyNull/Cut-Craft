@@ -3793,7 +3793,8 @@ impl CutCraftApp {
                 ui,
                 picked.len() == 1 && self.available("delete_toolpath"),
                 "Delete",
-                "Delete Toolpath: take the picked toolpath out of the job",
+                "Delete Toolpath: take the picked toolpath out of the job. Del does the same \
+                 just after you click it in the list",
             );
         });
         ui.horizontal_wrapped(|ui| {
@@ -4004,6 +4005,10 @@ impl CutCraftApp {
         let mut group_picked = None;
         let mut clicked = None;
         let ctrl = ui.input(|i| i.modifiers.command || i.modifiers.shift);
+        // any press elsewhere hands Del back to the drawing; a row's click takes it below
+        if ui.input(|i| i.pointer.any_pressed()) {
+            self.toolpath_list_clicked = false;
+        }
         let dragging = egui::DragAndDrop::has_payload_of_type::<Vec<EntityId>>(ui.ctx());
         // each toolpath's colour in the preview, when the machined areas take them
         let swatches = self.doc.job.machined_area == MachinedArea::ToolpathColor;
@@ -4056,6 +4061,7 @@ impl CutCraftApp {
                             }
                             // The toolpath menu acts on the row right-clicked, so it selects it
                             if label.secondary_clicked() {
+                                self.toolpath_list_clicked = true;
                                 self.selected_toolpath = Some(id);
                                 self.more_toolpaths.clear();
                                 self.selected_group = None;
@@ -4097,6 +4103,7 @@ impl CutCraftApp {
                 }
             });
         if let Some((id, selected)) = clicked {
+            self.toolpath_list_clicked = true;
             if ctrl {
                 // Ctrl-click: one more picked, or one less
                 if self.selected_toolpath.is_none() {

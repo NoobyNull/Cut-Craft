@@ -1071,6 +1071,9 @@ struct CutCraftApp {
     /// The toolpaths Ctrl-clicked in the list besides `selected_toolpath`, to group, move
     /// or drag together.
     more_toolpaths: std::collections::BTreeSet<EntityId>,
+    /// A toolpath row was the last thing clicked: Del deletes the picked toolpath, not the
+    /// drawing's selection. Any other click hands Del back to the drawing.
+    toolpath_list_clicked: bool,
     /// Whether the first click on the Toolpaths page of a job that has not had Material
     /// Setup opens it (tests leave it off).
     ask_material: bool,

@@ -57,6 +57,7 @@ impl CutCraftApp {
             toolpath_subtab: 0,
             toolpath_unfold: None,
             more_toolpaths: std::collections::BTreeSet::new(),
+            toolpath_list_clicked: false,
             ask_material: true,
             list_height: None,
             first_steps: std::cell::RefCell::default(),
@@ -347,6 +348,15 @@ impl CutCraftApp {
         self.show_subtab_of(id);
         // Delete with a snap mark picked lets that point go, rather than deleting vectors
         if id == "delete" && self.release_picked_snap() {
+            return;
+        }
+        // Delete just after picking a toolpath in the list deletes that toolpath
+        if id == "delete"
+            && self.toolpath_list_clicked
+            && self.selected_toolpath.is_some()
+            && self.pages.shown(Page::Toolpaths) != Shown::Hidden
+        {
+            self.invoke(ctx, "delete_toolpath");
             return;
         }
         // right-click menu items: a command with params chosen by the menu
