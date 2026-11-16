@@ -255,7 +255,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "recalculate_all_toolpaths",
-        "Recalculate All Toolpaths: works out every toolpath again, after you changed the vectors or the material",
+        "Recalculate All Toolpaths: works out every toolpath again, after you changed the vectors or the material. A merged or copied toolpath is worked out after the toolpaths it copies",
     ),
     (
         "tool_database",

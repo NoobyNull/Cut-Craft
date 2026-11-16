@@ -18,7 +18,8 @@ pub struct MergedToolpath;
 pub struct Params {
     /// What the toolpath is called in the toolpath list. It merges the toolpaths ticked
     /// (shown) in the toolpath list when Apply is pressed: tick them there first
-    /// (it is marked out of date when one of them changes: recalculate it then). Those
+    /// (it is marked out of date when one of them changes: recalculate it then, and the
+    /// hidden ones out of date are recalculated first). Those
     /// toolpaths are then hidden, so saving the shown toolpaths does not cut them twice. They
     /// must use one tool, and all is cut with the first one's feeds and speed: a toolpath
     /// whose copy of that tool is set differently is warned of

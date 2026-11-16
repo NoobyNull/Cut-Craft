@@ -384,3 +384,80 @@ fn a_toolpath_that_makes_nothing_again_is_explained_in_plain_words() {
     assert!(!why.contains('`') && !why.contains("nothing"), "{why}");
     assert!(why.contains("Centres"), "names the toolpath: {why}");
 }
+
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+struct CopiesParams {
+    sources: Vec<EntityId>,
+}
+
+/// Test strategy: a toolpath copying its sources' moves, as Merged and Array Copy do.
+struct Copies;
+
+impl Command for Copies {
+    const ID: &'static str = "copies";
+    type Params = CopiesParams;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Copies",
+            group: "Test",
+            icon: "",
+            shortcut: "",
+        }
+    }
+
+    fn run(doc: &Document, p: &CopiesParams) -> Result<Change, CommandError> {
+        let moves = p
+            .sources
+            .iter()
+            .filter_map(|s| doc.toolpaths.get(s))
+            .flat_map(|t| t.moves.clone())
+            .collect();
+        let mut c = Change::builder(doc);
+        c.add_toolpath(made_by::<Self>(
+            p,
+            "Copy".into(),
+            Tool::default(),
+            vec![],
+            moves,
+        ));
+        Ok(c.finish())
+    }
+}
+
+#[test]
+fn a_copy_recalculated_while_its_source_is_out_of_date_is_not_left_with_old_moves() {
+    let mut r = registry();
+    r.add::<Copies>();
+    let (mut doc, tp) = job();
+    doc.apply(&Copies::run(&doc, &CopiesParams { sources: vec![tp] }).unwrap())
+        .unwrap();
+    let copy = *doc.toolpaths.keys().last().unwrap();
+    let mut history = History::default();
+    let mut c = Change::builder(&doc);
+    c.replace(
+        EntityId(1),
+        doc.vectors[&EntityId(1)].transformed(&DAffine2::from_translation(Point::new(0.0, 9.0))),
+    );
+    let change = c.finish();
+    history.apply(&mut doc, change).unwrap();
+    assert!(doc.toolpaths[&tp].stale && doc.toolpaths[&copy].stale);
+    // Edit > Calculate on the copy alone: it copies the old moves, so it stays out of date
+    let change = r.edit(&doc, copy, None).unwrap();
+    history.apply(&mut doc, change).unwrap();
+    assert!(
+        doc.toolpaths[&copy].stale,
+        "its source is still out of date"
+    );
+    history.undo(&mut doc);
+    // recalculating the copy (Recalculate Visible, with the source hidden) recalculates the
+    // out-of-date source first, and copies its new moves
+    for ids in [vec![copy], vec![copy, tp]] {
+        let change = r.recalculate_each(&doc, &ids).unwrap();
+        history.apply(&mut doc, change).unwrap();
+        assert_eq!(plunge(&doc, tp), Point::new(5.0, 14.0));
+        assert_eq!(plunge(&doc, copy), Point::new(5.0, 14.0), "{ids:?}");
+        assert!(!doc.toolpaths[&tp].stale && !doc.toolpaths[&copy].stale);
+        history.undo(&mut doc);
+    }
+}

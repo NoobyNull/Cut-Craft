@@ -469,12 +469,16 @@ impl Registry {
     }
 
     /// Toolpaths `ids` recalculated in turn, chained, each a share of the progress bar
-    /// ([`crate::progress`]) named as it goes; stops early once asked to.
+    /// ([`crate::progress`]) named as it goes; stops early once asked to. A toolpath that
+    /// copies others (Merged, Array Copy) goes after its sources, and a source that is out
+    /// of date is recalculated with it even when not named (sources are hidden), so the
+    /// copy takes their new moves.
     pub fn recalculate_each(
         &self,
         doc: &Document,
         ids: &[EntityId],
     ) -> Result<Change, CommandError> {
+        let ids = sources_first(doc, ids);
         let steps: Vec<(usize, EntityId)> = ids.iter().copied().enumerate().collect();
         Change::chain_over(doc, &steps, |d, &(i, id)| {
             crate::progress::stop_if_cancelled()?;
@@ -488,4 +492,35 @@ impl Registry {
     pub fn iter(&self) -> impl Iterator<Item = &dyn DynCommand> {
         self.commands.iter().map(AsRef::as_ref)
     }
+}
+
+/// `ids` in order, each copy (Merged, Array Copy) moved after its sources and preceded by
+/// those of them that are out of date and not named.
+fn sources_first(doc: &Document, ids: &[EntityId]) -> Vec<EntityId> {
+    fn visit(
+        doc: &Document,
+        id: EntityId,
+        named: &std::collections::BTreeSet<EntityId>,
+        seen: &mut std::collections::BTreeSet<EntityId>,
+        out: &mut Vec<EntityId>,
+    ) {
+        if !seen.insert(id) {
+            return;
+        }
+        if let Some(t) = doc.toolpaths.get(&id) {
+            for s in crate::change::sources_of(t) {
+                if named.contains(&s) || doc.toolpaths.get(&s).is_some_and(|s| s.stale) {
+                    visit(doc, s, named, seen, out);
+                }
+            }
+        }
+        out.push(id);
+    }
+    let named: std::collections::BTreeSet<EntityId> = ids.iter().copied().collect();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = Vec::with_capacity(ids.len());
+    for &id in ids {
+        visit(doc, id, &named, &mut seen, &mut out);
+    }
+    out
 }

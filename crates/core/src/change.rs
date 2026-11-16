@@ -789,6 +789,7 @@ impl Change {
             }
             outdated.extend(more);
         }
+        self.keep_copies_behind_stale(doc, &outdated, &recut);
         for id in outdated {
             let toolpath = &doc.toolpaths[&id];
             if !toolpath.stale && !made.contains(&id) {
@@ -804,6 +805,57 @@ impl Change {
             }
         }
         self
+    }
+
+    /// Marks out of date each Merged or Array Copy toolpath this change makes again while a
+    /// source of it is still out of date, or is cut again only after it: it holds old moves.
+    fn keep_copies_behind_stale(
+        &mut self,
+        doc: &Document,
+        outdated: &std::collections::BTreeSet<EntityId>,
+        recut: &std::collections::BTreeSet<EntityId>,
+    ) {
+        let mut last = std::collections::BTreeMap::new();
+        for (i, edit) in self.edits.iter().enumerate() {
+            if let Edit::AddToolpath { id, .. }
+            | Edit::RemoveToolpath { id, .. }
+            | Edit::ReplaceToolpath { id, .. } = edit
+            {
+                last.insert(*id, i);
+            }
+        }
+        let still_stale = |s: EntityId, edits: &[Edit]| match last.get(&s) {
+            Some(&i) => match &edits[i] {
+                Edit::AddToolpath { toolpath, .. } => toolpath.stale,
+                Edit::ReplaceToolpath { after, .. } => after.stale,
+                _ => false,
+            },
+            None => doc
+                .toolpaths
+                .get(&s)
+                .is_some_and(|t| t.stale || outdated.contains(&s)),
+        };
+        let behind: Vec<usize> = last
+            .values()
+            .copied()
+            .filter(|&i| match &self.edits[i] {
+                Edit::AddToolpath { toolpath: t, .. } | Edit::ReplaceToolpath { after: t, .. } => {
+                    !t.stale
+                        && sources_of(t).iter().any(|&s| {
+                            still_stale(s, &self.edits)
+                                || last.get(&s).is_some_and(|&j| j > i && recut.contains(&s))
+                        })
+                }
+                _ => false,
+            })
+            .collect();
+        for i in behind {
+            if let Edit::AddToolpath { toolpath: t, .. } | Edit::ReplaceToolpath { after: t, .. } =
+                &mut self.edits[i]
+            {
+                t.stale = true;
+            }
+        }
     }
 
     /// The job this change sets, if it sets one: lets a view show a job before it is applied.
@@ -1978,7 +2030,7 @@ impl ChangeBuilder<'_> {
 
 /// The toolpaths `toolpath` copies its moves from: a Merged or Array Copy toolpath's
 /// `sources`.
-fn sources_of(toolpath: &Toolpath) -> Vec<EntityId> {
+pub(crate) fn sources_of(toolpath: &Toolpath) -> Vec<EntityId> {
     toolpath
         .params
         .get("sources")
