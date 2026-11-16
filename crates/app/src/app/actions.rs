@@ -918,7 +918,7 @@ impl CutCraftApp {
             && let Err(e) = std::fs::write(path, words.join("\n"))
         {
             self.status
-                .set_message(&format!("cannot keep the words in {}: {e}", path.display()));
+                .set_message(&crate::messages::cannot_keep_words(path, &e));
         }
     }
 
@@ -1165,7 +1165,7 @@ impl CutCraftApp {
                             .set_message(&format!("Saved template {}", path.display())),
                         Err(e) => self
                             .status
-                            .set_message(&format!("could not save {}: {e}", path.display())),
+                            .set_message(&crate::messages::could_not_save(&path, &e)),
                     }
                 }
             }
@@ -1188,7 +1188,7 @@ impl CutCraftApp {
                     let template = files::toolpath_template(&self.doc, &ids);
                     let message = match cut_craft_core::file::write_atomic(&path, &template) {
                         Ok(()) => format!("Saved toolpath template {}", path.display()),
-                        Err(e) => format!("could not save {}: {e}", path.display()),
+                        Err(e) => crate::messages::could_not_save(&path, &e),
                     };
                     self.status.set_message(&message);
                 }
@@ -2100,13 +2100,17 @@ impl CutCraftApp {
     /// The machine package at `path`, read; `None` with the status bar saying why not.
     fn read_package(&mut self, path: &std::path::Path) -> Option<cut_craft_machines::Machines> {
         let package = std::fs::read(path)
-            .map_err(|e| e.to_string())
-            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+            .map_err(|e| crate::messages::could_not_read(path, &e))
+            .and_then(|bytes| {
+                serde_json::from_slice(&bytes).map_err(|e| {
+                    log::warn!("{}: not a machine package ({e})", path.display());
+                    crate::messages::not_a_machine_package(path)
+                })
+            });
         match package {
             Ok(package) => Some(package),
-            Err(e) => {
-                self.status
-                    .set_message(&format!("{}: not a machine package ({e})", path.display()));
+            Err(message) => {
+                self.status.set_message(&message);
                 None
             }
         }

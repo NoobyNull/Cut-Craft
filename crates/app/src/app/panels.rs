@@ -4509,7 +4509,7 @@ fn save_part(
         }
     }
     out.save(path)
-        .map_err(|e| format!("could not save {}: {e}", path.display()))
+        .map_err(|e| crate::messages::could_not_save_picture(path, &e))
 }
 
 /// Whether `path` is a mesh, imported through Orientate 3D Model.

@@ -51,7 +51,7 @@ impl Session {
 
     pub fn save(&mut self, doc: &Document, history: &History, path: &Path) -> Result<(), String> {
         write_atomic(path, &save_job(doc))
-            .map_err(|e| format!("could not save {}: {e}", path.display()))?;
+            .map_err(|e| crate::messages::could_not_save(path, &e))?;
         self.path = Some(path.to_owned());
         self.saved = history.revision();
         Ok(())
