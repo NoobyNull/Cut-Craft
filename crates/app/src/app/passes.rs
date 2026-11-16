@@ -47,14 +47,18 @@ pub(super) fn edit_passes(ui: &mut egui::Ui, params: &mut Value, units: Units) -
     changed
 }
 
-/// The depth a form cuts to, which Edit Passes splits: its `depth`. None where there is no
-/// one depth: V-Carve's Fill works each shape's depth out from its width (its `depth` is
-/// the Groove depth of the other carves, hidden), and the 3D forms keep theirs elsewhere.
+/// The depth a form cuts to, which Edit Passes splits: its `depth` (Fluting's
+/// `flute_depth`). None where there is no one depth: V-Carve's Fill works each shape's depth
+/// out from its width (its `depth` is the Groove depth of the other carves, hidden), and the
+/// 3D forms keep theirs elsewhere.
 pub(super) fn cut_depth(params: &Value) -> Option<f64> {
     if params["place"] == "fill" {
         return None;
     }
-    params["depth"].as_f64().filter(|d| *d > 0.0)
+    params["depth"]
+        .as_f64()
+        .or_else(|| params["flute_depth"].as_f64())
+        .filter(|d| *d > 0.0)
 }
 
 /// The window's inside: the picture of the passes beside the ways to set them.

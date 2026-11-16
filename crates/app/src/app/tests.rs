@@ -9637,6 +9637,20 @@ fn v_carve_fill_has_no_edit_passes_for_a_depth_it_does_not_cut() {
 }
 
 #[test]
+fn fluting_offers_edit_passes_for_its_flute_depth() {
+    // fluting steps down a pass at a time, so its passes are set as any other cut's
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "fluting_toolpath");
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    assert!(h.text_at("Edit Passes…").is_some());
+    let params = &h.app.form.as_ref().unwrap().params;
+    assert_eq!(passes::cut_depth(params), params["flute_depth"].as_f64());
+}
+
+#[test]
 fn edit_passes_shows_each_pass_and_a_click_adds_one() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);

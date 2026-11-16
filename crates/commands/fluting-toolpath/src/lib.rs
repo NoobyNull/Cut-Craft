@@ -1,5 +1,7 @@
 //! Fluting Toolpath: cuts along the selected vectors from their start points, ramping the
-//! depth so the cut tapers in (and out), as for decorative flutes.
+//! depth so the cut tapers in (and out), as for decorative flutes. A flute deeper than the
+//! bit's pass depth is cut in passes (Edit Passes sets them), each the whole flute's shape a
+//! pass depth deeper than the last.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
@@ -41,7 +43,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_fluting.png"))]
     pub start_depth: f64,
-    /// Below the start depth at the deepest point
+    /// Below the start depth at the deepest point; cut in passes of the bit's pass depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D"))]
@@ -205,14 +207,22 @@ impl Command for FlutingToolpath {
                     at.extend(steps.map(|s| length - s));
                 }
                 at.sort_by(f64::total_cmp);
-                let cut: Vec<_> = insert_at(&points, &at)
+                let along = insert_at(&points, &at);
+                // a pass at a time, each the whole flute's shape scaled to its depth
+                p.tool
+                    .pass_depths(p.flute_depth)
                     .into_iter()
-                    .map(|(xy, s)| {
-                        let depth = p.start_depth + p.flute_depth * p.fraction(s, length, ramp);
-                        xy.extend(-depth)
+                    .flat_map(|z| {
+                        let cut: Vec<_> = along
+                            .iter()
+                            .map(|&(xy, s)| {
+                                let depth = p.start_depth - z * p.fraction(s, length, ramp);
+                                xy.extend(-depth)
+                            })
+                            .collect();
+                        follow(&cut, doc.job.clearance)
                     })
-                    .collect();
-                follow(&cut, doc.job.clearance)
+                    .collect::<Vec<_>>()
             })
             .collect();
         if p.project_onto_model {
@@ -244,11 +254,16 @@ mod tests {
         Path::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false)
     }
 
-    /// Depth (positive, below the surface) of the cut at each x along the line.
+    /// Depth (positive, below the surface) of the last (full depth) pass at each x along the
+    /// line.
     fn depth_at(p: &Params, xs: &[f64]) -> Vec<f64> {
         let tp = made_toolpath::<FlutingToolpath>(vec![line()], p).unwrap();
-        let cut: Vec<_> = tp
+        let last = tp
             .moves
+            .iter()
+            .rposition(|m| m.kind == MoveKind::Plunge)
+            .unwrap();
+        let cut: Vec<_> = tp.moves[last..]
             .iter()
             .filter(|m| m.kind != MoveKind::Rapid)
             .map(|m| m.to)
@@ -409,14 +424,45 @@ mod tests {
             .unwrap();
         // the start depth below the flat round the 8 mm dome
         assert!((plunge.to.z + 9.0).abs() < 0.01, "{}", plunge.to.z);
-        // over the top: 1 mm start + 4 mm flute halfway along, on the dome's top
+        // over the top: 1 mm start + 4 mm flute halfway along (the last pass), on the dome's
+        // top
         let top = tp
             .moves
             .iter()
+            .rev()
             .find(|m| (m.to.x - 20.0).abs() < 0.2 && m.kind == MoveKind::Cut)
             .unwrap();
         assert!((top.to.z + 3.0).abs() < 0.1, "{}", top.to.z);
         assert!(tp.moves.iter().all(|m| m.to.z >= -10.0 - 1e-9));
+    }
+
+    #[test]
+    fn a_deep_flute_is_cut_in_passes_of_the_tools_pass_depth() {
+        let p = Params {
+            flute_depth: 3.0,
+            tool: Tool {
+                pass_depth: 1.0,
+                ..Tool::default()
+            },
+            ..Params::default()
+        };
+        let tp = made_toolpath::<FlutingToolpath>(vec![line()], &p).unwrap();
+        // each pass from above: its deepest point one pass depth below the one before
+        let mut deepest = vec![];
+        for m in &tp.moves {
+            match m.kind {
+                MoveKind::Plunge => deepest.push(-m.to.z),
+                MoveKind::Cut => {
+                    let d = deepest.last_mut().unwrap();
+                    *d = d.max(-m.to.z);
+                }
+                MoveKind::Rapid => {}
+            }
+        }
+        assert_eq!(deepest.len(), 3, "{deepest:?}");
+        for (d, want) in deepest.iter().zip([1.0, 2.0, 3.0]) {
+            assert!((d - want).abs() < 1e-6, "{deepest:?}");
+        }
     }
 
     #[test]

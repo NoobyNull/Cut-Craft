@@ -410,7 +410,7 @@ percentages and passes get no letter.
 - **Flute Type:** ramp over the complete length (start depth at the start → full depth at the end); ramp at start (then full depth to the end); ramp at start and end.
 - **Ramp Length** is capped at the longest possible ramp (the vector's length, or half of it for start and end). **Ramp %** is a percentage of that longest ramp; **[check]** it must be greater than 0 and less than 100 ("Ramp % is invalid").
 - **Ramp Type:** Linear, or Smooth, which curves and transitions smoothly into full depth. **[unk]** the curve itself: no code reference to the fluting strings was found (no LEA or pointer to them); Cut Craft uses a quarter sine, level at full depth.
-- **[unk]** whether it cuts in several passes; Cut Craft cuts one pass. Project onto 3D Model is not yet done.
+- **[unk]** whether it cuts in several passes; Cut Craft steps down in the bit's passes (Edit Passes), each the whole flute's shape scaled to its depth. Project onto 3D Model is not yet done.
 
 ### V-Carve Inlay [obs] (help: VCarve Inlay Toolpath, -Pocket, -Plug)
 - Makes two toolpaths with one V-bit: a Pocket carving the shapes, and a Plug carving mirrored copies; after calculation they are separate (editing one does not change the other). Plug vectors are added to the job.
