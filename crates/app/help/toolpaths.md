@@ -92,6 +92,8 @@ The Materials Library can stay open while you use the Tool Database: its OK adds
 own feeds and materials, so tools added, deleted or changed there meanwhile stay as they are.
 Deleting a whole group in the Tool Database asks first, counting its tools, those Hide Unset
 Tools hides and those loaded in the tool changer; Cancel still brings them back until OK.
+Its Materials Library… button keeps your changes first, as Apply does; when they delete tools
+or materials it asks first, as Cancel could not bring those back afterwards.
 
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the

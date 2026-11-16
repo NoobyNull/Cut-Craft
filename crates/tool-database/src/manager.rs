@@ -89,8 +89,20 @@ pub struct Manager {
     /// The picked tool and the maker ▸ type group it had last drawn: while its group is
     /// still that one, the group follows its maker and type.
     followed: Option<(usize, String)>,
-    /// The group whose Delete is waiting for Delete or Keep under the tree.
-    deleting: Option<String>,
+    /// What the window is asking before it goes on, if anything.
+    asking: Option<Question>,
+    /// The database as last kept (opened, or Apply): what the edits since would delete.
+    saved: ToolDatabase,
+}
+
+/// A question the window asks before it goes on.
+#[derive(Clone, Debug, PartialEq)]
+enum Question {
+    /// Delete on this group, waiting for Delete or Keep under the tree.
+    Delete(String),
+    /// Materials Library…, waiting for Keep and Open or Not Now, as opening it would keep
+    /// deletions that Cancel could then not bring back.
+    Library,
 }
 
 /// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
@@ -265,7 +277,8 @@ impl Manager {
             pending: None,
             followed: None,
             renames: vec![],
-            deleting: None,
+            asking: None,
+            saved: db.clone(),
         }
     }
 
@@ -474,7 +487,91 @@ impl Manager {
         if let Some(asked) = self.pending.take() {
             outcome = outcome.or(Some(asked));
         }
+        if matches!(outcome, Some(Outcome::Apply)) {
+            self.applied();
+        }
         outcome
+    }
+
+    /// The edits so far are kept (Apply): Cancel goes back to here from now on.
+    pub fn applied(&mut self) {
+        self.saved = self.draft.clone();
+    }
+
+    /// Materials Library…: opens it, keeping the edits so far as Apply does; when they
+    /// delete tools or materials, it asks first, as Cancel could not bring those back.
+    pub fn open_materials_library(&mut self) {
+        if self.deletions().is_empty() {
+            self.pending = Some(Outcome::MaterialsLibrary);
+        } else {
+            self.asking = Some(Question::Library);
+        }
+    }
+
+    /// Keep and Open (`yes`) or Not Now, for Materials Library….
+    pub fn answer_library(&mut self, yes: bool) {
+        if self.asking == Some(Question::Library) {
+            self.asking = None;
+        }
+        if yes {
+            self.pending = Some(Outcome::MaterialsLibrary);
+        }
+    }
+
+    /// What deleting since the last Apply took: "2 deleted tools (A, B)", and so on.
+    fn deletions(&self) -> Vec<String> {
+        let tools: Vec<&str> = self
+            .saved
+            .tools
+            .iter()
+            .filter(|t| self.draft.get(&t.name).is_none())
+            .map(|t| t.name.as_str())
+            .collect();
+        let materials: Vec<&str> = self
+            .saved
+            .materials
+            .iter()
+            .filter(|m| {
+                !self
+                    .draft
+                    .materials
+                    .iter()
+                    .any(|d| d.eq_ignore_ascii_case(m))
+            })
+            .map(String::as_str)
+            .collect();
+        let named = |names: &[&str], one: &str| {
+            const SHOWN: usize = 3;
+            let mut list = names[..names.len().min(SHOWN)].join(", ");
+            if names.len() > SHOWN {
+                list.push_str(", …");
+            }
+            match names.len() {
+                1 => format!("1 deleted {one} ({list})"),
+                n => format!("{n} deleted {one}s ({list})"),
+            }
+        };
+        let mut out = vec![];
+        if !tools.is_empty() {
+            out.push(named(&tools, "tool"));
+        }
+        if !materials.is_empty() {
+            out.push(named(&materials, "material"));
+        }
+        out
+    }
+
+    /// What Materials Library… asks while it waits for an answer.
+    pub fn library_question(&self) -> Option<String> {
+        let deletions = self.deletions();
+        if self.asking != Some(Question::Library) || deletions.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "Opening the Materials Library keeps your changes here first, as Apply does, so \
+             Cancel can no longer bring back {}. Open it now?",
+            deletions.join(" and ")
+        ))
     }
 
     /// The tree: groups that open and close, each over its groups and tools.
@@ -721,7 +818,7 @@ impl Manager {
         }
         // a whole group asks first: it can hold tools the tree hides
         if let (TreeAction::Delete, Some(Pick::Group(g))) = (action, &self.pick) {
-            self.deleting = Some(g.clone());
+            self.asking = Some(Question::Delete(g.clone()));
             return None;
         }
         let outcome = self.do_action(action, &group);
@@ -736,7 +833,9 @@ impl Manager {
     /// many tools and groups go with it, and how many of those the tree hides or the tool
     /// changer holds.
     pub fn delete_question(&self) -> Option<String> {
-        let group = self.deleting.as_deref()?;
+        let Some(Question::Delete(group)) = &self.asking else {
+            return None;
+        };
         let inside: Vec<&Tool> = self
             .draft
             .tools
@@ -795,7 +894,7 @@ impl Manager {
 
     /// Delete (`yes`) or Keep, for the group Delete asked about.
     pub fn answer_delete(&mut self, yes: bool) {
-        let Some(group) = self.deleting.take() else {
+        let Some(Question::Delete(group)) = self.asking.take() else {
             return;
         };
         if yes {
@@ -810,10 +909,10 @@ impl Manager {
     /// The question Delete asks before a group goes, with its Delete and Keep, under the
     /// tree buttons; picking something else drops it.
     fn confirm_delete(&mut self, ui: &mut egui::Ui) {
-        if self.deleting.is_some()
-            && self.pick.as_ref() != self.deleting.clone().map(Pick::Group).as_ref()
+        if let Some(Question::Delete(group)) = &self.asking
+            && self.pick.as_ref() != Some(&Pick::Group(group.clone()))
         {
-            self.deleting = None;
+            self.asking = None;
         }
         let Some(question) = self.delete_question() else {
             return;
@@ -972,11 +1071,13 @@ impl Manager {
             if ui
                 .button("Materials Library…")
                 .on_hover_hint(
-                    "The materials by class and hardness, and each one's bits with their feeds",
+                    "The materials by class and hardness, and each one's bits with their \
+                     feeds. Your changes here are kept first, as Apply does (it asks first \
+                     when they delete tools or materials)",
                 )
                 .clicked()
             {
-                self.pending = Some(Outcome::MaterialsLibrary);
+                self.open_materials_library();
             }
             ui.add(egui::TextEdit::singleline(&mut self.new_material).hint_text("New material"));
             let typed = !self.new_material.trim().is_empty();
@@ -1010,6 +1111,19 @@ impl Manager {
             ui.checkbox(&mut self.copy_cutting_data, "with cutting data")
                 .on_hover_hint("The copy gets every tool's cutting data for the material");
         });
+        if let Some(question) = self.library_question() {
+            ui.group(|ui| {
+                ui.colored_label(ui.visuals().warn_fg_color, question);
+                ui.horizontal(|ui| {
+                    if ui.button("Keep and Open").clicked() {
+                        self.answer_library(true);
+                    }
+                    if ui.button("Not Now").clicked() {
+                        self.answer_library(false);
+                    }
+                });
+            });
+        }
     }
 
     /// A catalogue's tool, read only, with Copy to My Tools.
@@ -2020,6 +2134,31 @@ mod tests {
             None,
             "its slot is emptied"
         );
+    }
+
+    #[test]
+    fn the_materials_library_button_asks_first_when_it_would_keep_deletions() {
+        let db = ToolDatabase::starter();
+        let mut m = Manager::new(&db);
+        // nothing deleted: it opens, keeping the edits as Apply
+        m.open_materials_library();
+        assert!(matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)));
+        let gone = m.draft.tools.remove(0).name;
+        m.open_materials_library();
+        assert!(m.pending.is_none(), "it asks first");
+        let question = m.library_question().expect("a question");
+        assert!(question.contains("1 deleted tool"), "{question}");
+        assert!(question.contains(&gone), "{question}");
+        m.answer_library(false);
+        assert!(m.pending.is_none() && m.library_question().is_none());
+        assert_eq!(m.draft.tools.len(), db.tools.len() - 1, "the edits stay");
+        m.open_materials_library();
+        m.answer_library(true);
+        assert!(matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)));
+        // once applied, the deletion is kept already: no question
+        m.applied();
+        m.open_materials_library();
+        assert!(matches!(m.pending.take(), Some(Outcome::MaterialsLibrary)));
     }
 
     #[test]
