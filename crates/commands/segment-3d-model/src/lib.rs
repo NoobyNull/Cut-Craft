@@ -49,7 +49,8 @@ pub struct Params {
     #[serde(default = "one")]
     #[schemars(title = "Number of cuts", range(min = 1, max = 20))]
     pub cuts: u32,
-    /// Where the one plane cuts, as a share of the model's size along the axis
+    /// Where the one plane cuts, as a share of the model's size along the axis (shown only
+    /// with one cut: several cuts slice it equally)
     #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
     #[schemars(extend("x-show-when" = {"cuts": 1}))]
     pub position: f64,
@@ -391,7 +392,7 @@ impl Command for Segment3dModel {
                     *z = f64::NAN;
                 }
             }
-            c.add_component(k);
+            c.add_new_component(k);
             left += h.x - l.x + p.gap;
         }
         Ok(c.finish())

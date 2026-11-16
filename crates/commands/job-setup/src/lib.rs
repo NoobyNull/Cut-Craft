@@ -26,6 +26,39 @@ pub enum JobType {
     Rotary,
 }
 
+/// Where Z = 0 is on a rotary job: Job Setup and Material Setup show this in place of
+/// [`ZZero`] (its bed choice is the cylinder's axis there).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RotaryZZero {
+    /// The tool is zeroed on the top of the cylinder
+    #[default]
+    #[schemars(title = "Cylinder Surface")]
+    CylinderSurface,
+    /// The tool is zeroed on the cylinder's centre line, the rotary axis (touch off on the
+    /// axis, not on the machine bed or the rotary's base)
+    #[schemars(title = "Cylinder Axis")]
+    CylinderAxis,
+}
+
+impl From<ZZero> for RotaryZZero {
+    fn from(z: ZZero) -> Self {
+        match z {
+            ZZero::MaterialSurface => Self::CylinderSurface,
+            ZZero::MachineBed => Self::CylinderAxis,
+        }
+    }
+}
+
+impl From<RotaryZZero> for ZZero {
+    fn from(z: RotaryZZero) -> Self {
+        match z {
+            RotaryZZero::CylinderSurface => Self::MaterialSurface,
+            RotaryZZero::CylinderAxis => Self::MachineBed,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Size {
     /// The material's size across, left to right
@@ -42,7 +75,7 @@ pub struct Size {
         range(min = 0)
     )]
     pub height: f64,
-    /// How thick the material is
+    /// How thick the material is. Changing it after making toolpaths marks them out of date
     #[schemars(
         title = "Thickness (Z)",
         extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),
@@ -75,11 +108,17 @@ pub struct DatumPosition {
     pub position: Datum,
     /// Give that point coordinates other than 0, 0
     pub use_offset: bool,
-    /// The X the datum point is given
-    #[schemars(title = "X", extend("x-unit" = "mm"))]
+    /// The X the datum point is given, with Use offset ticked
+    #[schemars(
+        title = "X",
+        extend("x-unit" = "mm", "x-enable-when" = {"use_offset": "true"})
+    )]
     pub x: f64,
-    /// The Y the datum point is given
-    #[schemars(title = "Y", extend("x-unit" = "mm"))]
+    /// The Y the datum point is given, with Use offset ticked
+    #[schemars(
+        title = "Y",
+        extend("x-unit" = "mm", "x-enable-when" = {"use_offset": "true"})
+    )]
     pub y: f64,
 }
 
@@ -99,12 +138,21 @@ pub struct Params {
         extend("x-icon" = "job_setup/material_size_xyz.png")
     )]
     pub size: Size,
+    /// Where the tool is zeroed in Z: on top of the material, or under it on the machine bed
     #[schemars(
         title = "Z Zero Position",
-        extend("x-section" = true),
+        extend("x-section" = true, "x-hide-when" = {"job_type": "rotary"}),
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
+    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis
+    #[schemars(
+        title = "Z Zero Position",
+        extend("x-section" = true, "x-show-when" = {"job_type": "rotary"}),
+        extend("x-icon" = "job_setup/z_zero_{}.png")
+    )]
+    #[serde(default)]
+    pub rotary_z_zero: RotaryZZero,
     /// Which point of the material is the machine's X0, Y0. Changing it moves only the
     /// coordinates: the design, toolpaths, pictures, clamp zones and guides stay where they
     /// are on the material
@@ -135,12 +183,14 @@ pub struct Params {
     )]
     pub resolution: Resolution,
     /// What the material is, from the Materials Library: toolpaths pick their bits' feeds
-    /// and speeds for it (a layer naming its own material overrides it). Left empty, each
+    /// and speeds for it (a layer naming its own material overrides it), and the 3D view
+    /// shows it in the matching colour from Toolpaths ▸ Preview Colors. Left empty, each
     /// bit's own feeds
     #[serde(default)]
     #[schemars(title = "Material", extend("x-kind" = "material"))]
     pub material: String,
-    /// The material's colour in the 3D view
+    /// The material's colour in the 3D view. How the preview colours what the toolpaths cut
+    /// is Toolpaths ▸ Preview Colors, which this leaves as it is
     #[schemars(
         title = "Material Settings",
         extend("x-section" = true),
@@ -197,6 +247,7 @@ impl From<&Job> for Params {
                 units: job.units,
             },
             z_zero: job.z_zero,
+            rotary_z_zero: job.z_zero.into(),
             datum: DatumPosition {
                 position: job.datum,
                 use_offset: job.offset != Point::ZERO,
@@ -274,7 +325,11 @@ impl Command for JobSetup {
             clearance: p.gaps.clearance,
             plunge: Some(p.gaps.plunge),
             home: Some(home_for(doc, p)),
-            z_zero: p.z_zero,
+            z_zero: if p.job_type == JobType::Rotary {
+                p.rotary_z_zero.into()
+            } else {
+                p.z_zero
+            },
             datum: p.datum.position,
             offset: if p.datum.use_offset {
                 Point::new(p.datum.x, p.datum.y)
@@ -282,9 +337,14 @@ impl Command for JobSetup {
                 Point::ZERO
             },
             resolution: p.resolution,
-            colour: p.colour,
+            colour: preview_colour(doc, p),
+            // not on this form: kept as Material Setup, Clearing Settings and Toolpaths ▸
+            // Preview Colors set them
             model_position: doc.job.model_position,
             clearing: doc.job.clearing,
+            machined_area: doc.job.machined_area,
+            fill_colour: doc.job.fill_colour,
+            lithophane_light: doc.job.lithophane_light,
             ..shape
         };
         let mut c = Change::builder(doc);
@@ -311,6 +371,18 @@ impl Command for JobSetup {
         }
         Ok(c.finish())
     }
+}
+
+/// The material's colour in the 3D view: the colour picked on the form, or, when only the
+/// Material changed, the matching one from Preview Colors (Walnut's for "Walnut").
+fn preview_colour(doc: &Document, p: &Params) -> [u8; 3] {
+    let material = p.material.trim();
+    if p.colour != doc.job.colour || material == doc.job_material() {
+        return p.colour;
+    }
+    cmd_materials::Material::matching(material)
+        .and_then(cmd_materials::Material::colour)
+        .unwrap_or(p.colour)
 }
 
 /// Home as `p` sets it, but with a Home Z still at the old clearance (never set by hand)
@@ -385,6 +457,50 @@ mod tests {
         run_on::<JobSetup>(&mut doc, &with(|p| p.material = " Hard Maple ".into()));
         assert_eq!(doc.job_material(), "Hard Maple");
         assert_eq!(JobSetup::initial_params(&doc).material, "Hard Maple");
+    }
+
+    #[test]
+    fn picking_a_material_shows_it_in_its_colour_unless_a_colour_is_picked_too() {
+        use cmd_materials::Material;
+        let mut doc = sample_document();
+        let walnut = Material::Walnut.colour().unwrap();
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Walnut".into();
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(doc.job.colour, walnut, "the 3D view shows walnut");
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Hard Maple".into();
+        p.colour = [1, 2, 3];
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(
+            doc.job.colour,
+            [1, 2, 3],
+            "a colour picked on the form wins"
+        );
+        let mut p = JobSetup::initial_params(&doc);
+        p.material = "Titanium Grade 5".into();
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(doc.job.colour, [1, 2, 3], "no preview colour for it: kept");
+    }
+
+    #[test]
+    fn applying_it_keeps_the_preview_colours_set_elsewhere() {
+        use cut_craft_core::document::MachinedArea;
+        let mut doc = sample_document();
+        doc.job.machined_area = MachinedArea::Lithophane;
+        doc.job.fill_colour = [1, 2, 3];
+        doc.job.lithophane_light = 0.9;
+        let mut p = JobSetup::initial_params(&doc);
+        p.size.width += 10.0;
+        run_on::<JobSetup>(&mut doc, &p);
+        assert_eq!(
+            (
+                doc.job.machined_area,
+                doc.job.fill_colour,
+                doc.job.lithophane_light
+            ),
+            (MachinedArea::Lithophane, [1, 2, 3], 0.9)
+        );
     }
 
     fn with(change: impl FnOnce(&mut Params)) -> Params {
@@ -599,7 +715,7 @@ mod tests {
             p.size.length = 300.0;
             p.size.diameter = 50.0;
             p.orientation = Along::X;
-            p.z_zero = ZZero::MachineBed;
+            p.rotary_z_zero = RotaryZZero::CylinderAxis;
         }));
         let job = doc.job;
         assert_eq!(
@@ -625,6 +741,7 @@ mod tests {
             ),
             (JobType::Rotary, 50.0, 300.0)
         );
+        assert_eq!(reopened.rotary_z_zero, RotaryZZero::CylinderAxis);
     }
 
     #[test]
@@ -698,6 +815,20 @@ mod form_tests {
                 "{round}"
             );
         }
+        // Z zero reads as the cylinder's axis or surface on a rotary job, never the bed
+        assert_eq!(
+            rule(&schema["properties"]["z_zero"], "x-hide-when").as_deref(),
+            Some("\"rotary\"")
+        );
+        let round = &schema["properties"]["rotary_z_zero"];
+        assert_eq!(rule(round, "x-show-when").as_deref(), Some("\"rotary\""));
+        let titles: Vec<&str> = schema["$defs"]["RotaryZZero"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v["title"].as_str())
+            .collect();
+        assert_eq!(titles, ["Cylinder Surface", "Cylinder Axis"]);
         let orientation = &schema["properties"]["orientation"];
         assert_eq!(
             rule(orientation, "x-show-when").as_deref(),

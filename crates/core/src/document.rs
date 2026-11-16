@@ -562,7 +562,7 @@ impl Default for Job {
             datum: Datum::BottomLeft,
             offset: Point::ZERO,
             resolution: Resolution::Standard,
-            // pine, as Toolpaths ▸ Materials has it
+            // pine, as Toolpaths ▸ Preview Colors has it
             colour: [214, 160, 102],
             machined_area: MachinedArea::MaterialColor,
             lithophane_light: 0.5,
@@ -657,6 +657,10 @@ pub struct Document {
     /// Toolpath tiling: toolpaths saved in tiles for a machine smaller than the job.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tiling: Option<crate::tiling::Tiling>,
+    /// The tiling settings kept while tiling is off, so turning it on again starts from
+    /// them (added with keeping them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tiling_kept: Option<crate::tiling::Tiling>,
     /// Guide lines dragged out of the 2D view's rulers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
@@ -818,6 +822,7 @@ impl Default for Document {
             constraints: vec![],
             material_checked: false,
             tiling: None,
+            tiling_kept: None,
             bottom_side: false,
             other_side: SheetObjects::default(),
         }
@@ -929,6 +934,33 @@ impl Document {
             .copied()
     }
 
+    /// The level a new 3D component goes on: the level of the component picked in the
+    /// component tree, else the top shown level (else the first).
+    pub fn new_component_level(&self) -> u64 {
+        let first = self.levels.keys().next().copied().unwrap_or(0);
+        let picked = self
+            .selected_components
+            .iter()
+            .rev()
+            .find_map(|id| self.components.get(id))
+            .map(|k| {
+                if self.levels.contains_key(&k.level) {
+                    k.level
+                } else {
+                    first
+                }
+            });
+        picked
+            .or_else(|| {
+                self.levels
+                    .iter()
+                    .rev()
+                    .find(|(_, l)| l.visible)
+                    .map(|(&id, _)| id)
+            })
+            .unwrap_or(first)
+    }
+
     /// The vectors picked together with `id`: its group's, or `id` alone.
     pub fn group_members(&self, id: EntityId) -> Vec<EntityId> {
         match self.vector_groups.get(&id) {
@@ -974,6 +1006,30 @@ impl Document {
             .rev()
             .find_map(|id| self.bitmaps.get(id))
             .or_else(|| self.bitmaps.values().next_back())
+    }
+
+    /// The picture a picture toolpath carves: the one it was `made_from` when it has one
+    /// (an error once that is deleted), else [`Self::chosen_bitmap`]; with its id, to keep.
+    pub fn toolpath_bitmap(
+        &self,
+        made_from: Option<EntityId>,
+    ) -> Result<(EntityId, &Bitmap), crate::CommandError> {
+        if let Some(id) = made_from {
+            return self.bitmaps.get(&id).map(|b| (id, b)).ok_or_else(|| {
+                crate::CommandError::Failed(
+                    "the picture this toolpath was made from has been deleted. Import it \
+                     again and make a new toolpath from it"
+                        .into(),
+                )
+            });
+        }
+        self.selected_bitmaps
+            .iter()
+            .rev()
+            .find_map(|id| self.bitmaps.get_key_value(id))
+            .or_else(|| self.bitmaps.iter().next_back())
+            .map(|(&id, b)| (id, b))
+            .ok_or_else(|| crate::CommandError::Failed("import the picture first".into()))
     }
 
     /// The newest bitmap under `at`, for picking in the 2D view.

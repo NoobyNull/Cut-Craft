@@ -153,8 +153,8 @@ say "not implemented yet".
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
-  `x-hide-when`). Rotary Z Zero is still labelled Material Surface / Machine Bed, and Flip
-  design is not done.
+  `x-hide-when`). Rotary Z Zero reads Cylinder Surface / Cylinder Axis, with its own
+  pictures (Material Setup too); Flip design is not done.
 - Save Toolpaths (a form, as Aspire's): the machine and its posts suiting the job (the
   machine's default first, else Cut Craft's own FluidNC posts: tool changer, rotary jobs
   wrapped onto A in inverse time); the selected toolpath, the shown ones to one file, or each
@@ -734,10 +734,11 @@ say "not implemented yet".
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
     top or bottom, by count, or a Custom Slice List of each slice's thickness; optional
-    boundary vectors).
+    boundary vectors; each slice on a new level of its own, only the first shown, the
+    originals hidden).
   - Split Component (by a closed vector: "- A" inside, "- B" outside), Emboss Component
     (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
-    component with no wall steeper than the draft angle), Create Cross Section Vector (drag
+    component with no wall steeper than the draft angle, originals hidden), Create Cross Section Vector (drag
     a line; the profile is drawn from it, height 1:1).
   - Extrude and Weave: shapes swept along drive rails (the form's count of vectors picked
     first). Open cross-sections after them are hung across the rail nearest each, where
@@ -792,7 +793,8 @@ say "not implemented yet".
     modes reflect one half or quarter of the job about its middle; Wrapping (rotary jobs)
     brings what runs off one side of the unrolled job round the other, keeping the
     higher part where it meets itself. Older jobs get one level, so their models are
-    unchanged. New components go on the first level. Move Up / Move Down over the tree
+    unchanged. New components go on the level of the component picked in the tree, else
+    the top shown level, and the status bar names it (the level drop-down shows it too). Move Up / Move Down over the tree
     (Aspire's blue arrows) move the picked component within its level, and the level
     menu's Move Level Up / Down move a level with its components (Move Component, Move
     Level); dragging in the tree is not done.
@@ -820,9 +822,10 @@ say "not implemented yet".
   the model's thickness, which a new value scales the model to (Aspire's Set). 3D roughing
   and finishing and the wrapped 3D view place the model by it, refusing a model it pushes
   out of the material. Toolpath forms do not show Aspire's summary of these settings.
-- Toolpaths ▸ Materials (also beside Material Setup): a library of woods, sheet goods,
+- Toolpaths ▸ Preview Colors (also beside Material Setup): a library of woods, sheet goods,
   plastics and metals that sets the material's colour in the 3D view (Job Setup's colour);
-  Custom keeps Job Setup's. Woods show grain on the 3D view's top (lines along X that drift,
+  Custom keeps Job Setup's. Only the look: feeds and speeds follow Job Setup's Material, and
+  picking that Material picks the matching colour here (Hard Maple shows as Maple). Woods show grain on the 3D view's top (lines along X that drift,
   bunch, and move across as the surface goes down, so carvings show rings); the wrapped
   rotary view and the block's sides are plain. Custom is a solid colour of one's own.
   As Aspire's Material Appearance it also sets Machined Area Color: Material Color (cuts
@@ -866,7 +869,8 @@ implemented yet" listed.)
   while a model is imported.
 - Imported models: a cell over only a near-vertical side takes the height of the top beside
   it (up to 4 cells in), so steep sides leave no spikes; a wider steep band keeps its slope.
-- Lasers are not a tool type in the database (laser features are skipped by decision).
+- Lasers are a tool type in the database (Laser: a kerf and a speed, no pass depth or
+  spindle); the laser toolpath forms pick one with Select… like any other tool.
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (not described in the help), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
   (`docs/ROADMAP.md`, section 6).
@@ -875,5 +879,3 @@ implemented yet" listed.)
 
 ## Differences from Aspire 12 seen on screen
 
-- Aspire's rotary Job Setup calls its Z zero under the material "Cylinder Axis"; ours reuses
-  "Machine Bed" (posts print "Cylinder Axis").

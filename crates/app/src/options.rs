@@ -440,17 +440,18 @@ pub struct ToolpathSettings {
     #[schemars(title = "2D solid preview color", extend("x-kind" = "colour"))]
     pub solid_2d_preview_color: [u8; 3],
     /// Saved toolpaths leave out cutting points this close to the line past them, for
-    /// shorter files; 0 keeps every point. Profile, pocket and other 2D toolpaths
+    /// shorter files; 0 keeps every point, 0.1 mm is the most. The keep-out zones are
+    /// checked on what is saved. Profile, pocket and other 2D toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_2d: f64,
     /// The same for 3D roughing, finishing, texture, moulding and the like
     #[serde(default = "tolerance")]
-    #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_3d: f64,
     /// The same for V-carving, prism, inlay and chamfer toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_vcarve: f64,
     /// How many times faster than the machine a toolpath preview plays when it starts: 1
     /// plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the
@@ -465,7 +466,9 @@ pub struct ToolpathSettings {
     pub keep_out_labels: bool,
     /// Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
     /// made. On: it is made with the part under the zone left uncut, the tool lifting over
-    /// the zone, as if the zone were cut out of whatever is under it
+    /// the zone, as if the zone were cut out of whatever is under it. Either way, moves
+    /// across a zone go round it. Laser and drill bank toolpaths are never clipped: move the
+    /// part or the zone for those
     #[serde(default)]
     #[schemars(title = "Clip toolpaths at keep-out zones")]
     pub clip_at_keep_out_zones: bool,
@@ -510,6 +513,10 @@ fn tolerance() -> f64 {
     0.002_54
 }
 
+/// The most a toolpath tolerance can be, mm (the form's limit, and a hand-edited file's):
+/// far below a keep-out zone's clearance or a cut's accuracy.
+pub const MAX_TOLERANCE: f64 = 0.1;
+
 impl ToolpathSettings {
     /// The tolerance for a toolpath of this family.
     pub fn tolerance(&self, family: cut_craft_core::simplify::Family) -> f64 {
@@ -519,6 +526,7 @@ impl ToolpathSettings {
             Family::ThreeD => self.tolerance_3d,
             Family::VCarve => self.tolerance_vcarve,
         }
+        .clamp(0.0, MAX_TOLERANCE)
     }
 
     /// `doc` with each toolpath's cuts thinned to its tolerance, ready to save.
@@ -647,7 +655,8 @@ pub enum CuttingChecks {
 /// General settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct General {
-    /// How many files File ▸ Recent Files and the start page list
+    /// How many files File ▸ Recent Files and the start page list. Up to 20 are always
+    /// remembered, so a smaller number only hides the rest until it is raised again
     #[schemars(range(min = 1, max = 20))]
     pub recent_file_list_size: u32,
     /// Read every icon at startup, so none shows a loading spinner the first time it is
@@ -1222,9 +1231,41 @@ pub const WARNING_MORE: &str = "They set how hard Cut Craft works your computer 
     it cuts. Leave them alone unless you know why you are changing one; Reset to defaults puts \
     them all back.";
 
+/// What reading the options file found: the options, whether the advanced ones were
+/// changed outside Cut Craft, and the settings that could not be read.
+#[derive(Debug, Default)]
+pub struct Read {
+    pub options: Options,
+    pub tampered: bool,
+    /// Each setting left at its default, as `section ▸ setting` (or the section, or
+    /// `everything`); empty when the whole file was read.
+    pub unread: Vec<String>,
+}
+
+/// What the status bar says when some settings could not be read.
+pub fn unread_message(unread: &[String]) -> String {
+    format!(
+        "Some settings could not be read, so they are back to their defaults: {}. Your old \
+         settings file is kept beside the new one as options.json.bak. Set them again in \
+         Edit ▸ Options.",
+        unread.join(", ")
+    )
+}
+
 /// What the status bar says when the advanced settings were changed outside Cut Craft.
 pub const TAMPERED: &str = "Advanced settings were changed outside Cut Craft, so they were put \
     back to their safe defaults. Change them in Edit ▸ Options ▸ Advanced.";
+
+/// What the status bar says after the options are read: what could not be read, and that
+/// the advanced settings were put back, both when both happened; nothing when all was well.
+pub fn load_message(unread: &[String], tampered: bool) -> Option<String> {
+    match (unread.is_empty(), tampered) {
+        (true, false) => None,
+        (true, true) => Some(TAMPERED.to_owned()),
+        (false, false) => Some(unread_message(unread)),
+        (false, true) => Some(format!("{} {TAMPERED}", unread_message(unread))),
+    }
+}
 
 /// Help ▸ Check for Updates, and the check at startup.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1620,7 +1661,8 @@ pub struct Options {
     #[schemars(skip)]
     pub stl: fmt_export_as_stl::Settings,
     /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
-    /// own starting job until then.
+    /// own starting job until then. Set as Default changes only what is on its form, so the
+    /// clearing kept by Clearing Settings' Use as My Default stays.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub default_job: Option<cut_craft_core::document::Job>,
@@ -1770,23 +1812,44 @@ impl Options {
 
     /// The options kept in the config folder; the defaults when there are none.
     pub fn load() -> Self {
-        Self::load_checked().0
+        Self::load_checked().options
     }
 
-    /// [`Self::load`], and whether the advanced settings had been changed outside Cut Craft
-    /// (and so were put back to their defaults).
-    pub fn load_checked() -> (Self, bool) {
-        path().and_then(|p| std::fs::read(p).ok()).map_or_else(
-            || (Self::default(), false),
-            |bytes| Self::from_bytes(&bytes),
-        )
+    /// [`Self::load`], and what could not be read of it: whether the advanced settings had
+    /// been changed outside Cut Craft (and so were put back to their defaults), and the
+    /// settings left at their defaults. A file with settings left out is first copied to
+    /// `options.json.bak`, so saving the defaults over it loses nothing.
+    pub fn load_checked() -> Read {
+        let Some(path) = path() else {
+            return Read::default();
+        };
+        let Ok(bytes) = std::fs::read(&path) else {
+            return Read::default();
+        };
+        let read = Self::read_bytes(&bytes);
+        if !read.unread.is_empty() {
+            let _ = std::fs::write(path.with_extension("json.bak"), &bytes);
+        }
+        read
     }
 
     /// Options read from a file's bytes, the advanced ones only if their check matches; the
     /// defaults for a file that is not options at all.
+    #[cfg(test)]
     pub fn from_bytes(bytes: &[u8]) -> (Self, bool) {
+        let read = Self::read_bytes(bytes);
+        (read.options, read.tampered)
+    }
+
+    /// [`Self::from_bytes`], naming what could not be read. A setting this version cannot
+    /// read (one from a newer version, or a hand edit gone wrong) goes back to its default
+    /// on its own: the page it is on, and the rest of the file, are kept.
+    pub fn read_bytes(bytes: &[u8]) -> Read {
         let Ok(mut file) = serde_json::from_slice::<serde_json::Value>(bytes) else {
-            return (Self::default(), false);
+            return Read {
+                unread: vec!["everything".to_owned()],
+                ..Read::default()
+            };
         };
         let seal = file
             .as_object_mut()
@@ -1798,8 +1861,9 @@ impl Options {
             .and_then(serde_json::Value::as_object_mut)
             .and_then(|a| a.remove("grid_color"))
             .and_then(|g| serde_json::from_value::<[u8; 3]>(g).ok());
-        let Ok(mut options) = serde_json::from_value::<Self>(file) else {
-            return (Self::default(), false);
+        let (mut options, unread) = match serde_json::from_value::<Self>(file.clone()) {
+            Ok(options) => (options, vec![]),
+            Err(_) => Self::read_each(file),
         };
         if let Some(grid) = old_grid.filter(|g| *g != old_grid_color()) {
             options.appearance.light_2d.grid_color = grid;
@@ -1808,7 +1872,45 @@ impl Options {
         if tampered {
             options.advanced = Advanced::default();
         }
-        (options, tampered)
+        Read {
+            options,
+            tampered,
+            unread,
+        }
+    }
+
+    /// A file that does not read whole, read setting by setting onto the defaults: each
+    /// section kept if it reads, else each of its settings that does; and what was left out.
+    fn read_each(file: serde_json::Value) -> (Self, Vec<String>) {
+        let reads = |v: &serde_json::Value| serde_json::from_value::<Self>(v.clone()).is_ok();
+        let mut kept = serde_json::to_value(Self::default()).expect("options serialise");
+        let mut unread = vec![];
+        let serde_json::Value::Object(sections) = file else {
+            return (Self::default(), vec!["everything".to_owned()]);
+        };
+        for (section, value) in sections {
+            let mut trial = kept.clone();
+            trial[&section] = value.clone();
+            if reads(&trial) {
+                kept = trial;
+                continue;
+            }
+            let (Some(settings), true) = (value.as_object(), kept[&section].is_object()) else {
+                unread.push(section);
+                continue;
+            };
+            for (name, setting) in settings {
+                let mut trial = kept.clone();
+                trial[&section][name] = setting.clone();
+                if reads(&trial) {
+                    kept = trial;
+                } else {
+                    unread.push(format!("{section} ▸ {name}"));
+                }
+            }
+        }
+        let options = serde_json::from_value(kept).unwrap_or_default();
+        (options, unread)
     }
 
     /// These options with one page (`general`, `advanced`…) back to its defaults, as its
@@ -1867,6 +1969,16 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_file_both_unreadable_and_tampered_says_both() {
+        let unread = vec!["Display".to_owned()];
+        let both = load_message(&unread, true).unwrap();
+        assert!(both.contains("Display"), "{both}");
+        assert!(both.contains(TAMPERED), "{both}");
+        assert_eq!(load_message(&[], true).as_deref(), Some(TAMPERED));
+        assert_eq!(load_message(&unread, false), Some(unread_message(&unread)));
+        assert_eq!(load_message(&[], false), None);
+    }
     #[test]
     fn tilting_pans_as_set_and_reset_puts_back_cut_crafts_own_shortcuts() {
         assert!((Tilt::default().pan(-3.0) + 3.0).abs() < f32::EPSILON);
@@ -2059,6 +2171,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_tolerance_is_never_more_than_a_tenth_of_a_millimetre() {
+        use cut_craft_core::simplify::Family;
+        let mut t = Options::default().toolpaths;
+        t.tolerance_2d = 5.0;
+        t.tolerance_3d = 1.0;
+        t.tolerance_vcarve = 25.4;
+        for family in [Family::TwoD, Family::ThreeD, Family::VCarve] {
+            assert!((t.tolerance(family) - MAX_TOLERANCE).abs() < 1e-12);
+        }
+        let schema = serde_json::to_value(schemars::schema_for!(ToolpathSettings)).unwrap();
+        for field in ["tolerance_2d", "tolerance_3d", "tolerance_vcarve"] {
+            assert_eq!(schema["properties"][field]["maximum"], 0.1, "{field}");
+        }
+    }
+
     /// `o` as saved to a file, read back.
     fn saved(o: &Options) -> Vec<u8> {
         static FILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -2070,6 +2198,37 @@ mod tests {
         let bytes = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(path);
         bytes
+    }
+
+    #[test]
+    fn a_setting_that_cannot_be_read_loses_only_itself_and_is_named() {
+        let mut o = Options::default();
+        o.controls
+            .shortcuts
+            .insert("pan".to_owned(), vec!["Mouse Back".to_owned()]);
+        o.default_job = Some(cut_craft_core::document::Job {
+            width: 300.0,
+            ..Default::default()
+        });
+        o.appearance.system_title_bar = true;
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        // a theme a newer version knows, and a section of the wrong kind
+        file["appearance"]["theme"] = "neon".into();
+        file["favourites"] = 7.into();
+        let read = Options::read_bytes(&serde_json::to_vec(&file).unwrap());
+        assert_eq!(read.options.controls, o.controls, "the shortcuts kept");
+        assert_eq!(read.options.default_job, o.default_job);
+        assert!(
+            read.options.appearance.system_title_bar,
+            "the rest of it kept"
+        );
+        assert_eq!(read.options.appearance.theme, Theme::default());
+        assert_eq!(read.unread, ["appearance ▸ theme", "favourites"]);
+        assert!(!read.tampered);
+        // a file that reads whole names nothing
+        assert_eq!(Options::read_bytes(&saved(&o)).unread, [] as [String; 0]);
+        // and one that is not options at all names the lot
+        assert_eq!(Options::read_bytes(b"{ not json").unread, ["everything"]);
     }
 
     #[test]

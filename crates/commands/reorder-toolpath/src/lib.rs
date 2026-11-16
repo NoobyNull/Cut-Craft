@@ -1,7 +1,7 @@
 //! Move Toolpath (the toolpath list's up and down arrows): a toolpath one place up or down
 //! the list, which is the order it is cut and saved in. The two toolpaths trade places by
 //! trading ids, and Merged and Array Copy toolpaths naming either by id in their `sources`
-//! are told of the trade, so they keep the toolpaths they were made from.
+//! (or an Array Copy's `only`) are told of the trade, so they keep the toolpaths they were made from.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::toolpath::Toolpath;
@@ -46,19 +46,32 @@ pub fn neighbour(doc: &Document, id: EntityId, direction: Direction) -> Option<E
     }
 }
 
-/// `params` with `a` and `b` traded wherever its `sources` name them.
+/// Each id in `params` naming another toolpath: its `sources`, and an Array Copy's `only`
+/// (the one source it copies).
+fn source_ids(params: &mut serde_json::Value) -> Vec<&mut serde_json::Value> {
+    let Some(params) = params.as_object_mut() else {
+        return vec![];
+    };
+    params
+        .iter_mut()
+        .flat_map(|(key, value)| match key.as_str() {
+            "sources" => value
+                .as_array_mut()
+                .map_or_else(Vec::new, |ids| ids.iter_mut().collect()),
+            "only" if value.is_u64() => vec![value],
+            _ => vec![],
+        })
+        .collect()
+}
+
+/// `params` with `a` and `b` traded wherever it names them.
 fn traded(params: &serde_json::Value, a: EntityId, b: EntityId) -> serde_json::Value {
     let mut params = params.clone();
-    if let Some(sources) = params
-        .get_mut("sources")
-        .and_then(serde_json::Value::as_array_mut)
-    {
-        for source in sources {
-            if *source == serde_json::json!(a.0) {
-                *source = serde_json::json!(b.0);
-            } else if *source == serde_json::json!(b.0) {
-                *source = serde_json::json!(a.0);
-            }
+    for source in source_ids(&mut params) {
+        if *source == serde_json::json!(a.0) {
+            *source = serde_json::json!(b.0);
+        } else if *source == serde_json::json!(b.0) {
+            *source = serde_json::json!(a.0);
         }
     }
     params
@@ -136,21 +149,16 @@ pub fn arranged(doc: &Document, order: &[(EntityId, Toolpath)]) -> Result<Change
     Ok(c.finish())
 }
 
-/// `params` with each toolpath its `sources` name at its new id.
+/// `params` with each toolpath it names at its new id.
 fn followed(
     params: &serde_json::Value,
     moved: &std::collections::BTreeMap<EntityId, EntityId>,
 ) -> serde_json::Value {
     let mut params = params.clone();
-    if let Some(sources) = params
-        .get_mut("sources")
-        .and_then(serde_json::Value::as_array_mut)
-    {
-        for source in sources {
-            let to = source.as_u64().and_then(|id| moved.get(&EntityId(id)));
-            if let Some(to) = to {
-                *source = serde_json::json!(to.0);
-            }
+    for source in source_ids(&mut params) {
+        let to = source.as_u64().and_then(|id| moved.get(&EntityId(id)));
+        if let Some(to) = to {
+            *source = serde_json::json!(to.0);
         }
     }
     params
@@ -224,7 +232,8 @@ mod tests {
         }
         let mut merged = doc.toolpaths[&EntityId(1)].clone();
         merged.name = "Merged".into();
-        merged.params = serde_json::json!({ "name": "Merged", "sources": [1, 2] });
+        // an array copy's `only` names the one source it copies, as its `sources` do
+        merged.params = serde_json::json!({ "name": "Merged", "sources": [1, 2], "only": 1 });
         c.add_toolpath(merged);
         doc.apply(&c.finish()).unwrap();
         doc
@@ -252,6 +261,7 @@ mod tests {
             doc.toolpaths[&EntityId(4)].params["sources"],
             serde_json::json!([2, 1])
         );
+        assert_eq!(doc.toolpaths[&EntityId(4)].params["only"], 2, "A, now at 2");
         run_on::<ReorderToolpath>(
             &mut doc,
             &Params {
@@ -300,6 +310,7 @@ mod tests {
                 doc.toolpaths[&EntityId(3)].params["sources"],
                 serde_json::json!([2, 4])
             );
+            assert_eq!(doc.toolpaths[&EntityId(3)].params["only"], 2, "A, now at 2");
             assert_eq!(
                 doc.toolpaths[&EntityId(1)].group.as_deref(),
                 Some("Outside")

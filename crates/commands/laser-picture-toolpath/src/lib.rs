@@ -20,7 +20,7 @@ pub enum Strategy {
     Raster,
     /// Two sets at right angles
     Hatch,
-    /// Along the selected vectors
+    /// Along the selected vectors, where they cross the picture
     Selected,
 }
 
@@ -28,7 +28,8 @@ pub enum Strategy {
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
-    /// Of the laser's maximum, where the picture is black
+    /// Of the laser's maximum, where the picture is black (white burns nothing: a picture
+    /// white where the lines run is made with a warning that nothing will burn)
     #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
     #[schemars(extend("x-group" = "Laser"))]
     pub power: f64,
@@ -36,7 +37,8 @@ pub struct Params {
     #[schemars(range(min = 1))]
     #[schemars(extend("x-group" = "Laser"))]
     pub passes: u32,
-    /// The pattern of lines the picture is burned in
+    /// The pattern of lines the picture is burned in (along the selected vectors, the line
+    /// spacing and angle are theirs, so those settings are hidden)
     #[schemars(extend("x-group" = "Picture"))]
     pub strategy: Strategy,
     /// Full power or off, spread to give the tones, for materials that only burn or don't
@@ -45,12 +47,15 @@ pub struct Params {
     /// Between lines, in kerf widths (1 densest to 30 sparsest)
     #[schemars(range(min = 1, max = 30))]
     #[schemars(extend("x-group" = "Picture"))]
+    #[schemars(extend("x-hide-when" = {"strategy": "selected"}))]
     pub line_spacing: f64,
     /// The angle of the lines: 0° along X, 90° along Y
     #[schemars(extend("x-unit" = "°"))]
     #[schemars(extend("x-group" = "Picture"))]
+    #[schemars(extend("x-hide-when" = {"strategy": "selected"}))]
     pub line_angle: f64,
-    /// The laser: its diameter is the kerf, its feed rate the move speed
+    /// The laser, a Laser in the Tool Database (Select… picks another): its diameter is the
+    /// kerf, its feed rate the move speed
     pub tool: Tool,
 }
 
@@ -231,11 +236,17 @@ impl Command for LaserPictureToolpath {
             .min(spacing);
         let safe = doc.job.clearance;
         let (moves, power) = p.burn(&lines, bitmap, step, safe);
+        // only lines that never cross the picture leave nothing: the picture's own lines
+        // always do
         if moves.is_empty() {
             return Err(CommandError::Failed(
-                "nothing to burn on the picture. Pick a picture with darker areas, or raise the power".into(),
+                "the selected vectors don't cross the picture: move them over the picture, or \
+                 pick Raster or Hatch"
+                    .into(),
             ));
         }
+        // ponytail: 0.5 % of full power marks nothing on any material we know of
+        let white = power.iter().all(|&p| p < 0.5);
         let count = moves.len();
         let moves: Vec<Move> = (0..p.passes).flat_map(|_| moves.iter().copied()).collect();
         let power: Vec<f64> = power
@@ -247,6 +258,12 @@ impl Command for LaserPictureToolpath {
         let mut toolpath = made_by::<Self>(p, p.name.clone(), p.tool.clone(), ids, moves);
         toolpath.power = power;
         let mut c = Change::builder(doc);
+        if white {
+            c.note(
+                "the picture is white where the lines run, so nothing will burn: pick a picture \
+                 with darker areas",
+            );
+        }
         c.add_toolpath(toolpath);
         Ok(c.finish())
     }
@@ -301,6 +318,39 @@ mod tests {
             })
             .map(|(_, &p)| p)
             .unwrap()
+    }
+
+    #[test]
+    fn vectors_off_the_picture_are_told_to_go_over_it() {
+        let mut doc = with_picture();
+        let mut c = Change::builder(&doc);
+        let id = c.add(cut_craft_core::testing::square(100.0, 100.0, 10.0));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        let why = LaserPictureToolpath::run(
+            &doc,
+            &Params {
+                strategy: Strategy::Selected,
+                ..Params::default()
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(why.contains("over the picture"), "{why}");
+        assert!(!why.contains("power"), "{why}");
+    }
+
+    #[test]
+    fn a_white_picture_is_made_with_a_warning_that_nothing_burns() {
+        let mut doc = with_picture();
+        let id = *doc.bitmaps.keys().next().unwrap();
+        doc.bitmaps.get_mut(&id).unwrap().grey = vec![255; 60];
+        let change = LaserPictureToolpath::run(&doc, &Params::default()).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("nothing will burn")),
+            "{:?}",
+            change.notes
+        );
     }
 
     #[test]

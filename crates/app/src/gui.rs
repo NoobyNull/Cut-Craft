@@ -304,8 +304,9 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
         "load_template",
         "Load Toolpath Template",
-        "Add the toolpaths saved in a template to this job, ready to pick the vectors each \
-         one cuts and calculate",
+        "Add the toolpaths saved in a template to this job, ready to pick the vectors (or \
+         picture) each one cuts and calculate. A Merged or Array Copy toolpath uses the \
+         toolpaths saved with it; one saved without them says to tick the ones to use",
     ),
     (
         "save_selected_toolpath_as_template",
@@ -2252,7 +2253,7 @@ impl MenuSystem {
                         a("Save Cut List...", "cut_list"),
                         sep(),
                         a("Clearing Settings...", "clearing_settings"),
-                        i("Materials..."),
+                        a("Preview Colors...", "materials"),
                         sep(),
                         i("Tool Database..."),
                     ],

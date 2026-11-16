@@ -64,6 +64,10 @@ impl CutCraftApp {
         self.sync_machine_keep_out();
         // nodes picked on a vector since unselected, undone or put away are let go
         self.prune_picked_nodes();
+        // a reorder, or its undo, moved toolpaths between ids: what holds them follows
+        self.follow_toolpaths();
+        // Swap Sides undone or redone: the preview turns over with the job
+        self.follow_side();
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);
@@ -495,8 +499,11 @@ impl CutCraftApp {
                 }
             });
         });
-        // new components go on the first level
-        let level = doc.levels.values().next().map_or("", |l| l.name.as_str());
+        // the level new components go on: the picked component's, else the top shown one
+        let level = doc
+            .levels
+            .get(&doc.new_component_level())
+            .map_or("", |l| l.name.as_str());
         drop_down(ui, "view/component_levels.png", level, &mut |ui| {
             bordered(ui, |ui| {
                 for (&id, l) in doc.levels.iter().rev() {
@@ -3458,7 +3465,11 @@ impl CutCraftApp {
         egui::Modal::new(egui::Id::unique("earlier_gcode")).show(ctx, |ui| {
             ui.set_width(ui.spacing().interact_size.x * 11.0);
             ui.heading("Replace the earlier G-code?");
-            ui.label("These files from an earlier save are where the new ones go:");
+            ui.label(if ask.sending {
+                "These files from an earlier send are on the machine, where the new ones go:"
+            } else {
+                "These files from an earlier save are where the new ones go:"
+            });
             for file in ask.earlier.iter().take(SHOWN) {
                 ui.label(format!("• {}", super::file_name(file)));
             }
@@ -3521,7 +3532,6 @@ impl CutCraftApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
         }
-        self.recent.truncate(options.recent_count());
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
             self.playback_speed = options.toolpaths.preview_speed();
         }
@@ -4370,7 +4380,18 @@ fn tool_changes_section(ui: &mut egui::Ui, changes: &mut files::ToolChanges, has
     );
 }
 
-/// Save Toolpaths' files: what goes in each, and why there is a file for each tool.
+/// What Save Toolpaths says while tiling is on, with `tiles` tiles.
+pub(super) fn tiling_on(tiles: usize) -> String {
+    let s = if tiles == 1 { "" } else { "s" };
+    format!(
+        "Tiling on: {tiles} tile{s}. Each tile is saved as a file of its own, the name you \
+         give with _tile1 to _tile{tiles} added (a tile with nothing to cut gets none). \
+         Toolpaths ▸ Toolpath Tiling turns it off"
+    )
+}
+
+/// Save Toolpaths' files: what goes in each, why there is a file for each tool, and that
+/// each is saved once per tile while tiling is on.
 fn files_section(
     ui: &mut egui::Ui,
     doc: &cut_craft_core::document::Document,
@@ -4378,6 +4399,10 @@ fn files_section(
     split: Option<&str>,
 ) {
     let warn = ui.visuals().warn_fg_color;
+    // tiling on: each file is saved per tile, never under the name typed alone
+    if let Some(tiling) = doc.tiling {
+        ui.colored_label(warn, tiling_on(tiling.tiles(doc.job.area()).len()));
+    }
     if let Some(why) = split
         && plan.as_ref().is_ok_and(|p| p.len() > 1)
     {

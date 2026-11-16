@@ -10,7 +10,7 @@ use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::material_class::MaterialClass;
 use cut_craft_core::material_library::{ClassFeeds, Material, MaterialLibrary};
-use cut_craft_core::toolpath::{CuttingData, RateUnits, ToolDatabase};
+use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase};
 use eframe::egui;
 
 /// What is picked in the tree.
@@ -41,6 +41,9 @@ pub struct MaterialsWindow {
     /// The tools, whose feeds and speeds for the materials are edited here too.
     pub tools: ToolDatabase,
     pub pick: Option<MaterialPick>,
+    /// The tools as the window opened on them: what it changed is told from them, so its
+    /// OK keeps edits made in the Tool Database meanwhile.
+    opened_on: ToolDatabase,
 }
 
 /// The window's share of the screen when it first opens.
@@ -52,7 +55,75 @@ impl MaterialsWindow {
             library: library.clone(),
             tools: tools.clone(),
             pick: None,
+            opened_on: tools.clone(),
         }
+    }
+
+    /// `now`, the tool database as it is (the Tool Database may have changed it while this
+    /// window was open), with this window's own edits made to it: each bit's feeds for the
+    /// materials and classes, and the Material list. Tools added, deleted or edited
+    /// elsewhere meanwhile stay as they are.
+    #[must_use]
+    pub fn tools_onto(&self, now: &ToolDatabase) -> ToolDatabase {
+        // the same tool here: by its name, and a catalogue's entry only by a catalogue's
+        // (a copy in My Tools shares its name)
+        fn find<'a>(db: &'a ToolDatabase, name: &str, catalogue: bool) -> Option<&'a Tool> {
+            db.tools
+                .iter()
+                .find(|t| t.name == name && db.is_catalogue(t) == catalogue)
+        }
+        let mut out = now.clone();
+        for tool in &mut out.tools {
+            let catalogue = now.is_catalogue(tool);
+            // or by the name it had, when renamed meanwhile
+            let name = if find(&self.opened_on, &tool.name, catalogue).is_some() {
+                tool.name.as_str()
+            } else {
+                now.renamed
+                    .iter()
+                    .find(|(old, new)| {
+                        **new == tool.name && find(&self.opened_on, old, catalogue).is_some()
+                    })
+                    .map_or(tool.name.as_str(), |(old, _)| old.as_str())
+            };
+            let (Some(mine), Some(before)) = (
+                find(&self.tools, name, catalogue),
+                find(&self.opened_on, name, catalogue),
+            ) else {
+                continue;
+            };
+            if mine.materials != before.materials {
+                tool.materials.clone_from(&mine.materials);
+            }
+            if mine.class_feeds != before.class_feeds {
+                tool.class_feeds.clone_from(&mine.class_feeds);
+            }
+        }
+        let had = |list: &[String], m: &str| list.iter().any(|n| n.eq_ignore_ascii_case(m));
+        out.materials
+            .retain(|m| had(&self.tools.materials, m) || !had(&self.opened_on.materials, m));
+        for m in &self.tools.materials {
+            if !had(&self.opened_on.materials, m) && !had(&out.materials, m) {
+                out.materials.push(m.clone());
+            }
+        }
+        if self.tools.material != self.opened_on.material {
+            out.material.clone_from(&self.tools.material);
+        }
+        out
+    }
+
+    /// After Apply: the window goes on from `tools`, the database as saved.
+    pub fn applied(&mut self, tools: &ToolDatabase) {
+        self.tools = tools.clone();
+        self.opened_on = tools.clone();
+    }
+
+    /// The Tool Database kept edits (the Add Tool picker's Select, say): the window goes
+    /// on from `now`, its own edits still unkept on top, so Cancel still drops only those.
+    pub fn rebase(&mut self, now: &ToolDatabase) {
+        self.tools = self.tools_onto(now);
+        self.opened_on = now.clone();
     }
 
     /// The picked material's name, when one is picked.
@@ -503,6 +574,91 @@ mod tests {
         let tool = w.tools.get(&bit).unwrap();
         assert!(!tool.materials.iter().any(|d| d.material == "Black Cherry"));
         assert!(w.library.get("Black Cherry").is_none());
+    }
+
+    #[test]
+    fn its_feeds_go_onto_the_tool_database_as_it_is_now_not_as_it_was_when_it_opened() {
+        let mut w = window();
+        let bit = w.tools.tools[0].name.clone();
+        w.pick = Some(MaterialPick::Material(at(&w, "Hard Maple")));
+        w.add_tool(&bit);
+        // the Tool Database, opened on its own while the library was open: a tool deleted,
+        // one added and a bit's own feed changed
+        let mut now = ToolDatabase::starter();
+        let gone = now.tools.remove(1).name;
+        let mut added = now.tools[0].clone();
+        added.name = "A New Bit".into();
+        now.tools.push(added);
+        now.tools[0].feed_rate = 1234.0;
+        let merged = w.tools_onto(&now);
+        assert!(
+            merged.get(&gone).is_none(),
+            "the deleted tool stays deleted"
+        );
+        assert!(merged.get("A New Bit").is_some(), "the added tool stays");
+        let tool = merged.get(&bit).unwrap();
+        assert_eq!(tool.feed_rate, 1234.0, "the Tool Database's own edit stays");
+        assert!(
+            tool.materials.iter().any(|d| d.material == "Hard Maple"),
+            "the library's feeds are added"
+        );
+        assert!(merged.materials.iter().any(|m| m == "Hard Maple"));
+        // after Apply it goes on from the database as saved
+        w.applied(&merged);
+        now = merged.clone();
+        now.tools[0].materials.clear();
+        let again = w.tools_onto(&now);
+        assert!(
+            again.get(&bit).unwrap().materials.is_empty(),
+            "a later Tool Database edit is not undone by the next OK"
+        );
+    }
+
+    #[test]
+    fn a_catalogue_bit_copied_into_my_tools_gets_the_feeds_not_the_catalogue_entry() {
+        let mut db = ToolDatabase::starter();
+        let mut bit = db.tools[0].clone();
+        bit.name = "Maker Bit".into();
+        bit.group = "Catalogues/Maker".into();
+        db.catalogues.push("Catalogues/Maker".into());
+        db.tools.push(bit);
+        let mut w = MaterialsWindow::new(&MaterialLibrary::starter(), &db);
+        // the Add Tool picker's Copy to My Tools and Select, kept as the Tool Database's
+        // Select keeps it
+        let mut now = db.clone();
+        let catalogue = now.tools.len() - 1;
+        crate::tree::copy_to_mine(&mut now, catalogue);
+        w.rebase(&now);
+        w.pick = Some(MaterialPick::Material(at(&w, "Hard Maple")));
+        w.add_tool("Maker Bit");
+        let merged = w.tools_onto(&now);
+        let has_maple = |t: &cut_craft_core::toolpath::Tool| {
+            t.materials.iter().any(|d| d.material == "Hard Maple")
+        };
+        let mine = merged.get("Maker Bit").unwrap();
+        assert!(!merged.is_catalogue(mine), "the My Tools copy stays");
+        assert!(has_maple(mine), "the copy has the feeds");
+        assert!(
+            !has_maple(&merged.tools[catalogue]),
+            "the read-only catalogue entry is left as it was"
+        );
+    }
+
+    #[test]
+    fn its_feeds_follow_a_tool_renamed_in_the_tool_database_meanwhile() {
+        let mut w = window();
+        let bit = w.tools.tools[0].name.clone();
+        w.pick = Some(MaterialPick::Material(at(&w, "Hard Maple")));
+        w.add_tool(&bit);
+        let mut now = ToolDatabase::starter();
+        now.tools[0].name = "Renamed Bit".into();
+        now.note_renamed(&bit, "Renamed Bit");
+        let merged = w.tools_onto(&now);
+        let tool = merged.get("Renamed Bit").unwrap();
+        assert!(
+            tool.materials.iter().any(|d| d.material == "Hard Maple"),
+            "the library's feeds reach the renamed tool"
+        );
     }
 
     #[test]

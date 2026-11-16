@@ -36,12 +36,17 @@ pub enum ToolShape {
     /// cutter): cuts like an end mill, but only sideways, never plunging into the material
     #[schemars(title = "Surfacing Bit")]
     SurfacingBit,
+    /// A laser, for the laser toolpaths: its diameter is the kerf (the width it burns), its
+    /// feed rate the speed it moves at. It has no pass depth or flutes: Laser Cut / Fill
+    /// sets how many passes it makes
+    Laser,
 }
 
 impl ToolShape {
-    /// Flat bottomed: an end mill or a surfacing bit, which cut the same shape.
+    /// Flat bottomed: an end mill or a surfacing bit, which cut the same shape (and a
+    /// laser, whose burn the preview shows as a flat cut its kerf wide).
     pub fn is_flat(self) -> bool {
-        matches!(self, Self::EndMill | Self::SurfacingBit)
+        matches!(self, Self::EndMill | Self::SurfacingBit | Self::Laser)
     }
 }
 
@@ -365,6 +370,7 @@ impl Tool {
             ToolShape::ThreadMill => "Thread Mills",
             ToolShape::FormTool => "Form Tools",
             ToolShape::SurfacingBit => "Surfacing Bits",
+            ToolShape::Laser => "Lasers",
         };
         format!("{maker}/{kind}")
     }
@@ -620,7 +626,7 @@ impl Tool {
             }
         }
         Some(match self.shape {
-            ToolShape::EndMill | ToolShape::SurfacingBit => 0.0,
+            ToolShape::EndMill | ToolShape::SurfacingBit | ToolShape::Laser => 0.0,
             ToolShape::BallNose => radius - (radius * radius - r * r).max(0.0).sqrt(),
             ToolShape::VBit => r / (self.angle.to_radians() / 2.0).tan(),
             ToolShape::RadiusedEndMill => {
@@ -702,6 +708,30 @@ impl Tool {
             flute_length: 12.7,
             ..Self::default()
         }
+    }
+
+    /// A laser with a 0.15 mm kerf moving at 1500 mm/min: what the laser toolpaths start
+    /// with, and a starter tool.
+    pub fn laser() -> Self {
+        Self {
+            name: "Laser (0.15 mm kerf)".into(),
+            shape: ToolShape::Laser,
+            diameter: 0.15,
+            pass_depth: 0.0,
+            stepover: 0.0,
+            feed_rate: 1500.0,
+            plunge_rate: 1500.0,
+            spindle_speed: 0.0,
+            flutes: 1,
+            ..Self::default()
+        }
+    }
+
+    /// Whether it is a laser: the Laser tool type, or a laser toolpath's tool from before
+    /// lasers were a tool type (an end mill named as a laser, with no spindle).
+    pub fn is_laser(&self) -> bool {
+        self.shape == ToolShape::Laser
+            || (self.spindle_speed == 0.0 && self.name.to_lowercase().starts_with("laser"))
     }
 }
 
@@ -815,6 +845,8 @@ impl ToolDatabase {
             },
             // flattens the spoilboard: wide, and stepping over most of its width
             Tool::surfacing_bit(),
+            // burns rather than cuts: for the laser toolpaths
+            Tool::laser(),
         ];
         for tool in &mut tools {
             let set = if tool.name.contains(" in ") {
@@ -836,6 +868,22 @@ impl ToolDatabase {
             ],
             ..Self::default()
         }
+    }
+
+    /// A database from before lasers were a tool type, with no laser in My Tools: the
+    /// starter laser added (in `Metric Tools/Lasers`), so the laser toolpaths have one to
+    /// pick. Whether it was added.
+    pub fn add_laser_if_none(&mut self) -> bool {
+        if self.my_tools().any(|t| t.shape == ToolShape::Laser) {
+            return false;
+        }
+        let mut laser = Tool::laser();
+        while self.tools.iter().any(|t| t.name == laser.name) {
+            laser.name.push_str(" 2");
+        }
+        laser.group = format!("Metric Tools/{}", shape_group(ToolShape::Laser));
+        self.tools.push(laser);
+        true
     }
 
     /// Whether `tool` sits in a read-only catalogue (its group is in one of
@@ -1091,6 +1139,7 @@ pub fn shape_group(shape: ToolShape) -> &'static str {
         ToolShape::ThreadMill => "Thread Mills",
         ToolShape::FormTool => "Form Tools",
         ToolShape::SurfacingBit => "Surfacing Bits",
+        ToolShape::Laser => "Lasers",
     }
 }
 

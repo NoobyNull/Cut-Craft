@@ -507,6 +507,41 @@ mod tests {
     }
 
     #[test]
+    fn a_laser_s_rapids_go_round_a_zone_with_the_laser_off() {
+        let mut doc = crate::testing::with_toolpath();
+        doc.keep_out = vec![KeepOutZone::new("Clamp", square(40.0, -10.0, 20.0))];
+        let line = |x: f64| {
+            let at = |kind, x: f64, z: f64| Move {
+                kind,
+                to: DVec3::new(x, 0.0, z),
+            };
+            [
+                at(MoveKind::Rapid, x, 5.0),
+                at(MoveKind::Plunge, x, 0.0),
+                at(MoveKind::Cut, x + 10.0, 0.0),
+                at(MoveKind::Rapid, x + 10.0, 5.0),
+            ]
+        };
+        let mut t = doc.toolpaths.values().next().unwrap().clone();
+        t.moves = [line(0.0), line(100.0)].concat();
+        t.power = t
+            .moves
+            .iter()
+            .map(|m| if m.kind == MoveKind::Cut { 0.8 } else { 0.0 })
+            .collect();
+        let mut c = crate::Change::builder(&doc);
+        let id = c.add_toolpath(t);
+        doc.apply(&c.finish()).unwrap();
+        let made = &doc.toolpaths[&id];
+        assert!(made.moves.len() > 8, "a way round the zone");
+        assert!(!crossed(&doc.keep_out_zones(), &made.moves));
+        assert_eq!(made.power.len(), made.moves.len());
+        for (m, &p) in made.moves.iter().zip(&made.power) {
+            assert_eq!(p, if m.kind == MoveKind::Cut { 0.8 } else { 0.0 }, "{m:?}");
+        }
+    }
+
+    #[test]
     fn a_rapid_over_a_zone_goes_round_it_and_a_cut_through_one_violates() {
         let zones = [square(10.0, 10.0, 10.0)];
         let moves = [rapid(0.0, 14.0), rapid(30.0, 16.0)];

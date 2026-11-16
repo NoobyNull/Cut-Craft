@@ -10,6 +10,7 @@ mod draw3d;
 mod entry;
 mod first_run;
 mod fit_import;
+mod follow;
 mod guide;
 mod help;
 #[cfg(test)]
@@ -92,7 +93,8 @@ struct Copied {
     names: std::collections::BTreeMap<u64, String>,
 }
 
-/// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id.
+/// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id, unless a
+/// reorder has moved it since it was first previewed (see [`CutCraftApp::preview_mark`]).
 fn preview_mark(id: EntityId) -> u32 {
     u32::try_from(id.0).unwrap_or(u32::MAX)
 }
@@ -427,9 +429,10 @@ enum Info {
     Help(&'static str),
 }
 
-/// The previewed material before a preview: `None` was uncut material.
+/// The previewed material before a preview (`None` was uncut material), and the side
+/// it was made on (`true` the bottom), so Undo Last Preview turns it over to the job's side.
 #[derive(Clone, Debug)]
-pub(super) struct BeforePreview(Option<Material>);
+pub(super) struct BeforePreview(Option<Material>, bool);
 
 /// A save held while the user chooses what happens to an earlier save's G-code.
 pub(super) struct EarlierAsk {
@@ -443,6 +446,8 @@ pub(super) struct EarlierAsk {
     earlier: Vec<std::path::PathBuf>,
     /// Keep the answer as the default.
     remember: bool,
+    /// Asked for Send to Machine: `earlier` are names on the machine, not paths here.
+    sending: bool,
 }
 
 /// Save Toolpaths' choices (Save Toolpaths form), while its window is open.
@@ -993,6 +998,10 @@ type Rings3d = (
 );
 
 /// A command whose settings form is open.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the form's states, each on or off"
+)]
 struct OpenForm {
     id: &'static str,
     label: &'static str,
@@ -1042,8 +1051,15 @@ struct OpenForm {
     /// While a value is dragged, the undo depth after its last step and the shape and
     /// settings from before that step: the next step takes it back first.
     dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
-    /// How many changes could be undone when it opened: Cancel undoes back to there.
+    /// How many changes could be undone when it opened: Cancel undoes back to there, then
+    /// makes again the changes in `list_steps`.
     undo_from: usize,
+    /// The changes made in the toolpath list beside it while it is open (reorder, group,
+    /// delete, show or hide), each as its command and settings: they are not the form's, so
+    /// Cancel makes them again after taking back everything since it opened.
+    list_steps: Vec<(String, Value)>,
+    /// While the toolpath list beside it is drawn: what it applies goes in `list_steps`.
+    in_list: bool,
     /// How its drag is read: another way for a toolbox variant (Draw Circle from Edge).
     way: crate::flyout::DragWay,
 }
@@ -1185,12 +1201,17 @@ struct CutCraftApp {
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
     tools_path: Option<std::path::PathBuf>,
+    /// The tool database file that could not be read at start: nothing is saved over it,
+    /// and every save says so.
+    tools_unreadable: Option<std::path::PathBuf>,
     /// The open Tool Database window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// The Materials Library: materials by class and hardness.
     materials: cut_craft_core::material_library::MaterialLibrary,
     /// Where `materials` is saved; `None` keeps it in memory.
     materials_path: Option<std::path::PathBuf>,
+    /// The Materials Library file that could not be read at start, as `tools_unreadable`.
+    materials_unreadable: Option<std::path::PathBuf>,
     /// The open Materials Library window.
     materials_window: Option<cut_craft_tool_database::materials::MaterialsWindow>,
     /// What the open Select Tool picks for: a tool in one of the form's lists, or a tool
@@ -1268,6 +1289,9 @@ struct CutCraftApp {
     stroke: Vec<Point>,
     /// The previewed material before the last preview, for Undo Last Preview.
     before_preview: Option<BeforePreview>,
+    /// The side of a double-sided job the preview has up (`Document::bottom_side`): when
+    /// the job turns over (Swap Sides, or its undo or redo), the preview turns with it.
+    preview_side: bool,
     /// Node editing: the nodes picked with a box, which a drag of one moves together.
     picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
     /// Node editing's mirror lines, H and V: with the first, nodes either side of the
@@ -1327,6 +1351,12 @@ struct CutCraftApp {
     /// Counts the jobs opened or made: with the history's revision, which job and which
     /// change of it the 2D view draws (a new job's history starts its revisions again).
     job_epoch: u64,
+    /// What told the toolpaths apart at the last change, so a reorder, or its undo or redo,
+    /// moving them between ids is seen (see [`follow`]).
+    toolpath_keys: follow::Keys,
+    /// The mark each toolpath's cells take in the preview, where it is not its own id: the
+    /// one it was previewed under before a reorder moved it to another id.
+    preview_marks: std::collections::BTreeMap<EntityId, u32>,
     /// What a tool with no form (Group) warned of, in red at the foot of the tool panel, for
     /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
     /// too, takes it away.
@@ -1391,8 +1421,11 @@ struct CutCraftApp {
     /// cut a little each frame until it gets there, or Stop.
     playback_goal: Option<f64>,
     /// A preview stopped or played to its end, kept so its controls stay to scrub it back
-    /// and forth, till another preview or Reset Preview.
+    /// and forth, till another preview, Reset Preview or another job.
     kept_playback: Option<cut_craft_core::playback::Playback>,
+    /// The job's history revision when the playing (or kept) preview was laid out: once
+    /// the job changes, its moves are old, so it stops and its controls close.
+    playback_revision: u64,
     /// A playing preview's material as the 3D view draws it, and the GPU's surface of it,
     /// kept by what they were made from (the playback's revision, the detail and the job's
     /// revision; for the GPU, its wrap and sides too) so a paused preview is not made again
@@ -2030,6 +2063,11 @@ pub(crate) const KNIFE_LINE: &str = "Drag knife: zero Z with the blade tip touch
                                      material. It presses in by the Pressure, a share of the \
                                      Spring Travel, so no flute length is needed";
 
+/// Whether the form `id` is a laser toolpath's, whose tool is a laser.
+pub(crate) fn is_laser_form(id: &str) -> bool {
+    id.starts_with("laser_") && id.ends_with("_toolpath")
+}
+
 /// A toolpath form's tool, kept short: its name (with its tool changer holder), its size and
 /// pass in one line, Select… to pick it in the Tool Database (where the tool changer's
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
@@ -2056,6 +2094,13 @@ fn tool_picker(
             ui.strong(held_name(current, slots));
             if id == cut_craft_core::drag_knife::STRATEGY {
                 ui.label(KNIFE_LINE);
+            } else if is_laser_form(id) && tool.is_laser() {
+                // a laser from before lasers were a tool type reads as the laser it is
+                let laser = Tool {
+                    shape: cut_craft_core::toolpath::ToolShape::Laser,
+                    ..tool.clone()
+                };
+                ui.label(tool_line(&laser, None, units));
             } else {
                 ui.label(tool_line(tool, passes, units));
             }
@@ -2079,10 +2124,13 @@ fn tool_picker(
     ui.horizontal(|ui| {
         let select = ui
             .button("Select…")
-            .on_hover_hint(
+            .on_hover_hint(if is_laser_form(id) {
+                "Pick the laser this toolpath burns with in the Tool Database (its Lasers): it \
+                 brings its own kerf and speed"
+            } else {
                 "Pick the bit this toolpath cuts with in the Tool Database: it brings its own \
-                 feeds, speeds and pass depth",
-            )
+                 feeds, speeds and pass depth"
+            })
             .clicked();
         let edit = ui
             .button("Edit…")
@@ -2343,6 +2391,14 @@ fn tool_line(tool: &Tool, passes: Option<f64>, units: cut_craft_core::document::
     use cut_craft_core::toolpath::ToolShape;
     let length = |mm: f64| format!("{} {}", trimmed(mm / units.per()), units.suffix());
     let across = length(tool.diameter);
+    // a laser burns: its kerf and how fast it moves, no pass
+    if tool.shape == ToolShape::Laser {
+        return format!(
+            "Laser, {across} kerf, {} {}/min",
+            trimmed(tool.feed_rate / units.per()),
+            units.suffix()
+        );
+    }
     let line = match tool.shape {
         ToolShape::EndMill => format!("{across} end mill"),
         ToolShape::BallNose => format!("{across} ball nose"),
@@ -2353,6 +2409,7 @@ fn tool_line(tool: &Tool, passes: Option<f64>, units: cut_craft_core::document::
         ToolShape::ThreadMill => format!("{across} thread mill"),
         ToolShape::FormTool => format!("{across} form tool"),
         ToolShape::SurfacingBit => format!("{across} surfacing bit"),
+        ToolShape::Laser => unreachable!("said above"),
     };
     let pass = length(tool.pass_depth);
     let line = format!("{line}, {pass} a pass");

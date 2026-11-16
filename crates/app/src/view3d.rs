@@ -511,7 +511,7 @@ pub struct Look {
     pub light: DVec3,
     /// Rotary jobs: drawn round the axis; the sides are then left out.
     pub wrap: Option<Wrap>,
-    /// Wood's grain on the top, for a wood from Toolpaths ▸ Materials.
+    /// Wood's grain on the top, for a wood from Toolpaths ▸ Preview Colors.
     pub grain: Option<Grain>,
     /// View ▸ Use Shadow Shading: what the light cannot reach is drawn in shadow (flat jobs).
     pub shadows: bool,

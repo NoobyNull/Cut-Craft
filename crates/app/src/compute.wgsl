@@ -238,6 +238,30 @@ fn lower(i: u32, z: f32) {
     }
 }
 
+// The lowest the tip goes moving straight from a to b within the square from lo to hi;
+// NONE if it never passes over that square (tip_through).
+fn tip_through(a: vec3<f32>, b: vec3<f32>, lo: vec2<f32>, hi: vec2<f32>) -> f32 {
+    var t0 = 0.0;
+    var t1 = 1.0;
+    let step = b.xy - a.xy;
+    for (var k = 0; k < 2; k++) {
+        if (step[k] == 0.0) {
+            if (a[k] < lo[k] || a[k] > hi[k]) {
+                return NONE;
+            }
+        } else {
+            let enter = (lo[k] - a[k]) / step[k];
+            let leave = (hi[k] - a[k]) / step[k];
+            t0 = max(t0, min(enter, leave));
+            t1 = min(t1, max(enter, leave));
+        }
+    }
+    if (t0 > t1) {
+        return NONE;
+    }
+    return min(mix(a, b, t0).z, mix(a, b, t1).z);
+}
+
 // Lowers each cell a move passes over to the lowest the cutting edge reaches there.
 @compute @workgroup_size(64)
 fn sweep_main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) n: vec3<u32>) {
@@ -254,9 +278,16 @@ fn sweep_main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgr
     let hi = max(m.a.xy, m.b.xy) + m.radius;
     let columns = span(lo.x, hi.x, P.columns);
     let rows = span(lo.y, hi.y, P.rows);
+    // a bit narrower than a cell can pass between centres: then it also cuts each cell
+    // its tip passes through, as deep as the tip goes there
+    let thin = m.radius < P.cell * 0.70710678;
     for (var r = rows.x; r < rows.y; r++) {
         for (var c = columns.x; c < columns.y; c++) {
-            let z = lowest_edge(m.a, m.b, centre(c, r));
+            var z = lowest_edge(m.a, m.b, centre(c, r));
+            if (thin) {
+                let corner = vec2<f32>(f32(c), f32(r)) * P.cell;
+                z = min(z, tip_through(m.a, m.b, corner, corner + P.cell));
+            }
             if (z < NONE) {
                 lower(r * P.columns + c, max(z, P.bottom));
             }

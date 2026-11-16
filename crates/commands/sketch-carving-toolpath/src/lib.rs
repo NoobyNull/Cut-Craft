@@ -15,7 +15,7 @@ pub struct SketchCarvingToolpath;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
-    /// The newest bitmap
+    /// A picture: the one picked last, else the newest
     #[default]
     Bitmap,
     /// The 3D model: its hollows are the lines
@@ -36,6 +36,12 @@ pub enum Boundary {
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
+    /// The picture it was made from (for a Bitmap source; none: the one picked last, else the newest). Not on
+    /// the form: recalculating carves this picture again, whichever is picked. Left out of
+    /// toolpath templates and saved settings, which carve the other job's own picture
+    #[schemars(skip)]
+    #[serde(default)]
+    pub bitmap: Option<cut_craft_core::document::EntityId>,
     /// Where the sketch lines come from
     #[schemars(extend("x-group" = "Sketch"))]
     pub source: Source,
@@ -44,7 +50,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_sketch.png"))]
     pub start_depth: f64,
-    /// Below the start depth
+    /// Below the start depth, cut in passes no deeper than the tool's pass depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D"))]
@@ -60,7 +66,7 @@ pub struct Params {
     #[schemars(range(min = 0, max = 100))]
     #[schemars(extend("x-group" = "Sketch"))]
     pub line_thickness: f64,
-    /// Its stepover spaces the passes over the lines
+    /// Its stepover spaces the passes over the lines; its pass depth is the most each cuts
     pub tool: Tool,
 }
 
@@ -68,6 +74,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             name: "Sketch Carving".into(),
+            bitmap: None,
             source: Source::Bitmap,
             start_depth: 0.0,
             cut_depth: 1.0,
@@ -157,12 +164,13 @@ impl Params {
     fn darkness(&self, doc: &Document, cell: f64) -> Result<Grid, CommandError> {
         Ok(match self.source {
             Source::Bitmap => {
-                // the bitmap picked last, else the newest
-                let Some(bitmap) = doc.chosen_bitmap() else {
+                // the picture it was made from, else the one picked last, else the newest
+                if doc.bitmaps.is_empty() {
                     return Err(CommandError::Failed(
                         "import the picture to sketch first".into(),
                     ));
-                };
+                }
+                let (_, bitmap) = doc.toolpath_bitmap(self.bitmap)?;
                 Grid::sample(bitmap.rect, cell, |q| bitmap.darkness(q).unwrap_or(0.0))
             }
             Source::Model => {
@@ -196,12 +204,12 @@ impl Params {
     }
 }
 
-/// Cuts each row's runs of line cells (where `keep` allows) flat at `z`.
+/// Cuts each row's runs of line cells (where `keep` allows) flat at each of `depths`.
 fn cut_rows(
     grid: &Grid,
     line: &[bool],
     keep: impl Fn(Point) -> bool,
-    z: f64,
+    depths: &[f64],
     safe: f64,
 ) -> Vec<Move> {
     let mut moves = vec![];
@@ -222,7 +230,7 @@ fn cut_rows(
             moves.extend(contour_moves(
                 &[centre(first, r), centre(c, r)],
                 false,
-                &[z],
+                depths,
                 safe,
             ));
             c += 1;
@@ -249,16 +257,36 @@ impl Command for SketchCarvingToolpath {
         let inside = |q: Point| sketch.inside(q);
         // ponytail: each row's runs of line cells are cut flat; offsetting round the lines
         // would give smoother edges
-        let z = -(p.start_depth + p.cut_depth);
-        let moves = cut_rows(&sketch.grid, &sketch.line, inside, z, doc.job.clearance);
+        // down to the cut depth in the tool's passes, below the start depth
+        let depths: Vec<f64> = p
+            .tool
+            .pass_depths(p.cut_depth)
+            .into_iter()
+            .map(|z| z - p.start_depth)
+            .collect();
+        let moves = cut_rows(
+            &sketch.grid,
+            &sketch.line,
+            inside,
+            &depths,
+            doc.job.clearance,
+        );
         if moves.is_empty() {
             return Err(CommandError::Failed(
                 "the sketch has no lines. Use a thicker line".into(),
             ));
         }
         let mut c = Change::builder(doc);
+        // the picture kept, so recalculating sketches it whichever is picked then
+        let settings = Params {
+            bitmap: match p.source {
+                Source::Bitmap => Some(doc.toolpath_bitmap(p.bitmap)?.0),
+                Source::Model => None,
+            },
+            ..p.clone()
+        };
         c.add_toolpath(made_by::<Self>(
-            p,
+            &settings,
             p.name.clone(),
             p.tool.clone(),
             sketch.ids,
@@ -398,6 +426,49 @@ mod tests {
     }
 
     #[test]
+    fn recalculating_uses_the_picture_it_was_made_from_not_the_newest() {
+        let mut doc = with_picture();
+        doc.apply(&SketchCarvingToolpath::run(&doc, &Params::default()).unwrap())
+            .unwrap();
+        let (&tp, made) = doc.toolpaths.iter().next().unwrap();
+        let first = made.moves.clone();
+        // another picture imported, and picked
+        let mut c = Change::builder(&doc);
+        let other = c.add_bitmap(Bitmap {
+            name: "other".into(),
+            columns: 40,
+            rows: 40,
+            grey: (0..40 * 40)
+                .map(|i| if (5..7).contains(&(i % 40)) { 0 } else { 255 })
+                .collect(),
+            rect: Rect::new(Point::ZERO, Point::new(40.0, 40.0)),
+            depth: Vec::new(),
+            rgb: Vec::new(),
+        });
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        doc.selected_bitmaps = [other].into();
+        let mut r = cut_craft_core::Registry::default();
+        r.add::<SketchCarvingToolpath>();
+        let mut again = doc.clone();
+        again.apply(&r.recalculate(&doc, tp).unwrap()).unwrap();
+        assert_eq!(again.toolpaths[&tp].moves, first, "the same picture carved");
+        // that picture changed: the toolpath is out of date
+        let first_picture = *doc.bitmaps.keys().next().unwrap();
+        let mut moved = doc.bitmaps[&first_picture].clone();
+        moved.rect.min.x += 1.0;
+        moved.rect.max.x += 1.0;
+        let mut c = Change::builder(&doc);
+        c.replace_bitmap(first_picture, moved);
+        let change = c.finish().marking_stale(&doc);
+        doc.apply(&change).unwrap();
+        assert!(
+            doc.toolpaths[&tp].stale,
+            "out of date once its picture moves"
+        );
+    }
+
+    #[test]
     fn carves_the_dark_line_and_nothing_on_the_white() {
         let moves = sketch(&with_picture(), &Params::default());
         let cuts: Vec<_> = moves
@@ -411,6 +482,29 @@ mod tests {
             "only along the line"
         );
         assert!(cuts.iter().all(|q| (q.z + 1.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn a_deep_carve_steps_down_by_the_tools_pass_depth() {
+        let mut p = Params {
+            start_depth: 0.5,
+            cut_depth: 1.5,
+            ..Params::default()
+        };
+        p.tool.pass_depth = 0.5;
+        let moves = sketch(&with_picture(), &p);
+        let mut levels: Vec<f64> = moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut)
+            .map(|m| m.to.z)
+            .collect();
+        levels.sort_by(f64::total_cmp);
+        levels.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+        assert_eq!(
+            levels,
+            [-2.0, -1.5, -1.0],
+            "three passes below the start depth"
+        );
     }
 
     #[test]

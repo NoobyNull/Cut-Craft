@@ -1,7 +1,11 @@
-//! Create Texture Area: the selected component tiled over the selected closed vectors (or the
-//! whole job) with spacing, alternate-row and -column shifts and reflections in each group of
-//! four, as one new component; the tile is hidden. The component remembers its tile and
-//! settings: opening the form on it edits it in place, and resizing it tiles its new box.
+//! Create Texture Area: the component picked in the component tree tiled over the selected
+//! closed vectors (or the whole job) with spacing, alternate-row and -column shifts and
+//! reflections in each group of four, as one new component; the tile is hidden. Pick the
+//! tile in the tree last, after the vectors (a plain click on a vector lets go of the tree's
+//! pick), or pick the tile first and then open this tool: it keeps that tile. The
+//! component remembers its tile and settings and the shape of the vectors it fills: opening
+//! the form with it picked edits it, and moving or resizing it tiles its new box inside that
+//! shape, moved and sized with it.
 
 use cut_craft_core::component::Combine;
 use cut_craft_core::document::{Document, EntityId};
@@ -39,6 +43,11 @@ pub struct Params {
     #[schemars(skip)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replaces: Option<EntityId>,
+    /// The component picked in the tree as the form opened: still the tile after a plain
+    /// click on a vector to fill lets go of the tree's pick.
+    #[schemars(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile: Option<EntityId>,
 }
 
 impl Default for Params {
@@ -52,6 +61,7 @@ impl Default for Params {
             name: "Texture Area".into(),
             combine: Combine::Add,
             replaces: None,
+            tile: None,
         }
     }
 }
@@ -81,14 +91,18 @@ impl Command for TextureArea {
         }
     }
 
-    /// On a texture area, its own settings, so the form edits it.
+    /// On a texture area picked in the component tree, its own settings, so the form edits
+    /// it; on another component, that component as the tile.
     fn initial_params(doc: &Document) -> Params {
-        let Some(id) = doc.chosen_component() else {
+        let Some(id) = picked(doc) else {
             return Params::default();
         };
         let k = &doc.components[&id];
         let Some(texture) = &k.texture else {
-            return Params::default();
+            return Params {
+                tile: Some(id),
+                ..Params::default()
+            };
         };
         let t = &texture.tiling;
         Params {
@@ -100,6 +114,7 @@ impl Command for TextureArea {
             name: k.name.clone(),
             combine: k.combine,
             replaces: Some(id),
+            tile: None,
         }
     }
 
@@ -111,10 +126,16 @@ impl Command for TextureArea {
         let (seed_id, area, rings) = if let Some((_, k)) = editing {
             // an existing texture area: its own box, its tile
             let texture = k.texture.as_ref().expect("filtered above");
-            (texture.seed, k.extent(), vec![])
+            (texture.seed, k.extent(), texture.rings.clone())
         } else {
-            let Some(id) = doc.chosen_component() else {
-                return Err(CommandError::Failed("select a component to tile".into()));
+            let tile = p.tile.filter(|id| doc.components.contains_key(id));
+            let Some(id) = picked(doc).or(tile) else {
+                return Err(CommandError::Failed(
+                    "select the component to tile in the component tree last, after the \
+                     closed vectors to fill (none: the whole job), as clicking a vector lets \
+                     go of the component; or pick the tile, then open this tool"
+                        .into(),
+                ));
             };
             let (_, boundary) = doc.selected_paths(|path| path.closed);
             let rings: Vec<_> = boundary
@@ -146,6 +167,7 @@ impl Command for TextureArea {
         made.texture = Some(Texture {
             seed: seed_id,
             tiling,
+            rings,
         });
         let mut c = Change::builder(doc);
         if let Some((id, old)) = editing {
@@ -157,10 +179,20 @@ impl Command for TextureArea {
             let mut hidden = seed.clone();
             hidden.visible = false;
             c.replace_component(seed_id, hidden);
-            c.add_component(made);
+            c.add_new_component(made);
         }
         Ok(c.finish())
     }
+}
+
+/// The component picked in the component tree (the last picked of several); not the newest
+/// when none is, so the tool never tiles or edits one nobody chose.
+fn picked(doc: &Document) -> Option<EntityId> {
+    doc.selected_components
+        .iter()
+        .rev()
+        .find(|id| doc.components.contains_key(id))
+        .copied()
 }
 
 #[cfg(test)]
@@ -186,6 +218,8 @@ mod tests {
         c.add_component(k);
         let change = c.finish();
         doc.apply(&change).unwrap();
+        // picked in the component tree, as the tile
+        doc.selected_components = doc.components.keys().copied().collect();
         doc
     }
 
@@ -255,6 +289,101 @@ mod tests {
             k.height_at(Point::new(16.0, 4.0)).is_none(),
             "outside the square"
         );
+    }
+
+    #[test]
+    fn the_tile_must_be_picked_and_only_a_picked_texture_area_is_edited() {
+        let mut doc = ramp();
+        textured(&mut doc, &Params::default());
+        // nothing picked: the newest component (the texture area) is not edited
+        doc.selected_components.clear();
+        let p = TextureArea::initial_params(&doc);
+        assert_eq!(p.replaces, None, "not editing an area nobody picked");
+        let why = TextureArea::run(&doc, &p).unwrap_err().to_string();
+        assert!(
+            why.to_lowercase().contains("select the component to tile"),
+            "{why}"
+        );
+    }
+
+    #[test]
+    fn the_tile_picked_as_the_form_opens_is_kept_when_a_vector_is_clicked_after() {
+        let mut doc = ramp();
+        // the tile picked in the tree, then the form opened
+        let p = TextureArea::initial_params(&doc);
+        let tile = *doc.components.keys().next().unwrap();
+        assert_eq!(p.tile, Some(tile));
+        // a plain click on the vector to fill drops the tree's pick
+        let mut c = Change::builder(&doc);
+        let id = c.add(square(0.0, 0.0, 15.0));
+        c.select([id]);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        doc.selected_components.clear();
+        let k = textured(&mut doc, &p);
+        assert!(k.height_at(Point::new(14.0, 14.0)).is_some());
+        assert!(
+            k.height_at(Point::new(16.0, 4.0)).is_none(),
+            "the square only"
+        );
+    }
+
+    #[test]
+    fn with_no_tile_the_message_says_to_pick_it_last() {
+        let mut doc = ramp();
+        doc.selected_components.clear();
+        let why = TextureArea::run(&doc, &Params::default())
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("last"), "{why}");
+    }
+
+    #[test]
+    fn a_vector_shaped_area_keeps_its_shape_when_edited_and_moved() {
+        use cut_craft_core::geometry::Path;
+        use cut_craft_core::glam::{DAffine2, DVec2};
+        let mut doc = ramp();
+        let mut c = Change::builder(&doc);
+        // a triangle: its box's upper left corner is outside it
+        let corners = [
+            Point::new(0.0, 0.0),
+            Point::new(30.0, 0.0),
+            Point::new(30.0, 30.0),
+        ];
+        let id = c.add(Path::polyline(&corners, true));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        textured(&mut doc, &Params::default());
+        let area = *doc.components.keys().last().unwrap();
+        let outside = Point::new(3.0, 27.0);
+        assert!(doc.components[&area].height_at(outside).is_none());
+        // edited: still a triangle
+        doc.selected_components = [area].into_iter().collect();
+        let p = Params {
+            spacing_x: 10.0,
+            ..TextureArea::initial_params(&doc)
+        };
+        run_on::<TextureArea>(&mut doc, &p);
+        assert!(
+            doc.components[&area].height_at(outside).is_none(),
+            "editing keeps the shape"
+        );
+        assert!(
+            doc.components[&area]
+                .height_at(Point::new(27.0, 3.0))
+                .is_some()
+        );
+        // moved 5 mm right: the triangle moves with it
+        let change =
+            Change::transform_selected(&doc, |_| DAffine2::from_translation(DVec2::new(5.0, 0.0)))
+                .unwrap();
+        doc.apply(&change).unwrap();
+        let k = &doc.components[&area];
+        assert!(
+            k.height_at(outside + Point::new(5.0, 0.0)).is_none(),
+            "moving keeps the shape"
+        );
+        assert!(k.height_at(Point::new(32.0, 3.0)).is_some());
     }
 
     #[test]

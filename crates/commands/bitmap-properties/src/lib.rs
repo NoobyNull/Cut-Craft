@@ -12,6 +12,9 @@ pub struct BitmapProperties;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The bitmap to change
+    /// (the one right-clicked or picked: never shown on the form, so it cannot be changed
+    /// to another by mistake)
+    #[schemars(skip)]
     pub bitmap: EntityId,
     /// What the picture is called
     pub name: String,

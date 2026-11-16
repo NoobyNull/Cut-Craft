@@ -485,17 +485,40 @@ impl Component {
 }
 
 /// The model at the job's modeling resolution.
+pub fn model_at_resolution(doc: &Document) -> Material {
+    model(doc, cells_across_at_resolution(doc))
+}
+
+/// [`model_shape`] at the job's modeling resolution: NaN where no shown component is, so a
+/// component made from it has shape only where the model has.
+pub fn model_shape_at_resolution(doc: &Document) -> Material {
+    model_shape(doc, cells_across_at_resolution(doc))
+}
+
+/// Level `level`'s shown components combined alone, at the job's modeling resolution: NaN
+/// where none is, and without the level's own base height, combine mode, clipping or mirror,
+/// which the level puts on whatever is on it. A component holding this, put on that level,
+/// makes the model the components made.
+pub fn level_shape_at_resolution(doc: &Document, level: u64) -> Material {
+    let mut alone = doc.clone();
+    let on = doc.level_components(level);
+    for (id, c) in &mut alone.components {
+        c.visible = c.visible && on.contains(id);
+        c.level = level;
+    }
+    alone.levels = [(level, Level::default())].into();
+    model_shape_at_resolution(&alone)
+}
+
+/// How many cells across the job the modeling resolution gives.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "a cell count"
 )]
-pub fn model_at_resolution(doc: &Document) -> Material {
+fn cells_across_at_resolution(doc: &Document) -> usize {
     let longest = doc.job.width.max(doc.job.height);
-    model(
-        doc,
-        ((longest / doc.job.model_cell()).ceil() as usize).max(1),
-    )
+    ((longest / doc.job.model_cell()).ceil() as usize).max(1)
 }
 
 impl Component {
@@ -629,7 +652,7 @@ impl Component {
         out.shaping = self.shaping.transformed(t);
         out.level = self.level;
         out.group.clone_from(&self.group);
-        out.texture.clone_from(&self.texture);
+        out.texture = self.texture.as_ref().map(|k| k.transformed(t));
         out
     }
 
@@ -721,9 +744,50 @@ pub fn silhouette(parts: &[&Component]) -> Vec<crate::geometry::Path> {
         .collect()
 }
 
+/// The components the model is made of: shown, on a shown level (a component whose level is
+/// gone counting as on the first). A tool that builds a new component from the model hides
+/// these, so the model keeps its look and is not counted twice.
+pub fn shown_components(doc: &Document) -> Vec<EntityId> {
+    let first = doc.levels.keys().next().copied().unwrap_or(0);
+    doc.components
+        .iter()
+        .filter(|(_, c)| c.visible)
+        .filter(|(_, c)| {
+            let level = if doc.levels.contains_key(&c.level) {
+                c.level
+            } else {
+                first
+            };
+            doc.levels.get(&level).is_some_and(|l| l.visible)
+        })
+        .map(|(&id, _)| id)
+        .collect()
+}
+
+/// A new component holding `model` (heights as the whole model has them, NaN where nothing
+/// is), for a tool that builds one from the model and hides what it came from: put on the
+/// lowest shown level (one with no clipping or mirror, when there is one), with that level's
+/// base height taken off so the level does not add it a second time.
+pub fn model_component(doc: &Document, name: &str, model: &Material) -> Component {
+    let mut k = Component::from_material(name, Combine::Add, model);
+    let shown = || doc.levels.iter().filter(|(_, l)| l.visible);
+    let plain = shown().find(|(_, l)| l.clip.is_empty() && l.mirror == Mirror::Off);
+    if let Some((&id, level)) = plain.or_else(|| shown().next()) {
+        k.level = id;
+        for h in &mut k.heights {
+            // the level gives combine(0, h + base): undo it
+            *h = match level.combine {
+                Combine::Subtract => -*h - level.base_height,
+                _ => *h - level.base_height,
+            };
+        }
+    }
+    k
+}
+
 /// What a "selected components" tool works on: the selected components (else the newest
-/// one), and the single component they make: the one itself, or several baked together over
-/// the job. Removing the returned ids and adding the component replaces them.
+/// one), and the single component they make: the one itself, or several baked together (with
+/// no shape where none of them is). Removing the returned ids and adding the component replaces them.
 pub fn chosen_or_baked(doc: &Document) -> Option<(Vec<EntityId>, Component)> {
     let mut ids: Vec<EntityId> = doc
         .selected_components
@@ -742,8 +806,9 @@ pub fn chosen_or_baked(doc: &Document) -> Option<(Vec<EntityId>, Component)> {
             for (id, c) in &mut only.components {
                 c.visible = ids.contains(id);
             }
+            // nothing where none of them is, so the tool works on their shape alone
             let baked =
-                Component::from_material("Baked", Combine::Add, &model_at_resolution(&only));
+                Component::from_material("Baked", Combine::Add, &model_shape_at_resolution(&only));
             Some((ids, baked))
         }
     }
@@ -821,7 +886,9 @@ pub enum MachiningBoundary {
     #[default]
     #[schemars(title = "Material Boundary")]
     Material,
-    /// Inside the selected closed vectors
+    /// Inside the selected closed vectors (kept with the toolpath: recalculating uses them
+    /// again, and changing them marks it out of date). Switched to in Edit, select the
+    /// vectors before pressing Calculate
     #[schemars(title = "Selected Vector(s)")]
     SelectedVectors,
     /// Round the visible components on the level named

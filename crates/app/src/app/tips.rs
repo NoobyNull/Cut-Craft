@@ -87,9 +87,9 @@ pub(super) const TIPS: &[Tip] = &[
     ),
     tip(
         "tips/out_of_date.png",
-        "Changed a shape after making its toolpath? The toolpath is marked out of date, and \
-         Cut Craft offers to recalculate it. Saving or sending an out-of-date toolpath always \
-         stops to ask first.",
+        "Changed a shape, or the material's thickness in Job Setup, after making its toolpath? \
+         The toolpath is marked out of date, and Cut Craft offers to recalculate it. Saving or \
+         sending an out-of-date toolpath always stops to ask first.",
         "toolpaths",
     ),
     tip(
@@ -192,7 +192,9 @@ pub(super) const TIPS: &[Tip] = &[
     plain(
         "tips/first_setup.png",
         "Got a new machine, or set it up wrong the first time? **Help ▸ Run First-Time Setup \
-         Again** asks the starting questions again.",
+         Again** asks the starting questions again, starting from your answers, and corrects \
+         a machine you set up as not listed, keeping the posts you added to it and the rest \
+         of your default job.",
     ),
     tip(
         "tips/keyboard.png",

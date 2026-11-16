@@ -48,11 +48,17 @@ pub struct Params {
     /// Added everywhere inside the shape
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub base: f64,
-    /// The profile scaled up or down to this height, its shape kept (0: as it rises)
+    /// The profile scaled up or down to this height, its shape kept (0: as it rises).
+    /// Greyed while Total height is set, which sizes the shape instead
     #[serde(default)]
-    #[schemars(title = "Scale", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(
+        title = "Scale",
+        extend("x-unit" = "mm", "x-enable-when" = {"total_height": "0"}),
+        range(min = 0)
+    )]
     pub scale: f64,
-    /// The whole shape, base and all, scaled to this height (0: as made)
+    /// The whole shape, base and all, scaled to this height (0: as made). Set it above the
+    /// base: below it, the shape is a flat slab as high as the base
     #[serde(default)]
     #[schemars(title = "Total height", extend("x-unit" = "mm"), range(min = 0))]
     pub total_height: f64,
@@ -112,6 +118,15 @@ fn scaled(component: &mut Component, p: &Params) {
     for height in component.heights.iter_mut().filter(|h| !h.is_nan()) {
         *height = *height * factor + p.base;
     }
+}
+
+/// The warning when Total height leaves the profile no room above the base.
+fn slab_note(p: &Params) -> Option<String> {
+    (p.total_height > 0.0 && p.total_height <= p.base).then(|| {
+        "Total height is not more than the base, so the shape is a flat slab as high as the \
+         base. Set Total height above the base for the profile to rise."
+            .into()
+    })
 }
 
 /// How far `at` is in from the closed `ring`, inside corners mitred: where its nearest
@@ -361,6 +376,9 @@ impl Command for CreateShape {
         };
         component.shape = Some(serde_json::json!({ "params": kept, "paths": all }));
         let mut c = Change::builder(doc);
+        if let Some(note) = slab_note(p) {
+            c.note(note);
+        }
         match editing {
             Some(id) => {
                 let old = &doc.components[&id];
@@ -372,7 +390,7 @@ impl Command for CreateShape {
                 c.replace_component(id, component);
             }
             None => {
-                c.add_component(component);
+                c.add_new_component(component);
             }
         }
         Ok(c.finish())
@@ -436,6 +454,55 @@ mod tests {
             shape(vec![square(0.0, 0.0, 40.0)], &p).is_err(),
             "needs its profile"
         );
+    }
+
+    #[test]
+    fn scale_is_greyed_while_total_height_is_set() {
+        let schema = serde_json::to_value(schemars::schema_for!(Params)).unwrap();
+        assert_eq!(
+            schema["properties"]["scale"]["x-enable-when"],
+            serde_json::json!({ "total_height": "0" })
+        );
+    }
+
+    #[test]
+    fn a_total_height_below_the_base_is_warned_about() {
+        let doc = document_with(vec![square(0.0, 0.0, 40.0)]);
+        let p = Params {
+            base: 5.0,
+            total_height: 3.0,
+            ..Params::default()
+        };
+        let change = CreateShape::run(&doc, &p).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("Total height")),
+            "{:?}",
+            change.notes
+        );
+        let fine = Params {
+            base: 1.0,
+            total_height: 3.0,
+            ..Params::default()
+        };
+        assert_eq!(CreateShape::run(&doc, &fine).unwrap().notes.len(), 0);
+    }
+
+    #[test]
+    fn a_new_shape_goes_on_the_top_shown_level() {
+        use cut_craft_core::component::Level;
+        let mut doc = document_with(vec![square(0.0, 0.0, 40.0)]);
+        let mut c = Change::builder(&doc);
+        c.set_level(
+            1,
+            Some(Level {
+                name: "Level 2".into(),
+                ..Level::default()
+            }),
+        );
+        doc.apply(&c.finish()).unwrap();
+        let change = CreateShape::run(&doc, &Params::default()).unwrap();
+        doc.apply(&change).unwrap();
+        assert_eq!(doc.components.values().last().unwrap().level, 1);
     }
 
     #[test]

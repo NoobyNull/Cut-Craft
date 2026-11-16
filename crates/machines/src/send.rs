@@ -213,6 +213,14 @@ pub trait Store {
     /// Deletes file or folder `name` (with all in it) from folder `at`.
     fn delete(&self, at: &[String], name: &str) -> Result<(), String>;
     fn make_folder(&self, at: &[String], name: &str) -> Result<(), String>;
+    /// Moves file `name` from folder `at` into folder `into` (which is there), keeping its
+    /// name: how an earlier send's files are archived.
+    fn move_into(&self, at: &[String], name: &str, into: &[String]) -> Result<(), String> {
+        let _ = (at, into);
+        Err(format!(
+            "{name} not moved: this machine's files can't be moved"
+        ))
+    }
 }
 
 /// A folder this computer sees (a share, card or stick) as the machine's place.
@@ -359,6 +367,11 @@ impl Store for Folder {
     fn make_folder(&self, at: &[String], name: &str) -> Result<(), String> {
         let path = self.file(at, name)?;
         std::fs::create_dir(&path).map_err(|e| explain("Folder not made", &path, &e))
+    }
+
+    fn move_into(&self, at: &[String], name: &str, into: &[String]) -> Result<(), String> {
+        let (old, new) = (self.file(at, name)?, self.file(into, name)?);
+        std::fs::rename(&old, &new).map_err(|e| explain("Not moved", &old, &e))
     }
 }
 

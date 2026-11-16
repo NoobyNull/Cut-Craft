@@ -18,6 +18,13 @@ pub enum Phase {
     Finding(String),
     /// Found, but not signed: waiting for the user's yes.
     Asking(Box<Offer>),
+    /// Remove pressed for add-on `id` (called `name`): waiting for Remove or Keep, as it
+    /// has to be downloaded again to be used.
+    Removing {
+        id: String,
+        name: String,
+        gadget: bool,
+    },
     /// Downloading: bytes so far of the whole.
     Installing {
         name: String,
@@ -107,13 +114,31 @@ impl Addons {
     /// put in its place is asked about afresh. Whether there was a folder to remove from.
     fn remove(&mut self, id: &str) -> bool {
         let Some(dir) = &self.dir else { return false };
+        let (name, gadget) = self.about(id);
         self.phase = match addon::remove(dir, id) {
-            Ok(()) => Phase::Done("The add-on is removed.".into()),
+            Ok(()) if gadget => Phase::Done(format!(
+                "{name} is removed. It leaves the Gadgets menu when Cut Craft restarts."
+            )),
+            Ok(()) => Phase::Done(format!("{name} is removed.")),
             Err(e) => Phase::Failed(e),
         };
         self.updates.remove(id);
         self.allowed.remove(id);
         true
+    }
+
+    /// The installed add-on `id`'s name (its id when its manifest cannot be read), and
+    /// whether it is a gadget.
+    fn about(&self, id: &str) -> (String, bool) {
+        let manifest = self
+            .dir
+            .as_deref()
+            .and_then(|d| std::fs::read_to_string(d.join(id).join(addon::MANIFEST)).ok())
+            .and_then(|text| Manifest::parse(&text).ok());
+        match manifest {
+            Some(m) => (m.name, m.kind == "gadget"),
+            None => (id.to_owned(), false),
+        }
     }
 
     pub fn may_run(&mut self, id: &str, name: &str) -> bool {
@@ -243,6 +268,19 @@ impl Addons {
             |ui| self.body(ui),
         )
         .unwrap_or(Press::Nothing);
+        changed |= self.press(ctx, pressed);
+        if !open {
+            self.open = false;
+            if !self.busy() && !matches!(self.phase, Phase::Asking(_)) {
+                self.phase = Phase::Idle;
+            }
+        }
+        changed
+    }
+
+    /// Does what was pressed; whether an add-on was removed.
+    fn press(&mut self, ctx: &egui::Context, pressed: Press) -> bool {
+        let mut changed = false;
         match pressed {
             Press::Nothing => {}
             Press::Install(repo) => self.install_from(ctx, &repo),
@@ -262,12 +300,15 @@ impl Addons {
                 }
             }
             Press::Cancel => self.phase = Phase::Idle,
-            Press::Remove(id) => changed = self.remove(&id),
-        }
-        if !open {
-            self.open = false;
-            if !self.busy() && !matches!(self.phase, Phase::Asking(_)) {
-                self.phase = Phase::Idle;
+            Press::Remove(id) => {
+                let (name, gadget) = self.about(&id);
+                self.phase = Phase::Removing { id, name, gadget };
+            }
+            Press::RemoveAnyway => {
+                if let Phase::Removing { id, .. } = &self.phase {
+                    let id = id.clone();
+                    changed = self.remove(&id);
+                }
             }
         }
         changed
@@ -275,7 +316,7 @@ impl Addons {
 
     fn body(&mut self, ui: &mut egui::Ui) -> Press {
         let mut press = Press::Nothing;
-        let busy = self.busy() || matches!(self.phase, Phase::Asking(_));
+        let busy = self.busy() || matches!(self.phase, Phase::Asking(_) | Phase::Removing { .. });
         let dir = self.dir.clone();
         let installed = |id: &str| dir.as_deref().and_then(|d| addon::installed(d, id));
 
@@ -336,6 +377,16 @@ impl Addons {
         });
 
         ui.add_space(8.0);
+        if let Some(asked) = self.phase_view(ui) {
+            press = asked;
+        }
+        press
+    }
+
+    /// Where an install or remove has got to, with its buttons; what was pressed there.
+    fn phase_view(&self, ui: &mut egui::Ui) -> Option<Press> {
+        let mut pressed = Press::Nothing;
+        let press = &mut pressed;
         match &self.phase {
             Phase::Idle => {}
             Phase::Finding(repo) => {
@@ -350,10 +401,23 @@ impl Addons {
                     ui.label(unsigned_warning(offer));
                     ui.horizontal(|ui| {
                         if ui.button("Install Anyway").clicked() {
-                            press = Press::InstallAnyway;
+                            *press = Press::InstallAnyway;
                         }
                         if ui.button("Cancel").clicked() {
-                            press = Press::Cancel;
+                            *press = Press::Cancel;
+                        }
+                    });
+                });
+            }
+            Phase::Removing { name, .. } => {
+                ui.group(|ui| {
+                    ui.colored_label(ui.visuals().warn_fg_color, remove_question(name));
+                    ui.horizontal(|ui| {
+                        if ui.button("Remove").clicked() {
+                            *press = Press::RemoveAnyway;
+                        }
+                        if ui.button("Keep").clicked() {
+                            *press = Press::Cancel;
                         }
                     });
                 });
@@ -375,7 +439,7 @@ impl Addons {
                 ui.colored_label(ui.visuals().error_fg_color, e);
             }
         }
-        press
+        (pressed != Press::Nothing).then_some(pressed)
     }
 
     /// An add-on's state and its buttons.
@@ -422,6 +486,13 @@ enum Press {
     InstallAnyway,
     Cancel,
     Remove(String),
+    /// Remove, said again.
+    RemoveAnyway,
+}
+
+/// What Remove asks before add-on `name` goes.
+fn remove_question(name: &str) -> String {
+    format!("Remove {name}? Its folder is deleted, so you'll need to download it again to use it.")
 }
 
 /// The tool add-ons this Cut Craft has tools for: a tool add-on only works through a Cut
@@ -598,6 +669,41 @@ mod tests {
                 .contains("does not know")
         );
         assert!(installed_words(&m("g", "gadget")).contains("Gadgets menu"));
+    }
+
+    #[test]
+    fn remove_asks_first_and_says_a_gadget_leaves_its_menu_at_restart() {
+        let dir = std::env::temp_dir().join(format!("cutcraft-addon-rm-{}", std::process::id()));
+        let folder = dir.join("snowflake");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join(addon::MANIFEST),
+            "id = \"snowflake\"\nname = \"Snowflake\"\nkind = \"gadget\"\nversion = \"1.0.0\"",
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let mut a = Addons::with(dir.clone(), signed_repo, installs, nothing_newer);
+        assert!(
+            !a.press(&ctx, Press::Remove("snowflake".into())),
+            "nothing removed yet"
+        );
+        assert!(folder.exists());
+        let Phase::Removing { name, .. } = &a.phase else {
+            panic!("asks first: {:?}", a.phase)
+        };
+        assert_eq!(name, "Snowflake");
+        assert!(remove_question(name).contains("download it again"));
+        assert!(!a.press(&ctx, Press::Cancel), "Keep keeps it");
+        assert!(folder.exists() && a.phase == Phase::Idle);
+        a.press(&ctx, Press::Remove("snowflake".into()));
+        assert!(a.press(&ctx, Press::RemoveAnyway));
+        assert!(!folder.exists());
+        let Phase::Done(words) = &a.phase else {
+            panic!("{:?}", a.phase)
+        };
+        assert!(words.contains("Snowflake is removed"), "{words}");
+        assert!(words.contains("Gadgets menu"), "{words}");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

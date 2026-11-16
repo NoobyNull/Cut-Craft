@@ -243,7 +243,7 @@ fn params(grid: &Material, tool: &Tool, count: usize, centres: bool) -> Vec<u8> 
     };
     let half_angle_slope = (tool.angle.to_radians() / 2.0).tan();
     let shape = match tool.shape {
-        ToolShape::EndMill | ToolShape::SurfacingBit => 0,
+        ToolShape::EndMill | ToolShape::SurfacingBit | ToolShape::Laser => 0,
         ToolShape::BallNose => 1,
         ToolShape::VBit => 2,
         ToolShape::RadiusedEndMill => 3,
@@ -487,6 +487,8 @@ mod tests {
         };
         vec![
             shaped("end mill", ToolShape::EndMill, 6.0),
+            // narrower than a cell: it passes between centres
+            shaped("fine end mill", ToolShape::EndMill, 0.4),
             shaped("ball nose", ToolShape::BallNose, 6.0),
             Tool {
                 angle: 90.0,
@@ -581,6 +583,12 @@ mod tests {
     fn every_shader_function_ends_in_a_return_so_directx_builds_it() {
         let module = naga::front::wgsl::parse_str(include_str!("compute.wgsl"))
             .unwrap_or_else(|e| panic!("{e}"));
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .unwrap_or_else(|e| panic!("{e:?}"));
         let unended: Vec<&str> = module
             .functions
             .iter()
@@ -716,7 +724,10 @@ mod tests {
                 .zip(&relief().heights)
                 .filter(|(a, b)| a < b)
                 .count();
-            assert!(cut > 1000, "{}: only {cut} cells cut", tool.name);
+            // the fine end mill is narrower than a cell, so its cut is a thin line; the
+            // wide bits are held to a full cut's worth
+            let least = if tool.diameter < 1.0 { 500 } else { 1000 };
+            assert!(cut > least, "{}: only {cut} cells cut", tool.name);
         }
     }
 

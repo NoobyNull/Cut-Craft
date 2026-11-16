@@ -1,7 +1,10 @@
 //! Inlay Toolpath: a part and the cavity it fits, cut with one tool. Every corner of the
 //! shapes is rounded to the tool's radius first, so the part's outside corners match the
-//! cavity's, which the tool cannot cut sharp.
+//! cavity's, which the tool cannot cut sharp. An insert or hole cut right through the
+//! material has no tabs to hold it, so the form (and the checks before cutting) warn in red
+//! that it comes loose: hold it down, or leave a thin skin to cut off by hand.
 
+use cut_craft_core::checks;
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon::{self, Corners};
@@ -38,7 +41,8 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_inlay.png"))]
     pub start_depth: f64,
-    /// Below the start depth
+    /// Below the start depth. Right through the material, an insert or hole's waste comes
+    /// loose (inlays have no tabs): leave a thin skin, or hold the piece down
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D"))]
@@ -199,6 +203,16 @@ impl Command for InlayToolpath {
             return Err(tool_does_not_fit(&p.tool, None));
         }
         let mut c = Change::builder(doc);
+        let through = doc.job.thickness > 0.0 && start + depth + 1e-3 >= doc.job.thickness;
+        let kind = match p.inlay_type {
+            InlayType::MaleStraight => "male_straight",
+            InlayType::MaleStepped => "male_stepped",
+            InlayType::FemalePocket => "female_pocket",
+            InlayType::FemaleHole => "female_hole",
+        };
+        if through && let Some(loose) = checks::inlay_loose("Inlay", kind) {
+            c.note(loose);
+        }
         c.add_toolpath(made_by::<Self>(
             p,
             p.name.clone(),
@@ -254,6 +268,33 @@ mod tests {
             (nearest - 3.0 * (2f64.sqrt() - 1.0)).abs() < 0.05,
             "{nearest}"
         );
+    }
+
+    #[test]
+    fn an_insert_or_hole_cut_right_through_is_warned_of_at_the_forms_foot() {
+        let mut doc = cut_craft_core::testing::document_with(vec![square(20.0, 20.0, 40.0)]);
+        doc.job.thickness = 6.0;
+        let notes = |kind: InlayType, cut_depth: f64| {
+            let p = Params {
+                inlay_type: kind,
+                cut_depth,
+                ..Params::default()
+            };
+            InlayToolpath::run(&doc, &p).unwrap().notes
+        };
+        for kind in [
+            InlayType::MaleStraight,
+            InlayType::MaleStepped,
+            InlayType::FemaleHole,
+        ] {
+            let said = notes(kind, 6.0);
+            assert!(
+                said.iter().any(|n| n.contains("comes loose")),
+                "{kind:?}: {said:?}"
+            );
+            assert_eq!(notes(kind, 5.0), Vec::<String>::new(), "{kind:?}");
+        }
+        assert_eq!(notes(InlayType::FemalePocket, 6.0), Vec::<String>::new());
     }
 
     #[test]

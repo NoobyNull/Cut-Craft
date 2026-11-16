@@ -381,7 +381,7 @@ impl Command for Orientate3dModel {
         {
             let k = wrapped(doc, rotary, &tris, p)?;
             let mut c = Change::builder(doc);
-            c.add_component(Component { source, ..k });
+            c.add_new_component(Component { source, ..k });
             return Ok(c.finish());
         }
         let (tris, rect) = placed(doc, p, tris)?;
@@ -415,7 +415,7 @@ impl Command for Orientate3dModel {
         }
         k.source = source;
         let mut c = Change::builder(doc);
-        c.add_component(k);
+        c.add_new_component(k);
         if let Some(two) = doc.job.double_sided
             && p.model_type == ModelType::Full
             && p.placing.both_sides

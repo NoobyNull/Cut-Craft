@@ -609,12 +609,20 @@ impl Canvas {
                 painter.extend(Shape::dashed_line(&self.guide_ends(g), guide, dash, gap));
             }
         }
-        // toolpath tiles: their edges, and their overlap faintly
+        // toolpath tiles: their edges and numbers, and their overlap faintly
         if let Some(tiling) = doc.tiling {
             let edge = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
             let overlap = Stroke::new(datum.width, visuals.error_fg_color);
             let active = tiling.active_tile(doc.job.area());
-            for tile in tiling.tiles(doc.job.area()) {
+            for (n, tile) in tiling.tiles(doc.job.area()).into_iter().enumerate() {
+                // its number, as its file is named (name_tile1…), in its bottom-left corner
+                painter.text(
+                    t.to_screen(tile.min) + egui::vec2(4.0, -4.0),
+                    egui::Align2::LEFT_BOTTOM,
+                    format!("Tile {}", n + 1),
+                    egui::FontId::proportional(12.0),
+                    visuals.warn_fg_color,
+                );
                 let reach = tiling.reach(tile);
                 for (r, stroke) in [(reach, overlap), (tile, edge)] {
                     let screen_rect =

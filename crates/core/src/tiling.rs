@@ -35,7 +35,13 @@ pub struct Tiling {
     /// Tile height (along Y)
     #[schemars(title = "Tile height", extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
-    /// How far each tile's cuts run past its edges (at least the tool's radius for V-carving)
+    /// How far each tile's cuts run past its edges (at least the tool's radius for V-carving).
+    /// Each tile file's zero is at the start of its overlap, so a file covers the tile and
+    /// the overlap on both sides. A tile at the material's edge also holds every cut past
+    /// that edge (an outside profile's centreline, a lead-in): one running further out than
+    /// the overlap goes below zero (or past the far side) by the difference, and the checks
+    /// before saving measure each file with it. Laser toolpaths have none: their tiles meet
+    /// edge to edge, so no seam burns twice
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub overlap: f64,
     /// Put the part-size tile first rather than last
@@ -123,6 +129,20 @@ impl Tiling {
         Rect::new(tile.min - grow, tile.max + grow)
     }
 
+    /// What a file of `tile` covers on the machine: the tile with its overlap, whose start
+    /// is the file's zero.
+    pub fn file_size(&self, tile: Rect) -> Point {
+        self.reach(tile).size()
+    }
+
+    /// The biggest any tile's file covers on the machine (see [`Self::file_size`]).
+    pub fn largest_file(&self, area: Rect) -> Point {
+        self.tiles(area)
+            .into_iter()
+            .map(|t| self.file_size(t))
+            .fold(Point::ZERO, |a, b| Point::new(a.x.max(b.x), a.y.max(b.y)))
+    }
+
     /// The active tile, if one is picked and there is one of that number.
     pub fn active_tile(&self, area: Rect) -> Option<Rect> {
         let i = usize::try_from(self.active.checked_sub(1)?).ok()?;
@@ -137,21 +157,23 @@ impl Tiling {
     }
 
     /// `doc` with each toolpath's moves cut to `tile` (with the overlap) and moved so the
-    /// tile sits where the job's lower-left corner is.
+    /// start of the tile's overlap sits where the job's lower-left corner is: nothing in a
+    /// tile file goes below zero for its overlap (a cut past the material's edge, kept in
+    /// the edge tile, can).
     pub fn tiled(&self, doc: &Document, tile: Rect) -> Document {
         self.cut_to(doc, tile, true)
     }
 
     /// `doc` with each toolpath's moves cut to `tile` (with the overlap), and when `moved`
-    /// moved so the tile sits where the job's lower-left corner is.
+    /// moved so the start of the tile's overlap sits where the job's lower-left corner is.
     fn cut_to(&self, doc: &Document, tile: Rect, moved: bool) -> Document {
         let area = doc.job.area();
+        let reach = self.reach(tile);
         let shift = if moved {
-            tile.min - area.min
+            reach.min - area.min
         } else {
             Point::ZERO
         };
-        let reach = self.reach(tile);
         let by = DVec3::new(shift.x, shift.y, 0.0);
         let mut out = doc.clone();
         for toolpath in out.toolpaths.values_mut() {
@@ -161,7 +183,7 @@ impl Tiling {
                 let mut drilled = vec![];
                 let mut hits = vec![];
                 for hit in &bank.hits {
-                    if !tile.contains(hit.head) {
+                    if !past_edges(tile, tile, area).contains(hit.head) {
                         continue;
                     }
                     let from = drilled.len();
@@ -190,7 +212,14 @@ impl Tiling {
                 .iter()
                 .map(|m| m.to.z)
                 .fold(f64::MIN, f64::max);
-            let clipped = clip(&toolpath.moves, reach, safe);
+            // a laser's tiles meet edge to edge: run on into the overlap, it would burn the
+            // seam twice, once from each side
+            let over = if toolpath.power.is_empty() {
+                reach
+            } else {
+                tile
+            };
+            let clipped = clip(&toolpath.moves, past_edges(over, tile, area), safe);
             // a laser's power goes with each move it was set for; none on the moves added
             if !toolpath.power.is_empty() {
                 toolpath.power = clipped
@@ -207,8 +236,31 @@ impl Tiling {
                 .map(|(m, _)| Move { to: m.to - by, ..m })
                 .collect();
         }
+        // a toolpath with nothing in the tile is left out, so its tool is not changed to
+        // and its spindle not started for nothing
+        out.toolpaths
+            .retain(|_, t| t.moves.iter().any(|m| m.kind != MoveKind::Rapid));
         out
     }
+}
+
+/// `over` (`tile`, or it with its overlap) run on out without end wherever `tile` is at an
+/// edge of the material `area`: a cut past the material's edge (an outside profile's
+/// centreline, a lead-in) is in the tile at that edge, never left out of every tile.
+fn past_edges(over: Rect, tile: Rect, area: Rect) -> Rect {
+    const FAR: f64 = 1e9;
+    let at = |a: f64, b: f64| (a - b).abs() < 1e-9;
+    let out = |edge: bool, far: f64, own: f64| if edge { far } else { own };
+    Rect::new(
+        Point::new(
+            out(at(tile.min.x, area.min.x), -FAR, over.min.x),
+            out(at(tile.min.y, area.min.y), -FAR, over.min.y),
+        ),
+        Point::new(
+            out(at(tile.max.x, area.max.x), FAR, over.max.x),
+            out(at(tile.max.y, area.max.y), FAR, over.max.y),
+        ),
+    )
 }
 
 /// The parts of `moves` over `area`, joined by rapids at `safe` height and plunges down:
@@ -478,6 +530,170 @@ mod tests {
         assert_eq!(bank.hits[0].head, Point::new(right, y) - shift);
         assert_eq!((bank.hits[0].start, bank.hits[0].end), (0, 3));
         assert!((t2.moves[1].to.x - (right - shift.x)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_laser_toolpath_is_burned_once_along_a_seam_with_no_overlap() {
+        use crate::testing::with_toolpath;
+        let mut doc = with_toolpath();
+        let area = doc.job.area();
+        let y = area.center().y;
+        let t = doc.toolpaths.values_mut().next().unwrap();
+        let at = |kind, x: f64, z| Move {
+            kind,
+            to: DVec3::new(x, y, z),
+        };
+        t.moves = vec![
+            at(MoveKind::Rapid, area.min.x + 10.0, 5.0),
+            at(MoveKind::Plunge, area.min.x + 10.0, 0.0),
+            at(MoveKind::Cut, area.max.x - 10.0, 0.0),
+        ];
+        t.power = vec![0.0, 0.0, 0.8];
+        let tiling = Tiling {
+            width: area.size().x / 2.0,
+            height: area.size().y,
+            overlap: 3.0,
+            ..Tiling::default()
+        };
+        let tiles = tiling.tiles(area);
+        let burned = |n: usize| -> f64 {
+            let cut = tiling.cut_to(&doc, tiles[n], false);
+            let t = cut.toolpaths.values().next().unwrap();
+            t.moves
+                .windows(2)
+                .zip(&t.power[1..])
+                .filter(|(_, p)| **p > 0.0)
+                .map(|(pair, _)| pair[0].to.distance(pair[1].to))
+                .sum()
+        };
+        let whole = area.size().x - 20.0;
+        assert!(
+            (burned(0) + burned(1) - whole).abs() < 1e-6,
+            "the seam burned once: {} + {} of {whole}",
+            burned(0),
+            burned(1)
+        );
+        // a router's cut still runs on into the overlap
+        doc.toolpaths.values_mut().next().unwrap().power.clear();
+        let routed = tiling.cut_to(&doc, tiles[0], false);
+        let far = routed
+            .toolpaths
+            .values()
+            .next()
+            .unwrap()
+            .moves
+            .iter()
+            .map(|m| m.to.x);
+        assert!((far.fold(f64::MIN, f64::max) - (tiles[0].max.x + 3.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cuts_past_the_material_s_edge_go_in_the_tile_at_that_edge() {
+        use crate::testing::with_toolpath;
+        let mut doc = with_toolpath();
+        let area = doc.job.area();
+        // an outside profile's centreline, 5 mm out past the left and the top edges
+        let cut = |x: f64, y: f64| Move {
+            kind: MoveKind::Cut,
+            to: DVec3::new(x, y, -1.0),
+        };
+        let (left, top) = (area.min.x - 5.0, area.max.y + 5.0);
+        doc.toolpaths.values_mut().next().unwrap().moves = vec![
+            cut(left, area.min.y + 10.0),
+            cut(left, top),
+            cut(area.max.x - 10.0, top),
+        ];
+        let cut_length = |tiling: &Tiling| -> f64 {
+            tiling
+                .tiles(area)
+                .iter()
+                .map(|&tile| {
+                    let tiled = tiling.cut_to(&doc, tile, false);
+                    // a tile with nothing to cut has no toolpath
+                    tiled
+                        .toolpaths
+                        .values()
+                        .flat_map(|t| t.moves.windows(2))
+                        .filter(|pair| pair[1].kind == MoveKind::Cut)
+                        .map(|pair| pair[0].to.distance(pair[1].to))
+                        .sum::<f64>()
+                })
+                .sum()
+        };
+        let whole = (top - area.min.y - 10.0) + (area.max.x - 10.0 - left);
+        for layout in [Layout::Individual, Layout::FeedX, Layout::FeedY] {
+            let tiling = Tiling {
+                layout,
+                width: area.size().x / 2.0,
+                height: area.size().y / 2.0,
+                overlap: 0.0,
+                ..Tiling::default()
+            };
+            assert!(
+                (cut_length(&tiling) - whole).abs() < 1e-6,
+                "{layout:?}: {} of {whole}",
+                cut_length(&tiling)
+            );
+        }
+    }
+
+    #[test]
+    fn each_tile_file_starts_at_its_overlap_so_nothing_goes_below_zero() {
+        let mut doc = crate::testing::with_toolpath();
+        let a = doc.job.area();
+        let cut = |x: f64| Move {
+            kind: MoveKind::Cut,
+            to: DVec3::new(a.min.x + x, a.min.y + 10.0, -1.0),
+        };
+        // a cut along X from just before the second tile's start
+        doc.toolpaths.values_mut().next().unwrap().moves = vec![cut(98.0), cut(140.0)];
+        let t = Tiling {
+            layout: Layout::FeedX,
+            width: 100.0,
+            overlap: 3.0,
+            ..Tiling::default()
+        };
+        let second = t.tiles(a)[1];
+        let tiled = t.tiled(&doc, second);
+        let xs: Vec<f64> = tiled
+            .toolpaths
+            .values()
+            .next()
+            .unwrap()
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut)
+            .map(|m| m.to.x - a.min.x)
+            .collect();
+        assert!(xs.iter().all(|&x| x >= -1e-9), "none below zero: {xs:?}");
+        assert!(
+            (xs[0] - 43.0).abs() < 1e-9,
+            "the tile's start is at the overlap: {xs:?}"
+        );
+        assert_eq!(t.file_size(second), Point::new(106.0, a.size().y));
+    }
+
+    #[test]
+    fn a_toolpath_with_nothing_in_a_tile_is_left_out_of_it() {
+        let mut doc = crate::testing::with_toolpath();
+        let a = doc.job.area();
+        let cut = |x: f64| Move {
+            kind: MoveKind::Cut,
+            to: DVec3::new(a.min.x + x, a.min.y + 10.0, -1.0),
+        };
+        doc.toolpaths.values_mut().next().unwrap().moves = vec![cut(10.0), cut(40.0)];
+        let t = Tiling {
+            layout: Layout::FeedX,
+            width: 100.0,
+            overlap: 3.0,
+            ..Tiling::default()
+        };
+        let tiles = t.tiles(a);
+        assert_eq!(t.tiled(&doc, tiles[0]).toolpaths.len(), 1);
+        assert!(
+            t.tiled(&doc, tiles[2]).toolpaths.is_empty(),
+            "nothing to cut there"
+        );
     }
 
     #[test]

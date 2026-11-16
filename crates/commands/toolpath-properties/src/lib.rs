@@ -12,6 +12,9 @@ pub struct ToolpathProperties;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The toolpath these settings belong to
+    /// (the one right-clicked or picked: never shown on the form, so it cannot be changed
+    /// to another by mistake)
+    #[schemars(skip)]
     pub toolpath: EntityId,
     /// What the toolpath is called in the toolpath list
     pub name: String,

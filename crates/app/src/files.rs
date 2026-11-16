@@ -51,7 +51,7 @@ impl Session {
 
     pub fn save(&mut self, doc: &Document, history: &History, path: &Path) -> Result<(), String> {
         write_atomic(path, &save_job(doc))
-            .map_err(|e| format!("could not save {}: {e}", path.display()))?;
+            .map_err(|e| crate::messages::could_not_save(path, &e))?;
         self.path = Some(path.to_owned());
         self.saved = history.revision();
         Ok(())
@@ -374,6 +374,31 @@ pub fn orphaned_recovery(dir: &Path, own: &Path) -> Option<PathBuf> {
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
 }
 
+/// Whether the file `name` is one a save as `stem`.`extension` writes: that name itself, or
+/// a numbered, tiled or sided file beside it (`sign_1_Profile.nc`, `sign_tile2.nc`,
+/// `sign_Top.nc`).
+pub fn of_earlier_save(name: &str, stem: &str, extension: &str) -> bool {
+    let Some(rest) = name
+        .strip_suffix(&format!(".{extension}"))
+        .and_then(|n| n.strip_prefix(stem))
+    else {
+        return false;
+    };
+    if rest.is_empty() {
+        return true;
+    }
+    let Some(rest) = rest.strip_prefix('_') else {
+        return false;
+    };
+    let mut words = rest.split('_');
+    let first = words.next().unwrap_or_default();
+    let digits = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit());
+    (digits(first) && words.next().is_some())
+        || first.strip_prefix("tile").is_some_and(digits)
+        || first == "Top"
+        || first == "Bottom"
+}
+
 /// The G-code files an earlier save to `path` left in its folder: `path` itself and the
 /// numbered, tiled and sided files [`save_files`] writes beside it (`sign_1_Profile.nc`,
 /// `sign_tile2.nc`, `sign_Top.nc`), with the same extension. Other files are left out.
@@ -390,27 +415,7 @@ pub fn earlier_save(path: &Path) -> Vec<PathBuf> {
     } else {
         dir
     };
-    let ours = |name: &str| {
-        let Some(rest) = name
-            .strip_suffix(&format!(".{extension}"))
-            .and_then(|n| n.strip_prefix(stem.as_str()))
-        else {
-            return false;
-        };
-        if rest.is_empty() {
-            return true;
-        }
-        let Some(rest) = rest.strip_prefix('_') else {
-            return false;
-        };
-        let mut words = rest.split('_');
-        let first = words.next().unwrap_or_default();
-        let digits = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit());
-        (digits(first) && words.next().is_some())
-            || first.strip_prefix("tile").is_some_and(digits)
-            || first == "Top"
-            || first == "Bottom"
-    };
+    let ours = |name: &str| of_earlier_save(name, &stem, &extension);
     let Ok(read) = std::fs::read_dir(dir) else {
         return vec![];
     };
@@ -764,6 +769,9 @@ pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
 
 /// How many jobs the start page lists.
 pub const RECENT_COUNT: usize = 4;
+/// How many recent files are kept, whatever Options lists: its largest list size, so
+/// making the list smaller and larger again loses none.
+pub const RECENT_KEPT: usize = 20;
 
 /// Toolpath templates: the toolpaths' settings, without their moves or vectors.
 pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";
@@ -772,17 +780,49 @@ pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";
 pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::EntityId]) -> Vec<u8> {
     let toolpaths: Vec<_> = ids
         .iter()
-        .filter_map(|id| doc.toolpaths.get(id))
-        .map(|t| cut_craft_core::toolpath::Toolpath {
-            moves: vec![],
-            vectors: vec![],
-            power: vec![],
-            drill_bank: None,
-            fallbacks: vec![],
-            ..t.clone()
+        .filter_map(|id| Some((id, doc.toolpaths.get(id)?)))
+        .map(|(id, t)| {
+            let mut t = cut_craft_core::toolpath::Toolpath {
+                moves: vec![],
+                vectors: vec![],
+                power: vec![],
+                drill_bank: None,
+                fallbacks: vec![],
+                ..t.clone()
+            };
+            // like its vectors, the picture it carved is this job's: another job's own
+            // picture is carved instead
+            drop_job_ids(&mut t.params);
+            // its id here, so a Merged or Array Copy toolpath saved with it still names it
+            // once both are loaded into another job (at other ids)
+            if let Some(params) = t.params.as_object_mut() {
+                params.insert(TEMPLATE_ID.into(), serde_json::json!(id.0));
+            }
+            t
         })
         .collect();
     serde_json::to_vec_pretty(&toolpaths).expect("toolpaths serialise")
+}
+
+/// The key a template keeps each toolpath's id under, in its settings.
+const TEMPLATE_ID: &str = "template_id";
+
+/// Each id in `params` naming another toolpath: a Merged toolpath's `sources`, and an
+/// Array Copy's `sources` and `only` (the one it copies).
+fn named_toolpaths(params: &mut serde_json::Value) -> Vec<&mut serde_json::Value> {
+    let Some(params) = params.as_object_mut() else {
+        return vec![];
+    };
+    params
+        .iter_mut()
+        .flat_map(|(key, value)| match key.as_str() {
+            "sources" => value
+                .as_array_mut()
+                .map_or_else(Vec::new, |ids| ids.iter_mut().collect()),
+            "only" if value.is_u64() => vec![value],
+            _ => vec![],
+        })
+        .collect()
 }
 
 /// A template's toolpaths added, empty, ready to be edited and calculated on vectors.
@@ -793,8 +833,53 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
         return Err("the template holds no toolpaths".into());
     }
     let mut c = Change::builder(doc);
-    for t in toolpaths {
-        c.add_toolpath(t);
+    // the template's ids, and where those toolpaths are now
+    let mut moved = std::collections::BTreeMap::new();
+    let mut added = vec![];
+    for mut t in toolpaths {
+        let was = t
+            .params
+            .as_object_mut()
+            .and_then(|p| p.remove(TEMPLATE_ID))
+            .and_then(|id| id.as_u64());
+        added.push((c.add_toolpath(t.clone()), t));
+        if let Some(was) = was {
+            moved.insert(was, added.last().map(|(id, _)| *id).expect("just added"));
+        }
+    }
+    // a Merged or Array Copy toolpath names the template's own toolpaths at their new ids;
+    // one it named that the template left out (or an older template's) is of the job it
+    // was saved from, so it names none of this job's
+    for (id, mut t) in added {
+        let names = named_toolpaths(&mut t.params);
+        if names.is_empty() {
+            continue;
+        }
+        let mut lost = false;
+        for name in names {
+            if let Some(now) = name.as_u64().and_then(|was| moved.get(&was)) {
+                *name = serde_json::json!(now.0);
+            } else {
+                *name = serde_json::Value::Null;
+                lost = true;
+            }
+        }
+        if let Some(sources) = t.params.get_mut("sources").and_then(|s| s.as_array_mut()) {
+            sources.retain(|s| !s.is_null());
+        }
+        if lost {
+            if t.params.get("only").is_some_and(serde_json::Value::is_null)
+                && let Some(params) = t.params.as_object_mut()
+            {
+                params.remove("only");
+            }
+            c.note(format!(
+                "{} came without the toolpaths it was made from: tick the ones to use in the \
+                 toolpath list, then calculate it",
+                t.name
+            ));
+        }
+        c.replace_toolpath(id, t);
     }
     Ok(c.finish())
 }
@@ -830,8 +915,26 @@ pub fn load_form_settings(
     let (Some(saved), Some(params)) = (file["settings"].as_object(), params.as_object_mut()) else {
         return Err("the file holds no settings".into());
     };
-    merge_settings(params, saved);
+    let mut saved = saved.clone();
+    // the picture a toolpath was made from belongs to its job: the form keeps its own
+    for key in JOB_IDS {
+        saved.remove(key);
+    }
+    merge_settings(params, &saved);
     Ok(())
+}
+
+/// Settings naming something of the job they were saved in (the picture a Photo V-Carve or
+/// Sketch Carving carved), left out of templates and settings files.
+const JOB_IDS: [&str; 1] = ["bitmap"];
+
+/// `params` without the settings that name something of their job ([`JOB_IDS`]).
+fn drop_job_ids(params: &mut serde_json::Value) {
+    if let Some(params) = params.as_object_mut() {
+        for key in JOB_IDS {
+            params.remove(key);
+        }
+    }
 }
 
 /// `saved`'s values put into the `params` the form has, group by group, so a setting a
@@ -1144,6 +1247,100 @@ mod tests {
         assert_eq!(loaded.name, "Profile");
         assert_eq!(loaded.moves, vec![]);
         assert!(super::load_toolpath_template(&doc, b"[]").is_err());
+    }
+
+    #[test]
+    fn a_template_s_merged_toolpath_merges_the_template_s_own_toolpaths() {
+        use cut_craft_core::document::EntityId;
+        let last = |doc: &Document, n: usize| -> Vec<EntityId> {
+            let ids: Vec<EntityId> = doc.toolpaths.keys().copied().collect();
+            ids[ids.len() - n..].to_vec()
+        };
+        let mut doc = cut_craft_core::testing::three_toolpaths();
+        for t in doc.toolpaths.values_mut() {
+            t.params = serde_json::json!({ "name": t.name });
+        }
+        let [a, b, m] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        doc.toolpaths.get_mut(&m).unwrap().params["sources"] = serde_json::json!([a.0, b.0]);
+        // all three: the merged one names the two saved with it, at their new ids
+        let bytes = super::toolpath_template(&doc, &[a, b, m]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        doc.apply(&change).unwrap();
+        let [a2, b2, m2] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        assert_eq!(
+            doc.toolpaths[&m2].params["sources"],
+            serde_json::json!([a2.0, b2.0])
+        );
+        assert!(doc.toolpaths[&m2].params.get("template_id").is_none());
+        // the merged one alone: what it merged is not in the template, so it names nothing
+        // of this job, and says so
+        let bytes = super::toolpath_template(&doc, &[m]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        assert!(
+            change.notes.iter().any(|n| n.contains("tick")),
+            "{:?}",
+            change.notes
+        );
+        doc.apply(&change).unwrap();
+        let loaded = doc.toolpaths.values().last().unwrap();
+        assert_eq!(loaded.params["sources"], serde_json::json!([]));
+        // an Array Copy's one source likewise
+        let mut doc = cut_craft_core::testing::three_toolpaths();
+        for t in doc.toolpaths.values_mut() {
+            t.params = serde_json::json!({ "name": t.name });
+        }
+        let [a, _, m] = last(&doc, 3)[..] else {
+            unreachable!()
+        };
+        doc.toolpaths.get_mut(&m).unwrap().params["only"] = serde_json::json!(a.0);
+        let bytes = super::toolpath_template(&doc, &[a, m]);
+        doc.apply(&super::load_toolpath_template(&doc, &bytes).unwrap())
+            .unwrap();
+        let [a2, m2] = last(&doc, 2)[..] else {
+            unreachable!()
+        };
+        assert_eq!(doc.toolpaths[&m2].params["only"], serde_json::json!(a2.0));
+    }
+
+    #[test]
+    fn templates_and_saved_settings_leave_out_the_picture_a_toolpath_was_made_from() {
+        // a Photo V-Carve made from picture 7 of its job
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        let id = *doc.toolpaths.keys().next().unwrap();
+        doc.toolpaths.get_mut(&id).unwrap().params["bitmap"] = serde_json::json!(7);
+        let bytes = super::toolpath_template(&doc, &[id]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        doc.apply(&change).unwrap();
+        let loaded = doc.toolpaths.values().last().unwrap();
+        assert_eq!(
+            loaded.params.get("bitmap"),
+            None,
+            "another job carves its own picture"
+        );
+        // settings saved from its Edit form, loaded into a new form
+        let saved = super::form_settings(
+            "photo_vcarve_toolpath",
+            "Photo V-Carve",
+            &serde_json::json!({ "name": "Face", "bitmap": 7 }),
+        );
+        let mut params = serde_json::json!({ "name": "Photo V-Carve", "bitmap": null });
+        super::load_form_settings(
+            "photo_vcarve_toolpath",
+            "Photo V-Carve",
+            &mut params,
+            &saved,
+        )
+        .unwrap();
+        assert_eq!(params["name"], "Face");
+        assert_eq!(
+            params["bitmap"],
+            serde_json::Value::Null,
+            "the form's own picture"
+        );
     }
 
     /// Four shown toolpaths (End Mill, End Mill, V-Bit, End Mill) and a hidden one.

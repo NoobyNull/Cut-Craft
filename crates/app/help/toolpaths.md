@@ -4,6 +4,13 @@ The Toolpaths page, down the right, turns the selected vectors and the 3D model 
 toolpaths, lists them, previews them cutting the material and saves them for the machine.
 Pick a toolpath's tool to open its form; choose the cutter from the tool database there.
 
+Reordering the toolpath list (a drag, Move Up or Down, Group), or undoing or redoing that,
+leaves each toolpath what it was: a toolpath open in its form stays the one its Calculate
+makes again, notes being written in the Toolpath Summary stay with their toolpath, and
+what the preview has cut keeps each toolpath's colour. A change made in the list (a
+reorder, group, delete, or a tick showing or hiding a toolpath) while a tool's form is open
+beside it is kept when that form is cancelled: Cancel takes back only what the form did.
+
 While a preview plays, its controls sit over the 2D and 3D views: Pause or Run, Single
 Step, Run to Retract, Stop, the speed, Progress to drag the tool along the whole job, and
 Close up to drag it back and forth over the few minutes either side of where it is. At
@@ -14,16 +21,35 @@ it starts. The line under the controls gives the machine time left, and how long
 takes to watch at the chosen speed. A finishing toolpath with a small bit can take hours,
 so speed it up, drag Progress on, or press Stop (or Esc) to keep what is cut so far. Once
 stopped or played to the end the controls stay, so you can scrub back over it, until
-another preview, Reset Preview, or Close. Going back starts from the nearest point saved
+another preview, Reset Preview, or Close (Undo Last Preview brings back a preview Reset
+Preview cleared). New, Open and Close on the File menu clear the
+preview, its controls and Undo Last Preview, so nothing of the old job shows in the next. Any
+change to the job (an edit, a recalculation, Undo) stops a playing preview where it is and
+closes the controls, as its moves are out of date: preview again to play the new ones. A
+change in Job Setup to the material's size, thickness or place clears the preview, so the
+3D view shows the new block and the next Preview cuts into that. In the 3D view,
+double-click a piece the preview has cut right free (a part, or the waste round it) to take
+it away and see what is left; Undo Last Preview brings it back. Where nothing is cut free
+(uncut material, a pocket, a part held by tabs), even after another piece was taken, a
+double-click selects a component or fits the view as usual. Going back starts from the nearest point saved
 while it played, so it is quick once played through. A jump is cut across all the
 computer's cores, and the 3D view keeps its full detail while the preview plays (it is
 redrawn a few times a second; the tool moves smoothly in between). If a bit has no shank
 diameter set in the Tool Database, the preview draws a common one (1/4" for a V-bit, up
-to 1/2" for others) and says so under the controls. The Vectors button above the 3D view
+to 1/2" for others) and says so under the controls. The preview cuts a grid of small
+squares; a bit narrower than two of them (a 1/16" bit on a full sheet at Standard, say)
+still cuts every square its tip passes through, but its thin cuts can look broken or
+dotted, so a line under the controls says so for as long as the preview plays (or the
+status bar after how many were previewed, with Animate Preview off): pick a finer Toolpaths ▸ Preview Simulation Quality and preview again. The Vectors button above the 3D view
 (or View ▸ Draw Vectors in 3D View) shows or hides the vectors over the model, and is
 remembered next time. Turn off Animate Preview (the
 Toolpaths menu, Toolpath Drawing) to cut the whole preview at once, with a progress window
-you can Cancel (or press Esc).
+you can Cancel (or press Esc); the status bar then names the toolpath previewed, or says
+how many. Either way, Preview All and Preview Visible start again
+from uncut material, so old cuts never stay in the result; previewing one toolpath cuts
+into what is already previewed. In a double-sided job the preview turns over with Swap
+Sides, and back again with its Undo (and over with Redo); a side not previewed yet comes
+up uncut, with the side that was up kept underneath.
 
 When you save toolpaths, the post processor writes them as G-code for your machine. A post
 with arcs (the Cut Craft GRBL Arcs, Mach3 Arcs and FluidNC ATC Arcs posts) turns runs of
@@ -41,12 +67,22 @@ dated folder under Archive beside them (a second one saved in the same second ge
 folder), then adds the new ones. If the new files cannot be saved (a toolpath crossing a
 keep-out zone, say), the earlier ones are put back as they were. Tick Do this every time to
 stop being asked; Edit ▸ Options ▸ Confirmations ▸ G-code from an earlier save changes it.
+Send to Machine asks the same of an earlier send's files in the project's folder on the
+machine (old tile files from another layout too): Replace sends the new files and deletes
+the old ones left over; Archive moves them into a dated folder under Archive there first.
 A name typed with a dot of its own (sign v1.5) keeps it: the file is sign v1.5.nc.
 
 A drill brought in from a tool library (.vtdb) is kept as a drill: it cuts only straight
 down. Its Drill only tick sits beside its Tool Type in the Tool Database, to see or change.
 Picked for any toolpath but Drilling, the form says so in red at its foot, and the checks
 before saving warn of it too.
+
+A laser is a tool type of its own in the Tool Database (Laser, under Metric Tools ▸
+Lasers): its Kerf is the width it burns and its Speed how fast it moves; it has no pass
+depth, flutes or spindle. The Laser Cut / Fill and Laser Picture forms start with it and
+read it as "Laser, 0.15 mm kerf, 1500 mm/min"; Select… there picks another laser. A router
+bit picked on a laser form, or a laser on a router's toolpath, is said in red at the
+form's foot. A tool database saved before lasers were a tool type gets the starter laser.
 
 When one file changes tools (a pause to change the bit by hand, or a tool changer), the
 first move after the change lifts the new bit straight up to the safe height, and only
@@ -57,6 +93,21 @@ the file sets the new speed there, without stopping, so each toolpath cuts at it
 A bit renamed in the Tool Database keeps its tool changer slot: this job's toolpaths take
 the new name at once, and a job saved before the rename takes it when it opens (Undo puts
 the old name back), so the file still gives the bit its slot's tool number.
+If the Tool Database's or Materials Library's file (tools.json, materials.json) cannot be
+read when Cut Craft starts, it is left as it is: changes are kept until Cut Craft closes but
+not saved, and each OK says "not saved". Fix or rename that file, then restart. The bits'
+feeds edited in the Materials Library live in tools.json, so they are still saved when only
+materials.json could not be read.
+The Materials Library can stay open while you use the Tool Database: its OK adds only its
+own feeds and materials, so tools added, deleted, changed or renamed there meanwhile stay as
+they are. In its Add Tool picker, Select keeps the picker's changes at once (a catalogue bit
+copied into My Tools, say); the library's own feeds still wait for its OK.
+Deleting a whole group in the Tool Database asks first, under the tree, counting its tools,
+those Hide Unset Tools hides, those loaded in the tool changer and the job's toolpaths that
+cut with them; Cancel still brings them back until OK.
+Its Materials Library… button keeps your changes first, as Apply does; when they delete tools
+or materials it asks first, as Cancel could not bring those back afterwards (a tool only
+renamed is not counted).
 
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the
@@ -107,14 +158,16 @@ Full Depth goes round the edge once, at the bottom, after all the clearing passe
 clean wall with no lines where the passes met. It needs a bit whose flutes reach the full
 depth; with shorter flutes (from the Tool Database) the edge is cut at each pass instead.
 Raster and Adaptive pockets can also leave the edge pass out (Profile Pass: None); offset
-rings always end on the edge.
+rings always end on the edge. Only Raster offers First, round the edge before the rows:
+Adaptive always goes round the edge last, so switching a pocket set to First over to Adaptive
+picks Last.
 
 ## Checks before cutting (the Analyse tab)
 
 The Analyse tab, and Save Toolpaths before it writes a file, checks the shown toolpaths
 before you cut: rapid moves that would crash into material still there, cutting that only
-cuts air, spots the bit can't reach, settings the machine can't do, and toolpaths that are
-out of date. Each finding says how to put it right; ones marked Must fix stop the save.
+cuts air, spots the bit can't reach, a Drilling bit not the size of the holes drawn,
+settings the machine can't do, and toolpaths that are out of date. Each finding says how to put it right; ones marked Must fix stop the save.
 
 The checks cut every toolpath in order, so a big 3D finish (millions of tiny moves with a
 small ball nose) takes a little while: a few seconds on a fast computer, longer on a slow

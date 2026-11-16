@@ -3,7 +3,7 @@
 //! thread mill's tooth comes from the tool; jobs saved before thread mills were tools give
 //! its offset on the form.
 
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, Units};
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, ToolDatabase, ToolShape, made_by};
@@ -43,12 +43,12 @@ pub enum CutDirection {
     Up,
 }
 
-/// A standard thread's pitch, ISO metric coarse or Unified (UNC),
-/// else the pitch typed.
+/// A standard thread's size and pitch, ISO metric coarse or Unified (UNC),
+/// else the diameter and pitch typed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PitchPreset {
-    /// The pitch typed below
+    /// The diameter and pitch typed below
     #[default]
     Custom,
     /// Metric 2 mm bolt thread, 0.4 mm from ridge to ridge
@@ -135,6 +135,40 @@ pub enum PitchPreset {
 }
 
 impl PitchPreset {
+    /// The standard's major (largest) diameter in millimetres; none for Custom.
+    #[must_use]
+    pub fn diameter(self) -> Option<f64> {
+        let inch = |inches: f64| inches * 25.4;
+        Some(match self {
+            Self::Custom => return None,
+            Self::IsoM2 => 2.0,
+            Self::IsoM3 => 3.0,
+            Self::IsoM4 => 4.0,
+            Self::IsoM5 => 5.0,
+            Self::IsoM6 => 6.0,
+            Self::IsoM8 => 8.0,
+            Self::IsoM10 => 10.0,
+            Self::IsoM12 => 12.0,
+            Self::IsoM14 => 14.0,
+            Self::IsoM16 => 16.0,
+            Self::IsoM20 => 20.0,
+            Self::IsoM24 => 24.0,
+            Self::Uts4x40 => inch(0.112),
+            Self::Uts6x32 => inch(0.138),
+            Self::Uts8x32 => inch(0.164),
+            Self::Uts10x24 | Self::Uts10x32 => inch(0.190),
+            Self::UtsQuarterX20 | Self::UtsQuarterX28 => inch(0.25),
+            Self::UtsFiveSixteenthsX18 => inch(0.3125),
+            Self::UtsThreeEighthsX16 => inch(0.375),
+            Self::UtsSevenSixteenthsX14 => inch(0.4375),
+            Self::UtsHalfX13 => inch(0.5),
+            Self::UtsNineSixteenthsX12 => inch(0.5625),
+            Self::UtsFiveEighthsX11 => inch(0.625),
+            Self::UtsThreeQuartersX10 => inch(0.75),
+            Self::UtsOneX8 => inch(1.0),
+        })
+    }
+
     /// The standard's pitch in millimetres; none for Custom.
     #[must_use]
     pub fn pitch(self) -> Option<f64> {
@@ -183,9 +217,10 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D"))]
     pub max_depth: f64,
-    /// A standard thread's pitch, else the pitch typed below
+    /// A standard thread size, which sets both the diameter and the pitch; Custom to type
+    /// them below
     #[serde(default)]
-    #[schemars(title = "Pitch preset", extend("x-widget" = "drop-down"))]
+    #[schemars(title = "Thread size", extend("x-widget" = "drop-down"))]
     #[schemars(extend("x-group" = "Thread"))]
     pub pitch_preset: PitchPreset,
     /// Between the ridges of the thread
@@ -193,9 +228,10 @@ pub struct Params {
     #[schemars(extend("x-group" = "Thread"), extend("x-show-when" = {"pitch_preset": "custom"}))]
     #[schemars(extend("x-dim" = "P", "x-diagram" = "diagrams/thread_shape.png"))]
     pub pitch: f64,
-    /// The thread's major (largest) diameter
+    /// The thread's major (largest) diameter, about the size of the bolt; it should be
+    /// close to the size of the circles selected, or the form warns in red
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Thread"))]
+    #[schemars(extend("x-group" = "Thread"), extend("x-show-when" = {"pitch_preset": "custom"}))]
     #[schemars(extend("x-dim" = "Dia"))]
     pub diameter: f64,
     /// Cuts the thread this much deeper so it turns freely
@@ -275,6 +311,12 @@ impl Params {
         self.pitch_preset.pitch().unwrap_or(self.pitch)
     }
 
+    /// The major diameter: the thread size's, else the one typed.
+    #[must_use]
+    pub fn diameter(&self) -> f64 {
+        self.pitch_preset.diameter().unwrap_or(self.diameter)
+    }
+
     /// How far the threads go down: from the start to the tooth at the deepest.
     pub fn thread_length(&self) -> f64 {
         self.max_depth - self.tooth_offset()
@@ -285,10 +327,10 @@ impl Params {
         let r = self.tool.diameter / 2.0;
         match self.thread_type {
             // the tooth reaches out to the major diameter
-            ThreadType::Internal => self.diameter / 2.0 + self.fit_tolerance - r,
+            ThreadType::Internal => self.diameter() / 2.0 + self.fit_tolerance - r,
             // the tooth reaches in to an ISO external thread's minor diameter (d - 1.22687 P)
             ThreadType::External => {
-                self.diameter / 2.0 - 0.613_435 * self.pitch() - self.fit_tolerance + r
+                self.diameter() / 2.0 - 0.613_435 * self.pitch() - self.fit_tolerance + r
             }
         }
     }
@@ -360,6 +402,35 @@ impl Params {
     }
 }
 
+/// A warning when a selected vector is far from the thread's size: the thread is cut round
+/// its centre at the thread's own diameter, whatever the vector's size. A tapping hole is a
+/// little under the thread's diameter, so only a difference of more than a quarter of the
+/// diameter (or two pitches, for small threads) is warned of.
+fn size_note(paths: &[Path], p: &Params, units: Units) -> Option<String> {
+    let thread = p.diameter();
+    let allowed = (thread / 4.0).max(2.0 * p.pitch());
+    let across = |path: &Path| {
+        let size = path.bounds().size();
+        size.x.max(size.y)
+    };
+    let odd: Vec<f64> = paths
+        .iter()
+        .map(across)
+        .filter(|size| (size - thread).abs() > allowed)
+        .collect();
+    let first = *odd.first()?;
+    let which = match odd.len() {
+        1 => "A selected vector is".to_owned(),
+        n => format!("{n} selected vectors are not the thread's size; one is"),
+    };
+    Some(format!(
+        "{which} {} across but the thread is {} across: the thread is cut at its own size round \
+         the vector's centre. Pick the Thread size that fits, or type the Diameter.",
+        units.length(first, 1),
+        units.length(thread, 1),
+    ))
+}
+
 /// `points` from the first, each the nearest to the one before: the order that cuts quickest.
 fn nearest_first(mut points: Vec<Point>) -> Vec<Point> {
     let mut ordered = Vec::with_capacity(points.len());
@@ -392,7 +463,7 @@ impl Command for ThreadMillingToolpath {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("pitch", p.pitch())?;
-        ensure_positive("diameter", p.diameter)?;
+        ensure_positive("diameter", p.diameter())?;
         ensure_positive("tool diameter", p.tool.diameter)?;
         ensure_positive("tooth offset", p.tooth_offset())?;
         // The rule for a single-point tool's offset
@@ -424,8 +495,11 @@ impl Command for ThreadMillingToolpath {
         }
         let moves = centres.iter().flat_map(|&at| p.helix(at, safe)).collect();
         let mut c = Change::builder(doc);
+        if let Some(note) = size_note(&paths, p, doc.job.units) {
+            c.note(note);
+        }
         // the hole to pocket out before an internal thread: ISO's minor diameter
-        let minor = p.diameter - 1.082_532 * p.pitch();
+        let minor = p.diameter() - 1.082_532 * p.pitch();
         if p.create_circles && p.thread_type == ThreadType::Internal && minor > 0.0 {
             for &at in &centres {
                 c.add(Path::circle(at, minor / 2.0));
@@ -627,6 +701,66 @@ mod tests {
             change.added().next().is_none(),
             "no circle for an external thread"
         );
+    }
+
+    #[test]
+    fn a_thread_size_sets_the_diameter_as_well_as_the_pitch() {
+        assert_eq!(PitchPreset::IsoM8.diameter(), Some(8.0));
+        assert!((PitchPreset::UtsQuarterX20.diameter().unwrap() - 6.35).abs() < 1e-12);
+        assert_eq!(PitchPreset::Custom.diameter(), None);
+        let p = Params {
+            pitch_preset: PitchPreset::IsoM8,
+            tool: Tool {
+                diameter: 4.0,
+                ..Params::default().tool
+            },
+            ..Params::default()
+        };
+        assert!(
+            (p.diameter() - 8.0).abs() < 1e-12,
+            "the M8's, not the 20 typed"
+        );
+        let t = made_toolpath::<ThreadMillingToolpath>(
+            vec![Path::circle(Point::new(50.0, 50.0), 3.4)],
+            &p,
+        )
+        .unwrap();
+        let centre = Point::new(50.0, 50.0);
+        assert!(
+            helix(&t)
+                .iter()
+                .all(|q| (q.truncate().distance(centre) - 2.0).abs() < 1e-9),
+            "an 8 mm thread with a 4 mm tool"
+        );
+    }
+
+    #[test]
+    fn a_circle_far_from_the_threads_size_is_warned_of() {
+        let notes = |p: &Params, radius: f64| {
+            let doc = cut_craft_core::testing::document_with(vec![Path::circle(
+                Point::new(50.0, 50.0),
+                radius,
+            )]);
+            ThreadMillingToolpath::run(&doc, p).unwrap().notes
+        };
+        // a 20 mm thread round an M8 hole (6.8 mm)
+        let warned = notes(&Params::default(), 3.4);
+        assert_eq!(warned.len(), 1, "{warned:?}");
+        assert!(
+            warned[0].contains("6.8 mm") && warned[0].contains("20.0 mm"),
+            "{warned:?}"
+        );
+        // an M8 thread in its tapping hole, and a 20 mm thread in a 20 mm circle
+        let m8 = Params {
+            pitch_preset: PitchPreset::IsoM8,
+            tool: Tool {
+                diameter: 4.0,
+                ..Params::default().tool
+            },
+            ..Params::default()
+        };
+        assert_eq!(notes(&m8, 3.4), Vec::<String>::new());
+        assert_eq!(notes(&Params::default(), 10.0), Vec::<String>::new());
     }
 
     #[test]

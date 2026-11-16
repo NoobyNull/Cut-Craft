@@ -11,7 +11,10 @@ pub struct SheetProperties;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// The sheet's place in the Sheets list, from 0.
+    /// The sheet's place in the Sheets list, from 0: filled in by the menu the sheet was
+    /// right-clicked in, so not shown on the form.
+    #[schemars(skip)]
+    #[serde(default)]
     pub sheet: usize,
     /// What the sheet is called in the Sheets list
     pub name: String,
@@ -66,6 +69,17 @@ mod tests {
     use cut_craft_core::testing::{rejection, run_on, two_sheets};
 
     cut_craft_core::contract_tests!(SheetProperties, two_sheets);
+
+    #[test]
+    fn the_form_shows_only_the_name_not_the_sheets_place_in_the_list() {
+        let schema = serde_json::to_value(schemars::schema_for!(Params)).unwrap();
+        let fields = schema["properties"].as_object().unwrap();
+        assert!(fields.contains_key("name"));
+        assert!(!fields.contains_key("sheet"), "{fields:?}");
+        // the menu still fills it in, and a call without it renames the first sheet
+        let p: Params = serde_json::from_str(r#"{"name": "Top"}"#).unwrap();
+        assert_eq!(p.sheet, 0);
+    }
 
     #[test]
     fn renames_a_sheet() {

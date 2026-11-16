@@ -181,7 +181,7 @@ impl Command for ReliefFromPhoto {
             },
         );
         let mut c = Change::builder(doc);
-        c.add_component(relief);
+        c.add_new_component(relief);
         Ok(c.finish())
     }
 }

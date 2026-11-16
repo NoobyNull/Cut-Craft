@@ -56,6 +56,9 @@ pub struct Border {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The picture to change
+    /// (the one right-clicked or picked: never shown on the form, so it cannot be changed
+    /// to another by mistake)
+    #[schemars(skip)]
     pub bitmap: EntityId,
     #[schemars(title = "Picture", extend("x-section" = true))]
     pub tones: Tones,

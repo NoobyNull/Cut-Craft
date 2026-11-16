@@ -1,4 +1,5 @@
-//! Merged Toolpath: the visible toolpaths that use one tool made into one, with their cuts
+//! Merged Toolpath: the toolpaths shown in the toolpath list when Apply is pressed (tick the
+//! ones to merge there), all using one tool, made into one, with their cuts
 //! in whichever of the orders asked for leaves the least travelling between them, each
 //! part's cuts together when asked; and Ungroup, which takes a merged toolpath apart again.
 
@@ -15,11 +16,21 @@ pub struct MergedToolpath;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[expect(clippy::struct_excessive_bools, reason = "the Ordering tick boxes")]
 pub struct Params {
-    /// What the toolpath is called in the toolpath list
+    /// What the toolpath is called in the toolpath list. It merges the toolpaths ticked
+    /// (shown) in the toolpath list when Apply is pressed: tick them there first
+    /// (it is marked out of date when one of them changes: recalculate it then, and the
+    /// hidden ones out of date are recalculated first). Those
+    /// toolpaths are then hidden, so saving the shown toolpaths does not cut them twice. They
+    /// must use one tool, and all is cut with the first one's feeds and speed: a toolpath
+    /// whose copy of that tool is set differently is warned of
     pub name: String,
-    /// The toolpaths to merge (none: the visible ones)
+    /// The toolpaths to merge (none: the ones shown in the toolpath list when Apply is
+    /// pressed). Not on the form: tick the toolpaths to merge in the toolpath list
+    #[schemars(skip)]
+    #[serde(default)]
     pub sources: Vec<EntityId>,
-    /// Cuts in order across the job; of the orders ticked, the quickest is kept
+    /// Cuts in order across the job; of the orders ticked, the quickest is kept. Whatever
+    /// the order, the cuts inside a closed shape always come before the shape itself
     #[serde(default = "yes")]
     #[schemars(title = "Left to Right", extend("x-group" = "Ordering"))]
     pub left_to_right: bool,
@@ -45,7 +56,7 @@ pub struct Params {
     #[schemars(title = "Shortest Path", extend("x-group" = "Ordering"))]
     pub shortest_path: bool,
     /// Each part's cuts together: a part is an outermost closed cut with the cuts inside
-    /// it, cut in the toolpath list's order within the part
+    /// it, cut in the toolpath list's order within the part (its outline always last)
     #[serde(default)]
     #[schemars(title = "Merge By Part", extend("x-group" = "Ordering"))]
     pub merge_by_part: bool,
@@ -161,14 +172,7 @@ fn orders(cuts: &[Cut], p: &Params, height: f64) -> Vec<Vec<Cut>> {
 /// `cuts` as parts: each outermost closed cut with every cut starting inside it, in the
 /// order given; a cut inside none is a part of its own.
 fn parts(cuts: &[Cut]) -> Vec<Vec<Cut>> {
-    let rings: Vec<Option<Vec<Point>>> = cuts
-        .iter()
-        .map(|c| {
-            let ring: Vec<Point> = c.moves.iter().map(|m| m.to.truncate()).collect();
-            let closed = ring.len() > 2 && ring[0].distance(ring[ring.len() - 1]) < 1e-6;
-            closed.then_some(ring)
-        })
-        .collect();
+    let rings: Vec<Option<Vec<Point>>> = cuts.iter().map(ring).collect();
     // the cut that holds each one: the smallest closed cut it starts inside, if any
     let holder = |i: usize| -> Option<usize> {
         let at = cuts[i].start().truncate();
@@ -202,7 +206,65 @@ fn parts(cuts: &[Cut]) -> Vec<Vec<Cut>> {
             None => out.push((outer_of[i], vec![cut.clone()])),
         }
     }
-    out.into_iter().map(|(_, part)| part).collect()
+    out.into_iter()
+        .map(|(_, part)| insides_first(&part))
+        .collect()
+}
+
+/// A closed cut's outline, if it ends where it starts.
+fn ring(cut: &Cut) -> Option<Vec<Point>> {
+    let ring: Vec<Point> = cut.moves.iter().map(|m| m.to.truncate()).collect();
+    let closed = ring.len() > 2 && ring[0].distance(ring[ring.len() - 1]) < 1e-6;
+    closed.then_some(ring)
+}
+
+/// How far `at` is from the outline `ring`.
+fn off_ring(ring: &[Point], at: Point) -> f64 {
+    ring.windows(2)
+        .map(|w| {
+            let (a, b) = (w[0], w[1]);
+            let ab = b - a;
+            let t = if ab.length_squared() > 0.0 {
+                ((at - a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            at.distance(a + ab * t)
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// `order` with no closed cut ahead of a cut that starts inside it, so a part's outline is
+/// never cut free before the cuts inside the part; otherwise as given.
+fn insides_first(order: &[Cut]) -> Vec<Cut> {
+    let rings: Vec<Option<Vec<Point>>> = order.iter().map(ring).collect();
+    // for each cut, the cuts that must go before it: those starting inside it
+    let waits_for: Vec<Vec<usize>> = rings
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let Some(r) = r else { return vec![] };
+            (0..order.len())
+                .filter(|&j| j != i)
+                .filter(|&j| {
+                    let at = order[j].start().truncate();
+                    off_ring(r, at) > 1e-6 && inside(std::slice::from_ref(r), at)
+                })
+                .collect()
+        })
+        .collect();
+    let mut placed = vec![false; order.len()];
+    let mut out = Vec::with_capacity(order.len());
+    while out.len() < order.len() {
+        let ready = (0..order.len())
+            .find(|&i| !placed[i] && waits_for[i].iter().all(|&j| placed[j]))
+            // outlines that overlap each other: the earliest left
+            .or_else(|| (0..order.len()).find(|&i| !placed[i]))
+            .expect("a cut is left");
+        placed[ready] = true;
+        out.push(ready);
+    }
+    out.into_iter().map(|i| order[i].clone()).collect()
 }
 
 /// The cuts, each next one the nearest start to where the last ended.
@@ -221,6 +283,48 @@ fn nearest_first(mut left: Vec<Cut>) -> Vec<Cut> {
     order
 }
 
+/// What the merged toolpath warns of: each source whose tool, named as `first`'s, has other
+/// settings (feeds, speed or the bit's size), which merging replaces with `first`'s.
+fn tool_differences(first: &Toolpath, sources: &[&Toolpath]) -> Vec<String> {
+    let (a, mut notes) = (&first.tool, vec![]);
+    for source in sources {
+        let b = &source.tool;
+        let differ = |x: f64, y: f64| (x - y).abs() > 1e-9;
+        let fields: Vec<&str> = [
+            (a.shape != b.shape, "shape"),
+            (differ(a.diameter, b.diameter), "diameter"),
+            (differ(a.angle, b.angle), "angle"),
+            (differ(a.tip_radius, b.tip_radius), "tip radius"),
+            (differ(a.feed_rate, b.feed_rate), "feed rate"),
+            (differ(a.plunge_rate, b.plunge_rate), "plunge rate"),
+            (differ(a.spindle_speed, b.spindle_speed), "spindle speed"),
+        ]
+        .into_iter()
+        .filter_map(|(differs, field)| differs.then_some(field))
+        .collect();
+        if !fields.is_empty() {
+            notes.push(format!(
+                "{} uses {} with a different {}: the merged toolpath cuts it all with {}'s \
+                 settings. Edit the tool in one of them to match if that is not right",
+                source.name,
+                b.name,
+                fields.join(", "),
+                first.name
+            ));
+        }
+    }
+    notes
+}
+
+/// The toolpaths shown in the toolpath list, but none made by `strategy`.
+fn visible(doc: &Document, strategy: &str) -> Vec<EntityId> {
+    doc.toolpaths
+        .iter()
+        .filter(|(_, t)| t.visible && t.strategy != strategy)
+        .map(|(&id, _)| id)
+        .collect()
+}
+
 impl Command for MergedToolpath {
     const ID: &'static str = "merged_toolpath";
     type Params = Params;
@@ -234,24 +338,20 @@ impl Command for MergedToolpath {
         }
     }
 
-    fn initial_params(doc: &Document) -> Params {
-        Params {
-            sources: doc
-                .toolpaths
-                .iter()
-                .filter(|(_, t)| t.visible && t.strategy != Self::ID)
-                .map(|(&id, _)| id)
-                .collect(),
-            ..Params::default()
-        }
+    fn initial_params(_: &Document) -> Params {
+        // no sources: the toolpaths shown when Apply is pressed, not when the form opened
+        Params::default()
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let named = if p.sources.is_empty() {
-            Self::initial_params(doc).sources
+        let mut named = if p.sources.is_empty() {
+            visible(doc, Self::ID)
         } else {
             p.sources.clone()
         };
+        // a toolpath named twice is used once, not cut twice
+        let mut seen = std::collections::BTreeSet::new();
+        named.retain(|id| seen.insert(*id));
         let sources: Vec<&Toolpath> = named
             .iter()
             .filter_map(|id| doc.toolpaths.get(id))
@@ -274,6 +374,7 @@ impl Command for MergedToolpath {
                 first.name, first.tool.name, other.name, other.tool.name
             )));
         }
+        let notes = tool_differences(first, &sources);
         let in_order: Vec<Cut> = sources.iter().flat_map(|t| cuts(t)).collect();
         let height = doc.job.height;
         let order = if p.merge_by_part {
@@ -299,8 +400,9 @@ impl Command for MergedToolpath {
         } else {
             orders(&in_order, p, height)
                 .into_iter()
+                .map(|o| insides_first(&o))
                 .min_by(|a, b| travel(a).total_cmp(&travel(b)))
-                .unwrap_or(in_order)
+                .unwrap_or_else(|| insides_first(&in_order))
         };
         let safe = doc.job.clearance;
         let laser = sources.iter().any(|t| !t.power.is_empty());
@@ -331,6 +433,14 @@ impl Command for MergedToolpath {
         }
         let mut c = Change::builder(doc);
         c.add_toolpath(toolpath);
+        for note in notes {
+            c.note(note);
+        }
+        // the sources are under the new toolpath: hidden, so the default save (every shown
+        // toolpath) does not cut them twice. Recalculating leaves them as they are
+        if p.sources.is_empty() {
+            c.hide_toolpaths(&named);
+        }
         Ok(c.finish())
     }
 }
@@ -449,6 +559,44 @@ mod tests {
     }
 
     #[test]
+    fn the_form_hides_the_sources_and_merges_the_toolpaths_visible_at_apply() {
+        let doc = two();
+        let schema = serde_json::to_value(schemars::schema_for!(Params)).unwrap();
+        assert!(schema["properties"].get("sources").is_none(), "no id list");
+        let name = schema["properties"]["name"]["description"].as_str();
+        assert!(
+            name.is_some_and(|h| h.contains("ticked")),
+            "the form says which toolpaths it merges: {name:?}"
+        );
+        assert_eq!(MergedToolpath::initial_params(&doc).sources, []);
+        let once = merged(&doc).moves.len();
+        let doubled = Params {
+            sources: vec![EntityId(1), EntityId(1), EntityId(2)],
+            ..Params::default()
+        };
+        let change = MergedToolpath::run(&doc, &doubled).unwrap();
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        let made = after
+            .toolpaths
+            .values()
+            .find(|t| t.strategy == MergedToolpath::ID)
+            .unwrap();
+        assert_eq!(made.moves.len(), once, "a repeated id is merged once");
+    }
+
+    #[test]
+    fn the_toolpaths_merged_are_hidden_so_a_save_does_not_cut_them_twice() {
+        let doc = two();
+        let change = MergedToolpath::run(&doc, &Params::default()).unwrap();
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        assert!(!after.toolpaths[&EntityId(1)].visible);
+        assert!(!after.toolpaths[&EntityId(2)].visible);
+        assert!(merged(&doc).visible, "the merged toolpath is shown");
+    }
+
+    #[test]
     fn grid_rows_is_a_form_field_that_sets_how_tall_the_grid_rows_are() {
         let old: Params = serde_json::from_value(serde_json::json!({
             "name": "Merged", "sources": []
@@ -498,6 +646,32 @@ mod tests {
         doc.apply(&c.finish()).unwrap();
         let err = MergedToolpath::run(&doc, &Params::default()).unwrap_err();
         assert!(err.to_string().contains("drill bank"), "{err}");
+    }
+
+    #[test]
+    fn a_same_named_tool_with_other_settings_merges_with_a_warning_naming_them() {
+        let mut doc = two();
+        let mut t = doc.toolpaths[&EntityId(2)].clone();
+        t.tool.feed_rate += 500.0;
+        t.tool.spindle_speed += 1000.0;
+        let mut c = Change::builder(&doc);
+        c.replace_toolpath(EntityId(2), t);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        let change = MergedToolpath::run(&doc, &Params::default()).unwrap();
+        let note = change.notes.join(" ");
+        assert!(
+            note.contains("Second") && note.contains("feed rate") && note.contains("spindle speed"),
+            "{note}"
+        );
+        assert!(!note.contains("plunge rate"), "only what differs: {note}");
+        assert!(
+            MergedToolpath::run(&two(), &Params::default())
+                .unwrap()
+                .notes
+                .is_empty(),
+            "the same tool: nothing to say"
+        );
     }
 
     #[test]
@@ -661,9 +835,28 @@ mod tests {
         );
         assert_eq!(
             merged(false),
-            [0.0, 5.0, 100.0, 105.0],
-            "else the quickest order of all the cuts"
+            [5.0, 0.0, 105.0, 100.0],
+            "else the quickest order of all the cuts, but never a shape before what is inside it"
         );
+        // the squares first in the list: each still waits for what is inside it
+        let sources = vec![EntityId(2), EntityId(1)];
+        for by_part in [true, false] {
+            let p = Params {
+                merge_by_part: by_part,
+                sources: sources.clone(),
+                ..Params::default()
+            };
+            let change = MergedToolpath::run(&doc, &p).unwrap();
+            let mut after = doc.clone();
+            after.apply(&change).unwrap();
+            let t = after
+                .toolpaths
+                .into_values()
+                .find(|t| t.strategy == MergedToolpath::ID)
+                .unwrap();
+            let xs: Vec<f64> = starts(&t).into_iter().map(|(x, _)| x).collect();
+            assert_eq!(xs, [5.0, 0.0, 105.0, 100.0], "by part: {by_part}");
+        }
     }
 
     #[test]

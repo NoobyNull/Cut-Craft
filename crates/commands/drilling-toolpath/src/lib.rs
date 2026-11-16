@@ -1,7 +1,11 @@
 //! Drilling Toolpath: a hole at the centre of each selected closed vector, straight down or
 //! pecked a pass depth at a time, retracting above the start or above the last peck, and
-//! dwelling at the bottom of each peck if asked (the post needs a `DWELL_MOVE` block).
+//! dwelling at the bottom of each peck if asked (the post needs a `DWELL_MOVE` block). Every
+//! hole comes out the bit's width, whatever size it is drawn, so the form (and the checks
+//! before cutting) warn in red when the bit is wider than a hole, or a hole much wider than
+//! the bit: cut those with a Pocket or a Profile (Inside) instead.
 
+use cut_craft_core::checks;
 use cut_craft_core::document::Document;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by};
@@ -31,7 +35,7 @@ pub struct Params {
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_drill.png"))]
     pub depth: f64,
-    /// Peck drilling goes one pass depth deeper each peck
+    /// Peck drilling goes one pass depth deeper each peck; pick a bit the size of the holes
     pub tool: Tool,
     /// Drill in pecks of the tool's pass depth, rising between them; off drills straight down
     #[serde(default = "yes")]
@@ -140,6 +144,9 @@ impl Command for DrillingToolpath {
             }
         }
         let mut c = Change::builder(doc);
+        for note in checks::drill_sizes("Drilling", &p.tool, &paths, doc.job.units) {
+            c.note(note);
+        }
         c.add_toolpath(made_by::<Self>(
             p,
             p.name.clone(),
@@ -164,6 +171,26 @@ mod tests {
             Path::circle(Point::new(10.0, 10.0), 2.0),
             Path::circle(Point::new(30.0, 10.0), 2.0),
         ]
+    }
+
+    #[test]
+    fn a_bit_not_the_size_of_the_holes_is_warned_of_at_the_forms_foot() {
+        let doc = cut_craft_core::testing::document_with(holes()); // 4 mm holes
+        let p = Params::default(); // a 6 mm bit
+        let notes = DrillingToolpath::run(&doc, &p).unwrap().notes;
+        assert_eq!(notes.len(), 1, "{notes:?}");
+        assert!(notes[0].contains("bigger than 2 of the holes"), "{notes:?}");
+        let fits = Params {
+            tool: Tool {
+                diameter: 4.0,
+                ..Tool::default()
+            },
+            ..Params::default()
+        };
+        assert_eq!(
+            DrillingToolpath::run(&doc, &fits).unwrap().notes,
+            Vec::<String>::new()
+        );
     }
 
     #[test]

@@ -90,7 +90,7 @@ impl Command for TurnAndSpin {
             ));
         }
         let mut c = Change::builder(doc);
-        c.add_component(made);
+        c.add_new_component(made);
         Ok(c.finish())
     }
 }

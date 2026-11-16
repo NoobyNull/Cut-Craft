@@ -718,3 +718,92 @@ fn a_cancelled_preview_stops_cutting() {
     progress.track(|| m.cut(&path));
     assert!(m.heights.iter().all(|&z| z == 0.0), "nothing was cut");
 }
+
+#[test]
+fn material_covers_only_the_job_it_was_made_for() {
+    let job = Job {
+        width: 100.0,
+        height: 60.0,
+        ..Job::default()
+    };
+    let material = Material::new(&job, 200);
+    assert!(material.covers(&job));
+    let thicker = Job {
+        thickness: job.thickness + 5.0,
+        ..job
+    };
+    let wider = Job {
+        width: 140.0,
+        ..job
+    };
+    assert!(!material.covers(&thicker) && !material.covers(&wider));
+}
+
+#[test]
+fn material_not_cut_free_is_not_removed() {
+    // uncut: no piece cut free anywhere
+    let mut m = material();
+    assert_eq!(m.remove_piece(Point::new(50.0, 50.0)), 0);
+    assert!(m.heights.iter().all(|h| !h.is_nan()), "the block stays");
+    // a pocket, not through
+    m.cut(&toolpath(&[(30.0, 50.0, -5.0), (70.0, 50.0, -5.0)]));
+    assert_eq!(m.remove_piece(Point::new(50.0, 50.0)), 0);
+    // a slot right through that cuts nothing free (its ends stay joined)
+    m.cut(&toolpath(&[(30.0, 50.0, -25.0), (70.0, 50.0, -25.0)]));
+    assert_eq!(m.remove_piece(Point::new(10.0, 10.0)), 0);
+    assert!(m.heights.iter().all(|h| !h.is_nan()));
+}
+
+#[test]
+fn after_one_piece_is_removed_a_part_held_by_tabs_still_is_not() {
+    let mut m = material();
+    // part A cut right free round (15, 15)..(40, 40)
+    m.cut(&toolpath(&[
+        (15.0, 15.0, -25.0),
+        (40.0, 15.0, -25.0),
+        (40.0, 40.0, -25.0),
+        (15.0, 40.0, -25.0),
+        (15.0, 15.0, -25.0),
+    ]));
+    // part B round (60, 60)..(90, 90), its last side left short: held to the waste by a tab
+    m.cut(&toolpath(&[
+        (60.0, 60.0, -25.0),
+        (90.0, 60.0, -25.0),
+        (90.0, 90.0, -25.0),
+        (60.0, 90.0, -25.0),
+        (60.0, 72.0, -25.0),
+    ]));
+    assert!(m.remove_piece(Point::new(27.0, 27.0)) > 0, "A is cut free");
+    // B and the waste are all that is left: neither B nor the waste is taken
+    assert_eq!(m.remove_piece(Point::new(75.0, 75.0)), 0);
+    assert_eq!(m.remove_piece(Point::new(5.0, 95.0)), 0);
+    assert!(!m.at(Point::new(75.0, 75.0)).unwrap().is_nan(), "B stays");
+    assert!(
+        !m.at(Point::new(5.0, 95.0)).unwrap().is_nan(),
+        "the waste stays"
+    );
+}
+
+#[test]
+fn a_bit_narrower_than_a_cell_still_cuts_every_cell_its_tip_passes_through() {
+    // 2 mm cells, centres at odd millimetres; a 0.8 mm bit along y = x + 1 passes
+    // 0.71 mm from every centre, so it covers none of them
+    let job = Job {
+        width: 100.0,
+        height: 100.0,
+        ..Job::default()
+    };
+    let mut m = Material::new(&job, 50);
+    let tool = Tool {
+        diameter: 0.8,
+        ..Tool::default()
+    };
+    m.cut(&with_tool(
+        tool,
+        &[(10.0, 11.0, 2.0), (10.0, 11.0, -1.0), (40.0, 41.0, -1.0)],
+    ));
+    for x in [12.0, 20.5, 30.0, 38.0] {
+        assert_eq!(depth_at(&m, x, x + 1.0), -1.0, "under the tip at x = {x}");
+    }
+    assert_eq!(depth_at(&m, 30.0, 25.0), 0.0, "well away from the cut");
+}

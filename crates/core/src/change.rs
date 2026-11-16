@@ -143,10 +143,15 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
-    /// Turns toolpath tiling on (with its settings) or off.
+    /// Turns toolpath tiling on (with its settings) or off, and the settings kept while it
+    /// is off.
     SetTiling {
         before: Option<crate::tiling::Tiling>,
         after: Option<crate::tiling::Tiling>,
+        #[serde(default)]
+        kept_before: Option<crate::tiling::Tiling>,
+        #[serde(default)]
+        kept_after: Option<crate::tiling::Tiling>,
     },
     /// Replaces the guide lines.
     SetGuides {
@@ -247,9 +252,16 @@ impl Edit {
                 before: after,
                 after: before,
             },
-            Self::SetTiling { before, after } => Self::SetTiling {
+            Self::SetTiling {
+                before,
+                after,
+                kept_before,
+                kept_after,
+            } => Self::SetTiling {
                 before: after,
                 after: before,
+                kept_before: kept_after,
+                kept_after: kept_before,
             },
             Self::SetGuides { before, after } => Self::SetGuides {
                 before: after,
@@ -700,41 +712,99 @@ impl Change {
     }
 
     /// `self` with the toolpaths it leaves out of date marked stale: those made from a vector
-    /// it changes or removes, and, when it changes the model, those that cut the model. The
-    /// marks are edits of the change, so undoing it undoes them.
+    /// it changes or removes, those copying (Merged, Array Copy) a toolpath it removes, cuts
+    /// differently or leaves out of date, those carving a picture it moves or alters, when it changes the model those that cut the model, and when
+    /// it changes the material's thickness, where the model sits, or the rotary or
+    /// double-sided set-up, every toolpath (they bake those in when calculated). The marks
+    /// are edits of the change, so undoing it undoes them.
     #[must_use]
     pub fn marking_stale(mut self, doc: &Document) -> Self {
         let mut model = false;
         let mut clearing = false;
+        let mut material = false;
         let mut vectors = std::collections::BTreeSet::new();
         let mut made = std::collections::BTreeSet::new();
+        // toolpaths this change takes away or makes cut differently
+        let mut recut = std::collections::BTreeSet::new();
+        // pictures this change moves, alters or takes away
+        let mut pictures = std::collections::BTreeSet::new();
         for edit in &self.edits {
             match edit {
                 Edit::Replace { id, .. } | Edit::Remove { id, .. } => {
                     vectors.insert(*id);
                 }
+                Edit::ReplaceBitmap { id, .. } | Edit::RemoveBitmap { id, .. } => {
+                    pictures.insert(*id);
+                }
                 Edit::AddComponent { .. }
                 | Edit::RemoveComponent { .. }
                 | Edit::ReplaceComponent { .. }
                 | Edit::SetLevel { .. } => model = true,
-                Edit::SetJob { before, after } if before.clearing != after.clearing => {
-                    clearing = true;
+                Edit::SetJob { before, after } => {
+                    clearing |= before.clearing != after.clearing;
+                    model |= before.resolution != after.resolution;
+                    material |= before.thickness != after.thickness
+                        || before.model_position != after.model_position
+                        || before.rotary != after.rotary
+                        || before.double_sided != after.double_sided;
                 }
-                Edit::AddToolpath { id, .. }
-                | Edit::RemoveToolpath { id, .. }
-                | Edit::ReplaceToolpath { id, .. } => {
+                Edit::AddToolpath { id, .. } => {
                     made.insert(*id);
+                }
+                Edit::RemoveToolpath { id, .. } => {
+                    made.insert(*id);
+                    recut.insert(*id);
+                }
+                Edit::ReplaceToolpath { id, before, after } => {
+                    made.insert(*id);
+                    // shown, hidden or renamed, it cuts the same
+                    if before.moves != after.moves
+                        || before.tool != after.tool
+                        || before.power != after.power
+                    {
+                        recut.insert(*id);
+                    }
                 }
                 _ => {}
             }
         }
         let picks_again = self.picks_again(doc);
-        for (&id, toolpath) in &doc.toolpaths {
-            let outdated = (model && toolpath.reads_model())
-                || (clearing && toolpath.reads_clearing())
-                || toolpath.vectors.iter().any(|v| vectors.contains(v))
-                || picks_again.contains(&id);
-            if outdated && !toolpath.stale && !made.contains(&id) {
+        let mut outdated: std::collections::BTreeSet<EntityId> = doc
+            .toolpaths
+            .iter()
+            .filter(|&(id, toolpath)| {
+                material
+                    || (model && toolpath.reads_model())
+                    || (clearing && toolpath.reads_clearing())
+                    || toolpath.vectors.iter().any(|v| vectors.contains(v))
+                    || picture_of(toolpath).is_some_and(|b| pictures.contains(&b))
+                    || picks_again.contains(id)
+            })
+            .map(|(&id, _)| id)
+            .collect();
+        // a Merged or Array Copy toolpath copies the moves of its sources: out of date once
+        // one of them cuts differently or goes, or is itself out of date
+        loop {
+            let more: Vec<EntityId> = doc
+                .toolpaths
+                .iter()
+                .filter(|(id, _)| !outdated.contains(id))
+                .filter(|(_, t)| {
+                    sources_of(t)
+                        .iter()
+                        .any(|s| recut.contains(s) || outdated.contains(s))
+                })
+                .map(|(&id, _)| id)
+                .collect();
+            if more.is_empty() {
+                break;
+            }
+            outdated.extend(more);
+        }
+        self.keep_copies_behind_stale(doc, &outdated, &recut);
+        for id in outdated {
+            let toolpath = &doc.toolpaths[&id];
+            if !toolpath.stale && !made.contains(&id) {
                 let after = Toolpath {
                     stale: true,
                     ..toolpath.clone()
@@ -747,6 +817,57 @@ impl Change {
             }
         }
         self
+    }
+
+    /// Marks out of date each Merged or Array Copy toolpath this change makes again while a
+    /// source of it is still out of date, or is cut again only after it: it holds old moves.
+    fn keep_copies_behind_stale(
+        &mut self,
+        doc: &Document,
+        outdated: &std::collections::BTreeSet<EntityId>,
+        recut: &std::collections::BTreeSet<EntityId>,
+    ) {
+        let mut last = std::collections::BTreeMap::new();
+        for (i, edit) in self.edits.iter().enumerate() {
+            if let Edit::AddToolpath { id, .. }
+            | Edit::RemoveToolpath { id, .. }
+            | Edit::ReplaceToolpath { id, .. } = edit
+            {
+                last.insert(*id, i);
+            }
+        }
+        let still_stale = |s: EntityId, edits: &[Edit]| match last.get(&s) {
+            Some(&i) => match &edits[i] {
+                Edit::AddToolpath { toolpath, .. } => toolpath.stale,
+                Edit::ReplaceToolpath { after, .. } => after.stale,
+                _ => false,
+            },
+            None => doc
+                .toolpaths
+                .get(&s)
+                .is_some_and(|t| t.stale || outdated.contains(&s)),
+        };
+        let behind: Vec<usize> = last
+            .values()
+            .copied()
+            .filter(|&i| match &self.edits[i] {
+                Edit::AddToolpath { toolpath: t, .. } | Edit::ReplaceToolpath { after: t, .. } => {
+                    !t.stale
+                        && sources_of(t).iter().any(|&s| {
+                            still_stale(s, &self.edits)
+                                || last.get(&s).is_some_and(|&j| j > i && recut.contains(&s))
+                        })
+                }
+                _ => false,
+            })
+            .collect();
+        for i in behind {
+            if let Edit::AddToolpath { toolpath: t, .. } | Edit::ReplaceToolpath { after: t, .. } =
+                &mut self.edits[i]
+            {
+                t.stale = true;
+            }
+        }
     }
 
     /// The job this change sets, if it sets one: lets a view show a job before it is applied.
@@ -933,7 +1054,12 @@ impl Document {
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
             Edit::SetConstraints { after, .. } => self.constraints.clone_from(after),
             Edit::SetToolpathGroups { after, .. } => self.toolpath_groups.clone_from(after),
-            Edit::SetTiling { after, .. } => self.tiling = *after,
+            Edit::SetTiling {
+                after, kept_after, ..
+            } => {
+                self.tiling = *after;
+                self.tiling_kept = *kept_after;
+            }
             _ => unreachable!("only settings come here"),
         }
     }
@@ -1375,18 +1501,36 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    /// `toolpath` with its rapids routed round the keep-out zones, and when clipping is on,
-    /// what would cut into one left out (laser toolpaths, whose power runs move for move, as
-    /// they are; drill banks, whose hits are their moves, not clipped).
+    /// `toolpath` with its rapids routed round the keep-out zones (a laser's with the laser
+    /// off), and when clipping is on, what would cut into one left out (laser toolpaths,
+    /// whose power runs move for move, and drill banks, whose hits are their moves, not
+    /// clipped).
     fn kept_out(&self, mut toolpath: Toolpath) -> Toolpath {
         let zones = self.doc.keep_out_zones();
-        if !zones.is_empty() && toolpath.power.is_empty() {
-            if self.doc.clip_keep_out && toolpath.drill_bank.is_none() {
+        if !zones.is_empty() {
+            // a laser's lines are not clipped (its power goes with each move), only its
+            // rapids routed round
+            let laser = !toolpath.power.is_empty();
+            if self.doc.clip_keep_out && toolpath.drill_bank.is_none() && !laser {
                 let radius = toolpath.tool.diameter / 2.0;
                 let safe = self.doc.job.clearance;
                 toolpath.moves = crate::keep_out::clip(&zones, &toolpath.moves, radius, safe);
             }
             let (moves, origin, _) = crate::keep_out::route_indexed(&zones, &toolpath.moves);
+            // the ways round are rapids, with the laser off; every other move keeps its power
+            if laser {
+                toolpath.power = moves
+                    .iter()
+                    .zip(&origin)
+                    .map(|(m, &o)| {
+                        if m.kind == crate::toolpath::MoveKind::Rapid {
+                            0.0
+                        } else {
+                            toolpath.power.get(o).copied().unwrap_or(0.0)
+                        }
+                    })
+                    .collect();
+            }
             // a drill bank's plunges keep their moves, and the ways round that lead to them
             if let Some(bank) = &mut toolpath.drill_bank {
                 let at = |old: usize| origin.partition_point(|&o| o < old);
@@ -1442,6 +1586,22 @@ impl ChangeBuilder<'_> {
         });
     }
 
+    /// The toolpaths `ids` hidden, those shown: ones a Merged or Array Copy toolpath now
+    /// cuts, so saving the shown toolpaths does not cut them twice.
+    pub fn hide_toolpaths(&mut self, ids: &[EntityId]) {
+        for &id in ids {
+            if let Some(shown) = self.toolpath(id).filter(|t| t.visible).cloned() {
+                self.replace_toolpath(
+                    id,
+                    Toolpath {
+                        visible: false,
+                        ..shown
+                    },
+                );
+            }
+        }
+    }
+
     pub fn add_component(&mut self, component: Component) -> EntityId {
         let id = EntityId(self.next_id);
         self.next_id += 1;
@@ -1451,6 +1611,13 @@ impl ChangeBuilder<'_> {
             component: Box::new(component),
         });
         id
+    }
+
+    /// Adds a component made from scratch on the level new components go on
+    /// ([`Document::new_component_level`]).
+    pub fn add_new_component(&mut self, mut component: Component) -> EntityId {
+        component.level = self.doc.new_component_level();
+        self.add_component(component)
     }
 
     pub fn add_bitmap(&mut self, bitmap: Bitmap) -> EntityId {
@@ -1706,10 +1873,31 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    pub fn set_tiling(&mut self, after: Option<crate::tiling::Tiling>) {
-        if self.doc.tiling != after {
-            let before = self.doc.tiling;
-            self.edits.push(Edit::SetTiling { before, after });
+    /// Turns tiling on with `settings`, or off keeping them for when it is turned on again
+    /// (not kept when it was never on and they are the defaults: nothing to keep).
+    pub fn set_tiling_with(&mut self, on: bool, settings: crate::tiling::Tiling) {
+        if on {
+            self.set_tiling_kept(Some(settings), None);
+        } else {
+            let worth = self.doc.tiling.is_some()
+                || self.doc.tiling_kept.is_some()
+                || settings != crate::tiling::Tiling::default();
+            self.set_tiling_kept(None, worth.then_some(settings));
+        }
+    }
+
+    fn set_tiling_kept(
+        &mut self,
+        after: Option<crate::tiling::Tiling>,
+        kept_after: Option<crate::tiling::Tiling>,
+    ) {
+        if self.doc.tiling != after || self.doc.tiling_kept != kept_after {
+            self.edits.push(Edit::SetTiling {
+                before: self.doc.tiling,
+                after,
+                kept_before: self.doc.tiling_kept,
+                kept_after,
+            });
         }
     }
 
@@ -1901,6 +2089,21 @@ impl ChangeBuilder<'_> {
             unit_guess: None,
         }
     }
+}
+
+/// The toolpaths `toolpath` copies its moves from: a Merged or Array Copy toolpath's
+/// `sources`.
+pub(crate) fn sources_of(toolpath: &Toolpath) -> Vec<EntityId> {
+    toolpath
+        .params
+        .get("sources")
+        .and_then(|s| serde_json::from_value(s.clone()).ok())
+        .unwrap_or_default()
+}
+
+/// The picture a Photo V-Carve or Sketch Carving toolpath was made from: its `bitmap`.
+fn picture_of(toolpath: &Toolpath) -> Option<EntityId> {
+    serde_json::from_value(toolpath.params.get("bitmap")?.clone()).ok()?
 }
 
 /// Undo/redo stacks of applied changes.

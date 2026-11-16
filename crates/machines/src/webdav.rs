@@ -264,6 +264,17 @@ impl Store for WebDav {
         }
     }
 
+    fn move_into(&self, at: &[String], name: &str, into: &[String]) -> Result<(), String> {
+        let to_url = self.url(into, Some(name))?;
+        let headers = [("Destination", to_url.as_str()), ("Overwrite", "F")];
+        let (status, _) = self.ask("MOVE", &self.url(at, Some(name))?, &headers, &[])?;
+        if ok(status) {
+            Ok(())
+        } else {
+            Err(refused("Not moved", status))
+        }
+    }
+
     fn delete(&self, at: &[String], name: &str) -> Result<(), String> {
         let (status, _) = self.ask("DELETE", &self.url(at, Some(name))?, &[], &[])?;
         if ok(status) {

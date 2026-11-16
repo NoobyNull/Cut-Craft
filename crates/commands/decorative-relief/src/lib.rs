@@ -114,7 +114,7 @@ impl Command for DecorativeRelief {
         }
         let part = carve(p, rings, area, doc.job.model_cell(), doc.job.units)?;
         let mut c = Change::builder(doc);
-        c.add_component(part);
+        c.add_new_component(part);
         Ok(c.finish())
     }
 }

@@ -675,3 +675,29 @@ fn a_material_without_data_of_its_own_cuts_with_its_class_s() {
     assert_eq!(tool.cutting("Maple").material, "Maple");
     assert!(!tool.has_data_for("Walnut"), "borrowed, not its own");
 }
+
+#[test]
+fn the_starter_tools_have_a_laser_and_a_database_without_one_gets_it() {
+    let starter = ToolDatabase::starter();
+    let laser = starter
+        .tools
+        .iter()
+        .find(|t| t.shape == ToolShape::Laser)
+        .expect("a laser to pick");
+    assert_eq!(laser.diameter, 0.15, "its diameter is the kerf");
+    assert_eq!(laser.group, "Metric Tools/Lasers");
+    assert!(laser.is_laser() && !Tool::default().is_laser());
+    let mut starter = starter;
+    assert!(!starter.add_laser_if_none(), "it has one already");
+    // a database saved before lasers were a tool type
+    let mut old = ToolDatabase {
+        tools: vec![Tool::default()],
+        ..ToolDatabase::default()
+    };
+    assert!(old.add_laser_if_none());
+    assert_eq!(
+        old.get(&Tool::laser().name).unwrap().shape,
+        ToolShape::Laser
+    );
+    assert!(!old.add_laser_if_none(), "only once");
+}

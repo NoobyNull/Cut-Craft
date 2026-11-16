@@ -522,8 +522,9 @@ pub enum Tabs {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TabSpacing {
-    /// About one every distance, at least three on a path, and no more than a third of the
-    /// path in tabs: big parts get more, small ones are not all tab
+    /// About one every distance, three or more on a path, but no more than a third of the
+    /// path in tabs: big parts get more, and small ones get fewer than three (as few as one)
+    /// rather than being all tab
     #[default]
     Automatic,
     /// This many tabs spread evenly along each path

@@ -161,7 +161,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "zoom_to_drawing",
-        "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material",
+        "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material. In the 3D view F does it too, with the pointer over the view and no text box being typed in; F6 always does",
     ),
     (
         "zoom_to_job",
@@ -255,7 +255,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "recalculate_all_toolpaths",
-        "Recalculate All Toolpaths: works out every toolpath again, after you changed the vectors or the material",
+        "Recalculate All Toolpaths: works out every toolpath again, after you changed the vectors or the material. A merged or copied toolpath is worked out after the toolpaths it copies",
     ),
     (
         "tool_database",
@@ -297,7 +297,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "component_levels",
-        "Component Levels: opens the Components tab, where the 3D model's levels and components are listed",
+        "Component Levels: opens the Components tab, where the 3D model's levels and components are listed. A new component goes on the level of the component picked there, else on the top shown level",
     ),
     (
         "join_straight_line",
@@ -497,8 +497,17 @@ pub const HINTS: &[(&str, &str)] = &[
         "Model Resolution Highest: the 3D model in the finest detail, for small, detailed carvings; much slower",
     ),
     (
+        "reset_preview",
+        "Reset Preview: clears the preview back to uncut material; Undo Last Preview brings it back",
+    ),
+    (
+        "undo_last_preview",
+        "Undo Last Preview: goes back to the preview as it was before the last Preview or Reset \
+         Preview, once, turned over to the side the job is on now",
+    ),
+    (
         "preview_quality_1",
-        "Preview Quality Standard: toolpath previews in normal detail, quickest to draw",
+        "Preview Quality Standard: toolpath previews in normal detail, quickest to draw; a finer quality draws a small bit's thin cuts truer on a big sheet",
     ),
     (
         "preview_quality_2",
@@ -518,7 +527,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "create_component_from_toolpath_preview",
-        "Create Component from Toolpath Preview: turns the previewed, cut material into a 3D component, to carve on or reuse",
+        "Create Component from Toolpath Preview: turns the previewed, cut material into a 3D component, to carve on or reuse. It goes on the level of the component picked in the tree, else the top shown level, and the status bar names it",
     ),
     (
         "segment_3d_model_file",
@@ -558,7 +567,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "first_run_setup",
-        "First Run Setup: asks about your machine, units and bits again, as when Cut Craft first started",
+        "First Run Setup: asks about your machine, units and material again, starting from your answers, and corrects My Machine (keeping the posts you added)",
     ),
     (
         "options",
@@ -598,7 +607,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "addons",
-        "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository",
+        "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts",
     ),
     (
         "community:0",

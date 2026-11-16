@@ -69,7 +69,6 @@ pub struct Params {
     #[schemars(title = "Machining Limit Boundary")]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary: MachiningBoundary,
-    /// Grows the machining boundary, so the tool can go on past a raised edge
     /// The level whose components make the boundary
     #[serde(default)]
     #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
@@ -110,14 +109,19 @@ pub struct Params {
     #[schemars(extend("x-unit" = "°"), range(min = 0, max = 90))]
     #[schemars(extend("x-group" = "Strategy"))]
     pub raster_angle: f64,
-    /// Zig zag down from the level above over the ramp distance instead of plunging (Z level)
+    /// Zig zag down from the level above over the ramp distance instead of plunging. Z Level
+    /// only: 3D Raster does not ramp
     #[serde(default)]
-    #[schemars(extend("x-group" = "Ramp Plunge Moves"))]
+    #[schemars(extend(
+        "x-group" = "Ramp Plunge Moves",
+        "x-show-when" = {"strategy": "z_level"}
+    ))]
     pub ramp_plunge_moves: bool,
     #[serde(default = "ramp_distance")]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend(
         "x-group" = "Ramp Plunge Moves",
+        "x-show-when" = {"strategy": "z_level"},
         "x-enable-when" = {"ramp_plunge_moves": "true"}
     ))]
     /// How far along the cut each zig zag ramp runs
@@ -265,7 +269,7 @@ impl Command for RoughingToolpath3d {
             p,
             p.name.clone(),
             tool.clone(),
-            vec![],
+            boundary_vectors(doc, p.machining_boundary),
             moves,
         ));
         Ok(c.finish())
@@ -543,6 +547,18 @@ fn depth_first(
     order
 }
 
+/// The closed vectors a Selected Vector(s) boundary is made from, kept with the toolpath so
+/// recalculating uses them again (and changing them marks it out of date).
+fn boundary_vectors(
+    doc: &Document,
+    limit: MachiningBoundary,
+) -> Vec<cut_craft_core::document::EntityId> {
+    match limit {
+        MachiningBoundary::SelectedVectors => doc.selected_paths(|path| path.closed).0,
+        _ => vec![],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -559,6 +575,74 @@ mod tests {
         let change = RoughingToolpath3d::run(&doc, params).unwrap();
         doc.apply(&change).unwrap();
         doc.toolpaths.into_values().next().unwrap()
+    }
+
+    #[test]
+    fn ramping_is_offered_only_for_z_level_which_ramps() {
+        let schema = schemars::schema_for!(Params);
+        for key in ["ramp_plunge_moves", "ramp_distance"] {
+            assert_eq!(
+                schema.as_value()["properties"][key]["x-show-when"],
+                schemars::json_schema!({"strategy": "z_level"})
+                    .as_value()
+                    .clone(),
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_level_field_says_only_what_the_level_is() {
+        let schema = schemars::schema_for!(Params);
+        let help = schema.as_value()["properties"]["boundary_level"]["description"]
+            .as_str()
+            .unwrap();
+        assert_eq!(help, "The level whose components make the boundary");
+    }
+
+    #[test]
+    fn a_selected_vectors_boundary_is_kept_so_the_toolpath_recalculates() {
+        let mut doc = cut_craft_core::testing::domed();
+        let mut c = cut_craft_core::Change::builder(&doc);
+        let id = c.add(cut_craft_core::testing::square(0.0, 0.0, 10.0));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        let p = Params {
+            machining_boundary: MachiningBoundary::SelectedVectors,
+            ..Params::default()
+        };
+        doc.apply(&RoughingToolpath3d::run(&doc, &p).unwrap())
+            .unwrap();
+        let (&tp, made) = doc.toolpaths.iter().next().unwrap();
+        assert_eq!(made.vectors, [id], "the boundary is what it was made from");
+        // nothing selected now: recalculating still uses the boundary it was made with
+        let mut c = cut_craft_core::Change::builder(&doc);
+        c.select([]);
+        doc.apply(&c.finish()).unwrap();
+        let mut r = cut_craft_core::Registry::default();
+        r.add::<RoughingToolpath3d>();
+        let again = r.recalculate(&doc, tp);
+        assert!(again.is_ok(), "{:?}", again.err());
+    }
+
+    #[test]
+    fn switched_to_selected_vectors_in_edit_it_machines_inside_the_vectors_selected_now() {
+        let mut doc = cut_craft_core::testing::domed();
+        doc.apply(&RoughingToolpath3d::run(&doc, &Params::default()).unwrap())
+            .unwrap();
+        let tp = *doc.toolpaths.keys().next().unwrap();
+        let mut c = cut_craft_core::Change::builder(&doc);
+        let id = c.add(cut_craft_core::testing::square(0.0, 0.0, 10.0));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        let mut r = cut_craft_core::Registry::default();
+        r.add::<RoughingToolpath3d>();
+        let mut edited = doc.toolpaths[&tp].params.clone();
+        edited["machining_boundary"] = "selected_vectors".into();
+        let change = r.edit(&doc, tp, Some(&edited));
+        assert!(change.is_ok(), "{:?}", change.err());
+        doc.apply(&change.unwrap()).unwrap();
+        assert_eq!(doc.toolpaths[&tp].vectors, [id], "kept from now on");
     }
 
     #[test]

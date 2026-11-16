@@ -21,6 +21,7 @@ mod gadgets;
 mod gui;
 mod hints;
 mod icons;
+mod messages;
 mod options;
 mod pages;
 mod polyline;

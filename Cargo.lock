@@ -565,6 +565,7 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1168,6 +1169,7 @@ dependencies = [
 name = "cmd-job-setup"
 version = "0.6.11"
 dependencies = [
+ "cmd-materials",
  "cut-craft-core",
  "schemars",
  "serde",
@@ -1287,6 +1289,7 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1693,6 +1696,7 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

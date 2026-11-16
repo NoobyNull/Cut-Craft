@@ -60,6 +60,7 @@ pub struct Number<'a, N: Numeric> {
     fixed_decimals: Option<usize>,
     step: Option<f64>,
     parser: Option<Parser<'a>>,
+    trim_zeros: bool,
 }
 
 impl<'a, N: Numeric> Number<'a, N> {
@@ -79,6 +80,7 @@ impl<'a, N: Numeric> Number<'a, N> {
             fixed_decimals: None,
             step: None,
             parser: None,
+            trim_zeros: false,
         }
     }
 
@@ -112,6 +114,13 @@ impl<'a, N: Numeric> Number<'a, N> {
 
     pub fn fixed_decimals(mut self, decimals: usize) -> Self {
         self.fixed_decimals = Some(decimals);
+        self
+    }
+
+    /// Shows only the places the value needs (`5 in`, not `5.000 in`), however finely it
+    /// drags.
+    pub fn trim_zeros(mut self) -> Self {
+        self.trim_zeros = true;
         self
     }
 
@@ -151,6 +160,7 @@ impl<N: Numeric> egui::Widget for Number<'_, N> {
             max_decimals,
             fixed_decimals,
             parser,
+            trim_zeros,
             ..
         } = self;
         ui.horizontal(|ui| {
@@ -173,6 +183,11 @@ impl<N: Numeric> egui::Widget for Number<'_, N> {
             }
             if let Some(parser) = parser {
                 drag = drag.custom_parser(parser);
+            }
+            if trim_zeros && fixed_decimals.is_none() {
+                drag = drag.custom_formatter(|n, places| {
+                    egui::emath::format_with_decimals_in_range(n, 0..=*places.end())
+                });
             }
             let field = ui.add(drag);
             if field.hovered() {
