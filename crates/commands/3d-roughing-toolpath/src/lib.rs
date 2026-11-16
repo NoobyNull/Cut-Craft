@@ -69,7 +69,6 @@ pub struct Params {
     #[schemars(title = "Machining Limit Boundary")]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary: MachiningBoundary,
-    /// Grows the machining boundary, so the tool can go on past a raised edge
     /// The level whose components make the boundary
     #[serde(default)]
     #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
@@ -571,6 +570,15 @@ mod tests {
         let change = RoughingToolpath3d::run(&doc, params).unwrap();
         doc.apply(&change).unwrap();
         doc.toolpaths.into_values().next().unwrap()
+    }
+
+    #[test]
+    fn the_level_field_says_only_what_the_level_is() {
+        let schema = schemars::schema_for!(Params);
+        let help = schema.as_value()["properties"]["boundary_level"]["description"]
+            .as_str()
+            .unwrap();
+        assert_eq!(help, "The level whose components make the boundary");
     }
 
     #[test]
