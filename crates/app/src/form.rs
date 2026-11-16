@@ -2151,6 +2151,7 @@ mod tests {
                 tool: None,
                 group_end: None,
                 materials: None,
+                pattern: None,
             };
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 egui::CentralPanel::default().show(ui, |ui| {

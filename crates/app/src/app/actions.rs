@@ -5752,8 +5752,7 @@ impl CutCraftApp {
                 selector_section(ui, params, &layers, units);
             }
         };
-        let bed = self.machines.active().map(|m| [m.width, m.height]);
-        let stock = form_stock(&self.doc, &open.params, units, bed.unwrap_or_default());
+        let stock = form_stock(&self.doc, &open.params, units, bed(&self.machines));
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
         };
@@ -7139,6 +7138,11 @@ fn embellish_sample(params: &Value, entry: &str) -> form::SampleRings {
         .into_iter()
         .map(|ring| ring.into_iter().map(|q| [q.x, q.y]).collect())
         .collect()
+}
+
+/// The active machine's bed, width and height (none without a machine).
+fn bed(machines: &cut_craft_machines::Machines) -> [f64; 2] {
+    machines.active().map_or_default(|m| [m.width, m.height])
 }
 
 /// What Install Offline Package did: `added` machines, `here` already here by name.
