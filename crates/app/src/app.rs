@@ -532,7 +532,7 @@ impl Default for Summary {
             rapid: 5000.0,
             units: cut_craft_core::toolpath::RateUnits::MmPerMin,
             scale: 1.0,
-            acceleration: false,
+            acceleration: true,
             picked: None,
             notes: String::new(),
         }
@@ -554,6 +554,15 @@ struct GuideProps {
 
 /// A toolpath's row in the Toolpath Summary: its id, name, time, whether it is shown, and
 /// its notes.
+/// Each toolpath's cutting time, minutes: the shown ones cut one after another from the
+/// job's home (getting to each and its tool change included), a hidden one on its own; and
+/// the whole job's, the trip back home included.
+#[derive(Debug, Default)]
+pub(crate) struct CutTimes {
+    each: std::collections::BTreeMap<EntityId, f64>,
+    total: f64,
+}
+
 struct SummaryRow {
     id: EntityId,
     name: String,
@@ -1399,6 +1408,9 @@ struct CutCraftApp {
     /// machine, the minute…): worked out again only when one of those changes.
     note_vars:
         std::cell::RefCell<Option<(String, std::rc::Rc<Vec<cut_craft_core::notes::Variable>>)>>,
+    /// The cutting times and what they were worked out from (the job's revision, the
+    /// machine, the Toolpath Summary's settings): worked out again only when one changes.
+    cut_times: std::cell::RefCell<Option<(String, std::rc::Rc<CutTimes>)>>,
     /// How many toolpaths were out of date last frame.
     stale_known: usize,
     /// Toolpaths went out of date while a form was open: once it closes, ask whether to
@@ -1712,8 +1724,8 @@ fn acceleration_tick(
     let (name, acceleration) = machine.unzip();
     let tip = match acceleration {
         Some([x, y, z]) => format!(
-            "Stops at corners and speeds up and slows down along each move as {} allows: \
-             {x:.0}, {y:.0}, {z:.0} mm/s² (Machine Configuration)",
+            "Speeds up, slows down and slows for corners as {} does: {x:.0}, {y:.0}, \
+             {z:.0} mm/s² and its Cornering (Machine Configuration)",
             name.unwrap_or_default()
         ),
         None => "Needs an active machine with its accelerations in Machine Configuration".into(),
@@ -1732,7 +1744,9 @@ fn summary_fields() -> [crate::form::Field; 2] {
         crate::form::Field {
             key: "rapid_rate".into(),
             label: "Rapid rate".into(),
-            help: Some("The machine's G0 speed".into()),
+            help: Some(
+                "The machine's G0 speed, where Machine Configuration gives no max rate".into(),
+            ),
             kind: crate::form::Kind::Number {
                 unit: None,
                 min: Some(0.001),
@@ -1778,15 +1792,21 @@ fn summary_fields() -> [crate::form::Field; 2] {
     ]
 }
 
+/// The Toolpath Summary: each toolpath's time, the job's `total` (minutes), its settings and
+/// the picked toolpath's notes.
 fn summary_table(
     ui: &mut egui::Ui,
     rows: &[SummaryRow],
+    total: f64,
     summary: &mut Summary,
     units: cut_craft_core::document::Units,
     machine: Option<(String, [f64; 3])>,
 ) -> Option<(EntityId, String)> {
-    let total: f64 = rows.iter().filter(|r| r.visible).map(|r| r.minutes).sum();
-    ui.strong(format!("Total machining time: {}", hms(total)));
+    ui.strong(format!("Total machining time: {}", hms(total)))
+        .on_hover_hint(
+            "Every move: cutting, rapids, getting to each toolpath, tool changes and the trip \
+             back home",
+        );
     ui.separator();
     egui::Grid::new("summary").striped(true).show(ui, |ui| {
         for row in rows {
@@ -1804,7 +1824,10 @@ fn summary_table(
         }
     });
     ui.separator();
-    ui.weak("Time estimates based on the tools' feed rates");
+    ui.weak(
+        "Each time counts every move at the tools' feed rates and the machine's speeds, \
+         getting to it from the toolpath before and its tool change included",
+    );
     let per = summary.units.mm_per_min();
     let fields = summary_fields();
     let mut values = serde_json::json!({

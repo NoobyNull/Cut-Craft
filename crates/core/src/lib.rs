@@ -15,6 +15,7 @@ pub mod component;
 pub mod compute;
 pub mod constraint;
 pub mod csv;
+pub mod cut_time;
 pub mod document;
 pub mod drag_knife;
 pub mod drill_bank;

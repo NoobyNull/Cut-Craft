@@ -1218,8 +1218,8 @@ impl CutCraftApp {
         let start = (self.simulation.clone())
             .filter(|m| !fresh && m.covers(&self.doc.job))
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
-        // rapids as fast as the Toolpath Summary times them
-        let rapid = self.summary.rapid;
+        // each move as long as the Toolpath Summary times it
+        let motion = self.motion();
         let revision = self.history.revision();
         let what = match &list[..] {
             [one] => format!("Getting {} ready to preview", one.name),
@@ -1243,8 +1243,8 @@ impl CutCraftApp {
                     collided.retain(|id, _| !earlier.iter().any(|(e, _)| e == id));
                     collided
                 };
-                let playback =
-                    cut_craft_core::playback::Playback::new(start, &list, rapid).marked(&marks);
+                let playback = cut_craft_core::playback::Playback::planned(start, &list, &motion)
+                    .marked(&marks);
                 (playback, collided)
             },
             move |app, (playback, collided)| {
@@ -1439,8 +1439,8 @@ impl CutCraftApp {
                     .text("Speed"),
             )
             .on_hover_hint(
-                "×1 plays at the machine's own speed: each move at its tool's feed or plunge \
-                 rate, rapids at the Toolpath Summary's rapid rate. ×10 plays ten times faster",
+                "×1 plays at the machine's own speed, as the Toolpath Summary times it: feeds, \
+                 rapids, speeding up, slowing down and corners. ×10 plays ten times faster",
             );
         });
         if let Some(to) = self.scrub_sliders(ui, self.playback_goal.unwrap_or(at), length) {

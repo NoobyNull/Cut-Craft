@@ -131,7 +131,8 @@ Toolpaths page's buttons, each with its progress window as usual.
 - **GET toolpaths**: every toolpath with its tool, its run time (as the Toolpath Summary
   works it out, for example `"time": "12m 30s"`) and what to look at before cutting it:
   `warnings` (out of date, entries made another way, what the checks before cutting found)
-  and `errors`, which stop its G-code being made. The shown toolpaths' times are added up.
+  and `errors`, which stop its G-code being made. `total_time` is the whole job's, the
+  trip back home included (see [How long the job takes to cut](help:cutting_time)).
 - **POST calculate** `{"toolpaths": "all"}`: recalculates toolpaths, as **Recalculate**
   does. `toolpaths` is `all` (the default), `visible` (the ticked ones), one toolpath's id,
   or a list of ids.

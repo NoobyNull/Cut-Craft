@@ -338,6 +338,7 @@ mod job {
         let list = crate::job::toolpaths(
             &doc,
             &|t| if t.name == "Outline" { 90.5 } else { 2.0 },
+            None,
             &checks,
         );
         let rows = list["toolpaths"].as_array().unwrap();

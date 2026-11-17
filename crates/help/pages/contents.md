@@ -27,6 +27,8 @@ a CNC machine cuts them with.
   hitting wood beside a deep cut, shown red in the preview and asked about before saving.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.
+- [How long the job takes to cut](help:cutting_time): what the machining time counts, and
+  the machine settings that make it match your machine.
 - [Long jobs and the time left](help:progress): the progress window, how its "about 2
   minutes left" is worked out, and Cancel.
 

@@ -318,8 +318,9 @@ fn more_paths(
             "Every toolpath with its run time and warnings",
             "Each toolpath in list order: its tool, whether it is shown, its run time as the \
          Toolpath Summary works it out, and what to look at before cutting it (out of \
-         date, entries made another way, what the checks before cutting found). The shown \
-         ones' times are added up.",
+         date, entries made another way, what the checks before cutting found). Each time \
+         counts every move at the machine's speeds and accelerations, getting to it and its \
+         tool change included; the total is the whole job's, the trip back home included.",
             "The toolpaths",
         ),
     );

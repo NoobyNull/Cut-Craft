@@ -426,10 +426,12 @@ pub fn time_said(minutes: f64) -> String {
 /// `GET toolpaths`: each toolpath in list order with its tool, its run time as the
 /// Toolpath Summary works it out (`minutes`), and what to look at before cutting it: its
 /// own warnings (out of date, entries made another way) and what the checks before cutting
-/// found (`checks`), errors apart. The shown ones' times are added up.
+/// found (`checks`), errors apart. The total is the whole job's (`job`, minutes: the trip
+/// back home included) when given, else the shown ones' times added up.
 pub fn toolpaths(
     doc: &Document,
     minutes: &dyn Fn(&cut_craft_core::toolpath::Toolpath) -> f64,
+    job: Option<f64>,
     checks: &std::collections::BTreeMap<EntityId, Vec<cut_craft_core::preflight::Finding>>,
 ) -> Value {
     use cut_craft_core::preflight::Severity;
@@ -477,6 +479,7 @@ pub fn toolpaths(
             })
         })
         .collect();
+    let total = job.unwrap_or(total);
     json!({
         "units": units_name(doc.job.units),
         "toolpaths": rows,

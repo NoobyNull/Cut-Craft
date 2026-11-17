@@ -83,7 +83,7 @@ impl super::CutCraftApp {
         let now = chrono::Local::now();
         let ctx = self.notes_context(&now);
         let key = format!(
-            "{}|{}|{:?}|{}|{}|{:?}|{}|{}|{:?}|{}|{:?}|{}|{}|{:?}",
+            "{}|{}|{:?}|{}|{}|{:?}|{}|{}|{:?}|{}|{:?}|{}|{:?}",
             self.job_epoch,
             self.history.revision(),
             ctx.model_height,
@@ -92,10 +92,9 @@ impl super::CutCraftApp {
             ctx.bed,
             ctx.post,
             ctx.time,
-            ctx.acceleration,
+            ctx.motion,
             ctx.job_file,
             ctx.slots,
-            ctx.rapid,
             ctx.scale,
             ctx.holding,
         );
@@ -130,10 +129,7 @@ impl super::CutCraftApp {
             slots: self.slots(),
             date: now.format("%Y-%m-%d").to_string(),
             time: now.format("%H:%M").to_string(),
-            rapid: s.rapid,
-            acceleration: machine
-                .filter(|_| s.acceleration)
-                .map_or([0.0; 3], |m| m.acceleration),
+            motion: self.motion(),
             scale: s.scale,
             model_height: self.model_height_now(),
             holding: self.holding(),

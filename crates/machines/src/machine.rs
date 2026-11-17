@@ -21,6 +21,10 @@ pub struct Machine {
     pub max_rate: [f64; 3],
     /// Each axis's acceleration, X, Y, Z, mm/s² (0 when not given).
     pub acceleration: [f64; 3],
+    /// How far from a sharp corner the controller lets the bit stray to keep its speed
+    /// through the corner (junction deviation, GRBL's $11), mm; 0 for the usual 0.01 mm.
+    /// Only the cutting time estimates use it (added with better cutting times).
+    pub junction_deviation: f64,
     /// The spindle's slowest and fastest speed, rpm (0 when not given).
     pub spindle: [f64; 2],
     /// Show the bed size in inches.
