@@ -236,6 +236,7 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
 
+    #[cfg(unix)]
     fn vars(list: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
         list.iter()
             .map(|(k, v)| ((*k).into(), (*v).into()))
