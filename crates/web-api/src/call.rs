@@ -51,11 +51,32 @@ pub enum Call {
     Save { path: Option<String> },
     /// `POST job/export {"format", "path"}`: an Export menu item, saving to `path`.
     Export { format: String, path: String },
+    /// `GET notes`: the job's notes as typed, with their variables filled in (plain text
+    /// and HTML), and every variable notes can show with its value now.
+    Notes,
+    /// `POST notes {"text", "in_gcode", "opens_with_job"}`: change the notes (one undo);
+    /// what is left out stays as it is.
+    SetNotes(NotesBody),
     /// `POST job/new {"settings", "discard"}`: New, with Job Setup's OK pressed on these
     /// settings over what it starts with; `discard` throws away unsaved work.
     NewJob { settings: Value, discard: bool },
     /// `POST job/open {"path", "discard"}`: Open this job file.
     Open { path: String, discard: bool },
+}
+
+/// What `POST notes` changes; each left out stays as it is.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NotesBody {
+    /// The notes, written like Markdown with `{{variables}}`.
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Put the notes at the top of the G-code.
+    #[serde(default)]
+    pub in_gcode: Option<bool>,
+    /// Open the notes by themselves when the job is opened.
+    #[serde(default)]
+    pub opens_with_job: Option<bool>,
 }
 
 /// What `GET view.png` shows.
@@ -294,6 +315,11 @@ pub(crate) fn parse(route: &str, post: bool, body: Value, query: &str) -> Result
             Ok(Call::Gcode(g))
         }
         ("job/save" | "job/export" | "job/new" | "job/open", true) => job_file(route, body),
+        ("notes", false) => Ok(Call::Notes),
+        ("notes", true) => Ok(Call::SetNotes(from(
+            body,
+            r#"{"text": "Clamp the {{material.thickness}} board", "in_gcode": true}"#,
+        )?)),
         (
             "status" | "commands" | "actions" | "job" | "view.png" | "state" | "toolpaths"
             | "posts" | "progress",

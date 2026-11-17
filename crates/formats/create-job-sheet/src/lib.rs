@@ -90,6 +90,15 @@ pub struct Setup {
     pub rapid: f64,
     /// The machine's X, Y, Z accelerations, mm/s², for the run times (0 for none).
     pub acceleration: [f64; 3],
+    /// The Toolpath Summary's run time scale factor (1 for none).
+    pub scale: f64,
+    /// How tall the 3D model is, mm; `None` when there is none.
+    pub model_height: Option<f64>,
+    /// How the machine holds its bits (collet nut, spindle, holder per bit).
+    pub holding: cut_craft_core::collision::Holding,
+    /// The notes' variables as the app has them (machine, model height…); empty: worked out
+    /// from the job and this setup.
+    pub variables: Vec<cut_craft_core::notes::Variable>,
 }
 
 impl Default for Setup {
@@ -104,7 +113,35 @@ impl Default for Setup {
             printed: String::new(),
             rapid: RAPID,
             acceleration: [0.0; 3],
+            scale: 1.0,
+            model_height: None,
+            holding: cut_craft_core::collision::Holding::default(),
+            variables: vec![],
         }
+    }
+}
+
+/// What the notes' variables need, from what the sheet is given.
+fn notes_context(setup: &Setup) -> cut_craft_core::notes::Context {
+    let (date, time) = setup
+        .printed
+        .split_once(' ')
+        .map_or((setup.printed.clone(), String::new()), |(d, t)| {
+            (d.to_owned(), t.to_owned())
+        });
+    cut_craft_core::notes::Context {
+        job_file: setup.job_file.clone(),
+        machine: setup.machine.clone(),
+        post: setup.post.clone(),
+        slots: setup.slots.clone(),
+        date,
+        time,
+        rapid: setup.rapid,
+        acceleration: setup.acceleration,
+        scale: setup.scale,
+        model_height: setup.model_height,
+        holding: setup.holding,
+        ..cut_craft_core::notes::Context::default()
     }
 }
 
@@ -163,9 +200,36 @@ pub fn sheets(
             .chars()
             .map(|ch| if ch.is_alphanumeric() { ch } else { '_' })
             .collect();
+        // the notes' values from this sheet's own toolpaths, material and model placement;
+        // what only the app knows (the job's file, the machine, the time) as it gave them
+        // this sheet's own model measured, the active one's as given
+        let model_height = if i == doc.active_sheet || on.components.is_empty() {
+            setup.model_height.filter(|_| !on.components.is_empty())
+        } else {
+            let tall = cmd_scale_model_z_height::model_height(&on);
+            Some(if tall.is_finite() { tall } else { 0.0 })
+        };
+        let sheet_setup = Setup {
+            model_height,
+            ..setup.clone()
+        };
+        let mut vars = cut_craft_core::notes::variables(&on, &notes_context(&sheet_setup));
+        for v in &mut vars {
+            if let Some(given) = setup.variables.iter().find(|g| {
+                g.key == v.key
+                    && (matches!(g.group, "Machine" | "System")
+                        || matches!(g.key.as_str(), "job.name" | "job.file" | "job.folder"))
+            }) {
+                v.value.clone_from(&given.value);
+            }
+        }
+        let own = Setup {
+            variables: vars,
+            ..sheet_setup
+        };
         out.push((
             format!("_{name}{}", side(&on)),
-            sheet_for(&on, style, setup)?,
+            sheet_for(&on, style, &own)?,
         ));
     }
     Ok(out)
@@ -192,7 +256,7 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
     let mut h = format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><title>{title}</title>\
          <style>body{{font-family:sans-serif;max-width:60em;margin:auto}}svg{{max-width:100%;height:auto;border:1px solid #888}}\
-         table{{border-collapse:collapse}}td,th{{border:1px solid #888;padding:.2em .6em;text-align:left}}\
+         .notes li.check{{list-style:none;margin-left:-1.2em}}table{{border-collapse:collapse}}td,th{{border:1px solid #888;padding:.2em .6em;text-align:left}}\
          header,footer{{color:#fff;padding:.6em 1em;display:flex;align-items:center;gap:1em}}\
          header{{background:{}}}footer{{background:{};margin-top:2em}}header img{{max-width:165px;max-height:52px}}\
          header h1{{margin:0}}@media print{{body{{max-width:none}}header,footer{{print-color-adjust:exact;\
@@ -206,7 +270,10 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
     }
     let _ = write!(h, "<h1>{title}</h1></header>");
     let visible: Vec<_> = doc.toolpaths.values().filter(|t| t.visible).collect();
-    let minutes = |t: &Toolpath| t.machining_minutes_accelerating(setup.rapid, setup.acceleration);
+    // as the Toolpath Summary and the notes' run times have them
+    let minutes = |t: &Toolpath| {
+        t.machining_minutes_accelerating(setup.rapid, setup.acceleration) * setup.scale
+    };
     let total: f64 = visible.iter().map(|t| minutes(t)).sum();
     let tools = cut_craft_post::tools_and_numbers(&visible, &setup.slots);
     let number = |name: &str| tools.iter().find(|(t, _)| t == name).map_or(0, |&(_, n)| n);
@@ -298,7 +365,17 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
         let _ = write!(h, "<h2>Job Layout</h2>{layout}");
     }
     if style.notes && !doc.notes.is_empty() {
-        let _ = write!(h, "<h2>Job Notes</h2><pre>{}</pre>", escape(&doc.notes));
+        // rich text with its variables filled in; everything typed is escaped
+        let vars = if setup.variables.is_empty() {
+            cut_craft_core::notes::variables(doc, &notes_context(setup))
+        } else {
+            setup.variables.clone()
+        };
+        let _ = write!(
+            h,
+            "<h2>Job Notes</h2><div class=\"notes\">{}</div>",
+            cut_craft_core::notes::html(&doc.notes, &vars)
+        );
     }
     if style.material {
         material(&mut h, doc, &len);
@@ -446,11 +523,12 @@ mod tests {
     #[test]
     fn the_sheet_has_the_layout_setup_and_each_toolpath() {
         let mut doc = cut_craft_core::testing::with_toolpath();
-        doc.notes = "Glue <first>".into();
+        doc.notes = "Glue <first>\n- **{{toolpath.1.name}}** on {{material.thickness}}".into();
         let html = String::from_utf8(JobSheet::export(&doc).unwrap()).unwrap();
         for part in [
             "<h2>Job Layout</h2><svg",
-            "Glue &lt;first&gt;",
+            "<p>Glue &lt;first&gt;</p>",
+            "<ul><li><strong>Profile</strong> on 20 mm</li></ul>",
             "<h2>Material Setup</h2>",
             "600.00 mm",
             "<h3>Profile</h3>",
@@ -529,6 +607,93 @@ mod tests {
         let pages = sheets(&two, &Style::default(), &Setup::default()).unwrap();
         assert_eq!(pages.len(), 1, "only the sheet with toolpaths");
         assert!(pages[0].0.starts_with('_'));
+    }
+
+    #[test]
+    fn each_sheet_s_notes_use_its_own_toolpaths_and_the_app_s_machine() {
+        let doc = cut_craft_core::testing::with_toolpath();
+        let mut two = cut_craft_core::testing::two_sheets();
+        two.toolpaths = doc.toolpaths.clone();
+        two.notes = "{{toolpath.1.name}} on {{machine.name}}|{{model.measured_from}}".into();
+        // what the app had for its active sheet: another toolpath, and the machine
+        let mut vars =
+            cut_craft_core::notes::variables(&doc, &cut_craft_core::notes::Context::default());
+        for v in &mut vars {
+            match v.key.as_str() {
+                "toolpath.1.name" | "model.measured_from" => v.value = "Wrong".into(),
+                "machine.name" => v.value = "Shop".into(),
+                _ => {}
+            }
+        }
+        let setup = Setup {
+            variables: vars,
+            ..Setup::default()
+        };
+        let pages = sheets(&two, &Style::default(), &setup).unwrap();
+        assert!(pages[0].1.contains("<p>Profile on Shop|"), "{}", pages[0].1);
+        // the model's placement is the sheet's own, not the active sheet's
+        assert!(!pages[0].1.contains("Wrong"), "{}", pages[0].1);
+    }
+
+    #[test]
+    fn two_sheets_with_different_model_placements_each_show_their_own() {
+        use cut_craft_core::document::GapFrom;
+        let with = cut_craft_core::testing::with_toolpath();
+        let mut doc = cut_craft_core::testing::two_sheets();
+        doc.toolpaths = with.toolpaths.clone();
+        doc.sheets[1].objects.toolpaths = with.toolpaths.clone();
+        doc.job.model_position.from = GapFrom::Above;
+        doc.sheets[0].job.model_position.from = GapFrom::Above;
+        doc.sheets[1].job.model_position.from = GapFrom::Below;
+        // the second sheet in inches with a model on it, the first in mm with none
+        doc.sheets[1].job.units = cut_craft_core::document::Units::Inch;
+        doc.sheets[1].objects.components = cut_craft_core::testing::domed().components;
+        doc.notes = "Gap from {{model.measured_from}}\n{{job.units}}: {{model.height}}".into();
+        // what the app has: the active (first) sheet's values
+        let setup = Setup {
+            variables: cut_craft_core::notes::variables(
+                &doc,
+                &cut_craft_core::notes::Context::default(),
+            ),
+            ..Setup::default()
+        };
+        let pages = sheets(&doc, &Style::default(), &setup).unwrap();
+        assert_eq!(pages.len(), 2);
+        assert!(pages[0].1.contains("<p>Gap from Top</p>"), "{}", pages[0].1);
+        assert!(
+            pages[1].1.contains("<p>Gap from Bottom</p>"),
+            "{}",
+            pages[1].1
+        );
+        assert!(pages[0].1.contains("<p>mm: No model</p>"), "{}", pages[0].1);
+        assert!(pages[1].1.contains("<p>inches: "), "{}", pages[1].1);
+        assert!(!pages[1].1.contains("No model"), "{}", pages[1].1);
+    }
+
+    #[test]
+    fn the_run_times_follow_the_summary_s_scale() {
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        let t = doc.toolpaths.values_mut().next().unwrap();
+        for x in [0.0, 10_000.0] {
+            t.moves.push(cut_craft_core::toolpath::Move {
+                kind: cut_craft_core::toolpath::MoveKind::Cut,
+                to: cut_craft_core::glam::DVec3::new(x, 0.0, -1.0),
+            });
+        }
+        let total = |scale: f64| {
+            let html = sheet_for(
+                &doc,
+                &Style::default(),
+                &Setup {
+                    scale,
+                    ..Setup::default()
+                },
+            )
+            .unwrap();
+            let at = html.find("<th>Total run time</th><td>").unwrap();
+            html[at..].split("</td>").next().unwrap().to_owned()
+        };
+        assert_ne!(total(1.0), total(2.0));
     }
 
     #[test]

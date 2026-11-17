@@ -700,8 +700,14 @@ say "not implemented yet".
     with cut lines, or one label a page in seven label-printer sizes. The style is kept with
     the options. Barcodes and Data Matrix codes, the cabinet programs' own export formats and
     grain direction are not done.
-- Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
-  starting with "." open with the job (dialog 606).
+- Edit ▸ Notes: rich text kept with the job (Markdown-like headings, lists, check boxes,
+  bold, italic, web links; never HTML) with live `{{variables}}` picked from a searchable
+  Variable Explorer (job, material, model, machine, tools, toolpaths, document variables,
+  date). Fills the side panel, with Write / Preview. Undoable, printed by posts as
+  `[FILE_NOTES]` (one line, comment-safe), shown formatted on the job sheet, optionally at
+  the top of the G-code as comments, and read / written by the Web API (`GET` / `POST
+  notes`). Notes starting with "." open with the job (dialog 606). Deliberately more than
+  the reference's plain notes box, for a beginner's checklists.
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
   the material, arcs as Béziers.
 - File ▸ Import ▸ Import Vectors: Vectric `.crv3d` / `.crv` jobs, vectors only (lines, arcs,

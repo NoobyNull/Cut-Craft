@@ -801,6 +801,88 @@ fn the_help_page_explains_the_new_calls() {
 }
 
 #[test]
+fn a_script_cannot_untick_open_with_the_job_under_a_draft_that_would_tick_it_again() {
+    let (mut h, at) = switched_on();
+    h.app.doc.notes = "A".into();
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.app.form.as_mut().unwrap().params["notes"] = json!("..Clamp");
+    let (status, said) = call(
+        &mut h,
+        at,
+        "POST",
+        "notes",
+        Some(json!({ "opens_with_job": false })),
+    );
+    assert_eq!(status, 400, "{said}");
+    assert_eq!(h.app.doc.notes, "A", "nothing changed");
+    assert_eq!(h.app.form.as_ref().unwrap().params["notes"], "..Clamp");
+}
+
+#[test]
+fn a_notes_change_from_a_script_keeps_the_open_form_s_draft() {
+    let (mut h, at) = switched_on();
+    h.app.doc.notes = "A".into();
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.app.form.as_mut().unwrap().params["notes"] = json!("B, not applied yet");
+    let (status, set) = call(
+        &mut h,
+        at,
+        "POST",
+        "notes",
+        Some(json!({ "in_gcode": true, "opens_with_job": true })),
+    );
+    assert_eq!(status, 200, "{set}");
+    assert!(h.app.doc.notes_in_gcode);
+    assert_eq!(h.app.doc.notes, ".A");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["notes"], ".B, not applied yet",
+        "the draft is kept"
+    );
+    assert_eq!(form.params["in_gcode"], true);
+    // Cancel on the form keeps what the script did
+    assert_eq!(form.undo_from, h.app.history.undo_depth());
+}
+
+#[test]
+fn notes_are_read_and_written_with_their_variables_filled_in() {
+    let (mut h, at) = switched_on();
+    let (status, set) = call(
+        &mut h,
+        at,
+        "POST",
+        "notes",
+        Some(json!({ "text": "# Cut\n- [ ] {{material.thickness}} board", "in_gcode": true })),
+    );
+    assert_eq!(status, 200, "{set}");
+    assert_eq!(h.app.doc.notes, "# Cut\n- [ ] {{material.thickness}} board");
+    assert!(h.app.doc.notes_in_gcode);
+    let thick = super::notes_panel::value_now(&h.app, "material.thickness");
+    assert_eq!(set["plain"], format!("Cut\n[ ] {thick} board"));
+    // one undo takes it back
+    let (status, _) = call(
+        &mut h,
+        at,
+        "POST",
+        "invoke",
+        Some(json!({ "action": "undo" })),
+    );
+    assert_eq!(status, 200);
+    assert_eq!(h.app.doc.notes, "");
+    let (status, got) = call(&mut h, at, "GET", "notes", None);
+    assert_eq!(status, 200, "{got}");
+    assert_eq!(got["text"], "");
+    assert!(
+        got["variables"]
+            .as_array()
+            .is_some_and(|v| v.iter().any(|v| v["key"] == "toolpaths.list")),
+        "{got}"
+    );
+}
+
+#[test]
 fn status_tells_a_slow_jobs_progress_and_time_left_as_the_window_does() {
     let (mut h, at) = switched_on();
     let (_, idle) = call(&mut h, at, "GET", "status", None);

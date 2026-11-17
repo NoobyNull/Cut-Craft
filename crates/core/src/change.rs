@@ -131,6 +131,11 @@ pub enum Edit {
         before: String,
         after: String,
     },
+    /// Whether the notes go at the top of the G-code.
+    SetNotesInGcode {
+        before: bool,
+        after: bool,
+    },
     /// A group's text settings (what Draw Text made it from); `None` when it is not text.
     SetText {
         group: u64,
@@ -300,6 +305,10 @@ impl Edit {
             Self::SetNotes { before, after } => Self::SetNotes {
                 before: after.clone(),
                 after: before.clone(),
+            },
+            Self::SetNotesInGcode { before, after } => Self::SetNotesInGcode {
+                before: after,
+                after: before,
             },
             Self::SetText {
                 group,
@@ -1106,6 +1115,7 @@ impl Document {
     fn apply_setting(&mut self, edit: &Edit) {
         match edit {
             Edit::SetNotes { after, .. } => self.notes.clone_from(after),
+            Edit::SetNotesInGcode { after, .. } => self.notes_in_gcode = *after,
             Edit::SetVariables { after, .. } => self.variables.clone_from(after),
             Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
@@ -1287,6 +1297,7 @@ impl Document {
                 self.current_layer = *after;
             }
             Edit::SetNotes { .. }
+            | Edit::SetNotesInGcode { .. }
             | Edit::SetVariables { .. }
             | Edit::SetKeepOut { .. }
             | Edit::SetGuides { .. }
@@ -1988,6 +1999,16 @@ impl ChangeBuilder<'_> {
             self.edits.push(Edit::SetNotes {
                 before: self.doc.notes.clone(),
                 after: after.into(),
+            });
+        }
+    }
+
+    /// Whether the notes go at the top of the G-code.
+    pub fn set_notes_in_gcode(&mut self, after: bool) {
+        if self.doc.notes_in_gcode != after {
+            self.edits.push(Edit::SetNotesInGcode {
+                before: self.doc.notes_in_gcode,
+                after,
             });
         }
     }

@@ -1968,31 +1968,6 @@ pub const TOURS: &[Tour] = &[
         ],
     },
     Tour {
-        tool: "notes",
-        steps: &[
-            Step {
-                caption: "Notes keep free text with the job: the customer, the wood, anything to remember.",
-                setup: |app, ctx| {
-                    fresh_job(app, ctx);
-                    shapes_none(app);
-                },
-                mark: Mark::None,
-            },
-            Step {
-                caption: "Press **Notes** (under File Operations).",
-                setup: |app, _| on_design_tab(app, 0),
-                mark: Mark::At("tool:notes"),
-            },
-            Step {
-                caption: "Type the notes. Start them with a full stop (.) to have them open by themselves whenever the job is opened.",
-                setup: |app, ctx| {
-                    app.invoke(ctx, "notes");
-                },
-                mark: Mark::None,
-            },
-        ],
-    },
-    Tour {
         tool: "import_vectors_bitmap",
         steps: &[
             Step {

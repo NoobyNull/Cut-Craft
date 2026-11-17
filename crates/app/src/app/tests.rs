@@ -18573,6 +18573,112 @@ fn model_position_help_is_on_both_forms_with_pictures_and_links_that_go_somewher
 }
 
 #[test]
+fn long_notes_scroll_and_the_variable_explorer_stays_in_sight() {
+    use std::fmt::Write as _;
+    let mut h = Harness::new();
+    h.app.doc.notes = (1..=200).fold(String::new(), |mut text, n| {
+        let _ = writeln!(text, "Line {n}");
+        text
+    });
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let explorer = h
+        .text_at("Variable Explorer")
+        .expect("the Variable Explorer shows");
+    let screen = h.ctx.content_rect();
+    assert!(
+        explorer.y < screen.bottom() - 100.0,
+        "{explorer:?} in {screen:?}"
+    );
+}
+
+#[test]
+fn notes_fill_the_panel_and_a_double_clicked_variable_goes_in_live() {
+    let mut h = Harness::new();
+    h.app.doc.notes = "Plain old notes".into();
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the old notes load as they were, and the box takes the panel's height
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["notes"],
+        "Plain old notes"
+    );
+    let explorer = h
+        .text_at("Variable Explorer")
+        .expect("the Variable Explorer shows");
+    assert!(
+        explorer.y > 400.0,
+        "the notes box above it fills the panel: {explorer:?}"
+    );
+    for button in [
+        "Write",
+        "Preview",
+        "☐",
+        "Show these notes when the job opens",
+    ] {
+        assert!(h.text_at(button).is_some(), "{button}");
+    }
+    // found by searching, a double-click on the material's Width puts it in at the cursor
+    h.app.notes_ui.search = "material width".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let row = *h
+        .texts_at("Width")
+        .last()
+        .unwrap_or_else(|| panic!("{:?}", h.texts()));
+    h.double_click(row);
+    h.frame(vec![]);
+    let notes = h.app.form.as_ref().unwrap().params["notes"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(notes, "Plain old notes{{material.width}}");
+    // Preview shows its value now
+    let preview = h.text_at("Preview").unwrap();
+    h.click(preview, Modifiers::NONE);
+    h.frame(vec![]);
+    let tall = super::notes_panel::value_now(&h.app, "material.width");
+    assert!(
+        h.text_at(&tall).is_some(),
+        "{tall} in the preview: {:?}",
+        h.texts()
+    );
+    let apply = h.text_at("Apply").unwrap();
+    h.click(apply, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.notes, "Plain old notes{{material.width}}");
+}
+
+#[test]
+fn the_variable_explorer_searches_and_the_job_sheet_and_g_code_get_the_values() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.app.notes_ui.search = "thick".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Thickness").is_some());
+    assert!(
+        h.text_at("Job name").is_none(),
+        "other variables are hidden while searching"
+    );
+    // every place notes go uses the same values
+    h.app.doc.notes = "# Cut\n- **{{material.thickness}}** stock".into();
+    let thick = super::notes_panel::value_now(&h.app, "material.thickness");
+    let setup = h.app.job_setup();
+    let sheet =
+        fmt_create_job_sheet::sheet_for(&h.app.doc, &h.app.options.job_sheet, &setup).unwrap();
+    assert!(
+        sheet.contains(&format!("<li><strong>{thick}</strong> stock</li>")),
+        "{sheet}"
+    );
+    let lines = cut_craft_core::notes::gcode_lines(&h.app.doc.notes, &h.app.note_variables());
+    assert_eq!(lines, ["Cut".to_owned(), format!("- {thick} stock")]);
+}
+
+#[test]
 fn help_pages_live_in_the_help_crate_not_the_app() {
     // the app shows only what crates/help carries: a page or picture left in
     // crates/app/help is never shown
@@ -18744,4 +18850,28 @@ fn a_new_jobs_default_bit_has_its_flute_length_so_the_form_warns_of_nothing() {
     h.frame(vec![]);
     let line = h.app.form_reach().expect("a reach line");
     assert!(!line.text().contains("not checked"), "{line:?}");
+}
+
+#[test]
+fn the_notes_in_g_code_name_the_post_the_file_is_made_through() {
+    let mut h = ready_for_output();
+    h.app.doc.notes = "Post {{machine.post}}".into();
+    h.app.doc.notes_in_gcode = true;
+    let form = h.app.default_save_form();
+    let other = h
+        .app
+        .posts
+        .load("Cut Craft Mach3 Arcs (mm) (*.tap)")
+        .unwrap();
+    let default = h.app.form_post(&form).unwrap();
+    assert_ne!(
+        other.name, default.name,
+        "a post other than the machine's own"
+    );
+    let path = std::path::PathBuf::from("job.tap");
+    let made = chrono::Local::now().naive_local();
+    let texts = h.app.toolpath_texts(&form, &other, &path, made).unwrap();
+    let text = &texts[0].1;
+    assert!(text.contains("Mach3"), "{text}");
+    assert!(!text.contains("GRBL Arcs"), "{text}");
 }

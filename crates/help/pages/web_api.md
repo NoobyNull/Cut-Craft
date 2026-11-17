@@ -174,6 +174,15 @@ Toolpaths page's buttons, each with its progress window as usual.
   **Save As**: the job is that file from then on.
 - **POST job/export** `{"format": "export_dxf", "path": "/home/me/sign.dxf"}`: an
   **Export** menu item. The docs page lists each format.
+- **GET notes**: the job's [notes](help:notes) as typed (`text`), whether they open with
+  the job (`opens_with_job`) and go at the top of the G-code (`in_gcode`), the notes with
+  every variable filled in as plain text (`plain`) and as HTML (`html`), and every variable
+  the Variable Explorer lists (`variables`: each one's `key`, `group`, `label`,
+  `description` and `value` now).
+- **POST notes** `{"text": "# Setup\n- [ ] Clamp the {{material.thickness}} board"}`:
+  changes the notes, as **Apply** on the Notes form does (one undo). Send `in_gcode` or
+  `opens_with_job` (`true` or `false`) to change those; anything left out stays as it is.
+  It answers as **GET notes** does.
 
 ### An example: see a job, then make its G-code
 

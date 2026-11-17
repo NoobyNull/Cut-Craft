@@ -207,6 +207,8 @@ impl CutCraftApp {
             fine_3d: None,
             rough_3d: None,
             model_tall: std::cell::Cell::new(None),
+            notes_ui: super::notes_panel::NotesUi::default(),
+            note_vars: std::cell::RefCell::new(None),
             height_applied_at: None,
             job_epoch: 0,
             toolpath_keys: super::follow::Keys::default(),
@@ -1940,6 +1942,13 @@ impl CutCraftApp {
         let slots = self.slots();
         let per_tool = Self::split_for(form, post);
         let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
+        // the notes' variables are the whole job's, not one file's; the post is the one
+        // these files are made through, whichever the machine has first
+        let mut vars = (*self.note_variables()).clone();
+        if let Some(v) = vars.iter_mut().find(|v| v.key == "machine.post") {
+            v.value.clone_from(&post.name);
+        }
+        let notes = cut_craft_core::notes::gcode_lines(&self.doc.notes, &vars);
         let mut texts = vec![];
         for (path, part) in &parts {
             // one file per tile, each tile moved to the job's corner
@@ -1954,11 +1963,12 @@ impl CutCraftApp {
                     if in_tile.toolpaths.is_empty() {
                         continue;
                     }
-                    let text = files::render_through(post, &slots, &in_tile, &named, job, made)?;
+                    let text =
+                        files::render_through(post, &slots, &in_tile, &named, job, made, &notes)?;
                     texts.push((named, text));
                 }
             } else {
-                let text = files::render_through(post, &slots, part, path, job, made)?;
+                let text = files::render_through(post, &slots, part, path, job, made, &notes)?;
                 texts.push((path.clone(), text));
             }
         }
@@ -2792,6 +2802,9 @@ impl CutCraftApp {
         self.picked_constraint = None;
         self.picked_outline = None;
         self.job_epoch += 1;
+        // measured for the job before: a new history can be at the same revision
+        self.model_tall.set(None);
+        *self.note_vars.borrow_mut() = None;
         if let Some(job) = self.options.default_job {
             self.doc.job = job;
         }
@@ -3811,6 +3824,10 @@ impl CutCraftApp {
             acceleration: machine
                 .filter(|_| self.summary.acceleration)
                 .map_or([0.0; 3], |m| m.acceleration),
+            scale: self.summary.scale,
+            model_height: self.model_height_now(),
+            holding: self.holding(),
+            variables: (*self.note_variables()).clone(),
         }
     }
 
@@ -5654,6 +5671,13 @@ impl CutCraftApp {
             self.form_error(ui);
             self.form_buttons(ui);
         });
+        // Notes fill the panel with their own editor and Variable Explorer
+        if self.form.as_ref().is_some_and(|f| f.id == "notes") {
+            cut_craft_bug_report::mark(ui, "Tool form: Notes");
+            self.form_heading(ui);
+            self.notes_editor(ui);
+            return;
+        }
         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
     }
 

@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 34] = [
+const SCENES: [Scene; 40] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -90,6 +90,31 @@ const SCENES: [Scene; 34] = [
     ("model-sticks-out", |app, ctx| {
         model_position(app, ctx, GapFrom::Below, 15.0, false);
     }),
+    // Help: Notes (the four steps make notes-steps.gif)
+    ("notes-step-1", |app, ctx| {
+        notes(app, ctx, "", false, "");
+    }),
+    ("notes-step-2", |app, ctx| {
+        notes(app, ctx, NOTES_TYPED, false, "");
+    }),
+    ("notes-step-3", |app, ctx| {
+        notes(app, ctx, NOTES_FULL, false, "thickness");
+        app.notes_ui.picked = Some("material.thickness".into());
+    }),
+    ("notes-step-4", |app, ctx| {
+        notes(app, ctx, NOTES_FULL, true, "");
+    }),
+    ("notes-explorer", |app, ctx| {
+        notes(app, ctx, NOTES_FULL, false, "pocket");
+    }),
+    ("notes-gcode", |app, ctx| {
+        notes(app, ctx, NOTES_FULL, false, "");
+        app.form = None;
+        app.doc.notes = NOTES_FULL.into();
+        app.doc.notes_in_gcode = true;
+        app.view_gcode(app.default_save_form());
+        ctx.set_embed_viewports(true);
+    }),
     ("help-wiki", |app, _| {
         help_window(app, "pocket_toolpath", "");
     }),
@@ -124,6 +149,48 @@ fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
     app.form = None;
     search.clone_into(&mut app.help_search);
     app.info = Some(super::Info::Help(topic));
+}
+
+/// Notes typed with the toolbar: a heading, a check list and a numbered list.
+const NOTES_TYPED: &str = "# Oak sign for the porch\n\
+    **Before cutting**\n\
+    - [ ] Clamp all four corners\n\
+    - [ ] Zero Z on the *top* of the board\n\
+    1. Profile the sign out last\n\
+    See [the finishing guide](https://example.com/finish) for oil.";
+
+/// The same notes with live variables in.
+const NOTES_FULL: &str = "# Oak sign for the porch\n\
+    **Before cutting**\n\
+    - [x] Clamp all four corners\n\
+    - [ ] Zero Z on the *top* of the {{material.thickness}} board ({{material.z_zero}})\n\
+    ## Toolpaths ({{toolpaths.run_time}} in all)\n\
+    {{toolpaths.list}}\n\
+    Machine: {{machine.name}}, printed {{date}}";
+
+/// The sample shapes with a profile and a pocket, and the Notes form open with `text`:
+/// written, or in Preview; the Variable Explorer searched for `search`.
+fn notes(app: &mut CutCraftApp, ctx: &egui::Context, text: &str, preview: bool, search: &str) {
+    app.updates = crate::update::Updates::default();
+    ctx.set_embed_viewports(false);
+    app.gcode_view = None;
+    if app.doc.toolpaths.is_empty() {
+        app.form = None;
+        app.doc = cut_craft_core::document::Document::default();
+        (app.simulation, app.playback) = (None, None);
+        draw_shapes(app);
+        toolpaths(app, ctx);
+        app.view = View::TwoD;
+    }
+    if app.form.as_ref().is_none_or(|f| f.id != "notes") {
+        app.invoke(ctx, "notes");
+    }
+    if let Some(form) = app.form.as_mut() {
+        form.params["notes"] = serde_json::Value::String(text.into());
+    }
+    app.notes_ui.preview = preview;
+    app.notes_ui.search = search.into();
+    app.notes_ui.picked = None;
 }
 
 /// A long calculation's progress window: its step, how far it has got and the time left,
