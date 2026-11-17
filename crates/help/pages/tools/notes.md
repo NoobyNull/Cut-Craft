@@ -40,9 +40,12 @@ The **Variable Explorer** lists every variable by where it comes from:
   safe Z height.
 - **Model**: the 3D model's height and the gaps above and below it in the material (see
   [Material Setup](help:material_setup)).
-- **Machine**: the machine, its controller, post processor, bed size and tool changer.
+- **Machine**: the machine, its controller, post processor, bed size and tool changer,
+  and its collet nut and spindle size and whether bits have their own holder (see
+  [Collet and Holder Collisions](help:collisions)).
 - **Tools**: each bit the toolpaths use, numbered, with its diameter, pass depth,
-  stepover, feeds, speed and flutes, plus a list of them all.
+  stepover, feeds, speed, flutes, stick-out (marked "guessed" when it isn't set in the
+  Tool Database) and the holder it sits in, plus a list of them all.
 - **Toolpaths**: each toolpath, numbered in list order, with its tool and tool number,
   feeds and speed, stepover, pass depth, run time and its own notes from the Toolpath
   Summary, plus a list of them all and the total run time.

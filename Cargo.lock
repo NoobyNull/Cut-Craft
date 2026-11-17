@@ -2476,6 +2476,7 @@ dependencies = [
  "fmt-import-stl",
  "fmt-import-svg",
  "fmt-part-labels",
+ "gif",
  "hmac",
  "image",
  "log",

@@ -123,7 +123,8 @@ Toolpaths page's buttons, each with its progress window as usual.
   - `width=800` makes the picture 800 pixels wide; left out, it is the view's own size.
 
   The window shows that view for a moment while the picture is taken, then goes back to how
-  you left it. Cut Craft's window must be open on screen (not minimised) to take it.
+  you left it. Windows and menus open over the view are left out of the picture. Cut
+  Craft's window must be open on screen (not minimised) to take it.
 - **GET state**: the material (size, thickness, where Z zero and the datum are), where the
   3D model sits in it, each part of the model with its heights, and what is picked:
   vectors, model parts and the toolpath picked in the toolpath list.
@@ -157,6 +158,15 @@ Toolpaths page's buttons, each with its progress window as usual.
     `"accept_warnings": true`, which is like answering **Save Anyway**.
 
   The G-code is only made and saved: it is never sent to your machine.
+- **POST job/new** `{"settings": {"size": {"width": 300, "height": 150, "thickness": 12}}}`:
+  **New**, with **OK** pressed in **Job Setup**. Settings left out are what Job Setup starts
+  with (your **Set as Default** settings, if you saved some); **GET commands/job_setup**
+  lists them all. Settings Job Setup will not take are refused, and the job open stays
+  as it was.
+- **POST job/open** `{"path": "/home/me/sign.ccjob"}`: **Open** on that job file.
+
+  Neither throws away unsaved changes: they are refused until you save, or send
+  `"discard": true`.
 - **POST job/save** `{}`: **Save**. With `{"path": "/home/me/sign.ccjob"}` it is
   **Save As**: the job is that file from then on.
 - **POST job/export** `{"format": "export_dxf", "path": "/home/me/sign.dxf"}`: an

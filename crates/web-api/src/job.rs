@@ -460,6 +460,7 @@ pub fn toolpaths(
                     .collect::<Vec<_>>()
             };
             warnings.extend(said(Severity::Warning));
+            warnings.extend(said(Severity::MustAsk));
             json!({
                 "id": id.0,
                 "name": t.name,

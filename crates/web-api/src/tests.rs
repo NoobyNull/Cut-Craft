@@ -903,3 +903,40 @@ fn notes_come_filled_in_and_a_change_keeps_what_is_left_out() {
     let p = crate::job::notes_params(&plain, &dotted(Some(true))).unwrap();
     assert_eq!(p["notes"], "..Clamp", "opens, with the text's own dot kept");
 }
+
+#[test]
+fn starting_and_opening_a_job_are_read_from_their_body() {
+    let (address, _stop) = running(Some(TOKEN));
+    let call = |r: Reply| {
+        assert_eq!(r.status, 200, "{}", r.body);
+        r.body["call"].as_str().unwrap().to_owned()
+    };
+    assert_eq!(
+        call(post(address, "/api/v1/job/new", "{}")),
+        "NewJob { settings: Object {}, discard: false }"
+    );
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/job/new",
+            r#"{"settings":{"size":{"width":300}},"discard":true}"#
+        )),
+        "NewJob { settings: Object {\"size\": Object {\"width\": Number(300)}}, discard: true }"
+    );
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/job/open",
+            r#"{"path":"/tmp/a.ccjob"}"#
+        )),
+        "Open { path: \"/tmp/a.ccjob\", discard: false }"
+    );
+    assert_eq!(post(address, "/api/v1/job/open", "{}").status, 400);
+    assert_eq!(
+        post(address, "/api/v1/job/new", r#"{"settings":3}"#).status,
+        400
+    );
+    let doc = openapi::document(&[], &[], false);
+    assert!(doc["paths"]["/job/new"]["post"].is_object());
+    assert!(doc["paths"]["/job/open"]["post"].is_object());
+}

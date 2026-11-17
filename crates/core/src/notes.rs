@@ -73,6 +73,8 @@ pub struct Context {
     pub scale: f64,
     /// How tall the 3D model is, mm; `None` when there is none.
     pub model_height: Option<f64>,
+    /// How the machine holds its bits: collet nut, spindle and Holder per bit.
+    pub holding: crate::collision::Holding,
 }
 
 impl Default for Context {
@@ -90,8 +92,18 @@ impl Default for Context {
             acceleration: [0.0; 3],
             scale: 1.0,
             model_height: None,
+            holding: crate::collision::Holding::default(),
         }
     }
+}
+
+/// A collet nut's size: across and tall.
+fn holder_size(holder: &crate::collision::Holder, units: Units) -> String {
+    format!(
+        "{} across, {} tall",
+        length(holder.nut_diameter, units),
+        length(holder.nut_length, units)
+    )
 }
 
 /// `value` with at most three decimals and no trailing zeros.
@@ -436,6 +448,30 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         "Whether the machine changes tools itself",
         changer,
     );
+    add(
+        "Machine",
+        "",
+        "machine.collet_nut".into(),
+        "Collet nut",
+        "The collet nut's size, across and tall (Machine Configuration)",
+        holder_size(&ctx.holding.holder, units),
+    );
+    add(
+        "Machine",
+        "",
+        "machine.spindle_diameter".into(),
+        "Spindle diameter",
+        "How wide the spindle body above the collet nut is",
+        length(ctx.holding.holder.spindle_diameter, units),
+    );
+    add(
+        "Machine",
+        "",
+        "machine.holder_per_bit".into(),
+        "Holder per bit",
+        "Whether a bit's own holder in the Tool Database counts instead",
+        if ctx.holding.per_bit { "Yes" } else { "No" }.into(),
+    );
 
     // Tools
     let tools = tools_used(doc, &ctx.slots);
@@ -554,6 +590,32 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             "Flutes",
             "Its cutting edges",
             tool.flutes.to_string(),
+        );
+        let (stickout, guessed) = crate::collision::stickout(tool);
+        add(
+            "Tools",
+            &under,
+            key("stick_out"),
+            "Stick-out",
+            "How far the bit sticks out below the collet nut",
+            if guessed {
+                format!("{} (not set: guessed)", length(stickout, units))
+            } else {
+                length(stickout, units)
+            },
+        );
+        let holder = crate::collision::holder_of(tool, &ctx.holding);
+        add(
+            "Tools",
+            &under,
+            key("holder"),
+            "Holder",
+            "The collet nut and spindle it sits in",
+            format!(
+                "{} nut, {} spindle",
+                holder_size(&holder, units),
+                length(holder.spindle_diameter, units)
+            ),
         );
     }
 
@@ -1518,6 +1580,74 @@ mod tests {
         assert_eq!(value(&vars, "toolpath.2.tool_number"), Some("T2"));
         assert_eq!(value(&vars, "toolpath.1.tool_number"), Some("by hand"));
         assert_eq!(value(&vars, "machine.tool_changer"), Some("2 slots"));
+    }
+
+    #[test]
+    fn the_collet_nut_spindle_and_stick_out_come_from_the_machine_and_the_bit() {
+        use crate::collision::{Holder, Holding};
+        let mut doc = sample_document();
+        let tool = |name: &str, stickout: f64, holder: Option<Holder>| Tool {
+            name: name.into(),
+            diameter: 6.0,
+            stickout,
+            holder,
+            ..Tool::default()
+        };
+        let path = |tool: Tool| Toolpath {
+            name: "Cut".into(),
+            strategy: "profile_toolpath".into(),
+            params: serde_json::Value::Null,
+            tool,
+            vectors: vec![],
+            moves: vec![],
+            visible: true,
+            power: vec![],
+            stale: false,
+            group: None,
+            drill_bank: None,
+            fallbacks: vec![],
+        };
+        let small = Holder {
+            nut_diameter: 25.0,
+            nut_length: 15.0,
+            spindle_diameter: 52.0,
+        };
+        doc.toolpaths
+            .insert(EntityId(901), path(tool("Long", 30.0, Some(small))));
+        doc.toolpaths
+            .insert(EntityId(902), path(tool("Short", 0.0, None)));
+        let vars = variables(&doc, &Context::default());
+        assert_eq!(
+            value(&vars, "machine.collet_nut"),
+            Some("35 mm across, 20 mm tall")
+        );
+        assert_eq!(value(&vars, "machine.spindle_diameter"), Some("65 mm"));
+        assert_eq!(value(&vars, "machine.holder_per_bit"), Some("No"));
+        assert_eq!(value(&vars, "tool.1.stick_out"), Some("30 mm"));
+        let short = value(&vars, "tool.2.stick_out").unwrap();
+        assert!(short.ends_with("(not set: guessed)"), "{short}");
+        // its own holder counts only when the machine takes holders per bit
+        assert_eq!(
+            value(&vars, "tool.1.holder"),
+            Some("35 mm across, 20 mm tall nut, 65 mm spindle")
+        );
+        let ctx = Context {
+            holding: Holding {
+                holder: Holder::default(),
+                per_bit: true,
+            },
+            ..Context::default()
+        };
+        let vars = variables(&doc, &ctx);
+        assert_eq!(value(&vars, "machine.holder_per_bit"), Some("Yes"));
+        assert_eq!(
+            value(&vars, "tool.1.holder"),
+            Some("25 mm across, 15 mm tall nut, 52 mm spindle")
+        );
+        assert_eq!(
+            value(&vars, "tool.2.holder"),
+            Some("35 mm across, 20 mm tall nut, 65 mm spindle")
+        );
     }
 
     #[test]

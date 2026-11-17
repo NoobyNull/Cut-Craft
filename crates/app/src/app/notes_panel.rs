@@ -83,7 +83,7 @@ impl super::CutCraftApp {
         let now = chrono::Local::now();
         let ctx = self.notes_context(&now);
         let key = format!(
-            "{}|{}|{:?}|{}|{}|{}|{:?}|{}|{:?}|{}|{}",
+            "{}|{}|{:?}|{}|{}|{}|{:?}|{}|{:?}|{}|{}|{:?}",
             self.job_epoch,
             self.history.revision(),
             ctx.model_height,
@@ -95,6 +95,7 @@ impl super::CutCraftApp {
             ctx.slots,
             ctx.rapid,
             ctx.scale,
+            ctx.holding,
         );
         if let Some((at, vars)) = self.note_vars.borrow().as_ref()
             && *at == key
@@ -107,7 +108,7 @@ impl super::CutCraftApp {
     }
 
     /// What the notes' variables need from outside the job: its file, the machine, the time,
-    /// the Toolpath Summary's run time settings and the model's height.
+    /// the Toolpath Summary's run time settings, the model's height and the collet nut.
     fn notes_context(&self, now: &chrono::DateTime<chrono::Local>) -> notes::Context {
         let machine = self.machines.active();
         let s = &self.summary;
@@ -133,6 +134,7 @@ impl super::CutCraftApp {
                 .map_or([0.0; 3], |m| m.acceleration),
             scale: s.scale,
             model_height: self.model_height_now(),
+            holding: self.holding(),
         }
     }
 

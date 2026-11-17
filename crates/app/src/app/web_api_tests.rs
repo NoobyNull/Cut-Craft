@@ -793,6 +793,8 @@ fn the_help_page_explains_the_new_calls() {
         "POST gcode",
         "POST job/save",
         "POST job/export",
+        "POST job/new",
+        "POST job/open",
     ] {
         assert!(page.contains(call), "{call} is explained");
     }
@@ -832,4 +834,199 @@ fn notes_are_read_and_written_with_their_variables_filled_in() {
             .is_some_and(|v| v.iter().any(|v| v["key"] == "toolpaths.list")),
         "{got}"
     );
+}
+
+#[test]
+fn a_script_starts_a_new_job_with_its_own_job_setup_and_opens_one() {
+    let mut h = Harness::at_start();
+    h.app.options.web_api.enabled = true;
+    h.app.options.web_api.port = 0;
+    h.frame(vec![]);
+    let State::Running(at) = h.app.web_api_state().clone() else {
+        panic!("{:?}", h.app.web_api_state());
+    };
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/new",
+        Some(json!({ "settings": { "size": { "widht": 300 } } })),
+    );
+    assert_eq!(status, 400, "a misspelt setting is refused: {e}");
+    assert!(e["error"].as_str().unwrap().contains("width"), "{e}");
+    assert_ne!(h.app.screen, super::super::Screen::Job, "no job started");
+    let (status, made) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/new",
+        Some(json!({ "settings": { "size": { "width": 300, "height": 150, "thickness": 12 } } })),
+    );
+    assert_eq!(status, 200, "{made}");
+    assert_eq!(h.app.screen, super::super::Screen::Job);
+    assert_eq!(made["state"]["material"]["width"], 300.0, "{made}");
+    assert_eq!(made["state"]["material"]["thickness"], 12.0, "{made}");
+    // unsaved work is not thrown away unless the script says so
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    let (status, e) = call(&mut h, at, "POST", "job/new", Some(json!({})));
+    assert_eq!(status, 409, "{e}");
+    assert!(e["error"].as_str().unwrap().contains("discard"), "{e}");
+    assert_eq!(h.app.doc.vectors.len(), 1, "kept");
+    // settings Job Setup refuses leave the open job as it was, even told to discard it
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/new",
+        Some(json!({ "settings": { "gaps": { "plunge": 999 } }, "discard": true })),
+    );
+    assert_eq!(status, 409, "{e}");
+    assert_eq!(h.app.screen, super::super::Screen::Job, "still open");
+    assert_eq!(h.app.doc.vectors.len(), 1, "nothing thrown away");
+    assert!(h.app.session.is_dirty(&h.app.history), "its undo kept too");
+    // saved, then opened again after a fresh job
+    let dir = Scratch::new("cut-craft-web-open");
+    let (status, saved) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/save",
+        Some(json!({ "path": dir.join("box") })),
+    );
+    assert_eq!(status, 200, "{saved}");
+    let (status, _) = call(&mut h, at, "POST", "job/new", Some(json!({})));
+    assert_eq!(status, 200, "saved, so nothing is lost");
+    assert!(h.app.doc.vectors.is_empty());
+    let (status, opened) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/open",
+        Some(json!({ "path": saved["path"] })),
+    );
+    assert_eq!(status, 200, "{opened}");
+    assert_eq!(h.app.doc.vectors.len(), 1, "the saved job is back");
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/open",
+        Some(json!({ "path": dir.join("nothing.ccjob") })),
+    );
+    assert_eq!(status, 409, "{e}");
+    // a file there that will not read is refused, though it is the job open
+    std::fs::write(saved["path"].as_str().unwrap(), b"not a job").unwrap();
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/open",
+        Some(json!({ "path": saved["path"] })),
+    );
+    assert_eq!(status, 409, "a damaged file did not open: {e}");
+    assert_eq!(h.app.doc.vectors.len(), 1, "the job open is kept");
+}
+
+/// A folder of its own for one test, gone when the test ends, passed or not.
+struct Scratch(std::path::PathBuf);
+
+impl Scratch {
+    fn new(name: &str) -> Self {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("{name}-{}-{n}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir(&dir).unwrap();
+        Self(dir)
+    }
+
+    fn join(&self, file: &str) -> std::path::PathBuf {
+        self.0.join(file)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn a_new_job_from_a_script_starts_from_the_saved_default_job() {
+    let mut h = Harness::at_start();
+    h.app.options.default_job = Some(cut_craft_core::document::Job {
+        width: 444.0,
+        ..Default::default()
+    });
+    // a drawing waiting on an earlier Job Setup is not brought into this job
+    h.app.import_after_setup = Some(std::path::PathBuf::from("/nowhere/drawing.svg"));
+    h.app.options.web_api.enabled = true;
+    h.app.options.web_api.port = 0;
+    h.frame(vec![]);
+    let State::Running(at) = h.app.web_api_state().clone() else {
+        panic!("{:?}", h.app.web_api_state());
+    };
+    let (status, made) = call(&mut h, at, "POST", "job/new", Some(json!({})));
+    assert_eq!(status, 200, "{made}");
+    assert_eq!(made["state"]["material"]["width"], 444.0, "{made}");
+    assert!(h.app.import_after_setup.is_none());
+    assert!(h.app.doc.vectors.is_empty(), "nothing imported");
+}
+
+#[test]
+fn windows_over_the_view_are_left_out_of_its_picture() {
+    let (mut h, at) = switched_on();
+    // a real port, which Options keeps as it is
+    h.app.options.web_api.port = at.port();
+    h.app.options_window = true;
+    h.app.options_goto = Some("web_api");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let State::Running(at) = h.app.web_api_state().clone() else {
+        panic!("{:?}", h.app.web_api_state());
+    };
+    assert!(shows(&h, "WEB API Running at"), "Options is open");
+    let path = format!("{}view.png?view=2d", cut_craft_web_api::PREFIX);
+    let client = std::thread::spawn(move || {
+        let mut s = TcpStream::connect(at).unwrap();
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        s.write_all(request.as_bytes()).unwrap();
+        let mut bytes = vec![];
+        s.read_to_end(&mut bytes).unwrap();
+        bytes
+    });
+    let mut hidden = None;
+    for _ in 0..2000 {
+        if client.is_finished() {
+            break;
+        }
+        h.frame(vec![]);
+        if let Some(asked) = h.screenshot.take() {
+            hidden = Some(!shows(&h, "WEB API Running at"));
+            asked.complete(std::sync::Arc::new(egui::ColorImage::filled(
+                [1280, 800],
+                egui::Color32::RED,
+            )));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    let bytes = client.join().unwrap();
+    assert!(
+        bytes.starts_with(b"HTTP/1.1 200"),
+        "{}",
+        String::from_utf8_lossy(&bytes)
+    );
+    assert_eq!(hidden, Some(true), "the picture's frame has no windows");
+    h.frame(vec![]);
+    assert!(shows(&h, "WEB API Running at"), "Options is back");
+    assert!(h.app.options_window);
+}
+
+/// Whether any text drawn last frame holds `part`.
+fn shows(h: &Harness, part: &str) -> bool {
+    h.shapes.iter().any(|c| match &c.shape {
+        egui::Shape::Text(t) => t.galley.text().contains(part),
+        _ => false,
+    })
 }

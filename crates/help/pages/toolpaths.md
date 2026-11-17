@@ -7,7 +7,10 @@ see-also:
 
 The Toolpaths page, down the right, turns the selected vectors and the 3D model into
 toolpaths, lists them, previews them cutting the material and saves them for the machine.
-Pick a toolpath's tool to open its form; choose the cutter from the tool database there.
+Pick a toolpath's tool to open its form; choose the cutter from the tool database there. Until you
+choose one, a new form starts with a common 6 mm two-flute end mill (6 mm shank, 22 mm of
+flute), so it can already say how deep the bit reaches; pick your own bit with Select… so
+the sizes and speeds are really yours.
 
 A toolpath's form shows its lengths in the job's units, whatever the bit's own units are.
 In an inch job, picking a metric bit (a 6 mm end mill, say) leaves Cut Depth, Allowance
@@ -201,7 +204,9 @@ picks Last.
 The Analyse tab, and Save Toolpaths before it writes a file, checks the shown toolpaths
 before you cut: rapid moves that would crash into material still there, cutting that only
 cuts air, spots the bit can't reach, a Drilling bit not the size of the holes drawn,
-settings the machine can't do, and toolpaths that are out of date. Each finding says how to put it right; ones marked Must fix stop the save.
+the collet nut, spindle or shank hitting wood beside a deep cut (see
+[Collet and Holder Collisions](help:collisions)), settings the machine can't do, and
+toolpaths that are out of date. Each finding says how to put it right; ones marked Must fix stop the save.
 
 The checks cut every toolpath in order, so a big 3D finish (millions of tiny moves with a
 small ball nose) takes a little while: a few seconds on a fast computer, longer on a slow

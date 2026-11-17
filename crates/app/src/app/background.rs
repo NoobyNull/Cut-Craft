@@ -217,6 +217,12 @@ impl CutCraftApp {
             .iter()
             .filter_map(|&id| Some((self.preview_mark(id), source.toolpaths.get(&id)?.clone())))
             .collect();
+        let checked: Vec<EntityId> = ids
+            .iter()
+            .copied()
+            .filter(|id| source.toolpaths.contains_key(id))
+            .collect();
+        let (job, holding) = (source.job, self.holding());
         drop(source);
         let what = match &cuts[..] {
             [(_, one)] => format!("Previewing {}", one.name),
@@ -242,9 +248,14 @@ impl CutCraftApp {
                     material.cutting = *mark;
                     progress::part(i, cuts.len(), || material.cut(toolpath));
                 }
-                material
+                let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
+                    cuts.iter().map(|(_, t)| t).collect();
+                let collided = collided(&job, &checked, &toolpaths, &holding);
+                (material, collided)
             },
-            move |app, material| {
+            move |app, (material, collided)| {
+                let hit = collision_note(&collided);
+                app.collisions = collided;
                 let fine_bit =
                     crate::display::fine_bit_note(&tools, material.cell, app.display.quality);
                 app.simulation = Some(material);
@@ -257,6 +268,10 @@ impl CutCraftApp {
                 let message = match (done, fine_bit) {
                     (Some(done), Some(note)) => Some(format!("{done}. {note}")),
                     (done, note) => done.or(note),
+                };
+                let message = match (message, hit) {
+                    (Some(message), Some(hit)) => Some(format!("{message}. {hit}")),
+                    (message, hit) => message.or(hit),
                 };
                 if let Some(message) = message {
                     app.status.set_message(&message);
@@ -370,4 +385,75 @@ fn command_change_of(
     let change =
         cut_craft_core::rest::with_rest(&doc.job, params, change).map_err(|e| e.to_string())?;
     Ok(cut_craft_core::selector::kept(params, change))
+}
+
+/// What the collet nut, spindle or shank hit cutting `toolpaths` (`ids`, the same order) in
+/// turn into `job`'s uncut material, held as `holding` says: each toolpath that hits, with
+/// what to say of it.
+pub(super) fn collided(
+    job: &cut_craft_core::document::Job,
+    ids: &[EntityId],
+    toolpaths: &[&cut_craft_core::toolpath::Toolpath],
+    holding: &cut_craft_core::collision::Holding,
+) -> std::collections::BTreeMap<EntityId, super::Collided> {
+    let found = cut_craft_core::collision::find(job, toolpaths, holding);
+    ids.iter()
+        .zip(toolpaths)
+        .zip(found)
+        .filter_map(|((&id, toolpath), found)| {
+            let sentence = cut_craft_core::collision::sentence(
+                &toolpath.name,
+                &toolpath.tool,
+                &found,
+                job.units,
+            )?;
+            Some((
+                id,
+                super::Collided {
+                    sentence,
+                    hits: found.hits,
+                    moves: fingerprint(toolpath),
+                },
+            ))
+        })
+        .collect()
+}
+
+/// A quick stamp of `toolpath`'s moves and bit, which changes when it is recalculated or its
+/// bit is edited: its length and up to 64 moves spread through it.
+pub(super) fn fingerprint(toolpath: &cut_craft_core::toolpath::Toolpath) -> u64 {
+    use std::hash::{Hash as _, Hasher as _};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    let moves = &toolpath.moves;
+    moves.len().hash(&mut hasher);
+    let step = (moves.len() / 64).max(1);
+    for m in moves.iter().step_by(step).chain(moves.last()) {
+        for v in [m.to.x, m.to.y, m.to.z] {
+            v.to_bits().hash(&mut hasher);
+        }
+    }
+    let tool = &toolpath.tool;
+    for v in [tool.diameter, tool.stickout, tool.flute_length] {
+        v.to_bits().hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+/// The status bar's word on `collided`: which toolpaths hit, and where to look; `None` when
+/// none do.
+pub(super) fn collision_note(
+    collided: &std::collections::BTreeMap<EntityId, super::Collided>,
+) -> Option<String> {
+    match collided.len() {
+        0 => None,
+        1 => Some(
+            "⚠ The collet or spindle would hit the material in 1 toolpath: it is red in the \
+             Toolpaths list and the material in its way is red in the 3D view"
+                .into(),
+        ),
+        n => Some(format!(
+            "⚠ The collet or spindle would hit the material in {n} toolpaths: they are red \
+             in the Toolpaths list and the material in their way is red in the 3D view"
+        )),
+    }
 }
