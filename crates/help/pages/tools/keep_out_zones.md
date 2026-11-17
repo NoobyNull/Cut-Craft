@@ -23,4 +23,4 @@ see-also: material_setup, profile_toolpath, collisions
 
 5. Give the zones a **Name** (they are labelled Clamp 1, Clamp 2…), then press **OK**. A toolpath that would cut into a zone is not made.
 
-   ![Step 4](pictures/keep_out_zones/step-4.png)
+   ![Naming the zones](pictures/keep_out_zones/step-4.png)
