@@ -204,6 +204,30 @@ pub fn run_minutes(doc: &Document, toolpaths: &[&Toolpath], ctx: &Context) -> (V
     )
 }
 
+/// Every toolpath's run time in minutes, by id: the shown ones cut one after another from
+/// the job's home (getting to each and its tool change included), a hidden one on its own;
+/// and the whole job's, every shown toolpath and the trip back home.
+pub fn job_minutes(
+    doc: &Document,
+    ctx: &Context,
+) -> (
+    std::collections::BTreeMap<crate::document::EntityId, f64>,
+    f64,
+) {
+    let shown: Vec<_> = doc.toolpaths.iter().filter(|(_, t)| t.visible).collect();
+    let paths: Vec<&Toolpath> = shown.iter().map(|(_, t)| *t).collect();
+    let (minutes, total) = run_minutes(doc, &paths, ctx);
+    let mut each: std::collections::BTreeMap<_, _> =
+        shown.iter().map(|&(&id, _)| id).zip(minutes).collect();
+    for (&id, t) in doc.toolpaths.iter().filter(|(_, t)| !t.visible) {
+        each.insert(
+            id,
+            crate::cut_time::toolpath(t, &ctx.motion).total() / 60.0 * ctx.scale,
+        );
+    }
+    (each, total)
+}
+
 /// The file's name without its folder or extension; `Untitled` before it is saved.
 fn job_name(file: &str) -> String {
     std::path::Path::new(file)
@@ -633,9 +657,10 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             .map_or(0, |(n, _)| *n)
     };
     let paths: Vec<&Toolpath> = doc.toolpaths.values().collect();
-    let (times, total) = run_minutes(doc, &paths, ctx);
-    for (place, (t, &minutes)) in paths.iter().zip(&times).enumerate() {
+    let (times, total) = job_minutes(doc, ctx);
+    for (place, (id, t)) in doc.toolpaths.iter().enumerate() {
         let i = place + 1;
+        let minutes = times.get(id).copied().unwrap_or_default();
         let n = tool_number(&t.tool.name);
         lines.push(format!(
             "{i}. {} ({}, {}) {}",
@@ -1404,6 +1429,34 @@ pub fn toggle_check(text: &str, line: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_hidden_toolpath_is_left_out_of_the_job_s_run_and_timed_on_its_own() {
+        use crate::toolpath::{Move, MoveKind};
+        let mut doc = crate::testing::with_toolpath();
+        let first = doc.toolpaths.values().next().unwrap().clone();
+        let mut far = first.clone();
+        far.moves = vec![
+            Move {
+                kind: MoveKind::Rapid,
+                to: glam::DVec3::new(5000.0, 5000.0, 5.0),
+            },
+            Move {
+                kind: MoveKind::Cut,
+                to: glam::DVec3::new(5010.0, 5000.0, 5.0),
+            },
+        ];
+        far.visible = false;
+        far.tool.name = "Another bit".into();
+        let ctx = super::Context::default();
+        let (_, before) = super::job_minutes(&doc, &ctx);
+        let id = doc.next_id();
+        doc.toolpaths.insert(id, far.clone());
+        let (each, after) = super::job_minutes(&doc, &ctx);
+        assert!((after - before).abs() < 1e-12, "{before} then {after}");
+        let alone = crate::cut_time::toolpath(&far, &ctx.motion).total() / 60.0;
+        assert!((each[&id] - alone).abs() < 1e-12);
+    }
+
     use super::*;
     use crate::document::EntityId;
 

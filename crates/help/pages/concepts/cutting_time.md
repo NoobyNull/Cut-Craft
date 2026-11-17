@@ -62,8 +62,9 @@ is too short.
 ## Making the time match your machine
 
 - Fill in the machine's **Limits** in Machine Configuration. They make the biggest difference.
-- **Machine acceleration** in the Toolpath Summary is ticked to begin with. Untick it to see
-  the time at the feed rates alone.
+- **Machine acceleration** in the Toolpath Summary is ticked to begin with. Untick it to
+  leave out speeding up, slowing down and slowing for corners. Each axis's Max rate still
+  holds.
 - If your machine still runs slower than the estimate (a feed override, a slow controller),
   set the Toolpath Summary's **Scale factor**. For example, 1.2 makes every time a fifth longer.
 - Time a real job once and compare it with the estimate to choose the scale factor.

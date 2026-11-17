@@ -27,7 +27,8 @@ when it uses another bit. The **Total machining time** adds the trip back home a
 
 The machine speeds up, slows down and slows for corners as its **Limits** in Machine
 Configuration say: **Max rate**, **Acceleration** and **Cornering**. **Machine acceleration**
-is ticked to begin with. Untick it to see the time at the feed rates alone.
+is ticked to begin with. Untick it to leave out speeding up, slowing down and slowing for
+corners. Each axis's Max rate still holds.
 
 - **Rapid rate**: how fast rapids go when Machine Configuration gives no Max rate.
 - **Scale factor**: multiplies every time, for a machine that runs slower than planned.

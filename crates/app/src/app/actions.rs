@@ -4193,13 +4193,14 @@ impl CutCraftApp {
 
     /// The Toolpath Summary's rows: each toolpath with its estimated time and notes.
     fn summary_rows(&self) -> Vec<super::SummaryRow> {
+        let times = self.cut_times();
         self.doc
             .toolpaths
             .iter()
             .map(|(&id, t)| super::SummaryRow {
                 id,
                 name: t.name.clone(),
-                minutes: self.estimated_minutes(t),
+                minutes: times.each.get(&id).copied().unwrap_or_default(),
                 visible: t.visible,
                 notes: t.summary_notes().to_owned(),
             })
@@ -4249,12 +4250,11 @@ impl CutCraftApp {
     /// what the times go by changes.
     pub(super) fn cut_times(&self) -> std::rc::Rc<super::CutTimes> {
         let motion = self.motion();
-        let shown: Vec<EntityId> = self
+        let shown: Vec<(EntityId, bool)> = self
             .doc
             .toolpaths
             .iter()
-            .filter(|(_, t)| t.visible)
-            .map(|(&id, _)| id)
+            .map(|(&id, t)| (id, t.visible))
             .collect();
         let key = format!(
             "{}|{}|{motion:?}|{}|{shown:?}",
@@ -4268,20 +4268,11 @@ impl CutCraftApp {
             return times.clone();
         }
         let ctx = cut_craft_core::notes::Context {
-            motion: motion.clone(),
+            motion,
             scale: self.summary.scale,
             ..cut_craft_core::notes::Context::default()
         };
-        let visible: Vec<_> = self.doc.toolpaths.values().filter(|t| t.visible).collect();
-        let (minutes, total) = cut_craft_core::notes::run_minutes(&self.doc, &visible, &ctx);
-        let mut each: std::collections::BTreeMap<EntityId, f64> =
-            shown.iter().copied().zip(minutes).collect();
-        for (&id, t) in self.doc.toolpaths.iter().filter(|(_, t)| !t.visible) {
-            each.insert(
-                id,
-                cut_craft_core::cut_time::toolpath(t, &motion).total() / 60.0 * self.summary.scale,
-            );
-        }
+        let (each, total) = cut_craft_core::notes::job_minutes(&self.doc, &ctx);
         let times = std::rc::Rc::new(super::CutTimes { each, total });
         *self.cut_times.borrow_mut() = Some((key, times.clone()));
         times
