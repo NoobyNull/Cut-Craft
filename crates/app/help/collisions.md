@@ -60,6 +60,22 @@ holder uses the machine's. With Holder per bit not ticked, every bit uses the ma
 - **Use a longer bit**, or cut less deep.
 - For a shank that rubs: use a bit whose flutes are as long as the cut is deep.
 
-Clamps are not part of this check yet: keep them out of the way with
-[Keep-out zones](help:toolpaths). See also [Checks before cutting](help:toolpaths) and
-[Save Toolpaths](help:save_toolpaths).
+## Clamps
+
+Keep-out zones already keep the bit away from your clamps, but the collet nut and spindle
+are much wider than the bit. Beside a deep cut they can come down over a clamp the bit
+never touches. So each keep-out zone has a height: how tall the clamp stands above the
+top of the material (measure to its highest point; a screw head counts).
+
+- For clamps on this job, set **Clamp Height** in **Keep-Out Zones** when you make the
+  zones.
+- For clamps fixed to the bed, set **Tall** beside each zone in **Machine Configuration ▸
+  Keep-Out Zones**.
+
+A zone with no height is taken as 20 mm tall, and the warning says so. When the nut or
+spindle would come down lower than the clamp's top while over it, the toolpath is marked ⚠
+just as for the material, saying which clamp and where. Move the clamp further from the
+cut, or let the bit stick out further.
+
+See also [Keep-Out Zones](help:keep_out_zones), [Checks before cutting](help:toolpaths)
+and [Save Toolpaths](help:save_toolpaths).

@@ -1196,6 +1196,7 @@ impl CutCraftApp {
             .filter(|id| source.toolpaths.contains_key(id))
             .collect();
         let (job, holding) = (source.job, self.holding());
+        let clamps: Vec<_> = source.named_keep_out().cloned().collect();
         drop(source);
         let start = (self.simulation.clone())
             .filter(|m| !fresh && m.covers(&self.doc.job))
@@ -1211,7 +1212,8 @@ impl CutCraftApp {
             &what,
             move || {
                 let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
-                let collided = super::background::collided(&job, &checked, &list, &holding);
+                let collided =
+                    super::background::collided(&job, &checked, &list, (&holding, &clamps));
                 let playback =
                     cut_craft_core::playback::Playback::new(start, &list, rapid).marked(&marks);
                 (playback, collided)

@@ -176,6 +176,7 @@ impl CutCraftApp {
             .filter(|id| source.toolpaths.contains_key(id))
             .collect();
         let (job, holding) = (source.job, self.holding());
+        let clamps: Vec<_> = source.named_keep_out().cloned().collect();
         drop(source);
         let what = match &cuts[..] {
             [(_, one)] => format!("Previewing {}", one.name),
@@ -203,7 +204,7 @@ impl CutCraftApp {
                 }
                 let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
                     cuts.iter().map(|(_, t)| t).collect();
-                let collided = collided(&job, &checked, &toolpaths, &holding);
+                let collided = collided(&job, &checked, &toolpaths, (&holding, &clamps));
                 (material, collided)
             },
             move |app, (material, collided)| {
@@ -340,15 +341,18 @@ fn command_change_of(
 }
 
 /// What the collet nut, spindle or shank hit cutting `toolpaths` (`ids`, the same order) in
-/// turn into `job`'s uncut material, held as `holding` says: each toolpath that hits, with
-/// what to say of it.
+/// turn into `job`'s uncut material, held as `holding` says, with `clamps` (the keep-out
+/// zones) standing on it: each toolpath that hits, with what to say of it.
 pub(super) fn collided(
     job: &cut_craft_core::document::Job,
     ids: &[EntityId],
     toolpaths: &[&cut_craft_core::toolpath::Toolpath],
-    holding: &cut_craft_core::collision::Holding,
+    (holding, clamps): (
+        &cut_craft_core::collision::Holding,
+        &[cut_craft_core::keep_out::KeepOutZone],
+    ),
 ) -> std::collections::BTreeMap<EntityId, super::Collided> {
-    let found = cut_craft_core::collision::find(job, toolpaths, holding);
+    let found = cut_craft_core::collision::find(job, toolpaths, holding, clamps);
     ids.iter()
         .zip(toolpaths)
         .zip(found)

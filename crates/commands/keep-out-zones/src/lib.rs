@@ -41,6 +41,17 @@ pub struct Params {
     /// How far beyond the vectors the zones reach
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub clearance: f64,
+    /// How tall the clamps stand above the top of the material. Toolpaths already keep the
+    /// bit out of the zones; this lets the checks see the wider collet nut and spindle
+    /// coming down over a clamp beside a deep cut. Measure from the material's top to the
+    /// clamp's highest point (a screw head counts)
+    #[serde(default = "clamp_stands")]
+    #[schemars(title = "Clamp Height", extend("x-unit" = "mm"), range(min = 0))]
+    pub stands: f64,
+}
+
+fn clamp_stands() -> f64 {
+    cut_craft_core::keep_out::CLAMP_STANDS
 }
 
 fn clamp() -> String {
@@ -53,6 +64,7 @@ impl Default for Params {
             action: Action::default(),
             name: clamp(),
             clearance: 0.0,
+            stands: clamp_stands(),
         }
     }
 }
@@ -121,7 +133,7 @@ impl Command for KeepOutZones {
                     named
                         .into_iter()
                         .zip(made)
-                        .map(|(name, path)| KeepOutZone::new(name, path)),
+                        .map(|(name, path)| KeepOutZone::new(name, path).standing(p.stands)),
                 );
                 zones
             }
@@ -194,10 +206,15 @@ mod tests {
             action,
             name: name.into(),
             clearance: 0.0,
+            stands: 25.0,
         };
         run_on::<KeepOutZones>(&mut doc, &make(Action::Create, "Clamp"));
         let count = doc.keep_out.len();
         assert!(count >= 2, "the sample selects several closed vectors");
+        assert!(
+            doc.keep_out.iter().all(|z| z.height() == (25.0, false)),
+            "as tall as given"
+        );
         let named: Vec<_> = doc.keep_out.iter().map(|z| z.name.clone()).collect();
         assert_eq!(named[..2], ["Clamp 1", "Clamp 2"]);
         assert_eq!(doc.keep_out[0].label(), "Keep-out: Clamp 1");
