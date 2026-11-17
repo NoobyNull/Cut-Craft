@@ -36,10 +36,6 @@ jobs:
           - os: windows-latest
             name: windows-x86_64
             exe: cutcraft-depth.exe
-          # Apple Silicon Macs (macos-14 is retired: see builds.yml)
-          - os: macos-latest
-            name: macos-aarch64
-            exe: cutcraft-depth
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -66,8 +62,31 @@ jobs:
           name: depth-${{ matrix.name }}
           path: out/*
 
+  # Apple Silicon Macs, on their own: GitHub sometimes cancels macOS jobs before they start
+  # (no runner, minutes used up), and that mustn't hold back Linux and Windows. Run the
+  # workflow again later and publish adds the Mac zip to the same release.
+  # (macos-14 is retired: see builds.yml)
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p cut-craft-depth
+      - name: Zip
+        run: |
+          mkdir -p out pack
+          cp crates/depth-addon/addon.toml crates/depth-addon/README.md LICENSE target/release/cutcraft-depth pack/
+          (cd pack && zip -r ../out/depth-macos-aarch64.zip .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: depth-macos-aarch64
+          path: out/*
+
   publish:
-    needs: build
+    # once Linux (which also makes the weights) and Windows are built; the Mac zip if it was
+    if: always() && needs.build.result == 'success'
+    needs: [build, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +103,14 @@ jobs:
             exit 1
           fi
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/depth-addon/addon.toml)
-          gh release create "v$version" out/* --repo "$DEPTH_REPO" \
-            --title "Depth add-on $version" \
-            --notes "Estimates a photo's depth for Relief from Photo. Install it from Cut Craft: Gadgets > Add-ons."
+          if gh release view "v$version" --repo "$DEPTH_REPO" >/dev/null 2>&1; then
+            # a second run of the same version adds what was missing (a Mac zip, say)
+            gh release upload "v$version" out/* --repo "$DEPTH_REPO" --clobber
+          else
+            gh release create "v$version" out/* --repo "$DEPTH_REPO" \
+              --title "Depth add-on $version" \
+              --notes "Estimates a photo's depth for Relief from Photo. Install it from Cut Craft: Gadgets > Add-ons."
+          fi
+      - name: Say when the Mac zip is missing
+        if: needs.build-macos.result != 'success'
+        run: echo "::warning::The Mac build did not finish (${{ needs.build-macos.result }}), so this release has no Mac zip yet. Run Depth add-on again to add it."
