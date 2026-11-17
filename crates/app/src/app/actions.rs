@@ -1452,7 +1452,7 @@ impl CutCraftApp {
     }
 
     /// The answer to the earlier-save question: `None` saves nothing. `remember` keeps the
-    /// answer as the default (Edit ▸ Options ▸ Confirmations).
+    /// answer as the default (Edit ▸ Options ▸ Confirmation Choices).
     pub(super) fn answer_earlier(
         &mut self,
         choice: Option<crate::options::EarlierGcode>,
@@ -2416,6 +2416,8 @@ impl CutCraftApp {
                 list_steps: Vec::new(),
                 in_list: false,
                 way: crate::flyout::DragWay::AsIs,
+                made: None,
+                note: None,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -3010,7 +3012,7 @@ impl CutCraftApp {
             ui.heading("Toolpaths out of date");
             ui.label(recalculate_question(stale));
             ui.checkbox(&mut silence, "Don't ask again").on_hover_hint(
-                "Stop this question (Options ▸ Confirmations turns it back on). Out-of-date \
+                "Stop this question (Options ▸ Confirmation Choices turns it back on). Out-of-date \
                  toolpaths are still marked ⚠, and saving them still asks first",
             );
             ui.separator();
@@ -3280,10 +3282,17 @@ impl CutCraftApp {
             return;
         };
         self.start_command(&toolpath.strategy);
-        let mut params = toolpath.params;
+        let mut params = toolpath.params.clone();
         // the bank as the machine has it now, so a bank changed since is used
         self.fill_drill_bank(&toolpath.strategy, &mut params);
         if let Some(form) = self.form.as_mut().filter(|f| f.id == toolpath.strategy) {
+            // Calculate with nothing changed keeps it (a drill bank changed since is a change)
+            form.made = Some(super::calculate_again::Made {
+                ids: vec![id],
+                kept: vec![toolpath.params.clone()],
+                params: toolpath.params.clone(),
+                selection: None,
+            });
             form.params = params;
             form.editing = Some(id);
         }
@@ -3306,7 +3315,22 @@ impl CutCraftApp {
     /// A form's Apply: its command, or for an edited toolpath that toolpath made again with
     /// the form's settings, in its place.
     pub(super) fn apply_form(&mut self, id: &str, params: &Value) -> Result<(), String> {
-        if let Some(toolpath) = self.form.as_ref().and_then(|f| f.editing) {
+        if let Some(form) = &mut self.form {
+            form.note = None;
+        }
+        let editing = self.form.as_ref().and_then(|f| f.editing);
+        // Calculate pressed again: kept when nothing changed, else updated in place
+        match self.calculate_again(params) {
+            super::calculate_again::Again::UpToDate => {
+                self.say_up_to_date(params);
+                return Ok(());
+            }
+            super::calculate_again::Again::Update(made) if editing.is_none() => {
+                return self.calculate_in_background(id, params, Some(made));
+            }
+            _ => {}
+        }
+        if let Some(toolpath) = editing {
             self.edit_in_background(id, toolpath, params);
             return Ok(());
         }
@@ -5271,7 +5295,8 @@ impl CutCraftApp {
             } else {
                 c
             };
-            (c.label(), commit::hint(c, drawing, open.editing.is_some()))
+            let again = open.editing.is_some() || open.made.is_some();
+            (c.label(), commit::hint(c, drawing, again))
         })
     }
 
@@ -5292,22 +5317,17 @@ impl CutCraftApp {
         // what the form has done that Cancel would take back
         let done = self.history.undo_depth() > open.undo_from + open.list_steps.len();
         let (mut apply, mut close, mut default, mut cancel) = (false, false, false, false);
-        let (mut save, mut load, mut new_shape) = (false, false, false);
-        if open.page == Page::Toolpaths {
-            ui.horizontal(|ui| {
-                save = ui
-                    .button("Save Settings…")
-                    .on_hover_hint("Save this form's settings to a file, to use again later")
-                    .clicked();
-                load = ui
-                    .button("Load Settings…")
-                    .on_hover_hint("Fill this form from settings you saved before")
-                    .clicked();
-            });
-        }
+        let mut new_shape = false;
+        let as_new_offered = self.offers_calculate_as_new();
+        let (save, load) = if open.page == Page::Toolpaths {
+            settings_file_row(ui)
+        } else {
+            (false, false)
+        };
         if committing.is_none() {
             new_shape = live_row(ui, open.id, drawing, made);
         }
+        let as_new = as_new_offered && calculate_as_new_row(ui);
         let mut reset = false;
         ui.horizontal(|ui| {
             if let Some((label, hint)) = committing {
@@ -5348,6 +5368,10 @@ impl CutCraftApp {
             if let Some(form) = self.form.as_mut() {
                 (form.drawn, form.applied) = (None, None);
             }
+            return;
+        }
+        if as_new {
+            self.calculate_as_new();
             return;
         }
         if reset {
@@ -5718,6 +5742,10 @@ impl CutCraftApp {
         // a model poking out of the material where Model Position in Material puts it
         if let Some(out) = super::placement::warning(&form.params, self.placement_room()) {
             ui.colored_label(ui.visuals().error_fg_color, out);
+        }
+        // Calculate found nothing changed: said plainly, not as a warning
+        if let Some(note) = self.form_note() {
+            ui.label(note);
         }
         // what the last Apply made is not quite what was asked: said in red, never a pop-up
         if let Some(warning) = form.warning.as_ref().filter(|_| form.error.is_none()) {
@@ -7189,6 +7217,31 @@ fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
                 .clicked()
     })
     .inner
+}
+
+/// A toolpath form's Save Settings… and Load Settings…: whether each was pressed.
+fn settings_file_row(ui: &mut egui::Ui) -> (bool, bool) {
+    ui.horizontal(|ui| {
+        let save = ui
+            .button("Save Settings…")
+            .on_hover_hint("Save this form's settings to a file, to use again later")
+            .clicked();
+        let load = ui
+            .button("Load Settings…")
+            .on_hover_hint("Fill this form from settings you saved before")
+            .clicked();
+        (save, load)
+    })
+    .inner
+}
+
+/// After Calculate: Calculate as New, another toolpath on purpose, the one made kept. A row
+/// of its own over the buttons, so Calculate, Cancel and Close stay where they were;
+/// whether it was pressed.
+fn calculate_as_new_row(ui: &mut egui::Ui) -> bool {
+    ui.button("Calculate as New")
+        .on_hover_hint("Add another toolpath with these settings, keeping the one already made")
+        .clicked()
 }
 
 /// Embellish's samples and random sequences, for the pattern maker under its Sequence box.

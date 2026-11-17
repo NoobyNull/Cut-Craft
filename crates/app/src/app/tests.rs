@@ -14383,8 +14383,14 @@ fn every_tip_says_something_and_its_more_is_a_help_page() {
     for tip in super::tips::TIPS {
         assert!(tip.text.split_whitespace().count() >= 10, "{}", tip.text);
         assert!(seen.insert(tip.text), "said twice: {}", tip.text);
-        if let Some(t) = tip.topic {
-            assert!(topics.contains(&t), "{t} is not a help page");
+        assert!(
+            topics.contains(&tip.topic),
+            "{} is not a help page: {}",
+            tip.topic,
+            tip.text
+        );
+        for name in ["Aspire", "Vectric"] {
+            assert!(!tip.text.contains(name), "{name} named: {}", tip.text);
         }
     }
     let page = h.app.help_markdown("tips");
@@ -14392,26 +14398,84 @@ fn every_tip_says_something_and_its_more_is_a_help_page() {
 }
 
 #[test]
-fn every_tip_has_an_illustration_of_its_own() {
+fn there_are_well_over_a_hundred_tips_on_every_subject() {
+    use super::tips::{Area, TIPS};
+    assert!(TIPS.len() >= 129, "only {} tips", TIPS.len());
+    for area in Area::ALL {
+        let n = TIPS.iter().filter(|t| t.area == area).count();
+        assert!(n >= 5, "{area:?} has only {n} tips");
+    }
+}
+
+#[test]
+fn the_tips_page_sorts_them_by_subject_and_links_each_to_its_help() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("tips");
+    let mut at = 0;
+    for area in super::tips::Area::ALL {
+        let heading = format!("\n## {}\n", area.heading());
+        let found = page[at..]
+            .find(&heading)
+            .unwrap_or_else(|| panic!("{heading:?} missing, or out of order"));
+        at += found + heading.len();
+    }
+    for tip in super::tips::TIPS {
+        let line = format!("- {} [Tell me more](help:{})", tip.text, tip.topic);
+        assert!(page.contains(&line), "not listed with its link: {line}");
+    }
+}
+
+#[test]
+fn every_tip_has_an_illustration_of_its_own_or_its_tools_icon() {
+    use super::tips::Picture;
+    let h = Harness::new();
     let icons = icon_set();
     let mut seen = std::collections::HashSet::new();
+    let mut missing = vec![];
     for tip in super::tips::TIPS {
-        let picture = tip.picture;
-        assert!(
-            picture.starts_with("tips/")
-                && std::path::Path::new(picture)
-                    .extension()
-                    .is_some_and(|e| e == "png"),
-            "{picture}: a drawn illustration from assets/icons/tips, not a tool's icon"
-        );
-        assert!(icons.contains(picture), "{picture} is not drawn");
-        assert!(seen.insert(picture), "{picture} illustrates two tips");
+        match tip.picture {
+            Picture::Scene(picture) => {
+                assert!(
+                    picture.starts_with("tips/")
+                        && std::path::Path::new(picture)
+                            .extension()
+                            .is_some_and(|e| e == "png"),
+                    "{picture}: a drawn illustration from assets/icons/tips"
+                );
+                assert!(icons.contains(picture), "{picture} is not drawn");
+                assert!(seen.insert(picture), "{picture} illustrates two tips");
+            }
+            Picture::Icon(id) => {
+                let Some(key) = h.app.tip_icon(id) else {
+                    missing.push(id);
+                    continue;
+                };
+                assert!(!key.starts_with("tips/"), "{key}: an icon, not a scene");
+            }
+        }
     }
     let unused: Vec<_> = icons
         .iter()
         .filter(|k| k.starts_with("tips/") && !seen.contains(k.as_str()))
         .collect();
     assert!(unused.is_empty(), "illustrations no tip shows: {unused:?}");
+    assert!(missing.is_empty(), "no icon for these tips: {missing:?}");
+}
+
+#[test]
+fn a_tip_about_a_tool_shows_that_tools_icon() {
+    use super::tips::{Picture, TIPS};
+    let h = Harness::new();
+    let tip = TIPS
+        .iter()
+        .find(|t| t.picture == Picture::Icon("pocket_toolpath"))
+        .expect("a tip about pockets");
+    assert_eq!(
+        h.app.tip_picture(tip),
+        Some("toolpaths/pocket_toolpath.png"),
+        "the same picture as the button and its help page"
+    );
+    assert_eq!(h.app.tip_picture(&TIPS[0]), Some("tips/sample_project.png"));
 }
 
 #[test]
@@ -17839,5 +17903,150 @@ fn help_pages_live_in_the_help_crate_not_the_app() {
     assert!(
         strays.is_empty(),
         "move these to crates/help/pages (or crates/help/pictures): {strays:?}"
+    );
+}
+
+/// A Profile toolpath round a 40 mm square, its form still open after Calculate.
+fn calculated_profile() -> (Harness, EntityId) {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("profile_toolpath", &params).unwrap();
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    (h, id)
+}
+
+fn press_calculate(h: &mut Harness) {
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("profile_toolpath", &params).unwrap();
+}
+
+#[test]
+fn calculate_again_with_nothing_changed_keeps_the_toolpath_and_says_it_is_up_to_date() {
+    let (mut h, id) = calculated_profile();
+    let (depth, revision) = (h.app.history.undo_depth(), h.app.history.revision());
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1, "no second copy");
+    assert!(h.app.doc.toolpaths.contains_key(&id));
+    assert_eq!(h.app.history.undo_depth(), depth, "nothing to undo");
+    assert_eq!(h.app.history.revision(), revision);
+    let note = h.app.form_note().expect("said on the form");
+    assert!(note.starts_with("Already up to date"), "{note}");
+}
+
+#[test]
+fn calculate_after_a_change_of_settings_updates_the_toolpath_in_place() {
+    let (mut h, id) = calculated_profile();
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Outside cut");
+    assert_eq!(
+        h.app.form_note(),
+        None,
+        "the note goes once a setting changes"
+    );
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1, "updated, not added");
+    assert_eq!(h.app.doc.toolpaths[&id].name, "Outside cut", "in its place");
+    // and pressed again: up to date with the new settings
+    let depth = h.app.history.undo_depth();
+    press_calculate(&mut h);
+    assert_eq!(h.app.history.undo_depth(), depth);
+    // one undo takes the update back, the toolpath staying
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert_ne!(h.app.doc.toolpaths[&id].name, "Outside cut");
+}
+
+#[test]
+fn calculate_after_undo_makes_the_toolpath_again_rather_than_calling_it_up_to_date() {
+    let (mut h, id) = calculated_profile();
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Outside cut");
+    press_calculate(&mut h);
+    h.app.invoke(&h.ctx, "undo");
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert_eq!(h.app.doc.toolpaths[&id].name, "Outside cut");
+    // the first Calculate undone too: the toolpath is made anew
+    h.app.invoke(&h.ctx, "undo");
+    h.app.invoke(&h.ctx, "undo");
+    assert!(h.app.doc.toolpaths.is_empty());
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+}
+
+#[test]
+fn calculate_after_the_vectors_changed_works_the_toolpath_out_again_in_place() {
+    let (mut h, id) = calculated_profile();
+    // the square moved: the toolpath is out of date
+    let moved = cut_craft_core::Change::transform_selected(&h.app.doc, |_| {
+        cut_craft_core::glam::DAffine2::from_translation((5.0, 0.0).into())
+    })
+    .unwrap();
+    h.app.history.apply(&mut h.app.doc, moved).unwrap();
+    assert!(h.app.doc.toolpaths[&id].stale);
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert!(!h.app.doc.toolpaths[&id].stale, "worked out again");
+    assert_eq!(h.app.form_note(), None, "not called up to date");
+}
+
+#[test]
+fn calculate_as_new_adds_another_toolpath_and_follows_that_one() {
+    let (mut h, id) = calculated_profile();
+    h.app.calculate_as_new();
+    assert_eq!(h.app.doc.toolpaths.len(), 2, "a second one, asked for");
+    let new = *h.app.doc.toolpaths.keys().last().unwrap();
+    assert_ne!(new, id);
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Second");
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 2);
+    assert_eq!(
+        h.app.doc.toolpaths[&new].name, "Second",
+        "the new one updated"
+    );
+    assert_ne!(h.app.doc.toolpaths[&id].name, "Second");
+}
+
+#[test]
+fn calculate_with_other_vectors_picked_makes_a_new_toolpath() {
+    let (mut h, _) = calculated_profile();
+    h.app.form = None;
+    h.rectangle(80.0, 10.0, 20.0, 20.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    // the form opened again remembers nothing: a toolpath for the new square
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 2);
+    // the same form, other vectors picked: another, the first kept
+    let squares: Vec<EntityId> = h.app.doc.vectors.keys().copied().collect();
+    h.app.doc.selection = std::iter::once(squares[0]).collect();
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 3);
+}
+
+#[test]
+fn calculate_with_nothing_picked_updates_the_toolpath_from_its_own_vectors() {
+    let (mut h, id) = calculated_profile();
+    h.app.doc.selection = cut_craft_core::selection::Selection::new();
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Kept");
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert_eq!(h.app.doc.toolpaths[&id].name, "Kept");
+    assert_ne!(h.app.doc.toolpaths[&id].vectors, Vec::new());
+}
+
+#[test]
+fn edit_toolpath_calculate_with_nothing_changed_says_it_is_up_to_date() {
+    let (mut h, id) = calculated_profile();
+    h.app.form = None;
+    h.app.selected_toolpath = Some(id);
+    h.app.invoke(&h.ctx, "edit_toolpath");
+    let depth = h.app.history.undo_depth();
+    press_calculate(&mut h);
+    assert_eq!(h.app.history.undo_depth(), depth, "not made again");
+    assert!(
+        h.app
+            .form_note()
+            .is_some_and(|n| n.starts_with("Already up to date"))
     );
 }
