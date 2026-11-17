@@ -663,7 +663,7 @@ mod tests {
     fn an_item_dearer_than_a_share_goes_on_its_own_and_none_is_empty() {
         assert_eq!(shares(3, &|_| 10.0, 5.0), vec![0..1, 1..2, 2..3]);
         assert_eq!(shares(5, &|_| 1.0, 2.0), vec![0..2, 2..4, 4..5]);
-        assert_eq!(shares(0, &|_| 1.0, 2.0), vec![]);
+        assert_eq!(shares(0, &|_| 1.0, 2.0).len(), 0);
     }
 
     #[test]

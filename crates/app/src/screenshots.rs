@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 24] = [
+const SCENES: [Scene; 26] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -82,13 +82,28 @@ const SCENES: [Scene; 24] = [
     ("model-sticks-out", |app, ctx| {
         model_position(app, ctx, GapFrom::Below, 15.0, false);
     }),
+    ("help-wiki", |app, _| {
+        help_window(app, "pocket_toolpath", "");
+    }),
+    ("help-question", |app, _| {
+        help_window(app, "contents", "how do I cut out a sign with bridges?");
+    }),
     // Help: Long jobs and the time left
     ("progress-window", progress_window),
 ];
 
+/// The Help window over the job on page `topic`, with `search` typed in its search box.
+fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
+    app.updates = crate::update::Updates::default();
+    app.form = None;
+    search.clone_into(&mut app.help_search);
+    app.info = Some(super::Info::Help(topic));
+}
+
 /// A long calculation's progress window: its step, how far it has got and the time left,
 /// started from how long the last one took.
 fn progress_window(app: &mut CutCraftApp, _: &egui::Context) {
+    app.info = None;
     let kind = "screenshots:progress-window";
     cut_craft_core::eta::record(kind, 150.0);
     let (keep, wait) = std::sync::mpsc::channel::<()>();
