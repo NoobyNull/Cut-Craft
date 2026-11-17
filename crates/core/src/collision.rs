@@ -708,7 +708,7 @@ mod tests {
                 (100.0, 150.0, -30.0),
             ],
         );
-        let found = find(&job(), &[&island(), &through], &Holding::default());
+        let found = find(&job(), &[&island(), &through], &Holding::default(), &[]);
         assert!(!found[0].any(), "the clearing hits nothing");
         let worst = found[1].worst.expect("the nut meets the island");
         assert_eq!(worst.part, Part::ColletNut);
@@ -729,7 +729,7 @@ mod tests {
                 (100.0, 150.0, -40.0),
             ],
         );
-        let found = find(&job(), &[&island(), &ramp], &Holding::default());
+        let found = find(&job(), &[&island(), &ramp], &Holding::default(), &[]);
         assert!(!found[1].any(), "{:?}", found[1].worst);
     }
 
