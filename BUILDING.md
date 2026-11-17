@@ -150,9 +150,13 @@ newest code.
 
 Whenever `main`'s version has no tag yet, **Release tag** makes it: it tags the commit the
 version arrived in and starts the three **Builds** workflows on that tag, one per computer
-(Linux, Windows, macOS). Each builds, start-checks and signs its own files and adds them to
-the release: whichever finishes first publishes it, and the others add to it as they finish,
-so one that fails or waits for a runner holds back none of the others. Nobody pushes tags by hand, and a `v*` tag is never moved or deleted (see
+(Linux, Windows, macOS). Each builds, start-checks and runs its own tests (format, Clippy,
+every test, on the tagged code), and only once those pass signs its own files and adds them
+to the release: whichever finishes first publishes it, and the others add to it as they
+finish, so one that fails or waits for a runner holds back none of the others. A computer
+that finishes after a newer release is already out adds nothing to the older one: that
+version is skipped for it, and it ships with the newer one. So Linux, Windows and macOS can
+each be on a different version for a while. Nobody pushes tags by hand, and a `v*` tag is never moved or deleted (see
 "Repository protection").
 
 Afterwards, `git pull` and push `main` and the new tag to the Gitea mirror too

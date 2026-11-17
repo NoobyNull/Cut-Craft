@@ -326,7 +326,9 @@ Each starts the program on its runner to check it keeps running with its window 
 
 Each runs when its workflow or the packaging changes on a pushed branch, from the Actions tab,
 and on a `v*` tag, when it signs its files and adds them to that release (`publish-release.yml`,
-`scripts/publish-release`): the first to finish publishes the release and the others add to it.
+`scripts/publish-release`) once that computer's own tests pass: the first to finish publishes
+the release and the others add to it. One that finishes after a newer release is out skips
+its older version and ships with the newer one.
 
 ### Screenshots
 
