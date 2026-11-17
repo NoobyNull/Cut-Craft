@@ -4462,6 +4462,11 @@ fn a_picked_model_is_outlined_in_3d_even_out_of_transform_mode() {
     h.app.doc.selected_components.clear();
     h.frame(vec![]);
     assert!(h.app.picked_outline.is_none());
+    // a new job forgets the old one's outline (its revisions start again)
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.frame(vec![]);
+    h.app.reset_job();
+    assert!(h.app.picked_outline.is_none());
 }
 
 #[test]

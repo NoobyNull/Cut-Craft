@@ -2719,6 +2719,7 @@ impl CutCraftApp {
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
         self.picked_constraint = None;
+        self.picked_outline = None;
         self.job_epoch += 1;
         if let Some(job) = self.options.default_job {
             self.doc.job = job;
