@@ -4,7 +4,7 @@
 //! it sits, and whether anything below the zero plane is kept.
 
 use cut_craft_core::component::{Combine, Component, Source};
-use cut_craft_core::document::{Along, Document, Rotary};
+use cut_craft_core::document::{Along, Document, Job, ModelPosition, Rotary};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::{DMat3, DVec3};
 use cut_craft_core::params::Xy;
@@ -277,6 +277,17 @@ pub struct Params {
     )]
     #[serde(default)]
     pub axis: AxisMove,
+    /// Where the model sits in the material's thickness when it is cut: its top flush with
+    /// the material's top or a gap under it (Gap Above Model), or its bottom on the
+    /// material's bottom or a gap over it (Gap Below Model). The gap above and the gap below
+    /// add up to the material's thickness less the model's. The same setting as Material
+    /// Setup's, for the whole job
+    #[schemars(
+        title = "Model Position in Material",
+        extend("x-section" = true, "x-hide-when" = {"rotary": ["true"]})
+    )]
+    #[serde(default)]
+    pub in_material: ModelPosition,
     /// The job is rotary; set by the app when the form opens, never shown
     #[schemars(extend("x-hide-when" = {"rotary": ["true", "false"]}))]
     #[serde(default)]
@@ -335,6 +346,7 @@ impl Default for Params {
                 both_sides: false,
                 discard_below_zero: true,
             },
+            in_material: ModelPosition::default(),
             show_undercuts: true,
             model_type: ModelType::Full,
             fit_material: false,
@@ -363,6 +375,7 @@ impl Command for Orientate3dModel {
     fn initial_params(doc: &Document) -> Params {
         Params {
             fit_material: doc.job.rotary.is_some(),
+            in_material: doc.job.model_position,
             ..Params::default()
         }
     }
@@ -416,6 +429,13 @@ impl Command for Orientate3dModel {
         k.source = source;
         let mut c = Change::builder(doc);
         c.add_new_component(k);
+        // where it sits in the material: the job's, as Material Setup sets it
+        if doc.job.model_position != p.in_material {
+            c.set_job(Job {
+                model_position: p.in_material,
+                ..doc.job
+            });
+        }
         if let Some(two) = doc.job.double_sided
             && p.model_type == ModelType::Full
             && p.placing.both_sides
@@ -1022,6 +1042,39 @@ mod tests {
         let change = Orientate3dModel::run(&doc, &p).unwrap();
         assert_eq!(change.notes.len(), 1, "{:?}", change.notes);
         assert!(change.notes[0].contains("2.0 cm²"), "{:?}", change.notes);
+    }
+
+    #[test]
+    fn the_model_position_in_material_chosen_on_import_is_the_jobs() {
+        use cut_craft_core::document::{GapFrom, ModelPosition};
+        let at = |from, gap| Params {
+            in_material: ModelPosition { from, gap },
+            ..Params::default()
+        };
+        let (doc, _) = imported("bottom", &at(GapFrom::Below, 0.0));
+        assert_eq!(
+            doc.job.model_position,
+            ModelPosition {
+                from: GapFrom::Below,
+                gap: 0.0
+            },
+            "the 5 high box sits on the material's bottom"
+        );
+        let (doc, _) = imported("under", &at(GapFrom::Above, 2.5));
+        assert_eq!(doc.job.model_position.gap, 2.5);
+        // a gap past the room left is kept as typed, never refused (the form says so in red)
+        let (doc, _) = imported("past", &at(GapFrom::Below, 18.0));
+        assert_eq!(doc.job.model_position.gap, 18.0);
+        // the form opens on what the job has
+        let mut job = Document::default();
+        job.job.model_position = ModelPosition {
+            from: GapFrom::Below,
+            gap: 3.0,
+        };
+        assert_eq!(
+            Orientate3dModel::initial_params(&job).in_material,
+            job.job.model_position
+        );
     }
 
     #[test]

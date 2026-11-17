@@ -293,7 +293,7 @@ fn the_web_api_has_a_help_page_with_its_pictures_linked_from_contents() {
     }
     // every picture any help page shows is one the help carries
     let carried: Vec<&str> = cut_craft_help::PICTURES.iter().map(|(n, _)| *n).collect();
-    let mut shown = 0;
+    let mut shown = std::collections::BTreeSet::new();
     for topic in h.app.all_help_topics() {
         let md = h.app.help_markdown(topic);
         for part in md.split("](pictures/").skip(1) {
@@ -302,10 +302,10 @@ fn the_web_api_has_a_help_page_with_its_pictures_linked_from_contents() {
                 carried.contains(&name),
                 "{name} is not in crates/help/pictures"
             );
-            shown += 1;
+            shown.insert(name.to_owned());
         }
     }
-    assert_eq!(shown, carried.len(), "every picture carried is shown");
+    assert_eq!(shown.len(), carried.len(), "every picture carried is shown");
 }
 
 #[test]
