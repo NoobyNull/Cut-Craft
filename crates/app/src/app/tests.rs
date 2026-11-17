@@ -11684,8 +11684,7 @@ fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_of
     }
     // saving sign.nc where an earlier tiled save left its tiles asks Replace or Archive
     let path = dir.join(format!("sign.{ext}"));
-    h.app
-        .save_over_earlier(&form, post.clone(), path, String::new());
+    h.app.save_over_earlier(&form, post.clone(), path);
     let ask = h.app.earlier_ask.take().expect("asked");
     assert!(!ask.sending);
     assert_eq!(ask.earlier.len(), 2, "{:?}", ask.earlier);
@@ -11693,8 +11692,7 @@ fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_of
     h.app.machines.add();
     h.app.machines.active_mut().unwrap().send_to.folder = dir.join("card").display().to_string();
     h.app.session.path = Some(std::path::PathBuf::from("/jobs/sign.ccjob"));
-    h.app
-        .send_choosing(&form, post, String::new(), EarlierGcode::Ask);
+    h.app.send_choosing(&form, post, EarlierGcode::Ask);
     let ask = h.app.earlier_ask.as_ref().expect("asked");
     assert!(ask.sending);
     assert_eq!(ask.earlier.len(), 2);
@@ -15611,8 +15609,7 @@ fn a_save_that_fails_after_replace_or_archive_leaves_the_earlier_files_where_the
         std::fs::write(file, "old").unwrap();
     }
     for choice in [EarlierGcode::Replace, EarlierGcode::Archive] {
-        h.app
-            .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+        h.app.save_over_earlier(&form, post.clone(), path.clone());
         h.app.answer_earlier(Some(choice), false);
         let message = h.app.status.message.clone();
         assert!(message.contains("keep-out zone"), "{message}");
@@ -15656,8 +15653,7 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
         std::fs::write(file, "old").unwrap();
     }
     // asked first: nothing is written until it is answered
-    h.app
-        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    h.app.save_over_earlier(&form, post.clone(), path.clone());
     assert!(h.app.earlier_ask.is_some());
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "old");
     h.frame(vec![]);
@@ -15667,16 +15663,14 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
     h.app.answer_earlier(None, false);
     assert_eq!(std::fs::read_to_string(&stale).unwrap(), "old");
     // Replace: the new file, and no older numbered one left to run by mistake
-    h.app
-        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    h.app.save_over_earlier(&form, post.clone(), path.clone());
     h.app.answer_earlier(Some(EarlierGcode::Replace), false);
     assert!(std::fs::read_to_string(&path).unwrap().contains("G0"));
     assert!(!stale.exists());
     assert!(mine.exists(), "a file of the user's own is left alone");
     assert_eq!(h.app.options.confirmations.earlier_gcode, EarlierGcode::Ask);
     // Archive, remembered: the earlier file moved aside, and not asked next time
-    h.app
-        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    h.app.save_over_earlier(&form, post.clone(), path.clone());
     h.app.answer_earlier(Some(EarlierGcode::Archive), true);
     assert_eq!(
         h.app.options.confirmations.earlier_gcode,
@@ -15691,8 +15685,7 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
         h.app.status.message
     );
     // a second archive in the same second gets a folder of its own
-    h.app
-        .save_over_earlier(&form, post, path.clone(), String::new());
+    h.app.save_over_earlier(&form, post, path.clone());
     assert!(h.app.earlier_ask.is_none(), "not asked once remembered");
     assert_eq!(archived(&dir), 2);
     assert!(path.exists());

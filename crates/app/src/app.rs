@@ -448,8 +448,6 @@ pub(super) struct EarlierAsk {
     post: cut_craft_post::Post,
     /// Where the files go, as named.
     path: std::path::PathBuf,
-    /// What the checks before cutting add to the saved message.
-    told: String,
     /// The earlier save's files there.
     earlier: Vec<std::path::PathBuf>,
     /// Keep the answer as the default.

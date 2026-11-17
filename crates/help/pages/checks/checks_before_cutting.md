@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-17
-see-also: toolpaths, view_gcode
+see-also: toolpaths, save_toolpaths
 ---
 
 # Checks before cutting
@@ -44,7 +44,9 @@ with how to fix what it found.
 
 **Save Toolpaths...** and **Send to Machine** stay greyed until every ⚠ is ticked. Ticking
 says *I have read this, and it is what I want*. Nothing is refused for a warning: you
-decide. The ticks cannot be switched off, so nothing slips past unread.
+decide. The ticks cannot be switched off, so nothing slips past unread. (Earlier versions
+had a *Save and tell* choice in Options ▸ Confirmations that saved without asking; it is
+gone, and options saved with it still open.)
 
 A tick belongs to what the warning says. If you change the job and the same warning comes
 back, it stays ticked; a new or changed warning needs a new tick.

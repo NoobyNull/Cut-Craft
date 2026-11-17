@@ -556,11 +556,8 @@ impl CutCraftApp {
                 ),
             );
         }
-        // as Save Toolpaths: asked about unless Options say only to note them, and out-of-date
-        // toolpaths always
-        let ask = !stale.is_empty()
-            || self.options.confirmations.cutting_checks == crate::options::CuttingChecks::Ask;
-        if !warnings.is_empty() && ask && !gcode.accept_warnings {
+        // as Save Toolpaths: every warning is asked about
+        if !warnings.is_empty() && !gcode.accept_warnings {
             return Err(ApiError::refused(format!(
                 "The checks before cutting found: {}. Put them right, or send \
                  \"accept_warnings\": true to make the G-code anyway (as Save Anyway).",
