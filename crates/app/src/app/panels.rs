@@ -509,6 +509,7 @@ impl CutCraftApp {
             .selected(self.status.current_tool == label);
         let available = self.available(id);
         let response = tool_cell(ui, edge, |ui| ui.add_enabled(available, button));
+        crate::marks::note(ui, &format!("tool:{id}"), response.rect);
         self.with_guidance(response, id)
             .on_disabled_hover_text(self.unavailable_why(id))
     }
@@ -548,6 +549,9 @@ impl CutCraftApp {
             .selected(in_hand);
         let response = tool_cell(ui, edge, |ui| ui.add_enabled(any_available, face));
         super::guide::hover(&response, &tip);
+        for m in &button.members {
+            crate::marks::note(ui, &format!("tool:{m}"), response.rect);
+        }
         let response = response
             .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
             .on_disabled_hover_text(self.unavailable_why(id));
@@ -4462,6 +4466,7 @@ impl CutCraftApp {
                 "Check the toolpaths and write the G-code file your machine runs, using its \
                  post processor",
             );
+        crate::marks::note(ui, "tool:save_toolpaths", save.rect);
         if !ready {
             ui.weak(SAVE_NEEDS);
         }

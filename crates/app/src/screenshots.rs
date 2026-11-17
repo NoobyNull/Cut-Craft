@@ -21,7 +21,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 17] = [
+const SCENES: [Scene; 19] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -65,7 +65,20 @@ const SCENES: [Scene; 17] = [
         let steps = cut_craft_updater::Install::flatpak_steps(&version);
         update_window(app, update_offer(Err(steps)));
     }),
+    ("help-wiki", |app, _| {
+        help_window(app, "pocket_toolpath", "");
+    }),
+    ("help-question", |app, _| {
+        help_window(app, "contents", "how do I cut out a sign with bridges?");
+    }),
 ];
+
+/// The Help window over the job on page `topic`, with `search` typed in its search box.
+fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
+    app.updates = crate::update::Updates::default();
+    search.clone_into(&mut app.help_search);
+    app.info = Some(super::Info::Help(topic));
+}
 
 /// The Updates window over the job, at `phase`.
 fn update_window(app: &mut CutCraftApp, phase: crate::update::Phase) {

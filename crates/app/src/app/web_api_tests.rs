@@ -279,7 +279,7 @@ fn every_tool_and_menu_item_is_listed_for_scripts() {
 #[test]
 fn the_web_api_has_a_help_page_with_its_pictures_linked_from_contents() {
     let h = Harness::new();
-    assert!(h.app.help_topics().contains(&"web_api"));
+    assert!(h.app.all_help_topics().contains(&"web_api"));
     assert!(h.app.help_markdown("contents").contains("(help:web_api)"));
     let page = h.app.help_markdown("web_api");
     for call in [
@@ -292,16 +292,16 @@ fn the_web_api_has_a_help_page_with_its_pictures_linked_from_contents() {
         assert!(page.contains(call), "{call} is explained");
     }
     // every picture any help page shows is one the help carries
-    let carried: Vec<&str> = super::super::help::PICTURES
-        .iter()
-        .map(|(n, _)| *n)
-        .collect();
+    let carried: Vec<&str> = cut_craft_help::PICTURES.iter().map(|(n, _)| *n).collect();
     let mut shown = 0;
-    for topic in h.app.help_topics() {
+    for topic in h.app.all_help_topics() {
         let md = h.app.help_markdown(topic);
-        for part in md.split("](bytes://help/").skip(1) {
+        for part in md.split("](pictures/").skip(1) {
             let name = &part[..part.find(')').unwrap()];
-            assert!(carried.contains(&name), "{name} is not in help::PICTURES");
+            assert!(
+                carried.contains(&name),
+                "{name} is not in crates/help/pictures"
+            );
             shown += 1;
         }
     }
