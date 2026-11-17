@@ -161,7 +161,9 @@ impl CutCraftApp {
             | Call::ResetPreview
             | Call::Gcode(_)
             | Call::Save { .. }
-            | Call::Export { .. } => self.web_start_now(ctx, call),
+            | Call::Export { .. }
+            | Call::NewJob { .. }
+            | Call::Open { .. } => self.web_start_now(ctx, call),
             Call::Select { pick, add } => {
                 self.job_needed()?;
                 let mut ids = if *add {
