@@ -548,6 +548,20 @@ def _():
     return ic
 
 
+@icon("toolpaths/3d_pencil_toolpath")
+def _():
+    # an L of raised wood, round-topped: the pencil pass hugs the inside corner at its foot,
+    # where a big round bit cannot reach
+    def fn(X, Y):
+        arm = np.maximum(-0.25 - X, Y - 0.25)  # > 0 inside an arm of the L
+        return np.where(arm > 0, 0.45 * np.sqrt(np.clip(np.minimum(arm, 0.3) / 0.3, 0, 1)), 0.0)
+    ic = Icon().add([(on_slab(fn, n=120), WOOD)])
+    c = -0.25 + 0.07
+    pts = [(c, -0.95), (c, 0.25 - 0.07), (0.95, 0.25 - 0.07)]
+    ic.marks.append(stroke3(ic, [(x, y, 0.2) for x, y in pts], TP, 2.8))
+    return ic
+
+
 @icon("toolpaths/3d_roughing_toolpath")
 def _():
     fn = lambda X, Y: np.floor(dome_fn(r=0.8, h=0.7)(X, Y) / 0.175) * 0.175

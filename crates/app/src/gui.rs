@@ -716,6 +716,7 @@ fn toolpath_groups() -> Vec<ToolGroup> {
             &[
                 "3d_roughing_toolpath",
                 "3d_finishing_toolpath",
+                "3d_pencil_toolpath",
                 "rounding_toolpath",
             ],
         ),
@@ -2506,6 +2507,7 @@ mod tests {
             "surfacing_toolpath",
             "3d_roughing_toolpath",
             "3d_finishing_toolpath",
+            "3d_pencil_toolpath",
             "rounding_toolpath",
             "laser_cut_fill_toolpath",
             "laser_picture_toolpath",

@@ -487,6 +487,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-3d-pencil-toolpath"
+version = "0.6.12"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-3d-roughing-toolpath"
 version = "0.6.12"
 dependencies = [
@@ -2203,6 +2213,7 @@ version = "0.6.12"
 dependencies = [
  "chrono",
  "cmd-3d-finishing-toolpath",
+ "cmd-3d-pencil-toolpath",
  "cmd-3d-roughing-toolpath",
  "cmd-activate-sheet",
  "cmd-add-draft",

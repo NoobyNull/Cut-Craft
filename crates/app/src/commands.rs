@@ -50,6 +50,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_create_shape::CreateShape>();
     r.add::<cmd_vcarve_engrave_toolpath::VcarveEngraveToolpath>();
     r.add::<cmd_3d_finishing_toolpath::FinishingToolpath3d>();
+    r.add::<cmd_3d_pencil_toolpath::PencilToolpath3d>();
     r.add::<cmd_3d_roughing_toolpath::RoughingToolpath3d>();
     r.add::<cmd_toolpath_properties::ToolpathProperties>();
     r.add::<cmd_component_properties::ComponentProperties>();

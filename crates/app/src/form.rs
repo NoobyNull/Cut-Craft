@@ -157,7 +157,7 @@ pub type GroupEnd<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) -> bool + 'a;
 
 /// The fields that are lists of Tool Database tools, drawn by [`Look::tool`] as the form's
 /// own tool is.
-pub const TOOL_LISTS: [&str; 2] = ["tools", "clearance_tools"];
+pub const TOOL_LISTS: [&str; 3] = ["tools", "clearance_tools", "bits_before"];
 
 /// How a form looks: the units lengths are shown in, and the pictures sections show.
 pub struct Look<'a> {
@@ -2269,8 +2269,9 @@ mod tests {
     /// Numbers with no unit that are not measurements: counts, ids, shares and strengths. A
     /// new number that is none of these needs an `x-unit` (`mm` for a length), so it is
     /// shown converted in an inch job, or a place here saying why not.
-    const UNITLESS: [&str; 64] = [
+    const UNITLESS: [&str; 65] = [
         // counts
+        "extra_passes",
         "sides",
         "points",
         "passes",

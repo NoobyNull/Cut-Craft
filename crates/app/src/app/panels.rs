@@ -4986,6 +4986,9 @@ fn picked_message(picking: Option<super::PickFor>, name: &str) -> String {
         Some(super::PickFor::Listed(super::ToolList::Rest, _)) => {
             format!("Rest machining after {name}")
         }
+        Some(super::PickFor::Listed(super::ToolList::Before, _)) => {
+            format!("Pencil cuts only what {name} left")
+        }
         Some(super::PickFor::Holder(slot)) => format!("{name} loaded in holder T{slot}"),
         Some(super::PickFor::Listed(super::ToolList::Tools, _) | super::PickFor::Material)
         | None => format!("Cutting with {name}"),

@@ -2198,6 +2198,18 @@ enum ToolList {
     Tools,
     /// Rest Machining's earlier tools (`rest.after`).
     Rest,
+    /// The bits that finished before a 3D Pencil toolpath (`bits_before`).
+    Before,
+}
+
+impl ToolList {
+    /// The list a form's `key` holds, for a list drawn by [`tools_section`].
+    fn of_key(key: &str) -> Self {
+        match key {
+            "bits_before" => Self::Before,
+            _ => Self::Tools,
+        }
+    }
 }
 
 /// What Select Tool picks for, other than the open form's own tool.
@@ -2370,6 +2382,7 @@ fn put_listed(params: &mut Value, which: ToolList, at: ListSlot, tool: &Tool) {
     let list = match which {
         ToolList::Clearing => &mut params["clearance_tools"],
         ToolList::Tools => &mut params["tools"],
+        ToolList::Before => &mut params["bits_before"],
         ToolList::Rest => {
             if !params["rest"].is_object() {
                 params["rest"] = serde_json::to_value(cut_craft_core::rest::Rest::default())
@@ -2523,16 +2536,16 @@ fn tools_section(
 ) -> (bool, Option<ListAsk>) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Tools");
-        tool_list(
-            ui,
-            key,
-            &mut params[key],
-            tools,
-            slots,
-            "No tool picked yet: Add a tool… to pick one",
-            units,
-        )
+        let (heading, empty) = match ToolList::of_key(key) {
+            ToolList::Before => (
+                "Bits that finished before",
+                "None: the pencil bit runs along every valley. Add the bit your 3D Finishing \
+                 toolpath used, to cut only what it left",
+            ),
+            _ => ("Tools", "No tool picked yet: Add a tool… to pick one"),
+        };
+        ui.strong(heading);
+        tool_list(ui, key, &mut params[key], tools, slots, empty, units)
     })
     .inner
 }

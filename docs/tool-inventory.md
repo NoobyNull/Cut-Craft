@@ -49,6 +49,7 @@ Position and the start page's Create a new file are Job Setup.
 | Weld, Subtract, Overlap, Offset | polygon union / difference / intersection / offset |
 | Profile, Pocket, V-Carve | polygon offsets (V-Carve: regions with holes) + contour moves + pass depths |
 | 3D Roughing, 3D Finishing | placed model + machining boundary + raster or offset lines dropped along (each move checked with the simulation) + follow |
+| 3D Pencil (Cut Craft only, beyond Aspire) | placed model + rest areas of the bits before + the tip surface's valleys traced into lines + offsets dropped along + follow |
 | Recalculate All Toolpaths | Recalculate, for each toolpath |
 | Preview All Toolpaths | Preview Toolpath, for each toolpath, on fresh material |
 | Delete Layer | removing its vectors (as Delete does) + removing the layer |
@@ -413,6 +414,9 @@ say "not implemented yet".
   slopes and only the smallest clearance radius into the flat bottom, so the corners a round
   end mill misses are still cut.
 - 3D Finishing takes a list of tools and makes a toolpath for each (rest machining).
+- 3D Pencil Toolpath (Cut Craft only, beyond Aspire): a small ball nose along the valleys
+  and inside corners the finishing bit left, with extra passes either side; see
+  `re/SPEC.md` "3D Pencil Toolpath".
 - Posts: G2/G3 arcs (and helices) fitted to curves when the post has arc blocks, Cut Craft's
   own FluidNC posts included; Plunge (Z2) and the Home / Start Position in Job Setup.
 - Tool Database form tools: Form Tool is a tool type whose cutting edge is a profile;

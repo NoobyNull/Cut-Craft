@@ -1199,9 +1199,10 @@ pub struct Toolpath {
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
-const MODEL_STRATEGIES: [&str; 3] = [
+const MODEL_STRATEGIES: [&str; 4] = [
     "3d_roughing_toolpath",
     "3d_finishing_toolpath",
+    "3d_pencil_toolpath",
     "sketch_carving_toolpath",
 ];
 
