@@ -1,4 +1,2 @@
-- See the G-code before you save it: View G-code on the Toolpaths page
-- Spin the 3D view on its own with Auto-rotate, and pick the colours lines and toolpaths are drawn in
-- Embellish now runs along open lines, and you can edit shapes inside a group without ungrouping
-- Inch jobs keep exact values, and Analyse no longer freezes on big 3D jobs
+- New 3D Pencil toolpath: a small bit cleans the creases and corners a big ball nose can't reach
+- Rotary jobs: Auto-rotate now spins the part round its own long axis, like it turns on the machine
