@@ -836,9 +836,20 @@ fn a_script_starts_a_new_job_with_its_own_job_setup_and_opens_one() {
     assert_eq!(status, 409, "{e}");
     assert!(e["error"].as_str().unwrap().contains("discard"), "{e}");
     assert_eq!(h.app.doc.vectors.len(), 1, "kept");
+    // settings Job Setup refuses leave the open job as it was, even told to discard it
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/new",
+        Some(json!({ "settings": { "gaps": { "plunge": 999 } }, "discard": true })),
+    );
+    assert_eq!(status, 409, "{e}");
+    assert_eq!(h.app.screen, super::super::Screen::Job, "still open");
+    assert_eq!(h.app.doc.vectors.len(), 1, "nothing thrown away");
+    assert!(h.app.session.is_dirty(&h.app.history), "its undo kept too");
     // saved, then opened again after a fresh job
-    let dir = std::env::temp_dir().join(format!("cut-craft-web-open-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new("cut-craft-web-open");
     let (status, saved) = call(
         &mut h,
         at,
@@ -867,7 +878,63 @@ fn a_script_starts_a_new_job_with_its_own_job_setup_and_opens_one() {
         Some(json!({ "path": dir.join("nothing.ccjob") })),
     );
     assert_eq!(status, 409, "{e}");
-    let _ = std::fs::remove_dir_all(dir);
+    // a file there that will not read is refused, though it is the job open
+    std::fs::write(saved["path"].as_str().unwrap(), b"not a job").unwrap();
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/open",
+        Some(json!({ "path": saved["path"] })),
+    );
+    assert_eq!(status, 409, "a damaged file did not open: {e}");
+    assert_eq!(h.app.doc.vectors.len(), 1, "the job open is kept");
+}
+
+/// A folder of its own for one test, gone when the test ends, passed or not.
+struct Scratch(std::path::PathBuf);
+
+impl Scratch {
+    fn new(name: &str) -> Self {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("{name}-{}-{n}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir(&dir).unwrap();
+        Self(dir)
+    }
+
+    fn join(&self, file: &str) -> std::path::PathBuf {
+        self.0.join(file)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn a_new_job_from_a_script_starts_from_the_saved_default_job() {
+    let mut h = Harness::at_start();
+    h.app.options.default_job = Some(cut_craft_core::document::Job {
+        width: 444.0,
+        ..Default::default()
+    });
+    // a drawing waiting on an earlier Job Setup is not brought into this job
+    h.app.import_after_setup = Some(std::path::PathBuf::from("/nowhere/drawing.svg"));
+    h.app.options.web_api.enabled = true;
+    h.app.options.web_api.port = 0;
+    h.frame(vec![]);
+    let State::Running(at) = h.app.web_api_state().clone() else {
+        panic!("{:?}", h.app.web_api_state());
+    };
+    let (status, made) = call(&mut h, at, "POST", "job/new", Some(json!({})));
+    assert_eq!(status, 200, "{made}");
+    assert_eq!(made["state"]["material"]["width"], 444.0, "{made}");
+    assert!(h.app.import_after_setup.is_none());
+    assert!(h.app.doc.vectors.is_empty(), "nothing imported");
 }
 
 #[test]

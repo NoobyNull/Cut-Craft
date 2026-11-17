@@ -660,13 +660,30 @@ impl CutCraftApp {
         Ok(())
     }
 
-    /// `POST job/new`: New, then Job Setup's OK on its starting settings with the call's
-    /// laid over them. Settings it will not take leave no job started.
+    /// `POST job/new`: New, then Job Setup's OK on its starting settings (the saved
+    /// default job's) with the call's laid over them. Settings it will not take are tried
+    /// on a job of their own first, so they leave the job open as it was.
     fn web_new_job(&mut self, settings: &Value, discard: bool) -> Answer {
         self.unsaved_kept(discard)?;
-        let fresh = cut_craft_core::document::Document::default();
+        let mut fresh = cut_craft_core::document::Document::default();
+        if let Some(default) = self.options.default_job {
+            fresh.job = default;
+        }
         let params = job::run_params(&self.registry, &fresh, "job_setup", settings)?;
+        let setup = self
+            .registry
+            .get("job_setup")
+            .ok_or_else(|| ApiError::refused("Job Setup is missing."))?;
+        if let Err(why) = (setup.run_json(&fresh, &params).map_err(|e| e.to_string()))
+            .and_then(|change| fresh.apply(&change).map_err(|e| e.to_string()))
+        {
+            return Err(ApiError::refused(format!(
+                "Job Setup would not take that: {why}"
+            )));
+        }
         cut_craft_bug_report::logs::step("Web API started a new job");
+        // a drawing waiting on a Job Setup the window started is not this job's
+        self.import_after_setup = None;
         self.reset_job();
         self.view = View::TwoD;
         self.start_command("job_setup");
@@ -708,9 +725,13 @@ impl CutCraftApp {
             ))));
         }
         cut_craft_bug_report::logs::step("Web API opened a job");
+        // a job read puts itself in place of the one open, which starts a new job epoch;
+        // one that will not read leaves it, even when it is the same file
+        let before = self.job_epoch;
         self.open_path(&path);
         Started::AfterBusy(Box::new(move |app| {
-            if app.screen != super::Screen::Job
+            if app.job_epoch == before
+                || app.screen != super::Screen::Job
                 || app.session.path.as_deref() != Some(path.as_path())
             {
                 return Err(ApiError::refused(format!(

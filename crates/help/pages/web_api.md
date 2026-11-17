@@ -158,7 +158,9 @@ Toolpaths page's buttons, each with its progress window as usual.
   The G-code is only made and saved: it is never sent to your machine.
 - **POST job/new** `{"settings": {"size": {"width": 300, "height": 150, "thickness": 12}}}`:
   **New**, with **OK** pressed in **Job Setup**. Settings left out are what Job Setup starts
-  with; **GET commands/job_setup** lists them all.
+  with (your **Set as Default** settings, if you saved some); **GET commands/job_setup**
+  lists them all. Settings Job Setup will not take are refused, and the job open stays
+  as it was.
 - **POST job/open** `{"path": "/home/me/sign.ccjob"}`: **Open** on that job file.
 
   Neither throws away unsaved changes: they are refused until you save, or send

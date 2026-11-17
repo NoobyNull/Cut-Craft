@@ -435,7 +435,8 @@ fn more_paths(
         json!({ "post": {
         "summary": "Start a new job",
         "description": "New, with Job Setup's OK pressed: settings left out are what Job \
-            Setup starts with (GET commands/job_setup lists them). Unsaved work is kept, and \
+            Setup starts with, the saved default job's (GET commands/job_setup lists them). \
+            Settings Job Setup refuses leave the job open as it was. Unsaved work is kept, and \
             the call refused, unless \"discard\": true.",
         "requestBody": body(json!({
             "type": "object",
