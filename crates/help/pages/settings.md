@@ -112,8 +112,9 @@ Ribbon.
      **Show Favourites**. **Show All Tools** brings every tool back.
    - **Rail**: click the **★** button at the foot of the column of group icons.
    - **Ribbon**: open the **Favourites** tab.
-3. To take a tool off, right-click it and pick **Remove from Favourites**. Among your
-   favourites, **Move Earlier** and **Move Later** change their order.
+3. To take a tool off, right-click it and pick **Remove from Favourites**. In Classic and
+   Ribbon, right-click a favourite and pick **Move Earlier** or **Move Later** to change
+   their order.
 
 Favourites are kept between runs and are the same in every layout.
 

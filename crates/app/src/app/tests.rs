@@ -438,8 +438,12 @@ fn rail_and_ribbon_browsers_show_the_checks_before_cutting() {
             h.text_at("Checks").is_some(),
             "{layout:?}: the browser's tab"
         );
-        h.app.inspector_tab = INSPECTOR_TABS.iter().position(|&t| t == "Checks").unwrap();
+        // picked by clicking its tab, as a user would
+        let tab = h.text_at("Checks").unwrap();
+        h.press(tab, true, Modifiers::NONE);
+        h.press(tab, false, Modifiers::NONE);
         h.frame(vec![]);
+        assert_eq!(INSPECTOR_TABS[h.app.inspector_tab], "Checks", "{layout:?}");
         assert!(
             h.text_at("Make a toolpath (or tick one in the list) to check it here")
                 .is_some(),
