@@ -13405,12 +13405,7 @@ fn the_sample_project_opens_with_toolpaths_that_pass_the_checks() {
     assert_eq!(names, [super::sample::CARVE, super::sample::CUT_OUT]);
     let toolpaths: Vec<_> = h.app.doc.toolpaths.values().collect();
     let found = cut_craft_core::preflight::check(&h.app.doc, &toolpaths, &h.app.limits());
-    // the starter tools give no flute length, so how deep they reach goes unchecked: a
-    // note on every job, not a fault of the sample's
-    let faults: Vec<_> = found
-        .iter()
-        .filter(|f| !f.message.contains("has no flute length set"))
-        .collect();
+    let faults: Vec<_> = found.iter().collect();
     assert_eq!(faults, [] as [&cut_craft_core::preflight::Finding; 0]);
     assert!(
         !h.app.session.is_dirty(&h.app.history),
@@ -13833,7 +13828,7 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
     );
     assert!(h.text_at(line.text()).is_some(), "shown: {line:?}");
     assert!(line.text().contains("too wide for 1 spot"), "{line:?}");
-    // a wider shape fits; the starter bit has no flute length, so depth is not checked
+    // a wider shape fits; the starter bit has no flute length, so it reaches any depth
     h.app.form = None;
     h.rectangle(30.0, 10.0, 40.0, 50.0);
     h.click(h.at(70.0, 35.0), Modifiers::NONE);
@@ -13841,7 +13836,7 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
     h.app.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     let line = h.app.form_reach().expect("a reach line");
-    assert!(line.text().starts_with("Fits every spot"), "{line:?}");
+    assert_eq!(line.text(), "Reaches everything", "{line:?}");
 }
 
 #[test]
