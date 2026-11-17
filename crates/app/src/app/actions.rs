@@ -125,6 +125,7 @@ impl CutCraftApp {
             save_after: None,
             form_back: None,
             shots: None,
+            help_shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
                 .mine
@@ -163,6 +164,8 @@ impl CutCraftApp {
             help_cache: egui_commonmark::CommonMarkCache::default(),
             help_search: String::new(),
             help_index: vec![],
+            help_ranked: None,
+            help_history: cut_craft_help::wiki::History::default(),
             tip: None,
             tips_cache: egui_commonmark::CommonMarkCache::default(),
             sketch_areas: None,
@@ -1844,17 +1847,21 @@ impl CutCraftApp {
         }
         let mut found = cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits);
         if changes == files::ToolChanges::ToolChanger && !self.has_tool_changer() {
-            found.push(cut_craft_core::preflight::Finding {
-                severity: cut_craft_core::preflight::Severity::Warning,
-                message: "Tool changer (ATC) is chosen, but the machine has no tool changer \
-                          set up: the file changes tools with M6, which a machine without \
-                          one stops on or ignores, cutting on with the wrong bit. Choose \
-                          Separate file for each tool, or add the tool changer's slots in \
-                          Machine Configuration"
-                    .into(),
-            });
+            found.push(Self::no_tool_changer());
         }
         found
+    }
+
+    /// The warning when the tool changer is chosen but the machine has none set up.
+    pub(super) fn no_tool_changer() -> cut_craft_core::preflight::Finding {
+        cut_craft_core::preflight::Finding {
+            severity: cut_craft_core::preflight::Severity::Warning,
+            message: "Tool changer (ATC) is chosen, but the machine has no tool changer set \
+                      up: the file changes tools with M6, which a machine without one stops \
+                      on or ignores, cutting on with the wrong bit. Choose Separate file for \
+                      each tool, or add the tool changer's slots in Machine Configuration"
+                .into(),
+        }
     }
 
     /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when
@@ -5319,7 +5326,7 @@ impl CutCraftApp {
         let mut reset = false;
         ui.horizontal(|ui| {
             if let Some((label, hint)) = committing {
-                apply = ui.button(label).on_hover_hint(hint).clicked();
+                apply = marked_commit_button(ui, label, hint);
             }
             reset = reset_button(ui, open.id);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -7249,4 +7256,11 @@ fn not_saved(what: &str, path: &std::path::Path) -> String {
          until it closes",
         path.display()
     )
+}
+
+/// A form's commit button, marked for the help's step pictures; whether it was pressed.
+fn marked_commit_button(ui: &mut egui::Ui, label: &str, hint: &str) -> bool {
+    let button = ui.button(label);
+    crate::marks::note(ui, &format!("button:{label}"), button.rect);
+    button.on_hover_hint(hint).clicked()
 }

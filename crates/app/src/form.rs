@@ -455,46 +455,47 @@ fn plain(
         if (section.key == "tool" || TOOL_LISTS.contains(&section.key.as_str())) && !section.section
         {
             if let Some(tool) = look.tool {
-                tool(ui, &section.key, params);
+                let place = ui.scope(|ui| tool(ui, &section.key, params)).response.rect;
+                crate::marks::note(ui, &format!("field:{}", section.key), place);
             }
             continue;
         }
         let enabled = section.enabled.as_ref().is_none_or(|w| w.shown(top));
-        changed |= ui
-            .add_enabled_ui(enabled, |ui| {
-                ui.group(|ui| {
-                    ui.set_width(ui.available_width());
-                    hover(ui.strong(&section.label), section.help.as_ref());
-                    let value = &mut params[&section.key];
-                    let picture = section
-                        .icon
-                        .as_ref()
-                        .and_then(|template| (look.picture)(&icon_path(template, value)));
-                    let edited = ui
-                        .horizontal(|ui| {
-                            if let Some(picture) = picture {
-                                ui.add(picture);
+        let shown = ui.add_enabled_ui(enabled, |ui| {
+            ui.group(|ui| {
+                ui.set_width(ui.available_width());
+                hover(ui.strong(&section.label), section.help.as_ref());
+                let value = &mut params[&section.key];
+                let picture = section
+                    .icon
+                    .as_ref()
+                    .and_then(|template| (look.picture)(&icon_path(template, value)));
+                let edited = ui
+                    .horizontal(|ui| {
+                        if let Some(picture) = picture {
+                            ui.add(picture);
+                        }
+                        ui.vertical(|ui| match &section.kind {
+                            Kind::Group(inner) => {
+                                let inner: Vec<&Field> = inner.iter().collect();
+                                show_within(ui, &inner, value, look, top)
                             }
-                            ui.vertical(|ui| match &section.kind {
-                                Kind::Group(inner) => {
-                                    let inner: Vec<&Field> = inner.iter().collect();
-                                    show_within(ui, &inner, value, look, top)
-                                }
-                                kind => edit(ui, kind, value, &Value::Null, look),
-                            })
-                            .inner
+                            kind => edit(ui, kind, value, &Value::Null, look),
                         })
-                        .inner;
-                    // more under the section's settings (Model Position in Material's
-                    // picture), given the settings holding the section
-                    let ended = look
-                        .group_end
-                        .is_some_and(|end| end(ui, &section.label, params));
-                    edited | ended
-                })
-                .inner
+                        .inner
+                    })
+                    .inner;
+                // more under the section's settings (Model Position in Material's
+                // picture), given the settings holding the section
+                let ended = look
+                    .group_end
+                    .is_some_and(|end| end(ui, &section.label, params));
+                edited | ended
             })
-            .inner;
+            .inner
+        });
+        crate::marks::note(ui, &format!("field:{}", section.key), shown.response.rect);
+        changed |= shown.inner;
     }
     changed
 }
@@ -522,18 +523,21 @@ fn grid(
                     .filter(|_| own)
                     .and_then(|template| (look.picture)(&icon_path(template, &params[&f.key])));
                 let enabled = f.enabled.as_ref().is_none_or(|w| w.judged(params, top));
-                ui.add_enabled_ui(enabled, |ui| {
-                    ui.horizontal(|ui| {
-                        if let Some(picture) = picture {
-                            let edge = ui.spacing().interact_size.y * FIELD_PICTURE_ROWS;
-                            ui.add(picture.fit_to_exact_size(egui::vec2(edge, edge)));
-                        }
-                        if let Some(dim) = &f.dim {
-                            dim_letter(ui, dim);
-                        }
-                        hover(ui.label(&f.label), f.help.as_ref());
-                    });
-                });
+                let label_rect = ui
+                    .add_enabled_ui(enabled, |ui| {
+                        ui.horizontal(|ui| {
+                            if let Some(picture) = picture {
+                                let edge = ui.spacing().interact_size.y * FIELD_PICTURE_ROWS;
+                                ui.add(picture.fit_to_exact_size(egui::vec2(edge, edge)));
+                            }
+                            if let Some(dim) = &f.dim {
+                                dim_letter(ui, dim);
+                            }
+                            hover(ui.label(&f.label), f.help.as_ref());
+                        });
+                    })
+                    .response
+                    .rect;
                 // a picture named by the fields beside it reads them as they were this frame
                 let around = match &f.kind {
                     Kind::Choice(
@@ -565,6 +569,8 @@ fn grid(
                     note_help(ui.ctx(), help);
                 }
                 changed |= edited.inner;
+                let place = label_rect.union(edited.response.rect);
+                crate::marks::note(ui, &format!("field:{}", f.key), place);
                 ui.end_row();
             }
         });
