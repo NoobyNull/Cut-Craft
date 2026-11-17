@@ -1292,7 +1292,7 @@ pub fn load_message(unread: &[String], tampered: bool) -> Option<String> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Updates {
     /// About once a day, when Cut Craft starts, ask GitHub whether there is a new version,
-    /// and say so if there is. Nothing is downloaded or installed until you choose Update Now
+    /// and say so if there is. Nothing is downloaded or installed until you choose Install Now
     #[serde(default = "on")]
     #[schemars(title = "Check for updates when Cut Craft starts")]
     pub check_at_startup: bool,

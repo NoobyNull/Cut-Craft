@@ -161,6 +161,45 @@ pub fn replace(target: &Path, program: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Puts `program` at `dest`, a new name beside the old program (an `AppImage` named for its
+/// version); the old one is untouched until [`set_aside`].
+pub fn write_beside(dest: &Path, program: &[u8]) -> Result<(), String> {
+    let dir = dest.parent().unwrap_or(Path::new("."));
+    let cannot = |e: std::io::Error| {
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            format!(
+                "Cut Craft is not allowed to add files to {}. Download the new version from \
+                 the release page and put it there yourself.",
+                dir.display()
+            )
+        } else {
+            format!("could not install the update in {} ({e})", dir.display())
+        }
+    };
+    let new = beside(dest, ".new");
+    let written = fs::write(&new, program).and_then(|()| {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            fs::set_permissions(&new, fs::Permissions::from_mode(0o755))?;
+        }
+        fs::rename(&new, dest)
+    });
+    if let Err(e) = written {
+        let _ = fs::remove_file(&new);
+        return Err(cannot(e));
+    }
+    Ok(())
+}
+
+/// Sets `old` aside as `dest`'s backup, which the next start (from `dest`) removes like any
+/// other. If it cannot be moved it stays where it is: the new version runs from `dest`.
+pub fn set_aside(old: &Path, dest: &Path) {
+    if let Err(e) = fs::rename(old, backup_of(dest)) {
+        log::warn!("left {} in place after the update ({e})", old.display());
+    }
+}
+
 /// Removes what [`replace`] set aside last time, once the new program is the one running.
 pub fn clean_up(target: &Path) {
     for left in [backup_of(target), beside(target, ".new")] {
@@ -327,6 +366,34 @@ mod tests {
         clean_up(&exe);
         assert!(!backup_of(&exe).exists());
         assert_eq!(fs::read(&exe).unwrap(), b"newer");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_renamed_appimage_goes_beside_the_old_one_which_is_set_aside() {
+        let dir = scratch("beside");
+        let old = dir.join("CutCraft-0.6.13-x86_64.AppImage");
+        let new = dir.join("CutCraft-0.6.14-x86_64.AppImage");
+        fs::write(&old, b"old").unwrap();
+        write_beside(&new, b"new").unwrap();
+        assert_eq!(fs::read(&new).unwrap(), b"new");
+        assert_eq!(fs::read(&old).unwrap(), b"old", "untouched until set aside");
+        set_aside(&old, &new);
+        assert!(!old.exists(), "the old version's name is gone");
+        assert_eq!(fs::read(backup_of(&new)).unwrap(), b"old");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mode = fs::metadata(&new).unwrap().permissions().mode();
+            assert_eq!(mode & 0o111, 0o111, "the new program can be run");
+        }
+        // the next start, from the new file, removes the old one
+        clean_up(&new);
+        assert!(!backup_of(&new).exists());
+        // a folder that cannot be written leaves the old program alone
+        let gone = dir.join("missing").join("CutCraft-0.6.15-x86_64.AppImage");
+        assert!(write_beside(&gone, b"newer").is_err());
+        assert_eq!(fs::read(&new).unwrap(), b"new");
         fs::remove_dir_all(dir).unwrap();
     }
 

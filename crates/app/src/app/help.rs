@@ -12,6 +12,7 @@ const WEB_API: &str = include_str!("../../help/web-api.md");
 const VIEW_3D: &str = include_str!("../../help/view-3d.md");
 const GROUPS: &str = include_str!("../../help/groups.md");
 const PENCIL: &str = include_str!("../../help/3d-pencil.md");
+const UPDATES: &str = include_str!("../../help/updates.md");
 
 /// More help for a tool than its settings' doc comments give: pictures and steps, added
 /// under its settings.
@@ -79,6 +80,18 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "pencil-pass.gif",
         include_bytes!("../../help/pictures/pencil-pass.gif"),
+    ),
+    (
+        "update-offer.png",
+        include_bytes!("../../help/pictures/update-offer.png"),
+    ),
+    (
+        "update-steps.gif",
+        include_bytes!("../../help/pictures/update-steps.gif"),
+    ),
+    (
+        "update-by-hand.png",
+        include_bytes!("../../help/pictures/update-by-hand.png"),
     ),
 ];
 
@@ -203,6 +216,7 @@ impl CutCraftApp {
             "web_api" => "Web API".into(),
             "view_3d" => "3D View".into(),
             "groups" => "Groups".into(),
+            "updates" => "Updates".into(),
             id => self.tool_label(id),
         }
     }
@@ -217,6 +231,7 @@ impl CutCraftApp {
             "web_api",
             "view_3d",
             "groups",
+            "updates",
         ];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
@@ -252,6 +267,7 @@ impl CutCraftApp {
             "web_api" => WEB_API.to_owned(),
             "view_3d" => VIEW_3D.to_owned(),
             "groups" => GROUPS.to_owned(),
+            "updates" => UPDATES.to_owned(),
             id => {
                 let (page, name) = match self.page_of(id) {
                     Page::Design => ("design", "Design"),

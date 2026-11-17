@@ -1,6 +1,7 @@
-//! Help ▸ Check for Updates and the check at startup: the window that offers a new version,
-//! shows the download, and asks to restart. The work is [`cut_craft_updater`]'s, on a thread
-//! of its own so the window keeps drawing.
+//! Help ▸ Check for Updates and the check at startup: the window that offers a new version
+//! ("Download, install and relaunch?"), shows the download, and once it is installed closes
+//! Cut Craft (asking to save first) and opens the new version on the same job. The work is
+//! [`cut_craft_updater`]'s, on a thread of its own so the window keeps drawing.
 
 use cut_craft_updater::{Found, Install, RELEASES_PAGE, Step, Version};
 use eframe::egui;
@@ -35,7 +36,8 @@ pub enum Asked {
     Checked,
     /// Skip This Version: not offered at startup again.
     Skip(String),
-    /// Close Cut Craft (asking to save as usual) and start this program.
+    /// Close Cut Craft (asking to save as usual) and start this program: Relaunch Now, or
+    /// Install Now's download finished.
     Restart(PathBuf),
 }
 
@@ -50,6 +52,8 @@ pub struct Updates {
     skipped: Option<String>,
     /// The version found, for the window's words once it is installed.
     offered: Option<Version>,
+    /// Install Now was pressed: relaunch as soon as the new version is installed.
+    relaunch: bool,
     install: Install,
     current: Version,
     rx: Option<Receiver<Msg>>,
@@ -72,10 +76,19 @@ impl Updates {
             manual: false,
             skipped: None,
             offered: None,
+            relaunch: false,
             install,
             current,
             rx: None,
         }
+    }
+
+    /// Shows the window at `phase`, as the help's pictures do (`--screenshots`).
+    pub fn show(&mut self, phase: Phase) {
+        if let Phase::Found(Found::Release { release, .. }) = &phase {
+            self.offered = Some(release.version.clone());
+        }
+        (self.phase, self.open) = (phase, true);
     }
 
     /// Whether the startup check runs for this copy (not when a package manager updates it).
@@ -107,12 +120,13 @@ impl Updates {
         });
     }
 
-    /// Update Now: downloads and installs what the check found.
+    /// Install Now: downloads and installs what the check found, then relaunches.
     fn start_install(&mut self, ctx: &egui::Context) {
         let Phase::Found(found) = &self.phase else {
             return;
         };
         let found = found.clone();
+        self.relaunch = true;
         self.phase = Phase::Working(Step::Downloading { done: 0, total: 0 });
         let (tx, rx) = channel();
         self.rx = Some(rx);
@@ -128,31 +142,43 @@ impl Updates {
         });
     }
 
-    /// Takes in what the background thread has said; whether a check finished.
-    fn poll(&mut self) -> bool {
-        let Some(rx) = &self.rx else { return false };
+    /// Takes in what the background thread has said: a check finished, or the new version
+    /// was installed and Install Now asked for a relaunch.
+    fn poll(&mut self) -> Asked {
+        let Some(rx) = &self.rx else {
+            return Asked::Nothing;
+        };
         let msgs: Vec<Msg> = rx.try_iter().collect();
-        let mut checked = false;
+        let mut asked = Asked::Nothing;
         for msg in msgs {
             match msg {
                 Msg::Checked(answer) => {
-                    checked = answer.is_ok();
+                    if answer.is_ok() {
+                        asked = Asked::Checked;
+                    }
                     self.answered(answer);
                 }
                 Msg::Step(step) => self.phase = Phase::Working(step),
                 Msg::Done(done) => {
                     self.phase = match done {
-                        Ok(program) => Phase::Installed(program),
+                        Ok(program) => {
+                            if std::mem::take(&mut self.relaunch) {
+                                asked = Asked::Restart(program.clone());
+                            }
+                            Phase::Installed(program)
+                        }
                         Err(e) => {
+                            self.relaunch = false;
                             log::warn!("the update failed: {e}");
                             Phase::Failed(e)
                         }
                     };
+                    // shown if the relaunch is called off (Cancel at "Save changes?")
                     self.open = true;
                 }
             }
         }
-        checked
+        asked
     }
 
     /// The check's answer: shown when asked for, or when the startup check found a version
@@ -183,13 +209,9 @@ impl Updates {
 
     /// The window, when open; what it asks the app to do.
     pub fn window(&mut self, ctx: &egui::Context) -> Asked {
-        let checked = self.poll();
-        if !self.open {
-            return if checked {
-                Asked::Checked
-            } else {
-                Asked::Nothing
-            };
+        let polled = self.poll();
+        if !self.open || matches!(polled, Asked::Restart(_)) {
+            return polled;
         }
         let mut open = true;
         let id = egui::Id::unique("updates_window");
@@ -200,15 +222,11 @@ impl Updates {
                 self.body(ui)
             })
             .unwrap_or(Press::Nothing);
-        let mut asked = if checked {
-            Asked::Checked
-        } else {
-            Asked::Nothing
-        };
+        let mut asked = polled;
         let close = match pressed {
             Press::Nothing => false,
             Press::Close => true,
-            Press::UpdateNow => {
+            Press::InstallNow => {
                 self.start_install(ctx);
                 false
             }
@@ -267,8 +285,9 @@ impl Updates {
                 });
                 ui.add_space(4.0);
                 ui.weak(
-                    "You can close this window and keep working; it opens again when the \
-                     update is ready.",
+                    "You can close this window and keep working. When the new version is \
+                     installed, Cut Craft closes and opens it on the same job, asking you to \
+                     save any changes first.",
                 );
                 Press::Nothing
             }
@@ -279,16 +298,17 @@ impl Updates {
                     .map_or_else(String::new, |v| format!(" {v}"));
                 ui.heading(format!("Cut Craft{version} is installed"));
                 ui.label(
-                    "Restart Cut Craft to start using it. If your job has changes that are not \
-                     saved, you will be asked whether to save them first.",
+                    "Relaunch Cut Craft to start using it. If your job has changes that are \
+                     not saved, you are asked whether to save them first, and the job opens \
+                     again in the new version.",
                 );
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     let now = ui
-                        .button(egui::RichText::new("Restart Now").strong())
+                        .button(egui::RichText::new("Relaunch Now").strong())
                         .clicked();
                     let later = ui
-                        .button("Restart Later")
+                        .button("Relaunch Later")
                         .on_hover_text("The new version starts the next time you open Cut Craft")
                         .clicked();
                     if now {
@@ -326,7 +346,7 @@ impl Updates {
 enum Press {
     Nothing,
     Close,
-    UpdateNow,
+    InstallNow,
     TryAgain,
     Skip(String),
     Restart(PathBuf),
@@ -336,15 +356,16 @@ fn pressed(clicked: bool, press: Press) -> Press {
     if clicked { press } else { Press::Nothing }
 }
 
-/// A newer release: what changed, and Update Now (or the download page, when it cannot
-/// install itself here), Later and Skip This Version.
+/// A newer release: "Download, install and relaunch?" with what changed, and Install Now
+/// (or, when this copy cannot replace itself, how to update it, with its commands to copy),
+/// Later and Skip This Version.
 fn offer(
     ui: &mut egui::Ui,
     release: &cut_craft_updater::Release,
     ready: &Result<(), String>,
     current: &Version,
 ) -> Press {
-    ui.heading(format!("Cut Craft {} is available", release.version));
+    ui.heading(offer_heading(&release.version));
     ui.label(format!("You have version {current}."));
     ui.add_space(4.0);
     if !release.notes.is_empty() {
@@ -360,24 +381,45 @@ fn offer(
         ui.hyperlink_to("See this version on GitHub", &release.page);
     }
     ui.add_space(8.0);
-    ui.label(match ready {
+    match ready {
         Ok(()) => {
-            "Update Now downloads it from GitHub, checks it is a genuine, signed Cut Craft \
-             release that arrived complete, and installs it. Cut Craft asks before \
-             restarting, and your open job is not touched."
+            ui.label(egui::RichText::new("Download, install and relaunch?").strong());
+            ui.label(
+                "Install Now downloads it from GitHub, checks it is a genuine, signed Cut \
+                 Craft release that arrived complete, installs it, and reopens Cut Craft on \
+                 your job. If the job has unsaved changes you are asked to save them first. \
+                 If anything goes wrong, this version is left as it is.",
+            );
         }
-        Err(why) => why.as_str(),
-    });
+        Err(why) => {
+            ui.label(egui::RichText::new("Update this copy yourself").strong());
+            // the commands are shown below, each with Copy
+            ui.label(why.replace('`', ""));
+            for command in commands_in(why) {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Label::new(egui::RichText::new(command).monospace()).wrap());
+                    if ui
+                        .small_button("Copy")
+                        .on_hover_text("Copy this command, to paste into a terminal")
+                        .clicked()
+                    {
+                        ui.ctx().copy_text(command.to_owned());
+                    }
+                });
+            }
+        }
+    }
     ui.add_space(8.0);
     let press = ui
         .horizontal(|ui| {
             let mut press = Press::Nothing;
             if ready.is_ok() {
                 if ui
-                    .button(egui::RichText::new("Update Now").strong())
+                    .button(egui::RichText::new("Install Now").strong())
+                    .on_hover_text("Download, install and relaunch Cut Craft")
                     .clicked()
                 {
-                    press = Press::UpdateNow;
+                    press = Press::InstallNow;
                 }
             } else if ui.button("Open the Download Page").clicked() {
                 let page = if release.page.is_empty() {
@@ -387,7 +429,11 @@ fn offer(
                 };
                 ui.ctx().open_url(egui::OpenUrl::new_tab(page));
             }
-            if ui.button("Later").clicked() {
+            if ui
+                .button("Later")
+                .on_hover_text("Ask again the next time Cut Craft starts")
+                .clicked()
+            {
                 press = Press::Close;
             }
             if ui
@@ -406,6 +452,21 @@ fn offer(
     ui.add_space(4.0);
     ui.weak("Automatic checks can be turned off in Edit ▸ Options ▸ Updates.");
     press
+}
+
+/// The offer's heading.
+fn offer_heading(version: &Version) -> String {
+    format!("A new version ({version}) is available")
+}
+
+/// The commands in a how-to-update message: each part written in `backticks`, to copy.
+fn commands_in(why: &str) -> Vec<&str> {
+    why.split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .collect()
 }
 
 /// What an update step says, and how far along it is when that is known.
@@ -427,9 +488,10 @@ fn progress(step: Step) -> (String, Option<f32>) {
     }
 }
 
-/// Starts the new version; called once the user has said Restart Now and closing went ahead.
-pub fn restart(program: &std::path::Path) -> Result<(), String> {
-    cut_craft_updater::restart(program).map_err(|e| {
+/// Starts the new version on the job `open`, if one was open; called once closing went
+/// ahead after Install Now or Relaunch Now.
+pub fn restart(program: &std::path::Path, open: Option<&std::path::Path>) -> Result<(), String> {
+    cut_craft_updater::restart(program, open).map_err(|e| {
         format!(
             "Cut Craft could not start the new version ({e}). Open it again yourself: it is \
              installed."
@@ -545,6 +607,13 @@ mod tests {
             Phase::Found(Found::UpToDate),
             Phase::Found(found("0.5.0")),
             Phase::Found(Found::Release {
+                release: match found("0.5.0") {
+                    Found::Release { release, .. } => release,
+                    Found::UpToDate => unreachable!(),
+                },
+                ready: Err(Install::flatpak_steps(&Version::new(0, 5, 0))),
+            }),
+            Phase::Found(Found::Release {
                 release: Release {
                     notes: "New: automatic updates".into(),
                     ..match found("0.5.0") {
@@ -563,6 +632,73 @@ mod tests {
             assert_eq!(draw(&mut u), Asked::Nothing, "{phase:?}");
             assert!(u.open, "{phase:?} stays open until a button is pressed");
         }
+    }
+
+    #[test]
+    fn the_offer_asks_to_download_install_and_relaunch() {
+        assert_eq!(
+            offer_heading(&Version::new(0, 6, 14)),
+            "A new version (0.6.14) is available"
+        );
+    }
+
+    #[test]
+    fn install_now_relaunches_once_the_new_version_is_installed() {
+        let mut u = updates();
+        let (tx, rx) = channel();
+        u.rx = Some(rx);
+        u.relaunch = true;
+        u.phase = Phase::Working(Step::Installing);
+        tx.send(Msg::Done(Ok("/a/CutCraft-0.6.14-x86_64.AppImage".into())))
+            .unwrap();
+        assert_eq!(
+            draw(&mut u),
+            Asked::Restart("/a/CutCraft-0.6.14-x86_64.AppImage".into()),
+            "no second click: closing (and the save question) follows straight on"
+        );
+        // if closing is called off, the window offers Relaunch Now and Later
+        assert!(u.open);
+        assert!(matches!(u.phase, Phase::Installed(_)));
+        assert_eq!(draw(&mut u), Asked::Nothing, "asked once only");
+    }
+
+    #[test]
+    fn a_failed_install_does_not_relaunch() {
+        let mut u = updates();
+        let (tx, rx) = channel();
+        u.rx = Some(rx);
+        u.relaunch = true;
+        tx.send(Msg::Done(Err("the signature does not match".into())))
+            .unwrap();
+        assert_eq!(draw(&mut u), Asked::Nothing);
+        assert_eq!(
+            u.phase,
+            Phase::Failed("the signature does not match".into())
+        );
+        assert!(!u.relaunch);
+    }
+
+    #[test]
+    fn how_to_update_by_hand_lists_its_commands_to_copy() {
+        let flatpak = Install::flatpak_steps(&Version::new(0, 6, 14));
+        assert_eq!(
+            commands_in(&flatpak),
+            ["flatpak install --user cut-craft-0.6.14-x86_64.flatpak"]
+        );
+        let apt = "Update it there: for example `sudo apt update && sudo apt upgrade`, \
+                   `sudo dnf upgrade`, or `paru -Syu`.";
+        assert_eq!(
+            commands_in(apt),
+            [
+                "sudo apt update && sudo apt upgrade",
+                "sudo dnf upgrade",
+                "paru -Syu"
+            ]
+        );
+        assert_eq!(
+            commands_in("Download it from the release page."),
+            Vec::<&str>::new()
+        );
     }
 
     #[test]

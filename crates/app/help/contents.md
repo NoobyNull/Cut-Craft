@@ -11,6 +11,8 @@ a CNC machine cuts them with.
 - [Groups](help:groups): step inside a group to change one thing in it; text in a
   group stays editable.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
+- [Updates](help:updates): install a new version in one click; Cut Craft reopens on
+  your job.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.
 
@@ -150,17 +152,8 @@ Appearance page puts every color back.
 ## Updates
 
 Cut Craft asks GitHub about once a day, when it starts, whether there is a new version, and
-says so if there is. **Help ▸ Check for Updates** asks straight away.
-
-- **Update Now** downloads the new version, checks it is a genuine Cut Craft release
-  (signed by its maker) that arrived complete, and installs it. Nothing is downloaded until
-  you press it.
-- **Restart Now** closes Cut Craft and opens the new version. If your job has unsaved
-  changes, you are asked whether to save them first. **Restart Later** keeps working; the
-  new version starts next time.
-- **Skip This Version** stops the startup check offering that version.
-- To stop the startup check, turn off **Edit ▸ Options ▸ Updates ▸ Check for updates when
-  Cut Craft starts**.
-
-The Flatpak and the Mac version cannot replace themselves: the window links to the download
-page instead.
+asks you: "A new version is available. Download, install and relaunch?" **Install Now**
+downloads it, checks it is genuine, installs it, and reopens Cut Craft on your job, asking
+you to save any changes first. **Help ▸ Check for Updates** asks straight away. See
+[Updates](help:updates) for every step, what to do if it goes wrong, and how copies
+installed with apt, dnf or Flatpak are updated.
