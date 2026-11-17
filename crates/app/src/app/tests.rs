@@ -17808,7 +17808,7 @@ fn the_collet_hitting_the_wood_is_always_asked_about_before_saving() {
 #[test]
 fn the_collision_help_explains_the_sizes_with_a_picture() {
     let h = Harness::new();
-    assert!(h.app.help_topics().contains(&"collisions"));
+    assert!(h.app.all_help_topics().contains(&"collisions"));
     assert!(
         h.app
             .help_markdown("contents")
