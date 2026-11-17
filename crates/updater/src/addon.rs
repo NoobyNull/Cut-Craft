@@ -707,6 +707,15 @@ mod tests {
         format!("cutcraft-depth{}", std::env::consts::EXE_SUFFIX)
     }
 
+    /// A computer that is not this one, whose zip a release also carries.
+    fn other_platform() -> &'static str {
+        if platform() == "macos-aarch64" {
+            "windows-x86_64"
+        } else {
+            "macos-aarch64"
+        }
+    }
+
     fn depth_release(signed: bool) -> Fake {
         let here = zip(&[
             ("addon.toml", DEPTH.as_bytes()),
@@ -716,7 +725,10 @@ mod tests {
         fake(
             &[
                 (&format!("depth-{}.zip", platform()), here),
-                ("depth-macos-aarch64.zip", b"mac".to_vec()),
+                (
+                    &format!("depth-{}.zip", other_platform()),
+                    b"another computer's".to_vec(),
+                ),
                 ("weights.safetensors", b"weights".to_vec()),
             ],
             signed,

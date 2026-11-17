@@ -194,7 +194,7 @@ These pictures are made by the app itself and can be made again at any time (see
 
 | Platform | How |
 |---|---|
-| macOS (Apple Silicon and Intel) | Download `CutCraft-…-macos.dmg` from the repository's Releases and drag Cut Craft to Applications. It isn't signed, so the first time, right-click it and choose **Open**. |
+| macOS (Apple Silicon and Intel) | Download `CutCraft-…-macos.dmg` from the repository's Releases and drag Cut Craft to Applications. It isn't signed by Apple, so the first time macOS says it can't check it: open **System Settings ▸ Privacy & Security**, scroll down to the line about Cut Craft and click **Open Anyway** (on macOS 14 and older, right-clicking Cut Craft and choosing **Open** also works). |
 | Linux (x86-64), AppImage | Download `CutCraft-…-x86_64.AppImage`, make it executable (`chmod +x`) and run it. One file, nothing to install; it needs FUSE 2 (`libfuse2`), which most desktops have. |
 | Linux (x86-64), Flatpak | Download `cut-craft-…-x86_64.flatpak` and install it with `flatpak install --user cut-craft-…-x86_64.flatpak` (Flathub's freedesktop runtime comes with it). Inside its sandbox Report a Bug can't reach `gh`, so reports are kept on disk. |
 | Linux (x86-64), Ubuntu, Debian, Mint | Download `cut-craft_…_amd64.deb` and open it, or run `sudo apt install ./cut-craft_…_amd64.deb`. Your package manager looks after it, so Help ▸ Check for Updates tells you about new versions but doesn't replace it. |
@@ -264,8 +264,8 @@ files reach it. **Edit ▸ Options ▸ Use Wayland directly** turns this off (wi
 
 **Edit ▸ Options** holds what the views draw on start, toolpath previews, the number of recent
 files, whether icons are read in advance, the repository bug reports go to, and the Wayland
-choice. Settings are kept in `~/.config/cut-craft` (Linux) or
-`~/Library/Application Support/cut-craft` (macOS).
+choice. Settings are kept in `~/.config/cut-craft` (Linux), `%APPDATA%\cut-craft` (Windows)
+or `~/Library/Application Support/cut-craft` (macOS).
 
 ## Reporting bugs
 

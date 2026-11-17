@@ -1530,8 +1530,12 @@ struct Harness {
 impl Harness {
     /// The app as it starts: the start page, no job open.
     fn at_start() -> Self {
+        // Windows and Linux unless a test asks for a Mac (`on_a_mac`): egui takes the system
+        // the tests run on, and the Mac's menus, keys and title bar differ
+        let ctx = egui::Context::default();
+        ctx.set_os(egui::os::OperatingSystem::Nix);
         let mut h = Self {
-            ctx: egui::Context::default(),
+            ctx,
             app: CutCraftApp::new(),
             time: 0.0,
             shapes: vec![],
@@ -8226,7 +8230,11 @@ fn reset_to_defaults_puts_back_only_the_page_shown() {
     h.click(reset, Modifiers::NONE);
     h.frame(vec![]);
     click_button(&mut h, "Apply");
-    assert_eq!(h.app.options.appearance.theme, crate::options::Theme::Light);
+    // Light, or System on a Mac
+    assert_eq!(
+        h.app.options.appearance.theme,
+        crate::options::Theme::default()
+    );
     assert_eq!(
         h.app.options.general.recent_file_list_size, 9,
         "other pages kept"
