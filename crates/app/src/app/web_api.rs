@@ -27,6 +27,15 @@ pub(super) struct WebApi {
     pub state: Option<State>,
     /// Calls waiting for the app to be free (a slow job running), oldest first.
     waiting: std::collections::VecDeque<Pending>,
+    /// A call waiting on the slow job or the picture it started.
+    pub(super) later: Option<super::web_api_work::Later>,
+    /// What the Web API's checks before cutting found, by each plan's first toolpath.
+    pub(super) checks: Option<
+        std::collections::BTreeMap<
+            cut_craft_core::document::EntityId,
+            Vec<cut_craft_core::preflight::Finding>,
+        >,
+    >,
 }
 
 impl CutCraftApp {
@@ -83,6 +92,7 @@ impl CutCraftApp {
         // the old one goes first, so a restart on the same port finds it free
         api.server = None;
         api.waiting.clear();
+        api.later = None;
         api.started_with.clone_from(&wanted);
         api.state = Some(match wanted {
             None => State::Off,
@@ -107,15 +117,18 @@ impl CutCraftApp {
         if let Some(server) = &self.web_api.server {
             self.web_api.waiting.extend(server.take());
         }
+        let mut waiting_on = self.web_later(ctx);
         while let Some(pending) = self.web_api.waiting.pop_front() {
-            // a slow job (a toolpath calculating) finishes first; asking what is going on
-            // is always answered
-            if self.busy.is_some() && pending.call != Call::Status {
+            // a slow job (a toolpath calculating) or a call waiting on one finishes first;
+            // asking what is going on is always answered
+            if (self.busy.is_some() || waiting_on) && !Self::web_answered_while_busy(&pending.call)
+            {
                 self.web_api.waiting.push_front(pending);
                 break;
             }
-            let answer = self.web_call(ctx, &pending.call);
-            pending.answer(answer);
+            let started = self.web_start(ctx, &pending.call);
+            self.web_wait_on(ctx, pending, started);
+            waiting_on = self.web_api.later.is_some();
         }
     }
 
@@ -126,6 +139,7 @@ impl CutCraftApp {
                 "version": env!("CARGO_PKG_VERSION"),
                 "job_open": self.screen == Screen::Job,
                 "busy": self.busy.is_some(),
+                "progress": self.web_progress(),
                 "units": job::units_name(self.doc.job.units),
                 "form": self.form.as_ref().map(|f| f.id),
                 "message": self.status.message,
@@ -140,6 +154,19 @@ impl CutCraftApp {
             }
             Call::Invoke(action) => self.web_invoke(ctx, action),
             Call::Run { command, params } => self.web_run(command, params),
+            // run by web_start, before this
+            Call::View(_)
+            | Call::State
+            | Call::Toolpaths
+            | Call::Posts
+            | Call::Progress
+            | Call::Cancel
+            | Call::Calculate { .. }
+            | Call::Preview { .. }
+            | Call::ResetPreview
+            | Call::Gcode(_)
+            | Call::Save { .. }
+            | Call::Export { .. } => self.web_start_now(ctx, call),
             Call::Select { pick, add } => {
                 self.job_needed()?;
                 let mut ids = if *add {
@@ -160,7 +187,15 @@ impl CutCraftApp {
         }
     }
 
-    fn job_needed(&self) -> Result<(), ApiError> {
+    /// A call [`Self::web_start`] runs, answered now (one that would wait says so).
+    fn web_start_now(&mut self, ctx: &egui::Context, call: &Call) -> Answer {
+        match self.web_start(ctx, call) {
+            super::web_api_work::Started::Now(answer) => answer,
+            _ => Err(ApiError::refused("That call is answered once it is done.")),
+        }
+    }
+
+    pub(super) fn job_needed(&self) -> Result<(), ApiError> {
         if self.screen == Screen::Job {
             Ok(())
         } else {
@@ -197,7 +232,12 @@ impl CutCraftApp {
                 (text("id"), text("name"))
             })
             .collect();
-        openapi::document(&tools, &actions, self.options.web_api.allow_network)
+        let mut doc = openapi::document(&tools, &actions, self.options.web_api.allow_network);
+        let formats: Vec<(String, String)> = (self.registry.exporters())
+            .map(|e| (e.id.to_owned(), e.format.label.to_owned()))
+            .collect();
+        openapi::add_export_formats(&mut doc, &formats);
+        doc
     }
 
     /// `GET actions`: every menu item and tool button, by id and name, each with whether it
