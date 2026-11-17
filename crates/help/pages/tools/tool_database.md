@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-14
-see-also: pocket_toolpath, profile_toolpath, stepover
+reviewed: 2026-11-17
+see-also: pocket_toolpath, profile_toolpath, stepover, collisions
 ---
 
 ## Steps
@@ -16,3 +16,16 @@ see-also: pocket_toolpath, profile_toolpath, stepover
    ![Step 2](pictures/tool_database/step-2.png)
 
 Each bit's stepover and depth per pass decide how fast it cuts: see [what stepover is](help:stepover).
+
+## Stick-out and Own holder
+
+Under **Tool Shape**, **Stick-out** is how far the bit pokes out below the collet nut, from
+its tip up to the nut's face. Measure it once the bit is tightened in. Until you set it,
+Cut Craft guesses it from the length that cuts (flutes, or a V-bit's V height) plus any neck
+plus 5 mm, or 25 mm when none of those are set, and says so.
+On a deep cut the collet nut or spindle can hit wood beside the cut: see
+[Collet and Holder Collisions](help:collisions).
+
+**Own holder** (folded below it) gives this bit its own collet nut and spindle sizes. It is
+only used on a machine with **Holder per bit** ticked in Machine Configuration, such as one
+with a tool changer; otherwise every bit uses the machine's sizes.

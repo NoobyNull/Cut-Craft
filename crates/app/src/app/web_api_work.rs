@@ -543,7 +543,7 @@ impl CutCraftApp {
             return Err(ApiError::refused(refused));
         }
         let mut warnings: Vec<String> = (found.iter())
-            .filter(|f| f.severity == Severity::Warning)
+            .filter(|f| matches!(f.severity, Severity::Warning | Severity::MustAsk))
             .map(|f| f.message.clone())
             .collect();
         let stale: Vec<&str> = (plan.iter().flatten())
@@ -563,8 +563,9 @@ impl CutCraftApp {
             );
         }
         // as Save Toolpaths: asked about unless Options say only to note them, and out-of-date
-        // toolpaths always
+        // toolpaths and the collet or spindle hitting the material always
         let ask = !stale.is_empty()
+            || found.iter().any(|f| f.severity == Severity::MustAsk)
             || self.options.confirmations.cutting_checks == crate::options::CuttingChecks::Ask;
         if !warnings.is_empty() && ask && !gcode.accept_warnings {
             return Err(ApiError::refused(format!(

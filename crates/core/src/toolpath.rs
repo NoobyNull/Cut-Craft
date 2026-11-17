@@ -187,6 +187,19 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "is_nothing")]
     #[schemars(skip)]
     pub shank_length: f64,
+    /// How far the bit sticks out below the collet nut, from its tip up to the nut's face:
+    /// the collet and spindle are this high above the tip, and the checks look for them
+    /// hitting the material on deep cuts. 0 if not given, when it is taken to be a little
+    /// more than the flutes ([`Tool::stickout`]; added with collision checks)
+    #[serde(default, skip_serializing_if = "is_nothing")]
+    #[schemars(skip)]
+    pub stickout: f64,
+    /// The holder (collet nut and spindle) this bit sits in, when it has its own: used only
+    /// on a machine with Holder per bit ticked in Machine Configuration (a tool changer);
+    /// `None` for the machine's (added with collision checks)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub holder: Option<crate::collision::Holder>,
     /// Cutting edges, for the chip load (added after the first tool format)
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
@@ -672,6 +685,8 @@ impl Default for Tool {
             flute_length: 0.0,
             neck_length: 0.0,
             shank_length: 0.0,
+            stickout: 0.0,
+            holder: None,
             flutes: default_flutes(),
             drill_only: false,
             number: 0,

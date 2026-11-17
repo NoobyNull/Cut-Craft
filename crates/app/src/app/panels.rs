@@ -1194,6 +1194,19 @@ impl CutCraftApp {
             .iter()
             .filter_map(|&id| Some((source.toolpaths.get(&id)?.clone(), self.preview_mark(id))))
             .unzip();
+        let checked: Vec<EntityId> = toolpaths
+            .iter()
+            .copied()
+            .filter(|id| source.toolpaths.contains_key(id))
+            .collect();
+        // the toolpaths cut before these clear material out of the parts' way, so they are
+        // checked too (in cutting order), though only these are reported
+        let earlier: Vec<(EntityId, cut_craft_core::toolpath::Toolpath)> = (source.toolpaths)
+            .iter()
+            .take_while(|(id, _)| !checked.contains(id))
+            .map(|(&id, t)| (id, t.clone()))
+            .collect();
+        let (job, holding) = (source.job, self.holding());
         drop(source);
         let start = (self.simulation.clone())
             .filter(|m| !fresh && m.covers(&self.doc.job))
@@ -1209,9 +1222,27 @@ impl CutCraftApp {
             &what,
             move || {
                 let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
-                cut_craft_core::playback::Playback::new(start, &list, rapid).marked(&marks)
+                let collided = {
+                    let ids: Vec<EntityId> =
+                        earlier.iter().map(|(id, _)| *id).chain(checked).collect();
+                    let all: Vec<&cut_craft_core::toolpath::Toolpath> = earlier
+                        .iter()
+                        .map(|(_, t)| t)
+                        .chain(list.iter().copied())
+                        .collect();
+                    let mut collided = super::background::collided(&job, &ids, &all, &holding);
+                    collided.retain(|id, _| !earlier.iter().any(|(e, _)| e == id));
+                    collided
+                };
+                let playback =
+                    cut_craft_core::playback::Playback::new(start, &list, rapid).marked(&marks);
+                (playback, collided)
             },
-            move |app, playback| {
+            move |app, (playback, collided)| {
+                if let Some(hit) = super::background::collision_note(&collided) {
+                    app.status.set_message(&hit);
+                }
+                app.collisions = collided;
                 app.playback = Some(playback);
                 app.kept_playback = None;
                 app.playback_revision = revision;
@@ -1745,6 +1776,7 @@ impl CutCraftApp {
             let (_, coarse) = self.simulation_coarse.as_ref().expect("made above");
             if self.doc.job.machined_area == MachinedArea::MaterialColor
                 && coarse.other_side.is_none()
+                && self.collisions.is_empty()
             {
                 return Some(Cow::Borrowed(coarse));
             }
@@ -1794,7 +1826,7 @@ impl CutCraftApp {
             None => material,
         };
         let rgb = |[r, g, b]: [u8; 3]| egui::Color32::from_rgb(r, g, b);
-        match job.machined_area {
+        let material = match job.machined_area {
             MachinedArea::MaterialColor => material,
             MachinedArea::GlobalFillColor => {
                 view3d::painted(material, |_| Some(rgb(job.fill_colour)))
@@ -1806,7 +1838,44 @@ impl CutCraftApp {
             MachinedArea::Lithophane => {
                 view3d::lit_through(material, rgb(job.colour), job.lithophane_light)
             }
+        };
+        self.collisions_painted(material)
+    }
+
+    /// `material` with the stock the collet, spindle or shank would hit painted red, once
+    /// the preview has finished playing (before then the tool has not got there).
+    fn collisions_painted(&self, mut material: Material) -> Material {
+        if self.collisions.is_empty() || self.playback.as_ref().is_some_and(|p| !p.finished()) {
+            return material;
         }
+        let hits: Vec<cut_craft_core::collision::Hit> = self
+            .current_collisions()
+            .flat_map(|(_, c)| c.hits.iter().copied())
+            .collect();
+        let struck = cut_craft_core::collision::struck_cells(&material, &hits);
+        if struck.is_empty() {
+            return material;
+        }
+        if material.paint.len() != material.heights.len() {
+            material.paint = vec![0; material.heights.len()];
+        }
+        let [r, g, b, _] = COLLISION_RED.to_array();
+        for i in struck {
+            material.paint[i] = u32::from_be_bytes([1, r, g, b]);
+        }
+        material
+    }
+
+    /// What the last preview found the collet, spindle or shank hitting, for each toolpath
+    /// not recalculated since.
+    pub(super) fn current_collisions(&self) -> impl Iterator<Item = (EntityId, &super::Collided)> {
+        self.collisions.iter().filter_map(|(&id, c)| {
+            self.doc
+                .toolpaths
+                .get(&id)
+                .is_some_and(|t| super::background::fingerprint(t) == c.moves)
+                .then_some((id, c))
+        })
     }
 
     /// Each toolpath's colour in a Toolpath Color preview (none: no fill), by the mark its
@@ -3840,6 +3909,10 @@ impl CutCraftApp {
                 cut_craft_core::preflight::Severity::Warning => {
                     (ui.visuals().warn_fg_color, "Check")
                 }
+                // always asked about on saving, so red as well as marked
+                cut_craft_core::preflight::Severity::MustAsk => {
+                    (ui.visuals().error_fg_color, "⚠ Check")
+                }
             };
             ui.colored_label(colour, format!("{kind}: {}", f.message));
         }
@@ -4267,8 +4340,13 @@ impl CutCraftApp {
                             let toolpath = &self.doc.toolpaths[&id];
                             let selected = picked.contains(&id);
                             let swatch = swatches.then_some((places[&id], self.doc.job.colour));
+                            let collided = self
+                                .collisions
+                                .get(&id)
+                                .filter(|c| c.moves == super::background::fingerprint(toolpath))
+                                .map(|c| c.sentence.as_str());
                             let (label, ticked, rgb) =
-                                toolpath_row(ui, toolpath, selected, swatch, *in_group);
+                                toolpath_row(ui, toolpath, (selected, collided), swatch, *in_group);
                             let label = label.interact(egui::Sense::drag());
                             if let Some(visible) = ticked {
                                 shown = Some((id, visible));
@@ -4581,11 +4659,13 @@ type Places = std::collections::BTreeMap<EntityId, usize>;
 
 /// A toolpath's row in the list: its tick, its preview swatch (given its place and the
 /// material's colour, when the preview takes toolpath colours) and its name, indented in a
-/// group. The name's response, the tick's new state if changed, and the colour picked if any.
+/// group, marked ⚠ in red with what its collet or spindle hits (`collided`) when the last
+/// preview found that. The name's response, the tick's new state if changed, and the colour
+/// picked if any.
 fn toolpath_row(
     ui: &mut egui::Ui,
     toolpath: &cut_craft_core::toolpath::Toolpath,
-    selected: bool,
+    (selected, collided): (bool, Option<&str>),
     swatch: Option<(usize, [u8; 3])>,
     indented: bool,
 ) -> (egui::Response, Option<bool>, Option<[u8; 3]>) {
@@ -4606,7 +4686,17 @@ fn toolpath_row(
             if let Some((place, material)) = swatch {
                 rgb = preview_swatch(ui, toolpath, place, material);
             }
-            let row = if toolpath.stale {
+            let row = if let Some(collided) = collided {
+                let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
+                    .color(ui.visuals().error_fg_color);
+                let stale = if toolpath.stale {
+                    "\nIt is also out of date: recalculate it."
+                } else {
+                    ""
+                };
+                ui.selectable_label(selected, name)
+                    .on_hover_hint(format!("{}\n{collided}{stale}", toolpath.tool.name))
+            } else if toolpath.stale {
                 let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
                     .color(ui.visuals().warn_fg_color);
                 ui.selectable_label(selected, name).on_hover_hint(format!(
@@ -4908,6 +4998,10 @@ pub(super) const SAVE_NEEDS: &str = "Make a toolpath first, then save it here";
 
 /// The share of the Toolpaths page the toolpath list takes until its divider is dragged.
 const LIST_SHARE: f32 = 0.4;
+
+/// The stock in the way of the collet, spindle or shank, in the preview: a strong red, so it
+/// stands out on any material or toolpath colour.
+pub(super) const COLLISION_RED: egui::Color32 = egui::Color32::from_rgb(230, 30, 30);
 
 /// The toolpath list's actions in its More… menu (Recalculate All only while none is out of
 /// date, when it is a button of its own).
