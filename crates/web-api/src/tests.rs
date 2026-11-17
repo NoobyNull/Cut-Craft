@@ -282,6 +282,80 @@ mod job {
     use serde_json::json;
 
     #[test]
+    fn the_state_tells_the_material_the_model_and_what_is_picked_in_the_jobs_units() {
+        use cut_craft_core::document::Units;
+        let mut doc = cut_craft_core::testing::domed();
+        let s = crate::job::state(&doc, None);
+        assert_eq!(s["units"], "mm");
+        assert_eq!(s["material"]["width"], 40.0);
+        assert_eq!(s["material"]["thickness"], 10.0);
+        assert!(s["material"]["z_zero"].is_string(), "{s}");
+        assert!(s["model"]["position"]["gap"].is_number(), "{s}");
+        let parts = s["model"]["components"].as_array().unwrap();
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0]["name"], "dome");
+        assert!(parts[0]["height"].as_f64().unwrap() > 7.0, "{s}");
+        assert_eq!(s["selection"]["vectors"], json!([]));
+        assert_eq!(s["selection"]["toolpath"], serde_json::Value::Null);
+        let id = *doc.components.keys().next().unwrap();
+        doc.selected_components = [id].into();
+        doc.job.units = Units::Inch;
+        let s = crate::job::state(&doc, Some(EntityId(9)));
+        assert_eq!(s["selection"]["components"], json!([id.0]));
+        assert_eq!(s["selection"]["toolpath"], 9);
+        assert_eq!(s["material"]["width"], 1.575, "inches, to a thousandth");
+    }
+
+    #[test]
+    fn the_toolpath_list_gives_each_ones_time_and_what_to_look_at() {
+        use cut_craft_core::preflight::{Finding, Severity};
+        use cut_craft_core::toolpath::Toolpath;
+        let mut doc = sample_document();
+        let t = |name: &str, stale: bool| Toolpath {
+            name: name.into(),
+            strategy: "profile_toolpath".into(),
+            params: json!({}),
+            tool: cut_craft_core::toolpath::Tool::default(),
+            vectors: vec![],
+            moves: vec![],
+            visible: true,
+            power: vec![],
+            stale,
+            group: None,
+            drill_bank: None,
+            fallbacks: vec![],
+        };
+        doc.toolpaths.insert(EntityId(50), t("Outline", false));
+        doc.toolpaths.insert(EntityId(51), t("Pocket", true));
+        let checks = std::collections::BTreeMap::from([(
+            EntityId(50),
+            vec![Finding {
+                severity: Severity::Error,
+                message: "Too deep for the bit".into(),
+            }],
+        )]);
+        let list = crate::job::toolpaths(
+            &doc,
+            &|t| if t.name == "Outline" { 90.5 } else { 2.0 },
+            &checks,
+        );
+        let rows = list["toolpaths"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["name"], "Outline");
+        assert_eq!(rows[0]["minutes"], 90.5);
+        assert_eq!(rows[0]["time"], "1h 30m 30s");
+        assert_eq!(rows[0]["errors"], json!(["Too deep for the bit"]));
+        assert_eq!(rows[1]["out_of_date"], true);
+        let warned = rows[1]["warnings"][0].as_str().unwrap();
+        assert!(warned.contains("Recalculate"), "{warned}");
+        assert_eq!(
+            list["total_minutes"], 92.5,
+            "the shown ones' times added up"
+        );
+        assert_eq!(list["total_time"], "1h 32m 30s");
+    }
+
+    #[test]
     fn the_summary_lists_layers_vectors_and_the_selection_in_the_jobs_units() {
         let mut doc = sample_document();
         let s = summary(&doc);
@@ -587,5 +661,158 @@ fn the_description_lists_every_tool_and_menu_item_with_an_example() {
     assert_eq!(
         open["components"]["securitySchemes"]["token"]["scheme"],
         "bearer"
+    );
+}
+
+#[test]
+fn the_new_calls_are_read_from_their_path_query_and_body() {
+    let (address, _stop) = running(Some(TOKEN));
+    let call = |r: Reply| {
+        assert_eq!(r.status, 200, "{}", r.body);
+        r.body["call"].as_str().unwrap().to_owned()
+    };
+    let got = |path: &str| call(get(address, path, Some(TOKEN)));
+    assert_eq!(
+        got("/api/v1/view.png?view=top&preview=before&width=640"),
+        "View(Picture { view: Top, preview: Before, width: Some(640) })"
+    );
+    assert_eq!(
+        got("/api/v1/view.png"),
+        "View(Picture { view: Iso, preview: After, width: None })"
+    );
+    assert_eq!(got("/api/v1/state"), "State");
+    assert_eq!(got("/api/v1/toolpaths"), "Toolpaths");
+    assert_eq!(got("/api/v1/posts"), "Posts");
+    assert_eq!(got("/api/v1/progress"), "Progress");
+    assert_eq!(call(post(address, "/api/v1/cancel", "{}")), "Cancel");
+    assert_eq!(
+        call(post(address, "/api/v1/calculate", "{}")),
+        "Calculate { which: All, wait: true }"
+    );
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/calculate",
+            r#"{"toolpaths":[3,4],"wait":false}"#
+        )),
+        "Calculate { which: Ids([3, 4]), wait: false }"
+    );
+    assert_eq!(
+        call(post(address, "/api/v1/preview", r#"{"toolpaths":7}"#)),
+        "Preview { which: Ids([7]), wait: true }"
+    );
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/preview",
+            r#"{"toolpaths":"visible"}"#
+        )),
+        "Preview { which: Visible, wait: true }"
+    );
+    assert_eq!(
+        call(post(address, "/api/v1/preview/reset", "")),
+        "ResetPreview"
+    );
+    assert_eq!(
+        call(post(address, "/api/v1/gcode", "{}")),
+        "Gcode(Gcode { toolpath: None, group: None, each: false, post: None, save_to: None, \
+         replace: false, accept_warnings: false })"
+    );
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/gcode",
+            r#"{"toolpath":2,"post":"GRBL (mm)","save_to":"/tmp/a.nc","accept_warnings":true}"#
+        )),
+        "Gcode(Gcode { toolpath: Some(2), group: None, each: false, post: Some(\"GRBL (mm)\"), \
+         save_to: Some(\"/tmp/a.nc\"), replace: false, accept_warnings: true })"
+    );
+    assert_eq!(
+        call(post(address, "/api/v1/job/save", "{}")),
+        "Save { path: None }"
+    );
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/job/export",
+            r#"{"format":"export_dxf","path":"/tmp/a.dxf"}"#
+        )),
+        "Export { format: \"export_dxf\", path: \"/tmp/a.dxf\" }"
+    );
+}
+
+#[test]
+fn a_wrong_new_call_says_what_to_send_instead() {
+    let (address, _stop) = running(Some(TOKEN));
+    let bad = get(address, "/api/v1/view.png?view=sideways", Some(TOKEN));
+    assert_eq!(bad.status, 400);
+    let said = bad.body["error"].as_str().unwrap();
+    assert!(said.contains("top") && said.contains("iso"), "{said}");
+    let width = get(address, "/api/v1/view.png?width=big", Some(TOKEN));
+    assert_eq!(width.status, 400);
+    let tiny = get(address, "/api/v1/view.png?width=2", Some(TOKEN));
+    assert_eq!(tiny.status, 400, "{}", tiny.body);
+    let which = post(address, "/api/v1/calculate", r#"{"toolpaths":"some"}"#);
+    assert_eq!(which.status, 400);
+    assert!(
+        which.body["error"].as_str().unwrap().contains("visible"),
+        "{}",
+        which.body
+    );
+    assert_eq!(post(address, "/api/v1/job/export", "{}").status, 400);
+    assert_eq!(get(address, "/api/v1/calculate", Some(TOKEN)).status, 405);
+    assert_eq!(post(address, "/api/v1/toolpaths", "{}").status, 405);
+    // both a toolpath and a group: which is meant is not clear
+    let both = post(address, "/api/v1/gcode", r#"{"toolpath":1,"group":"Lid"}"#);
+    assert_eq!(both.status, 400);
+}
+
+#[test]
+fn a_picture_comes_back_as_a_png() {
+    let server = Server::start(&settings(None), || {}).expect("a free port listens");
+    let address = server.address();
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stopped = stop.clone();
+    std::thread::spawn(move || {
+        while !stopped.load(std::sync::atomic::Ordering::Relaxed) {
+            for p in server.take() {
+                p.answer_png(vec![0x89, b'P', b'N', b'G']);
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    });
+    let raw = get_raw(address, "/api/v1/view.png", "localhost");
+    let text = String::from_utf8_lossy(&raw);
+    assert!(text.starts_with("HTTP/1.1 200"), "{text}");
+    assert!(text.contains("Content-Type: image/png"), "{text}");
+    assert!(raw.ends_with(&[0x89, b'P', b'N', b'G']), "{text}");
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[test]
+fn the_description_lists_the_new_calls_and_shows_the_picture_as_one() {
+    let doc = openapi::document(&[], &[], false);
+    for (path, method) in [
+        ("/view.png", "get"),
+        ("/state", "get"),
+        ("/toolpaths", "get"),
+        ("/posts", "get"),
+        ("/progress", "get"),
+        ("/cancel", "post"),
+        ("/calculate", "post"),
+        ("/preview", "post"),
+        ("/preview/reset", "post"),
+        ("/gcode", "post"),
+        ("/job/save", "post"),
+        ("/job/export", "post"),
+    ] {
+        assert!(doc["paths"][path][method].is_object(), "{method} {path}");
+    }
+    let png = &doc["paths"]["/view.png"]["get"]["responses"]["200"]["content"];
+    assert!(png["image/png"].is_object(), "{png}");
+    let views = &doc["paths"]["/view.png"]["get"]["parameters"][0]["schema"]["enum"];
+    assert_eq!(
+        *views,
+        serde_json::json!(["2d", "top", "front", "right", "iso"])
     );
 }

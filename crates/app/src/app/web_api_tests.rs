@@ -279,7 +279,7 @@ fn every_tool_and_menu_item_is_listed_for_scripts() {
 #[test]
 fn the_web_api_has_a_help_page_with_its_pictures_linked_from_contents() {
     let h = Harness::new();
-    assert!(h.app.help_topics().contains(&"web_api"));
+    assert!(h.app.all_help_topics().contains(&"web_api"));
     assert!(h.app.help_markdown("contents").contains("(help:web_api)"));
     let page = h.app.help_markdown("web_api");
     for call in [
@@ -292,20 +292,20 @@ fn the_web_api_has_a_help_page_with_its_pictures_linked_from_contents() {
         assert!(page.contains(call), "{call} is explained");
     }
     // every picture any help page shows is one the help carries
-    let carried: Vec<&str> = super::super::help::PICTURES
-        .iter()
-        .map(|(n, _)| *n)
-        .collect();
-    let mut shown = 0;
-    for topic in h.app.help_topics() {
+    let carried: Vec<&str> = cut_craft_help::PICTURES.iter().map(|(n, _)| *n).collect();
+    let mut shown = std::collections::BTreeSet::new();
+    for topic in h.app.all_help_topics() {
         let md = h.app.help_markdown(topic);
-        for part in md.split("](bytes://help/").skip(1) {
+        for part in md.split("](pictures/").skip(1) {
             let name = &part[..part.find(')').unwrap()];
-            assert!(carried.contains(&name), "{name} is not in help::PICTURES");
-            shown += 1;
+            assert!(
+                carried.contains(&name),
+                "{name} is not in crates/help/pictures"
+            );
+            shown.insert(name.to_owned());
         }
     }
-    assert_eq!(shown, carried.len(), "every picture carried is shown");
+    assert_eq!(shown.len(), carried.len(), "every picture carried is shown");
 }
 
 #[test]
@@ -387,4 +387,413 @@ fn options_points_to_the_docs_page_on_the_chosen_port() {
         page.contains("http://localhost:7340/docs/"),
         "help points to /docs"
     );
+}
+
+/// `GET path` while the app runs frames, the window's picture filled in each time it is
+/// asked for, as a real window would: red inside the view being drawn, blue elsewhere. Its
+/// status, content type and body.
+fn get_picture(h: &mut Harness, at: SocketAddr, path: &str) -> (u16, String, Vec<u8>) {
+    let path = format!("{}{path}", cut_craft_web_api::PREFIX);
+    let client = std::thread::spawn(move || {
+        let mut s = TcpStream::connect(at).unwrap();
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        s.write_all(request.as_bytes()).unwrap();
+        let mut bytes = vec![];
+        s.read_to_end(&mut bytes).unwrap();
+        bytes
+    });
+    for _ in 0..2000 {
+        if client.is_finished() {
+            break;
+        }
+        h.frame(vec![]);
+        if let Some(asked) = h.screenshot.take() {
+            let area = if h.app.view == super::super::View::ThreeD {
+                h.app.view_3d_area
+            } else {
+                h.app.view_area
+            }
+            .expect("the view was drawn");
+            let mut picture = egui::ColorImage::filled([1280, 800], egui::Color32::BLUE);
+            for y in 0..800 {
+                for x in 0..1280 {
+                    #[expect(clippy::cast_precision_loss, reason = "pixel coordinates")]
+                    if area.contains(egui::pos2(x as f32 + 0.5, y as f32 + 0.5)) {
+                        picture.pixels[y * 1280 + x] = egui::Color32::RED;
+                    }
+                }
+            }
+            asked.complete(std::sync::Arc::new(picture));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    let bytes = client.join().unwrap();
+    let split = bytes.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+    let head = String::from_utf8_lossy(&bytes[..split]).into_owned();
+    let status = head[9..12].parse().unwrap();
+    let kind = head
+        .lines()
+        .find_map(|l| l.strip_prefix("Content-Type: "))
+        .unwrap_or_default()
+        .to_owned();
+    (status, kind, bytes[split + 4..].to_vec())
+}
+
+#[test]
+fn a_picture_of_the_3d_view_from_one_side_comes_back_and_the_window_goes_back_as_it_was() {
+    let (mut h, at) = switched_on();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = super::super::View::TwoD;
+    let orbit = h.app.orbit;
+    let (status, kind, png) = get_picture(&mut h, at, "view.png?view=top");
+    assert_eq!(status, 200, "{}", String::from_utf8_lossy(&png));
+    assert_eq!(kind, "image/png");
+    let picture = image::load_from_memory(&png).unwrap().to_rgba8();
+    let area = h.app.view_3d_area.unwrap();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "pixels"
+    )]
+    let size = (area.width().round() as u32, area.height().round() as u32);
+    assert_eq!(
+        picture.dimensions(),
+        size,
+        "the 3D view's part of the window"
+    );
+    assert!(
+        picture.pixels().all(|p| p.0 == [255, 0, 0, 255]),
+        "only the 3D view"
+    );
+    h.frame(vec![]);
+    assert_eq!(h.app.view, super::super::View::TwoD, "back to the 2D view");
+    assert_eq!(h.app.orbit, orbit, "the 3D view turned back as it was");
+    // the 2D view, made smaller
+    let (status, _, png) = get_picture(&mut h, at, "view.png?view=2d&width=300");
+    assert_eq!(status, 200);
+    let picture = image::load_from_memory(&png).unwrap().to_rgba8();
+    assert_eq!(picture.width(), 300);
+    assert!(
+        picture.pixels().all(|p| p.0[0] > 200 && p.0[2] < 50),
+        "only the 2D view"
+    );
+}
+
+#[test]
+fn a_picture_before_the_preview_shows_the_model_and_the_preview_comes_back_after() {
+    let (mut h, at) = switched_on();
+    h.app.doc = cut_craft_core::testing::domed();
+    let material = cut_craft_core::simulation::Material::new(&h.app.doc.job, 1000);
+    h.app.simulation = Some(material.clone());
+    let mut seen = None;
+    let path = format!(
+        "{}view.png?view=iso&preview=before",
+        cut_craft_web_api::PREFIX
+    );
+    let client = std::thread::spawn(move || {
+        let mut s = TcpStream::connect(at).unwrap();
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        s.write_all(request.as_bytes()).unwrap();
+        let mut bytes = vec![];
+        s.read_to_end(&mut bytes).unwrap();
+        bytes
+    });
+    for _ in 0..2000 {
+        if client.is_finished() {
+            break;
+        }
+        h.frame(vec![]);
+        if let Some(asked) = h.screenshot.take() {
+            seen = Some(h.app.simulation.is_some());
+            asked.complete(std::sync::Arc::new(egui::ColorImage::filled(
+                [1280, 800],
+                egui::Color32::RED,
+            )));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    let bytes = client.join().unwrap();
+    assert!(
+        bytes.starts_with(b"HTTP/1.1 200"),
+        "{}",
+        String::from_utf8_lossy(&bytes)
+    );
+    assert_eq!(
+        seen,
+        Some(false),
+        "the preview was set aside while it was taken"
+    );
+    assert_eq!(
+        h.app.simulation.as_ref(),
+        Some(&material),
+        "and put back after"
+    );
+}
+
+#[test]
+fn with_no_job_open_a_picture_says_to_open_one() {
+    let mut h = Harness::at_start();
+    h.app.options.web_api.enabled = true;
+    h.app.options.web_api.port = 0;
+    h.frame(vec![]);
+    let State::Running(at) = h.app.web_api_state().clone() else {
+        panic!("{:?}", h.app.web_api_state());
+    };
+    let (status, _, body) = get_picture(&mut h, at, "view.png");
+    assert_eq!(status, 409, "{}", String::from_utf8_lossy(&body));
+}
+
+/// The app with the Web API on and a profile toolpath round a rectangle, made by calls.
+fn with_a_toolpath() -> (Harness, SocketAddr, u64) {
+    let (mut h, at) = switched_on();
+    h.rectangle(10.0, 10.0, 50.0, 30.0);
+    let (status, _) = call(&mut h, at, "POST", "select", Some(json!({ "by": "all" })));
+    assert_eq!(status, 200);
+    let (status, made) = call(
+        &mut h,
+        at,
+        "POST",
+        "run",
+        Some(json!({ "command": "profile_toolpath" })),
+    );
+    assert_eq!(status, 200, "{made}");
+    let id = made["added_toolpaths"][0]
+        .as_u64()
+        .expect("a toolpath made");
+    (h, at, id)
+}
+
+#[test]
+fn the_toolpath_list_gives_run_times_and_the_checks_before_cutting() {
+    let (mut h, at, id) = with_a_toolpath();
+    let (status, list) = call(&mut h, at, "GET", "toolpaths", None);
+    assert_eq!(status, 200, "{list}");
+    let row = &list["toolpaths"][0];
+    assert_eq!(row["id"], id);
+    assert!(row["minutes"].as_f64().unwrap() > 0.0, "{row}");
+    assert!(row["time"].as_str().unwrap().ends_with('s'), "{row}");
+    assert!(
+        row["warnings"].is_array() && row["errors"].is_array(),
+        "{row}"
+    );
+    assert_eq!(list["total_minutes"], row["minutes"]);
+    // out of date: said, with what to do
+    h.app.doc.toolpaths.values_mut().next().unwrap().stale = true;
+    let (_, list) = call(&mut h, at, "GET", "toolpaths", None);
+    let warned = list["toolpaths"][0]["warnings"][0].as_str().unwrap();
+    assert!(warned.contains("Recalculate"), "{warned}");
+}
+
+#[test]
+fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
+    let (mut h, at, id) = with_a_toolpath();
+    h.app.doc.toolpaths.values_mut().next().unwrap().stale = true;
+    let (status, done) = call(&mut h, at, "POST", "calculate", Some(json!({})));
+    assert_eq!(status, 200, "{done}");
+    assert!(!h.app.doc.toolpaths[&cut_craft_core::document::EntityId(id)].stale);
+    assert_eq!(done["toolpaths"][0]["out_of_date"], false, "{done}");
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "calculate",
+        Some(json!({ "toolpaths": [999] })),
+    );
+    assert_eq!(status, 404, "{e}");
+    assert!(h.app.simulation.is_none());
+    let (status, previewed) = call(
+        &mut h,
+        at,
+        "POST",
+        "preview",
+        Some(json!({ "toolpaths": id })),
+    );
+    assert_eq!(status, 200, "{previewed}");
+    assert!(h.app.simulation.is_some(), "previewed");
+    assert!(h.app.playback.is_none(), "cut at once, not played");
+    let (status, progress) = call(&mut h, at, "GET", "progress", None);
+    assert_eq!(status, 200);
+    assert_eq!(progress["busy"], false, "{progress}");
+    let (status, e) = call(&mut h, at, "POST", "cancel", Some(json!({})));
+    assert_eq!(status, 409, "nothing to cancel: {e}");
+    let (status, _) = call(&mut h, at, "POST", "preview/reset", Some(json!({})));
+    assert_eq!(status, 200);
+    assert!(h.app.simulation.is_none(), "reset");
+    let (status, e) = call(&mut h, at, "POST", "preview/reset", Some(json!({})));
+    assert_eq!(status, 409, "no preview to reset: {e}");
+}
+
+#[test]
+fn a_script_gets_the_gcode_save_toolpaths_would_write_and_can_save_it() {
+    let (mut h, at, id) = with_a_toolpath();
+    // the bit's flute length known, so the checks before cutting find nothing to ask about
+    let (status, e) = call(&mut h, at, "POST", "gcode", Some(json!({})));
+    assert_eq!(status, 409, "{e}");
+    assert!(e["error"].as_str().unwrap().contains("flute length"), "{e}");
+    h.app
+        .doc
+        .toolpaths
+        .values_mut()
+        .next()
+        .unwrap()
+        .tool
+        .flute_length = 50.0;
+    let (status, posts) = call(&mut h, at, "GET", "posts", None);
+    assert_eq!(status, 200, "{posts}");
+    assert!(posts["default"].is_string(), "{posts}");
+    let (status, made) = call(&mut h, at, "POST", "gcode", Some(json!({})));
+    assert_eq!(status, 200, "{made}");
+    let file = &made["files"][0];
+    let text = file["gcode"].as_str().unwrap();
+    assert!(text.contains("G1") || text.contains("G01"), "{text}");
+    assert_eq!(made["saved"], false, "only shown");
+    let (status, one) = call(&mut h, at, "POST", "gcode", Some(json!({ "toolpath": id })));
+    assert_eq!(status, 200, "{one}");
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "toolpath": 999 })),
+    );
+    assert_eq!(status, 404, "{e}");
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "post": "No Such Post" })),
+    );
+    assert_eq!(status, 409, "{e}");
+    // saved as well; not over a file already there unless asked
+    let dir = std::env::temp_dir().join(format!("cut-craft-web-gcode-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("sign.nc");
+    let save = json!({ "save_to": path });
+    let (status, saved) = call(&mut h, at, "POST", "gcode", Some(save.clone()));
+    assert_eq!(status, 200, "{saved}");
+    assert_eq!(saved["saved"], true);
+    let written = saved["files"][0]["path"].as_str().unwrap().to_owned();
+    assert!(std::path::Path::new(&written).is_file(), "{written}");
+    let (status, e) = call(&mut h, at, "POST", "gcode", Some(save));
+    assert_eq!(status, 409, "{e}");
+    assert!(e["error"].as_str().unwrap().contains("replace"), "{e}");
+    let (status, _) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "save_to": path, "replace": true })),
+    );
+    assert_eq!(status, 200);
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "save_to": "sign.nc" })),
+    );
+    assert_eq!(status, 400, "a path from nowhere in particular: {e}");
+    // out of date: stopped, as Save Toolpaths asks, until the warnings are accepted
+    h.app.doc.toolpaths.values_mut().next().unwrap().stale = true;
+    let (status, e) = call(&mut h, at, "POST", "gcode", Some(json!({})));
+    assert_eq!(status, 409, "{e}");
+    assert!(
+        e["error"].as_str().unwrap().contains("accept_warnings"),
+        "{e}"
+    );
+    let (status, made) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "accept_warnings": true })),
+    );
+    assert_eq!(status, 200, "{made}");
+    assert!(!made["warnings"].as_array().unwrap().is_empty(), "{made}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_state_says_the_material_the_model_and_what_is_picked() {
+    let (mut h, at, id) = with_a_toolpath();
+    h.app.selected_toolpath = Some(cut_craft_core::document::EntityId(id));
+    let (status, state) = call(&mut h, at, "GET", "state", None);
+    assert_eq!(status, 200, "{state}");
+    assert!(
+        state["material"]["thickness"].as_f64().unwrap() > 0.0,
+        "{state}"
+    );
+    assert!(state["model"]["position"].is_object(), "{state}");
+    assert_eq!(state["selection"]["vectors"].as_array().unwrap().len(), 1);
+    assert_eq!(state["selection"]["toolpath"], id);
+}
+
+#[test]
+fn a_script_saves_and_exports_the_job_to_the_paths_it_gives() {
+    let (mut h, at) = switched_on();
+    h.rectangle(10.0, 10.0, 50.0, 30.0);
+    let (status, e) = call(&mut h, at, "POST", "job/save", Some(json!({})));
+    assert_eq!(status, 409, "never saved: where to? {e}");
+    let dir = std::env::temp_dir().join(format!("cut-craft-web-save-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (status, saved) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/save",
+        Some(json!({ "path": dir.join("sign") })),
+    );
+    assert_eq!(status, 200, "{saved}");
+    let path = std::path::PathBuf::from(saved["path"].as_str().unwrap());
+    assert!(path.is_file(), "{}", path.display());
+    assert_eq!(h.app.session.path.as_deref(), Some(path.as_path()));
+    let (status, _) = call(&mut h, at, "POST", "job/save", Some(json!({})));
+    assert_eq!(status, 200, "saved where it is");
+    let format = h.app.registry.exporters().next().unwrap().id;
+    let (status, out) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/export",
+        Some(json!({ "format": format, "path": dir.join("sign-export") })),
+    );
+    assert_eq!(status, 200, "{out}");
+    assert!(
+        std::path::Path::new(out["path"].as_str().unwrap()).is_file(),
+        "{out}"
+    );
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "job/export",
+        Some(json!({ "format": "no_such", "path": dir.join("x") })),
+    );
+    assert_eq!(status, 404, "{e}");
+    assert!(
+        e["error"].as_str().unwrap().contains(format),
+        "the formats there are: {e}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_help_page_explains_the_new_calls() {
+    let page = Harness::new().app.help_markdown("web_api");
+    for call in [
+        "GET view.png",
+        "GET state",
+        "GET toolpaths",
+        "POST calculate",
+        "POST preview",
+        "GET progress",
+        "POST gcode",
+        "POST job/save",
+        "POST job/export",
+    ] {
+        assert!(page.contains(call), "{call} is explained");
+    }
 }

@@ -16,6 +16,10 @@ mod guide;
 mod help;
 #[cfg(test)]
 mod help_coverage;
+#[path = "help_pictures.rs"]
+mod help_pictures;
+#[path = "help_tours.rs"]
+mod help_tours;
 mod layouts;
 mod mac;
 mod panels;
@@ -38,6 +42,7 @@ mod units_ask;
 mod updates;
 mod views;
 mod web_api;
+mod web_api_work;
 
 use crate::files::{self, Session};
 use crate::form::{self, Field};
@@ -1250,6 +1255,8 @@ struct CutCraftApp {
     space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
     shots: Option<screenshots::Shots>,
+    /// `--help-pictures`: the help pages' step pictures being taken.
+    help_shots: Option<help_pictures::HelpShots>,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
     /// What the copied vectors were part of: groups, layers, text and part names.
@@ -1282,6 +1289,10 @@ struct CutCraftApp {
     help_search: String,
     /// Every help page as (topic, title, Markdown), made the first time help is searched.
     help_index: Vec<(&'static str, String, String)>,
+    /// The help search's ranked index of [`Self::help_index`], made with it.
+    help_ranked: Option<cut_craft_help::search::Index>,
+    /// The help pages read before and after the one shown: Back and Forward.
+    help_history: cut_craft_help::wiki::History<&'static str>,
     /// The Did You Know? window, open on this tip.
     tip: Option<usize>,
     /// The Did You Know? window's rendered tips.
@@ -2142,8 +2153,9 @@ fn tool_picker(
         }
     }
     ui.horizontal(|ui| {
-        let select = ui
-            .button("Select…")
+        let select = ui.button("Select…");
+        crate::marks::note(ui, "button:Select…", select.rect);
+        let select = select
             .on_hover_hint(if is_laser_form(id) {
                 "Pick the laser this toolpath burns with in the Tool Database (its Lasers): it \
                  brings its own kerf and speed"
@@ -2841,10 +2853,30 @@ fn window_frame(builder: egui::ViewportBuilder, system_title_bar: bool) -> egui:
     }
 }
 
-/// Opens the main window and runs until it is closed; with `shots`, takes the README's
-/// pictures into that folder instead and quits ([`screenshots`]). `open` is a file named on
-/// the command line, opened once the window is up.
-pub fn run(title: &str, shots: Option<std::path::PathBuf>, open: Option<&std::path::Path>) {
+/// Pictures the app takes of itself, then quits.
+pub enum Pictures {
+    /// The README's ([`screenshots`]), into this folder.
+    Readme(std::path::PathBuf),
+    /// The help pages' step pictures ([`help_pictures`]), into this folder: every tour's, or
+    /// only the tools named.
+    Help(std::path::PathBuf, Vec<String>),
+}
+
+impl CutCraftApp {
+    /// Takes `pictures` of itself from the next frame on, then quits.
+    fn take_pictures(&mut self, ctx: &egui::Context, pictures: Pictures) {
+        match pictures {
+            Pictures::Readme(dir) => self.shots = Some(screenshots::Shots::new(dir)),
+            Pictures::Help(dir, only) => {
+                self.help_shots = Some(help_pictures::HelpShots::new(ctx, dir, &only));
+            }
+        }
+    }
+}
+
+/// Opens the main window and runs until it is closed; with `shots`, takes those pictures
+/// instead and quits. `open` is a file named on the command line, opened once the window is up.
+pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>) {
     // winit 0.29 delivered dropped files only on X11; 0.30 should on Wayland too, but until that
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
@@ -2928,9 +2960,9 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>, open: Option<&std::pa
                     );
                 }
             }
-            if let Some(dir) = shots {
+            if let Some(pictures) = shots {
                 // what a fresh clone shows: its icons, the starter tools, nothing of the user's
-                app.shots = Some(screenshots::Shots::new(dir));
+                app.take_pictures(&cc.egui_ctx, pictures);
                 crate::startup::window_opened();
                 return Ok(Box::new(app));
             }

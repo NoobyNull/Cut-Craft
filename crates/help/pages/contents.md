@@ -1,0 +1,181 @@
+---
+reviewed: 2026-11-17
+see-also:
+---
+
+# Cut Craft Help
+
+Cut Craft draws 2D vectors and 3D models on a sheet of material, then makes the toolpaths
+a CNC machine cuts them with.
+
+- [Design](help:design): the page down the left. Draw and edit vectors, then model in 3D.
+- [Toolpaths](help:toolpaths): the page down the right. Turn vectors into toolpaths,
+  preview them and save them for the machine.
+- [3D View](help:view_3d): turning, zooming and fitting the 3D view, changing a model's
+  height with its height buttons, and Auto-rotate to see the job from every side.
+- [Groups](help:groups): step inside a group to change one thing in it; text in a
+  group stays editable.
+- [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
+- [Updates](help:updates): install a new version in one click; Cut Craft reopens on
+  your job.
+- [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
+  hitting wood beside a deep cut, shown red in the preview and asked about before saving.
+- [Web API](help:web_api): let a program or script drive Cut Craft, off until you
+  switch it on in Options.
+
+## Finding help
+
+- **Search help** along the top of this window answers a question the way you'd ask it:
+  "how do I cut out a sign with tabs?", or just a word such as "stepover". The pages that
+  answer it best come first. It knows words that mean the same (bridges and hold-downs
+  find tabs, "cut out" finds Profile) and other endings of a word ("pockets" finds Pocket).
+
+  ![A question typed in the search box, and the pages that answer it, best first](pictures/help/ask-a-question.png)
+- **The side bar** beside every page lists **Other tools like this** (the tools in the same
+  group, each with its button's icon), **Related** pages, and **What links here**: the
+  pages that point to this one. Click one to go there.
+
+  ![Pocket's help page, with other toolpaths like it, related pages and what links here down its right](pictures/help/side-bar.png)
+- **Links in the words**: wherever a page names another tool or idea, the name is a link.
+- **◀ Back** and **Forward ▶** go through the pages you have read, like a web browser. A
+  mouse's own back and forward buttons and **Alt+Left** / **Alt+Right** do the same.
+- **?** at the top of the Design or Toolpaths page lists that page's tools, each beside the
+  picture on its button, so you can find a tool by its icon.
+- Each tool's page shows its button's picture beside its name, and search results show it
+  too, so you can tell you have the right tool.
+- **F1** with a tool's form open goes straight to that tool; with none open, to this page.
+- Hover over a setting's name in a form for a short note about it.
+- Hover over a greyed-out menu item or tool to see what it is waiting for, such as a
+  selection, a toolpath picked in the list, or a job open.
+
+## Windows that open beside Cut Craft
+
+Some tools open in a window of their own: Did You Know?, Options, the Tool Database,
+Machine Configuration, View G-code, Report a Bug and others. Each one stays in front of
+Cut Craft's main window until you close it, so clicking the main window never hides it.
+You can still use the main window while it is open. It does not cover other programs,
+and it is minimised along with Cut Craft.
+
+A file or folder window opened from one of these windows (Save, Open, Browse...) belongs
+to that window and opens in front of it.
+
+On a Wayland desktop with **Edit ▸ Options ▸ Advanced ▸ Use Wayland directly** switched
+on, and on a Mac, the desktop decides which window is in front. If a window goes behind,
+click it in the taskbar or dock to bring it back.
+
+## Printing
+
+**File ▸ Print (opens a PDF)...** opens the 2D view as a PDF in your computer's PDF viewer.
+Check it there, then print from the viewer as you would any PDF. To print what the machine
+operator needs, use **Toolpaths ▸ Print Job Sheet** or **Toolpaths ▸ Print Part Labels** instead.
+
+## Newer post-processors
+
+Cut Craft's own post-processors come with Cut Craft, so **Help ▸ Check for Updates** brings the
+newest ones. Post-processors you added yourself are read from their folder each time, so
+there is nothing to update; see **Machine ▸ Post-Processor Management**.
+
+## Number fields
+
+Every number field has small up and down arrows on its right. Click one to nudge the value
+by a step that suits it: 0.1 mm or 0.01 in for a length, 1 for a percentage, an angle or a
+count, 100 mm/min (5 in/min) for a feed rate, 1000 rpm for a spindle speed. A field with a
+small range takes a smaller step, so a few micrometres shown in inches never jumps to its
+limit in one click. A value between steps goes to the next step first: the 5 mm default
+clearance shows as 0.19685 in an inch job, and one click up makes it exactly 0.2 in, so the
+G-code says Z0.2000, not Z0.2069. Hold the arrow to keep going, and hold **Shift** for steps
+ten times as big. The arrows stop at the field's lowest and highest values. You can also
+drag sideways on the value (the pointer shows a two-way arrow there): each point moves it a
+tenth of a step, 0.01 mm or 0.001 in for a length. Or just click it and type.
+
+A number field takes a sum as well as a number, worked out when it is entered:
+`+ - * / ^` and brackets, and these letters:
+
+- **W** or **X**: the material's width; **H** or **Y**: its height; **T** or **Z**: its thickness
+- **P**: π
+- **I**: inches to millimetres; **M**: millimetres to inches; `'` after a number: feet
+- **{name}**: a [document variable](help:document_variables)
+
+## Keys
+
+- **F1** the open tool's help, **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options. Edit ▸ Options ▸ Mouse and Shortcuts can move these like any other key; the arrow keys always nudge the selection
+- **F11** the designing layout, **F12** the machining layout
+- **Ctrl+Alt+S** Increment and Save: a new numbered copy (sign_1), leaving the file you opened as it was. **Ctrl+S** saves over it
+- **Ctrl+Y** redoes; on a Mac **⇧⌘Z** does too, as in other Mac apps
+- **Ctrl+Q** starts Quick Engrave, except on a Mac, where **⌘Q** quits: set it another key in Edit ▸ Options ▸ Mouse and Shortcuts
+- **Esc** closes a small window in front (Find Tool, a library file's Properties) on its own, else the open form (on Import 3D Model's form it is Cancel: the model is not imported); pressed while dragging in the 2D or 3D view, it cancels the drag (a guide being pulled out of a ruler too) and changes nothing
+- **Esc** in Move, Rotate, Set Size or another Transform Objects tool opened over a form you were filling in goes back to that form, as you left it. What you moved stays moved, and toolpaths it changes are out of date until recalculated
+- **E** edits the selected shape (or Create Shape component) in the tool that made it. Once a Create Shape component has been sculpted, smoothed, embossed or cut back with Replace Below or Reset, it is kept as you left it: E no longer remakes it from its settings, so your hand work is never thrown away
+- Help ▸ Keyboard Shortcuts lists the rest.
+
+## Saving and opening jobs
+
+- When you open, start or close a job while the one you have open has unsaved changes,
+  Cut Craft asks **Save changes to (file name)?**: **Save** saves them, **Don't Save** lets
+  them go, **Cancel** keeps working. If you press **Don't Save**, then cancel the file
+  picker (or the file will not open), nothing is lost: your job stays open with its unsaved
+  changes, still marked with **\*** in the title and still kept for recovery.
+- A name you type with a dot in it keeps all of it: `plaque v1.2` saves as
+  `plaque v1.2.ccjob`. When Cut Craft adds the extension for you and a file of that name is
+  already there, it asks before replacing it. The same goes for exports, templates and
+  other saved files.
+- Opening a file with Cut Craft from your file manager (**Open With**, or dragging it onto
+  Cut Craft's icon) starts Cut Craft with it. A job opens. A drawing or picture starts a
+  new job: set up the material in **Job Setup**, and **OK** makes the job and imports the
+  file into it (**Cancel** goes back to the start page without it).
+- A job that will not open says why. **Damaged** means the file was cut short or broken,
+  often by a copy or cloud sync that did not finish: open a backup or an earlier copy.
+  **Saved by a newer version** means Cut Craft needs updating first (**Help ▸ Check for
+  Updates**). Either way the job stays in **Recent Files**, ready to try again; only a
+  file that is no longer there is taken off the list. If a newer version's job does open, but has settings this version does not
+  know, a warning names them: saving it here leaves them out, so update first to keep them.
+  Each save (Save, Save As, Increment and Save) gives the warning again.
+- Every file window starts on the kind of file you asked for, so the list only shows
+  files that will work. **File ▸ Open** shows Cut Craft jobs; **Import Component / 3D
+  Model** shows 3D models (.stl, .obj, .ccclip); **Import Vectors / Bitmap** shows drawings
+  and pictures (.dxf, .svg, .png, .jpg and the rest); **Import Cut List** shows .csv
+  spreadsheets; saving G-code shows your post-processor's file type. To pick a file of
+  another kind, open the file-type list at the bottom of the window (beside the file name
+  on Windows): the import windows also list each format on its own, and **All supported
+  files** for anything Cut Craft can import. On Linux, a file with a capital-letter
+  extension such as `PART.STL` shows too.
+- Unsaved work is copied for recovery every 30 seconds (Edit ▸ Options ▸ General). If
+  Cut Craft closes without saving, it opens that work again next time it starts. Each open
+  window keeps its own copy: a second Cut Craft window does not take the first one's work.
+  This works on network and other shared settings folders too. If the settings folder
+  cannot be written at all, the status bar warns that no copy is being kept: save often.
+
+## Colors on screen
+
+The 2D view draws your vectors, the toolpaths made from them and the bit's rapid moves each
+in its own color. If you find them hard to tell apart (with color blindness, say), change
+them in **Edit ▸ Options ▸ Appearance ▸ Vector and toolpath colors**:
+
+- **Standard**: vectors in the text color, toolpaths orange, rapid moves red, as Cut Craft
+  has always drawn them.
+- **Color-blind friendly**: vectors black (white in the dark theme), toolpaths deep orange,
+  rapid moves pink. They differ in how light or dark they are, not only in hue, so they
+  stay apart for every kind of color blindness and in grayscale.
+- **My own colors**: a **Vector color**, **Toolpath color** and **Rapid move color** to
+  pick for the light theme and for the dark theme, under **2D view in the light theme** and
+  **2D view in the dark theme**. Pick a toolpath color lighter or darker than the vector
+  color as well as another hue.
+
+![The same profile toolpath in the dark theme, in the standard colors (left) and the color-blind friendly ones (right)](pictures/line-colors-dark.png)
+
+![The same in the light theme](pictures/line-colors-light.png)
+
+The 3D view draws vectors in the same vector color. What you have selected is always blue,
+whichever colors you choose. Solid previews (**Toolpaths ▸ Toolpath Drawing ▸ Make 2D
+Previews Solid**) take the **2D solid preview color** in **Options ▸ Toolpath Settings**
+instead, and the 3D preview's colors are in **Toolpaths ▸ Preview Colors**. **Reset to defaults** at the foot of the
+Appearance page puts every color back.
+
+## Updates
+
+Cut Craft asks GitHub about once a day, when it starts, whether there is a new version, and
+asks you: "A new version is available. Download, install and relaunch?" **Install Now**
+downloads it, checks it is genuine, installs it, and reopens Cut Craft on your job, asking
+you to save any changes first. **Help ▸ Check for Updates** asks straight away. See
+[Updates](help:updates) for every step, what to do if it goes wrong, and how copies
+installed with apt, dnf or Flatpak are updated.
