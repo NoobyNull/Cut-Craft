@@ -29,6 +29,7 @@ pub mod material_class;
 pub mod material_library;
 pub mod medial;
 pub mod nodes;
+pub mod notes;
 pub mod packed;
 pub mod params;
 pub mod playback;

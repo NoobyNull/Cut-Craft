@@ -17619,3 +17619,85 @@ fn model_position_help_is_on_both_forms_with_pictures_and_links_that_go_somewher
         }
     }
 }
+
+#[test]
+fn notes_fill_the_panel_and_a_double_clicked_variable_goes_in_live() {
+    let mut h = Harness::new();
+    h.app.doc.notes = "Plain old notes".into();
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the old notes load as they were, and the box takes the panel's height
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["notes"],
+        "Plain old notes"
+    );
+    let explorer = h
+        .text_at("Variable Explorer")
+        .expect("the Variable Explorer shows");
+    assert!(
+        explorer.y > 400.0,
+        "the notes box above it fills the panel: {explorer:?}"
+    );
+    for button in [
+        "Write",
+        "Preview",
+        "☐",
+        "Show these notes when the job opens",
+    ] {
+        assert!(h.text_at(button).is_some(), "{button}");
+    }
+    // Material is open: a double-click on its Height puts it in where the cursor is
+    let row = *h
+        .texts_at("Height")
+        .last()
+        .unwrap_or_else(|| panic!("{:?}", h.texts()));
+    h.double_click(row);
+    h.frame(vec![]);
+    let notes = h.app.form.as_ref().unwrap().params["notes"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(notes, "Plain old notes{{material.height}}");
+    // Preview shows its value now
+    let preview = h.text_at("Preview").unwrap();
+    h.click(preview, Modifiers::NONE);
+    h.frame(vec![]);
+    let tall = super::notes_panel::value_now(&h.app, "material.height");
+    assert!(
+        h.text_at(&tall).is_some(),
+        "{tall} in the preview: {:?}",
+        h.texts()
+    );
+    let apply = h.text_at("Apply").unwrap();
+    h.click(apply, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.notes, "Plain old notes{{material.height}}");
+}
+
+#[test]
+fn the_variable_explorer_searches_and_the_job_sheet_and_g_code_get_the_values() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.app.notes_ui.search = "thick".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Thickness").is_some());
+    assert!(
+        h.text_at("Job name").is_none(),
+        "other variables are hidden while searching"
+    );
+    // every place notes go uses the same values
+    h.app.doc.notes = "# Cut\n- **{{material.thickness}}** stock".into();
+    let thick = super::notes_panel::value_now(&h.app, "material.thickness");
+    let setup = h.app.job_setup();
+    let sheet =
+        fmt_create_job_sheet::sheet_for(&h.app.doc, &h.app.options.job_sheet, &setup).unwrap();
+    assert!(
+        sheet.contains(&format!("<li><strong>{thick}</strong> stock</li>")),
+        "{sheet}"
+    );
+    let lines = cut_craft_core::notes::gcode_lines(&h.app.doc.notes, &h.app.note_variables());
+    assert_eq!(lines, ["Cut".to_owned(), format!("- {thick} stock")]);
+}

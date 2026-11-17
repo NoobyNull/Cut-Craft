@@ -18,6 +18,7 @@ mod help;
 mod help_coverage;
 mod layouts;
 mod mac;
+mod notes_panel;
 mod panels;
 mod passes;
 mod placement;
@@ -1344,6 +1345,12 @@ struct CutCraftApp {
     /// The model's height, lowest point to highest, and the history's revision it was
     /// measured at: Model Position in Material's picture and warning, measured once a change.
     model_tall: std::cell::Cell<Option<(u64, f64)>>,
+    /// The Notes panel's own state: Write or Preview, the Variable Explorer's search…
+    notes_ui: notes_panel::NotesUi,
+    /// The notes' variables and what they were worked out from (the job's revision, the
+    /// machine, the minute…): worked out again only when one of those changes.
+    note_vars:
+        std::cell::RefCell<Option<(String, std::rc::Rc<Vec<cut_craft_core::notes::Variable>>)>>,
     /// How many toolpaths were out of date last frame.
     stale_known: usize,
     /// Toolpaths went out of date while a form was open: once it closes, ask whether to

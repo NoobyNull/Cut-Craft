@@ -90,6 +90,9 @@ pub struct Setup {
     pub rapid: f64,
     /// The machine's X, Y, Z accelerations, mm/s², for the run times (0 for none).
     pub acceleration: [f64; 3],
+    /// The notes' variables as the app has them (machine, model height…); empty: worked out
+    /// from the job and this setup.
+    pub variables: Vec<cut_craft_core::notes::Variable>,
 }
 
 impl Default for Setup {
@@ -104,7 +107,29 @@ impl Default for Setup {
             printed: String::new(),
             rapid: RAPID,
             acceleration: [0.0; 3],
+            variables: vec![],
         }
+    }
+}
+
+/// What the notes' variables need, from what the sheet is given.
+fn notes_context(setup: &Setup) -> cut_craft_core::notes::Context {
+    let (date, time) = setup
+        .printed
+        .split_once(' ')
+        .map_or((setup.printed.clone(), String::new()), |(d, t)| {
+            (d.to_owned(), t.to_owned())
+        });
+    cut_craft_core::notes::Context {
+        job_file: setup.job_file.clone(),
+        machine: setup.machine.clone(),
+        post: setup.post.clone(),
+        slots: setup.slots.clone(),
+        date,
+        time,
+        rapid: setup.rapid,
+        acceleration: setup.acceleration,
+        ..cut_craft_core::notes::Context::default()
     }
 }
 
@@ -192,7 +217,7 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
     let mut h = format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><title>{title}</title>\
          <style>body{{font-family:sans-serif;max-width:60em;margin:auto}}svg{{max-width:100%;height:auto;border:1px solid #888}}\
-         table{{border-collapse:collapse}}td,th{{border:1px solid #888;padding:.2em .6em;text-align:left}}\
+         .notes li.check{{list-style:none;margin-left:-1.2em}}table{{border-collapse:collapse}}td,th{{border:1px solid #888;padding:.2em .6em;text-align:left}}\
          header,footer{{color:#fff;padding:.6em 1em;display:flex;align-items:center;gap:1em}}\
          header{{background:{}}}footer{{background:{};margin-top:2em}}header img{{max-width:165px;max-height:52px}}\
          header h1{{margin:0}}@media print{{body{{max-width:none}}header,footer{{print-color-adjust:exact;\
@@ -298,7 +323,17 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
         let _ = write!(h, "<h2>Job Layout</h2>{layout}");
     }
     if style.notes && !doc.notes.is_empty() {
-        let _ = write!(h, "<h2>Job Notes</h2><pre>{}</pre>", escape(&doc.notes));
+        // rich text with its variables filled in; everything typed is escaped
+        let vars = if setup.variables.is_empty() {
+            cut_craft_core::notes::variables(doc, &notes_context(setup))
+        } else {
+            setup.variables.clone()
+        };
+        let _ = write!(
+            h,
+            "<h2>Job Notes</h2><div class=\"notes\">{}</div>",
+            cut_craft_core::notes::html(&doc.notes, &vars)
+        );
     }
     if style.material {
         material(&mut h, doc, &len);
@@ -446,11 +481,12 @@ mod tests {
     #[test]
     fn the_sheet_has_the_layout_setup_and_each_toolpath() {
         let mut doc = cut_craft_core::testing::with_toolpath();
-        doc.notes = "Glue <first>".into();
+        doc.notes = "Glue <first>\n- **{{toolpath.1.name}}** on {{material.thickness}}".into();
         let html = String::from_utf8(JobSheet::export(&doc).unwrap()).unwrap();
         for part in [
             "<h2>Job Layout</h2><svg",
-            "Glue &lt;first&gt;",
+            "<p>Glue &lt;first&gt;</p>",
+            "<ul><li><strong>Profile</strong> on 20 mm</li></ul>",
             "<h2>Material Setup</h2>",
             "600.00 mm",
             "<h3>Profile</h3>",

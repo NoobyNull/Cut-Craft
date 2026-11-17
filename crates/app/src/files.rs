@@ -100,12 +100,13 @@ pub fn save_through(
     job: Option<&Path>,
 ) -> Result<(), String> {
     let made = chrono::Local::now().naive_local();
-    let text = render_through(post, slots, doc, path, job, made)?;
+    let text = render_through(post, slots, doc, path, job, made, &[])?;
     write_text(path, &text)
 }
 
 /// The G-code [`save_through`] writes to `path`, as made at `made`, without writing it
-/// (View G-code).
+/// (View G-code); `notes` are the job's notes with their variables filled in, as G-code
+/// comment lines (`cut_craft_core::notes::gcode_lines`).
 pub fn render_through(
     post: &Post,
     slots: &[Option<String>],
@@ -113,12 +114,14 @@ pub fn render_through(
     path: &Path,
     job: Option<&Path>,
     made: chrono::NaiveDateTime,
+    notes: &[String],
 ) -> Result<String, String> {
     let file = cut_craft_post::File {
         path,
         job,
         made,
         slots,
+        notes,
     };
     post.render(doc, &file)
 }

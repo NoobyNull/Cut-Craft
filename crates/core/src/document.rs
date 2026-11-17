@@ -617,6 +617,10 @@ impl Default for Job {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent whole-job settings, each saved as it is"
+)]
 pub struct Document {
     pub job: Job,
     pub vectors: BTreeMap<EntityId, Path>,
@@ -659,10 +663,14 @@ pub struct Document {
     /// saved. A click there picks one item in it instead of the whole group.
     #[serde(skip)]
     pub inside_group: Option<u64>,
-    /// Edit ▸ Notes: free text kept with the job, printed by posts as `[FILE_NOTES]`; notes
-    /// starting with "." open by themselves when the job is opened.
+    /// Edit ▸ Notes: rich text kept with the job (see [`crate::notes`]), printed by posts as
+    /// `[FILE_NOTES]`; notes starting with "." open by themselves when the job is opened.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub notes: String,
+    /// Notes ▸ Put these notes at the top of the G-code: the notes, variables filled in, as
+    /// comment lines under each file's header (added with rich notes; older jobs leave it off).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub notes_in_gcode: bool,
     /// Groups that are text, with the Draw Text settings they were made from, so the text
     /// can be edited again; ungrouping turns it into plain curves.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -858,6 +866,7 @@ impl Default for Document {
             group_parents: BTreeMap::new(),
             inside_group: None,
             notes: String::new(),
+            notes_in_gcode: false,
             texts: BTreeMap::new(),
             levels: crate::component::default_levels(),
             sheets: one_sheet(),

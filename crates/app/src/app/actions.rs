@@ -200,6 +200,8 @@ impl CutCraftApp {
             fine_3d: None,
             rough_3d: None,
             model_tall: std::cell::Cell::new(None),
+            notes_ui: super::notes_panel::NotesUi::default(),
+            note_vars: std::cell::RefCell::new(None),
             height_applied_at: None,
             job_epoch: 0,
             toolpath_keys: super::follow::Keys::default(),
@@ -1941,6 +1943,8 @@ impl CutCraftApp {
         let slots = self.slots();
         let per_tool = Self::split_for(form, post);
         let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
+        // the notes' variables are the whole job's, not one file's
+        let notes = cut_craft_core::notes::gcode_lines(&self.doc.notes, &self.note_variables());
         let mut texts = vec![];
         for (path, part) in &parts {
             // one file per tile, each tile moved to the job's corner
@@ -1955,11 +1959,12 @@ impl CutCraftApp {
                     if in_tile.toolpaths.is_empty() {
                         continue;
                     }
-                    let text = files::render_through(post, &slots, &in_tile, &named, job, made)?;
+                    let text =
+                        files::render_through(post, &slots, &in_tile, &named, job, made, &notes)?;
                     texts.push((named, text));
                 }
             } else {
-                let text = files::render_through(post, &slots, part, path, job, made)?;
+                let text = files::render_through(post, &slots, part, path, job, made, &notes)?;
                 texts.push((path.clone(), text));
             }
         }
@@ -3716,6 +3721,7 @@ impl CutCraftApp {
             acceleration: machine
                 .filter(|_| self.summary.acceleration)
                 .map_or([0.0; 3], |m| m.acceleration),
+            variables: (*self.note_variables()).clone(),
         }
     }
 
@@ -5550,6 +5556,13 @@ impl CutCraftApp {
             self.form_error(ui);
             self.form_buttons(ui);
         });
+        // Notes fill the panel with their own editor and Variable Explorer
+        if self.form.as_ref().is_some_and(|f| f.id == "notes") {
+            cut_craft_bug_report::mark(ui, "Tool form: Notes");
+            self.form_heading(ui);
+            self.notes_editor(ui);
+            return;
+        }
         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
     }
 

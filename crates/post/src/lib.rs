@@ -210,6 +210,21 @@ pub struct File<'a> {
     /// tool prints its slot as `[T]`; every tool used must be loaded. Empty for a machine
     /// without one: tools are numbered in the order they are first used.
     pub slots: &'a [Option<String>],
+    /// The job's notes, variables filled in, as lines safe in a comment
+    /// (`cut_craft_core::notes::gcode_lines`): `[FILE_NOTES]`, and comment lines under the
+    /// header when the job asks for them (Notes ▸ Put these notes at the top of the G-code).
+    /// Empty: the notes as typed, variables left unfilled.
+    pub notes: &'a [String],
+}
+
+/// The notes as comment-safe lines: the ones `file` brings (variables filled in), else the
+/// job's own as typed.
+fn notes_lines(doc: &Document, file: &File) -> Vec<String> {
+    if file.notes.is_empty() {
+        cut_craft_core::notes::gcode_lines(&doc.notes, &[])
+    } else {
+        file.notes.to_vec()
+    }
 }
 
 /// How long, in seconds, `toolpath` waits at the bottom of each plunge (Drilling's dwell).
@@ -623,7 +638,11 @@ impl Post {
         v.texts.insert("TOOLPATH_NAME", first.name.clone());
         v.texts.insert("TOOLNAME", first.tool.name.clone());
         v.tool(&first.tool, number(&first.tool.name));
+        let header_at = out.text.len();
         out.block("HEADER", &v);
+        if doc.notes_in_gcode {
+            out.notes(header_at, &notes_lines(doc, file));
+        }
 
         let mut previous_tool: Option<&str> = None;
         let mut previous_speed: Option<f64> = None;
@@ -1065,7 +1084,8 @@ impl Post {
                 Some(concat!("Cut Craft ", env!("CARGO_PKG_VERSION")).into()),
             ),
             ("POST_NAME", Some(self.name.clone())),
-            ("FILE_NOTES", Some(doc.notes.clone())),
+            // one line, so a note can never break out of the comment it is printed in
+            ("FILE_NOTES", Some(notes_lines(doc, file).join(" / "))),
             ("TOOLPATH_NOTES", None),
             ("TOOL_NOTES", None),
         ] {
@@ -1364,6 +1384,43 @@ impl Output<'_> {
         }
     }
 
+    /// The job's notes as comments, in the style the post's header writes its own (`;` or
+    /// brackets), under a line saying what they are: after the header's own comments and
+    /// before its first command (the header written from `header_at`), so they are read
+    /// before the spindle starts. Lines come already safe for a comment.
+    fn notes(&mut self, header_at: usize, lines: &[String]) {
+        if lines.is_empty() {
+            return;
+        }
+        let semicolon = self.post.blocks.get("HEADER").is_some_and(|header| {
+            header.iter().any(|l| l.trim_start().starts_with(';'))
+                && !header.iter().any(|l| l.trim_start().starts_with('('))
+        });
+        let comment = |text: &str| {
+            if semicolon {
+                format!("; {text}")
+            } else {
+                format!("({text})")
+            }
+        };
+        let mut notes = String::new();
+        for line in std::iter::once("Job notes:").chain(lines.iter().map(String::as_str)) {
+            notes.push_str(&comment(line));
+            notes.push_str(&self.post.line_ending);
+        }
+        // the first header line that is not a comment
+        let ending = self.post.line_ending.as_str();
+        let mut at = header_at;
+        for line in self.text[header_at..].split_inclusive(ending) {
+            let t = line.trim_start();
+            if !(t.starts_with('(') || t.starts_with(';') || t.trim().is_empty()) {
+                break;
+            }
+            at += line.len();
+        }
+        self.text.insert_str(at, &notes);
+    }
+
     fn value(&mut self, label: &str, v: &Values) -> String {
         if let Some(text) = v.texts.get(label) {
             return text
@@ -1579,6 +1636,7 @@ begin FOOTER
             job: Some(std::path::Path::new("/jobs/sign.ccjob")),
             made,
             slots: &[],
+            notes: &[],
         };
         let text = post.render(&doc, &file).unwrap();
         text.lines()
@@ -1630,6 +1688,7 @@ begin FOOTER
             job: None,
             made: chrono::NaiveDateTime::default(),
             slots: &[],
+            notes: &[],
         };
         let why = Post::parse(BASIC).unwrap().render(&doc, &file).unwrap_err();
         assert!(why.contains("LASER_SUPPORT"), "{why}");
@@ -1917,6 +1976,7 @@ begin FOOTER
             job: None,
             made: chrono::NaiveDateTime::default(),
             slots: &[],
+            notes: &[],
         };
         let why = Post::parse(&post).unwrap().render(&doc, &file).unwrap_err();
         assert!(why.contains("rotary"), "{why}");
@@ -1946,6 +2006,7 @@ begin FOOTER
             job: None,
             made: chrono::NaiveDateTime::default(),
             slots: &[],
+            notes: &[],
         };
         Post::default_for(&doc.job).render(&doc, &file).unwrap()
     }
@@ -1985,6 +2046,7 @@ begin FOOTER
                 .and_hms_opt(0, 0, 0)
                 .unwrap(),
             slots: &[],
+            notes: &[],
         };
         let plain = Post::parse(BASIC).unwrap();
         let why = plain.render(&doc, &file).unwrap_err();
@@ -2447,6 +2509,54 @@ begin FOOTER
     }
 
     #[test]
+    fn notes_go_under_the_header_as_comments_only_when_asked() {
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(toolpath("A", "6 mm"));
+        doc.apply(&c.finish()).unwrap();
+        doc.notes = "# Setup\n- clamp (corners)\nG0 Z-50".into();
+        let lines = vec!["Setup".to_owned(), "- clamp [corners]".to_owned()];
+        let render = |post: &str, doc: &Document, notes: &[String]| {
+            let file = File {
+                path: std::path::Path::new("/out.nc"),
+                job: None,
+                made: chrono::NaiveDateTime::default(),
+                slots: &[],
+                notes,
+            };
+            Post::parse(post).unwrap().render(doc, &file).unwrap()
+        };
+        let post = BASIC.replace(
+            "begin HEADER\n",
+            "begin HEADER\n\"(top)\"\n\"([FILE_NOTES])\"\n",
+        );
+        let text = render(&post, &doc, &lines);
+        assert!(!text.contains("Job notes"), "off unless asked: {text}");
+        // [FILE_NOTES] is one line, and the job's own notes are made safe when none come
+        assert!(text.contains("(Setup / - clamp [corners])"), "{text}");
+        let text = render(&post, &doc, &[]);
+        assert!(
+            text.contains("(Setup / - clamp [corners] / G0 Z-50)"),
+            "{text}"
+        );
+        doc.notes_in_gcode = true;
+        let text = render(&post, &doc, &lines);
+        let at: Vec<&str> = text.lines().collect();
+        let top = at.iter().position(|l| *l == "(top)").unwrap();
+        let notes = at.iter().position(|l| *l == "(Job notes:)").unwrap();
+        assert!(notes > top, "under the header's comments: {text}");
+        assert!(
+            at[..notes].iter().all(|l| l.starts_with('(')),
+            "before any command: {text}"
+        );
+        assert_eq!(at[notes + 1..notes + 3], ["(Setup)", "(- clamp [corners])"]);
+        // a post whose header comments with ; gets ; comments
+        let post = "POST_NAME = \"Semi\"\nFILE_EXTENSION = \"gcode\"\nUNITS = \"MM\"\nLINE_ENDING = \"[13][10]\"\nbegin HEADER\n\"; top\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\nbegin FEED_MOVE\n\"G1 [X] [Y] [Z] [F]\"\n";
+        let text = render(post, &doc, &lines);
+        assert!(text.contains("; Job notes:\r\n; Setup\r\n"), "{text}");
+    }
+
+    #[test]
     fn a_tool_changer_numbers_tools_by_their_slot_and_a_manual_bit_0() {
         let post = BASIC.replace("begin TOOLCHANGE\n", "begin TOOLCHANGE\n\"M6 T[T]\"\n");
         let mut doc = Document::default();
@@ -2461,6 +2571,7 @@ begin FOOTER
             job: None,
             made: chrono::NaiveDateTime::default(),
             slots,
+            notes: &[],
         };
         let post = Post::parse(&post).unwrap();
         let text = post.render(&doc, &file(&slots)).unwrap();
@@ -2688,6 +2799,7 @@ begin FOOTER
             job: None,
             made: chrono::NaiveDateTime::default(),
             slots: &[],
+            notes: &[],
         };
         let why = Post::parse(BASIC).unwrap().render(&doc, &file).unwrap_err();
         assert!(
