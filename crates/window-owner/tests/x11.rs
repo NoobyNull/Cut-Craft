@@ -2,8 +2,9 @@
 //! program and title and marked as the main window's own.
 #![cfg(all(unix, not(target_os = "macos")))]
 
+use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
@@ -22,13 +23,12 @@ impl Drop for Xvfb {
 }
 
 /// A private X server and a connection to it, or `None` where Xvfb is not installed. An
-/// installed Xvfb that does not start fails the test.
-fn server(test: u32) -> Option<(Xvfb, RustConnection, usize)> {
-    // a display number unlikely to be in use, one per test and run
-    let display = format!(":{}", 90 + (std::process::id() % 400) * 2 + test);
+/// installed Xvfb that does not start fails the test. Xvfb picks a free display itself and
+/// writes its number once ready (`-displayfd`), so the test never reaches another server.
+fn server() -> Option<(Xvfb, RustConnection, usize)> {
     let child = match Command::new("Xvfb")
-        .args([display.as_str(), "-nolisten", "tcp"])
-        .stdout(Stdio::null())
+        .args(["-displayfd", "1", "-nolisten", "tcp"])
+        .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
     {
@@ -37,18 +37,21 @@ fn server(test: u32) -> Option<(Xvfb, RustConnection, usize)> {
         Err(e) => panic!("Xvfb would not start: {e}"),
     };
     let mut xvfb = Xvfb(child);
-    let start = Instant::now();
-    while start.elapsed() < Duration::from_secs(10) {
-        // ours, not another server already on that display
-        if let Ok(Some(status)) = xvfb.0.try_wait() {
-            panic!("Xvfb on {display} stopped at once ({status}): display in use?");
-        }
-        if let Ok((conn, screen)) = RustConnection::connect(Some(&display)) {
-            return Some((xvfb, conn, screen));
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    panic!("Xvfb on {display} did not start within 10 s");
+    let stdout = xvfb.0.stdout.take().expect("Xvfb's output");
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let _ = BufReader::new(stdout).read_line(&mut line);
+        let _ = tx.send(line);
+    });
+    let line = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("Xvfb did not start within 10 s");
+    let number = line.trim();
+    assert!(!number.is_empty(), "Xvfb stopped before it was ready");
+    let (conn, screen) =
+        RustConnection::connect(Some(&format!(":{number}"))).expect("connect to Xvfb");
+    Some((xvfb, conn, screen))
 }
 
 fn window(conn: &RustConnection, screen: usize, pid: u32, title: &str) -> Window {
@@ -127,7 +130,7 @@ fn transient_for(conn: &RustConnection, window: Window) -> Option<u32> {
 
 #[test]
 fn a_dialog_window_is_marked_as_the_main_windows_own() {
-    let Some((_xvfb, conn, screen)) = server(0) else {
+    let Some((_xvfb, conn, screen)) = server() else {
         eprintln!("skipped: Xvfb is not installed");
         return;
     };
@@ -152,7 +155,7 @@ fn a_dialog_window_is_marked_as_the_main_windows_own() {
 
 #[test]
 fn a_window_that_is_not_there_is_not_found() {
-    let Some((_xvfb, conn, screen)) = server(1) else {
+    let Some((_xvfb, conn, screen)) = server() else {
         eprintln!("skipped: Xvfb is not installed");
         return;
     };
