@@ -2,7 +2,9 @@
 //! Each scene is set up as a person would leave it, given a moment to settle (the 3D view
 //! draws finely once still), captured, and saved as `DIR/NN-name.png`; then the app quits.
 //! The pictures show the app's own icons (`assets/icons`); nothing of the user's is read or
-//! saved.
+//! saved. Every scene is taken in the light theme, except a scene named `…-dark`, which is the
+//! scene before it again in the dark theme; it is also saved beside that one as
+//! `NN-…-light-and-dark.png`, the two side by side.
 
 use super::{CutCraftApp, Split, View};
 use crate::options::WindowLayout;
@@ -18,13 +20,20 @@ const ZOOM_3D: f32 = 1.4;
 const HOLD_SECONDS: f64 = 1.0;
 /// The window's size for the pictures, points.
 pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
+/// Each half's width in a light-and-dark picture, pixels.
+const HALF_WIDTH: u32 = 1200;
+/// The clear gap between the halves of a light-and-dark picture, pixels.
+const HALF_GAP: u32 = 24;
+/// The end of a scene's name that takes it again in the dark theme.
+const DARK: &str = "-dark";
 
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 40] = [
+const SCENES: [Scene; 43] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
+    ("design-2d-dark", |_, _| {}),
     ("model-3d", model),
     ("split-view", |app, _| app.split = Some(Split::SideBySide)),
     ("toolpath-preview", toolpaths),
@@ -32,7 +41,9 @@ const SCENES: [Scene; 40] = [
     ("machine-configuration", machine),
     ("import-3d-model", import),
     ("rail-layout", rail),
+    ("rail-layout-dark", |_, _| {}),
     ("ribbon-layout", ribbon),
+    ("ribbon-layout-dark", |_, _| {}),
     ("rotary-import", rotary_import),
     // Help: Toolpaths ▸ Looking at the G-code
     ("view-gcode", view_gcode),
@@ -411,6 +422,8 @@ pub struct Shots {
     asked: bool,
     /// Where it lands.
     shot: cut_craft_bug_report::Shot,
+    /// The scene before's picture: the light half of a `…-dark` scene's pair.
+    last: Option<std::sync::Arc<egui::ColorImage>>,
 }
 
 impl Shots {
@@ -421,6 +434,7 @@ impl Shots {
             since: None,
             asked: false,
             shot: cut_craft_bug_report::Shot::default(),
+            last: None,
         }
     }
 
@@ -432,6 +446,11 @@ impl Shots {
             std::process::exit(0);
         };
         let Some(since) = self.since else {
+            ctx.set_theme(if name.ends_with(DARK) {
+                egui::ThemePreference::Dark
+            } else {
+                egui::ThemePreference::Light
+            });
             setup(app, ctx);
             self.since = Some(now);
             return;
@@ -444,17 +463,51 @@ impl Shots {
             return;
         }
         if let Some(image) = cut_craft_bug_report::taken(&self.shot) {
-            let path = self.dir.join(format!("{:02}-{name}.png", self.scene + 1));
-            let saved = cut_craft_bug_report::png(&image)
-                .map_err(std::io::Error::other)
-                .and_then(|png| cut_craft_core::file::write_atomic(&path, &png));
-            match saved {
-                Ok(()) => println!("{}", path.display()),
-                Err(e) => eprintln!("{}: {e}", path.display()),
+            let number = self.scene + 1;
+            self.save(&format!("{number:02}-{name}.png"), &image);
+            if let (Some(base), Some(light)) = (name.strip_suffix(DARK), &self.last) {
+                let pair = side_by_side(light, &image, HALF_WIDTH);
+                self.save(&format!("{number:02}-{base}-light-and-dark.png"), &pair);
             }
+            self.last = Some(image);
             (self.scene, self.since, self.asked) = (self.scene + 1, None, false);
         }
     }
+
+    /// Saves `image` as `file` in the folder, and says where (or why not).
+    fn save(&self, file: &str, image: &egui::ColorImage) {
+        let path = self.dir.join(file);
+        let saved = cut_craft_bug_report::png(image)
+            .map_err(std::io::Error::other)
+            .and_then(|png| cut_craft_core::file::write_atomic(&path, &png));
+        match saved {
+            Ok(()) => println!("{}", path.display()),
+            Err(e) => eprintln!("{}: {e}", path.display()),
+        }
+    }
+}
+
+/// `light` and `dark` side by side, each made `half` pixels wide (proportions kept), with a
+/// clear gap of [`HALF_GAP`] between them.
+fn side_by_side(light: &egui::ColorImage, dark: &egui::ColorImage, half: u32) -> egui::ColorImage {
+    let [light, dark] = [light, dark].map(|picture| {
+        let [w, h] = picture.size.map(|n| u32::try_from(n).unwrap_or(u32::MAX));
+        let rgba = picture
+            .pixels
+            .iter()
+            .flat_map(egui::Color32::to_array)
+            .collect();
+        let whole = image::RgbaImage::from_raw(w, h, rgba).unwrap_or_default();
+        let height = (u64::from(half) * u64::from(h) / u64::from(w.max(1))).max(1);
+        let height = u32::try_from(height).unwrap_or(u32::MAX);
+        image::imageops::resize(&whole, half, height, image::imageops::FilterType::Lanczos3)
+    });
+    let height = light.height().max(dark.height());
+    let mut both = image::RgbaImage::new(2 * half + HALF_GAP, height);
+    image::imageops::overlay(&mut both, &light, 0, 0);
+    image::imageops::overlay(&mut both, &dark, i64::from(half + HALF_GAP), 0);
+    let size = [both.width(), both.height()].map(|n| n as usize);
+    egui::ColorImage::from_rgba_premultiplied(size, both.as_raw())
 }
 
 /// A new job with shapes drawn on it, the Design tab open.
@@ -721,4 +774,40 @@ fn height_taller(app: &mut CutCraftApp, _: &egui::Context) {
         let _ = app.apply("component_properties", &params);
     }
     app.status.set_message("Shape height 180%");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plain(size: [usize; 2], colour: egui::Color32) -> egui::ColorImage {
+        egui::ColorImage::new(size, vec![colour; size[0] * size[1]])
+    }
+
+    #[test]
+    fn light_and_dark_sit_side_by_side_at_half_width_with_a_clear_gap() {
+        let light = plain([40, 20], egui::Color32::WHITE);
+        let dark = plain([40, 20], egui::Color32::BLACK);
+        let both = side_by_side(&light, &dark, 20);
+        assert_eq!(both.size, [2 * 20 + HALF_GAP as usize, 10]);
+        let at = |x: usize, y: usize| both.pixels[y * both.size[0] + x];
+        assert_eq!(at(5, 5), egui::Color32::WHITE);
+        assert_eq!(
+            at(20 + HALF_GAP as usize / 2, 5),
+            egui::Color32::TRANSPARENT
+        );
+        assert_eq!(at(both.size[0] - 5, 5), egui::Color32::BLACK);
+    }
+
+    #[test]
+    fn every_dark_scene_follows_its_light_one() {
+        for (i, (name, _)) in SCENES.iter().enumerate() {
+            if let Some(base) = name.strip_suffix(DARK) {
+                assert!(
+                    i > 0 && SCENES[i - 1].0 == base,
+                    "{name} must follow {base}"
+                );
+            }
+        }
+    }
 }

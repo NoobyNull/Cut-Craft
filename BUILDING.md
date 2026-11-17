@@ -187,6 +187,9 @@ To cut a release:
    (about half a minute). It needs a display: on a Linux machine without one, run it under
    `xvfb-run -a` (packages `xvfb`, `libxkbcommon-x11-0` and `mesa-vulkan-drivers`). Look over
    the pictures before committing them; a picture the README doesn't use can be left out.
+   A scene named `…-dark` is the one before it again in the dark theme, and is also saved
+   as `NN-…-light-and-dark.png`, the two side by side: the README shows those for the
+   window layouts.
 
 5. `main` is protected, so the version goes in through a pull request like any other change.
    Commit the files on a branch and open a pull request titled `chore: version 0.6.1`:
