@@ -190,19 +190,23 @@ impl Command for VcarveEngraveToolpath {
                 clearing: Some(tool.clone()),
                 ..p.clone()
             };
-            // each bit its share of the progress bar, the V-bit's last
+            // each bit its share of the progress bar, its rest machining included, the
+            // V-bit's last
             let bits = p.clearance_tools.len() + 1;
-            let mut toolpath = cut_craft_core::progress::part(i, bits, || vcarve(doc, &own))?;
-            if i > 0 {
-                let rest = cut_craft_core::rest::Rest {
-                    after: p.clearance_tools[..i].to_vec(),
-                    ..Default::default()
-                };
-                toolpath.params["rest"] =
-                    serde_json::to_value(&rest).expect("rest settings serialise");
-                let params = toolpath.params.clone();
-                cut_craft_core::rest::apply(&doc.job, &mut toolpath, &params)?;
-            }
+            let toolpath = cut_craft_core::progress::part(i, bits, || {
+                let mut toolpath = vcarve(doc, &own)?;
+                if i > 0 {
+                    let rest = cut_craft_core::rest::Rest {
+                        after: p.clearance_tools[..i].to_vec(),
+                        ..Default::default()
+                    };
+                    toolpath.params["rest"] =
+                        serde_json::to_value(&rest).expect("rest settings serialise");
+                    let params = toolpath.params.clone();
+                    cut_craft_core::rest::apply(&doc.job, &mut toolpath, &params)?;
+                }
+                Ok::<_, CommandError>(toolpath)
+            })?;
             c.add_toolpath(toolpath);
         }
         let vbit = Params {
@@ -270,9 +274,13 @@ fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         let bottom =
             (!p.project_onto_model && doc.job.thickness > 0.0).then_some(doc.job.thickness);
         let notes = Fallbacks::default();
-        let mut moves = carve_above(&paths, p, doc.job.clearance, bottom, &notes);
+        // dropping onto the model takes its own share of the progress bar after the carving
+        let steps = if p.project_onto_model { 2 } else { 1 };
+        let mut moves = cut_craft_core::progress::part(0, steps, || {
+            carve_above(&paths, p, doc.job.clearance, bottom, &notes)
+        });
         if p.project_onto_model {
-            moves = project_onto_model(doc, tool, &moves)?;
+            moves = cut_craft_core::progress::part(1, 2, || project_onto_model(doc, tool, &moves))?;
         }
         let mut toolpath =
             made_by::<VcarveEngraveToolpath>(p, p.name.clone(), tool.clone(), ids, moves);

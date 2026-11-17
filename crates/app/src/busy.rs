@@ -45,12 +45,35 @@ impl Drop for Done {
     }
 }
 
+/// Whether a job's answer is one worth timing for [`eta`]'s history: a calculation that
+/// was refused (an `Err`) took no real time, so it would throw the next guess off.
+pub trait Outcome {
+    fn succeeded(&self) -> bool {
+        true
+    }
+}
+
+impl<T, E> Outcome for Result<T, E> {
+    fn succeeded(&self) -> bool {
+        self.is_ok()
+    }
+}
+
+// answers that are always worth timing: a preview's material, the checks' findings
+impl Outcome for () {}
+impl Outcome for u32 {}
+impl Outcome for cut_craft_core::simulation::Material {}
+impl Outcome for cut_craft_core::playback::Playback {}
+impl<T> Outcome for Vec<T> {}
+impl<K, V> Outcome for std::collections::BTreeMap<K, V> {}
+
 impl<A: 'static> Busy<A> {
     /// Starts `work` on its own thread, `then` to be given its answer (or why there is none)
     /// on the window's; `ctx` is woken when it is done. `kind` names the sort of job for
     /// [`eta`]'s history ("calculate:pocket-toolpath"): its time left starts from how long
-    /// the last one took, and a job that finishes is remembered under it.
-    pub fn start<T: Send + 'static>(
+    /// the last one took, and a job that succeeds ([`Outcome`]) without being cancelled is
+    /// remembered under it, timed as its thread finishes.
+    pub fn start<T: Outcome + Send + 'static>(
         what: &str,
         kind: &str,
         ctx: Option<&egui::Context>,
@@ -61,26 +84,27 @@ impl<A: 'static> Busy<A> {
         let started = Instant::now();
         let done = Arc::new(AtomicBool::new(false));
         let (tracked, flag, wake) = (progress.clone(), Arc::clone(&done), ctx.cloned());
+        let timed = kind.to_owned();
         let spawned = std::thread::Builder::new()
             .name("cut-craft job".into())
             .spawn(move || {
                 let _done = Done(flag, wake);
-                tracked.track(work)
+                let answer = tracked.track(work);
+                if answer.succeeded() && !tracked.is_cancelled() {
+                    eta::record(&timed, started.elapsed().as_secs_f64());
+                }
+                answer
             });
         // logged as started now and as finished or failed once its answer is used; a crash
         // meanwhile names it and the step it was on
         let at = progress.clone();
         let doing = cut_craft_bug_report::logs::doing_with(what, move || at.stage());
         let estimator = RefCell::new(Estimator::new(eta::usual(kind)));
-        let kind = kind.to_owned();
         let finish: Box<dyn FnOnce(&mut A)> = if let Ok(handle) = spawned {
             Box::new(move |state| {
                 let answer = handle.join().map_err(|panic| failed(&*panic));
                 match &answer {
-                    Ok(_) => {
-                        doing.finished("");
-                        eta::record(&kind, started.elapsed().as_secs_f64());
-                    }
+                    Ok(_) => doing.finished(""),
                     Err(why) => doing.failed(why),
                 }
                 then(state, answer);
@@ -520,6 +544,39 @@ mod tests {
         );
         assert_eq!(status["seconds_left"], Value::Null);
         go.send(()).unwrap();
+    }
+
+    #[test]
+    fn a_refused_or_cancelled_job_is_not_remembered() {
+        let kind = "test:refused";
+        let busy = Busy::start(
+            "Refusing",
+            kind,
+            None,
+            || -> Result<u32, String> { Err("select a vector".into()) },
+            |_: &mut State, _| {},
+        );
+        assert!(busy.wait(Duration::from_secs(10)));
+        busy.finish(&mut State::default());
+        assert_eq!(eta::usual(kind), None, "refused: not timed");
+        let kind = "test:cancelled";
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let (seen, saw) = std::sync::mpsc::channel::<()>();
+        let busy: Busy<State> = Busy::start(
+            "Cancelling",
+            kind,
+            None,
+            move || {
+                wait.recv().ok();
+                seen.send(()).ok();
+            },
+            |_, _| {},
+        );
+        busy.cancel();
+        go.send(()).unwrap();
+        saw.recv().unwrap();
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(eta::usual(kind), None, "cancelled: not timed");
     }
 
     #[test]

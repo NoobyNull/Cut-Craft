@@ -18,7 +18,7 @@ impl CutCraftApp {
     /// window can only show it; should the job change anyway, what it made is not used.
     /// `kind` names the sort of job ("calculate:pocket-toolpath", "preview") so its time
     /// left starts from how long the last one took ([`cut_craft_core::eta`]).
-    pub(super) fn in_background<T: Send + 'static>(
+    pub(super) fn in_background<T: crate::busy::Outcome + Send + 'static>(
         &mut self,
         what: &str,
         kind: &str,
