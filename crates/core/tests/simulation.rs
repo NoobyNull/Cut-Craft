@@ -590,7 +590,9 @@ fn a_tool_over_a_slope_leaves_the_slope_wherever_it_can_rest_on_it() {
     for row in 0..model.rows {
         for column in 0..model.columns {
             #[expect(clippy::cast_precision_loss, reason = "a small row count")]
-            let z = -(row as f64) * 0.01;
+            // +0.0, not -0.0, at the top row: f64::max(0.0, -0.0) may give either, and
+            // Apple Silicon gives +0.0 where x86 gives -0.0
+            let z = 0.0 - row as f64 * 0.01;
             model.heights[row * model.columns + column] = z;
         }
     }

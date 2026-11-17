@@ -42,8 +42,9 @@ A toolpath that took longer last time, or a preview with more moves to cut, gets
 share, so the bar moves at an even pace.
 
 Cut Craft remembers how long each kind of job took in a small file, `job-times.json`, in
-its settings folder (on Linux `~/.config/cut-craft`, on Windows
-`%APPDATA%\cut-craft`). Deleting it only means the first guesses start from scratch.
+its settings folder (on Linux `~/.config/cut-craft`, on Windows `%APPDATA%\cut-craft`,
+on a Mac `~/Library/Application Support/cut-craft`). Deleting it only means the first
+guesses start from scratch.
 
 This is the time Cut Craft takes to work the job out on your computer. How long the
 machine will take to cut is a different time: see the [Toolpaths page](help:toolpaths),
