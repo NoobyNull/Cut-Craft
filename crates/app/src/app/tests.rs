@@ -18327,3 +18327,14 @@ fn edit_toolpath_calculate_with_nothing_changed_says_it_is_up_to_date() {
             .is_some_and(|n| n.starts_with("Already up to date"))
     );
 }
+
+#[test]
+fn a_new_jobs_default_bit_has_its_flute_length_so_the_form_warns_of_nothing() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    let line = h.app.form_reach().expect("a reach line");
+    assert!(!line.text().contains("not checked"), "{line:?}");
+}
