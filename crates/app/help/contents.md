@@ -15,6 +15,8 @@ a CNC machine cuts them with.
   your job.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.
+- [Long jobs and the time left](help:progress): the progress window, how its "about 2
+  minutes left" is worked out, and Cancel.
 
 ## Finding help
 

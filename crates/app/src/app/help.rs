@@ -14,9 +14,10 @@ const GROUPS: &str = include_str!("../../help/groups.md");
 const PENCIL: &str = include_str!("../../help/3d-pencil.md");
 const UPDATES: &str = include_str!("../../help/updates.md");
 const MODEL_POSITION: &str = include_str!("../../help/model-position.md");
+const PROGRESS: &str = include_str!("../../help/progress.md");
 
 /// The help's own pages: every other topic is a tool's, headed by its button's icon.
-pub(super) const OWN_PAGES: [&str; 8] = [
+pub(super) const OWN_PAGES: [&str; 9] = [
     "contents",
     "design",
     "toolpaths",
@@ -25,6 +26,7 @@ pub(super) const OWN_PAGES: [&str; 8] = [
     "view_3d",
     "groups",
     "updates",
+    "progress",
 ];
 
 /// How many points across a tool's icon is beside its name at the top of its help page.
@@ -77,6 +79,10 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "web-api-docs.png",
         include_bytes!("../../help/pictures/web-api-docs.png"),
+    ),
+    (
+        "progress-window.png",
+        include_bytes!("../../help/pictures/progress-window.png"),
     ),
     (
         "view-gcode.png",
@@ -279,6 +285,7 @@ impl CutCraftApp {
             "toolpaths" => "Toolpaths page".into(),
             "tips" => "Did You Know?".into(),
             "web_api" => "Web API".into(),
+            "progress" => "Long jobs and the time left".into(),
             "view_3d" => "3D View".into(),
             "groups" => "Groups".into(),
             "updates" => "Updates".into(),
@@ -324,6 +331,7 @@ impl CutCraftApp {
             "toolpaths" => tools_page(Page::Toolpaths, TOOLPATHS),
             "tips" => super::tips::markdown(),
             "web_api" => WEB_API.to_owned(),
+            "progress" => PROGRESS.to_owned(),
             "view_3d" => VIEW_3D.to_owned(),
             "groups" => GROUPS.to_owned(),
             "updates" => UPDATES.to_owned(),

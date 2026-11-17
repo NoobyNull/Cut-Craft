@@ -296,6 +296,7 @@ impl CutCraftApp {
         let name = super::file_name(path);
         self.in_background(
             &format!("Importing {name}"),
+            &super::panels::importing(path),
             move || super::files::import(&registry, &doc, &reading),
             move |app, read| match read {
                 Ok(raw) => {

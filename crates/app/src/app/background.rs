@@ -16,9 +16,12 @@ impl CutCraftApp {
     /// Runs `work` on its own thread, its progress shown as `what` ("Calculating Pocket
     /// Toolpath") once it takes a while; `then` gets what it made. While it runs the
     /// window can only show it; should the job change anyway, what it made is not used.
+    /// `kind` names the sort of job ("calculate:pocket-toolpath", "preview") so its time
+    /// left starts from how long the last one took ([`cut_craft_core::eta`]).
     pub(super) fn in_background<T: Send + 'static>(
         &mut self,
         what: &str,
+        kind: &str,
         work: impl FnOnce() -> T + Send + 'static,
         then: impl FnOnce(&mut Self, T) + 'static,
     ) {
@@ -28,17 +31,41 @@ impl CutCraftApp {
         }
         let revision = self.history.revision();
         let named = what.to_owned();
-        let busy = Busy::start(what, None, work, move |app: &mut Self, made| match made {
-            Err(why) => app.status.set_message(&why),
-            Ok(_) if app.history.revision() != revision => app.status.set_message(&format!(
-                "{named} was not used: the job changed while it worked. Try again"
-            )),
-            Ok(made) => then(app, made),
+        let busy = Busy::start(what, kind, None, work, move |app: &mut Self, made| {
+            app.keep_job_times();
+            match made {
+                Err(why) => app.status.set_message(&why),
+                Ok(_) if app.history.revision() != revision => app.status.set_message(&format!(
+                    "{named} was not used: the job changed while it worked. Try again"
+                )),
+                Ok(made) => then(app, made),
+            }
         });
         if busy.wait(self.wait_before_showing) {
             busy.finish(self);
         } else {
             self.busy = Some(busy);
+        }
+    }
+
+    /// Finds the spelling words added and how long each kind of job took last run
+    /// ([`cut_craft_core::eta`]), so the first guesses at the time left start from them.
+    pub(super) fn load_words_and_job_times(&mut self) {
+        let dir = super::files::config_dir();
+        self.words_path = dir.as_ref().map(|d| d.join("words.txt"));
+        self.job_times_path = dir.map(|d| d.join("job-times.json"));
+        if let Some(path) = &self.job_times_path {
+            cut_craft_core::eta::set_history(cut_craft_core::eta::History::load(path));
+        }
+    }
+
+    /// Writes how long each kind of job took ([`cut_craft_core::eta`]) to the settings
+    /// folder, so the next run's first guesses start from them; nothing in tests.
+    pub(super) fn keep_job_times(&self) {
+        if let Some(path) = &self.job_times_path
+            && let Err(e) = cut_craft_core::eta::history().save(path)
+        {
+            log::warn!("Could not keep the job times in {}: {e}", path.display());
         }
     }
 
@@ -72,16 +99,29 @@ impl CutCraftApp {
         }
     }
 
+    /// The [`cut_craft_core::eta`] history kind for running command `id`: a toolpath's
+    /// calculation shares one with its Edit and Recalculate.
+    fn job_kind(&self, id: &str) -> String {
+        let meta = self.registry.get(id).map(cut_craft_core::DynCommand::meta);
+        if meta.is_some_and(|m| m.group.contains("Toolpath")) {
+            cut_craft_core::eta::calculating(id)
+        } else {
+            format!("apply:{id}")
+        }
+    }
+
     /// A form's Apply or Calculate for command `id` off the window's thread. What goes
     /// wrong shows on the form, if it is still open, else in the status bar.
     pub(super) fn apply_in_background(&mut self, id: &str, params: &Value) -> Result<(), String> {
         self.crossings_allowed(id, params)?;
         let what = self.doing(id);
+        let kind = self.job_kind(id);
         let (registry, doc) = (Arc::clone(&self.registry), self.doc.clone());
         let (command, settings) = (id.to_owned(), params.clone());
         let (id, params) = (id.to_owned(), params.clone());
         self.in_background(
             &what,
+            &kind,
             move || command_change(&registry, &doc, &command, &settings),
             move |app, change| {
                 let applied = app.applied(&id, &params, change);
@@ -101,9 +141,11 @@ impl CutCraftApp {
             .map_or_else(|| self.doing(id), |t| format!("Calculating {}", t.name));
         let (registry, doc, settings) =
             (Arc::clone(&self.registry), self.doc.clone(), params.clone());
+        let kind = self.job_kind(id);
         let id = id.to_owned();
         self.in_background(
             &what,
+            &kind,
             move || registry.edit(&doc, toolpath, Some(&settings)),
             move |app, change| {
                 // as when first made: not into a keep-out zone unless clipping is allowed
@@ -149,6 +191,7 @@ impl CutCraftApp {
         );
         self.in_background(
             &what,
+            "recalculate",
             move || registry.recalculate_each(&doc, &ids),
             move |app, change| {
                 app.record(change, &done);
@@ -183,8 +226,11 @@ impl CutCraftApp {
         };
         let tools: Vec<cut_craft_core::toolpath::Tool> =
             cuts.iter().map(|(_, t)| t.tool.clone()).collect();
+        // a toolpath of many moves takes longer to cut than one of a few: its share of the bar
+        let weights = preview_weights(cuts.iter().map(|(_, t)| t));
         self.in_background(
             &what,
+            "preview",
             move || {
                 let mut material = start;
                 for (i, (mark, toolpath)) in cuts.iter().enumerate() {
@@ -193,7 +239,7 @@ impl CutCraftApp {
                     }
                     progress::stage(&format!("{} ({} of {})", toolpath.name, i + 1, cuts.len()));
                     material.cutting = *mark;
-                    progress::part(i, cuts.len(), || material.cut(toolpath));
+                    progress::part_weighted(i, &weights, || material.cut(toolpath));
                 }
                 material
             },
@@ -323,4 +369,13 @@ fn command_change_of(
     let change =
         cut_craft_core::rest::with_rest(&doc.job, params, change).map_err(|e| e.to_string())?;
     Ok(cut_craft_core::selector::kept(params, change))
+}
+
+/// Each toolpath's share of a preview's progress bar: cutting takes about as long as the
+/// moves it makes.
+pub(super) fn preview_weights<'a>(
+    toolpaths: impl Iterator<Item = &'a cut_craft_core::toolpath::Toolpath>,
+) -> Vec<f64> {
+    #[expect(clippy::cast_precision_loss, reason = "a share of a progress bar")]
+    toolpaths.map(|t| t.moves.len() as f64 + 1.0).collect()
 }

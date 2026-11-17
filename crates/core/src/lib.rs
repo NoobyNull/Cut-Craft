@@ -17,6 +17,7 @@ pub mod document;
 pub mod drag_knife;
 pub mod drill_bank;
 pub mod entry;
+pub mod eta;
 pub mod file;
 pub mod fit;
 pub mod font;

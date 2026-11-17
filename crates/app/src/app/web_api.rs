@@ -131,14 +131,19 @@ impl CutCraftApp {
     pub(super) fn web_call(&mut self, ctx: &egui::Context, call: &Call) -> Answer {
         match call {
             Call::Status => Ok(json!({
-                "version": env!("CARGO_PKG_VERSION"),
-                "job_open": self.screen == Screen::Job,
-                "busy": self.busy.is_some(),
-                "progress": self.web_progress(),
-                "units": job::units_name(self.doc.job.units),
-                "form": self.form.as_ref().map(|f| f.id),
-                "message": self.status.message,
-            })),
+                            "version": env!("CARGO_PKG_VERSION"),
+                            "job_open": self.screen == Screen::Job,
+                            "busy": self.busy.is_some(),
+            <<<<<<< HEAD
+                            "progress": self.web_progress(),
+            =======
+                            // the slow job running, as its progress window tells it (null when none)
+                            "progress": self.busy.as_ref().map(crate::busy::Busy::status),
+            >>>>>>> 38e75b7 (feat: steadier, friendlier time-left estimates for every long job)
+                            "units": job::units_name(self.doc.job.units),
+                            "form": self.form.as_ref().map(|f| f.id),
+                            "message": self.status.message,
+                        })),
             Call::OpenApi => Ok(self.web_description()),
             Call::Commands => Ok(job::commands(&self.registry)),
             Call::Command(id) => job::command(&self.registry, &self.doc, id),

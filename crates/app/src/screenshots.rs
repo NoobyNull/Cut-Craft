@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 23] = [
+const SCENES: [Scene; 24] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -82,7 +82,30 @@ const SCENES: [Scene; 23] = [
     ("model-sticks-out", |app, ctx| {
         model_position(app, ctx, GapFrom::Below, 15.0, false);
     }),
+    // Help: Long jobs and the time left
+    ("progress-window", progress_window),
 ];
+
+/// A long calculation's progress window: its step, how far it has got and the time left,
+/// started from how long the last one took.
+fn progress_window(app: &mut CutCraftApp, _: &egui::Context) {
+    let kind = "screenshots:progress-window";
+    cut_craft_core::eta::record(kind, 150.0);
+    let (keep, wait) = std::sync::mpsc::channel::<()>();
+    // never told to finish: the app quits once the picture is taken
+    std::mem::forget(keep);
+    app.in_background(
+        "Calculating 3D Finishing",
+        kind,
+        move || {
+            cut_craft_core::progress::stage("Following the model's surface");
+            cut_craft_core::progress::note("Steep areas take a little longer than flat ones.");
+            cut_craft_core::progress::report(0.2);
+            wait.recv().ok();
+        },
+        |_, ()| {},
+    );
+}
 
 /// The medallion in the 3D view with Material Setup open beside it, its Model Position in
 /// Material set to `from` and `gap`; `apply`, pressed Apply (else only typed in).

@@ -325,13 +325,7 @@ impl CutCraftApp {
     pub(super) fn web_progress(&self) -> Value {
         match &self.busy {
             None => json!({ "busy": false }),
-            Some(busy) => json!({
-                "busy": true,
-                "doing": busy.what(),
-                "step": busy.stage(),
-                "fraction": busy.fraction(),
-                "seconds": (busy.elapsed().as_secs_f64() * 10.0).round() / 10.0,
-            }),
+            Some(busy) => busy.status(),
         }
     }
 

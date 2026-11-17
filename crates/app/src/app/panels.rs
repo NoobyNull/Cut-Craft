@@ -952,6 +952,7 @@ impl CutCraftApp {
         let done = format!("Imported {}", path.display());
         self.in_background(
             &format!("Importing {}", super::file_name(path)),
+            &importing(path),
             move || files::import(&registry, &doc, &reading),
             move |app, change| {
                 let change = change.map_err(cut_craft_core::CommandError::Failed);
@@ -1129,8 +1130,10 @@ impl CutCraftApp {
                 .cloned()
                 .collect();
         // cut off the window's thread, its progress shown, as the first side was
+        let weights = super::background::preview_weights(cuts.iter());
         self.in_background(
             "Previewing the other side",
+            "preview",
             move || {
                 let mut other = Material::new(&job, cells);
                 for (i, t) in cuts.iter().enumerate() {
@@ -1143,7 +1146,7 @@ impl CutCraftApp {
                         i + 1,
                         cuts.len()
                     ));
-                    cut_craft_core::progress::part(i, cuts.len(), || other.cut(t));
+                    cut_craft_core::progress::part_weighted(i, &weights, || other.cut(t));
                 }
                 other
             },
@@ -1203,6 +1206,7 @@ impl CutCraftApp {
         };
         self.in_background(
             &what,
+            "preview:ready",
             move || {
                 let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
                 cut_craft_core::playback::Playback::new(start, &list, rapid).marked(&marks)
@@ -5039,4 +5043,13 @@ fn tool_cell<R>(ui: &mut egui::Ui, edge: f32, add: impl FnOnce(&mut egui::Ui) ->
             .layout(Layout::left_to_right(Align::Center)),
     );
     add(&mut cell)
+}
+
+/// The [`cut_craft_core::eta`] history kind for importing `path`: by its sort of file, as
+/// an STL takes far longer than a DXF.
+pub(super) fn importing(path: &std::path::Path) -> String {
+    let sort = path
+        .extension()
+        .map_or_default(|e| e.to_string_lossy().to_ascii_lowercase());
+    format!("import:{sort}")
 }

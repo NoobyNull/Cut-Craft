@@ -797,3 +797,40 @@ fn the_help_page_explains_the_new_calls() {
         assert!(page.contains(call), "{call} is explained");
     }
 }
+
+#[test]
+fn status_tells_a_slow_jobs_progress_and_time_left_as_the_window_does() {
+    let (mut h, at) = switched_on();
+    let (_, idle) = call(&mut h, at, "GET", "status", None);
+    assert_eq!(idle["progress"]["busy"], false, "nothing running");
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    let (reported, said) = std::sync::mpsc::channel::<()>();
+    h.app.in_background(
+        "Calculating Slow Toolpath",
+        "test:web-api-status",
+        move || {
+            cut_craft_core::progress::stage("Halfway there");
+            cut_craft_core::progress::report(0.5);
+            reported.send(()).ok();
+            wait.recv().ok();
+        },
+        |_, ()| {},
+    );
+    said.recv().unwrap();
+    let (status, s) = call(&mut h, at, "GET", "status", None);
+    assert_eq!(status, 200);
+    assert_eq!(s["busy"], true);
+    let progress = &s["progress"];
+    assert_eq!(progress["doing"], "Calculating Slow Toolpath");
+    assert_eq!(progress["step"], "Halfway there");
+    assert_eq!(progress["fraction"], 0.5);
+    assert!(progress["seconds"].is_number(), "{progress}");
+    // a moment in it is still working that out (a slow computer may already guess)
+    let left = progress["time_left"].as_str().unwrap();
+    assert!(
+        left.contains("working out") || left.contains("left"),
+        "{progress}"
+    );
+    go.send(()).unwrap();
+}

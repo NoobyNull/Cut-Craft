@@ -5751,6 +5751,7 @@ fn escape_cancels_a_slow_job() {
     let (_go, wait) = std::sync::mpsc::channel::<()>();
     h.app.in_background(
         "Previewing Slow Toolpath",
+        "test:slow",
         move || {
             wait.recv().ok();
         },
@@ -7085,6 +7086,41 @@ fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
             h.app.help_markdown(tool).contains("(help:view_3d)"),
             "{tool} links it"
         );
+    }
+}
+
+#[test]
+fn the_progress_help_explains_the_time_left_with_a_picture() {
+    let h = Harness::new();
+    assert!(h.app.help_topics().contains(&"progress"));
+    assert!(
+        h.app.help_markdown("contents").contains("(help:progress)"),
+        "linked from Contents"
+    );
+    assert!(h.app.help_markdown("web_api").contains("(help:progress)"));
+    assert!(h.app.help_markdown("toolpaths").contains("(help:progress)"));
+    let page = h.app.help_markdown("progress");
+    for words in [
+        "bytes://help/progress-window.png",
+        "working out how long it will take",
+        "about 2 minutes",
+        "almost done",
+        "usually takes",
+        "taking longer than usual",
+        "Cancel",
+        "job-times.json",
+    ] {
+        assert!(page.contains(words), "{words}");
+    }
+    // and the words it explains are the ones the window uses
+    for estimate in [
+        cut_craft_core::eta::Estimate::Estimating,
+        cut_craft_core::eta::Estimate::AlmostDone,
+        cut_craft_core::eta::Estimate::LongerThanUsual,
+    ] {
+        let said = estimate.words().unwrap();
+        let said = said.trim_end_matches('…');
+        assert!(page.contains(said), "{said}");
     }
 }
 
@@ -11067,6 +11103,7 @@ fn a_slow_job_shows_a_progress_window_that_cancels_with_nothing_changed() {
     let before = h.app.history.revision();
     h.app.in_background(
         "Calculating Slow Toolpath",
+        "test:slow",
         move || {
             cut_craft_core::progress::report(0.4);
             reported.send(()).ok();
@@ -11117,6 +11154,7 @@ fn what_a_slow_job_made_is_not_used_if_the_job_changed_meanwhile() {
     let (go, wait) = std::sync::mpsc::channel::<()>();
     h.app.in_background(
         "Calculating",
+        "test:calculating",
         move || {
             wait.recv().ok();
         },

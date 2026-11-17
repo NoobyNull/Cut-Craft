@@ -112,7 +112,7 @@ pub fn document(tools: &[Tool<'_>], actions: &[(String, String)], token: bool) -
             "/status": get(
                 "What Cut Craft is doing",
                 "The version, whether a job is open, whether it is busy, the job's units, the \
-                 open form and the status bar's message.",
+                 open form and the status bar's message. progress is GET progress's answer.",
                 "Cut Craft's state",
             ),
             "/commands": get(
@@ -337,7 +337,9 @@ fn more_paths(
         get(
             "How far a slow job has got",
             "Whether Cut Craft is calculating or previewing, what, how far along (0 to 1, when \
-         it can tell) and for how long. Answered straight away, even while busy.",
+         it can tell), for how long, and the time left as the progress window says it \
+         (seconds_left once it can judge, time_left in words). Answered straight away, even \
+         while busy.",
             "The progress",
         ),
     );

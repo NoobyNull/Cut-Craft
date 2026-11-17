@@ -236,7 +236,9 @@ impl Command for PocketToolpath {
                 strategy: if i == 0 { p.strategy } else { Strategy::Offset },
                 ..p.clone()
             };
-            let mut toolpath = pocket(doc, &own)?;
+            // each bit its share of the progress bar
+            let mut toolpath =
+                cut_craft_core::progress::part(i, tools.len(), || pocket(doc, &own))?;
             if i > 0 {
                 let rest = cut_craft_core::rest::Rest {
                     after: tools[..i].iter().map(|&t| t.clone()).collect(),
