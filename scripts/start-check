@@ -5,15 +5,45 @@
 # its compute shaders can't run; Cut Craft must notice and carry on, not stop at wgpu's first
 # validation error with no message (the Windows 10 no-launch of v0.6.3).
 #
+# On a Mac it starts the program once, on Metal, on the runner's own screen.
+#
 #   scripts/start-check <path to cut-craft> [seconds]
 #
 # Needs xvfb-run, Mesa's EGL and Vulkan drivers (libegl1, mesa-vulkan-drivers) and the window's
-# libraries.
+# libraries (Linux), or nothing extra (macOS).
 set -euo pipefail
 
-exe=$(realpath "$1")
+exe=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 seconds=${2:-20}
 failed=0
+
+if [[ $(uname) == Darwin ]]; then
+  # a first run with its own settings folder, leaving the runner's alone; macOS has no
+  # `timeout`, so it runs in the background and is stopped when the time is up
+  home=$(mktemp -d)
+  HOME=$home "$exe" >"$home/out.txt" 2>&1 &
+  pid=$!
+  sleep "$seconds"
+  log="$home/Library/Application Support/cut-craft/cut-craft.log"
+  echo "--- metal: cut-craft.log"
+  cat "$log" 2>/dev/null || true
+  if ! kill -0 "$pid" 2>/dev/null; then
+    status=0
+    wait "$pid" || status=$?
+    echo "::error::Cut Craft on Metal stopped within $seconds s (exit $status)"
+    cat "$home/out.txt"
+    failed=1
+  elif ! grep -q "GPU:" "$log" 2>/dev/null; then
+    echo "::error::Cut Craft on Metal never set up its window (no GPU line in its log)"
+    cat "$home/out.txt"
+    failed=1
+  else
+    echo "Cut Craft on Metal kept running for $seconds s"
+  fi
+  kill "$pid" 2>/dev/null || true
+  rm -rf "$home"
+  exit $failed
+fi
 for backend in vulkan gl; do
   home=$(mktemp -d)
   status=0

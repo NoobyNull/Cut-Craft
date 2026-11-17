@@ -221,6 +221,11 @@ pub fn install(dir: Option<&Path>) {
         *file = std::fs::File::create(dir.join(LOG_FILE)).ok();
     }
     let crash = dir.map(|d| d.join(CRASH_FILE));
+    // what computer this is, read now (on a Mac or Windows that runs a small program) so a
+    // crash log can say it without waiting; not logged, as it goes only when the person says
+    std::thread::spawn(|| {
+        crate::system::this();
+    });
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         if let Some(path) = &crash {
@@ -248,10 +253,27 @@ fn crash_text(panic: &str) -> String {
         let list: String = running.iter().flat_map(|r| ["- ", r, "\n"]).collect();
         format!("{DOING_HEADING}{list}\n")
     };
+    // read at startup: a crash must not wait to ask the system
+    let (os, system) = match crate::system::this_if_read() {
+        Some(system) => {
+            let mut lines = system.lines();
+            if let Some(graphics) = crate::system::graphics() {
+                lines.push(format!("Graphics: {graphics}"));
+            }
+            (system.short(), lines.join("\n"))
+        }
+        None => (std::env::consts::OS.to_owned(), String::new()),
+    };
+    // after the backtrace: the service groups crashes by what comes before it, and the
+    // same crash on two computers is one crash
+    let system = if system.is_empty() {
+        system
+    } else {
+        format!("{system}\n\n")
+    };
     format!(
-        "Cut Craft {} on {} crashed: {panic}\n\n{doing}Backtrace:\n{}\n\nLog:\n{}\n",
+        "Cut Craft {} on {os} crashed: {panic}\n\n{doing}Backtrace:\n{}\n\n{system}Log:\n{}\n",
         env!("CARGO_PKG_VERSION"),
-        std::env::consts::OS,
         std::backtrace::Backtrace::force_capture(),
         recent()
     )
@@ -282,6 +304,22 @@ mod tests {
         assert!(text.contains("crashed: panicked at src/app.rs:1:1:\nboom"));
         assert!(text.contains("Backtrace:"));
         assert!(text.contains("wgpu: something odd"), "the log up to it");
+        crate::system::this();
+        let text = crash_text("panicked at src/app.rs:1:1:\nboom");
+        let short = crate::system::this().short();
+        assert!(
+            text.starts_with(&format!(
+                "Cut Craft {} on {short} crashed: ",
+                env!("CARGO_PKG_VERSION")
+            )),
+            "the system, short, where the service looks: {text}"
+        );
+        let system = text.find("\nSystem: ").expect("the system exactly");
+        assert!(
+            system > text.find("Backtrace:").unwrap() && system < text.find("\nLog:\n").unwrap(),
+            "after the backtrace, so the same crash groups as one on every computer"
+        );
+        assert!(text.contains("\nProcessor: "));
         let dir = std::env::temp_dir().join(format!("cut-craft-crash-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(CRASH_FILE), &text).unwrap();

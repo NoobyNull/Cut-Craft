@@ -149,3 +149,23 @@ test('refused reports are counted by reason and shown in the summary', async () 
   assert.equal(by['not JSON'].count, 1);
   assert.equal(s.total, 0, 'refused reports are not crash reports');
 });
+
+test('the dashboard shows one kind of system on its own', async () => {
+  const e = env();
+  const send = (os, what, ip) => post(e, report({ os, log: crashLog({ os, message: `${what} went wrong` }) }), NOW, { ip });
+  await send('Windows 11 23H2 x86_64', 'drawing', '198.51.100.1');
+  await send('windows', 'drawing', '198.51.100.2');
+  await send('macOS 14 Sonoma aarch64', 'saving', '198.51.100.3');
+  await send('Debian GNU/Linux 12 x86_64', 'opening', '198.51.100.4');
+  const all = await summary(e.DB, 7, NOW);
+  assert.equal(all.total, 4);
+  assert.deepEqual(all.byFamily, [
+    { family: 'windows', count: 2 }, { family: 'macos', count: 1 }, { family: 'linux', count: 1 }]);
+  const win = await summary(e.DB, 7, NOW, 'windows');
+  assert.equal(win.family, 'windows');
+  assert.equal(win.total, 2, 'a report with the details switched off still counts as Windows');
+  assert.equal(win.crashes.length, 1, 'only the crash Windows hit');
+  assert.deepEqual(win.byFamily, all.byFamily, 'every kind still counted for the filter');
+  assert.equal((await summary(e.DB, 7, NOW, 'linux')).crashes.length, 1);
+  assert.equal((await summary(e.DB, 7, NOW, "x' OR 1=1 --")).crashes.length, 3, 'anything else: every system');
+});

@@ -50,7 +50,7 @@ pub fn payload(crash: &str, install: &str, day: &str, bits: u32) -> serde_json::
     let log = cut(&privacy::hide_files(&privacy::scrub(crash)));
     serde_json::json!({
         "version": version_of(crash),
-        "os": std::env::consts::OS,
+        "os": os_of(crash),
         "title": privacy::hide_files(&privacy::crash_title(crash)),
         "signature": signature(&log),
         "install_id": install,
@@ -76,6 +76,24 @@ fn version_of(crash: &str) -> String {
         .filter(|v| !v.is_empty() && !v.contains(char::is_whitespace))
         .unwrap_or(env!("CARGO_PKG_VERSION"))
         .to_owned()
+}
+
+/// The system the crash log says crashed (its first line, `Cut Craft <version> on <system>
+/// crashed: …`), else this one's: the service groups crashes by it.
+fn os_of(crash: &str) -> String {
+    crash
+        .lines()
+        .next()
+        .and_then(|first| first.strip_prefix("Cut Craft "))
+        .and_then(|rest| rest.split_once(" on "))
+        .and_then(|(_, rest)| rest.split_once(" crashed:"))
+        .map(|(os, _)| os.trim())
+        .filter(|os| {
+            !os.is_empty()
+                && os.len() <= crate::system::SHORT_CHARS
+                && os.chars().all(|c| c == ' ' || c.is_ascii_graphic())
+        })
+        .map_or_else(|| crate::system::this().short(), str::to_owned)
 }
 
 /// The text a proof of work hashes, `nonce` last: what the service hashes to check it.
@@ -336,6 +354,20 @@ mod tests {
         assert_eq!(base36(0), "0");
         assert_eq!(base36(36 * 36 + 35), "10z");
         assert_eq!(leading_zeros(&[0, 0b0001_0000]), 11);
+    }
+
+    #[test]
+    fn the_system_sent_is_the_one_the_crash_log_names() {
+        assert_eq!(
+            os_of(CRASH),
+            "linux",
+            "a log from before systems were named"
+        );
+        assert_eq!(
+            os_of("Cut Craft 0.6.16 on Windows 11 23H2 x86_64 crashed: panicked at a.rs:1:1:\nx"),
+            "Windows 11 23H2 x86_64"
+        );
+        assert_eq!(os_of("garbled"), crate::system::this().short());
     }
 
     #[test]

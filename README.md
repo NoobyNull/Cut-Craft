@@ -194,7 +194,7 @@ These pictures are made by the app itself and can be made again at any time (see
 
 | Platform | How |
 |---|---|
-| macOS (Apple Silicon and Intel) | Download `CutCraft-…-macos.dmg` from the repository's Releases and drag Cut Craft to Applications. It isn't signed, so the first time, right-click it and choose **Open**. |
+| macOS (Apple Silicon and Intel) | Download `CutCraft-…-macos.dmg` from the repository's Releases and drag Cut Craft to Applications. It isn't signed by Apple, so the first time macOS says it can't check it: open **System Settings ▸ Privacy & Security**, scroll down to the line about Cut Craft and click **Open Anyway** (on macOS 14 and older, right-clicking Cut Craft and choosing **Open** also works). |
 | Linux (x86-64), AppImage | Download `CutCraft-…-x86_64.AppImage`, make it executable (`chmod +x`) and run it. One file, nothing to install; it needs FUSE 2 (`libfuse2`), which most desktops have. |
 | Linux (x86-64), Flatpak | Download `cut-craft-…-x86_64.flatpak` and install it with `flatpak install --user cut-craft-…-x86_64.flatpak` (Flathub's freedesktop runtime comes with it). Inside its sandbox Report a Bug can't reach `gh`, so reports are kept on disk. |
 | Linux (x86-64), Ubuntu, Debian, Mint | Download `cut-craft_…_amd64.deb` and open it, or run `sudo apt install ./cut-craft_…_amd64.deb`. Your package manager looks after it, so Help ▸ Check for Updates tells you about new versions but doesn't replace it. |
@@ -202,7 +202,9 @@ These pictures are made by the app itself and can be made again at any time (see
 | Linux (x86-64), archive | Download `cut-craft-…-linux-x86_64.tar.gz`, unpack it and run `./cut-craft`. Or [build from source](#building-from-source); `scripts/install-launcher` adds it to the desktop's application menu. |
 | Windows (x86-64) | Download `cut-craft-…-windows-x86_64.zip`, unpack it and run `cut-craft.exe`. It isn't signed, so SmartScreen may ask first: **More info ▸ Run anyway**. Not tested much yet. |
 
-Each release has all of them, and so does each run of **Builds** under Actions.
+Each release has all of them, and each run of **Builds (Linux)**, **Builds (Windows)** and
+**Builds (macOS)** under Actions has that computer's. A release's files appear one computer at
+a time as each finishes building, so for a few minutes after a release some may be missing.
 
 ## Using it
 
@@ -262,8 +264,8 @@ files reach it. **Edit ▸ Options ▸ Use Wayland directly** turns this off (wi
 
 **Edit ▸ Options** holds what the views draw on start, toolpath previews, the number of recent
 files, whether icons are read in advance, the repository bug reports go to, and the Wayland
-choice. Settings are kept in `~/.config/cut-craft` (Linux) or
-`~/Library/Application Support/cut-craft` (macOS).
+choice. Settings are kept in `~/.config/cut-craft` (Linux), `%APPDATA%\cut-craft` (Windows)
+or `~/Library/Application Support/cut-craft` (macOS).
 
 ## Reporting bugs
 
@@ -310,7 +312,9 @@ when it is unset.
 
 ### Release builds
 
-`.github/workflows/builds.yml` builds all three on GitHub's runners, side by side:
+Three workflows build them on GitHub's runners, each on its own, so one failing holds back none
+of the others (`.github/workflows/builds-macos.yml`, `builds-linux.yml`, `builds-windows.yml`).
+Each starts the program on its runner to check it keeps running with its window set up:
 
 - **macOS:** `scripts/macos-dmg` builds for Apple Silicon and Intel, joins them into one
   `Cut Craft.app` and packs it in a DMG. It runs on any Mac too.
@@ -320,8 +324,11 @@ when it is unset.
   dnf repository and to the AUR is described in `packaging/README.md`.
 - **Windows:** a release build, packed as a `.zip`.
 
-It runs when the workflow or the packaging changes on a pushed branch, from the Actions tab,
-and on a `v*` tag, which attaches them all to that release.
+Each runs when its workflow or the packaging changes on a pushed branch, from the Actions tab,
+and on a `v*` tag, when it signs its files and adds them to that release (`publish-release.yml`,
+`scripts/publish-release`) once that computer's own tests pass: the first to finish publishes
+the release and the others add to it. One that finishes after a newer release is out skips
+its older version and ships with the newer one.
 
 ### Screenshots
 

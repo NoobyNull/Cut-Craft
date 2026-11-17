@@ -1,6 +1,6 @@
 # Linux packages and where they are published
 
-Every release (`.github/workflows/builds.yml`) attaches, besides the AppImage, Flatpak and
+Every release (`.github/workflows/builds-linux.yml`) attaches, besides the AppImage, Flatpak and
 `.tar.gz`, a `.deb` and an `.rpm` made by `scripts/linux-distro-packages`. Both install:
 
 | File | What it is |
@@ -26,7 +26,7 @@ Actions ▸ Variables), so nothing is published by accident.
 | AUR, `cut-craft-bin` (Arch, CachyOS, Manjaro) | `aur.yml` | `PUBLISH_AUR` | an AUR account with an SSH key; the private key as the secret `AUR_SSH_KEY` |
 | apt and dnf repositories on GitHub Pages | `linux-repo.yml` | `PUBLISH_LINUX_REPOS` | the secret `REPO_SIGNING_KEY` (`scripts/make-repo-key`); Settings ▸ Pages ▸ Source: GitHub Actions |
 
-Both run after **Builds** finishes on a `v*` tag, and can be started by hand from the Actions
+Both run after **Builds (Linux)** finishes on a `v*` tag, and can be started by hand from the Actions
 tab. The AUR one runs `scripts/aur-update`, which points `packaging/aur/cut-craft-bin/PKGBUILD`
 at the release, refuses a download not signed with Cut Craft's release key, builds it on Arch
 and pushes the PKGBUILD and `.SRCINFO`. The repository one takes the newest three releases'

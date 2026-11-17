@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-17
-see-also: web_api, contents
+see-also: web_api, bug_reports, contents
 ---
 
 # Changing settings

@@ -52,6 +52,8 @@ crash, crashing, collision, hit, hitting, rapid into material
 checks, pre-cut checks, preflight, verify, safety check, sanity check, acknowledge, tick
 tool number, tool numbers, t number, atc, tool changer, automatic tool change
 generic bit, generic tool, maker's figures, manufacturer, catalogue, library
+bug report, report a bug, crash, crash report, crash log, error report, problem
+system, operating system, os, windows version, macos version, linux distribution, distro, computer details
 theme, dark mode, light mode, night mode, dark theme, light theme
 window layout, menu style, menu layout, ribbon, rail, classic layout, toolbar layout
 construction line, construction lines, construction geometry, reference line, helper line, guide path, layout line

@@ -130,7 +130,8 @@ async function adminApi(request, env, path, url, now, who) {
   }
   if (method === 'GET' && path === '/admin/api/summary') {
     const days = Math.min(setting(url.searchParams.get('days'), 30), 400);
-    return json({ ...(await summary(env.DB, days, now)), settings: settings(env) });
+    const family = url.searchParams.get('os');
+    return json({ ...(await summary(env.DB, days, now, family)), settings: settings(env) });
   }
   if (method === 'POST' && path === '/admin/api/cleanup') {
     return json(await cleanup(env.DB, settings(env), now));

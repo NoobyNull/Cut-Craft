@@ -48,6 +48,9 @@ pub struct GpuCompute {
     overcut: wgpu::ComputePipeline,
     /// The most cell visits one dispatch is given: [`MOST_WORK`], less in the tests.
     most_work: f64,
+    /// The tests' smaller limits than the card's.
+    #[cfg(test)]
+    limits: Option<wgpu::Limits>,
 }
 
 impl GpuCompute {
@@ -71,9 +74,23 @@ impl GpuCompute {
             sweep: pipeline("sweep_main"),
             overcut: pipeline("overcut_main"),
             most_work: MOST_WORK,
+            #[cfg(test)]
+            limits: None,
             device,
             queue,
         }
+    }
+
+    /// Whether buffers of these sizes (bytes) all fit on this card: each kernel call that
+    /// would not goes to the CPU instead, slower but whole. A big preview's grid can pass a
+    /// card's limit (a Mac's Metal allows less in one buffer than most Linux and Windows
+    /// drivers), and wgpu stops the program on a buffer over it.
+    fn fits(&self, sizes: &[usize]) -> bool {
+        #[cfg(test)]
+        if let Some(limits) = &self.limits {
+            return fits_card(limits, sizes);
+        }
+        fits_card(&self.device.limits(), sizes)
     }
 
     /// Runs `pipeline` over `count` items (`input`, at its binding) with the grid's heights,
@@ -188,6 +205,17 @@ impl GpuCompute {
         staging.unmap();
         answers
     }
+}
+
+/// Whether every buffer of `sizes` bytes fits within `limits`: the size a buffer may have,
+/// and the size a shader may see of one.
+fn fits_card(limits: &wgpu::Limits, sizes: &[usize]) -> bool {
+    let most = limits
+        .max_buffer_size
+        .min(limits.max_storage_buffer_binding_size);
+    sizes
+        .iter()
+        .all(|&size| u64::try_from(size).is_ok_and(|size| size <= most))
 }
 
 /// `count` items cut into runs of about `most` cell visits each, item `i` costing
@@ -321,6 +349,9 @@ impl Compute for GpuCompute {
             .flatten()
             .collect();
         let n = points.len();
+        if !self.fits(&[grid.heights.len() * 4, input.len(), n * 4]) {
+            return Cpu.drop_at(grid, tool, points);
+        }
         self.run(
             &self.drop,
             &params(grid, tool, n, false),
@@ -342,6 +373,9 @@ impl Compute for GpuCompute {
         let n = grid.columns * grid.rows;
         if n == 0 {
             return vec![];
+        }
+        if !self.fits(&[n * 4, n * 4]) {
+            return Cpu.drop_everywhere(grid, tool);
         }
         self.run(
             &self.drop,
@@ -365,11 +399,15 @@ impl Compute for GpuCompute {
             return vec![];
         }
         let n = moves.len();
+        let records = move_records(grid, tool, moves);
+        if !self.fits(&[grid.heights.len() * 4, records.len(), n * 4]) {
+            return Cpu.overcut_along(grid, tool, moves);
+        }
         self.run(
             &self.overcut,
             &params(grid, tool, n, false),
             grid,
-            (4, &move_records(grid, tool, moves)),
+            (4, &records),
             (n, &|i| along(grid.cell, tool.reach(), moves[i])),
             Some(n),
         )
@@ -393,11 +431,15 @@ impl Compute for GpuCompute {
         if pairs.is_empty() || material.heights.is_empty() {
             return;
         }
+        let records = move_records(material, tool, &pairs);
+        if !self.fits(&[material.heights.len() * 4, records.len()]) {
+            return Cpu.cut_along(material, tool, moves);
+        }
         let heights = self.run(
             &self.sweep,
             &params(material, tool, pairs.len(), false),
             material,
-            (4, &move_records(material, tool, &pairs)),
+            (4, &records),
             (pairs.len(), &|i| {
                 along(material.cell, tool.reach(), pairs[i])
             }),
@@ -600,6 +642,40 @@ mod tests {
         assert!(
             unended.is_empty(),
             "these end without a plain return: {unended:?}"
+        );
+    }
+
+    /// A grid bigger than the card takes in one buffer (a Mac's Metal allows less than most
+    /// Linux and Windows drivers) goes to the CPU rather than stopping the program.
+    #[test]
+    fn a_buffer_over_the_cards_limits_is_left_to_the_cpu() {
+        let limits = wgpu::Limits {
+            max_buffer_size: 1000,
+            max_storage_buffer_binding_size: 400,
+            ..wgpu::Limits::default()
+        };
+        assert!(super::fits_card(&limits, &[400, 8, 0]));
+        assert!(!super::fits_card(&limits, &[401]), "over the binding size");
+        let big_binding = wgpu::Limits {
+            max_storage_buffer_binding_size: u64::MAX,
+            ..limits
+        };
+        assert!(super::fits_card(&big_binding, &[1000]));
+        assert!(
+            !super::fits_card(&big_binding, &[1001]),
+            "over the buffer size"
+        );
+        // and with the card's own limits, a kernel over them answers as the CPU does
+        let Some(mut gpu) = gpu() else { return };
+        gpu.limits = Some(wgpu::Limits {
+            max_storage_buffer_binding_size: 64,
+            ..gpu.device.limits()
+        });
+        let relief = relief();
+        let tool = Tool::default();
+        assert_eq!(
+            gpu.drop_everywhere(&relief, &tool),
+            Cpu.drop_everywhere(&relief, &tool)
         );
     }
 
