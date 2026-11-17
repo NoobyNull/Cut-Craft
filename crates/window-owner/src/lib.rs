@@ -121,6 +121,13 @@ impl Windows {
             tries: 0,
             focused,
         };
+        if focused {
+            // only one window has the keyboard: the one that had it before has lost it, even
+            // if it has not said so yet this frame
+            for other in self.dialogs.values_mut() {
+                other.focused = false;
+            }
+        }
         let dialog = self.dialogs.entry(key).or_insert(fresh);
         if dialog.frame + 1 < frame {
             *dialog = fresh;
@@ -330,6 +337,21 @@ mod tests {
         w.owned(1, Native::X11(9));
         // not shown on frames 11 and 12: closed; back on 13 as a new window
         assert_eq!(w.shown(1, 13, true), Step::Own { main: MAIN });
+    }
+
+    #[test]
+    fn the_keyboard_moving_to_another_dialog_moves_the_file_dialogs_too() {
+        let mut w = with_main();
+        w.shown(1, 10, true);
+        w.owned(1, Native::X11(9));
+        w.shown(2, 10, false);
+        w.owned(2, Native::X11(11));
+        // dialog 2 says it has the keyboard before dialog 1 says it lost it
+        w.set_main(Some(MAIN), 11);
+        w.shown(2, 11, true);
+        assert_eq!(w.focused_dialog(), Some(Native::X11(11)));
+        w.shown(1, 11, false);
+        assert_eq!(w.focused_dialog(), Some(Native::X11(11)));
     }
 
     #[test]
