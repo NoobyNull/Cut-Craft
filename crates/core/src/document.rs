@@ -377,10 +377,49 @@ pub enum GapFrom {
 /// Material Setup's Model Position in Material.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ModelPosition {
+    /// Which face of the material the gap is measured from: down from its top to the
+    /// model's top, or up from its bottom to the model's bottom
     pub from: GapFrom,
     /// How far the model sits from the material's face
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub gap: f64,
+}
+
+/// Which face of the material a model that does not fit pokes out of, and by how much (mm).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Poke {
+    /// Out of the material's top: the cutter would cut air over it
+    Top(f64),
+    /// Out of the material's bottom: below it, the cut would go into the spoilboard
+    Bottom(f64),
+}
+
+impl ModelPosition {
+    /// The gap above and the gap below a model `model` tall in material `thickness`
+    /// thick: the gap typed on its side, what is left on the other. They always add up to
+    /// the material less the model; one below 0 is the model sticking out.
+    pub fn gaps(&self, thickness: f64, model: f64) -> (f64, f64) {
+        let left = thickness - model - self.gap;
+        match self.from {
+            GapFrom::Above => (self.gap, left),
+            GapFrom::Below => (left, self.gap),
+        }
+    }
+
+    /// Where, and how far, a model `model` tall pokes out of material `thickness` thick
+    /// placed this way; `None` when it fits.
+    pub fn sticks_out(&self, thickness: f64, model: f64) -> Option<Poke> {
+        // ponytail: 1 µm slack for rounding, as the toolpaths allow
+        const SLACK: f64 = 1e-6;
+        let (above, below) = self.gaps(thickness, model);
+        if above < -SLACK {
+            Some(Poke::Top(-above))
+        } else if below < -SLACK {
+            Some(Poke::Bottom(-below))
+        } else {
+            None
+        }
+    }
 }
 
 /// Material Setup's Home / Start Position: where the tool starts from and goes back to at the
@@ -1746,6 +1785,43 @@ mod part_tests {
         assert!(
             doc.pick_part(Point::new(50.0, 50.0), 0.5).is_empty(),
             "its layer is locked"
+        );
+    }
+}
+
+#[cfg(test)]
+mod model_position_tests {
+    use super::*;
+
+    fn at(from: GapFrom, gap: f64) -> ModelPosition {
+        ModelPosition { from, gap }
+    }
+
+    #[test]
+    fn the_gaps_above_and_below_share_what_the_model_leaves_of_the_material() {
+        // a 10 mm model in 20 mm material: 10 mm to share, whichever gap is typed
+        assert_eq!(at(GapFrom::Above, 0.0).gaps(20.0, 10.0), (0.0, 10.0));
+        assert_eq!(at(GapFrom::Above, 3.0).gaps(20.0, 10.0), (3.0, 7.0));
+        assert_eq!(at(GapFrom::Below, 0.0).gaps(20.0, 10.0), (10.0, 0.0));
+        assert_eq!(at(GapFrom::Below, 4.0).gaps(20.0, 10.0), (6.0, 4.0));
+    }
+
+    #[test]
+    fn a_model_sticks_out_when_a_gap_leaves_no_room_and_is_said_by_how_much() {
+        assert_eq!(at(GapFrom::Above, 10.0).sticks_out(20.0, 10.0), None);
+        // 6 below leaves -1 above: the top pokes 1 mm out of the material's top
+        assert_eq!(
+            at(GapFrom::Below, 11.0).sticks_out(20.0, 10.0),
+            Some(Poke::Top(1.0))
+        );
+        assert_eq!(
+            at(GapFrom::Above, 12.5).sticks_out(20.0, 10.0),
+            Some(Poke::Bottom(2.5))
+        );
+        // taller than the material: out whatever the gap
+        assert_eq!(
+            at(GapFrom::Above, 0.0).sticks_out(20.0, 25.0),
+            Some(Poke::Bottom(5.0))
         );
     }
 }

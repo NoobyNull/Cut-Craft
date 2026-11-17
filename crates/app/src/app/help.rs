@@ -13,6 +13,7 @@ const VIEW_3D: &str = include_str!("../../help/view-3d.md");
 const GROUPS: &str = include_str!("../../help/groups.md");
 const PENCIL: &str = include_str!("../../help/3d-pencil.md");
 const UPDATES: &str = include_str!("../../help/updates.md");
+const MODEL_POSITION: &str = include_str!("../../help/model-position.md");
 
 /// The help's own pages: every other topic is a tool's, headed by its button's icon.
 pub(super) const OWN_PAGES: [&str; 8] = [
@@ -39,6 +40,7 @@ const ICON_URI: &str = "bytes://help-icons/";
 fn tool_extra(id: &str) -> Option<&'static str> {
     match id {
         "3d_pencil_toolpath" => Some(PENCIL),
+        "material_setup" | "orientate_3d_model" => Some(MODEL_POSITION),
         _ => None,
     }
 }
@@ -123,6 +125,18 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "update-by-hand.png",
         include_bytes!("../../help/pictures/update-by-hand.png"),
+    ),
+    (
+        "model-top-at-top.png",
+        include_bytes!("../../help/pictures/model-top-at-top.png"),
+    ),
+    (
+        "model-bottom-on-bottom.png",
+        include_bytes!("../../help/pictures/model-bottom-on-bottom.png"),
+    ),
+    (
+        "model-sticks-out.png",
+        include_bytes!("../../help/pictures/model-sticks-out.png"),
     ),
 ];
 
