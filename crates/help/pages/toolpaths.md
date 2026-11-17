@@ -7,7 +7,10 @@ see-also:
 
 The Toolpaths page, down the right, turns the selected vectors and the 3D model into
 toolpaths, lists them, previews them cutting the material and saves them for the machine.
-Pick a toolpath's tool to open its form; choose the cutter from the tool database there.
+Pick a toolpath's tool to open its form; choose the cutter from the tool database there. Until you
+choose one, a new form starts with a common 6 mm two-flute end mill (6 mm shank, 22 mm of
+flute), so it can already say how deep the bit reaches; pick your own bit with Select… so
+the sizes and speeds are really yours.
 
 A toolpath's form shows its lengths in the job's units, whatever the bit's own units are.
 In an inch job, picking a metric bit (a 6 mm end mill, say) leaves Cut Depth, Allowance

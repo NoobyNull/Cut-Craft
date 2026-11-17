@@ -651,6 +651,22 @@ impl Tool {
     }
 }
 
+impl Tool {
+    /// The bit a new toolpath's form starts with before one is picked: the default 6 mm
+    /// end mill with the sizes a common two-flute one has (6 mm shank, 22 mm of flute), so
+    /// the form can say how deep it reaches and the preview draws its own shank, rather
+    /// than warning a beginner about sizes they never set. [`Tool::default`] keeps them
+    /// unset, as a bit read from a file that does not give them.
+    #[must_use]
+    pub fn starter() -> Self {
+        Self {
+            shank_diameter: 6.0,
+            flute_length: 22.0,
+            ..Self::default()
+        }
+    }
+}
+
 impl Default for Tool {
     fn default() -> Self {
         Self {

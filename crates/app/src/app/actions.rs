@@ -2364,6 +2364,9 @@ impl CutCraftApp {
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
         self.fill_drill_bank(cmd.id(), &mut params);
+        // the untouched default bit given the sizes a real one has, so a new form warns of
+        // nothing the beginner did not set
+        starter_tool(&mut params);
         // a toolpath's form in the standard order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)
@@ -7238,6 +7241,16 @@ fn calculate_as_new_row(ui: &mut egui::Ui) -> bool {
     ui.button("Calculate as New")
         .on_hover_hint("Add another toolpath with these settings, keeping the one already made")
         .clicked()
+}
+
+/// A form's starting bit, when it is the bare default ([`Tool::default`]), made the
+/// starter bit ([`Tool::starter`]): the same 6 mm end mill with its flute length and shank.
+fn starter_tool(params: &mut Value) {
+    use cut_craft_core::toolpath::Tool;
+    let bare = serde_json::to_value(Tool::default()).expect("tools serialize");
+    if let Some(tool) = params.get_mut("tool").filter(|t| **t == bare) {
+        *tool = serde_json::to_value(Tool::starter()).expect("tools serialize");
+    }
 }
 
 /// Embellish's samples and random sequences, for the pattern maker under its Sequence box.
