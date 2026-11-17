@@ -3645,12 +3645,11 @@ fn help_search_finds_tools_by_name_not_by_their_icons_file() {
     let mut h = Harness::new();
     let found = h.app.help_search_results("pencil");
     assert_eq!(found[0].0, "3d_pencil_toolpath", "{found:?}");
-    assert_eq!(h.app.help_search_results("help-icons"), vec![]);
-    assert_eq!(
-        h.app.help_search_results("create_vectors"),
-        vec![],
-        "an icon's folder is no word of the help's"
-    );
+    // the search reads each page's words, never an icon's file path or folder
+    for (t, _, md) in &h.app.help_index {
+        assert!(!md.contains("help-icons"), "{t}");
+        assert!(!md.contains("create_vectors"), "{t}");
+    }
 }
 
 #[test]
@@ -14222,9 +14221,16 @@ fn help_search_lists_matching_pages_and_opens_one() {
         found[0].0, "job_setup",
         "a name that matches first: {found:?}"
     );
+    let tabs: Vec<&str> = h
+        .app
+        .help_search_results("tabs")
+        .into_iter()
+        .map(|(t, ..)| t)
+        .collect();
+    assert_eq!(tabs.first(), Some(&"tabs"), "its own page first: {tabs:?}");
     assert!(
-        h.app.help_search_results("tabs").len() > 1,
-        "a word finds every page using it"
+        tabs.contains(&"profile_toolpath"),
+        "then the pages using it: {tabs:?}"
     );
     assert!(
         h.app

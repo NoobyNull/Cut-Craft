@@ -46,7 +46,11 @@ const MOST: usize = 50;
 /// The most results a search gives: past these the pages only brush the question.
 const MOST_SHOWN: usize = 15;
 
-/// How good a result must be to be shown, as a share of the best one's score: below it a
+/// The results always shown, however far below the best: a word that is one page's title
+/// still lists the other pages using it.
+const LEAST_SHOWN: usize = 5;
+
+/// How good a result must be to be shown past [`LEAST_SHOWN`], as a share of the best one's score: below it a
 /// page only says one common word of the question.
 const WORTH_SHOWING: f32 = 0.25;
 
@@ -134,7 +138,9 @@ impl Index {
         };
         let best = top.first().map_or(0.0, |(score, _)| *score);
         top.into_iter()
-            .take_while(|(score, _)| *score >= best * WORTH_SHOWING)
+            .enumerate()
+            .take_while(|(i, (score, _))| *i < LEAST_SHOWN || *score >= best * WORTH_SHOWING)
+            .map(|(_, hit)| hit)
             .take(MOST_SHOWN)
             .filter_map(|(_, at)| {
                 let d: TantivyDocument = searcher.doc(at).ok()?;
