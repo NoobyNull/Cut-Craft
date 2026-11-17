@@ -867,7 +867,8 @@ fn notes_come_filled_in_and_a_change_keeps_what_is_left_out() {
             in_gcode: Some(true),
             ..NotesBody::default()
         },
-    );
+    )
+    .unwrap();
     assert_eq!(p["notes"], doc.notes);
     assert_eq!(p["in_gcode"], true);
     let p = crate::job::notes_params(
@@ -877,6 +878,28 @@ fn notes_come_filled_in_and_a_change_keeps_what_is_left_out() {
             opens_with_job: Some(false),
             ..NotesBody::default()
         },
-    );
+    )
+    .unwrap();
     assert_eq!(p["notes"], "new");
+    // a "." first would open them with the job: refused unless they are to open
+    let plain = cut_craft_core::document::Document::default();
+    let dotted = |opens| NotesBody {
+        text: Some(".Clamp".into()),
+        opens_with_job: opens,
+        ..NotesBody::default()
+    };
+    assert_eq!(
+        crate::job::notes_params(&plain, &dotted(None))
+            .unwrap_err()
+            .status,
+        400
+    );
+    assert_eq!(
+        crate::job::notes_params(&plain, &dotted(Some(false)))
+            .unwrap_err()
+            .status,
+        400
+    );
+    let p = crate::job::notes_params(&plain, &dotted(Some(true))).unwrap();
+    assert_eq!(p["notes"], "..Clamp", "opens, with the text's own dot kept");
 }

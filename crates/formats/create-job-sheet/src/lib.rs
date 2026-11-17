@@ -188,9 +188,23 @@ pub fn sheets(
             .chars()
             .map(|ch| if ch.is_alphanumeric() { ch } else { '_' })
             .collect();
+        // the notes' values from this sheet's own toolpaths and material; what only the app
+        // knows (the machine, the model's height, the time) as it gave them
+        let mut vars = cut_craft_core::notes::variables(&on, &notes_context(setup));
+        for v in &mut vars {
+            if let Some(given) = setup.variables.iter().find(|g| {
+                g.key == v.key && matches!(g.group, "Job" | "Model" | "Machine" | "System")
+            }) {
+                v.value.clone_from(&given.value);
+            }
+        }
+        let own = Setup {
+            variables: vars,
+            ..setup.clone()
+        };
         out.push((
             format!("_{name}{}", side(&on)),
-            sheet_for(&on, style, setup)?,
+            sheet_for(&on, style, &own)?,
         ));
     }
     Ok(out)
@@ -565,6 +579,34 @@ mod tests {
         let pages = sheets(&two, &Style::default(), &Setup::default()).unwrap();
         assert_eq!(pages.len(), 1, "only the sheet with toolpaths");
         assert!(pages[0].0.starts_with('_'));
+    }
+
+    #[test]
+    fn each_sheet_s_notes_use_its_own_toolpaths_and_the_app_s_machine() {
+        let doc = cut_craft_core::testing::with_toolpath();
+        let mut two = cut_craft_core::testing::two_sheets();
+        two.toolpaths = doc.toolpaths.clone();
+        two.notes = "{{toolpath.1.name}} on {{machine.name}}".into();
+        // what the app had for its active sheet: another toolpath, and the machine
+        let mut vars =
+            cut_craft_core::notes::variables(&doc, &cut_craft_core::notes::Context::default());
+        for v in &mut vars {
+            match v.key.as_str() {
+                "toolpath.1.name" => v.value = "Wrong".into(),
+                "machine.name" => v.value = "Shop".into(),
+                _ => {}
+            }
+        }
+        let setup = Setup {
+            variables: vars,
+            ..Setup::default()
+        };
+        let pages = sheets(&two, &Style::default(), &setup).unwrap();
+        assert!(
+            pages[0].1.contains("<p>Profile on Shop</p>"),
+            "{}",
+            pages[0].1
+        );
     }
 
     #[test]

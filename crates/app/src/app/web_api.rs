@@ -154,7 +154,7 @@ impl CutCraftApp {
             }
             Call::SetNotes(body) => {
                 self.job_needed()?;
-                let params = job::notes_params(&self.doc, body);
+                let params = job::notes_params(&self.doc, body)?;
                 cut_craft_bug_report::logs::step("Web API changed the notes");
                 self.apply("notes", &params).map_err(ApiError::refused)?;
                 // an open Notes form shows them as they are now

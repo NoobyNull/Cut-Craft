@@ -83,7 +83,8 @@ impl super::CutCraftApp {
         let now = chrono::Local::now();
         let ctx = self.notes_context(&now);
         let key = format!(
-            "{}|{:?}|{}|{}|{}|{:?}|{}",
+            "{}|{}|{:?}|{}|{}|{}|{:?}|{}|{:?}|{}|{}",
+            self.job_epoch,
             self.history.revision(),
             ctx.model_height,
             ctx.machine,
@@ -91,7 +92,10 @@ impl super::CutCraftApp {
             ctx.time,
             ctx.acceleration,
             ctx.job_file,
-        ) + &format!("|{}|{}", ctx.rapid, ctx.scale);
+            ctx.slots,
+            ctx.rapid,
+            ctx.scale,
+        );
         if let Some((at, vars)) = self.note_vars.borrow().as_ref()
             && *at == key
         {

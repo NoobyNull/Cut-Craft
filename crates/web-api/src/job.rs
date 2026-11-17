@@ -318,8 +318,9 @@ pub fn notes(doc: &Document, variables: &[cut_craft_core::notes::Variable]) -> V
 }
 
 /// The `notes` command's settings for `POST notes`: what `body` gives, the rest as the job
-/// has it now.
-pub fn notes_params(doc: &Document, body: &crate::call::NotesBody) -> Value {
+/// has it now. Notes kept with a "." first open with the job, so text starting with one
+/// cannot be kept without opening: that is refused, saying so.
+pub fn notes_params(doc: &Document, body: &crate::call::NotesBody) -> Result<Value, ApiError> {
     use cut_craft_core::notes;
     let text = body
         .text
@@ -328,11 +329,17 @@ pub fn notes_params(doc: &Document, body: &crate::call::NotesBody) -> Value {
     let opens = body
         .opens_with_job
         .unwrap_or_else(|| notes::opens_with_job(&doc.notes));
+    if !opens && text.starts_with(notes::OPEN_MARK) {
+        return Err(ApiError::bad(
+            "Notes starting with \".\" open with the job. Send \"opens_with_job\": true, or \
+             start the text with something else.",
+        ));
+    }
     let mark = if opens { "." } else { "" };
-    json!({
+    Ok(json!({
         "notes": format!("{mark}{text}"),
         "in_gcode": body.in_gcode.unwrap_or(doc.notes_in_gcode),
-    })
+    }))
 }
 
 /// `GET state`: the material as Job Setup has it, where the 3D model sits in it (Material

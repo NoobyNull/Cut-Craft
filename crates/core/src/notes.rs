@@ -761,6 +761,18 @@ pub fn variable_spans(text: &str) -> Vec<(std::ops::Range<usize>, &str)> {
     found
 }
 
+/// The `{{key}}` `text` starts with: its byte range and key; `None` when it starts with
+/// none. Looks no further than the first `}}`.
+fn variable_here(text: &str) -> Option<(std::ops::Range<usize>, &str)> {
+    let close = text.strip_prefix("{{")?.find("}}")? + 2;
+    let key = &text[2..close];
+    (!key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_alphanumeric() || "._-".contains(c)))
+    .then_some((0..close + 2, key))
+}
+
 /// `text` with each `{{key}}` its value; a key with no variable stays as typed, so a typo
 /// shows where it is.
 pub fn resolve(text: &str, vars: &[Variable]) -> String {
@@ -878,7 +890,7 @@ fn spans(text: &str) -> Vec<Span> {
     while i < text.len() {
         let rest = &text[i..];
         if rest.starts_with("{{")
-            && let Some((range, key)) = variable_spans(rest).first().filter(|(r, _)| r.start == 0)
+            && let Some((range, key)) = variable_here(rest)
         {
             {
                 flush(&mut out, &mut current, bold, italic);
@@ -886,7 +898,7 @@ fn spans(text: &str) -> Vec<Span> {
                     text: rest[range.clone()].into(),
                     bold,
                     italic,
-                    variable: Some((*key).into()),
+                    variable: Some(key.into()),
                     ..Span::default()
                 });
                 i += range.end;
@@ -1077,7 +1089,8 @@ pub fn html(text: &str, vars: &[Variable]) -> String {
 pub const GCODE_COMMENT_WIDTH: usize = 70;
 
 /// The notes as lines a G-code comment can hold: plain text ([`plain`]), only printable
-/// ASCII, no brackets or semicolons (which would end a comment early), each line at most
+/// ASCII, no brackets or semicolons (which would end a comment early), no `!`, `~` or `?`
+/// (GRBL acts on those even inside a comment: feed hold, resume, status), each line at most
 /// [`GCODE_COMMENT_WIDTH`] long, broken between words.
 pub fn gcode_lines(text: &str, vars: &[Variable]) -> Vec<String> {
     let mut out = vec![];
@@ -1089,8 +1102,10 @@ pub fn gcode_lines(text: &str, vars: &[Variable]) -> Vec<String> {
                 ')' => ']',
                 ';' => ',',
                 '×' => 'x',
+                '!' | '?' => '.',
+                '~' => '-',
                 c if c.is_ascii_graphic() || c == ' ' => c,
-                _ => '?',
+                _ => '-',
             })
             .collect();
         let clean = clean.trim_end();
@@ -1542,7 +1557,10 @@ mod tests {
             value: "two\nG0 Z-50".into(),
         }];
         let lines = gcode_lines("Clamp (corners); then {{x}} — ok\n\n", &vars);
-        assert_eq!(lines, vec!["Clamp [corners], then two", "G0 Z-50 ? ok"]);
+        assert_eq!(lines, vec!["Clamp [corners], then two", "G0 Z-50 - ok"]);
+        let lines = gcode_lines("Clamp firmly! Ready? ~ok", &[]);
+        assert_eq!(lines, vec!["Clamp firmly. Ready. -ok"]);
+        assert!(lines.iter().all(|l| !l.contains(['!', '~', '?'])));
         for line in gcode_lines(&"word ".repeat(40), &[]) {
             assert!(line.len() <= GCODE_COMMENT_WIDTH, "{line}");
         }

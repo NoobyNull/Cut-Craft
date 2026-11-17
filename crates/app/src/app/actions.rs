@@ -2728,6 +2728,9 @@ impl CutCraftApp {
         (self.doc, self.history, self.session, self.form) = Default::default();
         self.picked_constraint = None;
         self.job_epoch += 1;
+        // measured for the job before: a new history can be at the same revision
+        self.model_tall.set(None);
+        *self.note_vars.borrow_mut() = None;
         if let Some(job) = self.options.default_job {
             self.doc.job = job;
         }
