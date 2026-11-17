@@ -21,25 +21,34 @@ impl Drop for Xvfb {
     }
 }
 
-/// A private X server and a connection to it, or `None` where Xvfb is not installed.
+/// A private X server and a connection to it, or `None` where Xvfb is not installed. An
+/// installed Xvfb that does not start fails the test.
 fn server(test: u32) -> Option<(Xvfb, RustConnection, usize)> {
     // a display number unlikely to be in use, one per test and run
     let display = format!(":{}", 90 + (std::process::id() % 400) * 2 + test);
-    let child = Command::new("Xvfb")
+    let child = match Command::new("Xvfb")
         .args([display.as_str(), "-nolisten", "tcp"])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .ok()?;
-    let xvfb = Xvfb(child);
+    {
+        Ok(child) => child,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => panic!("Xvfb would not start: {e}"),
+    };
+    let mut xvfb = Xvfb(child);
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(10) {
+        // ours, not another server already on that display
+        if let Ok(Some(status)) = xvfb.0.try_wait() {
+            panic!("Xvfb on {display} stopped at once ({status}): display in use?");
+        }
         if let Ok((conn, screen)) = RustConnection::connect(Some(&display)) {
             return Some((xvfb, conn, screen));
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    None
+    panic!("Xvfb on {display} did not start within 10 s");
 }
 
 fn window(conn: &RustConnection, screen: usize, pid: u32, title: &str) -> Window {

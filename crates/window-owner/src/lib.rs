@@ -136,6 +136,11 @@ impl Windows {
         }
     }
 
+    /// Dialog `key` closed ([`dialog_closed`]).
+    pub fn closed(&mut self, key: u64) {
+        self.dialogs.remove(&key);
+    }
+
     /// Dialog `key`'s window was found and is now the main window's own.
     pub fn owned(&mut self, key: u64, window: Native) {
         if let Some(dialog) = self.dialogs.get_mut(&key) {
@@ -169,11 +174,18 @@ pub fn set_main_window(window: Option<&impl HasWindowHandle>, frame: u64) {
     with(|w| w.set_main(main, frame));
 }
 
-/// Dialog `key`, titled `title`, was shown on `frame`, with the keyboard or not: the first time,
-/// its window is made the main window's own so it stays above it. `true` while its window is
+/// Dialog `key` is being shown on `frame`, with the keyboard or not: called before its
+/// controls run, so a file dialog one of them opens belongs to it from the first frame it has
+/// the keyboard. What to do about its window goes to [`dialog_window`] once it is open.
+pub fn dialog_seen(key: u64, frame: u64, focused: bool) -> Step {
+    with(|w| w.shown(key, frame, focused)).unwrap_or(Step::Nothing)
+}
+
+/// Dialog `key`, titled `title`, is open, and [`dialog_seen`] said `step`: the first time, its
+/// window is made the main window's own so it stays above it. `true` while its window is
 /// still to be found: look again within [`RETRY`].
-pub fn dialog_shown(key: u64, title: &str, frame: u64, focused: bool) -> bool {
-    let Some(Step::Own { main }) = with(|w| w.shown(key, frame, focused)) else {
+pub fn dialog_window(key: u64, title: &str, step: Step) -> bool {
+    let Step::Own { main } = step else {
         return false;
     };
     match own(title, main) {
@@ -184,6 +196,12 @@ pub fn dialog_shown(key: u64, title: &str, frame: u64, focused: bool) -> bool {
         }
         None => true,
     }
+}
+
+/// Dialog `key` has closed: its window is forgotten, so no file dialog is given it and the
+/// next one to open under that key is owned afresh.
+pub fn dialog_closed(key: u64) {
+    with(|w| w.closed(key));
 }
 
 /// The dialog window a file dialog opened now belongs to, or `None` for the main window
@@ -312,6 +330,19 @@ mod tests {
         w.owned(1, Native::X11(9));
         // not shown on frames 11 and 12: closed; back on 13 as a new window
         assert_eq!(w.shown(1, 13, true), Step::Own { main: MAIN });
+    }
+
+    #[test]
+    fn a_dialog_closed_is_forgotten_at_once() {
+        let mut w = with_main();
+        w.shown(1, 10, true);
+        w.owned(1, Native::X11(9));
+        w.closed(1);
+        // the next pass: no file dialog goes to the closed window
+        w.set_main(Some(MAIN), 11);
+        assert_eq!(w.focused_dialog(), None);
+        // and opened again on that very pass, its new window is owned
+        assert_eq!(w.shown(1, 11, true), Step::Own { main: MAIN });
     }
 
     #[test]

@@ -101,7 +101,9 @@ fn dialog_in<R>(
     scroll: bool,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> Option<R> {
+    let key = egui::ViewportId::from_hash_of(id).0.value();
     if !*open {
+        cut_craft_window_owner::dialog_closed(key);
         return None;
     }
     if ctx.embed_viewports() {
@@ -115,14 +117,17 @@ fn dialog_in<R>(
     }
     let mut add = Some(add);
     let viewport = egui::ViewportId::from_hash_of(id);
-    let mut focused = false;
+    let frame = ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT);
+    let mut step = cut_craft_window_owner::Step::Nothing;
     let out = ctx.show_viewport_immediate(
         viewport,
         egui::ViewportBuilder::default()
             .with_title(title)
             .with_inner_size(size),
         |ui, _| {
-            focused = ui.ctx().input(|i| i.viewport().focused) == Some(true);
+            // before the controls run: a file dialog one opens belongs to this window
+            let focused = ui.ctx().input(|i| i.viewport().focused) == Some(true);
+            step = cut_craft_window_owner::dialog_seen(key, frame, focused);
             let out = egui::CentralPanel::default()
                 .show(ui, |ui| {
                     let add = add.take()?;
@@ -144,8 +149,9 @@ fn dialog_in<R>(
     );
     // the window is open now: it is made the main window's own, so it stays above it until
     // it closes, and file dialogs opened from it belong to it
-    let frame = ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT);
-    if cut_craft_window_owner::dialog_shown(viewport.0.value(), title, frame, focused) {
+    if !*open {
+        cut_craft_window_owner::dialog_closed(key);
+    } else if cut_craft_window_owner::dialog_window(key, title, step) {
         ctx.request_repaint_after(cut_craft_window_owner::RETRY);
     }
     out
