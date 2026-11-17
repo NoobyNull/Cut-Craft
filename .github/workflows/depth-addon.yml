@@ -36,7 +36,7 @@ jobs:
           - os: windows-latest
             name: windows-x86_64
             exe: cutcraft-depth.exe
-          # Apple Silicon Macs (macos-14 is retired: see builds.yml)
+          # Apple Silicon Macs (macos-14 is retired: see builds-macos.yml)
           - os: macos-latest
             name: macos-aarch64
             exe: cutcraft-depth

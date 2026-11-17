@@ -1,0 +1,75 @@
+#!/bin/bash
+# Tests for scripts/publish-release: scripts/test-publish-release (CI runs it on each pull
+# request). A stand-in `gh` records what it is asked and plays a release that is or is not
+# there yet, or one another build makes while this one is making it.
+set -uo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+failed=0
+fail() {
+  echo "FAIL: $*"
+  failed=1
+}
+
+mkdir -p "$work/bin" "$work/dist"
+cat >"$work/bin/gh" <<'GH'
+#!/bin/bash
+echo "$*" >>"$GH_LOG"
+case "$1 $2" in
+  "release view") [[ -f $GH_STATE/exists ]] ;;
+  "release create")
+    if [[ -f $GH_STATE/race ]]; then touch "$GH_STATE/exists"; exit 1; fi
+    [[ -f $GH_STATE/exists ]] && exit 1
+    touch "$GH_STATE/exists" ;;
+  "release upload") [[ ! -f $GH_STATE/upload-fails ]] ;;
+esac
+GH
+chmod +x "$work/bin/gh"
+
+run() { # state... : runs publish-release with a fresh log, in the given state
+  rm -rf "$work/state" "$work/log"
+  mkdir -p "$work/state"
+  for s in "$@"; do touch "$work/state/$s"; done
+  PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
+    "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1
+}
+log() { cat "$work/log" 2>/dev/null; }
+
+touch "$work/dist/cut-craft-1.2.3-windows-x86_64.zip"
+touch "$work/dist/cut-craft-1.2.3-windows-x86_64.zip.minisig"
+
+# the first build to finish publishes the release
+run || fail "first: failed: $(cat "$work/out")"
+log | grep -q "^release create v1.2.3 -R o/r --verify-tag" || fail "first: no create: $(log)"
+
+# a later build adds to it and makes nothing
+run exists || fail "later: failed: $(cat "$work/out")"
+log | grep -q "release create" && fail "later: made the release again: $(log)"
+log | grep -q "release upload v1.2.3 .*windows-x86_64.zip -R o/r --clobber" \
+  || fail "later: did not upload: $(log)"
+
+# two at once: this one's create loses, and it adds to the other's
+run race || fail "race: failed: $(cat "$work/out")"
+log | grep -q "release upload" || fail "race: did not upload: $(log)"
+
+# signatures go up before the files they sign
+first_upload=$(log | grep -m1 "release upload")
+[[ $first_upload == *.minisig* && $first_upload != *".zip -R"* ]] \
+  || fail "the first upload is not the signatures alone: $first_upload"
+
+# a failed upload fails the step
+run exists upload-fails && fail "a failed upload passed"
+
+# an unsigned file is never published
+touch "$work/dist/cut-craft-1.2.3.dmg"
+run exists && fail "an unsigned file was published"
+log | grep -q "release upload" && fail "uploaded with an unsigned file there: $(log)"
+rm "$work/dist/cut-craft-1.2.3.dmg"
+
+# nothing built: nothing to publish
+rm "$work/dist"/*
+run exists && fail "an empty folder passed"
+
+if [[ $failed == 0 ]]; then echo "publish-release: all tests pass"; fi
+exit $failed

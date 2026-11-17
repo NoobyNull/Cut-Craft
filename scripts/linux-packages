@@ -3,7 +3,7 @@
 #   scripts/linux-packages [PROGRAM [LIBS]]  (default: target/release/cut-craft)
 # LIBS is a folder holding the libraries the AppImage carries (see AppRun) and, in
 # LIBS/licenses, their licence files; without it they are taken from this system.
-# .github/workflows/builds.yml runs it on GitHub. Needs rsvg-convert, and for the Flatpak
+# .github/workflows/builds-linux.yml runs it on GitHub. Needs rsvg-convert, and for the Flatpak
 # flatpak and flatpak-builder with the freedesktop 25.08 runtime and SDK from Flathub;
 # appimagetool is fetched when it is not installed.
 set -euo pipefail

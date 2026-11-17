@@ -1,0 +1,50 @@
+#!/bin/bash
+# Adds one computer's signed builds to the release for TAG, making the release first if no
+# other computer's build has yet. Linux, Windows and macOS are built apart (the three
+# "Builds" workflows), and whichever finishes first publishes the release; the others add
+# their files to it as they finish. A computer's failed build holds back no one else's.
+#
+#   scripts/publish-release TAG DIR      (GH_TOKEN and GITHUB_REPOSITORY from the workflow)
+#
+# Signatures go up before the files they sign, so a file is never on the release without
+# its .minisig. The updater (crates/updater) offers a computer a release only once that
+# computer's own file and signature are both there; until then it offers the one before.
+set -euo pipefail
+tag=${1:?usage: scripts/publish-release TAG DIR}
+dir=${2:?usage: scripts/publish-release TAG DIR}
+repo=(-R "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is not set}")
+
+shopt -s nullglob
+signatures=("$dir"/*.minisig)
+files=()
+for f in "$dir"/*; do
+  [[ -f $f && $f != *.minisig ]] && files+=("$f")
+done
+if [[ ${#files[@]} == 0 ]]; then
+  echo "::error::Nothing to publish in $dir"
+  exit 1
+fi
+for f in "${files[@]}"; do
+  if [[ ! -f $f.minisig ]]; then
+    echo "::error::$(basename "$f") is not signed: run scripts/sign-release first"
+    exit 1
+  fi
+done
+
+if gh release view "$tag" "${repo[@]}" >/dev/null 2>&1; then
+  echo "$tag is already published: adding these files to it"
+elif gh release create "$tag" "${repo[@]}" --verify-tag --title "Cut Craft $tag" --generate-notes; then
+  echo "published $tag"
+elif gh release view "$tag" "${repo[@]}" >/dev/null 2>&1; then
+  # another computer's build made it a moment ago
+  echo "$tag was published meanwhile: adding these files to it"
+else
+  echo "::error::Could not publish $tag"
+  exit 1
+fi
+
+gh release upload "$tag" "${signatures[@]}" "${repo[@]}" --clobber
+gh release upload "$tag" "${files[@]}" "${repo[@]}" --clobber
+for f in "${files[@]}"; do
+  echo "attached $(basename "$f")"
+done

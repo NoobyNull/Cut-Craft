@@ -149,8 +149,10 @@ newest code.
 - **minor** (a milestone): 0.6.2 → 0.7.0
 
 Whenever `main`'s version has no tag yet, **Release tag** makes it: it tags the commit the
-version arrived in and starts **Builds** on that tag, which builds, signs and publishes the
-release. Nobody pushes tags by hand, and a `v*` tag is never moved or deleted (see
+version arrived in and starts the three **Builds** workflows on that tag, one per computer
+(Linux, Windows, macOS). Each builds, start-checks and signs its own files and adds them to
+the release: whichever finishes first publishes it, and the others add to it as they finish,
+so one that fails or waits for a runner holds back none of the others. Nobody pushes tags by hand, and a `v*` tag is never moved or deleted (see
 "Repository protection").
 
 Afterwards, `git pull` and push `main` and the new tag to the Gitea mirror too
@@ -199,9 +201,15 @@ To cut a release:
    gh pr create --title "chore: version 0.6.1" --body "Version 0.6.1"
    ```
 
-6. When CI is green, merge it. **Release tag** tags v0.6.1 on the merge and **Builds** makes
-   the macOS DMG, Linux `.tar.gz`, AppImage and Flatpak, and Windows `.zip`, signs each and
-   attaches them to the release on GitHub's Releases page. Watch with `gh run list --limit 6`.
+6. When CI is green, merge it. **Release tag** tags v0.6.1 on the merge and starts
+   **Builds (Linux)** (`.tar.gz`, AppImage, Flatpak, `.deb`, `.rpm`), **Builds (Windows)**
+   (`.zip`) and **Builds (macOS)** (DMG). Each signs its files and adds them to the release on
+   GitHub's Releases page as soon as it is done. Watch with `gh run list --limit 6`.
+
+   Installed copies are offered the new version only once their own computer's signed file is
+   on the release (the updater reads the newest few releases and takes the newest that has
+   it), so a release that has Linux's files but not yet Windows's is invisible to Windows
+   copies until Windows's arrive.
 
 7. Build the same version locally (see "Build and run locally").
 
@@ -211,7 +219,8 @@ Two rulesets (Settings → Rules → Rulesets) guard the GitHub repository:
 
 - **Protect main**: `main` can't be deleted or force-pushed, and changes reach it only through
   pull requests whose CI (`check (ubuntu-latest)`, `check (windows-latest)`) and title check
-  (`kind`) pass. No review is required. Nobody bypasses it, admins included, except deploy
+  (`kind`) pass. CI also runs `check (macos-latest)`, which is not required: it reports, and
+  a Mac-only failure doesn't hold back a merge. No review is required. Nobody bypasses it, admins included, except deploy
   keys (none is set up, and nothing needs one). To override in an emergency, set the ruleset
   to Disabled and back to Active afterwards.
 - **Protect release tags**: a `v*` tag can't be deleted or moved once it exists. New tags can
@@ -231,7 +240,8 @@ Two rulesets (Settings → Rules → Rulesets) guard the GitHub repository:
 - **A release came out wrong.** Its tag can't be moved or deleted. Fix it on `main` and cut the
   next version (`scripts/release-version`, above).
 - **A version merged but no release appeared.** Open Actions → **Release tag** and read the run
-  for that merge; **Run workflow** there tries again. If the tag exists but **Builds** failed,
-  open Actions → Builds → **Run workflow**, leave "Use workflow from" on `main`, and type the
-  tag (such as `v0.5.3`) in the box. A release goes out once Linux and Windows are built; when
-  GitHub couldn't start the macOS build, run it again the same way later to add the DMG.
+  for that merge; **Run workflow** there tries again. If the tag exists but one computer's
+  build failed (or GitHub never started it), open Actions → that **Builds (…)** workflow →
+  **Run workflow**, leave "Use workflow from" on `main`, and type the tag (such as `v0.5.3`)
+  in the box. It adds that computer's files to the release, or publishes the release if no
+  other computer's build has yet. The others are not touched.
