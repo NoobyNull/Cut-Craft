@@ -71,7 +71,7 @@ toolpath you have since removed is not left to run by mistake. Archive moves the
 dated folder under Archive beside them (a second one saved in the same second gets its own
 folder), then adds the new ones. If the new files cannot be saved (a toolpath crossing a
 keep-out zone, say), the earlier ones are put back as they were. Tick Do this every time to
-stop being asked; Edit ▸ Options ▸ Confirmations ▸ G-code from an earlier save changes it.
+stop being asked; Edit ▸ Options ▸ Confirmation Choices ▸ G-code from an earlier save changes it.
 Send to Machine asks the same of an earlier send's files in the project's folder on the
 machine (old tile files from another layout too): Replace sends the new files and deletes
 the old ones left over; Archive moves them into a dated folder under Archive there first.
