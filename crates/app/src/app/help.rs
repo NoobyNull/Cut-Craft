@@ -13,6 +13,7 @@ const VIEW_3D: &str = include_str!("../../help/view-3d.md");
 const GROUPS: &str = include_str!("../../help/groups.md");
 const PENCIL: &str = include_str!("../../help/3d-pencil.md");
 const UPDATES: &str = include_str!("../../help/updates.md");
+const COLLISIONS: &str = include_str!("../../help/collisions.md");
 
 /// More help for a tool than its settings' doc comments give: pictures and steps, added
 /// under its settings.
@@ -92,6 +93,10 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "update-by-hand.png",
         include_bytes!("../../help/pictures/update-by-hand.png"),
+    ),
+    (
+        "collet-hits.png",
+        include_bytes!("../../help/pictures/collet-hits.png"),
     ),
 ];
 
@@ -217,6 +222,7 @@ impl CutCraftApp {
             "view_3d" => "3D View".into(),
             "groups" => "Groups".into(),
             "updates" => "Updates".into(),
+            "collisions" => "Collet and Holder Collisions".into(),
             id => self.tool_label(id),
         }
     }
@@ -232,6 +238,7 @@ impl CutCraftApp {
             "view_3d",
             "groups",
             "updates",
+            "collisions",
         ];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
@@ -268,6 +275,7 @@ impl CutCraftApp {
             "view_3d" => VIEW_3D.to_owned(),
             "groups" => GROUPS.to_owned(),
             "updates" => UPDATES.to_owned(),
+            "collisions" => COLLISIONS.to_owned(),
             id => {
                 let (page, name) = match self.page_of(id) {
                     Page::Design => ("design", "Design"),

@@ -4456,6 +4456,8 @@ fn checks_section(ui: &mut egui::Ui, found: &[cut_craft_core::preflight::Finding
         let (colour, kind) = match f.severity {
             Severity::Error => (ui.visuals().error_fg_color, "Must fix"),
             Severity::Warning => (ui.visuals().warn_fg_color, "Check"),
+            // always asked about on saving, so red as well as marked
+            Severity::MustAsk => (ui.visuals().error_fg_color, "⚠ Check"),
         };
         ui.colored_label(colour, format!("{kind}: {}", f.message));
     }

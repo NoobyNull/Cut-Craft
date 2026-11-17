@@ -1667,6 +1667,73 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
                 .on_hover_hint("How many cutting edges the bit has, for the chip load");
             ui.add(Number::new(&mut tool.flutes).range(1..=12));
             ui.end_row();
+            stickout_row(ui, tool);
+        });
+    own_holder(ui, tool);
+}
+
+/// Stick-out: how far the bit pokes out below the collet nut, with what is taken while it
+/// is not set.
+fn stickout_row(ui: &mut egui::Ui, tool: &mut Tool) {
+    ui.label("Stick-out").on_hover_hint(
+        "How far the bit pokes out below the collet nut, from its tip up to the nut's face. \
+         Measure it once the bit is tightened in. On a deep cut the collet nut and spindle \
+         can hit material beside the cut: the preview and Save Toolpaths warn of it. 0 for \
+         not set",
+    );
+    ui.horizontal(|ui| {
+        length(ui, &mut tool.stickout, tool.units);
+        let (taken, guessed) = cut_craft_core::collision::stickout(tool);
+        if guessed {
+            let shown = if tool.units == Units::Inch {
+                format!("{:.3} in", taken / INCH)
+            } else {
+                format!("{taken:.1} mm")
+            };
+            ui.weak(format!("not set: taken as {shown}"));
+        }
+    });
+    ui.end_row();
+}
+
+/// The bit's own collet nut and spindle sizes, for a machine with Holder per bit ticked
+/// (a tool changer): folded, as most bits use the machine's.
+fn own_holder(ui: &mut egui::Ui, tool: &mut Tool) {
+    let summary = if tool.holder.is_some() {
+        "Own holder: set"
+    } else {
+        "Own holder: the machine's"
+    };
+    egui::CollapsingHeader::new(summary)
+        .id_salt("tool_own_holder")
+        .show(ui, |ui| {
+            ui.weak(
+                "Only for a machine with Holder per bit ticked in Machine Configuration (a \
+                 tool changer, each bit in a holder of its own). Otherwise the machine's \
+                 collet nut and spindle are used",
+            );
+            let mut own = tool.holder.is_some();
+            if ui
+                .checkbox(&mut own, "This bit has its own holder")
+                .changed()
+            {
+                tool.holder = own.then(cut_craft_core::collision::Holder::default);
+            }
+            if let Some(holder) = tool.holder.as_mut() {
+                egui::Grid::new("tool_own_holder_sizes")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        for (label, value) in [
+                            ("Collet nut across", &mut holder.nut_diameter),
+                            ("Collet nut height", &mut holder.nut_length),
+                            ("Spindle across", &mut holder.spindle_diameter),
+                        ] {
+                            ui.label(label);
+                            length(ui, value, tool.units);
+                            ui.end_row();
+                        }
+                    });
+            }
         });
 }
 

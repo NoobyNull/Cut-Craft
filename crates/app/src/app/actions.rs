@@ -204,6 +204,7 @@ impl CutCraftApp {
             toolpath_keys: super::follow::Keys::default(),
             preview_marks: std::collections::BTreeMap::new(),
             tool_note: None,
+            collisions: std::collections::BTreeMap::new(),
             stale_known: 0,
             stale_while_form: false,
             recalculate_ask: None,
@@ -1592,13 +1593,18 @@ impl CutCraftApp {
             self.status.set_message(&refused);
             return None;
         }
+        // the collet or spindle hitting the material is always asked about
+        let must_ask = found
+            .iter()
+            .any(|f| f.severity == cut_craft_core::preflight::Severity::MustAsk);
         let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
         // out-of-date toolpaths are always asked about, whatever Options say
         let stale = plan
             .iter()
             .flatten()
             .any(|id| self.doc.toolpaths.get(id).is_some_and(|t| t.stale));
-        let ask = stale || self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+        let ask =
+            stale || must_ask || self.options.confirmations.cutting_checks == CuttingChecks::Ask;
         if !problems.is_empty() && ask && !std::mem::take(&mut self.checks_accepted) {
             // asked over the window: the answer saves (or sends) again
             self.ask_save_anyway(form, problems, sending);
@@ -2023,9 +2029,18 @@ impl CutCraftApp {
                     spindle: m.spindle,
                     slots: m.slots.clone(),
                     left: None,
+                    holding: m.holding(),
                 });
         limits.left = Some(self.options.confirmations.left());
         limits
+    }
+
+    /// How the active machine holds its bits, for the collet and holder checks (the usual
+    /// holder without a machine).
+    pub(super) fn holding(&self) -> cut_craft_core::collision::Holding {
+        self.machines
+            .active()
+            .map_or_default(cut_craft_machines::Machine::holding)
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.

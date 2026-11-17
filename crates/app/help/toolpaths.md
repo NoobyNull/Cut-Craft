@@ -172,7 +172,9 @@ picks Last.
 The Analyse tab, and Save Toolpaths before it writes a file, checks the shown toolpaths
 before you cut: rapid moves that would crash into material still there, cutting that only
 cuts air, spots the bit can't reach, a Drilling bit not the size of the holes drawn,
-settings the machine can't do, and toolpaths that are out of date. Each finding says how to put it right; ones marked Must fix stop the save.
+the collet nut, spindle or shank hitting wood beside a deep cut (see
+[Collet and Holder Collisions](help:collisions)), settings the machine can't do, and
+toolpaths that are out of date. Each finding says how to put it right; ones marked Must fix stop the save.
 
 The checks cut every toolpath in order, so a big 3D finish (millions of tiny moves with a
 small ball nose) takes a little while: a few seconds on a fast computer, longer on a slow

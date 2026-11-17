@@ -43,6 +43,22 @@ pub struct Machine {
     pub drill_bank: Option<cut_craft_core::drill_bank::DrillBank>,
     /// Where its G-code programs are saved, and the folder its files are sent to.
     pub send_to: crate::send::SendTo,
+    /// What holds the bits: the collet nut and the spindle above it, checked for hitting
+    /// the material on deep cuts (added with collision checks).
+    pub holder: cut_craft_core::collision::Holder,
+    /// Holder per bit: each bit can have a holder of its own in the Tool Database, used
+    /// instead of [`Self::holder`] (a tool changer's bits each sit in their own holder).
+    pub holder_per_bit: bool,
+}
+
+impl Machine {
+    /// How it holds its bits, for the collet and holder checks.
+    pub fn holding(&self) -> cut_craft_core::collision::Holding {
+        cut_craft_core::collision::Holding {
+            holder: self.holder,
+            per_bit: self.holder_per_bit,
+        }
+    }
 }
 
 /// A rectangle of the bed kept out of: its lower-left corner and its size, mm, and what its

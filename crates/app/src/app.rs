@@ -97,6 +97,16 @@ struct Copied {
 
 /// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id, unless a
 /// reorder has moved it since it was first previewed (see [`CutCraftApp::preview_mark`]).
+/// What the parts above a toolpath's flutes hit in a preview.
+#[derive(Clone, Debug)]
+pub(crate) struct Collided {
+    /// What hits, where, and how to put it right.
+    pub sentence: String,
+    pub hits: Vec<cut_craft_core::collision::Hit>,
+    /// The toolpath's moves when checked: once recalculated, what was found no longer holds.
+    pub moves: usize,
+}
+
 fn preview_mark(id: EntityId) -> u32 {
     u32::try_from(id.0).unwrap_or(u32::MAX)
 }
@@ -1340,6 +1350,9 @@ struct CutCraftApp {
     /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
     /// made once a change, not every frame.
     rough_3d: Option<(RoughKey, Material)>,
+    /// What the collet nut, spindle or shank hit in the last preview, by toolpath: the
+    /// toolpath list marks them ⚠ in red and the 3D view shows the stock in the way red.
+    collisions: std::collections::BTreeMap<EntityId, Collided>,
     /// How many toolpaths were out of date last frame.
     stale_known: usize,
     /// Toolpaths went out of date while a form was open: once it closes, ask whether to

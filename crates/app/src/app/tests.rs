@@ -17316,3 +17316,122 @@ fn view_gcode_closes_when_saving_starts_so_it_cannot_cover_the_file_dialog() {
         "with the G-code window out of the way"
     );
 }
+
+/// A Profile round a rectangle with the bit sticking out only 2 mm below its collet nut, so
+/// the nut sinks into the wood round the cut.
+fn collet_too_low() -> Harness {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    for toolpath in h.app.doc.toolpaths.values_mut() {
+        toolpath.tool.flute_length = 1.0;
+        toolpath.tool.stickout = 2.0;
+    }
+    h
+}
+
+#[test]
+fn a_preview_marks_the_collet_hitting_the_wood_in_the_list_and_in_red() {
+    // Matthew 2026-11-17: the uncut stock the preview keeps is what collisions are checked
+    // against
+    let mut h = collet_too_low();
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.frame(vec![]);
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    let collided = h.app.collisions.get(&id).expect("the nut hits");
+    assert!(
+        collided
+            .sentence
+            .contains("the collet nut would hit the material"),
+        "{}",
+        collided.sentence
+    );
+    assert!(
+        h.app
+            .status
+            .message
+            .contains("⚠ The collet or spindle would hit")
+    );
+    // red in the list
+    h.frame(vec![]);
+    let name = h.app.doc.toolpaths[&id].name.clone();
+    assert!(h.text_at(&format!("⚠ {name}")).is_some());
+    // and the wood in the way red in the 3D view
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let [r, g, b, _] = super::panels::COLLISION_RED.to_array();
+    let red = u32::from_be_bytes([1, r, g, b]);
+    assert!(surface.paint.contains(&red));
+    // recalculated, what was found no longer holds
+    h.app.doc.toolpaths.get_mut(&id).unwrap().moves.pop();
+    assert_eq!(h.app.current_collisions().count(), 0);
+}
+
+#[test]
+fn the_collet_hitting_the_wood_is_always_asked_about_before_saving() {
+    let mut h = ready_for_output();
+    h.app.options.confirmations.cutting_checks = crate::options::CuttingChecks::SaveAndTell;
+    let form = one_file_form();
+    let post = h.app.form_post(&form).unwrap();
+    let found = |severity| {
+        Some(vec![cut_craft_core::preflight::Finding {
+            severity,
+            message: "Profile 1: the collet nut would hit the material".to_owned(),
+        }])
+    };
+    let checks = |h: &Harness, severity| {
+        vec![super::SaveChecks {
+            plan: h.app.plan(&form, &post).unwrap(),
+            changes: form.changes,
+            revision: h.app.history.revision(),
+            machine: h.app.machines.active,
+            found: found(severity),
+        }]
+    };
+    // an ordinary warning is only told, as Options say
+    h.app.save_checks = checks(&h, cut_craft_core::preflight::Severity::Warning);
+    assert!(h.app.ready_to_save(&form, false).is_some());
+    // a collision always asks, whatever Options say
+    h.app.save_checks = checks(&h, cut_craft_core::preflight::Severity::MustAsk);
+    assert!(h.app.ready_to_save(&form, false).is_none());
+    assert!(h.app.save_anyway.is_some());
+}
+
+#[test]
+fn the_collision_help_explains_the_sizes_with_a_picture() {
+    let h = Harness::new();
+    assert!(h.app.help_topics().contains(&"collisions"));
+    assert!(
+        h.app
+            .help_markdown("contents")
+            .contains("(help:collisions)"),
+        "linked from Contents"
+    );
+    assert!(
+        h.app
+            .help_markdown("toolpaths")
+            .contains("(help:collisions)")
+    );
+    let page = h.app.help_markdown("collisions");
+    for words in [
+        "Stick-out",
+        "Collet nut across",
+        "Spindle across",
+        "Holder per bit",
+        "Own holder",
+        "This question cannot be switched",
+        "bytes://help/collet-hits.png",
+    ] {
+        assert!(page.contains(words), "{words}");
+    }
+    assert!(
+        super::help::PICTURES
+            .iter()
+            .any(|(name, bytes)| *name == "collet-hits.png" && bytes.starts_with(b"\x89PNG")),
+        "its picture goes with the app"
+    );
+}

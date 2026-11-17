@@ -13,6 +13,8 @@ a CNC machine cuts them with.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.
+- [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
+  hitting wood beside a deep cut, shown red in the preview and asked about before saving.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.
 
