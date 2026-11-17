@@ -150,6 +150,11 @@ impl<A: 'static> Busy<A> {
         (self.finish)(state);
     }
 
+    /// The step it is on now.
+    pub fn stage(&self) -> String {
+        self.progress.stage()
+    }
+
     /// How long the job has left, as it looks now.
     pub fn estimate(&self) -> Estimate {
         let elapsed = self.started.elapsed().as_secs_f64();

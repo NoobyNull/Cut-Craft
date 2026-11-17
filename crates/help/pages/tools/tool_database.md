@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-17
-see-also: pocket_toolpath, profile_toolpath, stepover, collisions
+see-also: pocket_toolpath, profile_toolpath, stepover, collisions, check_tool_numbers, check_makers_figures
 ---
 
 ## Steps
@@ -16,6 +16,23 @@ see-also: pocket_toolpath, profile_toolpath, stepover, collisions
    ![Step 2](pictures/tool_database/step-2.png)
 
 Each bit's stepover and depth per pass decide how fast it cuts: see [what stepover is](help:stepover).
+
+## Tool numbers
+
+A tool changer picks bits by their **Tool Number** (T1, T2...). Give each bit its own number;
+**0** means you change the bit by hand, and any number of bits may share 0. When you type a
+number another bit already has, the Tool Database says so in red under it. Nothing is
+refused, and the checks before cutting call it out again when you save
+([Each bit its own tool number](help:check_tool_numbers)).
+
+![The red note under a tool number another bit has](pictures/checks/tool-number-taken.png)
+
+## A maker's feeds and speeds
+
+A bit copied from a maker's catalogue keeps the maker's feeds and speeds. When a toolpath's
+feed rate, plunge rate or spindle speed ends up more than a tenth away from them, the checks
+before cutting ask you to tick it, so a typing slip is not cut
+([Feeds and speeds as the maker gives](help:check_makers_figures)).
 
 ## Stick-out and Own holder
 

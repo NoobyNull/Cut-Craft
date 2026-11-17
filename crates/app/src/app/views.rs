@@ -3595,6 +3595,10 @@ impl CutCraftApp {
     }
 
     /// Save Toolpaths: the machine and post, which toolpaths go in which file, and Save.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the window's sections in the order they show, each a line or two"
+    )]
     pub(super) fn save_toolpaths_window(&mut self, ctx: &egui::Context) {
         use crate::files::SaveMode;
         let Some(mut form) = self.save_form.clone() else {
@@ -3626,6 +3630,9 @@ impl CutCraftApp {
             Ok(plan) => self.save_checks(plan, form.changes).map(<[_]>::to_vec),
             Err(_) => Some(vec![]),
         };
+        let skipped = plan
+            .as_ref()
+            .map_or_else(|_| vec![], |p| self.not_checked(p, form.changes));
         let mut again = false;
         let errors = found.as_deref().is_some_and(|f| Self::refused(f).is_some());
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
@@ -3679,10 +3686,13 @@ impl CutCraftApp {
                 );
             ui.separator();
             files_section(ui, &self.doc, &plan, split);
-            again = self.checks_or_waiting(ui, found.as_deref());
+            ui.separator();
+            again = self.check_list(ui, found.as_deref(), &skipped);
             ui.add_space(ui.spacing().item_spacing.y);
-            let ready = plan.is_ok() && !errors && found.is_some();
-            pressed = self.save_buttons(ui, ready, errors);
+            // ticked in the list this frame counts at once
+            let unticked = found.as_deref().is_some_and(|f| !self.all_acknowledged(f));
+            let ready = plan.is_ok() && !errors && found.is_some() && !unticked;
+            pressed = self.save_buttons(ui, ready, errors, unticked);
         });
         if again {
             self.check_again();
@@ -3695,22 +3705,6 @@ impl CutCraftApp {
         }
         self.pressed(&form, pressed);
         self.save_form = (open && self.save_after.is_none()).then_some(form);
-    }
-
-    /// Save Toolpaths' checks before cutting: what they found, or that they are running or
-    /// were cancelled, with Check Again; whether it was pressed.
-    fn checks_or_waiting(
-        &self,
-        ui: &mut egui::Ui,
-        found: Option<&[cut_craft_core::preflight::Finding]>,
-    ) -> bool {
-        if let Some(found) = found {
-            checks_section(ui, found);
-            return false;
-        }
-        ui.separator();
-        ui.strong("Checks before cutting");
-        self.checks_waiting(ui)
     }
 
     /// Does what Save Toolpaths' buttons asked (as [`Self::save_buttons`] says).
@@ -3746,6 +3740,7 @@ impl CutCraftApp {
         ui: &mut egui::Ui,
         ready: bool,
         errors: bool,
+        unticked: bool,
     ) -> (
         bool,
         bool,
@@ -3759,6 +3754,8 @@ impl CutCraftApp {
                 response
                     .on_disabled_hover_text("Fix the problems marked Must fix to save")
                     .clicked()
+            } else if unticked {
+                response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
             } else {
                 response.clicked()
             };
@@ -3770,7 +3767,9 @@ impl CutCraftApp {
                     "Save the files straight onto the machine, in this project's own folder \
                      there",
                 );
-            send = if reachable {
+            send = if reachable && unticked && !errors {
+                response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
+            } else if reachable {
                 response
                     .on_disabled_hover_text("Fix the problems marked Must fix to send")
                     .clicked()
@@ -4524,25 +4523,9 @@ pub(super) fn immediate_output(
     save
 }
 
-/// Save Toolpaths' checks before cutting: each error (Must fix) and warning (Check) with
-/// how to put it right.
-fn checks_section(ui: &mut egui::Ui, found: &[cut_craft_core::preflight::Finding]) {
-    use cut_craft_core::preflight::Severity;
-    if found.is_empty() {
-        return;
-    }
-    ui.separator();
-    ui.strong("Checks before cutting");
-    for f in found {
-        let (colour, kind) = match f.severity {
-            Severity::Error => (ui.visuals().error_fg_color, "Must fix"),
-            Severity::Warning => (ui.visuals().warn_fg_color, "Check"),
-            // always asked about on saving, so red as well as marked
-            Severity::MustAsk => (ui.visuals().error_fg_color, "⚠ Check"),
-        };
-        ui.colored_label(colour, format!("{kind}: {}", f.message));
-    }
-}
+/// Why Save Toolpaths and Send to Machine are greyed while a warning is not ticked.
+const TICK_TO_SAVE: &str =
+    "Tick each ⚠ under Checks before cutting to say you have read it, then save";
 
 /// Save Toolpaths' tool changes: a file for each tool, the tool changer (when the machine
 /// has one), or a pause to change the tool by hand.

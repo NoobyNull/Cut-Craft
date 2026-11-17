@@ -3992,33 +3992,12 @@ impl CutCraftApp {
             ui.weak("Make a toolpath (or tick one in the list) to check it here");
             return;
         }
-        let found = self
-            .save_checks(&[shown], crate::files::ToolChanges::SeparateFiles)
-            .map(<[_]>::to_vec);
-        ui.strong("Checks before cutting");
-        let Some(found) = found else {
-            if self.checks_waiting(ui) {
-                self.check_again();
-            }
-            return;
-        };
-        if found.is_empty() {
-            ui.label("✔ Nothing found that would stop or spoil the cut");
-        }
-        for f in &found {
-            let (colour, kind) = match f.severity {
-                cut_craft_core::preflight::Severity::Error => {
-                    (ui.visuals().error_fg_color, "Must fix")
-                }
-                cut_craft_core::preflight::Severity::Warning => {
-                    (ui.visuals().warn_fg_color, "Check")
-                }
-                // always asked about on saving, so red as well as marked
-                cut_craft_core::preflight::Severity::MustAsk => {
-                    (ui.visuals().error_fg_color, "⚠ Check")
-                }
-            };
-            ui.colored_label(colour, format!("{kind}: {}", f.message));
+        let plan = [shown];
+        let changes = crate::files::ToolChanges::SeparateFiles;
+        let found = self.save_checks(&plan, changes).map(<[_]>::to_vec);
+        let skipped = self.not_checked(&plan, changes);
+        if self.check_list(ui, found.as_deref(), &skipped) {
+            self.check_again();
         }
         let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
         ui.add_space(ui.spacing().item_spacing.y);

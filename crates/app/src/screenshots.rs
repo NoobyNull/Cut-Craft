@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 30] = [
+const SCENES: [Scene; 34] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -96,6 +96,16 @@ const SCENES: [Scene; 30] = [
     ("help-question", |app, _| {
         help_window(app, "contents", "how do I cut out a sign with bridges?");
     }),
+    // Help: Checks before cutting (each builds on the one before)
+    ("checks-running", checks_running),
+    ("checks-found", checks_found),
+    ("checks-ticked", |app, _| {
+        let found = app.save_checks.iter().find_map(|c| c.found.clone());
+        for f in found.unwrap_or_default() {
+            app.acknowledged.insert(f.message);
+        }
+    }),
+    ("tool-number-taken", tool_number_taken),
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {
@@ -139,6 +149,31 @@ fn progress_window(app: &mut CutCraftApp, _: &egui::Context) {
     );
 }
 
+/// The sample sign's toolpaths on a machine that says what it can do, Save Toolpaths open.
+fn checks_job(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.form = None;
+    // the help scenes' window closed, the Toolpaths page not pinned over the windows
+    app.info = None;
+    app.help_search.clear();
+    app.pages.set_pinned(super::Page::Toolpaths, false);
+    app.doc = cut_craft_core::document::Document::default();
+    draw_shapes(app);
+    toolpaths(app, ctx);
+    app.invoke(ctx, "reset_preview");
+    app.view = View::TwoD;
+    app.machines.add();
+    if let Some(m) = app.machines.active_mut() {
+        m.name = "Shop Router".into();
+        (m.width, m.height, m.depth) = (1220.0, 610.0, 100.0);
+        m.max_rate = [5000.0, 5000.0, 1500.0];
+        m.spindle = [10000.0, 24000.0];
+    }
+    app.acknowledged.clear();
+    app.save_form = Some(app.default_save_form());
+    // its window drawn inside Cut Craft's, where the picture is taken
+    ctx.set_embed_viewports(true);
+}
+
 /// Snapping Options (F4) with Smart snapping unticked and not applied yet.
 fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
     (app.options_window, app.options_draft, app.options_closing) = (false, None, false);
@@ -164,6 +199,62 @@ fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.options_edited(edited);
     // its window drawn inside Cut Craft's, where the picture is taken
     ctx.set_embed_viewports(true);
+}
+
+/// The checks part-way: the settings checked, the machine's being checked.
+fn checks_running(app: &mut CutCraftApp, ctx: &egui::Context) {
+    checks_job(app, ctx);
+    let Some(form) = app.save_form.clone() else {
+        return;
+    };
+    let Some(plan) = app
+        .form_post(&form)
+        .ok()
+        .and_then(|p| app.plan(&form, &p).ok())
+    else {
+        return;
+    };
+    app.save_checks = vec![super::SaveChecks {
+        plan,
+        changes: form.changes,
+        revision: app.history.revision(),
+        machine: app.machines.active,
+        found: None,
+    }];
+    app.in_background(
+        super::CHECKING,
+        "check",
+        || {
+            cut_craft_core::progress::stage(&cut_craft_core::preflight::Phase::Machine.stage(""));
+            cut_craft_core::progress::report(0.55);
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        },
+        |_, ()| {},
+    );
+}
+
+/// The checks done: what they found, nothing ticked yet.
+fn checks_found(app: &mut CutCraftApp, ctx: &egui::Context) {
+    // the pretend run before is let go, so the real checks run
+    app.save_checks.clear();
+    checks_job(app, ctx);
+}
+
+/// The Tool Database: a bit given a tool number another bit has.
+fn tool_number_taken(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.save_form = None;
+    // nothing pinned over the Tool Database's window
+    app.pages.set_pinned(super::Page::Toolpaths, false);
+    if let Some(first) = app.tools.tools.first_mut() {
+        first.number = 2;
+    }
+    if let Some(second) = app.tools.tools.get_mut(1) {
+        second.number = 2;
+    }
+    app.invoke(ctx, "tool_database");
+    if let Some(manager) = &mut app.tool_manager {
+        manager.pick = Some(cut_craft_tool_database::Pick::Tool(1));
+    }
 }
 
 /// The medallion in the 3D view with Material Setup open beside it, its Model Position in

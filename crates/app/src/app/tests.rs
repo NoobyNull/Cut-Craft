@@ -2359,7 +2359,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
     };
     let path = std::env::temp_dir().join(format!("cut-craft-keep-out-{}.nc", std::process::id()));
     let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
-    assert!(refused.contains("keep-out zones"), "{refused}");
+    assert!(refused.contains("keep-out zone"), "{refused}");
     assert!(!path.exists(), "nothing written");
 }
 
@@ -12145,8 +12145,7 @@ fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_of
     }
     // saving sign.nc where an earlier tiled save left its tiles asks Replace or Archive
     let path = dir.join(format!("sign.{ext}"));
-    h.app
-        .save_over_earlier(&form, post.clone(), path, String::new());
+    h.app.save_over_earlier(&form, post.clone(), path);
     let ask = h.app.earlier_ask.take().expect("asked");
     assert!(!ask.sending);
     assert_eq!(ask.earlier.len(), 2, "{:?}", ask.earlier);
@@ -12154,8 +12153,7 @@ fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_of
     h.app.machines.add();
     h.app.machines.active_mut().unwrap().send_to.folder = dir.join("card").display().to_string();
     h.app.session.path = Some(std::path::PathBuf::from("/jobs/sign.ccjob"));
-    h.app
-        .send_choosing(&form, post, String::new(), EarlierGcode::Ask);
+    h.app.send_choosing(&form, post, EarlierGcode::Ask);
     let ask = h.app.earlier_ask.as_ref().expect("asked");
     assert!(ask.sending);
     assert_eq!(ask.earlier.len(), 2);
@@ -16138,8 +16136,7 @@ fn a_save_that_fails_after_replace_or_archive_leaves_the_earlier_files_where_the
         std::fs::write(file, "old").unwrap();
     }
     for choice in [EarlierGcode::Replace, EarlierGcode::Archive] {
-        h.app
-            .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+        h.app.save_over_earlier(&form, post.clone(), path.clone());
         h.app.answer_earlier(Some(choice), false);
         let message = h.app.status.message.clone();
         assert!(message.contains("keep-out zone"), "{message}");
@@ -16183,8 +16180,7 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
         std::fs::write(file, "old").unwrap();
     }
     // asked first: nothing is written until it is answered
-    h.app
-        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    h.app.save_over_earlier(&form, post.clone(), path.clone());
     assert!(h.app.earlier_ask.is_some());
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "old");
     h.frame(vec![]);
@@ -16194,16 +16190,14 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
     h.app.answer_earlier(None, false);
     assert_eq!(std::fs::read_to_string(&stale).unwrap(), "old");
     // Replace: the new file, and no older numbered one left to run by mistake
-    h.app
-        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    h.app.save_over_earlier(&form, post.clone(), path.clone());
     h.app.answer_earlier(Some(EarlierGcode::Replace), false);
     assert!(std::fs::read_to_string(&path).unwrap().contains("G0"));
     assert!(!stale.exists());
     assert!(mine.exists(), "a file of the user's own is left alone");
     assert_eq!(h.app.options.confirmations.earlier_gcode, EarlierGcode::Ask);
     // Archive, remembered: the earlier file moved aside, and not asked next time
-    h.app
-        .save_over_earlier(&form, post.clone(), path.clone(), String::new());
+    h.app.save_over_earlier(&form, post.clone(), path.clone());
     h.app.answer_earlier(Some(EarlierGcode::Archive), true);
     assert_eq!(
         h.app.options.confirmations.earlier_gcode,
@@ -16218,8 +16212,7 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
         h.app.status.message
     );
     // a second archive in the same second gets a folder of its own
-    h.app
-        .save_over_earlier(&form, post, path.clone(), String::new());
+    h.app.save_over_earlier(&form, post, path.clone());
     assert!(h.app.earlier_ask.is_none(), "not asked once remembered");
     assert_eq!(archived(&dir), 2);
     assert!(path.exists());
@@ -18073,6 +18066,7 @@ fn save_anyway_is_asked_in_the_window_not_by_a_dialog_that_can_hide_behind_it() 
         found: Some(vec![cut_craft_core::preflight::Finding {
             severity: cut_craft_core::preflight::Severity::Warning,
             message: "Air cutting".to_owned(),
+            check: cut_craft_core::preflight::Check::AirCutting,
         }]),
     }];
     // asked over the window rather than by the system (a test opening one panics)
@@ -18112,16 +18106,39 @@ fn save_toolpaths_window_steps_aside_while_the_save_asks_then_comes_back() {
         found: Some(vec![cut_craft_core::preflight::Finding {
             severity: cut_craft_core::preflight::Severity::Warning,
             message: "Air cutting".to_owned(),
+            check: cut_craft_core::preflight::Check::AirCutting,
         }]),
     }];
     h.frame(vec![]);
     h.frame(vec![]);
+    // Matthew: each warning is acknowledged before saving; Save waits, greyed
+    h.click(h.text_at("Save Toolpaths...").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(
+        h.app.save_form.is_some(),
+        "greyed until the warning is ticked"
+    );
+    assert!(h.app.save_after.is_none());
+    h.click(h.text_at("⚠ Air cutting").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.acknowledged.contains("Air cutting"), "ticked as read");
     h.click(h.text_at("Save Toolpaths...").unwrap(), Modifiers::NONE);
     assert!(h.app.save_form.is_none(), "the form closes first");
+    assert!(h.app.save_after.is_some(), "the save waits for it to go");
     assert!(
         h.app.save_anyway.is_none(),
         "nothing asked while it is still there"
     );
+    // ticked in the form, the save does not ask again
+    assert!(
+        h.app.ready_to_save(&form, false).is_some(),
+        "ticking was the asking"
+    );
+    // the question over the window still steps the form aside until answered
+    h.app.save_after = None;
+    h.app.form_back = Some(form.clone());
+    h.app
+        .ask_save_anyway(&form, vec!["Air cutting".to_owned()], false);
     for _ in 0..3 {
         h.frame(vec![]);
     }
@@ -18131,6 +18148,59 @@ fn save_toolpaths_window_steps_aside_while_the_save_asks_then_comes_back() {
     h.click(h.text_at("Don't Save").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     assert!(h.app.save_form.is_some(), "the form is back once answered");
+}
+
+#[test]
+fn save_toolpaths_lists_every_check_with_how_it_came_out_and_its_help() {
+    // Matthew: "what is it actually checking ... what is it doing for me"
+    use cut_craft_core::preflight::{Check, Finding};
+    let mut h = ready_for_output();
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    let form = h.app.save_form.clone().unwrap();
+    let post = h.app.form_post(&form).unwrap();
+    h.app.save_checks = vec![super::SaveChecks {
+        plan: h.app.plan(&form, &post).unwrap(),
+        changes: form.changes,
+        revision: h.app.history.revision(),
+        machine: h.app.machines.active,
+        found: Some(vec![
+            Finding::error(Check::Rapids, "Profile would crash".into()),
+            Finding::warning(Check::GenericTool, "Profile: a generic bit".into()),
+        ]),
+    }];
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let texts = h.texts();
+    let shown = |t: &str| texts.iter().any(|s| s == t);
+    assert!(shown("Checks before cutting"), "{texts:?}");
+    // what needs a look comes first, by name, with what was found under it
+    assert!(shown(Check::Rapids.name()), "{texts:?}");
+    assert!(shown("Must fix: Profile would crash"), "{texts:?}");
+    assert!(shown(Check::GenericTool.name()), "{texts:?}");
+    assert!(shown("⚠ Profile: a generic bit"), "{texts:?}");
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.starts_with("✔ ") && t.contains("passed · ⚠ 1 to read · ✖ 1 must fix")),
+        "{texts:?}"
+    );
+    // the heading's ? opens the help about every check
+    let heading = h.text_at("Checks before cutting").unwrap();
+    let help = h
+        .texts_at("?")
+        .into_iter()
+        .filter(|p| (p.y - heading.y).abs() < 4.0)
+        .min_by(|a, b| (a.x - heading.x).abs().total_cmp(&(b.x - heading.x).abs()))
+        .unwrap();
+    h.click(help, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(
+        matches!(
+            h.app.info,
+            Some(super::Info::Help(super::check_list::OVERVIEW))
+        ),
+        "opens the checks' help"
+    );
 }
 
 #[test]
@@ -18241,6 +18311,7 @@ fn view_gcode_closes_when_saving_starts_so_it_cannot_cover_the_file_dialog() {
         found: Some(vec![cut_craft_core::preflight::Finding {
             severity: cut_craft_core::preflight::Severity::Warning,
             message: "Air cutting".to_owned(),
+            check: cut_craft_core::preflight::Check::AirCutting,
         }]),
     }];
     h.app.save_after = Some(super::gcode_view::SaveAfter::new(form, false));
@@ -18311,13 +18382,14 @@ fn a_preview_marks_the_collet_hitting_the_wood_in_the_list_and_in_red() {
 #[test]
 fn the_collet_hitting_the_wood_is_always_asked_about_before_saving() {
     let mut h = ready_for_output();
-    h.app.options.confirmations.cutting_checks = crate::options::CuttingChecks::SaveAndTell;
     let form = one_file_form();
     let post = h.app.form_post(&form).unwrap();
+    let message = "Profile 1: the collet nut would hit the material".to_owned();
     let found = |severity| {
         Some(vec![cut_craft_core::preflight::Finding {
             severity,
-            message: "Profile 1: the collet nut would hit the material".to_owned(),
+            message: message.clone(),
+            check: cut_craft_core::preflight::Check::Collisions,
         }])
     };
     let checks = |h: &Harness, severity| {
@@ -18329,10 +18401,11 @@ fn the_collet_hitting_the_wood_is_always_asked_about_before_saving() {
             found: found(severity),
         }]
     };
-    // an ordinary warning is only told, as Options say
+    // an ordinary warning, ticked as read, saves without asking again
+    h.app.acknowledged.insert(message.clone());
     h.app.save_checks = checks(&h, cut_craft_core::preflight::Severity::Warning);
     assert!(h.app.ready_to_save(&form, false).is_some());
-    // a collision always asks, whatever Options say
+    // a collision, ticked too, still asks
     h.app.save_checks = checks(&h, cut_craft_core::preflight::Severity::MustAsk);
     assert!(h.app.ready_to_save(&form, false).is_none());
     assert!(h.app.save_anyway.is_some());
