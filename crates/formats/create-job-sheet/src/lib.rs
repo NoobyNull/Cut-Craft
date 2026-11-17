@@ -202,19 +202,30 @@ pub fn sheets(
             .collect();
         // the notes' values from this sheet's own toolpaths, material and model placement;
         // what only the app knows (the job's file, the machine, the time) as it gave them
-        let mut vars = cut_craft_core::notes::variables(&on, &notes_context(setup));
+        // this sheet's own model measured, the active one's as given
+        let model_height = if i == doc.active_sheet || on.components.is_empty() {
+            setup.model_height.filter(|_| !on.components.is_empty())
+        } else {
+            let tall = cmd_scale_model_z_height::model_height(&on);
+            Some(if tall.is_finite() { tall } else { 0.0 })
+        };
+        let sheet_setup = Setup {
+            model_height,
+            ..setup.clone()
+        };
+        let mut vars = cut_craft_core::notes::variables(&on, &notes_context(&sheet_setup));
         for v in &mut vars {
-            if let Some(given) = setup
-                .variables
-                .iter()
-                .find(|g| g.key == v.key && matches!(g.group, "Job" | "Machine" | "System"))
-            {
+            if let Some(given) = setup.variables.iter().find(|g| {
+                g.key == v.key
+                    && (matches!(g.group, "Machine" | "System")
+                        || matches!(g.key.as_str(), "job.name" | "job.file" | "job.folder"))
+            }) {
                 v.value.clone_from(&given.value);
             }
         }
         let own = Setup {
             variables: vars,
-            ..setup.clone()
+            ..sheet_setup
         };
         out.push((
             format!("_{name}{}", side(&on)),
@@ -259,7 +270,10 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
     }
     let _ = write!(h, "<h1>{title}</h1></header>");
     let visible: Vec<_> = doc.toolpaths.values().filter(|t| t.visible).collect();
-    let minutes = |t: &Toolpath| t.machining_minutes_accelerating(setup.rapid, setup.acceleration);
+    // as the Toolpath Summary and the notes' run times have them
+    let minutes = |t: &Toolpath| {
+        t.machining_minutes_accelerating(setup.rapid, setup.acceleration) * setup.scale
+    };
     let total: f64 = visible.iter().map(|t| minutes(t)).sum();
     let tools = cut_craft_post::tools_and_numbers(&visible, &setup.slots);
     let number = |name: &str| tools.iter().find(|(t, _)| t == name).map_or(0, |&(_, n)| n);
@@ -631,7 +645,10 @@ mod tests {
         doc.job.model_position.from = GapFrom::Above;
         doc.sheets[0].job.model_position.from = GapFrom::Above;
         doc.sheets[1].job.model_position.from = GapFrom::Below;
-        doc.notes = "Gap from {{model.measured_from}}".into();
+        // the second sheet in inches with a model on it, the first in mm with none
+        doc.sheets[1].job.units = cut_craft_core::document::Units::Inch;
+        doc.sheets[1].objects.components = cut_craft_core::testing::domed().components;
+        doc.notes = "Gap from {{model.measured_from}}\n{{job.units}}: {{model.height}}".into();
         // what the app has: the active (first) sheet's values
         let setup = Setup {
             variables: cut_craft_core::notes::variables(
@@ -648,6 +665,35 @@ mod tests {
             "{}",
             pages[1].1
         );
+        assert!(pages[0].1.contains("<p>mm: No model</p>"), "{}", pages[0].1);
+        assert!(pages[1].1.contains("<p>inches: "), "{}", pages[1].1);
+        assert!(!pages[1].1.contains("No model"), "{}", pages[1].1);
+    }
+
+    #[test]
+    fn the_run_times_follow_the_summary_s_scale() {
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        let t = doc.toolpaths.values_mut().next().unwrap();
+        for x in [0.0, 10_000.0] {
+            t.moves.push(cut_craft_core::toolpath::Move {
+                kind: cut_craft_core::toolpath::MoveKind::Cut,
+                to: cut_craft_core::glam::DVec3::new(x, 0.0, -1.0),
+            });
+        }
+        let total = |scale: f64| {
+            let html = sheet_for(
+                &doc,
+                &Style::default(),
+                &Setup {
+                    scale,
+                    ..Setup::default()
+                },
+            )
+            .unwrap();
+            let at = html.find("<th>Total run time</th><td>").unwrap();
+            html[at..].split("</td>").next().unwrap().to_owned()
+        };
+        assert_ne!(total(1.0), total(2.0));
     }
 
     #[test]

@@ -14,6 +14,8 @@ bit goes in first, what finish to use. The box fills the panel, so there is room
 2. Type, and use the toolbar for the look: **B** bold, **I** italic, **H** a heading,
    **•** a bulleted list, **1.** a numbered list, **☐** a check list and **Link** a link
    to a web page. Pick some words first to change just those, or the lines they are on.
+   **1.** numbers the lines 1, 2, 3 (carrying on from a numbered line just above); press
+   it again to take the numbers off. A number you type yourself is kept as you typed it.
 3. Put in a live value (see below).
 4. Press **Preview** to see the notes as they will read (tick a check box there to tick
    it in the notes), then **Apply** to keep them.

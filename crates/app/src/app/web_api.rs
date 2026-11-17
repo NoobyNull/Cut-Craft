@@ -160,6 +160,7 @@ impl CutCraftApp {
             Call::SetNotes(body) => {
                 self.job_needed()?;
                 let params = job::notes_params(&self.doc, body)?;
+                self.notes_draft_can_follow(body)?;
                 cut_craft_bug_report::logs::step("Web API changed the notes");
                 self.apply("notes", &params).map_err(ApiError::refused)?;
                 // an open Notes form takes what was sent and keeps the rest of its draft;
@@ -553,6 +554,32 @@ const RUNNING_GREEN: egui::Color32 = egui::Color32::from_rgb(0x2e, 0x9e, 0x44);
 
 /// An open Notes form's `draft` after `POST notes` sent `body` (made into `sent`): the text,
 /// the open mark and the G-code tick each change only when sent.
+impl CutCraftApp {
+    /// Refuses turning off "Open with the job" while the open Notes form keeps unapplied
+    /// words starting with the open mark: those words would turn it on again when applied.
+    fn notes_draft_can_follow(&self, body: &cut_craft_web_api::NotesBody) -> Result<(), ApiError> {
+        use cut_craft_core::notes;
+        let draft = self
+            .form
+            .as_ref()
+            .filter(|f| f.id == "notes")
+            .and_then(|f| f.params["notes"].as_str());
+        match draft {
+            Some(draft)
+                if body.text.is_none()
+                    && body.opens_with_job == Some(false)
+                    && notes::strip_open_mark(draft).starts_with(notes::OPEN_MARK) =>
+            {
+                Err(ApiError::bad(
+                    "The Notes window's unapplied notes start with \".\", which would open \
+                     them with the job again. Apply or cancel them there, or send \"text\" too.",
+                ))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 fn form_takes_notes(
     draft: &mut serde_json::Value,
     body: &cut_craft_web_api::NotesBody,

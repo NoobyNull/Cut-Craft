@@ -3351,6 +3351,7 @@ name = "fmt-create-job-sheet"
 version = "0.6.14"
 dependencies = [
  "base64 0.21.7",
+ "cmd-scale-model-z-height",
  "cut-craft-core",
  "cut-craft-post",
  "fmt-export-svg",

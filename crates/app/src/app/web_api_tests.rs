@@ -801,6 +801,25 @@ fn the_help_page_explains_the_new_calls() {
 }
 
 #[test]
+fn a_script_cannot_untick_open_with_the_job_under_a_draft_that_would_tick_it_again() {
+    let (mut h, at) = switched_on();
+    h.app.doc.notes = "A".into();
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.app.form.as_mut().unwrap().params["notes"] = json!("..Clamp");
+    let (status, said) = call(
+        &mut h,
+        at,
+        "POST",
+        "notes",
+        Some(json!({ "opens_with_job": false })),
+    );
+    assert_eq!(status, 400, "{said}");
+    assert_eq!(h.app.doc.notes, "A", "nothing changed");
+    assert_eq!(h.app.form.as_ref().unwrap().params["notes"], "..Clamp");
+}
+
+#[test]
 fn a_notes_change_from_a_script_keeps_the_open_form_s_draft() {
     let (mut h, at) = switched_on();
     h.app.doc.notes = "A".into();

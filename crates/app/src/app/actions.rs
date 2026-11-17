@@ -1942,8 +1942,13 @@ impl CutCraftApp {
         let slots = self.slots();
         let per_tool = Self::split_for(form, post);
         let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
-        // the notes' variables are the whole job's, not one file's
-        let notes = cut_craft_core::notes::gcode_lines(&self.doc.notes, &self.note_variables());
+        // the notes' variables are the whole job's, not one file's; the post is the one
+        // these files are made through, whichever the machine has first
+        let mut vars = (*self.note_variables()).clone();
+        if let Some(v) = vars.iter_mut().find(|v| v.key == "machine.post") {
+            v.value.clone_from(&post.name);
+        }
+        let notes = cut_craft_core::notes::gcode_lines(&self.doc.notes, &vars);
         let mut texts = vec![];
         for (path, part) in &parts {
             // one file per tile, each tile moved to the job's corner

@@ -18851,3 +18851,27 @@ fn a_new_jobs_default_bit_has_its_flute_length_so_the_form_warns_of_nothing() {
     let line = h.app.form_reach().expect("a reach line");
     assert!(!line.text().contains("not checked"), "{line:?}");
 }
+
+#[test]
+fn the_notes_in_g_code_name_the_post_the_file_is_made_through() {
+    let mut h = ready_for_output();
+    h.app.doc.notes = "Post {{machine.post}}".into();
+    h.app.doc.notes_in_gcode = true;
+    let form = h.app.default_save_form();
+    let other = h
+        .app
+        .posts
+        .load("Cut Craft Mach3 Arcs (mm) (*.tap)")
+        .unwrap();
+    let default = h.app.form_post(&form).unwrap();
+    assert_ne!(
+        other.name, default.name,
+        "a post other than the machine's own"
+    );
+    let path = std::path::PathBuf::from("job.tap");
+    let made = chrono::Local::now().naive_local();
+    let texts = h.app.toolpath_texts(&form, &other, &path, made).unwrap();
+    let text = &texts[0].1;
+    assert!(text.contains("Mach3"), "{text}");
+    assert!(!text.contains("GRBL Arcs"), "{text}");
+}

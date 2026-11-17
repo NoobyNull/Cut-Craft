@@ -1256,7 +1256,7 @@ impl Format {
             }
             Self::Heading => line_starts(text, selected, "## "),
             Self::Bullet => line_starts(text, selected, "- "),
-            Self::Numbered => line_starts(text, selected, "1. "),
+            Self::Numbered => numbered_lines(text, selected),
             Self::Check => line_starts(text, selected, "- [ ] "),
         }
     }
@@ -1285,15 +1285,60 @@ fn line_starts(
     selected: std::ops::Range<usize>,
     mark: &str,
 ) -> (String, std::ops::Range<usize>) {
+    marked_lines(text, selected, &|_| mark.to_owned(), &|line| {
+        line.starts_with(mark).then_some(mark.len())
+    })
+}
+
+/// Each line the chars `selected` touch numbered on from the line above (1, 2, 3… when
+/// that is no numbered line), or, when they all are numbered, none.
+fn numbered_lines(
+    text: &str,
+    selected: std::ops::Range<usize>,
+) -> (String, std::ops::Range<usize>) {
+    let numbered = |line: &str| match kind_of(line) {
+        (Kind::Numbered(n), rest) if !line.starts_with(char::is_whitespace) => {
+            Some((n.parse::<u64>().unwrap_or(0), line.len() - rest.len()))
+        }
+        _ => None,
+    };
+    let first = text
+        .chars()
+        .take(selected.start)
+        .filter(|c| *c == '\n')
+        .count();
+    let from = first
+        .checked_sub(1)
+        .and_then(|above| text.split('\n').nth(above))
+        .and_then(&numbered)
+        .map_or(1, |(n, _)| n + 1);
+    marked_lines(
+        text,
+        selected,
+        &|i| format!("{}. ", from + i as u64),
+        &|line| numbered(line).map(|(_, len)| len),
+    )
+}
+
+/// Each line the chars `selected` touch starting with `mark(its place in the selection)`,
+/// or, when `has` finds a mark (its length in bytes) on them all, none.
+fn marked_lines(
+    text: &str,
+    selected: std::ops::Range<usize>,
+    mark: &dyn Fn(usize) -> String,
+    has: &dyn Fn(&str) -> Option<usize>,
+) -> (String, std::ops::Range<usize>) {
     let mut lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
     let line_of = |char_index: usize| text.chars().take(char_index).filter(|c| *c == '\n').count();
     let (first, last) = (line_of(selected.start), line_of(selected.end));
-    let all = lines[first..=last].iter().all(|l| l.starts_with(mark));
+    let all = lines[first..=last].iter().all(|l| has(l).is_some());
     let mut moved = 0_isize;
-    for line in &mut lines[first..=last] {
+    let count = |s: &str| isize::try_from(s.chars().count()).unwrap_or(0);
+    for (i, line) in lines[first..=last].iter_mut().enumerate() {
         if all {
-            line.drain(..mark.len());
-            moved -= isize::try_from(mark.chars().count()).unwrap_or(0);
+            let len = has(line).unwrap_or(0);
+            moved -= count(&line[..len]);
+            line.drain(..len);
         } else {
             // another kind of line start is swapped for this one
             let (kind, rest) = kind_of(line);
@@ -1303,9 +1348,9 @@ fn line_starts(
                 line.chars().count() - rest.chars().count()
             };
             let rest = rest.to_owned();
+            let mark = mark(i);
             *line = format!("{mark}{rest}");
-            moved += isize::try_from(mark.chars().count()).unwrap_or(0)
-                - isize::try_from(had).unwrap_or(0);
+            moved += count(&mark) - isize::try_from(had).unwrap_or(0);
         }
     }
     let end = selected.end.saturating_add_signed(moved);
@@ -1675,6 +1720,17 @@ mod tests {
             plain(notes, &[]),
             "Setup\n- clamp corners\n1. zero Z\n[x] sand\nsee docs (https://a.dev)"
         );
+    }
+
+    #[test]
+    fn the_numbered_button_counts_on_and_takes_the_numbers_off_again() {
+        let (out, _) = Format::Numbered.apply("Clamp\nZero\nCut", 0..15);
+        assert_eq!(out, "1. Clamp\n2. Zero\n3. Cut");
+        let (out, _) = Format::Numbered.apply(&out, 0..24);
+        assert_eq!(out, "Clamp\nZero\nCut");
+        // a line under a numbered one carries on from it
+        let (out, _) = Format::Numbered.apply("4. Clamp\nZero", 10..10);
+        assert_eq!(out, "4. Clamp\n5. Zero");
     }
 
     #[test]

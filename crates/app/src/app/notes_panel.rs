@@ -83,11 +83,13 @@ impl super::CutCraftApp {
         let now = chrono::Local::now();
         let ctx = self.notes_context(&now);
         let key = format!(
-            "{}|{}|{:?}|{}|{}|{}|{:?}|{}|{:?}|{}|{}|{:?}",
+            "{}|{}|{:?}|{}|{}|{:?}|{}|{}|{:?}|{}|{:?}|{}|{}|{:?}",
             self.job_epoch,
             self.history.revision(),
             ctx.model_height,
             ctx.machine,
+            ctx.controller,
+            ctx.bed,
             ctx.post,
             ctx.time,
             ctx.acceleration,
