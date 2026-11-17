@@ -20,7 +20,15 @@ case "$1 $2" in
   "release view")
     [[ -f $GH_STATE/exists ]] || exit 1
     # --json assets: the names already on the release
-    if [[ $* == *--json* ]]; then cat "$GH_STATE/assets" 2>/dev/null || true; fi ;;
+    # (each line: a name, and "starter" after it for one whose upload was cut off; GitHub
+    # leaves those out only when asked for uploaded assets alone)
+    if [[ $* == *--json* ]]; then
+      if [[ $* == *'state == "uploaded"'* ]]; then
+        awk '$2 != "starter" {print $1}' "$GH_STATE/assets" 2>/dev/null || true
+      else
+        awk '{print $1}' "$GH_STATE/assets" 2>/dev/null || true
+      fi
+    fi ;;
   "release create")
     if [[ -f $GH_STATE/race ]]; then touch "$GH_STATE/exists"; exit 1; fi
     [[ -f $GH_STATE/exists ]] && exit 1
@@ -76,7 +84,19 @@ printf '%s\n' cut-craft-1.2.3-windows-x86_64.zip.minisig >"$work/state/assets"
 rm -f "$work/log"
 PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
   "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "half pair: failed: $(cat "$work/out")"
-[[ $(log | grep -c "release upload") == 2 ]] || fail "half pair: not signature then file: $(log)"
+first_upload=$(log | grep -m1 "release upload")
+second_upload=$(log | grep "release upload" | sed -n 2p)
+[[ $(log | grep -c "release upload") == 2 && $first_upload == *.minisig* \
+  && $first_upload != *".zip -R"* && $second_upload == *".zip -R"* ]] \
+  || fail "half pair: not signature then file: $(log)"
+
+# the signature went up but the file's upload was cut off, leaving an empty file behind: the
+# pair is not complete, so both go up again
+printf '%s\n' "cut-craft-1.2.3-windows-x86_64.zip starter" cut-craft-1.2.3-windows-x86_64.zip.minisig >"$work/state/assets"
+rm -f "$work/log"
+PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
+  "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "cut-off file: failed: $(cat "$work/out")"
+log | grep "release upload" | grep -q ".zip -R" || fail "cut-off file: the empty file was left: $(log)"
 
 # only the file got there (its signature was lost): the new file goes up before its
 # signature, so the old file is never shown beside this build's signature

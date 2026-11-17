@@ -66,7 +66,10 @@ fi
 # build's signature only matches this build's file, in the order that never shows a file
 # beside a signature that isn't its own: signature first, unless the old file is the half
 # that is there, when the file goes first (a file with no signature is never offered).
-on_release=$(gh release view "$tag" "${repo[@]}" --json assets --jq '.assets[].name')
+# Only assets fully uploaded count: an upload cut off part way can leave an empty one behind
+# (state "starter"), which is uploaded again (--clobber replaces it).
+on_release=$(gh release view "$tag" "${repo[@]}" --json assets \
+  --jq '.assets[] | select(.state == "uploaded") | .name')
 there() { grep -qxF "$1" <<<"$on_release"; }
 first=()
 second=()
