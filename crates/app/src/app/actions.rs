@@ -122,6 +122,7 @@ impl CutCraftApp {
             gcode_view: None,
             save_anyway: None,
             checks_accepted: false,
+            acknowledged: std::collections::BTreeSet::new(),
             save_after: None,
             form_back: None,
             shots: None,
@@ -1599,6 +1600,8 @@ impl CutCraftApp {
             self.status.set_message(&refused);
             return None;
         }
+        // every one ticked as read in Save Toolpaths: that was the asking
+        let ticked = self.all_acknowledged(&found);
         let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
         // out-of-date toolpaths are always asked about, whatever Options say
         let stale = plan
@@ -1606,7 +1609,7 @@ impl CutCraftApp {
             .flatten()
             .any(|id| self.doc.toolpaths.get(id).is_some_and(|t| t.stale));
         let ask = stale || self.options.confirmations.cutting_checks == CuttingChecks::Ask;
-        if !problems.is_empty() && ask && !std::mem::take(&mut self.checks_accepted) {
+        if !problems.is_empty() && ask && !ticked && !std::mem::take(&mut self.checks_accepted) {
             // asked over the window: the answer saves (or sends) again
             self.ask_save_anyway(form, problems, sending);
             return None;
@@ -1779,11 +1782,8 @@ impl CutCraftApp {
             }
             self.save_checks.push(key.clone());
             let doc = self.doc.clone();
-            let mut limits = self.limits();
-            if changes != files::ToolChanges::ToolChanger {
-                limits.slots.clear();
-            }
             let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
+            let limits = self.check_limits(&ids, changes);
             let started = key.clone();
             self.in_background(
                 super::CHECKING,
@@ -1827,15 +1827,12 @@ impl CutCraftApp {
         plan: &[Vec<EntityId>],
         changes: files::ToolChanges,
     ) -> Vec<cut_craft_core::preflight::Finding> {
-        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = plan
+        let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
+        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = ids
             .iter()
-            .flatten()
             .filter_map(|id| self.doc.toolpaths.get(id))
             .collect();
-        let mut limits = self.limits();
-        if changes != files::ToolChanges::ToolChanger {
-            limits.slots.clear();
-        }
+        let limits = self.check_limits(&ids, changes);
         let mut found = cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits);
         if changes == files::ToolChanges::ToolChanger && !self.has_tool_changer() {
             found.push(Self::no_tool_changer());
@@ -1852,6 +1849,7 @@ impl CutCraftApp {
                       on or ignores, cutting on with the wrong bit. Choose Separate file for \
                       each tool, or add the tool changer's slots in Machine Configuration"
                 .into(),
+            check: cut_craft_core::preflight::Check::ToolChanger,
         }
     }
 
@@ -2034,9 +2032,63 @@ impl CutCraftApp {
                     spindle: m.spindle,
                     slots: m.slots.clone(),
                     left: None,
+                    library: None,
                 });
         limits.left = Some(self.options.confirmations.left());
         limits
+    }
+
+    /// [`Self::limits`] for checking the toolpaths `ids` saved with `changes`: the tool
+    /// changer's slots only when it changes the tools, and the Tool Database's copy of
+    /// each of their bits, to compare with.
+    pub(super) fn check_limits(
+        &self,
+        ids: &[EntityId],
+        changes: files::ToolChanges,
+    ) -> cut_craft_core::preflight::Limits {
+        let mut limits = self.limits();
+        if changes != files::ToolChanges::ToolChanger {
+            limits.slots.clear();
+        }
+        let mut library = std::collections::BTreeMap::new();
+        for toolpath in ids.iter().filter_map(|id| self.doc.toolpaths.get(id)) {
+            let name = &toolpath.tool.name;
+            // a bit copied in from a maker's catalogue is compared with the catalogue's
+            let catalogue =
+                (self.tools.tools.iter()).find(|t| t.name == *name && self.tools.is_catalogue(t));
+            if let Some(listed) = catalogue.or_else(|| self.tools.get(name)) {
+                library.insert(name.clone(), listed.for_material(&self.tools.material));
+            }
+        }
+        limits.library = Some(library);
+        limits
+    }
+
+    /// The checks before cutting that cannot be made on `plan` saved with `changes`, each
+    /// with why.
+    pub(super) fn not_checked(
+        &self,
+        plan: &[Vec<EntityId>],
+        changes: files::ToolChanges,
+    ) -> Vec<(cut_craft_core::preflight::Check, String)> {
+        let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
+        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = ids
+            .iter()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .collect();
+        cut_craft_core::preflight::not_checked(
+            &self.doc,
+            &toolpaths,
+            &self.check_limits(&ids, changes),
+        )
+    }
+
+    /// Whether every warning in `found` was ticked as read in the checks before cutting.
+    pub(super) fn all_acknowledged(&self, found: &[cut_craft_core::preflight::Finding]) -> bool {
+        found
+            .iter()
+            .filter(|f| f.severity != cut_craft_core::preflight::Severity::Error)
+            .all(|f| self.acknowledged.contains(&f.message))
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.

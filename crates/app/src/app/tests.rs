@@ -2347,7 +2347,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
     };
     let path = std::env::temp_dir().join(format!("cut-craft-keep-out-{}.nc", std::process::id()));
     let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
-    assert!(refused.contains("keep-out zones"), "{refused}");
+    assert!(refused.contains("keep-out zone"), "{refused}");
     assert!(!path.exists(), "nothing written");
 }
 
@@ -17540,6 +17540,7 @@ fn save_anyway_is_asked_in_the_window_not_by_a_dialog_that_can_hide_behind_it() 
         found: Some(vec![cut_craft_core::preflight::Finding {
             severity: cut_craft_core::preflight::Severity::Warning,
             message: "Air cutting".to_owned(),
+            check: cut_craft_core::preflight::Check::AirCutting,
         }]),
     }];
     // asked over the window rather than by the system (a test opening one panics)
@@ -17579,16 +17580,39 @@ fn save_toolpaths_window_steps_aside_while_the_save_asks_then_comes_back() {
         found: Some(vec![cut_craft_core::preflight::Finding {
             severity: cut_craft_core::preflight::Severity::Warning,
             message: "Air cutting".to_owned(),
+            check: cut_craft_core::preflight::Check::AirCutting,
         }]),
     }];
     h.frame(vec![]);
     h.frame(vec![]);
+    // Matthew: each warning is acknowledged before saving; Save waits, greyed
+    h.click(h.text_at("Save Toolpaths...").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(
+        h.app.save_form.is_some(),
+        "greyed until the warning is ticked"
+    );
+    assert!(h.app.save_after.is_none());
+    h.click(h.text_at("⚠ Air cutting").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.acknowledged.contains("Air cutting"), "ticked as read");
     h.click(h.text_at("Save Toolpaths...").unwrap(), Modifiers::NONE);
     assert!(h.app.save_form.is_none(), "the form closes first");
+    assert!(h.app.save_after.is_some(), "the save waits for it to go");
     assert!(
         h.app.save_anyway.is_none(),
         "nothing asked while it is still there"
     );
+    // ticked in the form, the save does not ask again
+    assert!(
+        h.app.ready_to_save(&form, false).is_some(),
+        "ticking was the asking"
+    );
+    // the question over the window still steps the form aside until answered
+    h.app.save_after = None;
+    h.app.form_back = Some(form.clone());
+    h.app
+        .ask_save_anyway(&form, vec!["Air cutting".to_owned()], false);
     for _ in 0..3 {
         h.frame(vec![]);
     }
@@ -17598,6 +17622,59 @@ fn save_toolpaths_window_steps_aside_while_the_save_asks_then_comes_back() {
     h.click(h.text_at("Don't Save").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     assert!(h.app.save_form.is_some(), "the form is back once answered");
+}
+
+#[test]
+fn save_toolpaths_lists_every_check_with_how_it_came_out_and_its_help() {
+    // Matthew: "what is it actually checking ... what is it doing for me"
+    use cut_craft_core::preflight::{Check, Finding};
+    let mut h = ready_for_output();
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    let form = h.app.save_form.clone().unwrap();
+    let post = h.app.form_post(&form).unwrap();
+    h.app.save_checks = vec![super::SaveChecks {
+        plan: h.app.plan(&form, &post).unwrap(),
+        changes: form.changes,
+        revision: h.app.history.revision(),
+        machine: h.app.machines.active,
+        found: Some(vec![
+            Finding::error(Check::Rapids, "Profile would crash".into()),
+            Finding::warning(Check::GenericTool, "Profile: a generic bit".into()),
+        ]),
+    }];
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let texts = h.texts();
+    let shown = |t: &str| texts.iter().any(|s| s == t);
+    assert!(shown("Checks before cutting"), "{texts:?}");
+    // what needs a look comes first, by name, with what was found under it
+    assert!(shown(Check::Rapids.name()), "{texts:?}");
+    assert!(shown("Must fix: Profile would crash"), "{texts:?}");
+    assert!(shown(Check::GenericTool.name()), "{texts:?}");
+    assert!(shown("⚠ Profile: a generic bit"), "{texts:?}");
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.starts_with("✔ ") && t.contains("passed · ⚠ 1 to read · ✖ 1 must fix")),
+        "{texts:?}"
+    );
+    // the heading's ? opens the help about every check
+    let heading = h.text_at("Checks before cutting").unwrap();
+    let help = h
+        .texts_at("?")
+        .into_iter()
+        .filter(|p| (p.y - heading.y).abs() < 4.0)
+        .min_by(|a, b| (a.x - heading.x).abs().total_cmp(&(b.x - heading.x).abs()))
+        .unwrap();
+    h.click(help, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(
+        matches!(
+            h.app.info,
+            Some(super::Info::Help(super::check_list::OVERVIEW))
+        ),
+        "opens the checks' help"
+    );
 }
 
 #[test]
@@ -17708,6 +17785,7 @@ fn view_gcode_closes_when_saving_starts_so_it_cannot_cover_the_file_dialog() {
         found: Some(vec![cut_craft_core::preflight::Finding {
             severity: cut_craft_core::preflight::Severity::Warning,
             message: "Air cutting".to_owned(),
+            check: cut_craft_core::preflight::Check::AirCutting,
         }]),
     }];
     h.app.save_after = Some(super::gcode_view::SaveAfter::new(form, false));
