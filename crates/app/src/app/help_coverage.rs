@@ -16,6 +16,8 @@
 //! - **Help on every option** of a choice (each variant's doc comment), so a beginner can tell
 //!   Outside from Inside without trying both.
 //! - No placeholder text ("TODO", "No help written…").
+//! - **Its button's icon** beside its name on its help page, for a tool on the Design or
+//!   Toolpaths page, so a beginner who knows the picture finds its help.
 //!
 //! Menu items that run no tool need only a tooltip.
 
@@ -67,6 +69,8 @@ pub(super) enum What {
     NoOptionHelp(String, String),
     /// Where the placeholder is: `tooltip`, `intro`, or a setting's label.
     Placeholder(String),
+    /// A tool's help page without its button's icon beside its name.
+    NoIcon,
     /// The same tooltip as another tool (a crate holding several commands says one thing
     /// for all of them): by the other tool's id.
     SharedTooltip(String),
@@ -84,6 +88,7 @@ impl Gap {
             What::NoOptionHelp(s, o) => format!("option without help: {s} = {o}"),
             What::Placeholder(at) => format!("placeholder text in {at}"),
             What::SharedTooltip(other) => format!("same tooltip as {other}"),
+            What::NoIcon => "no icon on its help page".to_owned(),
         };
         format!("{} | {what}", self.id)
     }
@@ -131,6 +136,19 @@ fn tooltip_gaps(id: &str, label: &str, tooltip: Option<&str>) -> Vec<Gap> {
         Some(t) if words(tooltip_body(t, label)) < TOOLTIP_WORDS => vec![gap(What::ShortTooltip)],
         Some(_) => vec![],
     }
+}
+
+/// The gap when tool `id`'s help `page` does not show its button's icon (at `icon`, the
+/// URI the help shows it by, `None` when it has none).
+fn icon_gaps(id: &str, label: &str, icon: Option<&str>, page: &str) -> Vec<Gap> {
+    if icon.is_some_and(|uri| page.contains(uri)) {
+        return vec![];
+    }
+    vec![Gap {
+        id: id.to_owned(),
+        label: label.to_owned(),
+        what: What::NoIcon,
+    }]
 }
 
 /// The gaps in a tool's help page: its intro, then each setting and option of its form
@@ -224,22 +242,19 @@ fn menu_actions(app: &CutCraftApp) -> Vec<(String, String)> {
 pub(super) fn gaps(app: &CutCraftApp) -> Vec<Gap> {
     let mut seen = BTreeSet::new();
     let mut gaps = vec![];
-    let tools = app
+    let pages: Vec<&str> = app
         .help_topics()
         .into_iter()
-        .filter(|t| {
-            !matches!(
-                *t,
-                "contents"
-                    | "design"
-                    | "toolpaths"
-                    | "tips"
-                    | "web_api"
-                    | "groups"
-                    | "view_3d"
-                    | "updates"
-            )
-        })
+        .filter(|t| !super::help::OWN_PAGES.contains(t))
+        .collect();
+    // a tool with a button on the Design or Toolpaths page shows its icon on its help page
+    for &id in &pages {
+        let icon = app.help_icon_uri(id, super::help::PAGE_ICON);
+        let page = app.help_markdown(id);
+        gaps.extend(icon_gaps(id, &app.tool_label(id), icon.as_deref(), &page));
+    }
+    let tools = pages
+        .into_iter()
         .map(String::from)
         .chain(app.registry.iter().map(|c| c.id().to_owned()));
     for id in tools {
@@ -299,8 +314,9 @@ pub(super) fn report(gaps: &[Gap]) -> String {
         "{} help gaps in {} tools and menu items.\n\n\
          Each tool needs: a tooltip saying what it does ({TOOLTIP_WORDS}+ words after its \
          name), a help page intro ({ABOUT_WORDS}+ words), and help on every setting and every \
-         option of a choice ({SETTING_WORDS}+ words). Menu items that run no tool need a \
-         tooltip only.\n",
+         option of a choice ({SETTING_WORDS}+ words). A tool on the Design or Toolpaths page \
+         shows its button's icon beside its name on its help page. Menu items that run no \
+         tool need a tooltip only.\n",
         gaps.len(),
         tools.len()
     );
@@ -319,6 +335,7 @@ pub(super) fn report(gaps: &[Gap]) -> String {
                 What::SharedTooltip(other) => {
                     format!("tooltip is the same as `{other}`'s: say what this one does")
                 }
+                What::NoIcon => "no icon on its help page: give the tool a button icon".to_owned(),
             };
             let _ = writeln!(md, "- [ ] {line}");
         }
@@ -452,6 +469,22 @@ mod tests {
             page_gaps("p", "P", Some("Cuts things"), None)[0].what,
             What::ShortIntro
         );
+    }
+
+    #[test]
+    fn a_tool_page_without_its_buttons_icon_is_a_gap() {
+        let uri = "bytes://help-icons/48/toolpaths/x.png";
+        let page = format!("# ![X icon]({uri}) X\n\nCuts.");
+        assert_eq!(icon_gaps("x", "X", Some(uri), &page), vec![]);
+        assert_eq!(icon_gaps("x", "X", None, "# X")[0].what, What::NoIcon);
+        assert_eq!(
+            icon_gaps("x", "X", Some(uri), "# X\n\nCuts.")[0].what,
+            What::NoIcon,
+            "an icon the page does not show"
+        );
+        let gap = &icon_gaps("x", "X", None, "# X")[0];
+        assert_eq!(gap.key(), "x | no icon on its help page");
+        assert!(report(std::slice::from_ref(gap)).contains("- [ ] no icon"));
     }
 
     #[test]
