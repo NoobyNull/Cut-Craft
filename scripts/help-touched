@@ -1,0 +1,78 @@
+#!/bin/bash
+# The help rule: a pull request that changes a tool must change its help page too, even if
+# only to say the page was checked. Changing a page's "reviewed:" date to today counts.
+#
+#   scripts/help-touched BASE          checks the changes from BASE (a commit) to HEAD
+#   scripts/help-touched --files       checks the changed paths listed on stdin, one a line
+#
+# What a change asks for:
+#   crates/commands/<crate>/...        crates/help/pages/tools/<id>.md for every command the
+#                                      crate makes (each `const ID` in its src/lib.rs)
+#   any other crates/<crate>/src/...   at least one page under crates/help/pages/ (the ones
+#                                      that cover what changed: Contents, Design, a tool...)
+# Left out: tests (tests.rs, tests/, benches/), build.rs, Cargo files, and the help crate
+# itself. Exits 1 with a list of the pages to change; CI runs it on every pull request.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+if [[ ${1:-} == --files ]]; then
+  mapfile -t changed
+elif [[ -n ${1:-} ]]; then
+  mapfile -t changed < <(git diff --name-only "$1" HEAD)
+else
+  echo "usage: scripts/help-touched BASE | --files < paths" >&2
+  exit 2
+fi
+
+touched() { # is $1 among the changed paths?
+  local p
+  for p in "${changed[@]}"; do [[ $p == "$1" ]] && return 0; done
+  return 1
+}
+
+any_page=0
+for p in "${changed[@]}"; do
+  [[ $p == crates/help/pages/*.md ]] && any_page=1
+done
+
+declare -A need=()  # page -> the change asking for it
+general=""          # a change asking for any page
+for p in "${changed[@]}"; do
+  [[ $p == *.rs ]] || continue
+  case $p in
+    */tests.rs | */tests/* | */benches/* | */build.rs | crates/help/*) continue ;;
+  esac
+  if [[ $p =~ ^crates/commands/([^/]+)/ ]]; then
+    lib="crates/commands/${BASH_REMATCH[1]}/src/lib.rs"
+    [[ -f $lib ]] || continue # the command was removed
+    while read -r id; do
+      need["crates/help/pages/tools/$id.md"]=$p
+    done < <(grep -oP "const ID: &'static str = \"\K[^\"]+" "$lib" || true)
+  elif [[ $p == crates/*/src/* ]]; then
+    general=$p
+  fi
+done
+
+missing=()
+for page in "${!need[@]}"; do
+  touched "$page" || missing+=("$page   (for ${need[$page]})")
+done
+if ((${#missing[@]})); then
+  IFS=$'\n' sorted=($(sort <<<"${missing[*]}")); unset IFS
+  echo "These tools changed, but their help pages did not:"
+  printf '  %s\n' "${sorted[@]}"
+fi
+if [[ -n $general && $any_page == 0 ]]; then
+  echo "$general changed, but no help page under crates/help/pages/ did."
+  echo "Update the pages that cover what changed (Contents, Design, Toolpaths or a tool's)."
+fi
+if ((${#missing[@]})) || [[ -n $general && $any_page == 0 ]]; then
+  cat <<'HINT'
+
+Every change to a tool updates its help: new or changed steps, pictures and settings, and
+links to the pages around it. If the page already says everything, set its "reviewed:" line
+to today's date (YYYY-MM-DD) to declare it checked. See CONTRIBUTING.md, "Help for every tool".
+HINT
+  exit 1
+fi
+echo "Help pages updated for every tool changed."
