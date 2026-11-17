@@ -1110,19 +1110,8 @@ pub fn html(text: &str, vars: &[Variable]) -> String {
             if let Some(tag) = list {
                 let _ = write!(out, "</{tag}>");
             }
-            let start = match &line.kind {
-                Kind::Numbered(n) => n.parse::<u64>().ok().filter(|n| *n != 1),
-                _ => None,
-            };
-            match (wanted, start) {
-                // a list that starts past 1 keeps its numbers
-                (Some(tag), Some(n)) => {
-                    let _ = write!(out, "<{tag} start=\"{n}\">");
-                }
-                (Some(tag), _) => {
-                    let _ = write!(out, "<{tag}>");
-                }
-                (None, _) => {}
+            if let Some(tag) = wanted {
+                let _ = write!(out, "<{tag}>");
             }
             list = wanted;
         }
@@ -1143,6 +1132,14 @@ pub fn html(text: &str, vars: &[Variable]) -> String {
         match line.kind {
             Kind::Heading(level) => {
                 let _ = write!(out, "<h{0}>{words}</h{0}>", level + 2);
+            }
+            // each number as typed, so 3 then 7 stay 3 and 7
+            Kind::Numbered(n) if n.parse::<u64>().is_ok_and(|n| n != 1) => {
+                let _ = write!(
+                    out,
+                    "<li value=\"{}\">{words}</li>",
+                    n.trim_start_matches('0')
+                );
             }
             Kind::Bullet | Kind::Numbered(_) => {
                 let _ = write!(out, "<li>{words}</li>");
@@ -1687,8 +1684,12 @@ mod tests {
     #[test]
     fn a_numbered_list_keeps_its_first_number_and_a_link_fills_in_its_variables() {
         assert_eq!(
-            html("3. Clamp\n4. Zero", &[]),
-            "<ol start=\"3\"><li>Clamp</li><li>Zero</li></ol>"
+            html("3. Clamp\n7. Zero", &[]),
+            "<ol><li value=\"3\">Clamp</li><li value=\"7\">Zero</li></ol>"
+        );
+        assert_eq!(
+            html("1. A\n2. B", &[]),
+            "<ol><li>A</li><li value=\"2\">B</li></ol>"
         );
         let vars = vec![Variable {
             key: "job.name".into(),
