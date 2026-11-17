@@ -613,6 +613,59 @@ impl Material {
         worst
     }
 
+    /// How far the material stands above a round part of the head (a shank, collet nut or
+    /// spindle `radius` across from the axis, its bottom `rise` above the tip) while the tip
+    /// moves straight from `a` to `b`: the most any cell centre under the part is above the
+    /// part's bottom there, and that cell's centre. `None` when the part clears everything
+    /// (it is above the top, 0, or off the material, or every cell under it is lower).
+    pub fn above_part(
+        &self,
+        a: DVec3,
+        b: DVec3,
+        radius: f64,
+        rise: f64,
+        peaks: &Tiles,
+    ) -> Option<(f64, Point)> {
+        // the material is nowhere above its top, 0
+        if a.z.min(b.z) + rise >= 0.0 || radius <= 0.0 {
+            return None;
+        }
+        let (from, along) = (a.truncate(), (b - a).truncate());
+        let mut worst: Option<(f64, Point)> = None;
+        let low = a.z.min(b.z) + rise;
+        self.tiles_near(
+            peaks,
+            from,
+            b.truncate(),
+            radius,
+            |tile, _, columns, rows| {
+                // nothing in this tile stands higher above the part than found already
+                if peaks.values[tile] - low <= worst.map_or(0.0, |(w, _)| w) {
+                    return;
+                }
+                for row in rows {
+                    for column in columns.clone() {
+                        let height = self.heights[row * self.columns + column];
+                        if height.is_nan() {
+                            continue;
+                        }
+                        let centre = self.centre(column, row);
+                        let Some((t0, t1)) = covered(from - centre, along, radius) else {
+                            continue;
+                        };
+                        // z is linear along the move: the part is lowest at one end of its span
+                        let bottom = a.lerp(b, t0).z.min(a.lerp(b, t1).z) + rise;
+                        let over = height - bottom;
+                        if over > worst.map_or(0.0, |(w, _)| w) {
+                            worst = Some((over, centre));
+                        }
+                    }
+                }
+            },
+        );
+        worst
+    }
+
     /// The columns and rows within `radius` of the tool's axis anywhere from `a` to `b`.
     fn swept(&self, a: DVec3, b: DVec3, radius: f64) -> (Range<usize>, Range<usize>) {
         let (lo, hi) = (

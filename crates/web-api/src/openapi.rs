@@ -431,6 +431,46 @@ fn more_paths(
     } }),
     );
     paths.insert(
+        "/job/new".into(),
+        json!({ "post": {
+        "summary": "Start a new job",
+        "description": "New, with Job Setup's OK pressed: settings left out are what Job \
+            Setup starts with, the saved default job's (GET commands/job_setup lists them). \
+            Settings Job Setup refuses leave the job open as it was. Unsaved work is kept, and \
+            the call refused, unless \"discard\": true.",
+        "requestBody": body(json!({
+            "type": "object",
+            "properties": {
+                "settings": { "type": "object" },
+                "discard": { "type": "boolean" },
+            },
+        }), examples(&[
+            ("plain", "As Job Setup starts", json!({})),
+            ("size", "A 300 x 150 x 12 mm board", json!({ "settings": { "size":
+                { "width": 300, "height": 150, "thickness": 12 } } })),
+        ])),
+        "responses": answer("The new job's state"),
+    } }),
+    );
+    paths.insert(
+        "/job/open".into(),
+        json!({ "post": {
+        "summary": "Open a job",
+        "description": "Open, on this job file. Unsaved work is kept, and the call refused, \
+            unless \"discard\": true.",
+        "requestBody": body(json!({
+            "type": "object", "required": ["path"],
+            "properties": {
+                "path": { "type": "string" },
+                "discard": { "type": "boolean" },
+            },
+        }), examples(&[
+            ("open", "Open a job", json!({ "path": "/home/me/sign.ccjob" })),
+        ])),
+        "responses": answer("The job's state"),
+    } }),
+    );
+    paths.insert(
         "/job/export".into(),
         json!({ "post": {
         "summary": "Export the job",

@@ -15,10 +15,14 @@ a CNC machine cuts them with.
   height with its height buttons, and Auto-rotate to see the job from every side.
 - [Groups](help:groups): step inside a group to change one thing in it; text in a
   group stays editable.
+- [Changing settings](help:settings): Edit ▸ Options, and how Apply, Cancel and Close
+  keep or throw away your changes.
 - [Did You Know?](help:tips): short tips by subject, from drawing to cutting safely, one
   shown each time Cut Craft starts. Each links to the page that says more.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.
+- [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
+  hitting wood beside a deep cut, shown red in the preview and asked about before saving.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.
 

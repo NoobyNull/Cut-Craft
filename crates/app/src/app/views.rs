@@ -3334,7 +3334,7 @@ impl CutCraftApp {
         )
     }
 
-    /// Edit ▸ Options: the sections; a change is saved and applied at once.
+    /// Edit ▸ Options: the sections; changes wait for Apply, and Cancel throws them away.
     #[expect(
         clippy::too_many_lines,
         reason = "the one Options window, with the extras some pages show under their settings"
@@ -3342,7 +3342,11 @@ impl CutCraftApp {
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
         let mut open = self.options_window;
         let fields = self.options_categories();
-        let mut values = serde_json::to_value(&self.options).expect("options serialise");
+        let mut values = serde_json::to_value(self.edited_options()).expect("options serialise");
+        let dirty = self.options_dirty();
+        let closing = self.options_closing;
+        let mut button = None;
+        let mut answer = None;
         let mut changed = None;
         let mut reset = None;
         if let Some(key) = self.options_goto.take()
@@ -3367,6 +3371,7 @@ impl CutCraftApp {
                 .map_or_else(|| id.to_owned(), |(_, label)| label.clone())
         };
         let capture = self.capture.clone();
+        let edited_web_api = self.edited_options().web_api.clone();
         let web_api_state = self.web_api_state().clone();
         let search = &mut self.shortcut_search;
         let mut shortcut_edit = None;
@@ -3377,6 +3382,17 @@ impl CutCraftApp {
         let (id, size) = (egui::Id::unique("options"), dialog_size(ctx));
         // the categories down the left, the chosen one's settings beside them
         cut_craft_bug_report::dialog_with_panels(ctx, id, "Options", size, &mut open, |ui| {
+            // the window's own close box asks first too, while changes wait
+            if dirty && ui.ctx().input(|i| i.viewport().close_requested()) {
+                ui.ctx()
+                    .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            }
+            egui::Panel::bottom("options_buttons").show(ui, |ui| {
+                button = super::options_apply::footer(ui, dirty);
+            });
+            if closing {
+                answer = super::options_apply::question(ui.ctx());
+            }
             egui::Panel::left("options_categories")
                 .resizable(false)
                 .show(ui, |ui| {
@@ -3420,11 +3436,8 @@ impl CutCraftApp {
                         changed = serde_json::from_value::<crate::options::Options>(values).ok();
                     }
                     if category.key == "web_api" {
-                        web_api_pressed = super::web_api::options_section(
-                            ui,
-                            &web_api_state,
-                            &self.options.web_api,
-                        );
+                        web_api_pressed =
+                            super::web_api::options_section(ui, &web_api_state, &edited_web_api);
                     }
                     if category.key == super::shortcuts_page::CATEGORY {
                         shortcut_edit = super::shortcuts_page::show(
@@ -3439,15 +3452,25 @@ impl CutCraftApp {
             });
         });
         if let Some(page) = reset {
-            changed = Some(self.options.reset(&page));
+            changed = Some(self.edited_options().reset(&page));
         }
-        // closing the window, or leaving the page, stops waiting for a shortcut
-        if !open || !on_shortcuts {
+        // leaving the page stops waiting for a shortcut
+        if !on_shortcuts {
             self.capture = None;
         }
-        self.options_window = open;
+        // kept until Apply
         if let Some(options) = changed {
-            self.options_changed(ctx, options);
+            self.options_edited(options);
+        }
+        // the close box is Close: it asks first while changes wait
+        if !open {
+            button = Some(super::options_apply::Button::Close);
+        }
+        if let Some(button) = button {
+            self.options_button(ctx, button);
+        }
+        if let Some(answer) = answer {
+            self.options_answer(ctx, answer);
         }
         if let Some(pressed) = web_api_pressed {
             self.web_api_pressed(pressed);
@@ -3545,7 +3568,11 @@ impl CutCraftApp {
         }
     }
 
-    fn options_changed(&mut self, ctx: &egui::Context, options: crate::options::Options) {
+    pub(super) fn options_changed(
+        &mut self,
+        ctx: &egui::Context,
+        options: crate::options::Options,
+    ) {
         options.apply_to(&mut self.display);
         ctx.set_theme(options.appearance.theme.preference());
         let frame = options.appearance.system_title_bar;
@@ -4460,6 +4487,8 @@ fn checks_section(ui: &mut egui::Ui, found: &[cut_craft_core::preflight::Finding
         let (colour, kind) = match f.severity {
             Severity::Error => (ui.visuals().error_fg_color, "Must fix"),
             Severity::Warning => (ui.visuals().warn_fg_color, "Check"),
+            // always asked about on saving, so red as well as marked
+            Severity::MustAsk => (ui.visuals().error_fg_color, "⚠ Check"),
         };
         ui.colored_label(colour, format!("{kind}: {}", f.message));
     }

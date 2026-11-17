@@ -23,6 +23,7 @@ mod help_pictures;
 mod help_tours;
 mod layouts;
 mod mac;
+mod options_apply;
 mod panels;
 mod passes;
 mod placement;
@@ -104,6 +105,17 @@ struct Copied {
 
 /// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id, unless a
 /// reorder has moved it since it was first previewed (see [`CutCraftApp::preview_mark`]).
+/// What the parts above a toolpath's flutes hit in a preview.
+#[derive(Clone, Debug)]
+pub(crate) struct Collided {
+    /// What hits, where, and how to put it right.
+    pub sentence: String,
+    pub hits: Vec<cut_craft_core::collision::Hit>,
+    /// A stamp of the toolpath when checked ([`background::fingerprint`]): once it is
+    /// recalculated or its bit edited, what was found no longer holds.
+    pub moves: u64,
+}
+
 fn preview_mark(id: EntityId) -> u32 {
     u32::try_from(id.0).unwrap_or(u32::MAX)
 }
@@ -1365,6 +1377,9 @@ struct CutCraftApp {
     /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
     /// made once a change, not every frame.
     rough_3d: Option<(RoughKey, Material)>,
+    /// What the collet nut, spindle or shank hit in the last preview, by toolpath: the
+    /// toolpath list marks them ⚠ in red and the 3D view shows the stock in the way red.
+    collisions: std::collections::BTreeMap<EntityId, Collided>,
     /// The model's height, lowest point to highest, and the history's revision it was
     /// measured at: Model Position in Material's picture and warning, measured once a change.
     model_tall: std::cell::Cell<Option<(u64, f64)>>,
@@ -1488,6 +1503,11 @@ struct CutCraftApp {
     /// Edit ▸ Options, kept between runs, and whether its window is open.
     options: crate::options::Options,
     options_window: bool,
+    /// Changes made in the Options window and not applied yet; `None` when it shows the
+    /// options as they are. They take effect only on Apply.
+    options_draft: Option<crate::options::Options>,
+    /// Close was pressed with changes not applied: the window asks Apply or Discard.
+    options_closing: bool,
     /// The Options category shown, by its place in the list.
     options_page: usize,
     /// Show advanced settings is ticked: the Advanced category lists. Off at every start, so
