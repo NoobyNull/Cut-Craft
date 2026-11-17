@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 40] = [
+const SCENES: [Scene; 41] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -139,6 +139,13 @@ const SCENES: [Scene; 40] = [
     ("snapping-not-applied", snapping_not_applied),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
+    // Help: Reporting a bug (the details of the computer)
+    ("bug-report-form", |app, ctx| {
+        ctx.set_embed_viewports(true);
+        app.info = None;
+        (app.snap_window, app.snap_draft) = (false, None);
+        cut_craft_bug_report::open_here(ctx);
+    }),
     // Help: Long jobs and the time left
     ("progress-window", progress_window),
 ];
