@@ -67,7 +67,7 @@ pub const DIALOG_HEIGHT_SHARE: f32 = 0.8;
 
 /// A dialog in a window of its own beside the main one (the Tool Database, Machine
 /// Configuration, Report a Bug...), closed with the desktop's own button: `open` goes false
-/// then. Its content scrolls when it is taller than the window. Where no second window can
+/// then. It stays above the main window until it closes ([`cut_craft_window_owner`]). Its content scrolls when it is taller than the window. Where no second window can
 /// open (the web, tests), an egui window inside the main one instead.
 pub fn dialog<R>(
     ctx: &egui::Context,
@@ -101,7 +101,9 @@ fn dialog_in<R>(
     scroll: bool,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> Option<R> {
+    let key = egui::ViewportId::from_hash_of(id).0.value();
     if !*open {
+        cut_craft_window_owner::dialog_closed(key);
         return None;
     }
     if ctx.embed_viewports() {
@@ -114,12 +116,18 @@ fn dialog_in<R>(
             .and_then(|shown| shown.inner);
     }
     let mut add = Some(add);
-    ctx.show_viewport_immediate(
-        egui::ViewportId::from_hash_of(id),
+    let viewport = egui::ViewportId::from_hash_of(id);
+    let frame = ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT);
+    let mut step = cut_craft_window_owner::Step::Nothing;
+    let out = ctx.show_viewport_immediate(
+        viewport,
         egui::ViewportBuilder::default()
             .with_title(title)
             .with_inner_size(size),
         |ui, _| {
+            // before the controls run: a file dialog one opens belongs to this window
+            let focused = ui.ctx().input(|i| i.viewport().focused) == Some(true);
+            step = cut_craft_window_owner::dialog_seen(key, frame, focused);
             let out = egui::CentralPanel::default()
                 .show(ui, |ui| {
                     let add = add.take()?;
@@ -138,7 +146,15 @@ fn dialog_in<R>(
             }
             out
         },
-    )
+    );
+    // the window is open now: it is made the main window's own, so it stays above it until
+    // it closes, and file dialogs opened from it belong to it
+    if !*open {
+        cut_craft_window_owner::dialog_closed(key);
+    } else if cut_craft_window_owner::dialog_window(key, title, step) {
+        ctx.request_repaint_after(cut_craft_window_owner::RETRY);
+    }
+    out
 }
 
 /// Where a window picture lands once egui has drawn it (a frame or more later).

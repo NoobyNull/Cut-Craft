@@ -220,7 +220,8 @@ pub(super) fn markdown() -> String {
     let mut md = String::from(
         "[Contents](help:contents)\n\n# Did You Know?\n\nShort tips for getting more out of \
          Cut Craft. One is shown each time Cut Craft starts; turn that off in the tip's window \
-         or in **Edit ▸ Options ▸ General**.\n\n",
+         or in **Edit ▸ Options ▸ General**. The tip's window stays in front of Cut Craft \
+         until you close it (see [Windows that open beside Cut Craft](help:contents)).\n\n",
     );
     for t in TIPS {
         md.push_str("- ");

@@ -27,6 +27,8 @@ egui_extras.workspace = true
 image.workspace = true
 log = "0.4"
 rfd.workspace = true
+# keeps dialog windows above the main window, and file dialogs with the window that opened them
+cut-craft-window-owner.workspace = true
 # Cut Craft's window handed to rfd, so its dialogs open as the window's own
 raw-window-handle = "0.6"
 schemars.workspace = true

@@ -24,6 +24,21 @@ a CNC machine cuts them with.
 - Hover over a greyed-out menu item or tool to see what it is waiting for, such as a
   selection, a toolpath picked in the list, or a job open.
 
+## Windows that open beside Cut Craft
+
+Some tools open in a window of their own: Did You Know?, Options, the Tool Database,
+Machine Configuration, View G-code, Report a Bug and others. Each one stays in front of
+Cut Craft's main window until you close it, so clicking the main window never hides it.
+You can still use the main window while it is open. It does not cover other programs,
+and it is minimised along with Cut Craft.
+
+A file or folder window opened from one of these windows (Save, Open, Browse...) belongs
+to that window and opens in front of it.
+
+On a Wayland desktop with **Edit ▸ Options ▸ Advanced ▸ Use Wayland directly** switched
+on, and on a Mac, the desktop decides which window is in front. If a window goes behind,
+click it in the taskbar or dock to bring it back.
+
 ## Printing
 
 **File ▸ Print (opens a PDF)...** opens the 2D view as a PDF in your computer's PDF viewer.
