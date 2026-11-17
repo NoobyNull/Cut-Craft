@@ -193,6 +193,9 @@ pub fn document(tools: &[Tool<'_>], actions: &[(String, String)], token: bool) -
             } },
         },
     });
+    if let Value::Object(paths) = &mut doc["paths"] {
+        paths.extend(more_paths(&answer, &body));
+    }
     if token {
         doc["components"]["securitySchemes"] = json!({
             "token": {
@@ -203,4 +206,245 @@ pub fn document(tools: &[Tool<'_>], actions: &[(String, String)], token: bool) -
         doc["security"] = json!([{ "token": [] }]);
     }
     doc
+}
+
+/// The export formats `job/export` takes, by id with their names, added to the description
+/// (they come from the app's own Export menu).
+pub fn add_export_formats(doc: &mut Value, formats: &[(String, String)]) {
+    let ids: Vec<&str> = formats.iter().map(|(id, _)| id.as_str()).collect();
+    let content =
+        &mut doc["paths"]["/job/export"]["post"]["requestBody"]["content"]["application/json"];
+    content["schema"]["properties"]["format"]["enum"] = json!(ids);
+    let examples: Map<String, Value> = formats
+        .iter()
+        .map(|(id, name)| {
+            (
+                id.clone(),
+                json!({ "summary": name, "value": { "format": id, "path": "/home/me/sign" } }),
+            )
+        })
+        .collect();
+    content["examples"] = Value::Object(examples);
+}
+
+/// The calls that show what the job makes and run the slow jobs: pictures of the views, the
+/// state, the toolpaths with their times, calculating and previewing, G-code, saving.
+// one JSON document, read top to bottom as the page shows it
+#[expect(clippy::too_many_lines)]
+fn more_paths(
+    answer: &dyn Fn(&str) -> Value,
+    body: &dyn Fn(Value, Map<String, Value>) -> Value,
+) -> Map<String, Value> {
+    let get = |summary: &str, description: &str, what: &str| {
+        json!({ "get": {
+            "summary": summary, "description": description, "responses": answer(what)
+        } })
+    };
+    let examples = |list: &[(&str, &str, Value)]| -> Map<String, Value> {
+        list.iter()
+            .map(|(k, summary, value)| {
+                (
+                    (*k).to_owned(),
+                    json!({ "summary": summary, "value": value }),
+                )
+            })
+            .collect()
+    };
+    let which = json!({
+        "description": "\"all\", \"visible\", one toolpath's id, or a list of ids",
+        "oneOf": [
+            { "type": "string", "enum": ["all", "visible"] },
+            { "type": "integer" },
+            { "type": "array", "items": { "type": "integer" } },
+        ],
+    });
+    let work = |what: &str| {
+        json!({
+            "type": "object",
+            "properties": {
+                "toolpaths": which,
+                "wait": { "type": "boolean", "description": format!(
+                    "Answer once {what} is done (the default); false answers straight away, \
+                     and GET progress follows it") },
+            },
+        })
+    };
+    let mut picture = answer("The picture");
+    picture["200"] = json!({
+        "description": "The picture, as a PNG",
+        "content": { "image/png": { "schema": { "type": "string", "format": "binary" } } },
+    });
+    picture["503"] = json!({ "$ref": "#/components/responses/Error" });
+    let query = |name: &str, description: &str, schema: Value| {
+        json!({ "name": name, "in": "query", "required": false,
+                "description": description, "schema": schema })
+    };
+    let views: Vec<&str> = crate::Look::names().collect();
+    let mut paths = Map::new();
+    paths.insert(
+        "/view.png".into(),
+        json!({ "get": {
+        "summary": "A picture of the 2D or 3D view",
+        "description": "The view as Cut Craft's window draws it, as a PNG. The window shows \
+            that view for a moment while the picture is taken, then goes back to how it was. \
+            Open this in a web browser to see the job.",
+        "parameters": [
+            query("view", "2d, or the 3D view from the top, front, right or at an angle (iso)",
+                json!({ "type": "string", "enum": views, "default": "iso" })),
+            query("preview", "after: the toolpath preview, if there is one; before: the \
+                model as it is before cutting",
+                json!({ "type": "string", "enum": ["after", "before"], "default": "after" })),
+            query("width", "How wide the picture is, pixels; the view's own size if left out",
+                json!({ "type": "integer", "minimum": crate::call::WIDTHS.start(),
+                        "maximum": crate::call::WIDTHS.end() })),
+        ],
+        "responses": picture,
+    } }),
+    );
+    paths.insert(
+        "/state".into(),
+        get(
+            "The material, the model and what is picked",
+            "The material as Job Setup has it (size, thickness, where Z zero and the datum \
+         are), where the 3D model sits in it (Material Setup) with each part of the model \
+         and its heights, and what is picked: vectors, model parts and the toolpath picked \
+         in the toolpath list. Lengths are in the job's units.",
+            "The state",
+        ),
+    );
+    paths.insert(
+        "/toolpaths".into(),
+        get(
+            "Every toolpath with its run time and warnings",
+            "Each toolpath in list order: its tool, whether it is shown, its run time as the \
+         Toolpath Summary works it out, and what to look at before cutting it (out of \
+         date, entries made another way, what the checks before cutting found). The shown \
+         ones' times are added up.",
+            "The toolpaths",
+        ),
+    );
+    paths.insert(
+        "/posts".into(),
+        get(
+            "The post processors to make G-code with",
+            "The active machine's post processors that suit this job, and which is used when \
+         POST gcode names none.",
+            "The posts",
+        ),
+    );
+    paths.insert(
+        "/progress".into(),
+        get(
+            "How far a slow job has got",
+            "Whether Cut Craft is calculating or previewing, what, how far along (0 to 1, when \
+         it can tell) and for how long. Answered straight away, even while busy.",
+            "The progress",
+        ),
+    );
+    paths.insert(
+        "/cancel".into(),
+        json!({ "post": {
+        "summary": "Cancel the slow job",
+        "description": "Presses Cancel on the progress window: the job stops and nothing \
+            changes.",
+        "responses": answer("What was cancelled"),
+    } }),
+    );
+    paths.insert(
+        "/calculate".into(),
+        json!({ "post": {
+        "summary": "Calculate toolpaths",
+        "description": "Recalculates these toolpaths, as Recalculate does, with its \
+            progress window. Other calls wait until it is done.",
+        "requestBody": body(work("calculating"), examples(&[
+            ("all", "Every toolpath", json!({ "toolpaths": "all" })),
+            ("visible", "The shown ones", json!({ "toolpaths": "visible" })),
+            ("one", "One toolpath", json!({ "toolpaths": 3 })),
+            ("no_wait", "Answer straight away", json!({ "toolpaths": "all", "wait": false })),
+        ])),
+        "responses": answer("The toolpaths, calculated"),
+    } }),
+    );
+    paths.insert(
+        "/preview".into(),
+        json!({ "post": {
+        "summary": "Preview toolpaths",
+        "description": "Cuts these toolpaths, in list order, into fresh material, as \
+            Preview does (without playing it). GET view.png then shows the result.",
+        "requestBody": body(work("the preview"), examples(&[
+            ("all", "Every toolpath", json!({ "toolpaths": "all" })),
+            ("visible", "The shown ones", json!({ "toolpaths": "visible" })),
+            ("one", "One toolpath", json!({ "toolpaths": 3 })),
+        ])),
+        "responses": answer("What was previewed"),
+    } }),
+    );
+    paths.insert(
+        "/preview/reset".into(),
+        json!({ "post": {
+        "summary": "Reset the preview",
+        "description": "Takes the preview away, as Reset Preview does; Undo Last Preview \
+            brings it back.",
+        "responses": answer("What happened"),
+    } }),
+    );
+    paths.insert("/gcode".into(), json!({ "post": {
+        "summary": "Make the G-code",
+        "description": "The G-code Save Toolpaths would write, each file's name and text, \
+            after the same checks before cutting. An error stops it (nothing is made); \
+            warnings stop it too until \"accept_warnings\": true, as Save Anyway. With \
+            \"save_to\", the files are saved there as well. Nothing is sent to the machine: \
+            Cut Craft is not a G-code sender.",
+        "requestBody": body(json!({
+            "type": "object",
+            "properties": {
+                "toolpath": { "type": "integer", "description": "Only this toolpath" },
+                "group": { "type": "string", "description": "Only this toolpath group" },
+                "each": { "type": "boolean", "description": "Each shown toolpath in a file of its own" },
+                "post": { "type": "string", "description": "A post from GET posts; the machine's default if left out" },
+                "save_to": { "type": "string", "description": "Save the files here too" },
+                "replace": { "type": "boolean", "description": "Write over a file already there" },
+                "accept_warnings": { "type": "boolean", "description": "Go ahead though the checks found warnings" },
+            },
+        }), examples(&[
+            ("shown", "Every shown toolpath, in one file", json!({})),
+            ("one", "One toolpath", json!({ "toolpath": 3 })),
+            ("each", "Each shown toolpath in a file of its own", json!({ "each": true })),
+            ("save", "Saved as well", json!({ "save_to": "/home/me/sign.nc" })),
+        ])),
+        "responses": answer("The G-code"),
+    } }));
+    paths.insert(
+        "/job/save".into(),
+        json!({ "post": {
+        "summary": "Save the job",
+        "description": "Save, or Save As when a path is given (the job is from then on that \
+            file, as Save As makes it).",
+        "requestBody": body(json!({
+            "type": "object",
+            "properties": { "path": { "type": "string" } },
+        }), examples(&[
+            ("save", "Save where it is", json!({})),
+            ("save_as", "Save As", json!({ "path": "/home/me/sign.ccjob" })),
+        ])),
+        "responses": answer("Where it was saved"),
+    } }),
+    );
+    paths.insert(
+        "/job/export".into(),
+        json!({ "post": {
+        "summary": "Export the job",
+        "description": "An Export menu item (vectors as DXF, SVG and the like), saved to \
+            path.",
+        "requestBody": body(json!({
+            "type": "object", "required": ["format", "path"],
+            "properties": {
+                "format": { "type": "string" },
+                "path": { "type": "string" },
+            },
+        }), Map::new()),
+        "responses": answer("Where it was saved"),
+    } }),
+    );
+    paths
 }

@@ -1838,17 +1838,21 @@ impl CutCraftApp {
         }
         let mut found = cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits);
         if changes == files::ToolChanges::ToolChanger && !self.has_tool_changer() {
-            found.push(cut_craft_core::preflight::Finding {
-                severity: cut_craft_core::preflight::Severity::Warning,
-                message: "Tool changer (ATC) is chosen, but the machine has no tool changer \
-                          set up: the file changes tools with M6, which a machine without \
-                          one stops on or ignores, cutting on with the wrong bit. Choose \
-                          Separate file for each tool, or add the tool changer's slots in \
-                          Machine Configuration"
-                    .into(),
-            });
+            found.push(Self::no_tool_changer());
         }
         found
+    }
+
+    /// The warning when the tool changer is chosen but the machine has none set up.
+    pub(super) fn no_tool_changer() -> cut_craft_core::preflight::Finding {
+        cut_craft_core::preflight::Finding {
+            severity: cut_craft_core::preflight::Severity::Warning,
+            message: "Tool changer (ATC) is chosen, but the machine has no tool changer set \
+                      up: the file changes tools with M6, which a machine without one stops \
+                      on or ignores, cutting on with the wrong bit. Choose Separate file for \
+                      each tool, or add the tool changer's slots in Machine Configuration"
+                .into(),
+        }
     }
 
     /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when
