@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 27] = [
+const SCENES: [Scene; 28] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -93,6 +93,8 @@ const SCENES: [Scene; 27] = [
     ("options-apply-question", |app, _| {
         app.options_closing = true;
     }),
+    // Help: Toolpaths ▸ Pressing Calculate again
+    ("calculate-again", calculate_again),
 ];
 
 /// The Help window over the job on page `topic`, with `search` typed in its search box.
@@ -142,6 +144,32 @@ fn model_position(
         }
     }
     app.view = View::ThreeD;
+}
+
+/// A Profile toolpath calculated, then Calculate pressed again with nothing changed: the
+/// form says it is already up to date and offers Calculate as New.
+fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
+    (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
+    app.form = None;
+    app.gcode_view = None;
+    app.updates = crate::update::Updates::default();
+    (app.simulation, app.playback) = (None, None);
+    app.doc = cut_craft_core::document::Document::default();
+    app.view = View::TwoD;
+    draw_shapes(app);
+    let o = app.doc.job.area().min;
+    app.doc.selection = app
+        .doc
+        .pick(o + Point::new(40.0, 110.0), 2.0)
+        .into_iter()
+        .collect();
+    app.pages.set_pinned(super::Page::Toolpaths, true);
+    app.invoke(ctx, "profile_toolpath");
+    for _ in 0..2 {
+        if let Some(params) = app.form.as_ref().map(|f| f.params.clone()) {
+            let _ = app.apply_form("profile_toolpath", &params);
+        }
+    }
 }
 
 /// The Updates window over the job, at `phase`.

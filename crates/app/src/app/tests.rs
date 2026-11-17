@@ -18000,3 +18000,148 @@ fn help_pages_live_in_the_help_crate_not_the_app() {
         "move these to crates/help/pages (or crates/help/pictures): {strays:?}"
     );
 }
+
+/// A Profile toolpath round a 40 mm square, its form still open after Calculate.
+fn calculated_profile() -> (Harness, EntityId) {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("profile_toolpath", &params).unwrap();
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    (h, id)
+}
+
+fn press_calculate(h: &mut Harness) {
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("profile_toolpath", &params).unwrap();
+}
+
+#[test]
+fn calculate_again_with_nothing_changed_keeps_the_toolpath_and_says_it_is_up_to_date() {
+    let (mut h, id) = calculated_profile();
+    let (depth, revision) = (h.app.history.undo_depth(), h.app.history.revision());
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1, "no second copy");
+    assert!(h.app.doc.toolpaths.contains_key(&id));
+    assert_eq!(h.app.history.undo_depth(), depth, "nothing to undo");
+    assert_eq!(h.app.history.revision(), revision);
+    let note = h.app.form_note().expect("said on the form");
+    assert!(note.starts_with("Already up to date"), "{note}");
+}
+
+#[test]
+fn calculate_after_a_change_of_settings_updates_the_toolpath_in_place() {
+    let (mut h, id) = calculated_profile();
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Outside cut");
+    assert_eq!(
+        h.app.form_note(),
+        None,
+        "the note goes once a setting changes"
+    );
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1, "updated, not added");
+    assert_eq!(h.app.doc.toolpaths[&id].name, "Outside cut", "in its place");
+    // and pressed again: up to date with the new settings
+    let depth = h.app.history.undo_depth();
+    press_calculate(&mut h);
+    assert_eq!(h.app.history.undo_depth(), depth);
+    // one undo takes the update back, the toolpath staying
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert_ne!(h.app.doc.toolpaths[&id].name, "Outside cut");
+}
+
+#[test]
+fn calculate_after_undo_makes_the_toolpath_again_rather_than_calling_it_up_to_date() {
+    let (mut h, id) = calculated_profile();
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Outside cut");
+    press_calculate(&mut h);
+    h.app.invoke(&h.ctx, "undo");
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert_eq!(h.app.doc.toolpaths[&id].name, "Outside cut");
+    // the first Calculate undone too: the toolpath is made anew
+    h.app.invoke(&h.ctx, "undo");
+    h.app.invoke(&h.ctx, "undo");
+    assert!(h.app.doc.toolpaths.is_empty());
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+}
+
+#[test]
+fn calculate_after_the_vectors_changed_works_the_toolpath_out_again_in_place() {
+    let (mut h, id) = calculated_profile();
+    // the square moved: the toolpath is out of date
+    let moved = cut_craft_core::Change::transform_selected(&h.app.doc, |_| {
+        cut_craft_core::glam::DAffine2::from_translation((5.0, 0.0).into())
+    })
+    .unwrap();
+    h.app.history.apply(&mut h.app.doc, moved).unwrap();
+    assert!(h.app.doc.toolpaths[&id].stale);
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert!(!h.app.doc.toolpaths[&id].stale, "worked out again");
+    assert_eq!(h.app.form_note(), None, "not called up to date");
+}
+
+#[test]
+fn calculate_as_new_adds_another_toolpath_and_follows_that_one() {
+    let (mut h, id) = calculated_profile();
+    h.app.calculate_as_new();
+    assert_eq!(h.app.doc.toolpaths.len(), 2, "a second one, asked for");
+    let new = *h.app.doc.toolpaths.keys().last().unwrap();
+    assert_ne!(new, id);
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Second");
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 2);
+    assert_eq!(
+        h.app.doc.toolpaths[&new].name, "Second",
+        "the new one updated"
+    );
+    assert_ne!(h.app.doc.toolpaths[&id].name, "Second");
+}
+
+#[test]
+fn calculate_with_other_vectors_picked_makes_a_new_toolpath() {
+    let (mut h, _) = calculated_profile();
+    h.app.form = None;
+    h.rectangle(80.0, 10.0, 20.0, 20.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    // the form opened again remembers nothing: a toolpath for the new square
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 2);
+    // the same form, other vectors picked: another, the first kept
+    let squares: Vec<EntityId> = h.app.doc.vectors.keys().copied().collect();
+    h.app.doc.selection = std::iter::once(squares[0]).collect();
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 3);
+}
+
+#[test]
+fn calculate_with_nothing_picked_updates_the_toolpath_from_its_own_vectors() {
+    let (mut h, id) = calculated_profile();
+    h.app.doc.selection = cut_craft_core::selection::Selection::new();
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Kept");
+    press_calculate(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert_eq!(h.app.doc.toolpaths[&id].name, "Kept");
+    assert_ne!(h.app.doc.toolpaths[&id].vectors, Vec::new());
+}
+
+#[test]
+fn edit_toolpath_calculate_with_nothing_changed_says_it_is_up_to_date() {
+    let (mut h, id) = calculated_profile();
+    h.app.form = None;
+    h.app.selected_toolpath = Some(id);
+    h.app.invoke(&h.ctx, "edit_toolpath");
+    let depth = h.app.history.undo_depth();
+    press_calculate(&mut h);
+    assert_eq!(h.app.history.undo_depth(), depth, "not made again");
+    assert!(
+        h.app
+            .form_note()
+            .is_some_and(|n| n.starts_with("Already up to date"))
+    );
+}
