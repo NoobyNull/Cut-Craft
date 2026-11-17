@@ -6,8 +6,8 @@ use super::{
     Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FineKey, HEIGHT_DRAG_EVERY,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
     Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_BOX_MARGIN,
-    TOOL_ICON_ROWS, TOOL_SHANK, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog,
-    file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
+    TOOL_ICON_ROWS, TOOL_SHANK, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_name, files,
+    gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
 };
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
@@ -208,17 +208,17 @@ impl CutCraftApp {
                 self.picking = None;
             }
             Outcome::Import => {
-                if let Some(path) = file_dialog()
-                    .add_filter("Tool databases", &files::TOOL_FILE_EXTENSIONS)
-                    .pick_file()
+                if let Some(path) =
+                    super::filtered_dialog(super::Dialog::OpenToolDatabase, &self.registry)
+                        .pick_file()
                 {
                     self.import_tools(&path);
                 }
             }
             Outcome::Export(tools) => {
-                if let Some(path) = file_dialog()
-                    .add_filter("Cut Craft tool database", &["json"])
-                    .save_file()
+                if let Some(path) =
+                    super::filtered_dialog(super::Dialog::SaveToolDatabase, &self.registry)
+                        .save_file()
                 {
                     let done = format!(
                         "Exported {} tools to {}",

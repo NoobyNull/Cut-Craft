@@ -2,17 +2,17 @@
 //! menus, the start page and the Design and Toolpaths pages.
 
 use super::{
-    APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Document,
+    APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Dialog, Document,
     EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, KEY_ACTION_NAMES, Key,
-    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers,
-    OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS,
-    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks,
-    SaveForm, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES,
-    ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog,
-    commands, commit, dialog_size, egui, file_dialog, file_name, files, form, form_settings_dialog,
-    gui, job_dialog, menu_items, message_dialog, on_the_desktop, page_width, rest_section,
-    saving_path, selector_section, shortcut, show_page, side_tabs, side_tabs_width, summary_table,
-    template_dialog, texture_dialog, tool_picker, toolpath_template_dialog, view3d,
+    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, Menus, Modifiers, OpenForm,
+    PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS, SECTION_PICTURE_ROWS,
+    SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen, Session,
+    Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
+    Value, View, WHATS_NEW, brush_dialog, commands, commit, dialog_size, egui, file_dialog,
+    file_name, files, filtered_dialog, form, form_settings_dialog, gui, job_dialog, menu_items,
+    message_dialog, on_the_desktop, page_width, rest_section, saving_path, selector_section,
+    shortcut, show_page, side_tabs, side_tabs_width, summary_table, template_dialog,
+    texture_dialog, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -574,7 +574,7 @@ impl CutCraftApp {
                     Some(cut_craft_machines::MachineManager::adding(&self.machines));
             }
             "install_offline_package" => {
-                let dialog = file_dialog().add_filter("Machine package", &["json"]);
+                let dialog = filtered_dialog(Dialog::MachinePackage, &self.registry);
                 if let Some(path) = dialog.pick_file() {
                     self.install_package(&path);
                 }
@@ -704,8 +704,7 @@ impl CutCraftApp {
             "tile_windows_vertical" => self.split = Some(super::Split::SideBySide),
             "cascade_windows" => self.split = None,
             "save_shaded_image" => {
-                if let Some(path) = file_dialog()
-                    .add_filter("PNG image", &["png"])
+                if let Some(path) = filtered_dialog(Dialog::SaveShadedImage, &self.registry)
                     .set_file_name("shaded.png")
                     .save_file()
                 {
@@ -1086,22 +1085,18 @@ impl CutCraftApp {
             },
             "save_as" => self.save_as(),
             "import_vectors_bitmap" | "import_component_3d_model" => {
-                let mut dialog = file_dialog();
-                let models = id == "import_component_3d_model";
-                for importer in self.registry.importers() {
-                    if MODEL_IMPORTERS.contains(&importer.id) == models {
-                        dialog =
-                            dialog.add_filter(importer.format.label, importer.format.extensions);
-                    }
-                }
-                if let Some(path) = dialog.pick_file() {
+                let which = if id == "import_component_3d_model" {
+                    Dialog::ImportModel
+                } else {
+                    Dialog::ImportVectorsOrPicture
+                };
+                if let Some(path) = filtered_dialog(which, &self.registry).pick_file() {
                     self.import_file(&path);
                 }
             }
             "import_cut_list" => {
-                if let Some(path) = file_dialog()
-                    .add_filter("Cut list (CSV)", &["csv"])
-                    .pick_file()
+                if let Some(path) =
+                    filtered_dialog(Dialog::ImportCutList, &self.registry).pick_file()
                 {
                     self.import_cut_list(&path);
                 }
@@ -1115,9 +1110,8 @@ impl CutCraftApp {
             }
             "segment_3d_model_file" => {
                 // the segmenting form, on an STL picked first
-                if let Some(path) = file_dialog()
-                    .add_filter("STL or OBJ", &["stl", "obj"])
-                    .pick_file()
+                if let Some(path) =
+                    filtered_dialog(Dialog::SegmentModel, &self.registry).pick_file()
                 {
                     self.start_command("segment_3d_model");
                     if let Some(form) = self.form.as_mut().filter(|f| f.id == "segment_3d_model") {
@@ -1128,20 +1122,15 @@ impl CutCraftApp {
             "import_toolpaths_file" => {
                 // G-code read back as toolpaths: the form opens on the file picked, to say
                 // which tool cut it
-                if let Some(path) = file_dialog()
-                    .add_filter(
-                        "G-code",
-                        &["nc", "tap", "gcode", "ngc", "cnc", "txt", "gc", "nc1"],
-                    )
-                    .pick_file()
+                if let Some(path) =
+                    filtered_dialog(Dialog::ImportToolpaths, &self.registry).pick_file()
                 {
                     self.import_toolpaths_from(&path);
                 }
             }
             "install_post_processor" => {
-                if let Some(path) = file_dialog()
-                    .add_filter("Post-processor", &["pp"])
-                    .pick_file()
+                if let Some(path) =
+                    filtered_dialog(Dialog::InstallPostProcessor, &self.registry).pick_file()
                 {
                     self.install_post(&path);
                 }
@@ -1401,7 +1390,11 @@ impl CutCraftApp {
             return;
         };
         let extension = post.extension.clone();
-        let mut dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
+        let which = Dialog::SaveToolpaths {
+            post: &post.name,
+            extension: &extension,
+        };
+        let mut dialog = filtered_dialog(which, &self.registry);
         let named = cut_craft_machines::send::safe_name(&self.output_name(form), false);
         dialog = dialog.set_file_name(format!("{named}.{extension}"));
         let (key, name) = self.project();
@@ -2223,7 +2216,7 @@ impl CutCraftApp {
                     }
                 }
                 MachineOutcome::InstallPackage => {
-                    let dialog = file_dialog().add_filter("Machine package", &["json"]);
+                    let dialog = filtered_dialog(Dialog::MachinePackage, &self.registry);
                     if let Some(path) = dialog.pick_file() {
                         self.machine_outcome_install(&path);
                     }
@@ -2245,9 +2238,8 @@ impl CutCraftApp {
         use cut_craft_machines::PostOutcome;
         match outcome {
             PostOutcome::Install => {
-                if let Some(path) = file_dialog()
-                    .add_filter("Post-processor", &["pp"])
-                    .pick_file()
+                if let Some(path) =
+                    filtered_dialog(Dialog::InstallPostProcessor, &self.registry).pick_file()
                 {
                     self.install_post(&path);
                 }
@@ -2825,7 +2817,7 @@ impl CutCraftApp {
         let Some(format) = self.registry.exporter(id).map(|e| e.format) else {
             return;
         };
-        let dialog = file_dialog().add_filter(format.label, format.extensions);
+        let dialog = filtered_dialog(Dialog::Export(id), &self.registry);
         if let Some(path) = dialog.save_file()
             && let Some(path) = saving_path(&path, format.extensions)
         {
@@ -2857,7 +2849,7 @@ impl CutCraftApp {
     /// File ▸ Save As: the job saved under the name and folder the person picks.
     fn save_as(&mut self) {
         let (folder, name) = self.save_as_suggestion();
-        let dialog = job_dialog().set_file_name(name);
+        let dialog = filtered_dialog(Dialog::SaveJob, &self.registry).set_file_name(name);
         let dialog = match folder {
             Some(folder) => dialog.set_directory(folder),
             None => dialog,
@@ -2914,7 +2906,7 @@ impl CutCraftApp {
         match answer {
             rfd::MessageDialogResult::Yes => {
                 let path = self.session.path.clone().or_else(|| {
-                    job_dialog()
+                    filtered_dialog(Dialog::SaveJob, &self.registry)
                         .save_file()
                         .and_then(|path| saving_path(&path, &[JOB_EXTENSION]))
                 });
@@ -3204,29 +3196,19 @@ impl CutCraftApp {
     pub(super) fn file_icon_action(&mut self, id: &str) {
         let result = match id {
             "import_vectors" => {
-                let mut dialog = file_dialog();
-                for importer in self.registry.importers() {
-                    if VECTOR_IMPORTERS.contains(&importer.id) {
-                        dialog =
-                            dialog.add_filter(importer.format.label, importer.format.extensions);
-                    }
-                }
+                let dialog = filtered_dialog(Dialog::ImportVectors, &self.registry);
                 if let Some(path) = dialog.pick_file() {
                     self.import_file(&path);
                 }
                 Ok(())
             }
             "export_vectors" => {
-                let mut dialog = file_dialog();
-                let exporters: Vec<_> = self
-                    .registry
-                    .exporters()
-                    .filter(|e| VECTOR_EXPORTERS.contains(&e.id))
+                let dialog = filtered_dialog(Dialog::ExportVectors, &self.registry);
+                let exporters: Vec<_> = VECTOR_EXPORTERS
+                    .iter()
+                    .filter_map(|id| self.registry.exporter(id))
                     .map(|e| (e.id, e.format))
                     .collect();
-                for (_, format) in &exporters {
-                    dialog = dialog.add_filter(format.label, format.extensions);
-                }
                 match dialog.save_file() {
                     // the extension picks the format; DXF when there is none
                     Some(path) => {
@@ -3671,7 +3653,7 @@ impl CutCraftApp {
     /// Toolpaths ▸ Create Job Sheet: the page for each sheet with toolpaths (and the side
     /// worked on), in the Job Setup Sheet Editor's style, beside the file named.
     pub(super) fn create_job_sheet(&mut self) {
-        let Some(path) = file_dialog().add_filter("Job sheet", &["html"]).save_file() else {
+        let Some(path) = filtered_dialog(Dialog::JobSheet, &self.registry).save_file() else {
             return;
         };
         self.write_job_sheets(&path);

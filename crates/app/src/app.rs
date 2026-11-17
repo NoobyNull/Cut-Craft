@@ -610,18 +610,7 @@ const SCROLL_NOTCH: f32 = 50.0;
 /// How much a wheel notch grows the sculpting brush, or its strength; with Ctrl, finer.
 const BRUSH_STEP: f64 = 0.1;
 const BRUSH_FINE_STEP: f64 = 0.02;
-/// Importers that make components; Import Component / 3D Model offers these, Import
-/// Vectors / Bitmap the rest.
-const MODEL_IMPORTERS: [&str; 2] = ["import_stl", "import_3d_clipart"];
-/// Import Vectors and Export Vectors: the vector formats only.
-const VECTOR_IMPORTERS: [&str; 3] = ["import_dxf", "import_svg", "import_crv3d"];
-const VECTOR_EXPORTERS: [&str; 5] = [
-    "export_dxf",
-    "export_svg",
-    "export_pdf",
-    "export_eps",
-    "export_ai",
-];
+use crate::file_filters::{Dialog, VECTOR_EXPORTERS};
 /// The layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned); and
 /// the keys of actions with no menu item: N Node Edit, F1 help, F2 and F3 the views.
 const LAYOUT_KEYS: [(&str, &str); 6] = [
@@ -1793,8 +1782,8 @@ use cut_craft_core::file::TEMPLATE_EXTENSION as TEMPLATE;
 
 /// Job templates, starting in Cut Craft's `templates` folder.
 /// A file dialog opening in one of the user's settings folders (made if need be).
-fn settings_dialog(filter: &str, extension: &str, folder: &str) -> rfd::FileDialog {
-    let dialog = file_dialog().add_filter(filter, &[extension]);
+fn settings_dialog(which: Dialog<'_>, folder: &str) -> rfd::FileDialog {
+    let dialog = filtered_dialog(which, &cut_craft_core::Registry::default());
     match files::config_dir().map(|d| d.join(folder)) {
         Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
         _ => dialog,
@@ -1802,43 +1791,37 @@ fn settings_dialog(filter: &str, extension: &str, folder: &str) -> rfd::FileDial
 }
 
 fn template_dialog() -> rfd::FileDialog {
-    settings_dialog("Cut Craft job template", TEMPLATE, "templates")
+    settings_dialog(Dialog::JobTemplate, "templates")
 }
 
 /// Sculpting brushes, kept in the brushes folder.
 fn brush_dialog() -> rfd::FileDialog {
-    settings_dialog("Sculpting brush", "ccclip", "brushes")
+    settings_dialog(Dialog::SculptingBrush, "brushes")
 }
 
 /// Texture Toolpath's textures, kept in the textures folder.
 fn texture_dialog() -> rfd::FileDialog {
-    settings_dialog(
-        "Texture settings",
-        cmd_texture_toolpath::TEXTURE_EXTENSION,
-        "textures",
-    )
+    settings_dialog(Dialog::Texture, "textures")
 }
 
 /// Toolpath templates, in the same `templates` folder.
 fn toolpath_template_dialog() -> rfd::FileDialog {
-    settings_dialog(
-        "Toolpath template",
-        files::TOOLPATH_TEMPLATE_EXTENSION,
-        "templates",
-    )
+    settings_dialog(Dialog::ToolpathTemplate, "templates")
 }
 
 /// A toolpath form's saved settings, in the same `templates` folder.
 fn form_settings_dialog() -> rfd::FileDialog {
-    settings_dialog(
-        "Toolpath settings",
-        files::FORM_SETTINGS_EXTENSION,
-        "templates",
-    )
+    settings_dialog(Dialog::FormSettings, "templates")
 }
 
 fn job_dialog() -> rfd::FileDialog {
-    file_dialog().add_filter("Cut Craft job", &[JOB_EXTENSION, OLD_JOB_EXTENSION])
+    filtered_dialog(Dialog::OpenJob, &cut_craft_core::Registry::default())
+}
+
+/// The system's file dialog with `which`'s file types, the one its action wants first
+/// (see [`crate::file_filters`]).
+fn filtered_dialog(which: Dialog<'_>, registry: &cut_craft_core::Registry) -> rfd::FileDialog {
+    crate::file_filters::apply(file_dialog(), which, registry)
 }
 
 /// The system's file dialog. Tests must never open one: it lands on the desktop of whoever

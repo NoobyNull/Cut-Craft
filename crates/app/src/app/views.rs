@@ -6,9 +6,9 @@ use super::{
     DESIGN_TABS, DROP_SHADE, Drag, EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout,
     OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
     Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
-    ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
-    inspected, inspected_rows, measured, measured_rows, page_width, paint_focus_ring, saving_path,
-    show_page, view2d,
+    ViewTransform, bordered, dialog_size, egui, file_name, files, gui, handles, inspected,
+    inspected_rows, measured, measured_rows, page_width, paint_focus_ring, saving_path, show_page,
+    view2d,
 };
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
@@ -280,8 +280,7 @@ impl CutCraftApp {
         );
         let state = || self.bug_state();
         let pick = || {
-            file_dialog()
-                .add_filter("Pictures", &["png", "jpg", "jpeg", "gif", "bmp"])
+            super::filtered_dialog(super::Dialog::BugReportPictures, &self.registry)
                 .pick_files()
                 .unwrap_or_default()
         };
@@ -3812,9 +3811,8 @@ impl CutCraftApp {
             ui.weak("A logo is scaled to 165 × 52 pixels at most; landscape pictures suit it.");
         });
         if pick_logo
-            && let Some(path) = file_dialog()
-                .add_filter("Logo", &["png", "jpg", "jpeg", "gif"])
-                .pick_file()
+            && let Some(path) =
+                super::filtered_dialog(super::Dialog::JobSheetLogo, &self.registry).pick_file()
         {
             let ext = path
                 .extension()
@@ -4058,8 +4056,7 @@ impl CutCraftApp {
     }
 
     fn save_stl(&mut self, triangles: &[[cut_craft_core::glam::DVec3; 3]]) {
-        let Some(path) = file_dialog()
-            .add_filter("STL", &["stl"])
+        let Some(path) = super::filtered_dialog(super::Dialog::SaveStl, &self.registry)
             .save_file()
             .and_then(|path| saving_path(&path, &["stl"]))
         else {

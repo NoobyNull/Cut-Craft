@@ -280,12 +280,7 @@ impl CutCraftApp {
                 return;
             }
         };
-        let mut dialog = super::file_dialog();
-        for importer in self.registry.importers() {
-            if !super::MODEL_IMPORTERS.contains(&importer.id) {
-                dialog = dialog.add_filter(importer.format.label, importer.format.extensions);
-            }
-        }
+        let dialog = super::filtered_dialog(super::Dialog::ImportIntoShape, &self.registry);
         if let Some(path) = dialog.pick_file() {
             self.import_into(&path, shape);
         }
