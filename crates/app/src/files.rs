@@ -85,7 +85,7 @@ pub fn export(registry: &Registry, id: &str, doc: &Document, path: &Path) -> Res
     let exporter = registry
         .exporter(id)
         .ok_or_else(|| format!("no exporter called {id}"))?;
-    let bytes = (exporter.export)(doc).map_err(|e| e.to_string())?;
+    let bytes = exporter.run(doc).map_err(|e| e.to_string())?;
     write_atomic(path, &bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 

@@ -211,6 +211,7 @@ cmd-offset-vectors = { path = "../commands/offset-vectors" }
 cmd-overlap-intersect = { path = "../commands/overlap-intersect" }
 cmd-subtract-vectors = { path = "../commands/subtract-vectors" }
 cmd-weld-vectors = { path = "../commands/weld-vectors" }
+cmd-construction-lines = { path = "../commands/construction-lines" }
 cmd-job-setup = { path = "../commands/job-setup" }
 cmd-delete = { path = "../commands/delete" }
 cmd-draw-arc = { path = "../commands/draw-arc" }

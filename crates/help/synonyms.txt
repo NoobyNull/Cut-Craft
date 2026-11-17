@@ -57,3 +57,4 @@ system, operating system, os, windows version, macos version, linux distribution
 theme, dark mode, light mode, night mode, dark theme, light theme
 window layout, menu style, menu layout, ribbon, rail, classic layout, toolbar layout
 favourites, favourite, favorites, favorite, starred, pinned tools, quick tools, most used
+construction line, construction lines, construction geometry, reference line, helper line, guide path, layout line
