@@ -6,6 +6,7 @@ pub mod bend;
 pub mod bitmap;
 pub mod calc;
 mod change;
+pub mod check_list;
 pub mod checks;
 pub mod collision;
 mod command;

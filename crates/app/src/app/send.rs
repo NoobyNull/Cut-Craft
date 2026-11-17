@@ -24,11 +24,11 @@ impl CutCraftApp {
     /// machine's files. Files an earlier send left there (the same names, and old numbered,
     /// tile and side files) are replaced or archived as Options say, or asked about.
     pub(super) fn send_toolpaths(&mut self, form: &SaveForm) {
-        let Some((post, told)) = self.ready_to_save(form, true) else {
+        let Some(post) = self.ready_to_save(form, true) else {
             return;
         };
         let choice = self.options.confirmations.earlier_gcode;
-        self.send_choosing(form, post, told, choice);
+        self.send_choosing(form, post, choice);
     }
 
     /// Send to Machine once the checks are done, doing `choice` with an earlier send's
@@ -37,7 +37,6 @@ impl CutCraftApp {
         &mut self,
         form: &SaveForm,
         post: cut_craft_post::Post,
-        told: String,
         choice: EarlierGcode,
     ) {
         let Some(store) = self.machines.active().and_then(|m| store_of(&m.send_to)) else {
@@ -59,15 +58,13 @@ impl CutCraftApp {
                 form: form.clone(),
                 post,
                 path: PathBuf::new(),
-                told,
                 earlier: earlier.into_iter().map(PathBuf::from).collect(),
                 remember: false,
                 sending: true,
             });
             return;
         }
-        self.status
-            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+        self.status.set_message(&result.unwrap_or_else(|e| e));
     }
 
     /// Writes the form's files through `post` (and the job sheet) and sends them to the

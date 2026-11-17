@@ -332,6 +332,7 @@ mod job {
             vec![Finding {
                 severity: Severity::Error,
                 message: "Too deep for the bit".into(),
+                check: cut_craft_core::preflight::Check::Reach,
             }],
         )]);
         let list = crate::job::toolpaths(

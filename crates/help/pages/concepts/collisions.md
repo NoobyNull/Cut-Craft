@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-17
-see-also: tool_database, save_toolpaths, keep_out_zones, toolpaths
+see-also: tool_database, save_toolpaths, keep_out_zones, toolpaths, check_collisions
 ---
 
 # Collet and Holder Collisions

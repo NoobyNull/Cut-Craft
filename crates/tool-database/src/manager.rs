@@ -1115,11 +1115,12 @@ impl Manager {
                     .changer
                     .as_ref()
                     .and_then(|c| c.slot_of(&before).map(|slot| (c.machine.as_str(), slot)));
+                let taken = sharing_number(tools, i);
                 tool_details(
                     ui,
                     &mut tools[i],
                     (&groups, name_formats),
-                    (look, loaded),
+                    (look, loaded, &taken),
                     &material,
                     Some(&self.library),
                 );
@@ -1254,7 +1255,7 @@ impl Manager {
                 ui,
                 &mut shown,
                 (&groups, &mut formats),
-                (look, None),
+                (look, None, &[]),
                 &material,
                 Some(&self.library),
             );
@@ -1417,7 +1418,7 @@ fn tool_details(
     ui: &mut egui::Ui,
     tool: &mut Tool,
     (groups, formats): (&[String], &mut BTreeMap<String, String>),
-    (look, loaded): (&Look, Option<(&str, usize)>),
+    (look, loaded, taken): (&Look, Option<(&str, usize)>, &[String]),
     material: &str,
     library: Option<&cut_craft_core::material_library::MaterialLibrary>,
 ) {
@@ -1429,7 +1430,7 @@ fn tool_details(
             ui.vertical(|ui| {
                 ui.set_width(info);
                 section(ui, "Tool Info", |ui| {
-                    tool_info(ui, tool, (groups, formats), look, loaded);
+                    tool_info(ui, tool, (groups, formats), look, (loaded, taken));
                 });
             });
             ui.vertical(|ui| {
@@ -1439,7 +1440,7 @@ fn tool_details(
         });
     } else {
         section(ui, "Tool Info", |ui| {
-            tool_info(ui, tool, (groups, formats), look, loaded);
+            tool_info(ui, tool, (groups, formats), look, (loaded, taken));
         });
         section(ui, "Tool Shape", |ui| geometry(ui, tool));
     }
@@ -1598,7 +1599,7 @@ fn tool_info(
     tool: &mut Tool,
     (groups, formats): (&[String], &mut BTreeMap<String, String>),
     look: &Look,
-    loaded: Option<(&str, usize)>,
+    (loaded, taken): (Option<(&str, usize)>, &[String]),
 ) {
     egui::Grid::new("tool_info").num_columns(2).show(ui, |ui| {
         ui.label("Name");
@@ -1674,6 +1675,17 @@ fn tool_info(
             }
         }
         ui.end_row();
+        // never refused: said in red, as the checks before cutting say it
+        if let Some(note) = number_taken(tool.number, taken) {
+            ui.label("");
+            let red = egui::RichText::new(note).color(ui.visuals().error_fg_color);
+            // wrapped within the column the number box is in, never widening the window
+            ui.vertical(|ui| {
+                ui.set_max_width(ui.available_width().min(INFO_MIN));
+                ui.add(egui::Label::new(red).wrap());
+            });
+            ui.end_row();
+        }
         form_row(ui, tool, look);
         ui.label("Notes");
         ui.add(
@@ -1683,6 +1695,36 @@ fn tool_info(
         );
         ui.end_row();
     });
+}
+
+/// The other tools in `tools` (catalogues aside: they are not loaded) with the same tool
+/// number as the `i`th, by name; none for 0, which means the bit is changed by hand.
+pub fn sharing_number(tools: &[Tool], i: usize) -> Vec<String> {
+    let Some(tool) = tools.get(i).filter(|t| t.number != 0) else {
+        return vec![];
+    };
+    tools
+        .iter()
+        .enumerate()
+        .filter(|&(j, t)| j != i && t.number == tool.number && t.name != tool.name)
+        .filter(|(_, t)| !t.group.starts_with(cut_craft_core::toolpath::CATALOGUES))
+        .map(|(_, t)| t.name.clone())
+        .collect()
+}
+
+/// The red note under Tool Number when other tools have it: a tool changer picks bits by
+/// number, so it would pick up the wrong one.
+pub fn number_taken(number: u32, taken: &[String]) -> Option<String> {
+    let (first, more) = taken.split_first()?;
+    let also = match more.len() {
+        0 => String::new(),
+        1 => " and 1 more".to_owned(),
+        n => format!(" and {n} more"),
+    };
+    Some(format!(
+        "Tool number {number} is also {first}'s{also}. A tool changer would pick up the \
+         wrong bit: give this one a number of its own, or 0 if you change it by hand"
+    ))
 }
 
 /// The narrowest Tool Info beside the drawing's card.
@@ -1920,6 +1962,29 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_tool_number_another_bit_has_is_said_in_red_but_0_is_shared_freely() {
+        let bit = |name: &str, number: u32| Tool {
+            name: name.into(),
+            number,
+            ..Tool::default()
+        };
+        let tools = vec![
+            bit("6 mm End Mill", 3),
+            bit("60° V-Bit", 3),
+            bit("1/4\" Ball Nose", 0),
+            bit("1/8\" End Mill", 0),
+        ];
+        assert_eq!(sharing_number(&tools, 0), ["60° V-Bit"]);
+        assert!(sharing_number(&tools, 2).is_empty(), "0: changed by hand");
+        let note = number_taken(3, &sharing_number(&tools, 0)).unwrap();
+        assert!(
+            note.starts_with("Tool number 3 is also 60° V-Bit's. A tool changer"),
+            "{note}"
+        );
+        assert_eq!(number_taken(3, &[]), None);
+    }
+
     #[test]
     fn renames_are_kept_from_the_first_name_to_the_last() {
         let mut m = super::Manager::new(&cut_craft_core::toolpath::ToolDatabase::default());

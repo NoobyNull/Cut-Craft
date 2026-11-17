@@ -582,10 +582,6 @@ pub struct Confirmations {
     #[serde(default)]
     #[schemars(title = "Sharp offset intersections check")]
     pub sharp_offset_intersections: IntersectionCheck,
-    /// Problems the checks before cutting find when saving toolpaths
-    #[serde(default)]
-    #[schemars(title = "Checks before cutting")]
-    pub cutting_checks: CuttingChecks,
     /// The checks before cutting warn when a tool's taper or shape will leave more material
     /// than this on the model. Raise it if the warnings are about bits too small to matter
     #[serde(default = "material_left")]
@@ -614,7 +610,6 @@ impl Default for Confirmations {
             toolpath_intersections: IntersectionCheck::default(),
             radiused_offset_intersections: IntersectionCheck::default(),
             sharp_offset_intersections: IntersectionCheck::default(),
-            cutting_checks: CuttingChecks::default(),
             material_left: material_left(),
             ask_to_recalculate: ask_to_recalculate(),
             earlier_gcode: EarlierGcode::default(),
@@ -660,17 +655,6 @@ pub enum IntersectionCheck {
     /// Go on without checking
     #[schemars(title = "Don't check")]
     DontCheck,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum CuttingChecks {
-    /// List the problems and ask before saving
-    #[default]
-    Ask,
-    /// Save, and say what was found in the status bar
-    #[schemars(title = "Save and tell")]
-    SaveAndTell,
 }
 
 /// General settings.
@@ -2657,12 +2641,17 @@ mod tests {
             "previews start ten times faster than the machine"
         );
         assert!((o.confirmations.left() - cut_craft_core::checks::LEFT).abs() < 1e-9);
-        let older: Confirmations = serde_json::from_str(r#"{ "cutting_checks": "ask" }"#).unwrap();
-        assert_eq!(
-            older,
-            Confirmations::default(),
-            "older options get the same"
-        );
+        for older in [
+            r#"{ "cutting_checks": "ask" }"#,
+            r#"{ "cutting_checks": "save_and_tell" }"#,
+        ] {
+            let older: Confirmations = serde_json::from_str(older).unwrap();
+            assert_eq!(
+                older,
+                Confirmations::default(),
+                "older options, with the Save and tell choice since taken out, still load"
+            );
+        }
         let wild = ToolpathSettings {
             preview_multiplier: 1e9,
             ..o.toolpaths

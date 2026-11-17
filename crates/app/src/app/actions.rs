@@ -14,7 +14,7 @@ use super::{
     shortcut, show_page, side_tabs, side_tabs_width, summary_table, template_dialog,
     texture_dialog, tool_picker, toolpath_template_dialog, view3d,
 };
-use crate::options::{CuttingChecks, IntersectionCheck};
+use crate::options::IntersectionCheck;
 use cut_craft_bug_report::hint::HoverHint;
 
 /// The buttons of "Save changes?": what each does, rather than Yes and No.
@@ -122,6 +122,7 @@ impl CutCraftApp {
             gcode_view: None,
             save_anyway: None,
             checks_accepted: false,
+            acknowledged: std::collections::BTreeSet::new(),
             save_after: None,
             form_back: None,
             shots: None,
@@ -1404,7 +1405,7 @@ impl CutCraftApp {
     /// each file of the form's plan through its post (and each tile, when the job is tiled),
     /// with the job sheet beside them when the form says so.
     pub(super) fn save_toolpaths(&mut self, form: &SaveForm) {
-        let Some((post, told)) = self.ready_to_save(form, false) else {
+        let Some(post) = self.ready_to_save(form, false) else {
             return;
         };
         let extension = post.extension.clone();
@@ -1428,7 +1429,7 @@ impl CutCraftApp {
             return;
         };
         let path = files::with_extension_added(&path, &extension);
-        self.save_over_earlier(form, post, path, told);
+        self.save_over_earlier(form, post, path);
     }
 
     /// Save Toolpaths' Save once the file is named: straight on when no earlier save left
@@ -1438,11 +1439,10 @@ impl CutCraftApp {
         form: &SaveForm,
         post: cut_craft_post::Post,
         path: std::path::PathBuf,
-        told: String,
     ) {
         let earlier = files::earlier_save(&path);
         if earlier.is_empty() {
-            self.finish_save(form, &post, &path, &told, "");
+            self.finish_save(form, &post, &path, "");
             return;
         }
         match self.options.confirmations.earlier_gcode {
@@ -1451,13 +1451,12 @@ impl CutCraftApp {
                     form: form.clone(),
                     post,
                     path,
-                    told,
                     earlier,
                     remember: false,
                     sending: false,
                 });
             }
-            choice => self.save_with(choice, form, &post, &path, &told, &earlier),
+            choice => self.save_with(choice, form, &post, &path, &earlier),
         }
     }
 
@@ -1479,16 +1478,9 @@ impl CutCraftApp {
             self.save_options();
         }
         if ask.sending {
-            return self.send_choosing(&ask.form, ask.post, ask.told, choice);
+            return self.send_choosing(&ask.form, ask.post, choice);
         }
-        self.save_with(
-            choice,
-            &ask.form,
-            &ask.post,
-            &ask.path,
-            &ask.told,
-            &ask.earlier,
-        );
+        self.save_with(choice, &ask.form, &ask.post, &ask.path, &ask.earlier);
     }
 
     /// Replaces (deletes) or archives `earlier`, then saves. They are moved aside first
@@ -1501,7 +1493,6 @@ impl CutCraftApp {
         form: &SaveForm,
         post: &cut_craft_post::Post,
         path: &std::path::Path,
-        told: &str,
         earlier: &[std::path::PathBuf],
     ) {
         use crate::options::EarlierGcode;
@@ -1525,7 +1516,7 @@ impl CutCraftApp {
         } else {
             String::new()
         };
-        if self.finish_save(form, post, path, told, &done) {
+        if self.finish_save(form, post, path, &done) {
             if !archiving {
                 let _ = std::fs::remove_dir_all(&folder);
             }
@@ -1542,14 +1533,13 @@ impl CutCraftApp {
         self.status.set_message(&message);
     }
 
-    /// Writes the files (and the job sheet) and says what was saved, then `after` and
-    /// `told`; whether the G-code files were written.
+    /// Writes the files (and the job sheet) and says what was saved, then `after`; whether
+    /// the G-code files were written.
     fn finish_save(
         &mut self,
         form: &SaveForm,
         post: &cut_craft_post::Post,
         path: &std::path::Path,
-        told: &str,
         after: &str,
     ) -> bool {
         let (_, name) = self.project();
@@ -1572,18 +1562,18 @@ impl CutCraftApp {
             Ok(done)
         };
         self.status
-            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{after}{told}")));
+            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{after}")));
         true
     }
 
     /// Save Toolpaths' post and the checks before cutting, asked about when they find
-    /// something (and so may say no): the post and what to add to the message saying what
-    /// was saved; `None` when not saving, the status bar saying why.
+    /// something not ticked as read (and so may say no): the post; `None` when not saving,
+    /// the status bar saying why.
     pub(super) fn ready_to_save(
         &mut self,
         form: &SaveForm,
         sending: bool,
-    ) -> Option<(cut_craft_post::Post, String)> {
+    ) -> Option<cut_craft_post::Post> {
         let post = match self.form_post(form) {
             Ok(post) => post,
             Err(e) => {
@@ -1610,30 +1600,21 @@ impl CutCraftApp {
             self.status.set_message(&refused);
             return None;
         }
-        // the collet or spindle hitting the material is always asked about
+        // every one ticked as read in Save Toolpaths: that was the asking, but for the
+        // collet or spindle hitting the material, which is always asked about
+        let ticked = self.all_acknowledged(&found);
         let must_ask = found
             .iter()
             .any(|f| f.severity == cut_craft_core::preflight::Severity::MustAsk);
         let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
-        // out-of-date toolpaths are always asked about, whatever Options say
-        let stale = plan
-            .iter()
-            .flatten()
-            .any(|id| self.doc.toolpaths.get(id).is_some_and(|t| t.stale));
-        let ask =
-            stale || must_ask || self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+        let ask = must_ask || !ticked;
         if !problems.is_empty() && ask && !std::mem::take(&mut self.checks_accepted) {
             // asked over the window: the answer saves (or sends) again
             self.ask_save_anyway(form, problems, sending);
             return None;
         }
         self.checks_accepted = false;
-        let told = if problems.is_empty() || ask {
-            String::new()
-        } else {
-            format!(" (check before cutting: {})", problems.join("; "))
-        };
-        Some((post, told))
+        Some(post)
     }
 
     /// The name the form's file is saved under (before its extension): a group's own name,
@@ -1795,11 +1776,8 @@ impl CutCraftApp {
             }
             self.save_checks.push(key.clone());
             let doc = self.doc.clone();
-            let mut limits = self.limits();
-            if changes != files::ToolChanges::ToolChanger {
-                limits.slots.clear();
-            }
             let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
+            let limits = self.check_limits(&ids, changes);
             let started = key.clone();
             self.in_background(
                 super::CHECKING,
@@ -1843,15 +1821,12 @@ impl CutCraftApp {
         plan: &[Vec<EntityId>],
         changes: files::ToolChanges,
     ) -> Vec<cut_craft_core::preflight::Finding> {
-        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = plan
+        let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
+        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = ids
             .iter()
-            .flatten()
             .filter_map(|id| self.doc.toolpaths.get(id))
             .collect();
-        let mut limits = self.limits();
-        if changes != files::ToolChanges::ToolChanger {
-            limits.slots.clear();
-        }
+        let limits = self.check_limits(&ids, changes);
         let mut found = cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits);
         if changes == files::ToolChanges::ToolChanger && !self.has_tool_changer() {
             found.push(Self::no_tool_changer());
@@ -1868,6 +1843,7 @@ impl CutCraftApp {
                       on or ignores, cutting on with the wrong bit. Choose Separate file for \
                       each tool, or add the tool changer's slots in Machine Configuration"
                 .into(),
+            check: cut_craft_core::preflight::Check::ToolChanger,
         }
     }
 
@@ -2053,10 +2029,64 @@ impl CutCraftApp {
                     spindle: m.spindle,
                     slots: m.slots.clone(),
                     left: None,
+                    library: None,
                     holding: m.holding(),
                 });
         limits.left = Some(self.options.confirmations.left());
         limits
+    }
+
+    /// [`Self::limits`] for checking the toolpaths `ids` saved with `changes`: the tool
+    /// changer's slots only when it changes the tools, and the Tool Database's copy of
+    /// each of their bits, to compare with.
+    pub(super) fn check_limits(
+        &self,
+        ids: &[EntityId],
+        changes: files::ToolChanges,
+    ) -> cut_craft_core::preflight::Limits {
+        let mut limits = self.limits();
+        if changes != files::ToolChanges::ToolChanger {
+            limits.slots.clear();
+        }
+        let mut library = std::collections::BTreeMap::new();
+        for toolpath in ids.iter().filter_map(|id| self.doc.toolpaths.get(id)) {
+            let name = &toolpath.tool.name;
+            // a bit copied in from a maker's catalogue is compared with the catalogue's
+            let catalogue =
+                (self.tools.tools.iter()).find(|t| t.name == *name && self.tools.is_catalogue(t));
+            if let Some(listed) = catalogue.or_else(|| self.tools.get(name)) {
+                library.insert(name.clone(), listed.for_material(&self.tools.material));
+            }
+        }
+        limits.library = Some(library);
+        limits
+    }
+
+    /// The checks before cutting that cannot be made on `plan` saved with `changes`, each
+    /// with why.
+    pub(super) fn not_checked(
+        &self,
+        plan: &[Vec<EntityId>],
+        changes: files::ToolChanges,
+    ) -> Vec<(cut_craft_core::preflight::Check, String)> {
+        let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
+        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = ids
+            .iter()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .collect();
+        cut_craft_core::preflight::not_checked(
+            &self.doc,
+            &toolpaths,
+            &self.check_limits(&ids, changes),
+        )
+    }
+
+    /// Whether every warning in `found` was ticked as read in the checks before cutting.
+    pub(super) fn all_acknowledged(&self, found: &[cut_craft_core::preflight::Finding]) -> bool {
+        found
+            .iter()
+            .filter(|f| f.severity != cut_craft_core::preflight::Severity::Error)
+            .all(|f| self.acknowledged.contains(&f.message))
     }
 
     /// How the active machine holds its bits, for the collet and holder checks (the usual
