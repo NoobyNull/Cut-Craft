@@ -1133,13 +1133,9 @@ pub fn html(text: &str, vars: &[Variable]) -> String {
             Kind::Heading(level) => {
                 let _ = write!(out, "<h{0}>{words}</h{0}>", level + 2);
             }
-            // each number as typed, so 3 then 7 stay 3 and 7
-            Kind::Numbered(n) if n.parse::<u64>().is_ok_and(|n| n != 1) => {
-                let _ = write!(
-                    out,
-                    "<li value=\"{}\">{words}</li>",
-                    n.trim_start_matches('0')
-                );
+            // each number as typed, so 3 then 7 stay 3 and 7, and 3 then 1 stay 3 and 1
+            Kind::Numbered(n) if let Ok(n) = n.parse::<u64>() => {
+                let _ = write!(out, "<li value=\"{n}\">{words}</li>");
             }
             Kind::Bullet | Kind::Numbered(_) => {
                 let _ = write!(out, "<li>{words}</li>");
@@ -1689,7 +1685,15 @@ mod tests {
         );
         assert_eq!(
             html("1. A\n2. B", &[]),
-            "<ol><li>A</li><li value=\"2\">B</li></ol>"
+            "<ol><li value=\"1\">A</li><li value=\"2\">B</li></ol>"
+        );
+        assert_eq!(
+            html("3. Clamp\n1. Zero", &[]),
+            "<ol><li value=\"3\">Clamp</li><li value=\"1\">Zero</li></ol>"
+        );
+        assert_eq!(
+            html("0. Check\n007. Cut", &[]),
+            "<ol><li value=\"0\">Check</li><li value=\"7\">Cut</li></ol>"
         );
         let vars = vec![Variable {
             key: "job.name".into(),
@@ -1716,7 +1720,7 @@ mod tests {
         let html = html("# Setup\n- a\n- [ ] b\n1. c\ntext", &[]);
         assert_eq!(
             html,
-            "<h3>Setup</h3><ul><li>a</li><li class=\"check\">&#9744; b</li></ul><ol><li>c</li></ol><p>text</p>"
+            "<h3>Setup</h3><ul><li>a</li><li class=\"check\">&#9744; b</li></ul><ol><li value=\"1\">c</li></ol><p>text</p>"
         );
     }
 
