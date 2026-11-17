@@ -1690,6 +1690,21 @@ impl Harness {
     }
 
     /// The middle of `text` where the last frame drew it.
+    /// The middle of each drawing of `text`'s words, without the space a picture before
+    /// them on their line leaves at their start.
+    fn words_at(&self, text: &str) -> Vec<Pos2> {
+        self.shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(t) if t.galley.text() == text => {
+                    let row = t.galley.rows.first()?;
+                    Some(t.pos + row.rect_without_leading_space().center().to_vec2())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     fn text_at(&self, text: &str) -> Option<Pos2> {
         self.shapes.iter().find_map(|clipped| match &clipped.shape {
             egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos + t.galley.size() / 2.0),
@@ -3576,6 +3591,92 @@ fn the_3d_pencil_help_shows_what_it_cuts_with_pictures() {
         page.contains("**Extra passes each side**"),
         "its settings listed"
     );
+}
+
+#[test]
+fn a_tools_help_page_shows_its_toolbar_icon_by_its_name() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("3d_pencil_toolpath");
+    assert!(
+        page.contains(
+            "# ![3D Pencil Toolpath icon](bytes://help-icons/48/toolpaths/3d_pencil_toolpath.png) \
+             3D Pencil Toolpath\n"
+        ),
+        "the same picture as its button, beside its name: {page}"
+    );
+}
+
+#[test]
+fn the_toolpaths_help_lists_each_tool_by_its_icon() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("toolpaths");
+    assert!(
+        page.contains(
+            "- ![](bytes://help-icons/24/toolpaths/3d_pencil_toolpath.png) \
+             [3D Pencil Toolpath](help:3d_pencil_toolpath)\n"
+        ),
+        "{page}"
+    );
+    let design = h.app.help_markdown("design");
+    assert!(
+        design.contains("- ![](bytes://help-icons/24/drawing/create_vectors/draw_circle.png) "),
+        "{design}"
+    );
+}
+
+#[test]
+fn every_tools_help_page_shows_its_buttons_icon() {
+    let h = Harness::new();
+    let missing: Vec<&str> = h
+        .app
+        .help_topics()
+        .into_iter()
+        .filter(|t| !help::OWN_PAGES.contains(t))
+        .filter(|t| match h.app.help_icon_uri(t, help::PAGE_ICON) {
+            Some(uri) => !h.app.help_markdown(t).contains(&uri),
+            None => true,
+        })
+        .collect();
+    assert!(missing.is_empty(), "help with no icon: {missing:?}");
+}
+
+#[test]
+fn help_search_finds_tools_by_name_not_by_their_icons_file() {
+    let mut h = Harness::new();
+    let found = h.app.help_search_results("pencil");
+    assert_eq!(found[0].0, "3d_pencil_toolpath", "{found:?}");
+    assert_eq!(h.app.help_search_results("help-icons"), vec![]);
+    assert_eq!(
+        h.app.help_search_results("create_vectors"),
+        vec![],
+        "an icon's folder is no word of the help's"
+    );
+}
+
+#[test]
+fn the_help_window_shows_tool_icons_on_pages_and_in_search_results() {
+    let mut h = Harness::new();
+    h.app.info = Some(Info::Help("3d_pencil_toolpath"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let big = "bytes://help-icons/48/toolpaths/3d_pencil_toolpath.png";
+    let image = h.ctx.try_load_bytes(big);
+    assert!(
+        matches!(image, Ok(egui::load::BytesPoll::Ready { .. })),
+        "the page's icon handed to egui"
+    );
+    h.app.help_search = "pencil".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let small = "bytes://help-icons/24/toolpaths/3d_pencil_toolpath.png";
+    assert!(
+        matches!(
+            h.ctx.try_load_bytes(small),
+            Ok(egui::load::BytesPoll::Ready { .. })
+        ),
+        "each result beside its icon"
+    );
+    assert!(h.text_at("3D Pencil Toolpath").is_some());
 }
 
 #[test]
@@ -6954,10 +7055,7 @@ fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
         ("model-height-buttons.gif", &b"GIF8"[..]),
         ("model-height-buttons.png", b"\x89PNG"),
     ] {
-        assert!(
-            page.contains(&format!("pictures/{picture}")),
-            "{picture}"
-        );
+        assert!(page.contains(&format!("pictures/{picture}")), "{picture}");
         assert!(
             cut_craft_help::PICTURES
                 .iter()
@@ -7351,6 +7449,8 @@ fn editing_placed_text_replaces_it() {
 #[test]
 fn help_contents_links_to_the_pages_and_their_tools() {
     let mut h = Harness::new();
+    // the tools are listed by their icons, drawn at their own size, as the app does
+    egui_extras::install_image_loaders(&h.ctx);
     h.app.pages.set_pinned(Page::Design, true);
     h.app.invoke(&h.ctx, "help_contents");
     assert_eq!(h.app.info, Some(Info::Help("contents")));
@@ -7365,8 +7465,24 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
     assert_eq!(h.app.info, Some(Info::Help("design")));
+    // listed by their icons: wheeled down to the first group's last tools
+    h.frame(vec![
+        Event::PointerMoved(Pos2::new(200.0, 400.0)),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -200.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Wheel,
+            modifiers: Modifiers::NONE,
+        },
+    ]);
+    // the wheel scrolls smoothly over a few frames
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    // beside its icon: the words themselves, not the space the icon leaves on their line
     let at = *h
-        .texts_at("Job Setup")
+        .words_at("Job Setup")
         .last()
         .expect("its tools are listed");
     h.click(at, Modifiers::NONE);

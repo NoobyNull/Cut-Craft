@@ -1931,8 +1931,9 @@ fn preview_3d(app: &mut CutCraftApp, ctx: &egui::Context) {
 /// A new job, nothing drawn, the 2D view.
 fn fresh_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
-    // the last tour's windows closed
+    // the last tour's windows closed, so none is left in the next tour's pictures
     (app.tool_manager, app.info, app.part_labels_window) = (None, None, false);
+    (app.save_form, app.gcode_view) = (None, None);
     // the last tour's job goes without asking whether to save it
     app.reset_job();
     app.invoke(ctx, "new");

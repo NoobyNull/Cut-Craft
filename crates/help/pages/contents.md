@@ -37,7 +37,10 @@ a CNC machine cuts them with.
 - **Links in the words**: wherever a page names another tool or idea, the name is a link.
 - **◀ Back** and **Forward ▶** go through the pages you have read, like a web browser. A
   mouse's own back and forward buttons and **Alt+Left** / **Alt+Right** do the same.
-- **?** at the top of the Design or Toolpaths page lists that page's tools.
+- **?** at the top of the Design or Toolpaths page lists that page's tools, each beside the
+  picture on its button, so you can find a tool by its icon.
+- Each tool's page shows its button's picture beside its name, and search results show it
+  too, so you can tell you have the right tool.
 - **F1** with a tool's form open goes straight to that tool; with none open, to this page.
 - Hover over a setting's name in a form for a short note about it.
 - Hover over a greyed-out menu item or tool to see what it is waiting for, such as a

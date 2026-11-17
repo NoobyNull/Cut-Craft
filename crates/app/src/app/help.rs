@@ -14,6 +14,18 @@ enum Step {
     Forward,
 }
 
+/// The help's own pages, which the app writes: every other topic in [`CutCraftApp::help_topics`]
+/// is a tool's, headed by its button's icon.
+pub(super) const OWN_PAGES: [&str; 4] = ["contents", "design", "toolpaths", "tips"];
+
+/// How many points across a tool's icon is beside its name at the top of its help page.
+pub(super) const PAGE_ICON: u16 = 48;
+/// And beside its name in a list of tools or of search results.
+pub(super) const LIST_ICON: u16 = 24;
+/// Where the help's small copies of the tool icons are kept in egui: then the size, then
+/// the icon's own path (`bytes://help-icons/48/toolpaths/pocket_toolpath.png`).
+const ICON_URI: &str = "bytes://help-icons/";
+
 /// A side bar list's pages: (topic, title, its tool's icon).
 type SidebarRows = Vec<(&'static str, String, Option<egui::Image<'static>>)>;
 
@@ -58,6 +70,14 @@ impl CutCraftApp {
         } else {
             (String::new(), vec![])
         };
+        let found_icons: Vec<Option<String>> = found
+            .iter()
+            .map(|(t, ..)| self.help_icon_uri(t, LIST_ICON))
+            .collect();
+        self.load_help_icons(ctx, &markdown);
+        for uri in found_icons.iter().flatten() {
+            self.load_help_icons(ctx, uri);
+        }
         let (can_back, can_forward) = (
             self.help_history.can_go_back(),
             self.help_history.can_go_forward(),
@@ -85,18 +105,8 @@ impl CutCraftApp {
                     ));
                     return;
                 }
-                ui.weak(match found.len() {
-                    1 => "1 page found, best first".to_owned(),
-                    n => format!("{n} pages found, best first"),
-                });
-                for (t, title, line) in &found {
-                    if ui.link(egui::RichText::new(title).strong()).clicked() {
-                        picked = Some(*t);
-                    }
-                    if !line.is_empty() {
-                        ui.weak(line);
-                    }
-                    ui.add_space(ui.spacing().item_spacing.y);
+                if let Some(t) = results_ui(ui, &found, &found_icons) {
+                    picked = Some(t);
                 }
             });
         });
@@ -135,7 +145,13 @@ impl CutCraftApp {
             self.help_index = self
                 .all_help_topics()
                 .into_iter()
-                .map(|t| (t, self.help_title(t), self.help_markdown(t)))
+                .map(|t| {
+                    (
+                        t,
+                        self.help_title(t),
+                        without_pictures(&self.help_markdown(t)),
+                    )
+                })
                 .collect();
             self.help_ranked = None;
         }
@@ -248,7 +264,7 @@ impl CutCraftApp {
 
     /// Every help page: Contents, the two tool pages, the tips, and each of the tools.
     pub(super) fn help_topics(&self) -> Vec<&'static str> {
-        let mut topics = vec!["contents", "design", "toolpaths", "tips"];
+        let mut topics = OWN_PAGES.to_vec();
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
         }
@@ -287,7 +303,10 @@ impl CutCraftApp {
             for g in self.help_groups(page) {
                 let _ = write!(md, "\n## {}\n\n", g.name);
                 for id in g.tools {
-                    let _ = writeln!(md, "- [{}](help:{id})", self.tool_label(id));
+                    let icon = self
+                        .help_icon_uri(id, LIST_ICON)
+                        .map_or_else(String::new, |uri| format!("![]({uri}) "));
+                    let _ = writeln!(md, "- {icon}[{}](help:{id})", self.tool_label(id));
                 }
             }
             md
@@ -307,9 +326,13 @@ impl CutCraftApp {
                 };
                 let (about, fields) = self.tool_help(id);
                 let about = about.unwrap_or_else(|| "No help written for this tool yet.".into());
+                let label = self.tool_label(id);
+                let icon = self
+                    .help_icon_uri(id, PAGE_ICON)
+                    .map_or_else(String::new, |uri| format!("![{label} icon]({uri}) "));
                 let mut md = format!(
-                    "[Contents](help:contents) ▸ [{name}](help:{page})\n\n# {}\n\n{about}\n\n",
-                    self.tool_label(id)
+                    "[Contents](help:contents) ▸ [{name}](help:{page})\n\n# {icon}{label}\n\n\
+                     {about}\n\n"
                 );
                 let steps = written(id);
                 if !steps.trim().is_empty() {
@@ -323,6 +346,31 @@ impl CutCraftApp {
                 }
                 md
             }
+        }
+    }
+
+    /// Where the help shows tool `id`'s button icon, `edge` points across: the same picture
+    /// as its button, made small. `None` for a tool with no icon.
+    pub(super) fn help_icon_uri(&self, id: &str, edge: u16) -> Option<String> {
+        let key = self.icons.find(self.explicit_icon(id), id)?;
+        Some(format!("{ICON_URI}{edge}/{key}"))
+    }
+
+    /// Hands egui each small tool icon `text` names that it does not have yet.
+    fn load_help_icons(&self, ctx: &egui::Context, text: &str) {
+        for uri in icon_uris(text) {
+            let id = egui::Id::unique(("help_icon", uri));
+            if ctx.data(|d| d.get_temp::<bool>(id)).is_some() {
+                continue;
+            }
+            let small = uri
+                .strip_prefix(ICON_URI)
+                .and_then(|rest| rest.split_once('/'))
+                .and_then(|(edge, key)| self.icons.small_png(key, edge.parse().ok()?));
+            if let Some(png) = small {
+                ctx.include_bytes(uri.to_owned(), png);
+            }
+            ctx.data_mut(|d| d.insert_temp(id, true));
         }
     }
 
@@ -512,6 +560,70 @@ fn sidebar_ui(ui: &mut egui::Ui, lists: &SidebarLists) -> Option<&'static str> {
     picked
 }
 
+/// The search results, best first: each page's icon, its title as a link, and the line that
+/// matched. Gives the page clicked.
+fn results_ui(
+    ui: &mut egui::Ui,
+    found: &[(&'static str, String, String)],
+    icons: &[Option<String>],
+) -> Option<&'static str> {
+    let mut picked = None;
+    ui.weak(match found.len() {
+        1 => "1 page found, best first".to_owned(),
+        n => format!("{n} pages found, best first"),
+    });
+    let edge = egui::Vec2::splat(f32::from(LIST_ICON));
+    for ((t, title, line), icon) in found.iter().zip(icons) {
+        ui.horizontal(|ui| {
+            if let Some(uri) = icon {
+                ui.add(egui::Image::new(uri.clone()).fit_to_exact_size(edge));
+            }
+            if ui.link(egui::RichText::new(title).strong()).clicked() {
+                picked = Some(*t);
+            }
+        });
+        if !line.is_empty() {
+            ui.weak(line);
+        }
+        ui.add_space(ui.spacing().item_spacing.y);
+    }
+    picked
+}
+
+/// The small tool icons `text` names, by their `bytes://help-icons/` URI.
+fn icon_uris(text: &str) -> impl Iterator<Item = &str> {
+    text.match_indices(ICON_URI).map(|(at, _)| {
+        let rest = &text[at..];
+        &rest[..rest.find([')', ' ', '\n']).unwrap_or(rest.len())]
+    })
+}
+
+/// Markdown with each picture as its words alone: search finds a page by what it says, not
+/// by its pictures' file names.
+fn without_pictures(md: &str) -> String {
+    let mut out = String::with_capacity(md.len());
+    let mut rest = md;
+    while let Some(open) = rest.find("![") {
+        let after = &rest[open + 2..];
+        let Some((alt, tail)) = after
+            .split_once("](")
+            .and_then(|(alt, tail)| Some((alt, tail.split_once(')')?.1)))
+        else {
+            break;
+        };
+        out.push_str(&rest[..open]);
+        out.push_str(alt);
+        // a picture with no words leaves no gap where it was
+        rest = if alt.is_empty() {
+            tail.strip_prefix(' ').unwrap_or(tail)
+        } else {
+            tail
+        };
+    }
+    out.push_str(rest);
+    out
+}
+
 /// A Markdown line as plain words: no list dash, bold stars or link targets.
 fn plain_line(line: &str) -> String {
     let mut out = String::new();
@@ -559,7 +671,7 @@ fn form_of(id: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{plain_line, search};
+    use super::{icon_uris, plain_line, search, without_pictures};
     use cut_craft_help::search::{Doc, Index};
 
     fn index() -> Vec<(&'static str, String, String)> {
@@ -611,5 +723,30 @@ mod tests {
             plain_line("- [Design](help:design): the page down the left"),
             "Design: the page down the left"
         );
+    }
+
+    #[test]
+    fn search_reads_a_pictures_words_not_its_file_name() {
+        assert_eq!(
+            without_pictures(
+                "# ![Pocket icon](bytes://help-icons/48/toolpaths/pocket.png) Pocket\n\
+                 - ![](bytes://help-icons/24/a.png) [A](help:a)\nno [link](help:b) lost ![x"
+            ),
+            "# Pocket icon Pocket\n- [A](help:a)\nno [link](help:b) lost ![x"
+        );
+    }
+
+    #[test]
+    fn a_pages_small_icons_are_found_by_their_uri() {
+        let md = "# ![P](bytes://help-icons/48/t/p.png) P\n- ![](bytes://help-icons/24/d/c.png) C";
+        let found: Vec<&str> = icon_uris(md).collect();
+        assert_eq!(
+            found,
+            [
+                "bytes://help-icons/48/t/p.png",
+                "bytes://help-icons/24/d/c.png"
+            ]
+        );
+        assert_eq!(icon_uris("bytes://help-icons/24/x.png").count(), 1);
     }
 }
