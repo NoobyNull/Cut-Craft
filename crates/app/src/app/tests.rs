@@ -6886,6 +6886,41 @@ fn the_3d_views_help_shows_auto_rotate_with_its_moving_picture() {
 }
 
 #[test]
+fn auto_rotate_turns_a_rotary_job_round_its_own_axis() {
+    use cut_craft_core::document::{Along, Job};
+    use cut_craft_core::glam::DVec3;
+    for (along, axis) in [(Along::X, DVec3::X), (Along::Y, DVec3::Y)] {
+        let mut h = Harness::new();
+        h.app.doc.job = Job::rotary(300.0, 50.0, along);
+        h.app.view = View::ThreeD;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        assert!(h.app.display.auto_wrapping, "drawn wrapped round the axis");
+        let start = h.app.orbit;
+        let button = h.text_at("Auto-rotate").unwrap();
+        h.click(button, Modifiers::NONE);
+        for _ in 0..5 {
+            h.frame(vec![]);
+        }
+        let now = h.app.orbit;
+        assert!(
+            (now.project(axis).0 - start.project(axis).0).length() < 1e-6,
+            "{along:?}: the cylinder's axis stays put"
+        );
+        assert!(
+            now.towards_viewer().angle_between(start.towards_viewer()) > 0.05,
+            "{along:?}: and the cylinder turns round it"
+        );
+        // drawn flat (View ▸ Auto Wrapping off), it spins about the vertical as a flat job
+        h.app.display.auto_wrapping = false;
+        let flat = h.app.orbit;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        assert!((h.app.orbit.pitch - flat.pitch).abs() < 1e-9 && h.app.orbit.yaw != flat.yaw);
+    }
+}
+
+#[test]
 fn auto_rotates_speed_is_kept_with_the_options() {
     let o = crate::options::Options::default().view_3d;
     assert!(

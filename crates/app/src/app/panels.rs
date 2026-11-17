@@ -1977,15 +1977,23 @@ impl CutCraftApp {
         }
     }
 
-    /// Turns the 3D view on while Auto-rotate spins it, and asks for the next frame.
+    /// Turns the 3D view on while Auto-rotate spins it, and asks for the next frame: a flat
+    /// job about its vertical, a rotary job round its cylinder's axis.
     fn spin_3d(&mut self, ctx: &egui::Context) {
         let Some(last) = self.spinning_3d else {
             return;
         };
         let now = ctx.input(|i| i.time);
-        self.orbit = self
-            .orbit
-            .spun(now - last, self.options.view_3d.spin_speed());
+        // a rotary job drawn wrapped turns round its cylinder's axis, a flat one on the spot
+        let axis = match self.doc.job.rotary.filter(|_| self.display.auto_wrapping) {
+            Some(r) if r.along == cut_craft_core::document::Along::X => {
+                cut_craft_core::glam::DVec3::X
+            }
+            Some(_) => cut_craft_core::glam::DVec3::Y,
+            None => cut_craft_core::glam::DVec3::Z,
+        };
+        let speed = self.options.view_3d.spin_speed();
+        self.orbit = self.orbit.spun_about(axis, now - last, speed);
         self.spinning_3d = Some(now);
         ctx.request_repaint();
     }
