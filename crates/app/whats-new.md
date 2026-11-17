@@ -1,4 +1,4 @@
-- Checks before cutting: warns if the collet nut, spindle or holder would hit the material or a clamp
-- Settings windows wait for Apply, and Calculate no longer copies an unchanged toolpath
-- Place a model in the material and watch it move; job notes can show live values
-- Wiki-style help with picture tours, question search and 176 more tips
+- Bug and crash reports now say which system, processor and graphics card you have
+- Macs: the app opens without a "damaged" message; use Open Anyway in Privacy & Security
+- Very large jobs that don't fit on the graphics card are worked out on the processor instead of stopping
+- The Depth add-on is built for Intel and Apple Silicon Macs, and says plainly when it isn't ready yet
