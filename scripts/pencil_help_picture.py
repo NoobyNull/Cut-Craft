@@ -5,8 +5,8 @@ round). Middle: the pencil toolpath along the valleys. Right: after the pencil p
 
 usage:
   PENCIL_PICTURE=/tmp/p.json cargo test -p cmd-3d-pencil-toolpath help_picture -- --ignored
-  python3 -I scripts/pencil_help_picture.py /tmp/p.json crates/app/help/pictures/pencil-before-after.png \
-      crates/app/help/pictures/pencil-pass.gif
+  python3 -I scripts/pencil_help_picture.py /tmp/p.json crates/help/pictures/pencil-before-after.png \
+      crates/help/pictures/pencil-pass.gif
 The GIF plays the same: the finished job, the pencil passes drawn in as they cut, then the
 job after them.
 """

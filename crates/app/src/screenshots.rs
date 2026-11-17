@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 29] = [
+const SCENES: [Scene; 31] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -107,7 +107,21 @@ const SCENES: [Scene; 29] = [
         app.view_gcode(app.default_save_form());
         ctx.set_embed_viewports(true);
     }),
+    ("help-wiki", |app, _| {
+        help_window(app, "pocket_toolpath", "");
+    }),
+    ("help-question", |app, _| {
+        help_window(app, "contents", "how do I cut out a sign with bridges?");
+    }),
 ];
+
+/// The Help window over the job on page `topic`, with `search` typed in its search box.
+fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
+    app.updates = crate::update::Updates::default();
+    app.form = None;
+    search.clone_into(&mut app.help_search);
+    app.info = Some(super::Info::Help(topic));
+}
 
 /// Notes typed with the toolbar: a heading, a check list and a numbered list.
 const NOTES_TYPED: &str = "# Oak sign for the porch\n\
