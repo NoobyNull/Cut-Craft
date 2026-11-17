@@ -610,6 +610,22 @@ impl CutCraftApp {
                 self.save_options();
                 ctx.request_repaint();
             }
+            // hidden construction lines cannot stay picked: they are let go
+            "show_construction_lines" => {
+                self.display.toggle(id);
+                self.doc.hide_construction = !self.display.construction;
+                if !self.display.construction {
+                    let kept: Vec<_> = (self.doc.selection.iter().copied())
+                        .filter(|v| !self.doc.is_construction(*v))
+                        .collect();
+                    if kept.len() < self.doc.selection.len() {
+                        let mut c = Change::builder(&self.doc);
+                        c.select(kept);
+                        self.record(Ok(c.finish()), "Construction lines hidden");
+                    }
+                }
+                ctx.request_repaint();
+            }
             "draw_vectors_in_3d_view" => {
                 self.show_vectors_3d(!self.display.vectors_3d);
                 ctx.request_repaint();

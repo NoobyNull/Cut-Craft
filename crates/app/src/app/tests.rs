@@ -10331,6 +10331,66 @@ fn a_copy_pasted_on_its_original_shows_its_common_lines_in_red() {
 }
 
 #[test]
+fn the_right_click_menu_turns_vectors_into_construction_lines_and_back() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 30.0);
+    let menu = |app: &CutCraftApp| app.menus.selection_menu(&app.doc);
+    h.choose(menu, &["Make Construction Line"]);
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    assert!(h.app.doc.is_construction(id));
+    // all of the selection is construction lines now: the item turns them back
+    h.choose(menu, &["Make Real Line"]);
+    assert!(!h.app.doc.is_construction(id));
+    h.app.invoke(&h.ctx, "undo");
+    assert!(h.app.doc.is_construction(id), "undone, it is one again");
+}
+
+#[test]
+fn hiding_construction_lines_lets_go_of_them_and_showing_brings_them_back() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 30.0);
+    h.app.invoke(&h.ctx, "make_construction_line");
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    assert!(h.app.display.construction, "shown to start with");
+    h.app.invoke(&h.ctx, "show_construction_lines");
+    assert_eq!(
+        h.app.display.checked("show_construction_lines"),
+        Some(false)
+    );
+    assert!(!h.app.doc.shown(id) && !h.app.doc.editable(id));
+    assert!(
+        h.app.doc.selection.is_empty(),
+        "a hidden line is not left picked"
+    );
+    // a job opened while they are hidden keeps them hidden
+    h.app.doc.hide_construction = false;
+    h.frame(vec![]);
+    assert!(h.app.doc.hide_construction);
+    h.app.invoke(&h.ctx, "show_construction_lines");
+    assert!(h.app.doc.shown(id));
+}
+
+#[test]
+fn a_profile_never_cuts_a_selected_construction_line() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 30.0);
+    h.app.invoke(&h.ctx, "make_construction_line");
+    let err = h
+        .app
+        .apply(
+            "profile_toolpath",
+            &h.app
+                .registry
+                .get("profile_toolpath")
+                .unwrap()
+                .default_params(),
+        )
+        .unwrap_err();
+    assert!(err.contains("construction lines"), "{err}");
+    assert!(h.app.doc.toolpaths.is_empty());
+}
+
+#[test]
 fn show_open_vector_ends_is_a_view_menu_switch() {
     let mut h = Harness::new();
     assert!(!h.app.display.open_ends, "off to start with");

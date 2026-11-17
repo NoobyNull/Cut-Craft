@@ -100,6 +100,13 @@ pub enum Edit {
         before: Option<u64>,
         after: Option<u64>,
     },
+    /// Makes a vector a construction line (used only to place things, never cut) or a
+    /// real one again.
+    SetConstruction {
+        id: EntityId,
+        before: bool,
+        after: bool,
+    },
     /// Moves a vector between layers; `None` is "not on any layer" (added or removed).
     SetLayer {
         id: EntityId,
@@ -248,6 +255,11 @@ impl Edit {
                 after: before,
             },
             Self::SetLayer { id, before, after } => Self::SetLayer {
+                id,
+                before: after,
+                after: before,
+            },
+            Self::SetConstruction { id, before, after } => Self::SetConstruction {
                 id,
                 before: after,
                 after: before,
@@ -428,6 +440,7 @@ impl Change {
             layers: doc.layers.clone(),
             current_layer: doc.current_layer,
             vector_layers: BTreeMap::new(),
+            construction: BTreeMap::new(),
             levels: BTreeMap::new(),
             sheets: (doc.sheets.clone(), doc.active_sheet),
             side: (doc.bottom_side, doc.other_side.clone()),
@@ -796,7 +809,9 @@ impl Change {
         let mut pictures = std::collections::BTreeSet::new();
         for edit in &self.edits {
             match edit {
-                Edit::Replace { id, .. } | Edit::Remove { id, .. } => {
+                Edit::Replace { id, .. }
+                | Edit::Remove { id, .. }
+                | Edit::SetConstruction { id, .. } => {
                     vectors.insert(*id);
                 }
                 Edit::ReplaceBitmap { id, .. } | Edit::RemoveBitmap { id, .. } => {
@@ -1239,6 +1254,16 @@ impl Document {
                     None => self.group_parents.remove(group),
                 };
             }
+            Edit::SetConstruction { id, before, after } => {
+                if self.construction.contains(id) != *before {
+                    return Err(ApplyError::Conflict(*id));
+                }
+                if *after {
+                    self.construction.insert(*id);
+                } else {
+                    self.construction.remove(id);
+                }
+            }
             Edit::SetLayer { id, before, after } => {
                 if self.vector_layers.get(id) != before.as_ref() {
                     return Err(ApplyError::Conflict(*id));
@@ -1419,6 +1444,8 @@ pub struct ChangeBuilder<'a> {
     layers: Vec<Layer>,
     current_layer: LayerId,
     vector_layers: BTreeMap<EntityId, Option<LayerId>>,
+    /// Construction lines as this change has left them, shadowing `doc`.
+    construction: BTreeMap<EntityId, bool>,
     /// Levels as this change has left them (`None` = removed), shadowing `doc`.
     levels: BTreeMap<u64, Option<Level>>,
     /// The sheet list and active sheet as this change has left them.
@@ -1472,6 +1499,8 @@ impl ChangeBuilder<'_> {
             let copies = self.add_regrouped(paths, &doc.texts, &doc.part_names, shift_of(t));
             for (&id, &copy) in originals.iter().zip(&copies) {
                 self.move_to_layer(copy, doc.layer_of(id));
+                // a copy of a construction line is one too
+                self.set_construction(copy, doc.is_construction(id));
             }
             all.extend(copies);
         }
@@ -1560,6 +1589,7 @@ impl ChangeBuilder<'_> {
             self.select(after);
         }
         self.pending.insert(id, None);
+        self.set_construction(id, false);
         self.edits.push(Edit::Remove { id, path });
         self.set_vector_layer(id, None);
         // a removed vector leaves its group; the last one out takes the group's text with it
@@ -1777,6 +1807,23 @@ impl ChangeBuilder<'_> {
         match self.vector_layers.get(&id) {
             Some(layer) => *layer,
             None => self.doc.vector_layers.get(&id).copied(),
+        }
+    }
+
+    /// Whether vector `id` is a construction line, as this change has left it.
+    pub fn is_construction(&self, id: EntityId) -> bool {
+        self.construction
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| self.doc.is_construction(id))
+    }
+
+    /// Makes vector `id` a construction line (`true`) or a real one.
+    pub fn set_construction(&mut self, id: EntityId, after: bool) {
+        let before = self.is_construction(id);
+        if before != after {
+            self.construction.insert(id, after);
+            self.edits.push(Edit::SetConstruction { id, before, after });
         }
     }
 
@@ -2170,6 +2217,14 @@ impl ChangeBuilder<'_> {
                     after: None,
                 });
             }
+            if doc.is_construction(id) {
+                self.edits.push(Edit::SetConstruction {
+                    id,
+                    before: true,
+                    after: false,
+                });
+                left.construction.insert(id);
+            }
             self.edits.push(Edit::Remove {
                 id,
                 path: path.clone(),
@@ -2212,6 +2267,13 @@ impl ChangeBuilder<'_> {
                     id,
                     before: None,
                     after: v.group,
+                });
+            }
+            if arriving.construction.contains(&id) {
+                self.edits.push(Edit::SetConstruction {
+                    id,
+                    before: false,
+                    after: true,
                 });
             }
         }

@@ -807,6 +807,13 @@ pub fn colour32([r, g, b]: [u8; 3]) -> egui::Color32 {
     egui::Color32::from_rgb(r, g, b)
 }
 
+/// What construction lines are drawn in: a muted light blue that reads on the light and
+/// the dark theme, softer than the vectors that are cut.
+pub const CONSTRUCTION_COLOUR: [u8; 3] = [110, 160, 215];
+
+/// A construction line's dash pattern, in multiples of the view's dash: long dash, dot.
+pub const CONSTRUCTION_DASHES: [f32; 2] = [2.0, 0.4];
+
 /// How faint a dragged component is drawn where it was, out of 255.
 const MOVING_FADE: u8 = 70;
 
@@ -837,6 +844,22 @@ fn paint_vectors(
             painter.add(Shape::line(screen(path), selected));
         } else if doc.selection.contains(id) {
             painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
+        } else if doc.is_construction(*id) {
+            // dash-dot in a soft blue: placed by, never cut
+            let colour = colour32(CONSTRUCTION_COLOUR);
+            let stroke = if outside(*id) {
+                Stroke::new(width, colour.gamma_multiply(OUTSIDE_GROUP_FADE))
+            } else {
+                Stroke::new(width, colour)
+            };
+            let dashes = CONSTRUCTION_DASHES.map(|d| d * dash);
+            painter.extend(Shape::dashed_line_with_offset(
+                &screen(path),
+                stroke,
+                &dashes,
+                &[gap, gap],
+                0.0,
+            ));
         } else if outside(*id) {
             painter.add(Shape::line(screen(path), faded));
         } else {

@@ -33,6 +33,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_select::UnselectAll>();
     r.add::<cmd_job_setup::JobSetup>();
     r.add::<cmd_weld_vectors::WeldVectors>();
+    r.add::<cmd_construction_lines::MakeConstructionLine>();
+    r.add::<cmd_construction_lines::MakeRealLine>();
     r.add::<cmd_subtract_vectors::SubtractVectors>();
     r.add::<cmd_overlap_intersect::OverlapIntersect>();
     r.add::<cmd_offset_vectors::OffsetVectors>();

@@ -353,6 +353,12 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "Put a circle on each end of every open vector, so a gap that stops a shape being \
          pocketed or carved stands out",
     ),
+    (
+        "show_construction_lines",
+        "Show Construction Lines",
+        "Show or hide the dashed construction lines: lines that only place things and are \
+         never cut. Hidden, they cannot be picked either",
+    ),
 ];
 
 /// The icons of built-in tools whose file is not named for their id.
@@ -1072,6 +1078,7 @@ impl MenuSystem {
                 "import_into_shape",
             )
             .enabled(crate::app::shape_to_import_into(doc)),
+            construction_item(doc),
             MenuItem::submenu("Move to Layer", layers.collect()),
             MenuItem::with_action("Copy to Other Side", "copy_to_other_side")
                 .enabled(doc.job.double_sided.is_some()),
@@ -1162,6 +1169,17 @@ pub fn guides_submenu() -> MenuItem {
 
 /// The selection's Text submenu: editing the selected text, and breaking a block of lines
 /// into a text per line.
+/// The selection's construction line item: Make Real Line when every selected vector is a
+/// construction line already, else Make Construction Line.
+fn construction_item(doc: &Document) -> MenuItem {
+    if cmd_construction_lines::all_construction(doc) {
+        MenuItem::with_action("Make Real Line", "make_real_line")
+    } else {
+        MenuItem::with_action("Make Construction Line", "make_construction_line")
+            .enabled(!doc.selection.is_empty())
+    }
+}
+
 fn text_items(doc: &Document) -> Vec<MenuItem> {
     let group = cmd_draw_text::selected_text_group(doc);
     let lines = group
@@ -2285,6 +2303,7 @@ impl MenuSystem {
                         i("Draw Keep-Out Zones in 3D View"),
                         i("Show Keep-Out Zone Labels"),
                         i("Show Open Vector Ends"),
+                        i("Show Construction Lines"),
                         sep(),
                         i("Auto-Wrapping View"),
                         i("Color Shaded View"),

@@ -728,6 +728,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-construction-lines"
+version = "0.6.15"
+dependencies = [
+ "cut-craft-core",
+ "glam",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-convert-span"
 version = "0.6.15"
 dependencies = [
@@ -2301,6 +2312,7 @@ dependencies = [
  "cmd-close-with-line",
  "cmd-component-boundary",
  "cmd-component-properties",
+ "cmd-construction-lines",
  "cmd-convert-span",
  "cmd-convert-text-to-curves",
  "cmd-copy-along-vectors",

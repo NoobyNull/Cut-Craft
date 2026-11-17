@@ -41,7 +41,9 @@ type Ends = (LayerId, [i64; 2], [i64; 2]);
 /// layer, or on another span of its own.
 pub fn common_lines(doc: &Document) -> Vec<Span> {
     let mut by_ends: HashMap<Ends, Vec<(Span, Point)>> = HashMap::new();
-    for (&id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
+    // a construction line lying on a vector is how one is meant to be used: never flagged
+    let flagged = |id: EntityId| doc.shown(id) && !doc.is_construction(id);
+    for (&id, path) in doc.vectors.iter().filter(|(id, _)| flagged(**id)) {
         let layer = doc.layer_of(id);
         let mut from = path.start;
         for (index, &segment) in path.segments.iter().enumerate() {

@@ -67,6 +67,8 @@ impl CutCraftApp {
         self.note_stale();
         // a job opened or made, or another machine chosen: the machine's zones on it
         self.sync_machine_keep_out();
+        // View ▸ Show Construction Lines, on whichever job is open
+        self.doc.hide_construction = !self.display.construction;
         // nodes picked on a vector since unselected, undone or put away are let go
         self.prune_picked_nodes();
         // a reorder, or its undo, moved toolpaths between ids: what holds them follows
@@ -2413,6 +2415,24 @@ impl CutCraftApp {
                     let button = self.icon_button(icon, "", tip, edge).selected(on);
                     if ui.add(button).on_hover_hint(tip).clicked() {
                         clicked = Some(id);
+                    }
+                }
+                // the job's construction lines shown or hidden: the eye says which they are
+                if !self.doc.construction.is_empty() {
+                    let (icon, tip) = if self.display.construction {
+                        (
+                            "view/construction_lines_shown.png",
+                            "Construction lines shown: click to hide them",
+                        )
+                    } else {
+                        (
+                            "view/construction_lines_hidden.png",
+                            "Construction lines hidden: click to show them",
+                        )
+                    };
+                    let button = self.icon_button(icon, "", tip, edge);
+                    if ui.add(button).on_hover_hint(tip).clicked() {
+                        clicked = Some("show_construction_lines");
                     }
                 }
             });

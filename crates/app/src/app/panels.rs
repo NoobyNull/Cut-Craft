@@ -3827,7 +3827,8 @@ impl CutCraftApp {
             self.doc
                 .vectors
                 .iter()
-                .filter(|(id, _)| self.doc.shown(**id))
+                // construction lines only place things in the 2D view: nothing to see in 3D
+                .filter(|(id, _)| self.doc.shown(**id) && !self.doc.is_construction(**id))
                 .map(|(_, path)| path.flatten(cut_craft_core::polygon::TOLERANCE))
                 .collect()
         } else {

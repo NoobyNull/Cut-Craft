@@ -54,3 +54,4 @@ tool number, tool numbers, t number, atc, tool changer, automatic tool change
 generic bit, generic tool, maker's figures, manufacturer, catalogue, library
 theme, dark mode, light mode, night mode, dark theme, light theme
 window layout, menu style, menu layout, ribbon, rail, classic layout, toolbar layout
+construction line, construction lines, construction geometry, reference line, helper line, guide path, layout line

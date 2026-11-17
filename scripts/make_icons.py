@@ -940,6 +940,10 @@ I[vw + "split_side_by_side.svg"] = lambda: [rect(4, 6, 40, 36, 2, DARK, 2.5, "no
 I[vw + "split_over_and_under.svg"] = lambda: [rect(4, 6, 40, 36, 2, DARK, 2.5, "none"), rect(4, 6, 40, 18, 0, DARK, 2, LIGHT), rect(4, 24, 40, 18, 0, DARK, 2, MODEL)]
 I[vw + "2d_toolpath_drawing_on.svg"] = lambda: [rect(10, 10, 28, 28, 2, INK, 2.5, LIGHT), rect(5, 5, 38, 38, 8, TP, SW)]
 I[vw + "2d_toolpath_drawing_off.svg"] = lambda: [greyed(rect(10, 10, 28, 28, 2, INK, 2.5, LIGHT) + rect(5, 5, 38, 38, 8, TP, SW))]
+# View ▸ Show Construction Lines: an eye over a dashed construction line, open while they
+# are shown, closed (greyed, as a hidden layer's) while they are hidden
+I[vw + "construction_lines_shown.svg"] = lambda: [eye(24, 19, 1.0), line(5, 40, 43, 40, ACC, SW, "6 5")]
+I[vw + "construction_lines_hidden.svg"] = lambda: [eye(24, 17, 1.0, GREY, True), line(5, 40, 43, 40, ACC, SW, "6 5")]
 I[vw + "solid_2d_toolpath_drawing.svg"] = lambda: [path("M5,13 A8,8 0 0 1 13,5 H35 A8,8 0 0 1 43,13 V35 A8,8 0 0 1 35,43 H13 A8,8 0 0 1 5,35 Z M12,12 V36 H36 V12 Z", None, 0, "#7fd1a6"),
                                                    rect(12, 12, 24, 24, 1, INK, 2.5, LIGHT)]
 

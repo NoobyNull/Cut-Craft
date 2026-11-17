@@ -129,6 +129,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Break Block into Lines: splits a block of text into one text object per line, so each line can be moved on its own",
     ),
     (
+        "make_real_line",
+        "Make Real Line: turns the selected dashed construction lines back into normal vectors, so toolpaths can cut them and exported files include them",
+    ),
+    (
         "unselect_all",
         "Unselect All: clears the selection, so nothing is picked and no tool will change anything until you pick again",
     ),
