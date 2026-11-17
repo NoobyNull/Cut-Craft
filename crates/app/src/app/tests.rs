@@ -14164,8 +14164,14 @@ fn every_tip_says_something_and_its_more_is_a_help_page() {
     for tip in super::tips::TIPS {
         assert!(tip.text.split_whitespace().count() >= 10, "{}", tip.text);
         assert!(seen.insert(tip.text), "said twice: {}", tip.text);
-        if let Some(t) = tip.topic {
-            assert!(topics.contains(&t), "{t} is not a help page");
+        assert!(
+            topics.contains(&tip.topic),
+            "{} is not a help page: {}",
+            tip.topic,
+            tip.text
+        );
+        for name in ["Aspire", "Vectric"] {
+            assert!(!tip.text.contains(name), "{name} named: {}", tip.text);
         }
     }
     let page = h.app.help_markdown("tips");
@@ -14173,26 +14179,84 @@ fn every_tip_says_something_and_its_more_is_a_help_page() {
 }
 
 #[test]
-fn every_tip_has_an_illustration_of_its_own() {
+fn there_are_well_over_a_hundred_tips_on_every_subject() {
+    use super::tips::{Area, TIPS};
+    assert!(TIPS.len() >= 129, "only {} tips", TIPS.len());
+    for area in Area::ALL {
+        let n = TIPS.iter().filter(|t| t.area == area).count();
+        assert!(n >= 5, "{area:?} has only {n} tips");
+    }
+}
+
+#[test]
+fn the_tips_page_sorts_them_by_subject_and_links_each_to_its_help() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("tips");
+    let mut at = 0;
+    for area in super::tips::Area::ALL {
+        let heading = format!("\n## {}\n", area.heading());
+        let found = page[at..]
+            .find(&heading)
+            .unwrap_or_else(|| panic!("{heading:?} missing, or out of order"));
+        at += found + heading.len();
+    }
+    for tip in super::tips::TIPS {
+        let line = format!("- {} [Tell me more](help:{})", tip.text, tip.topic);
+        assert!(page.contains(&line), "not listed with its link: {line}");
+    }
+}
+
+#[test]
+fn every_tip_has_an_illustration_of_its_own_or_its_tools_icon() {
+    use super::tips::Picture;
+    let h = Harness::new();
     let icons = icon_set();
     let mut seen = std::collections::HashSet::new();
+    let mut missing = vec![];
     for tip in super::tips::TIPS {
-        let picture = tip.picture;
-        assert!(
-            picture.starts_with("tips/")
-                && std::path::Path::new(picture)
-                    .extension()
-                    .is_some_and(|e| e == "png"),
-            "{picture}: a drawn illustration from assets/icons/tips, not a tool's icon"
-        );
-        assert!(icons.contains(picture), "{picture} is not drawn");
-        assert!(seen.insert(picture), "{picture} illustrates two tips");
+        match tip.picture {
+            Picture::Scene(picture) => {
+                assert!(
+                    picture.starts_with("tips/")
+                        && std::path::Path::new(picture)
+                            .extension()
+                            .is_some_and(|e| e == "png"),
+                    "{picture}: a drawn illustration from assets/icons/tips"
+                );
+                assert!(icons.contains(picture), "{picture} is not drawn");
+                assert!(seen.insert(picture), "{picture} illustrates two tips");
+            }
+            Picture::Icon(id) => {
+                let Some(key) = h.app.tip_icon(id) else {
+                    missing.push(id);
+                    continue;
+                };
+                assert!(!key.starts_with("tips/"), "{key}: an icon, not a scene");
+            }
+        }
     }
     let unused: Vec<_> = icons
         .iter()
         .filter(|k| k.starts_with("tips/") && !seen.contains(k.as_str()))
         .collect();
     assert!(unused.is_empty(), "illustrations no tip shows: {unused:?}");
+    assert!(missing.is_empty(), "no icon for these tips: {missing:?}");
+}
+
+#[test]
+fn a_tip_about_a_tool_shows_that_tools_icon() {
+    use super::tips::{Picture, TIPS};
+    let h = Harness::new();
+    let tip = TIPS
+        .iter()
+        .find(|t| t.picture == Picture::Icon("pocket_toolpath"))
+        .expect("a tip about pockets");
+    assert_eq!(
+        h.app.tip_picture(tip),
+        Some("toolpaths/pocket_toolpath.png"),
+        "the same picture as the button and its help page"
+    );
+    assert_eq!(h.app.tip_picture(&TIPS[0]), Some("tips/sample_project.png"));
 }
 
 #[test]
