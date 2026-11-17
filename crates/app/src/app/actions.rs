@@ -199,6 +199,7 @@ impl CutCraftApp {
             picked_constraint: None,
             fine_3d: None,
             rough_3d: None,
+            model_tall: std::cell::Cell::new(None),
             height_applied_at: None,
             job_epoch: 0,
             toolpath_keys: super::follow::Keys::default(),
@@ -1041,6 +1042,9 @@ impl CutCraftApp {
         if let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") {
             form.params = source.settings;
             form.params["file"] = Value::from(path.display().to_string());
+            // where the model sits in the material is the job's now, not as it was then
+            form.params["in_material"] =
+                serde_json::to_value(self.doc.job.model_position).expect("a position serializes");
             form.drawn = id;
             self.apply_live();
         }
@@ -5636,6 +5640,35 @@ impl CutCraftApp {
         ))
     }
 
+    /// What Model Position in Material needs beside its form's settings: the job's
+    /// material and the model's height (measured only while a form showing it is open).
+    pub(super) fn placement_room(&self) -> super::placement::Room {
+        let shows = self
+            .form
+            .as_ref()
+            .is_some_and(|f| matches!(f.id, "material_setup" | "orientate_3d_model"));
+        let tall = if shows && !self.doc.components.is_empty() {
+            let revision = self.history.revision();
+            match self.model_tall.get() {
+                Some((at, tall)) if at == revision => tall,
+                _ => {
+                    let tall = cmd_scale_model_z_height::model_height(&self.doc);
+                    let tall = if tall.is_finite() { tall } else { 0.0 };
+                    self.model_tall.set(Some((revision, tall)));
+                    tall
+                }
+            }
+        } else {
+            0.0
+        };
+        super::placement::Room {
+            thickness: self.doc.job.thickness,
+            tall,
+            units: self.doc.job.units,
+            rotary: self.doc.job.rotary.is_some(),
+        }
+    }
+
     /// Why the open form's last Apply failed, or what it warned of, in red, over its buttons.
     fn form_error(&self, ui: &mut egui::Ui) {
         let Some(form) = self.form.as_ref() else {
@@ -5687,6 +5720,10 @@ impl CutCraftApp {
         if let Some(past) = self.tiles_past_bed(form) {
             ui.colored_label(ui.visuals().error_fg_color, past);
         }
+        // a model poking out of the material where Model Position in Material puts it
+        if let Some(out) = super::placement::warning(&form.params, self.placement_room()) {
+            ui.colored_label(ui.visuals().error_fg_color, out);
+        }
         // what the last Apply made is not quite what was asked: said in red, never a pop-up
         if let Some(warning) = form.warning.as_ref().filter(|_| form.error.is_none()) {
             ui.colored_label(ui.visuals().error_fg_color, warning);
@@ -5702,12 +5739,17 @@ impl CutCraftApp {
     }
 
     /// The open form's heading and settings; [`Self::form_panel`] pins its buttons under it.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one form's closures (tool, group ends, pictures) set up in one place"
+    )]
     pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
         let form = self.form.as_ref().map_or("none", |f| f.label);
         cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
         let slots = self.slots();
         self.form_heading(ui);
         let reach = self.form_reach();
+        let room = self.placement_room();
         let Some(open) = &mut self.form else { return };
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
@@ -5781,6 +5823,7 @@ impl CutCraftApp {
         let stock = form_stock(&self.doc, &open.params, units, bed(&self.machines));
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
+                | super::placement::section_end(ui, group, params, room)
         };
         let look = form::Look {
             units,

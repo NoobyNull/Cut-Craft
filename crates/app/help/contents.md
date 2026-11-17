@@ -6,8 +6,8 @@ a CNC machine cuts them with.
 - [Design](help:design): the page down the left. Draw and edit vectors, then model in 3D.
 - [Toolpaths](help:toolpaths): the page down the right. Turn vectors into toolpaths,
   preview them and save them for the machine.
-- [3D View](help:view_3d): turning, zooming and fitting the 3D view, and Auto-rotate to
-  see the job from every side.
+- [3D View](help:view_3d): turning, zooming and fitting the 3D view, changing a model's
+  height with its height buttons, and Auto-rotate to see the job from every side.
 - [Groups](help:groups): step inside a group to change one thing in it; text in a
   group stays editable.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
@@ -22,7 +22,10 @@ a CNC machine cuts them with.
 
 - **Search help** along the top of this window finds every page with the words you type:
   a tool's name, a setting such as "stepover", or any word for what you want to do.
-- **?** at the top of the Design or Toolpaths page lists that page's tools.
+- **?** at the top of the Design or Toolpaths page lists that page's tools, each beside the
+  picture on its button, so you can find a tool by its icon.
+- Each tool's page shows its button's picture beside its name, and search results show it
+  too, so you can tell you have the right tool.
 - **F1** with a tool's form open goes straight to that tool; with none open, to this page.
 - Hover over a setting's name in a form for a short note about it.
 - Hover over a greyed-out menu item or tool to see what it is waiting for, such as a

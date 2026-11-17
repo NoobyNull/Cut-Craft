@@ -875,6 +875,33 @@ pub fn model_shape(doc: &Document, cells_across: usize) -> Material {
     model_over(doc, cells_across, f64::NAN)
 }
 
+/// The model's `shape` set in the material where Material Setup's Model Position in
+/// Material puts it, as the 3D toolpaths cut it: where no component is becomes the model's
+/// zero plane, then the whole surface moves down so its top (Gap Above Model) or its
+/// bottom (Gap Below Model) is the gap from that face. With nothing modelled the material's
+/// uncut top stays at 0.
+pub fn seat_in_material(job: &crate::document::Job, shape: &mut Material) {
+    if shape.heights.iter().all(|h| h.is_nan()) {
+        shape.heights.fill(0.0);
+        return;
+    }
+    for h in shape.heights.iter_mut().filter(|h| h.is_nan()) {
+        *h = 0.0;
+    }
+    let lowest = shape.heights.iter().copied().fold(f64::INFINITY, f64::min);
+    let top = shape
+        .heights
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+    let shift = job.model_shift(lowest, top);
+    // a model that goes past the material's bottom is cut right through there, not drawn
+    // under the block where its underside would hide it
+    for h in &mut shape.heights {
+        *h = (*h + shift).max(shape.bottom);
+    }
+}
+
 /// Where a 3D toolpath works: the tool's tip stays inside.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -1160,5 +1187,79 @@ mod shaping_tests {
         json.as_object_mut().unwrap().remove("shaping");
         let k: Component = serde_json::from_value(json).unwrap();
         assert!(k.shaping.is_identity());
+    }
+}
+
+#[cfg(test)]
+mod seated_tests {
+    use super::*;
+    use crate::document::{GapFrom, ModelPosition};
+
+    /// A 10 mm block on half the job, nothing on the other half, in 20 mm material.
+    fn shape(doc: &Document) -> Material {
+        let mut m = Material::new(&doc.job, 4);
+        for (i, h) in m.heights.iter_mut().enumerate() {
+            *h = if i % 4 < 2 { 10.0 } else { f64::NAN };
+        }
+        m
+    }
+
+    fn doc(from: GapFrom, gap: f64) -> Document {
+        let mut doc = Document::default();
+        doc.job.thickness = 20.0;
+        doc.job.model_position = ModelPosition { from, gap };
+        doc
+    }
+
+    #[test]
+    fn the_model_sits_in_the_material_where_material_setup_puts_it() {
+        let range = |m: &Material| {
+            let lo = m.heights.iter().copied().fold(f64::INFINITY, f64::min);
+            let hi = m.heights.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            (lo, hi)
+        };
+        // top flush with the material's top: the background 10 mm down
+        let d = doc(GapFrom::Above, 0.0);
+        let mut m = shape(&d);
+        seat_in_material(&d.job, &mut m);
+        assert_eq!(range(&m), (-10.0, 0.0));
+        // 3 mm under the top
+        let d = doc(GapFrom::Above, 3.0);
+        let mut m = shape(&d);
+        seat_in_material(&d.job, &mut m);
+        assert_eq!(range(&m), (-13.0, -3.0));
+        // its bottom on the material's bottom
+        let d = doc(GapFrom::Below, 0.0);
+        let mut m = shape(&d);
+        seat_in_material(&d.job, &mut m);
+        assert_eq!(range(&m), (-20.0, -10.0));
+        assert_eq!(m.bottom, -20.0);
+        // 4 mm over the bottom
+        let d = doc(GapFrom::Below, 4.0);
+        let mut m = shape(&d);
+        seat_in_material(&d.job, &mut m);
+        assert_eq!(range(&m), (-16.0, -6.0));
+        assert!(m.heights.iter().all(|h| h.is_finite()), "no holes left");
+    }
+
+    #[test]
+    fn a_model_taller_than_the_material_is_cut_through_at_the_bottom() {
+        // 10 mm of model in 6 mm material, top flush: the lowest 4 mm is past the bottom
+        let mut d = doc(GapFrom::Above, 0.0);
+        d.job.thickness = 6.0;
+        let mut m = shape(&d);
+        seat_in_material(&d.job, &mut m);
+        let lo = m.heights.iter().copied().fold(f64::INFINITY, f64::min);
+        assert_eq!(lo, -6.0, "no lower than the material's bottom");
+        assert_eq!(m.bottom, -6.0);
+    }
+
+    #[test]
+    fn nothing_modelled_stays_the_uncut_top() {
+        let d = doc(GapFrom::Below, 4.0);
+        let mut m = Material::new(&d.job, 4);
+        m.heights.fill(f64::NAN);
+        seat_in_material(&d.job, &mut m);
+        assert!(m.heights.iter().all(|&h| h == 0.0));
     }
 }
