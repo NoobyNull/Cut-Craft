@@ -24,6 +24,7 @@ mod help_tours;
 mod layouts;
 mod mac;
 mod notes_panel;
+mod options_apply;
 mod panels;
 mod passes;
 mod placement;
@@ -1486,6 +1487,11 @@ struct CutCraftApp {
     /// Edit ▸ Options, kept between runs, and whether its window is open.
     options: crate::options::Options,
     options_window: bool,
+    /// Changes made in the Options window and not applied yet; `None` when it shows the
+    /// options as they are. They take effect only on Apply.
+    options_draft: Option<crate::options::Options>,
+    /// Close was pressed with changes not applied: the window asks Apply or Discard.
+    options_closing: bool,
     /// The Options category shown, by its place in the list.
     options_page: usize,
     /// Show advanced settings is ticked: the Advanced category lists. Off at every start, so

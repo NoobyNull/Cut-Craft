@@ -17,6 +17,8 @@ saves files for your machine, it does not drive it.
 
 1. Open **Edit ▸ Options ▸ Web API**.
 2. Tick **Turn on the Web API**.
+3. Press **Apply** at the foot of the window. Settings wait for Apply: see
+   [Changing settings](help:settings).
 
 That is all for programs on this computer: they need no password.
 

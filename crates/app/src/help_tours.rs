@@ -1851,6 +1851,2055 @@ pub const TOURS: &[Tour] = &[
             },
         ],
     },
+    Tour {
+        tool: "new",
+        steps: &[
+            Step {
+                caption: "Start a new job: the board's size and thickness, and where the machine's zero is.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Press **New** (under File Operations, at the top of the Design page). Job Setup opens: see [Job Setup](help:job_setup).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:new"),
+            },
+        ],
+    },
+    Tour {
+        tool: "open",
+        steps: &[
+            Step {
+                caption: "Open a job you saved before (a .ccjob file).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Press **Open** (under File Operations) and pick the file.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:open"),
+            },
+        ],
+    },
+    Tour {
+        tool: "save",
+        steps: &[
+            Step {
+                caption: "Save the job: the drawing, the 3D model and the toolpaths, all in one file. Save often.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Press **Save** (under File Operations). The first time, name the file; after that it saves over it.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:save"),
+            },
+        ],
+    },
+    Tour {
+        tool: "export_vectors",
+        steps: &[
+            Step {
+                caption: "Send your drawing to another program, as DXF, SVG or EPS. Select what to send, or nothing for everything.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Press **Export Vectors** (under File Operations), choose the type and name the file.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:export_vectors"),
+            },
+        ],
+    },
+    Tour {
+        tool: "paste_in_place",
+        steps: &[
+            Step {
+                caption: "Paste in Place puts what you copied exactly where it was, rather than where the pointer is: handy for copying between sheets or jobs. Copy something first (Ctrl+C).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Press **Paste in Place** (under File Operations).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:paste_in_place"),
+            },
+            Step {
+                caption: "The copy lands on top of where the original was, ready to move or change.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "copy");
+                    app.invoke(ctx, "paste_in_place");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "open_folder",
+        steps: &[
+            Step {
+                caption: "Open the folder the job is saved in, to find its files.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Press **Open Folder** (under File Operations). Your file manager opens there.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:open_folder"),
+            },
+        ],
+    },
+    Tour {
+        tool: "import_vectors_bitmap",
+        steps: &[
+            Step {
+                caption: "Bring in a drawing (DXF, SVG) or a picture (PNG, JPG and more) to cut, trace or draw over. You can also just drop the file on the sheet.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, open **Import** and press **Import Vectors or Picture**, then pick the file.",
+                setup: |app, _| on_design_tab(app, 4),
+                mark: Mark::At("tool:import_vectors_bitmap"),
+            },
+        ],
+    },
+    Tour {
+        tool: "import_vectors",
+        steps: &[
+            Step {
+                caption: "Bring in a drawing made in another program: DXF or SVG.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Under **Import**, press **Import Vectors** and pick the file. A DXF asks which units it was drawn in.",
+                setup: |app, _| on_design_tab(app, 4),
+                mark: Mark::At("tool:import_vectors"),
+            },
+        ],
+    },
+    Tour {
+        tool: "import_into_shape",
+        steps: &[
+            Step {
+                caption: "Fit a drawing or picture inside a shape you already have: select the shape first (a circle, plaque or heart).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Under **Import**, press **Import Into Selected Shape** and pick the file. Choose to scale it, stretch it or bend it to the outline. Select an open line instead to bend the drawing along it.",
+                setup: |app, _| on_design_tab(app, 4),
+                mark: Mark::At("tool:import_into_shape"),
+            },
+        ],
+    },
+    Tour {
+        tool: "import_component_3d_model",
+        steps: &[
+            Step {
+                caption: "Bring in a 3D model (STL or OBJ) or saved 3D clipart to carve.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Under **Import**, press **Import 3D Model** and pick the file, then size and place it.",
+                setup: |app, _| on_design_tab(app, 4),
+                mark: Mark::At("tool:import_component_3d_model"),
+            },
+        ],
+    },
+    Tour {
+        tool: "clipart_library",
+        steps: &[
+            Step {
+                caption: "The clipart library holds ready-made drawings, pictures and 3D models in your folders.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Import**, press **Clipart Library**.",
+                setup: |app, _| on_design_tab(app, 4),
+                mark: Mark::At("tool:clipart_library"),
+            },
+            Step {
+                caption: "The Library opens: drag a piece onto the job.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "clipart_library");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "import_toolpaths_file",
+        steps: &[
+            Step {
+                caption: "Read a G-code file back in as toolpaths, to preview and check it before it runs.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Under **Import**, press **Import Toolpaths (G-code)** and pick the file.",
+                setup: |app, _| on_design_tab(app, 4),
+                mark: Mark::At("tool:import_toolpaths_file"),
+            },
+        ],
+    },
+    Tour {
+        tool: "import_cut_list",
+        steps: &[
+            Step {
+                caption: "Draw a rectangle for each part in a spreadsheet's cut list (saved as CSV): name, length, width and how many.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Under **Import**, press **Import Cut List** and pick the file. Then use [Nest Parts](help:nest_parts) to lay them out on the board.",
+                setup: |app, _| on_design_tab(app, 4),
+                mark: Mark::At("tool:import_cut_list"),
+            },
+        ],
+    },
+    Tour {
+        tool: "pan",
+        steps: &[
+            Step {
+                caption: "Pan slides the view around without changing anything.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Press **Pan** (under 2D View Control).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:pan"),
+            },
+            Step {
+                caption: "Drag in the view to slide it. The mouse wheel zooms in and out wherever you are.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "pan");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "zoom_box",
+        steps: &[
+            Step {
+                caption: "Zoom Box zooms in on the part you draw a box round.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Press **Zoom Box** (under 2D View Control).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:zoom_box"),
+            },
+            Step {
+                caption: "Drag a box round the part to see close up.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "zoom_box");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "zoom_to_job",
+        steps: &[
+            Step {
+                caption: "Zoom to Job fits the whole board in the view again.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Press **Zoom to Job** (under 2D View Control).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:zoom_to_job"),
+            },
+            Step {
+                caption: "The whole job fits the view.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "zoom_to_job");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "zoom_selected",
+        steps: &[
+            Step {
+                caption: "Zoom Selected fits what you selected in the view. Select it first.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Press **Zoom Selected** (under 2D View Control).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:zoom_selected"),
+            },
+            Step {
+                caption: "The view zooms to fit the selection.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "zoom_selected");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "interface_layout",
+        steps: &[
+            Step {
+                caption: "Choose how the panels are laid out, and save layouts of your own.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Press **Interface Layout** (under 2D View Control).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:interface_layout"),
+            },
+            Step {
+                caption: "Pick a layout, or save the one you have.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "interface_layout");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_polyline",
+        steps: &[
+            Step {
+                caption: "Draw lines through points you click: a zigzag, an outline, a path.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Draw Line / Polyline**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_polyline"),
+            },
+            Step {
+                caption: "Click each corner in the view, or drag for a curved span. Click the first point again to close the shape, or press Esc to finish an open line. You can also type the points in the form.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_polyline");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_rectangle_from_center",
+        steps: &[
+            Step {
+                caption: "Draw a rectangle out from its middle, the same distance each way.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Under **Create**, press **Draw Rectangle From Centre** (it shares a button with Draw Rectangle).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_rectangle_from_center"),
+            },
+            Step {
+                caption: "Click the middle, then drag out to a corner, or type the size in the form.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_rectangle_from_center");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_circle_from_edge",
+        steps: &[
+            Step {
+                caption: "Draw a circle from one edge to the other, rather than from its middle.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Under **Create**, press **Draw Circle From Edge** (it shares a button with Draw Circle).",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_circle_from_edge"),
+            },
+            Step {
+                caption: "Drag across the circle from edge to edge, or type it in the form.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_circle_from_edge");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_ellipse",
+        steps: &[
+            Step {
+                caption: "Draw an oval: a stretched circle, for plaques and frames.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Draw Ellipse**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_ellipse"),
+            },
+            Step {
+                caption: "Drag from the middle out to a corner of the box it fits in, or type the centre, width and height in the form.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_ellipse");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_polygon",
+        steps: &[
+            Step {
+                caption: "Draw a shape with equal sides: a triangle, a hexagon, an octagon.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Draw Polygon**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_polygon"),
+            },
+            Step {
+                caption: "Set the number of **Sides**, then drag from the middle out, or type the centre and radius.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_polygon");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_star",
+        steps: &[
+            Step {
+                caption: "Draw a star with as many points as you like.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Draw Star**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_star"),
+            },
+            Step {
+                caption: "Set the number of **Points** and how deep the points go (inner radius), then drag from the middle out, or type the sizes.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_star");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_arc",
+        steps: &[
+            Step {
+                caption: "Draw part of a circle: an arc.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Draw Arc**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_arc"),
+            },
+            Step {
+                caption: "Set the centre, radius, and the start and end angles. It runs anticlockwise from the start to the end.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_arc");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_curve",
+        steps: &[
+            Step {
+                caption: "Draw a smooth curve that passes through every point you click.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Draw Curve**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_curve"),
+            },
+            Step {
+                caption: "Click the points in the view. The curve bends smoothly through each one; press Esc to finish.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_curve");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "draw_freehand",
+        steps: &[
+            Step {
+                caption: "Draw by hand, like a pencil: the line follows the pointer and is smoothed.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Draw Freehand**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:draw_freehand"),
+            },
+            Step {
+                caption: "Hold the button down and draw in the view.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_freehand");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "edit_text",
+        steps: &[
+            Step {
+                caption: "Change words you made with Draw Text: select the text.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_text(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Edit Text**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:edit_text"),
+            },
+            Step {
+                caption: "The text's form opens: change the words, font or size, and the letters on the job follow.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "edit_text");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "convert_text_to_curves",
+        steps: &[
+            Step {
+                caption: "Turn text into plain shapes, so you can change the letters' outlines with node editing. Select the text.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_text(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Convert Text to Curves**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:convert_text_to_curves"),
+            },
+            Step {
+                caption: "The letters are now shapes. They can no longer be edited as text.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "convert_text_to_curves");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "text_on_a_curve",
+        steps: &[
+            Step {
+                caption: "Lay words along a curve, as on a badge or a sign's arch. Select the text, then Shift-click the curve.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_text_curve(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Text on a Curve**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:text_on_a_curve"),
+            },
+            Step {
+                caption: "Choose whether the letters sit above, on or below the curve, and whether they turn with it. The text stays editable.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "text_on_a_curve");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "auto_layout_text",
+        steps: &[
+            Step {
+                caption: "Fit text to fill a shape as big as it will go, wrapping it onto lines. Select the text and the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_text_rect(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Auto Layout Text**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:auto_layout_text"),
+            },
+            Step {
+                caption: "Set the border to leave round the edge. The words are sized and wrapped to fill the shape.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "auto_layout_text");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "dimensions",
+        steps: &[
+            Step {
+                caption: "Dimensions draw measurements on the job: lengths, angles and radii, with arrows and the number.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_rect(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Dimensions**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:dimensions"),
+            },
+            Step {
+                caption: "Choose the kind (length, horizontal, vertical, angle, radius), then click the points to measure.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "dimensions");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "create_fillets",
+        steps: &[
+            Step {
+                caption: "Round the sharp corners of a shape, or cut dog-bones into inside corners so a round bit can reach them. Select the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_rect(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Create Fillets**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:create_fillets"),
+            },
+            Step {
+                caption: "Choose a rounded corner or a dog-bone, set the radius, then click the corners (or do every corner at once).",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "create_fillets");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "vector_boundary",
+        steps: &[
+            Step {
+                caption: "Draw one outline round several shapes, for a border or a backing board. Select the shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Vector Boundary**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:vector_boundary"),
+            },
+            Step {
+                caption: "Choose how close the outline follows them, and how far out it sits.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "vector_boundary");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "vector_texture",
+        steps: &[
+            Step {
+                caption: "Fill a shape with rows of wavy lines or a decorative pattern, to carve as a texture. Select the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_rect(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Create Vector Texture**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:vector_texture"),
+            },
+            Step {
+                caption: "Choose the pattern and its spacing, waves and angle. Change the **Seed** for another random variation.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "vector_texture");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "embellish",
+        steps: &[
+            Step {
+                caption: "Embellish adds folk-style swirls and ornament designed to fit the shape. Select a closed shape for a fill, or an open line to run along.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_rect(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Embellish**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:embellish"),
+            },
+            Step {
+                caption: "Pick a style and its settings. Warnings appear in red at the foot of the form.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "embellish");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "trace_bitmap",
+        steps: &[
+            Step {
+                caption: "Trace turns a picture into shapes you can cut. Import the picture and select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_picture(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Trace Bitmap**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:trace_bitmap"),
+            },
+            Step {
+                caption: "Choose black and white or colour, and how many colours. The preview shows the shapes; press **Apply** to keep them.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "trace_bitmap");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "quick_trace",
+        steps: &[
+            Step {
+                caption: "Quick Trace turns a picture into shapes in one click, with settings chosen to suit it. Select the picture.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_picture(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Quick Trace**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:quick_trace"),
+            },
+            Step {
+                caption: "The shapes are drawn over the picture. For more control, use [Trace Bitmap](help:trace_bitmap).",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "quick_trace");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "document_variables",
+        steps: &[
+            Step {
+                caption: "Variables are named numbers kept with the job, such as {thickness}, to use in any number box.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_none(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Create**, press **Document Variables**.",
+                setup: |app, _| on_design_tab(app, 0),
+                mark: Mark::At("tool:document_variables"),
+            },
+            Step {
+                caption: "Add a name and a value. Type {name} in a number box to use it; change it here and every box using it follows.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "document_variables");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "node_edit",
+        steps: &[
+            Step {
+                caption: "Node editing moves the points (nodes) a shape is made of, to reshape it. Select the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Node Edit**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:node_edit"),
+            },
+            Step {
+                caption: "Drag a node to move it. Right-click a node or a span for more: add or delete nodes, make a span straight or curved.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "node_edit");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "transform",
+        steps: &[
+            Step {
+                caption: "Transform moves, turns and resizes with the handles round the selection. Select the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Transform**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:transform"),
+            },
+            Step {
+                caption: "Drag a corner handle to resize, the round handle to turn it, or the middle to move it.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "transform");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "group",
+        steps: &[
+            Step {
+                caption: "Grouping joins shapes so they select and move as one. Select them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Group**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:group"),
+            },
+            Step {
+                caption: "They now move together. Ungroup takes them apart again.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "group");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "measure_inspect",
+        steps: &[
+            Step {
+                caption: "Measure distances and angles, and read a shape's size.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_rect(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Measure / Inspect**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:measure_inspect"),
+            },
+            Step {
+                caption: "Click two points to measure between them, or click a shape to see its size.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "measure_inspect");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "fit_curves_to_vectors",
+        steps: &[
+            Step {
+                caption: "Fit Curves redraws rough shapes (from a trace or a scan) as smooth arcs and curves. Select them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Fit Curves to Vectors**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:fit_curves_to_vectors"),
+            },
+            Step {
+                caption: "Choose arcs, curves or straight lines and how closely they follow the shape.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "fit_curves_to_vectors");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "vector_validator",
+        steps: &[
+            Step {
+                caption: "Vector Validator finds shapes that would stop a toolpath: lines crossing themselves, doubled shapes, zero-length spans.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Vector Validator**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:vector_validator"),
+            },
+            Step {
+                caption: "It selects the faulty shapes so you can fix them, and can fix zero-length spans for you.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "vector_validator");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "edit_picture",
+        steps: &[
+            Step {
+                caption: "Make a picture lighter, darker or more contrasty before you trace or carve it. Select the picture.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_picture(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Edit Picture**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:edit_picture"),
+            },
+            Step {
+                caption: "Move the sliders for contrast, brightness and gamma; tick Invert to swap light and dark.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "edit_picture");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "crop_bitmap",
+        steps: &[
+            Step {
+                caption: "Trim a picture to a shape. Select the picture and the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_picture_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Crop Bitmap**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:crop_bitmap"),
+            },
+            Step {
+                caption: "Everything outside the shape is cleared to white.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "crop_bitmap");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "join_vectors",
+        steps: &[
+            Step {
+                caption: "Join open lines whose ends nearly meet into one line, or one closed shape. Select them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_lines(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Join Vectors**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:join_vectors"),
+            },
+            Step {
+                caption: "Set how close the ends must be to join.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "join_vectors");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "join_open_ends",
+        steps: &[
+            Step {
+                caption: "Join two open ends by clicking them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_lines(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Join Open Ends**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:join_open_ends"),
+            },
+            Step {
+                caption: "Click an open end, then the end it should meet. Choose a straight line, running both ends on until they meet, or a curve.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "join_open_ends");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "join_straight_line",
+        steps: &[
+            Step {
+                caption: "Join the ends of the selected open lines with straight lines.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_lines2(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Join With Straight Line**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:join_straight_line"),
+            },
+            Step {
+                caption: "The nearest ends are joined by straight lines.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "join_straight_line");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "join_smooth_curve",
+        steps: &[
+            Step {
+                caption: "Join the ends of the selected open lines with smooth curves.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_lines2(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Join With Smooth Curve**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:join_smooth_curve"),
+            },
+            Step {
+                caption: "The nearest ends are joined by curves that carry on their direction.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "join_smooth_curve");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "join_move_end_points",
+        steps: &[
+            Step {
+                caption: "Join the selected open lines by moving their ends together.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_lines2(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Join By Moving End Points**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:join_move_end_points"),
+            },
+            Step {
+                caption: "The nearest ends are moved to meet.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "join_move_end_points");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "close_extend_vector",
+        steps: &[
+            Step {
+                caption: "Close an open line into a shape, so it can be pocketed or cut round. Select the open lines.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_lines(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Close / Extend Vector**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:close_extend_vector"),
+            },
+            Step {
+                caption: "Choose to close it with a straight line from end to start, or by running its end lines on until they meet.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "close_extend_vector");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "weld_vectors",
+        steps: &[
+            Step {
+                caption: "Weld joins overlapping shapes into one outline. Select them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Weld Vectors**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:weld_vectors"),
+            },
+            Step {
+                caption: "One outline goes round both; the lines inside are gone.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "weld_vectors");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "subtract_vectors",
+        steps: &[
+            Step {
+                caption: "Subtract cuts the other shapes out of the biggest, like a cookie cutter. Select them all.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Subtract Vectors**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:subtract_vectors"),
+            },
+            Step {
+                caption: "The biggest shape now has a bite taken out where the others overlapped it.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "subtract_vectors");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "overlap_intersect",
+        steps: &[
+            Step {
+                caption: "Overlap keeps only the part where the selected shapes overlap. Select them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Overlap**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:overlap_intersect"),
+            },
+            Step {
+                caption: "Only the shared part is left.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "overlap_intersect");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "interactive_vector_trim",
+        steps: &[
+            Step {
+                caption: "Trim away pieces of lines between where they cross other lines, by clicking them.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Interactive Vector Trim**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:interactive_vector_trim"),
+            },
+            Step {
+                caption: "Click a piece to cut it away up to the nearest crossings, or drag across several.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "interactive_vector_trim");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "trim_objects",
+        steps: &[
+            Step {
+                caption: "Trim the selected shapes to the shape you pick last: what is outside it is cut away. Select them, the trimming shape last.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Trim Objects**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:trim_objects"),
+            },
+            Step {
+                caption: "Only the parts inside the last shape are kept.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "trim_objects");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "center_in_material",
+        steps: &[
+            Step {
+                caption: "Put the selection in the middle of the board. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Centre in Material** (under Align Objects).",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:center_in_material"),
+            },
+            Step {
+                caption: "It moves to the middle of the material.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "center_in_material");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "center_horizontally_in_material",
+        steps: &[
+            Step {
+                caption: "Centre the selection left to right on the board.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Centre Horizontally in Material**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:center_horizontally_in_material"),
+            },
+            Step {
+                caption: "It moves to the board's middle, left to right.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "center_horizontally_in_material");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "center_vertically_in_material",
+        steps: &[
+            Step {
+                caption: "Centre the selection front to back on the board.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Centre Vertically in Material**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:center_vertically_in_material"),
+            },
+            Step {
+                caption: "It moves to the board's middle, front to back.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "center_vertically_in_material");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "center",
+        steps: &[
+            Step {
+                caption: "Centre the selected shapes on each other.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Centre**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:center"),
+            },
+            Step {
+                caption: "Their middles now line up.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "center");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "align_left",
+        steps: &[
+            Step {
+                caption: "Line up the left edges of the selected shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Align Left**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:align_left"),
+            },
+            Step {
+                caption: "Their left edges now line up.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "align_left");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "align_right",
+        steps: &[
+            Step {
+                caption: "Line up the right edges of the selected shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Align Right**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:align_right"),
+            },
+            Step {
+                caption: "Their right edges now line up.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "align_right");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "align_top",
+        steps: &[
+            Step {
+                caption: "Line up the tops of the selected shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Align Top**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:align_top"),
+            },
+            Step {
+                caption: "Their tops now line up.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "align_top");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "align_bottom",
+        steps: &[
+            Step {
+                caption: "Line up the bottoms of the selected shapes.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Align Bottom**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:align_bottom"),
+            },
+            Step {
+                caption: "Their bottoms now line up.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "align_bottom");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "center_horizontally",
+        steps: &[
+            Step {
+                caption: "Line up the middles of the selected shapes, left to right.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Centre Horizontally**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:center_horizontally"),
+            },
+            Step {
+                caption: "Their middles now line up up and down the job.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "center_horizontally");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "center_vertically",
+        steps: &[
+            Step {
+                caption: "Line up the middles of the selected shapes, front to back.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_pair(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Centre Vertically**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:center_vertically"),
+            },
+            Step {
+                caption: "Their middles now line up across the job.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "center_vertically");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "left_to_right",
+        steps: &[
+            Step {
+                caption: "Space the selected shapes out evenly from left to right.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_three(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Space Left to Right**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:left_to_right"),
+            },
+            Step {
+                caption: "The gaps between them are now even.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "left_to_right");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "right_to_left",
+        steps: &[
+            Step {
+                caption: "Space the selected shapes out evenly from right to left.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_three(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Space Right to Left**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:right_to_left"),
+            },
+            Step {
+                caption: "The gaps between them are now even.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "right_to_left");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "top_to_bottom",
+        steps: &[
+            Step {
+                caption: "Space the selected shapes out evenly from top to bottom.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_three(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Space Top to Bottom**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:top_to_bottom"),
+            },
+            Step {
+                caption: "The gaps between them are now even.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "top_to_bottom");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "bottom_to_top",
+        steps: &[
+            Step {
+                caption: "Space the selected shapes out evenly from bottom to top.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_three(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Space Bottom to Top**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:bottom_to_top"),
+            },
+            Step {
+                caption: "The gaps between them are now even.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "bottom_to_top");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "move",
+        steps: &[
+            Step {
+                caption: "Move the selection to an exact place, or by an exact distance. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Under **Edit**, press **Move** (under Transform Objects).",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:move"),
+            },
+            Step {
+                caption: "Type where it goes (X and Y) and which point of it to place there, or how far to move it, then press **Apply**.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "move");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "rotate",
+        steps: &[
+            Step {
+                caption: "Turn the selection by an exact angle. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Rotate**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:rotate"),
+            },
+            Step {
+                caption: "Type the **Angle** and the point to turn about, then press **Apply**.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "rotate");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "set_size",
+        steps: &[
+            Step {
+                caption: "Make the selection an exact size. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Set Size**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:set_size"),
+            },
+            Step {
+                caption: "Type the width or height; keep **Link** ticked to keep its proportions. Then press **Apply**.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "set_size");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "mirror",
+        steps: &[
+            Step {
+                caption: "Flip the selection, as in a mirror. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Mirror**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:mirror"),
+            },
+            Step {
+                caption: "Choose which way to flip, and whether to keep the original, then press **Apply**.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "mirror");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "distort_object",
+        steps: &[
+            Step {
+                caption: "Bend the selection into a new shape by moving the corners of its box, or along a curve. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_rect(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Distort Object**.",
+                setup: |app, _| on_design_tab(app, 1),
+                mark: Mark::At("tool:distort_object"),
+            },
+            Step {
+                caption: "Drag the corner handles to bend it.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "distort_object");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "offset_vectors",
+        steps: &[
+            Step {
+                caption: "Draw a copy of a shape a set distance outside or inside it: a border, a frame or an inlay. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Offset Vectors**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:offset_vectors"),
+            },
+            Step {
+                caption: "Set the **Distance** and choose outside or inside, then press **Apply**.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "offset_vectors");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "nest_parts",
+        steps: &[
+            Step {
+                caption: "Nesting packs the selected shapes onto the board with as little waste as possible.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_three(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Nest Parts**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:nest_parts"),
+            },
+            Step {
+                caption: "Set the bit's width and the gap to leave, and the corner to start from, then press **Apply**.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "nest_parts");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "name_part",
+        steps: &[
+            Step {
+                caption: "Name a shape for the cut list and the labels. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Name Part**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:name_part"),
+            },
+            Step {
+                caption: "Type the name and press **Apply**.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "name_part");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "engrave_part_names",
+        steps: &[
+            Step {
+                caption: "Draw each name as text in the middle of its shape, so a quick engrave marks them all. Name the shapes first.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_circle(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Engrave Part Names**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:engrave_part_names"),
+            },
+            Step {
+                caption: "The names are drawn on a Part Names layer, ready for a [Quick Engrave](help:quick_engrave_toolpath).",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "engrave_part_names");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "plate_production",
+        steps: &[
+            Step {
+                caption: "Make many name plates or badges from one design and a list of names. Select the design.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_text_rect(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Plate Production**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:plate_production"),
+            },
+            Step {
+                caption: "Pick the data file; text with !!name!! in it is filled in from each row.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "plate_production");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "array_copy",
+        steps: &[
+            Step {
+                caption: "Make a grid of copies of the selection. Select it.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "Under **Arrange**, press **Array Copy** (under Array Objects).",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:array_copy"),
+            },
+            Step {
+                caption: "Set how many rows and columns and the gaps between, then press **Create**.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "array_copy");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "circular_copy",
+        steps: &[
+            Step {
+                caption: "Make copies spaced round a centre, like the spokes of a wheel. Select the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_star(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Circular Copy**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:circular_copy"),
+            },
+            Step {
+                caption: "Set how many copies and the centre, and whether they turn as they go round.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "circular_copy");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "copy_along_vectors",
+        steps: &[
+            Step {
+                caption: "Copy a shape along a line. Select the shape first, then Shift-click the line.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_copy_along(app);
+                },
+                mark: Mark::Everything,
+            },
+            Step {
+                caption: "On the Design page, under **Arrange**, press **Copy Along Vectors**.",
+                setup: |app, _| on_design_tab(app, 2),
+                mark: Mark::At("tool:copy_along_vectors"),
+            },
+            Step {
+                caption: "Set how many copies or the gap between them, and whether they turn to follow the line.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "copy_along_vectors");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
 ];
 
 const CIRCLE_X: f64 = 200.0;
@@ -1933,6 +3982,8 @@ fn fresh_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
     // the last tour's windows closed, so none is left in the next tour's pictures
     (app.tool_manager, app.info, app.part_labels_window) = (None, None, false);
+    // the Design tab down the left (not Sheets, Layers or the Library)
+    app.design_tab = 0;
     (app.save_form, app.gcode_view) = (None, None);
     // the last tour's job goes without asking whether to save it
     app.reset_job();
@@ -2085,4 +4136,145 @@ fn landscape(x: f64, y: f64) -> u8 {
         0.55 + 0.4 * y
     };
     (tone.clamp(0.0, 1.0) * 255.0) as u8
+}
+
+/// The Design page pinned open on sub-tab `tab` (0 Create, 1 Edit, 2 Arrange, 4 Import).
+fn on_design_tab(app: &mut CutCraftApp, tab: usize) {
+    app.pages.set_pinned(Page::Design, true);
+    app.design_subtab = tab;
+}
+
+/// Nothing drawn: the tool needs nothing selected.
+fn shapes_none(_: &mut CutCraftApp) {}
+
+/// Everything drawn so far, selected in the order drawn.
+fn select_all(app: &mut CutCraftApp) {
+    app.form = None;
+    app.doc.selection = app.doc.vectors.keys().copied().collect();
+}
+
+/// A circle, selected.
+fn shapes_circle(app: &mut CutCraftApp) {
+    draw(app, "draw_circle", circle());
+    select_all(app);
+}
+
+/// A star, selected.
+fn shapes_star(app: &mut CutCraftApp) {
+    draw(app, "draw_star", star());
+    select_all(app);
+}
+
+/// A rectangle, selected.
+fn shapes_rect(app: &mut CutCraftApp) {
+    rect(app);
+    select_all(app);
+}
+
+/// A circle and a smaller rectangle overlapping it, both selected (the rectangle last).
+fn shapes_pair(app: &mut CutCraftApp) {
+    draw(app, "draw_circle", circle());
+    let over = serde_json::json!({ "x": 230.0, "y": 90.0, "width": 160.0, "height": 110.0 });
+    let over = with(app, "draw_rectangle", &over);
+    draw(app, "draw_rectangle", over);
+    select_all(app);
+}
+
+/// Three circles of different sizes, unevenly spaced and out of line, all selected.
+fn shapes_three(app: &mut CutCraftApp) {
+    for (x, y, r) in [
+        (80.0, 120.0, 30.0),
+        (150.0, 190.0, 45.0),
+        (330.0, 140.0, 35.0),
+    ] {
+        let c = serde_json::json!({ "center": { "x": x, "y": y }, "radius": r });
+        draw(app, "draw_circle", c);
+    }
+    select_all(app);
+}
+
+/// Three open lines whose ends nearly meet, all selected.
+fn shapes_lines(app: &mut CutCraftApp) {
+    let spans = [
+        [(80.0, 80.0), (200.0, 80.0)],
+        [(206.0, 84.0), (206.0, 220.0)],
+        [(200.0, 226.0), (80.0, 226.0)],
+    ];
+    for [(x0, y0), (x1, y1)] in spans {
+        let line = serde_json::json!({
+            "points": [{ "x": x0, "y": y0 }, { "x": x1, "y": y1 }],
+            "closed": false,
+            "curves": []
+        });
+        draw(app, "draw_polyline", with(app, "draw_polyline", &line));
+    }
+    select_all(app);
+}
+
+/// Words made with Draw Text, selected.
+fn shapes_text(app: &mut CutCraftApp) {
+    let words = serde_json::json!({
+        "text": "CUT CRAFT", "height": 40.0, "anchor": { "x": 60.0, "y": 140.0 }
+    });
+    let words = with(app, "draw_text", &words);
+    draw(app, "draw_text", words);
+    select_all(app);
+}
+
+/// Words, then an arch to lay them on, both selected (the arch last).
+fn shapes_text_curve(app: &mut CutCraftApp) {
+    let words = serde_json::json!({
+        "text": "CUT CRAFT", "height": 24.0, "anchor": { "x": 120.0, "y": 60.0 }
+    });
+    let words = with(app, "draw_text", &words);
+    draw(app, "draw_text", words);
+    let arch = serde_json::json!({
+        "center": { "x": 200.0, "y": 90.0 }, "radius": 120.0,
+        "start_angle": 20.0, "end_angle": 160.0
+    });
+    let arch = with(app, "draw_arc", &arch);
+    draw(app, "draw_arc", arch);
+    select_all(app);
+}
+
+/// Words and a plaque round them, both selected.
+fn shapes_text_rect(app: &mut CutCraftApp) {
+    shapes_rect(app);
+    shapes_text(app);
+}
+
+/// The made-up picture, selected.
+fn shapes_picture(app: &mut CutCraftApp) {
+    picture(app);
+}
+
+/// The made-up picture and a circle over it, both selected.
+fn shapes_picture_circle(app: &mut CutCraftApp) {
+    picture(app);
+    draw(app, "draw_circle", circle());
+    select_all(app);
+}
+
+/// A small star, then a curve to copy it along, both selected (the star first).
+fn shapes_copy_along(app: &mut CutCraftApp) {
+    let small = serde_json::json!({
+        "center": { "x": 60.0, "y": 150.0 }, "outer_radius": 20.0, "inner_radius": 9.0,
+        "points": 5, "rotation": 90.0
+    });
+    let small = with(app, "draw_star", &small);
+    draw(app, "draw_star", small);
+    let path = serde_json::json!({
+        "points": [{ "x": 100.0, "y": 80.0 }, { "x": 220.0, "y": 220.0 }, { "x": 360.0, "y": 90.0 }],
+        "closed": false,
+        "curves": []
+    });
+    draw(app, "draw_polyline", with(app, "draw_polyline", &path));
+    select_all(app);
+}
+
+/// Two open lines whose ends nearly meet, both selected.
+fn shapes_lines2(app: &mut CutCraftApp) {
+    shapes_lines(app);
+    let last = app.doc.vectors.keys().last().copied();
+    app.doc.selection.retain(|id| Some(*id) != last);
 }
