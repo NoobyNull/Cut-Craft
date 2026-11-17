@@ -1359,7 +1359,11 @@ impl CutCraftApp {
         };
         let (at, length) = (playback.at(), playback.length());
         // from the playback itself: while it plays there is no finished simulation
-        let fine_bit = crate::display::fine_bit_note(playback.tools(), playback.material().cell);
+        let fine_bit = crate::display::fine_bit_note(
+            playback.tools(),
+            playback.material().cell,
+            self.display.quality,
+        );
         let guessed_shank = playback
             .tool()
             .filter(|(_, tool)| tool.shank_diameter.is_nan() || tool.shank_diameter <= 0.0)

@@ -11189,7 +11189,7 @@ fn a_fine_bit_note_after_a_preview_keeps_the_count_beside_it() {
         message.starts_with("Previewed 2 toolpaths. ⚠ "),
         "{message}"
     );
-    assert!(message.contains("narrower than two of the preview's squares"));
+    assert!(message.contains("is finer than the preview's"));
 }
 
 #[test]
@@ -17188,7 +17188,7 @@ fn a_fine_bit_is_noted_under_the_controls_while_its_preview_plays() {
         assert!(
             h.texts()
                 .iter()
-                .any(|t| t.contains("narrower than two of the preview's squares")),
+                .any(|t| t.contains("is finer than the preview's")),
             "the note shows while it plays, whichever toolpath is cutting ({share})"
         );
     }
