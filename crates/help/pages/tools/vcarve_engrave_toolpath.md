@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-17
 see-also: draw_text, save_toolpaths
 ---
 
@@ -32,3 +32,8 @@ see-also: draw_text, save_toolpaths
    ![Step 6](pictures/vcarve_engrave_toolpath/step-6.png)
 
 V-carving needs a V-bit; pick one from the [Tool Database](help:tool_database).
+
+Carving lots of letters or a detailed picture can take a while to calculate. The progress
+window moves on as each shape is carved, gives each clearance bit its share, and says about
+how long is left ([Long jobs and the time left](help:progress)). Cancel stops it with
+nothing changed.
