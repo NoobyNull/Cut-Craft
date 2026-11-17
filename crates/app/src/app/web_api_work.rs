@@ -90,6 +90,8 @@ impl CutCraftApp {
             Call::Gcode(gcode) => self.web_gcode(gcode),
             Call::Save { path } => now(self.web_save(path.as_deref())),
             Call::Export { format, path } => now(self.web_export(format, path)),
+            Call::NewJob { settings, discard } => now(self.web_new_job(settings, *discard)),
+            Call::Open { path, discard } => self.web_open(path, *discard),
             other => now(self.web_call(ctx, other)),
         }
     }
@@ -220,12 +222,16 @@ impl CutCraftApp {
             let settle = if two_d { SETTLE_2D } else { SETTLE_3D };
             if capture.frames >= SETTLE_FRAMES && now - since >= settle {
                 let shot = cut_craft_bug_report::Shot::default();
+                leave_out_windows(ctx);
                 cut_craft_bug_report::take_screenshot(ctx, &shot);
                 capture.asked = Some((now, shot));
             }
             return None;
         };
         let Some(window) = cut_craft_bug_report::taken(shot) else {
+            // the window may hand over a later frame than the one asked on: each frame is
+            // kept clear until the picture comes
+            leave_out_windows(ctx);
             if now - asked_at > PICTURE_WITHIN {
                 return Some(Err(ApiError {
                     status: 503,
@@ -532,7 +538,7 @@ impl CutCraftApp {
             return Err(ApiError::refused(refused));
         }
         let mut warnings: Vec<String> = (found.iter())
-            .filter(|f| f.severity == Severity::Warning)
+            .filter(|f| matches!(f.severity, Severity::Warning | Severity::MustAsk))
             .map(|f| f.message.clone())
             .collect();
         let stale: Vec<&str> = (plan.iter().flatten())
@@ -552,8 +558,9 @@ impl CutCraftApp {
             );
         }
         // as Save Toolpaths: asked about unless Options say only to note them, and out-of-date
-        // toolpaths always
+        // toolpaths and the collet or spindle hitting the material always
         let ask = !stale.is_empty()
+            || found.iter().any(|f| f.severity == Severity::MustAsk)
             || self.options.confirmations.cutting_checks == crate::options::CuttingChecks::Ask;
         if !warnings.is_empty() && ask && !gcode.accept_warnings {
             return Err(ApiError::refused(format!(
@@ -635,6 +642,105 @@ impl CutCraftApp {
             return Err(ApiError::refused(self.status.message.clone()));
         }
         Ok(json!({ "path": path, "message": self.status.message }))
+    }
+
+    /// Refused while there is unsaved work, unless the call says to throw it away.
+    fn unsaved_kept(&self, discard: bool) -> Result<(), ApiError> {
+        if self.screen == super::Screen::Job && !discard && self.session.is_dirty(&self.history) {
+            return Err(ApiError::refused(format!(
+                "The job open has unsaved changes. Save it first (POST {}job/save), or send \
+                 \"discard\": true to throw them away.",
+                cut_craft_web_api::PREFIX
+            )));
+        }
+        Ok(())
+    }
+
+    /// `POST job/new`: New, then Job Setup's OK on its starting settings (the saved
+    /// default job's) with the call's laid over them. Settings it will not take are tried
+    /// on a job of their own first, so they leave the job open as it was.
+    fn web_new_job(&mut self, settings: &Value, discard: bool) -> Answer {
+        self.unsaved_kept(discard)?;
+        let mut fresh = cut_craft_core::document::Document::default();
+        if let Some(default) = self.options.default_job {
+            fresh.job = default;
+        }
+        let params = job::run_params(&self.registry, &fresh, "job_setup", settings)?;
+        let setup = self
+            .registry
+            .get("job_setup")
+            .ok_or_else(|| ApiError::refused("Job Setup is missing."))?;
+        if let Err(why) = (setup.run_json(&fresh, &params).map_err(|e| e.to_string()))
+            .and_then(|change| fresh.apply(&change).map_err(|e| e.to_string()))
+        {
+            return Err(ApiError::refused(format!(
+                "Job Setup would not take that: {why}"
+            )));
+        }
+        cut_craft_bug_report::logs::step("Web API started a new job");
+        // a drawing waiting on a Job Setup the window started is not this job's
+        self.import_after_setup = None;
+        self.reset_job();
+        self.view = View::TwoD;
+        self.start_command("job_setup");
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "job_setup") else {
+            self.screen = super::Screen::Start;
+            return Err(ApiError::refused("Job Setup did not open."));
+        };
+        form.new_job = true;
+        form.params = params;
+        self.screen = super::Screen::NewJob;
+        self.job_setup_ok();
+        if self.screen != super::Screen::Job {
+            let why = (self.form.as_ref())
+                .and_then(|f| f.error.clone())
+                .unwrap_or_else(|| self.status.message.clone());
+            self.form = None;
+            self.job_setup_cancel();
+            return Err(ApiError::refused(format!(
+                "Job Setup would not take that: {why}"
+            )));
+        }
+        Ok(json!({
+            "message": self.status.message,
+            "state": job::state(&self.doc, self.selected_toolpath),
+        }))
+    }
+
+    /// `POST job/open`: Open on `path`, answered once it has been read (a big job is read
+    /// with its progress window).
+    fn web_open(&mut self, path: &str, discard: bool) -> Started {
+        let path = match whole_path(path).and_then(|p| self.unsaved_kept(discard).map(|()| p)) {
+            Ok(path) => path,
+            Err(e) => return Started::Now(Err(e)),
+        };
+        if !path.is_file() {
+            return Started::Now(Err(ApiError::refused(format!(
+                "There is no job file at {}.",
+                path.display()
+            ))));
+        }
+        cut_craft_bug_report::logs::step("Web API opened a job");
+        // a job read puts itself in place of the one open, which starts a new job epoch;
+        // one that will not read leaves it, even when it is the same file
+        let before = self.job_epoch;
+        self.open_path(&path);
+        Started::AfterBusy(Box::new(move |app| {
+            if app.job_epoch == before
+                || app.screen != super::Screen::Job
+                || app.session.path.as_deref() != Some(path.as_path())
+            {
+                return Err(ApiError::refused(format!(
+                    "{} did not open: {}",
+                    path.display(),
+                    app.status.message
+                )));
+            }
+            Ok(json!({
+                "message": app.status.message,
+                "state": job::state(&app.doc, app.selected_toolpath),
+            }))
+        }))
     }
 
     /// `POST job/export`: an Export menu item, to `path`.
@@ -723,4 +829,22 @@ fn capital(text: &str) -> String {
     chars
         .next()
         .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
+}
+
+/// Takes this frame's windows, menus and pop-ups out of what is drawn, so the picture taken
+/// of it shows the view alone (the frame after the picture draws them again): everything
+/// above the panels.
+fn leave_out_windows(ctx: &egui::Context) {
+    let above: Vec<egui::LayerId> = ctx.memory(|m| {
+        m.layer_ids()
+            .filter(|l| l.order != egui::Order::Background)
+            .collect()
+    });
+    ctx.graphics_mut(|g| {
+        for layer in above {
+            if let Some(list) = g.get_mut(layer) {
+                *list = egui::layers::PaintList::default();
+            }
+        }
+    });
 }

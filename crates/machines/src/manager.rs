@@ -163,6 +163,7 @@ impl MachineManager {
             };
             details(ui, machine, library);
             limits(ui, machine);
+            holder(ui, machine);
             tool_changer(ui, machine, None);
             keep_out(ui, machine);
             drill_bank(ui, machine);
@@ -362,6 +363,80 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
                 ui.end_row();
             });
     });
+}
+
+/// What holds the bits: the collet nut and the spindle above it, which the checks before
+/// cutting look for hitting the material on deep cuts, and Holder per bit.
+fn holder(ui: &mut egui::Ui, machine: &mut Machine) {
+    let (per, length) = if machine.inches {
+        (INCH, " in")
+    } else {
+        (1.0, " mm")
+    };
+    // one line, folded, until wanted: it is set once, and the usual sizes are there already
+    let holder = machine.holder;
+    let summary = format!(
+        "Spindle and Collet Nut: nut {} across, spindle {} across{}",
+        shown(holder.nut_diameter / per, length),
+        shown(holder.spindle_diameter / per, length),
+        if machine.holder_per_bit {
+            ", holder per bit"
+        } else {
+            ""
+        }
+    );
+    egui::CollapsingHeader::new(summary)
+        .id_salt("machine_holder")
+        .show(ui, |ui| {
+            ui.weak(
+                "Only the bit's flutes cut. On a deep cut the collet nut or the spindle above \
+                 it can run into material still standing beside the cut: the preview and Save \
+                 Toolpaths warn of it. Measure across the nut and the spindle with a ruler",
+            );
+            egui::Grid::new("machine_holder_sizes")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    let holder = &mut machine.holder;
+                    let rows = [
+                        (
+                            "Collet nut across",
+                            &mut holder.nut_diameter,
+                            "Across the nut that tightens the collet (an ER20 nut is about \
+                             35 mm, a trim router's about 25 mm)",
+                        ),
+                        (
+                            "Collet nut height",
+                            &mut holder.nut_length,
+                            "From the nut's bottom face up to where the spindle (or router) \
+                             body starts",
+                        ),
+                        (
+                            "Spindle across",
+                            &mut holder.spindle_diameter,
+                            "Across the spindle or router body above the nut (65 mm or 80 \
+                             mm for most spindles)",
+                        ),
+                    ];
+                    for (label, value, hint) in rows {
+                        ui.label(label).on_hover_hint(hint);
+                        measure(ui, value, per, length);
+                        ui.end_row();
+                    }
+                });
+            ui.checkbox(&mut machine.holder_per_bit, "Holder per bit")
+                .on_hover_hint(
+                    "Tick for a tool changer whose bits each sit in a holder of their own: \
+                     each bit can then have its own collet nut and spindle sizes in the Tool \
+                     Database. A bit without them uses the sizes above",
+                );
+        });
+}
+
+/// A length for a summary line: no more decimals than it needs.
+fn shown(value: f64, unit: &str) -> String {
+    let text = format!("{value:.3}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    format!("{text}{unit}")
 }
 
 /// The most slots a tool changer can be given here.

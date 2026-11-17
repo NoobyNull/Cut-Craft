@@ -26,7 +26,9 @@ const STEP_WIDTH: u32 = 800;
 /// Colours in a saved step picture: enough for the app's flat colours and its wood.
 const STEP_COLOURS: usize = 64;
 /// The GIF's width, pixels; its frames are the step pictures made smaller.
-const GIF_WIDTH: u32 = 600;
+const GIF_WIDTH: u32 = 480;
+/// Colours in the GIF, one palette shared by every frame: keeps the pictures folder small.
+const GIF_COLOURS: usize = 64;
 /// How long the GIF shows each step, hundredths of a second.
 const GIF_STEP_CS: u16 = 260;
 /// The ring's colour: the icons' orange accent.
@@ -154,36 +156,80 @@ impl HelpShots {
         (self.step, self.since, self.asked) = (self.step + 1, None, false);
     }
 
-    /// The tour's steps as one looping GIF, `GIF_WIDTH` wide.
+    /// The tour's steps as one looping GIF ([`lean_gif`]).
     fn write_gif(&mut self, tool: &str) {
-        use image::codecs::gif::{GifEncoder, Repeat};
         let path = self.dir.join(tool).join("tour.gif");
         let frames = std::mem::take(&mut self.frames);
-        let written = std::fs::File::create(&path)
-            .map_err(|e| e.to_string())
-            .and_then(|file| {
-                let mut gif = GifEncoder::new_with_speed(std::io::BufWriter::new(file), 10);
-                gif.set_repeat(Repeat::Infinite)
-                    .map_err(|e| e.to_string())?;
-                for picture in frames {
-                    let height = GIF_WIDTH * picture.height() / picture.width().max(1);
-                    let small = image::imageops::resize(
-                        &picture,
-                        GIF_WIDTH,
-                        height,
-                        image::imageops::FilterType::Lanczos3,
-                    );
-                    let delay = image::Delay::from_numer_denom_ms(u32::from(GIF_STEP_CS) * 10, 1);
-                    gif.encode_frame(image::Frame::from_parts(small, 0, 0, delay))
-                        .map_err(|e| e.to_string())?;
-                }
-                Ok(())
-            });
+        let written = lean_gif(&frames)
+            .and_then(|bytes| std::fs::write(&path, bytes).map_err(|e| e.to_string()));
         match written {
             Ok(()) => println!("{}", path.display()),
             Err(e) => eprintln!("{}: {e}", path.display()),
         }
     }
+}
+
+/// `steps` as one looping GIF, [`GIF_WIDTH`] wide, each shown [`GIF_STEP_CS`]: every frame
+/// drawn with one shared palette of [`GIF_COLOURS`] colours and no dithering, so a tour costs
+/// about half what a palette a frame would. Shorter steps are padded with white at the foot.
+fn lean_gif(steps: &[image::RgbaImage]) -> Result<Vec<u8>, String> {
+    let small: Vec<image::RgbaImage> = steps
+        .iter()
+        .map(|picture| {
+            let height = (GIF_WIDTH * picture.height() / picture.width().max(1)).max(1);
+            image::imageops::resize(
+                picture,
+                GIF_WIDTH,
+                height,
+                image::imageops::FilterType::Lanczos3,
+            )
+        })
+        .collect();
+    let height = small
+        .iter()
+        .map(image::RgbaImage::height)
+        .max()
+        .unwrap_or(1);
+    let frames: Vec<image::RgbaImage> = small
+        .iter()
+        .map(|frame| {
+            let mut padded = image::RgbaImage::from_pixel(GIF_WIDTH, height, image::Rgba([255; 4]));
+            image::imageops::overlay(&mut padded, frame, 0, 0);
+            padded
+        })
+        .collect();
+    // one palette learnt from every frame together
+    let all: Vec<u8> = frames
+        .iter()
+        .flat_map(|f| f.as_raw().iter().copied())
+        .collect();
+    let quant = color_quant::NeuQuant::new(10, GIF_COLOURS, &all);
+    let palette: Vec<u8> = quant.color_map_rgb().into_iter().collect();
+    let (w, h) = (
+        u16::try_from(GIF_WIDTH).map_err(|e| e.to_string())?,
+        u16::try_from(height).map_err(|e| e.to_string())?,
+    );
+    let mut out = vec![];
+    {
+        let mut gif = gif::Encoder::new(&mut out, w, h, &palette).map_err(|e| e.to_string())?;
+        gif.set_repeat(gif::Repeat::Infinite)
+            .map_err(|e| e.to_string())?;
+        for frame in &frames {
+            let indices: Vec<u8> = frame
+                .pixels()
+                .map(|p| u8::try_from(quant.index_of(&p.0)).unwrap_or(0))
+                .collect();
+            let gif_frame = gif::Frame {
+                width: w,
+                height: h,
+                delay: GIF_STEP_CS,
+                buffer: std::borrow::Cow::Owned(indices),
+                ..gif::Frame::default()
+            };
+            gif.write_frame(&gif_frame).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(out)
 }
 
 /// The tour as Markdown for its help page, printed to paste into the page.
@@ -363,6 +409,32 @@ fn crop_origin(centre: (f32, f32), size: (u32, u32), window: (u32, u32)) -> (u32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tours_gif_is_small_one_palette_for_every_frame_and_loops() {
+        // two steps of different heights, each with a colour gradient
+        let step = |w: u32, h: u32, shift: u8| {
+            image::RgbaImage::from_fn(w, h, |x, y| {
+                let x = u8::try_from(x % 256).unwrap_or(0);
+                let y = u8::try_from(y % 256).unwrap_or(0);
+                image::Rgba([x, y.wrapping_add(shift), shift, 255])
+            })
+        };
+        let bytes = lean_gif(&[step(800, 500, 0), step(800, 520, 90)]).unwrap();
+        let mut options = gif::DecodeOptions::new();
+        options.set_color_output(gif::ColorOutput::Indexed);
+        let mut gif = options.read_info(bytes.as_slice()).unwrap();
+        assert_eq!(gif.width(), u16::try_from(GIF_WIDTH).unwrap());
+        assert!(gif.global_palette().unwrap().len() / 3 <= GIF_COLOURS);
+        assert_eq!(gif.repeat(), gif::Repeat::Infinite);
+        let mut frames = 0;
+        while let Some(frame) = gif.read_next_frame().unwrap() {
+            assert!(frame.palette.is_none(), "a frame with its own palette");
+            assert_eq!(frame.delay, GIF_STEP_CS);
+            frames += 1;
+        }
+        assert_eq!(frames, 2);
+    }
 
     #[test]
     fn a_crop_centres_on_the_ring_and_stays_in_the_window() {

@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-14
-see-also: profile_toolpath, pocket_toolpath
+reviewed: 2026-11-17
+see-also: profile_toolpath, pocket_toolpath, collisions
 ---
 
 ## Steps
@@ -16,3 +16,7 @@ see-also: profile_toolpath, pocket_toolpath
    ![Step 2](pictures/save_toolpaths/step-2.png)
 
 Always check the toolpaths in the preview first: what you save is exactly what the machine cuts.
+
+If the collet nut, spindle or shank would hit the wood beside a deep cut, the
+checks list it as **⚠ Check** and Save always asks before writing the file, whatever
+Options say. See [Collet and Holder Collisions](help:collisions).
