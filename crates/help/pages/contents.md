@@ -15,6 +15,8 @@ a CNC machine cuts them with.
   height with its height buttons, and Auto-rotate to see the job from every side.
 - [Groups](help:groups): step inside a group to change one thing in it; text in a
   group stays editable.
+- [Checks before cutting](help:checks_before_cutting): what Cut Craft checks before
+  it saves your toolpaths, what each check protects you from, and how to fix what it finds.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.

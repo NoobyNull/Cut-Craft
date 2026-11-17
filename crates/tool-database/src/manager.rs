@@ -1617,7 +1617,12 @@ fn tool_info(
         // never refused: said in red, as the checks before cutting say it
         if let Some(note) = number_taken(tool.number, taken) {
             ui.label("");
-            ui.colored_label(ui.visuals().error_fg_color, note);
+            let red = egui::RichText::new(note).color(ui.visuals().error_fg_color);
+            // wrapped within the column the number box is in, never widening the window
+            ui.vertical(|ui| {
+                ui.set_max_width(ui.available_width().min(INFO_MIN));
+                ui.add(egui::Label::new(red).wrap());
+            });
             ui.end_row();
         }
         form_row(ui, tool, look);
@@ -1656,9 +1661,8 @@ pub fn number_taken(number: u32, taken: &[String]) -> Option<String> {
         n => format!(" and {n} more"),
     };
     Some(format!(
-        "Tool number {number} is also {first}'s{also}: a tool changer picks bits by number, \
-         so it would pick up the wrong one. Give this bit a number of its own, or 0 if you \
-         change it by hand"
+        "Tool number {number} is also {first}'s{also}. A tool changer would pick up the \
+         wrong bit: give this one a number of its own, or 0 if you change it by hand"
     ))
 }
 
@@ -1847,7 +1851,7 @@ mod tests {
         assert!(sharing_number(&tools, 2).is_empty(), "0: changed by hand");
         let note = number_taken(3, &sharing_number(&tools, 0)).unwrap();
         assert!(
-            note.starts_with("Tool number 3 is also 60° V-Bit's: a tool changer"),
+            note.starts_with("Tool number 3 is also 60° V-Bit's. A tool changer"),
             "{note}"
         );
         assert_eq!(number_taken(3, &[]), None);

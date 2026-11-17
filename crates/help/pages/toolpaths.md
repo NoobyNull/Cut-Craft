@@ -175,18 +175,19 @@ picks Last.
 ## Checks before cutting (the Analyse tab)
 
 The Analyse tab, and Save Toolpaths before it writes a file, checks the shown toolpaths
-before you cut: rapid moves that would crash into material still there, cutting that only
-cuts air, spots the bit can't reach, a Drilling bit not the size of the holes drawn,
-settings the machine can't do, and toolpaths that are out of date. Each finding says how to put it right; ones marked Must fix stop the save.
+before you cut. Every check is listed by name, with how it came out: passed, ⚠ to read
+and tick, ✖ must fix, or not checked (and why). Press a check's **?** for its own page.
+See [Checks before cutting](help:checks_before_cutting) for every check, what it protects
+you from, and how to fix what it finds.
 
 The checks cut every toolpath in order, so a big 3D finish (millions of tiny moves with a
 small ball nose) takes a little while: a few seconds on a fast computer, longer on a slow
 one. They run in the background with a progress window that says which step they are on,
 and Cut Craft keeps drawing while they work. Cancel (or Esc) stops them; the tab then says
 nothing has been checked yet, with a Check Again button, and Save Toolpaths and Send to
-Machine wait until the checks have run. When the checks find something that is not a Must
-fix, Save Toolpaths asks over Cut Craft's window whether to save anyway, listing what they
-found: Save Anyway goes on to name the file, Don't Save saves nothing. While the save asks
+Machine wait until the checks have run. Each ⚠ the checks find is ticked to say you have
+read it; Save Toolpaths and Send to Machine wait, greyed, until every one is ticked, and the
+save then goes on without asking again. While the save asks
 its questions and you name the file, the Save Toolpaths window steps aside so nothing hides
 behind it, and comes back afterwards. They run again only when a toolpath, the job or
 the machine changes, so going back to the tab is instant. See also

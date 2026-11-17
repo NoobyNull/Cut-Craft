@@ -106,6 +106,7 @@ fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
     app.form = None;
     search.clone_into(&mut app.help_search);
     app.info = Some(super::Info::Help(topic));
+}
 
 /// The sample sign's toolpaths on a machine that says what it can do, Save Toolpaths open.
 fn checks_job(app: &mut CutCraftApp, ctx: &egui::Context) {
@@ -169,6 +170,8 @@ fn checks_found(app: &mut CutCraftApp, ctx: &egui::Context) {
 /// The Tool Database: a bit given a tool number another bit has.
 fn tool_number_taken(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.save_form = None;
+    // nothing pinned over the Tool Database's window
+    app.pages.set_pinned(super::Page::Toolpaths, false);
     if let Some(first) = app.tools.tools.first_mut() {
         first.number = 2;
     }
