@@ -135,24 +135,24 @@ layer, level and snapping controls are along the top.
 The same job in 3D: a ringed medallion made from a height formula, and a dome made with
 Create Shape on the circle.
 
-![Models in the 3D view](docs/screenshots/03-model-3d.png)
+![Models in the 3D view](docs/screenshots/04-model-3d.png)
 
 2D and 3D side by side (**2D beside 3D**; **2D over 3D** stacks them).
 
-![The split view](docs/screenshots/04-split-view.png)
+![The split view](docs/screenshots/05-split-view.png)
 
 A profile round the rectangle and a pocket in the circle, previewed cut into the material.
 
-![A toolpath preview](docs/screenshots/05-toolpath-preview.png)
+![A toolpath preview](docs/screenshots/06-toolpath-preview.png)
 
 The Tool Database: groups on the left, the picked tool's details on the right. Changes are
 kept only on **Apply** or **OK**.
 
-![The Tool Database](docs/screenshots/06-tool-database.png)
+![The Tool Database](docs/screenshots/07-tool-database.png)
 
 Machine Configuration: a machine with a five-slot tool changer and three tools loaded.
 
-![Machine Configuration](docs/screenshots/07-machine-configuration.png)
+![Machine Configuration](docs/screenshots/08-machine-configuration.png)
 
 Importing a 3D model: it shows in the scene at once over the modeling plane, faces a cutter
 cannot reach in red (Show undercuts turns that off), and the settings on the left move and
@@ -164,19 +164,28 @@ the material's length, width or thickness stops it. A model is kept whole by def
 double-sided job its underside goes to the other side, in a rotary job it wraps round the
 axis; **Options ▸ Importing and Exporting** can offer the flat, top-only import instead, or both.
 
-![Importing a 3D model](docs/screenshots/08-import-3d-model.png)
+![Importing a 3D model](docs/screenshots/09-import-3d-model.png)
 
 The window can be laid out three ways (**Options ▸ General ▸ Window layout**, or **View ▸
-Window Layout**). Classic is the layout above. Rail puts one icon per tool group down the
-left; clicking one lists that group's tools by name, and the inspector on the right holds
-the open tool's form or the sheets, layers, components, library and toolpath list.
+Window Layout**), and each comes in a light and a dark theme (**Options ▸ Appearance ▸
+Theme**, or follow the desktop's own). Each picture below shows the light theme on the left
+and the dark theme on the right.
 
-![The Rail layout](docs/screenshots/09-rail-layout.png)
+Classic is the layout above: the Design page with its tool groups down the left, the
+Toolpaths page on the right, and tabs down the side to switch between them.
+
+![The Classic layout, light and dark](docs/screenshots/03-design-2d-light-and-dark.png)
+
+Rail puts one icon per tool group down the left; clicking one lists that group's tools by
+name, and the inspector on the right holds the open tool's form or the sheets, layers,
+components, library and toolpath list.
+
+![The Rail layout, light and dark](docs/screenshots/11-rail-layout-light-and-dark.png)
 
 Ribbon puts Design, Model and Toolpaths tabs of tool groups across the top, the browser on
 the left and the open form on the right. **Ctrl+K** finds a tool by name in any layout.
 
-![The Ribbon layout](docs/screenshots/10-ribbon-layout.png)
+![The Ribbon layout, light and dark](docs/screenshots/13-ribbon-layout-light-and-dark.png)
 
 These pictures are made by the app itself and can be made again at any time (see
 [Screenshots](#screenshots)).
@@ -317,7 +326,9 @@ Each starts the program on its runner to check it keeps running with its window 
 
 Each runs when its workflow or the packaging changes on a pushed branch, from the Actions tab,
 and on a `v*` tag, when it signs its files and adds them to that release (`publish-release.yml`,
-`scripts/publish-release`): the first to finish publishes the release and the others add to it.
+`scripts/publish-release`) once that computer's own tests pass: the first to finish publishes
+the release and the others add to it. One that finishes after a newer release is out skips
+its older version and ships with the newer one.
 
 ### Screenshots
 

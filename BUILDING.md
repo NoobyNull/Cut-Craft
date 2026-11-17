@@ -150,9 +150,13 @@ newest code.
 
 Whenever `main`'s version has no tag yet, **Release tag** makes it: it tags the commit the
 version arrived in and starts the three **Builds** workflows on that tag, one per computer
-(Linux, Windows, macOS). Each builds, start-checks and signs its own files and adds them to
-the release: whichever finishes first publishes it, and the others add to it as they finish,
-so one that fails or waits for a runner holds back none of the others. Nobody pushes tags by hand, and a `v*` tag is never moved or deleted (see
+(Linux, Windows, macOS). Each builds, start-checks and runs its own tests (format, Clippy,
+every test, on the tagged code), and only once those pass signs its own files and adds them
+to the release: whichever finishes first publishes it, and the others add to it as they
+finish, so one that fails or waits for a runner holds back none of the others. A computer
+that finishes after a newer release is already out adds nothing to the older one: that
+version is skipped for it, and it ships with the newer one. So Linux, Windows and macOS can
+each be on a different version for a while. Nobody pushes tags by hand, and a `v*` tag is never moved or deleted (see
 "Repository protection").
 
 Afterwards, `git pull` and push `main` and the new tag to the Gitea mirror too
@@ -189,6 +193,9 @@ To cut a release:
    (about half a minute). It needs a display: on a Linux machine without one, run it under
    `xvfb-run -a` (packages `xvfb`, `libxkbcommon-x11-0` and `mesa-vulkan-drivers`). Look over
    the pictures before committing them; a picture the README doesn't use can be left out.
+   A scene named `…-dark` is the one before it again in the dark theme, and is also saved
+   as `NN-…-light-and-dark.png`, the two side by side: the README shows those for the
+   window layouts.
 
 5. `main` is protected, so the version goes in through a pull request like any other change.
    Commit the files on a branch and open a pull request titled `chore: version 0.6.1`:

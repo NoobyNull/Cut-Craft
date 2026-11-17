@@ -1,0 +1,52 @@
+# One computer's own tests before its builds are published, called by each of the three Builds
+# workflows on a release: the same gate as CI (format, Clippy, every test) on that computer,
+# on the tagged code. A computer whose tests fail publishes nothing for that version; the
+# others still do. (CI's own check job stays in ci.yml, as branch protection names its jobs.)
+name: Platform tests
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: The runner (ubuntu-latest, windows-latest or macos-latest)
+        required: true
+        type: string
+      ref:
+        description: "The tag to test (empty: the commit this run is for)"
+        required: false
+        type: string
+        default: ""
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tests:
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Linux GUI libraries
+        if: runner.os == 'Linux'
+        run: |
+          scripts/apt-install libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev
+      - name: Room on the runner
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Tests
+        run: cargo nextest run --workspace --all-features --no-tests=pass --no-fail-fast

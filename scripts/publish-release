@@ -9,6 +9,10 @@
 # Signatures go up before the files they sign, so a file is never on the release without
 # its .minisig. The updater (crates/updater) offers a computer a release only once that
 # computer's own file and signature are both there; until then it offers the one before.
+#
+# A computer whose builds finish after a newer release is already out adds nothing to the
+# older one: that version is skipped for it, and it ships with the newer release when its
+# builds for that one pass. So Linux, Windows and macOS can each be on a different version.
 set -euo pipefail
 tag=${1:?usage: scripts/publish-release TAG DIR}
 dir=${2:?usage: scripts/publish-release TAG DIR}
@@ -30,6 +34,20 @@ for f in "${files[@]}"; do
   fi
 done
 
+# newer: a published (not draft) release whose vX.Y.Z sorts after this one
+newer=""
+while read -r other; do
+  [[ $other =~ ^v[0-9]+(\.[0-9]+)*$ && $other != "$tag" ]] || continue
+  if [[ $(printf '%s\n%s\n' "$tag" "$other" | sort -V | tail -1) == "$other" ]]; then
+    newer=$other
+    break
+  fi
+done < <(gh release list "${repo[@]}" --limit 100 --exclude-drafts --json tagName --jq '.[].tagName')
+if [[ -n $newer ]]; then
+  echo "::notice::$newer is already out, so $tag is skipped for these files: they ship with $newer"
+  exit 0
+fi
+
 if gh release view "$tag" "${repo[@]}" >/dev/null 2>&1; then
   echo "$tag is already published: adding these files to it"
 elif gh release create "$tag" "${repo[@]}" --verify-tag --title "Cut Craft $tag" --generate-notes; then
@@ -48,7 +66,10 @@ fi
 # build's signature only matches this build's file, in the order that never shows a file
 # beside a signature that isn't its own: signature first, unless the old file is the half
 # that is there, when the file goes first (a file with no signature is never offered).
-on_release=$(gh release view "$tag" "${repo[@]}" --json assets --jq '.assets[].name')
+# Only assets fully uploaded count: an upload cut off part way can leave an empty one behind
+# (state "starter"), which is uploaded again (--clobber replaces it).
+on_release=$(gh release view "$tag" "${repo[@]}" --json assets \
+  --jq '.assets[] | select(.state == "uploaded") | .name')
 there() { grep -qxF "$1" <<<"$on_release"; }
 first=()
 second=()

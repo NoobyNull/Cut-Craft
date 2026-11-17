@@ -269,6 +269,7 @@ impl CutCraftApp {
                     .get_or_insert_with(cut_craft_bug_report::relay::new_install_id)
                     .clone();
                 self.save_options();
+                self.reporter.computer_details = self.options.bug_reports.computer_details;
                 self.reporter.send_crash(ctx, crash, &install);
             }
             CrashLogs::Ask => self.reporter.report_crash(crash, false),
@@ -278,6 +279,8 @@ impl CutCraftApp {
     /// Right-click ▸ Report a Bug Here…, over whatever was drawn.
     pub(super) fn report_bugs(&mut self, ctx: &egui::Context) {
         // the reporter is taken out while the app answers its questions
+        // what the person said in Options, as it is now
+        self.reporter.computer_details = self.options.bug_reports.computer_details;
         let mut reporter = std::mem::replace(
             &mut self.reporter,
             cut_craft_bug_report::Reporter::new("", None),

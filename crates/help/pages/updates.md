@@ -28,6 +28,11 @@ a Linux computer may be offered it while a Windows computer or a Mac still says 
 date. Check again later and it will be there. You are never offered a version you cannot
 download.
 
+Each kind of computer's download is only added once its own tests pass. If one kind is held
+back long enough that a newer version comes out first, it skips the older version and goes
+straight to the newer one. So now and then Linux, Windows and Mac are on different version
+numbers. That is expected: each is offered the newest version made for it.
+
 ## What Install Now does
 
 ![Install Now: downloading, checking the download, then Cut Craft reopening on the same job](pictures/update-steps.gif)

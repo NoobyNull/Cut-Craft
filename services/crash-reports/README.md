@@ -35,7 +35,7 @@ owners agreed to send them, groups them by crash, and shows the maintainer a pri
 | Field | Rule |
 | --- | --- |
 | `version` | CutCraft version, 1–40 printable characters, e.g. `0.6.4` |
-| `os` | 1–40 printable characters, e.g. `Windows 11 x64` |
+| `os` | 1–40 printable characters, e.g. `Windows 11 23H2 x86_64`, `macOS 14 Sonoma aarch64`, `Debian GNU/Linux 12 x86_64`; just `windows` / `macos` / `linux` when the person switched the computer's details off |
 | `title` | plain-language crash title, 1–200 characters |
 | `signature` | 8–64 of `A-Z a-z 0-9 _ -` (a hex hash is fine) |
 | `install_id` | random id made at install, 8–64 of `A-Z a-z 0-9 -` (a UUID) |
@@ -87,7 +87,7 @@ CutCraft can't send.
 
 ## Dashboard
 
-- Reports per day, by version and by system, for the last 7, 30, 90 or 365 days.
+- Reports per day, by version and by system (Windows, macOS, Linux, then each exact system), for the last 7, 30, 90 or 365 days; the **from** list shows one kind of system on its own.
 - Every crash with its status: **New**, **Came back**, **GitHub issue**, **Handled**.
 - Click a crash to read its example logs, copy or delete one, and then:
   - **Mark handled and delete logs** (with an optional note such as "fixed in 0.6.5");

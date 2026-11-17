@@ -20,12 +20,22 @@ case "$1 $2" in
   "release view")
     [[ -f $GH_STATE/exists ]] || exit 1
     # --json assets: the names already on the release
-    if [[ $* == *--json* ]]; then cat "$GH_STATE/assets" 2>/dev/null || true; fi ;;
+    # (each line: a name, and "starter" after it for one whose upload was cut off; GitHub
+    # leaves those out only when asked for uploaded assets alone)
+    if [[ $* == *--json* ]]; then
+      if [[ $* == *'state == "uploaded"'* ]]; then
+        awk '$2 != "starter" {print $1}' "$GH_STATE/assets" 2>/dev/null || true
+      else
+        awk '{print $1}' "$GH_STATE/assets" 2>/dev/null || true
+      fi
+    fi ;;
   "release create")
     if [[ -f $GH_STATE/race ]]; then touch "$GH_STATE/exists"; exit 1; fi
     [[ -f $GH_STATE/exists ]] && exit 1
     touch "$GH_STATE/exists" ;;
   "release upload") [[ ! -f $GH_STATE/upload-fails ]] ;;
+  # the tags of the releases already out, newest first, as GitHub lists them
+  "release list") cat "$GH_STATE/releases" 2>/dev/null || true ;;
 esac
 GH
 chmod +x "$work/bin/gh"
@@ -74,7 +84,19 @@ printf '%s\n' cut-craft-1.2.3-windows-x86_64.zip.minisig >"$work/state/assets"
 rm -f "$work/log"
 PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
   "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "half pair: failed: $(cat "$work/out")"
-[[ $(log | grep -c "release upload") == 2 ]] || fail "half pair: not signature then file: $(log)"
+first_upload=$(log | grep -m1 "release upload")
+second_upload=$(log | grep "release upload" | sed -n 2p)
+[[ $(log | grep -c "release upload") == 2 && $first_upload == *.minisig* \
+  && $first_upload != *".zip -R"* && $second_upload == *".zip -R"* ]] \
+  || fail "half pair: not signature then file: $(log)"
+
+# the signature went up but the file's upload was cut off, leaving an empty file behind: the
+# pair is not complete, so both go up again
+printf '%s\n' "cut-craft-1.2.3-windows-x86_64.zip starter" cut-craft-1.2.3-windows-x86_64.zip.minisig >"$work/state/assets"
+rm -f "$work/log"
+PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
+  "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "cut-off file: failed: $(cat "$work/out")"
+log | grep "release upload" | grep -q ".zip -R" || fail "cut-off file: the empty file was left: $(log)"
 
 # only the file got there (its signature was lost): the new file goes up before its
 # signature, so the old file is never shown beside this build's signature
@@ -94,6 +116,21 @@ run exists && fail "an unsigned file was published"
 log | grep -q "release upload" && fail "uploaded with an unsigned file there: $(log)"
 rm "$work/dist/cut-craft-1.2.3.dmg"
 
+# a newer release is already out: this older version is skipped for these files (they ship
+# with the newer one), and nothing is made or uploaded
+rm -rf "$work/state" "$work/log"; mkdir -p "$work/state"; touch "$work/state/exists"
+printf '%s\n' v1.2.10 v1.2.3 v1.2.2 >"$work/state/releases"
+PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
+  "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "newer out: failed: $(cat "$work/out")"
+log | grep -qE "release (create|upload)" && fail "newer out: published the older version: $(log)"
+grep -q "v1.2.10 is already out" "$work/out" || fail "newer out: did not say why: $(cat "$work/out")"
+# only older ones out (and odd tags that are not versions): published as usual
+printf '%s\n' v1.2.3 v1.2.2 depth-v9 nightly >"$work/state/releases"
+rm -f "$work/log"
+PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
+  "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "older out: failed: $(cat "$work/out")"
+log | grep -q "release upload" || fail "older out: did not upload: $(log)"
+
 # nothing built: nothing to publish
 rm "$work/dist"/*
 run exists && fail "an empty folder passed"
@@ -104,6 +141,13 @@ for os in linux windows macos; do
   wf="$here/../.github/workflows/builds-$os.yml"
   grep -qxF "  group: builds-$os-\${{ inputs.tag || github.ref_name }}" "$wf" \
     || fail "builds-$os.yml: a pushed tag and a started one don't share a concurrency group"
+done
+
+# each computer's own tests pass before its files are published
+for os in linux windows macos; do
+  wf="$here/../.github/workflows/builds-$os.yml"
+  awk '/^  release:/{r=1} r&&/needs:/{print; exit}' "$wf" | grep -q tests \
+    || fail "builds-$os.yml: publishes without waiting for its own tests"
 done
 
 if [[ $failed == 0 ]]; then echo "publish-release: all tests pass"; fi

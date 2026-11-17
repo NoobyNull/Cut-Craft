@@ -25,6 +25,7 @@ on:
       - "scripts/macos-dmg"
       - ".github/workflows/publish-release.yml"
       - "scripts/publish-release"
+      - ".github/workflows/platform-tests.yml"
       - "scripts/sign-release"
       - "packaging/**"
 
@@ -61,12 +62,21 @@ jobs:
           name: cut-craft-macos
           path: dist/*.dmg
 
+  # On a v* tag: this computer's own tests (format, Clippy, every test) on the tagged code.
+  # Its files are published only once these pass.
+  tests:
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/platform-tests.yml
+    with:
+      os: macos-latest
+      ref: ${{ inputs.tag }}
+
   # On a v* tag: signs these and adds them to the release, publishing it if this computer's
   # builds are the first to finish. The other computers' builds don't wait for these, nor
   # these for them.
   release:
     if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/')
-    needs: [macos]
+    needs: [tests, macos]
     uses: ./.github/workflows/publish-release.yml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
