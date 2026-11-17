@@ -470,20 +470,27 @@ fn plain(
                         .icon
                         .as_ref()
                         .and_then(|template| (look.picture)(&icon_path(template, value)));
-                    ui.horizontal(|ui| {
-                        if let Some(picture) = picture {
-                            ui.add(picture);
-                        }
-                        ui.vertical(|ui| match &section.kind {
-                            Kind::Group(inner) => {
-                                let inner: Vec<&Field> = inner.iter().collect();
-                                show_within(ui, &inner, value, look, top)
+                    let edited = ui
+                        .horizontal(|ui| {
+                            if let Some(picture) = picture {
+                                ui.add(picture);
                             }
-                            kind => edit(ui, kind, value, &Value::Null, look),
+                            ui.vertical(|ui| match &section.kind {
+                                Kind::Group(inner) => {
+                                    let inner: Vec<&Field> = inner.iter().collect();
+                                    show_within(ui, &inner, value, look, top)
+                                }
+                                kind => edit(ui, kind, value, &Value::Null, look),
+                            })
+                            .inner
                         })
-                        .inner
-                    })
-                    .inner
+                        .inner;
+                    // more under the section's settings (Model Position in Material's
+                    // picture), given the settings holding the section
+                    let ended = look
+                        .group_end
+                        .is_some_and(|end| end(ui, &section.label, params));
+                    edited | ended
                 })
                 .inner
             })
@@ -2815,7 +2822,8 @@ mod tests {
                 "Model Size",
                 "Position relative to Modeling Plane",
                 "Interactive Rotation",
-                "Rotation Axis Movement"
+                "Rotation Axis Movement",
+                "Model Position in Material"
             ]
         );
         let Kind::Group(orientation) = &field(&f, "orientation").kind else {

@@ -63,6 +63,10 @@ pub struct Look<'a> {
 }
 
 /// The open window: the database being edited and what is picked in it.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the window's own tick boxes and whether it is asking to close"
+)]
 pub struct Manager {
     pub draft: ToolDatabase,
     pub pick: Option<Pick>,
@@ -95,9 +99,9 @@ pub struct Manager {
     asking: Option<Question>,
     /// The database as last kept (opened, or Apply): what the edits since would delete.
     saved: ToolDatabase,
-    /// The tool changer as last kept, once the window has drawn (it is loaded after
-    /// opening): edits to it wait for Apply too.
-    saved_changer: Option<Option<Changer>>,
+    /// The tool changer as last kept (the app loads it after opening, then calls
+    /// [`Self::applied`]): edits to it wait for Apply too.
+    saved_changer: Option<Changer>,
     /// Closed with changes not applied: it asks Apply or Discard first.
     closing: bool,
     /// The tool each of the open job's toolpaths cuts with, one name per toolpath: Delete
@@ -106,6 +110,20 @@ pub struct Manager {
     /// Where the tree was last drawn: a question showing never moves it.
     #[cfg(test)]
     tree_rect: egui::Rect,
+}
+
+/// Apply at the right, greyed out until something changes, with whether changes wait
+/// beside it. Whether Apply was pressed.
+fn apply_row(ui: &mut egui::Ui, dirty: bool) -> bool {
+    use cut_craft_bug_report::unapplied;
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        let pressed = unapplied::apply_button(ui, dirty);
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            unapplied::note(ui, dirty);
+        });
+        pressed
+    })
+    .inner
 }
 
 /// A question the window asks before it goes on.
@@ -424,20 +442,40 @@ impl Manager {
 
     /// There are edits Apply or OK hasn't kept yet.
     pub fn dirty(&self) -> bool {
-        self.draft != self.saved
-            || self
-                .saved_changer
-                .as_ref()
-                .is_some_and(|c| *c != self.changer)
+        self.draft != self.saved || self.saved_changer != self.changer
+    }
+
+    /// Its close box pressed: closes as Cancel, or asks first while changes wait.
+    fn close_box(&mut self, dirty: bool) -> Option<Outcome> {
+        if dirty {
+            self.closing = true;
+            None
+        } else {
+            Some(Outcome::Cancel)
+        }
+    }
+
+    /// Closed with changes waiting: asks Apply or Discard; what the answer asks of the app.
+    fn close_question(&mut self, ctx: &egui::Context) -> Option<Outcome> {
+        use cut_craft_bug_report::unapplied::{Answer, question};
+        if !self.closing {
+            return None;
+        }
+        match question(ctx, "tool_database_apply_question")? {
+            Answer::ApplyAndClose => Some(Outcome::Ok),
+            Answer::Discard => Some(Outcome::Cancel),
+            Answer::KeepEditing => {
+                self.closing = false;
+                None
+            }
+        }
     }
 
     /// Draws the window; what it asks of the app, if anything.
     pub fn show(&mut self, ctx: &egui::Context, look: &Look) -> Option<Outcome> {
-        use cut_craft_bug_report::unapplied::{self, Answer};
+        use cut_craft_bug_report::unapplied;
         let mut open = true;
         let mut outcome = None;
-        let changer = self.changer.clone();
-        self.saved_changer.get_or_insert(changer);
         let dirty = self.dirty();
         let size = ctx.content_rect().size() * WINDOW_SHARE;
         cut_craft_bug_report::dialog_with_panels(
@@ -453,14 +491,7 @@ impl Manager {
             |ui| {
                 cut_craft_bug_report::mark(ui, "Tool Database window");
                 unapplied::hold_close(ui, dirty);
-                if self.closing {
-                    match unapplied::question(ui.ctx(), "tool_database_apply_question") {
-                        Some(Answer::ApplyAndClose) => outcome = Some(Outcome::Ok),
-                        Some(Answer::Discard) => outcome = Some(Outcome::Cancel),
-                        Some(Answer::KeepEditing) => self.closing = false,
-                        None => {}
-                    }
-                }
+                outcome = self.close_question(ui.ctx());
                 egui::Panel::bottom("tool_database_buttons").show(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("Cancel").clicked() {
@@ -523,15 +554,9 @@ impl Manager {
                     });
                 egui::CentralPanel::default().show(ui, |ui| {
                     egui::Panel::bottom("tool_database_apply").show(ui, |ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if unapplied::apply_button(ui, dirty) {
-                                outcome = Some(Outcome::Apply);
-                            }
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| unapplied::note(ui, dirty),
-                            );
-                        });
+                        if apply_row(ui, dirty) {
+                            outcome = Some(Outcome::Apply);
+                        }
                     });
                     egui::ScrollArea::vertical().show(ui, |ui| self.details(ui, look));
                 });
@@ -539,11 +564,7 @@ impl Manager {
         );
         // the close box drops the edits only once asked, while some wait
         if !open {
-            if dirty {
-                self.closing = true;
-            } else {
-                outcome = Some(Outcome::Cancel);
-            }
+            outcome = self.close_box(dirty);
         }
         if let Some(asked) = self.pending.take() {
             outcome = outcome.or(Some(asked));
@@ -557,7 +578,7 @@ impl Manager {
     /// The edits so far are kept (Apply): Cancel goes back to here from now on.
     pub fn applied(&mut self) {
         self.saved = self.draft.clone();
-        self.saved_changer = Some(self.changer.clone());
+        self.saved_changer.clone_from(&self.changer);
         self.closing = false;
     }
 
