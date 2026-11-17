@@ -3383,10 +3383,7 @@ impl CutCraftApp {
         // the categories down the left, the chosen one's settings beside them
         cut_craft_bug_report::dialog_with_panels(ctx, id, "Options", size, &mut open, |ui| {
             // the window's own close box asks first too, while changes wait
-            if dirty && ui.ctx().input(|i| i.viewport().close_requested()) {
-                ui.ctx()
-                    .send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            }
+            cut_craft_bug_report::unapplied::hold_close(ui, dirty);
             egui::Panel::bottom("options_buttons").show(ui, |ui| {
                 button = super::options_apply::footer(ui, dirty);
             });
@@ -4101,32 +4098,85 @@ impl CutCraftApp {
 
     /// Snapping Options: what drawing and node drags snap to.
     pub(super) fn snap_options_window(&mut self, ctx: &egui::Context) {
+        use cut_craft_bug_report::unapplied::{self, Answer, Button};
         let mut open = self.snap_window;
         let schema = serde_json::to_value(schemars::schema_for!(cut_craft_core::snap::SnapOptions))
             .expect("a schema serialises");
         let fields = crate::form::fields(&schema);
-        let mut values = serde_json::to_value(&self.options.snapping).expect("options serialise");
+        let shown = self.snap_draft.as_ref().unwrap_or(&self.options.snapping);
+        let mut values = serde_json::to_value(shown).expect("options serialise");
+        let dirty = self.snap_draft.is_some();
+        let closing = self.snap_closing;
+        let (mut edited, mut button, mut answer) = (None, None, None);
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique("snapping_options"), dialog_size(ctx));
-        cut_craft_bug_report::dialog(ctx, id, "Snapping Options", size, &mut open, |ui| {
-            let picture = |_: &str| None;
-            let look = crate::form::Look {
-                units,
-                picture: &picture,
-                material: crate::form::material(&self.doc, units),
-                tool: None,
-                group_end: None,
-                materials: None,
-                pattern: None,
-            };
-            if crate::form::show(ui, &fields, &mut values, &look)
-                && let Ok(options) = serde_json::from_value(values)
-            {
-                self.options.snapping = options;
-                self.save_options();
+        cut_craft_bug_report::dialog_with_panels(
+            ctx,
+            id,
+            "Snapping Options",
+            size,
+            &mut open,
+            |ui| {
+                unapplied::hold_close(ui, dirty);
+                egui::Panel::bottom("snapping_buttons").show(ui, |ui| {
+                    button = unapplied::footer(ui, dirty);
+                });
+                if closing {
+                    answer = unapplied::question(ui.ctx(), "snapping_apply_question");
+                }
+                let picture = |_: &str| None;
+                let look = crate::form::Look {
+                    units,
+                    picture: &picture,
+                    material: crate::form::material(&self.doc, units),
+                    tool: None,
+                    group_end: None,
+                    materials: None,
+                    pattern: None,
+                };
+                egui::CentralPanel::default().show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        if crate::form::show(ui, &fields, &mut values, &look) {
+                            edited =
+                                serde_json::from_value::<cut_craft_core::snap::SnapOptions>(values)
+                                    .ok();
+                        }
+                    });
+                });
+            },
+        );
+        // kept until Apply, unless it is as it already is
+        if let Some(edited) = edited {
+            self.snap_draft = (edited != self.options.snapping).then_some(edited);
+        }
+        // the close box is Close: it asks first while changes wait
+        if !open {
+            button = Some(Button::Close);
+        }
+        let apply = |app: &mut Self| {
+            if let Some(snapping) = app.snap_draft.take() {
+                app.options.snapping = snapping;
+                app.save_options();
             }
-        });
-        self.snap_window = open;
+        };
+        let close = |app: &mut Self| {
+            (app.snap_draft, app.snap_closing, app.snap_window) = (None, false, false);
+        };
+        match button {
+            Some(Button::Apply) => apply(self),
+            Some(Button::Close) if self.snap_draft.is_some() => self.snap_closing = true,
+            Some(Button::Cancel | Button::Close) => close(self),
+            None => {}
+        }
+        match answer {
+            Some(Answer::ApplyAndClose) => {
+                apply(self);
+                close(self);
+            }
+            Some(Answer::Discard) => close(self),
+            Some(Answer::KeepEditing) => self.snap_closing = false,
+            None => {}
+        }
     }
 
     /// The wheel zooms about the cursor, and tilting it pans sideways (as Options ▸ Mouse and
