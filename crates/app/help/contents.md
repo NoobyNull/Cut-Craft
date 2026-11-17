@@ -10,6 +10,8 @@ a CNC machine cuts them with.
   see the job from every side.
 - [Groups](help:groups): step inside a group to change one thing in it; text in a
   group stays editable.
+- [Changing settings](help:settings): Edit ▸ Options, and how Apply, Cancel and Close
+  keep or throw away your changes.
 - [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.

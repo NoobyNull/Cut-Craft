@@ -13,6 +13,7 @@ const VIEW_3D: &str = include_str!("../../help/view-3d.md");
 const GROUPS: &str = include_str!("../../help/groups.md");
 const PENCIL: &str = include_str!("../../help/3d-pencil.md");
 const UPDATES: &str = include_str!("../../help/updates.md");
+const SETTINGS: &str = include_str!("../../help/settings.md");
 
 /// More help for a tool than its settings' doc comments give: pictures and steps, added
 /// under its settings.
@@ -33,6 +34,14 @@ const GROUP_TOOLS: [&str; 4] = [
 
 /// The help's own pictures, by the `bytes://help/` name its pages show them by.
 pub(super) const PICTURES: &[(&str, &[u8])] = &[
+    (
+        "options-not-applied.png",
+        include_bytes!("../../help/pictures/options-not-applied.png"),
+    ),
+    (
+        "options-apply-question.png",
+        include_bytes!("../../help/pictures/options-apply-question.png"),
+    ),
     (
         "web-api-options.png",
         include_bytes!("../../help/pictures/web-api-options.png"),
@@ -217,6 +226,7 @@ impl CutCraftApp {
             "view_3d" => "3D View".into(),
             "groups" => "Groups".into(),
             "updates" => "Updates".into(),
+            "settings" => "Changing settings".into(),
             id => self.tool_label(id),
         }
     }
@@ -232,6 +242,7 @@ impl CutCraftApp {
             "view_3d",
             "groups",
             "updates",
+            "settings",
         ];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
@@ -268,6 +279,7 @@ impl CutCraftApp {
             "view_3d" => VIEW_3D.to_owned(),
             "groups" => GROUPS.to_owned(),
             "updates" => UPDATES.to_owned(),
+            "settings" => SETTINGS.to_owned(),
             id => {
                 let (page, name) = match self.page_of(id) {
                     Page::Design => ("design", "Design"),

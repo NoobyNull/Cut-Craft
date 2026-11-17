@@ -238,6 +238,7 @@ pub(super) fn gaps(app: &CutCraftApp) -> Vec<Gap> {
                     | "groups"
                     | "view_3d"
                     | "updates"
+                    | "settings"
             )
         })
         .map(String::from)

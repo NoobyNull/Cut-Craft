@@ -44,7 +44,12 @@ impl CutCraftApp {
 
     /// Options ▸ Web API ▸ Make New Token: calls with the old one are turned away from now.
     pub(super) fn new_web_api_token(&mut self) {
-        self.options.web_api.token = cut_craft_web_api::new_token();
+        let token = cut_craft_web_api::new_token();
+        // changes waiting in the Options window keep the new token too
+        if let Some(edited) = &mut self.options_draft {
+            edited.web_api.token.clone_from(&token);
+        }
+        self.options.web_api.token = token;
         self.save_options();
         self.status
             .set_message("Made a new Web API token: scripts need the new one from now on");
