@@ -1,2 +1,2 @@
-- New 3D Pencil toolpath: after a big ball nose roughs a carving, a small bit cleans out the deep creases and corners it couldn't reach
-- Rotary jobs: Auto-rotate now spins the part round its own long axis, the way it turns on the machine
+- New 3D Pencil toolpath: a small bit cleans the creases and corners a big ball nose can't reach
+- Rotary jobs: Auto-rotate now spins the part round its own long axis, like it turns on the machine
