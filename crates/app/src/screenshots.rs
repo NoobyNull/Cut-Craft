@@ -111,6 +111,10 @@ fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
 /// The sample sign's toolpaths on a machine that says what it can do, Save Toolpaths open.
 fn checks_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
+    // the help scenes' window closed, the Toolpaths page not pinned over the windows
+    app.info = None;
+    app.help_search.clear();
+    app.pages.set_pinned(super::Page::Toolpaths, false);
     app.doc = cut_craft_core::document::Document::default();
     draw_shapes(app);
     toolpaths(app, ctx);
