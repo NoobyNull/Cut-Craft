@@ -106,6 +106,15 @@ A number field takes a sum as well as a number, worked out when it is entered:
   file that is no longer there is taken off the list. If a newer version's job does open, but has settings this version does not
   know, a warning names them: saving it here leaves them out, so update first to keep them.
   Each save (Save, Save As, Increment and Save) gives the warning again.
+- Every file window starts on the kind of file you asked for, so the list only shows
+  files that will work. **File ▸ Open** shows Cut Craft jobs; **Import Component / 3D
+  Model** shows 3D models (.stl, .obj, .ccclip); **Import Vectors / Bitmap** shows drawings
+  and pictures (.dxf, .svg, .png, .jpg and the rest); **Import Cut List** shows .csv
+  spreadsheets; saving G-code shows your post-processor's file type. To pick a file of
+  another kind, open the file-type list at the bottom of the window (beside the file name
+  on Windows): the import windows also list each format on its own, and **All supported
+  files** for anything Cut Craft can import. On Linux, a file with a capital-letter
+  extension such as `PART.STL` shows too.
 - Unsaved work is copied for recovery every 30 seconds (Edit ▸ Options ▸ General). If
   Cut Craft closes without saving, it opens that work again next time it starts. Each open
   window keeps its own copy: a second Cut Craft window does not take the first one's work.
