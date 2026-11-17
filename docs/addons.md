@@ -57,7 +57,7 @@ An add-on lives in its own GitHub repository, and Cut Craft installs that reposi
 such as `v0.2.0`). A release carries:
 
 - **The zip.** Either one per computer, named `<anything>-<os>-<arch>.zip` (`os` and
-  `arch` as Rust spells them: `linux-x86_64`, `windows-x86_64`, `macos-aarch64`), or one
+  `arch` as Rust spells them: `linux-x86_64`, `windows-x86_64`, `macos-aarch64`, `macos-x86_64`), or one
   `<anything>.zip` for every computer (gadgets and content packs). It holds `addon.toml`
   and the add-on's files, which may be in folders. It may unpack to 1 GB at most.
 - **Downloads.** Each large file named in `downloads`, attached once beside the zips, so
@@ -68,7 +68,7 @@ such as `v0.2.0`). A release carries:
 GitHub's SHA-256 checksum of every file must match, or the install is refused.
 
 `.github/workflows/depth-addon.yml` is a worked example. It builds `cutcraft-depth` for
-Linux, Windows and Apple Silicon Macs, zips each with `addon.toml`, converts the Small
+Linux, Windows and Macs (Apple Silicon and Intel), zips each with `addon.toml`, converts the Small
 model's weights and publishes the release on `NoobyNull/CutCraft-Depth`. It does not sign
 (see Signing), so it needs only the `ADDON_RELEASE_TOKEN` secret.
 

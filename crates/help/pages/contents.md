@@ -107,6 +107,10 @@ A number field takes a sum as well as a number, worked out when it is entered:
 
 ## Keys
 
+On a Mac, read **⌘** (Command) where this help says **Ctrl**, and **⌥** (Option) for
+**Alt**. The menus show each shortcut the Mac way, ⌘S for Save, and the delete key
+deletes the selection.
+
 - **F1** the open tool's help, **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options. Edit ▸ Options ▸ Mouse and Shortcuts can move these like any other key; the arrow keys always nudge the selection
 - **F11** the designing layout, **F12** the machining layout
 - **Ctrl+K** Find Tool: type part of a tool's name and press Enter to open it, wherever it is in the menus

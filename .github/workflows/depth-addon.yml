@@ -1,7 +1,7 @@
 # The Depth add-on's release, published on its own repository (DEPTH_REPO) so Gadgets >
 # Add-ons finds it as that repository's newest release (crates/updater/src/addon.rs):
 #   depth-linux-x86_64.zip, depth-windows-x86_64.zip,  addon.toml and cutcraft-depth
-#   depth-macos-aarch64.zip
+#   depth-macos-aarch64.zip, depth-macos-x86_64.zip     Apple Silicon and Intel Macs
 #   depth_anything_v2_vits.safetensors                 the weights, once for all
 # Unsigned by Matthew's choice: Cut Craft installs it after its "not responsible" warning.
 # Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs one
@@ -62,29 +62,35 @@ jobs:
           name: depth-${{ matrix.name }}
           path: out/*
 
-  # Apple Silicon Macs, on their own: GitHub sometimes cancels macOS jobs before they start
-  # (no runner, minutes used up), and that mustn't hold back Linux and Windows. Run the
-  # workflow again later and publish adds the Mac zip to the same release.
-  # (macos-14 is retired: see builds-macos.yml)
+  # Macs, Apple Silicon and Intel (both built on one Apple Silicon runner), on their own:
+  # GitHub sometimes cancels macOS jobs before they start (no runner, minutes used up), and
+  # that mustn't hold back Linux and Windows. Run the workflow again later and publish adds
+  # the Mac zips to the same release. (macos-14 is retired: see builds-macos.yml)
   build-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p cut-craft-depth
-      - name: Zip
+      - name: Build and zip
         run: |
-          mkdir -p out pack
-          cp crates/depth-addon/addon.toml crates/depth-addon/README.md LICENSE target/release/cutcraft-depth pack/
-          (cd pack && zip -r ../out/depth-macos-aarch64.zip .)
+          mkdir -p out
+          for arch in aarch64 x86_64; do
+            cargo build --release -p cut-craft-depth --target "$arch-apple-darwin"
+            rm -rf pack && mkdir pack
+            cp crates/depth-addon/addon.toml crates/depth-addon/README.md LICENSE \
+              "target/$arch-apple-darwin/release/cutcraft-depth" pack/
+            (cd pack && zip -r "../out/depth-macos-$arch.zip" .)
+          done
       - uses: actions/upload-artifact@v4
         with:
-          name: depth-macos-aarch64
+          name: depth-macos
           path: out/*
 
   publish:
-    # once Linux (which also makes the weights) and Windows are built; the Mac zip if it was
+    # once Linux (which also makes the weights) and Windows are built; the Mac zips if they were
     if: always() && needs.build.result == 'success'
     needs: [build, build-macos]
     runs-on: ubuntu-latest
@@ -113,4 +119,4 @@ jobs:
           fi
       - name: Say when the Mac zip is missing
         if: needs.build-macos.result != 'success'
-        run: echo "::warning::The Mac build did not finish (${{ needs.build-macos.result }}), so this release has no Mac zip yet. Run Depth add-on again to add it."
+        run: echo "::warning::The Mac build did not finish (${{ needs.build-macos.result }}), so this release has no Mac zips yet. Run Depth add-on again to add it."
