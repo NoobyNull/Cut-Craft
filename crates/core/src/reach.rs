@@ -227,7 +227,8 @@ pub fn missed_sentence(name: &str, tool: &Tool, missed: &Missed, fix: Fix, units
 }
 
 /// Whether cutting `depth` mm deep is beyond `tool`'s flutes, as one sentence in `units` that
-/// says what to do about it; `None` when it reaches, or the flute length is not set.
+/// says what to do about it; `None` when it reaches. A bit with no flute length set is taken
+/// to have flutes as long as any cut (Matthew's rule), so it always reaches.
 pub fn too_deep(name: &str, tool: &Tool, depth: f64, units: Units) -> Option<String> {
     let flutes = tool.cutting_length()?;
     (depth > flutes + 1e-6).then(|| {
@@ -294,16 +295,6 @@ pub fn form_line(
             problems.join("; ")
         )));
     }
-    if depth.is_some() && tool.cutting_length().is_none() {
-        let fits = if missed.is_some() {
-            "Fits every spot, but depth"
-        } else {
-            "Depth"
-        };
-        return Some(Line::Unknown(format!(
-            "{fits} not checked: set this bit's Flute Length in the Tool Database"
-        )));
-    }
     (depth.is_some() || missed.is_some()).then(|| Line::Reaches("Reaches everything".into()))
 }
 
@@ -314,14 +305,12 @@ pub enum Line {
     Reaches(String),
     /// Something is not: in red.
     Short(String),
-    /// It could not be checked: in the warning colour.
-    Unknown(String),
 }
 
 impl Line {
     pub fn text(&self) -> &str {
         match self {
-            Self::Reaches(t) | Self::Short(t) | Self::Unknown(t) => t,
+            Self::Reaches(t) | Self::Short(t) => t,
         }
     }
 }
@@ -555,11 +544,10 @@ mod tests {
             flute_length: 0.0,
             ..tool.clone()
         };
-        let unchecked = form_line(&unknown, Some(10.0), Some(&none), Units::Mm).unwrap();
-        assert!(matches!(unchecked, Line::Unknown(_)), "{unchecked:?}");
-        assert!(
-            unchecked.text().starts_with("Fits every spot"),
-            "{unchecked:?}"
+        // no flute length set: taken as long as any cut, so it reaches however deep
+        assert_eq!(
+            form_line(&unknown, Some(100.0), Some(&none), Units::Mm),
+            Some(Line::Reaches("Reaches everything".into()))
         );
         let unpicked = Tool {
             name: String::new(),

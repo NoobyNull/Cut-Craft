@@ -628,10 +628,19 @@ fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
 #[test]
 fn a_script_gets_the_gcode_save_toolpaths_would_write_and_can_save_it() {
     let (mut h, at, id) = with_a_toolpath();
-    // the bit's flute length known, so the checks before cutting find nothing to ask about
+    // flutes shorter than the cut: the checks before cutting have something to ask about
+    h.app
+        .doc
+        .toolpaths
+        .values_mut()
+        .next()
+        .unwrap()
+        .tool
+        .flute_length = 2.0;
     let (status, e) = call(&mut h, at, "POST", "gcode", Some(json!({})));
     assert_eq!(status, 409, "{e}");
-    assert!(e["error"].as_str().unwrap().contains("flute length"), "{e}");
+    assert!(e["error"].as_str().unwrap().contains("flutes"), "{e}");
+    // long enough flutes: nothing to ask about
     h.app
         .doc
         .toolpaths
