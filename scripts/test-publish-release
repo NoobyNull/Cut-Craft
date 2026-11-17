@@ -76,6 +76,15 @@ PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITO
   "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "half pair: failed: $(cat "$work/out")"
 [[ $(log | grep -c "release upload") == 2 ]] || fail "half pair: not signature then file: $(log)"
 
+# only the file got there (its signature was lost): the new file goes up before its
+# signature, so the old file is never shown beside this build's signature
+printf '%s\n' cut-craft-1.2.3-windows-x86_64.zip >"$work/state/assets"
+rm -f "$work/log"
+PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
+  "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "file only: failed: $(cat "$work/out")"
+first_upload=$(log | grep -m1 "release upload")
+[[ $first_upload == *".zip -R"* ]] || fail "file only: signature went up before the file: $(log)"
+
 # a failed upload fails the step
 run exists upload-fails && fail "a failed upload passed"
 

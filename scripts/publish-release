@@ -44,26 +44,31 @@ fi
 
 # Run again (a re-run of this computer's build): a file already there with its signature is
 # left as it is, since replacing it deletes the working one first and a failed upload would
-# lose it. A file without its signature there (an upload stopped part way) goes up again,
-# signature first, as this build's own signature only matches this build's file.
+# lose it. An incomplete pair (an upload stopped part way) goes up again whole, as this
+# build's signature only matches this build's file, in the order that never shows a file
+# beside a signature that isn't its own: signature first, unless the old file is the half
+# that is there, when the file goes first (a file with no signature is never offered).
 on_release=$(gh release view "$tag" "${repo[@]}" --json assets --jq '.assets[].name')
 there() { grep -qxF "$1" <<<"$on_release"; }
-send_signatures=()
-send_files=()
+first=()
+second=()
 for f in "${files[@]}"; do
   name=$(basename "$f")
   if there "$name" && there "$name.minisig"; then
     echo "$name is already on $tag with its signature: left as it is"
+  elif there "$name"; then
+    first+=("$f")
+    second+=("$f.minisig")
   else
-    send_signatures+=("$f.minisig")
-    send_files+=("$f")
+    first+=("$f.minisig")
+    second+=("$f")
   fi
 done
-if [[ ${#send_files[@]} == 0 ]]; then
+if [[ ${#first[@]} == 0 ]]; then
   exit 0
 fi
-gh release upload "$tag" "${send_signatures[@]}" "${repo[@]}" --clobber
-gh release upload "$tag" "${send_files[@]}" "${repo[@]}" --clobber
-for f in "${send_files[@]}"; do
-  echo "attached $(basename "$f")"
+gh release upload "$tag" "${first[@]}" "${repo[@]}" --clobber
+gh release upload "$tag" "${second[@]}" "${repo[@]}" --clobber
+for f in "${first[@]}" "${second[@]}"; do
+  [[ $f == *.minisig ]] || echo "attached $(basename "$f")"
 done
