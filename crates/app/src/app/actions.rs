@@ -1452,7 +1452,7 @@ impl CutCraftApp {
     }
 
     /// The answer to the earlier-save question: `None` saves nothing. `remember` keeps the
-    /// answer as the default (Edit ▸ Options ▸ Confirmations).
+    /// answer as the default (Edit ▸ Options ▸ Confirmation Choices).
     pub(super) fn answer_earlier(
         &mut self,
         choice: Option<crate::options::EarlierGcode>,
@@ -3011,7 +3011,7 @@ impl CutCraftApp {
             ui.heading("Toolpaths out of date");
             ui.label(recalculate_question(stale));
             ui.checkbox(&mut silence, "Don't ask again").on_hover_hint(
-                "Stop this question (Options ▸ Confirmations turns it back on). Out-of-date \
+                "Stop this question (Options ▸ Confirmation Choices turns it back on). Out-of-date \
                  toolpaths are still marked ⚠, and saving them still asks first",
             );
             ui.separator();
