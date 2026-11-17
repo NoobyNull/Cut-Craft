@@ -384,6 +384,21 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
                     }
                     ui.end_row();
                 }
+                ui.label("Cornering").on_hover_hint(
+                    "How far the controller lets the bit stray from a sharp corner to keep \
+                     its speed through it (junction deviation, GRBL $11); 0 is the usual \
+                     0.01 mm. The cutting time estimates use it",
+                );
+                let mut shown = machine.junction_deviation / per;
+                let corner = Number::new(&mut shown)
+                    .speed(0.001)
+                    .range(0.0..=f64::MAX)
+                    .max_decimals(4)
+                    .suffix(format!(" {length}"));
+                if ui.add(corner).changed() {
+                    machine.junction_deviation = shown * per;
+                }
+                ui.end_row();
                 ui.label("Spindle");
                 for value in &mut machine.spindle {
                     ui.add(

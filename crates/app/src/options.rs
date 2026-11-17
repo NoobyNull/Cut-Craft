@@ -493,7 +493,8 @@ pub struct ToolpathSettings {
     #[serde(default)]
     #[schemars(title = "Clip toolpaths at keep-out zones")]
     pub clip_at_keep_out_zones: bool,
-    /// How long changing a bit by hand takes, for Suggest's times on Pocket's clearing bits
+    /// How long changing a bit by hand takes, for the cutting times and Suggest's times on
+    /// Pocket's clearing bits
     #[serde(default = "change_by_hand")]
     #[schemars(title = "Bit change by hand", extend("x-unit" = "min"), range(min = 0))]
     pub change_by_hand: f64,

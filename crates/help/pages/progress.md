@@ -47,7 +47,7 @@ on a Mac `~/Library/Application Support/cut-craft`). Deleting it only means the 
 guesses start from scratch.
 
 This is the time Cut Craft takes to work the job out on your computer. How long the
-machine will take to cut is a different time: see the [Toolpaths page](help:toolpaths),
+machine will take to cut is a different time: see [How long the job takes to cut](help:cutting_time),
 and the line under the preview's controls, which gives the machine time left as it plays.
 
 Programs that use the [Web API](help:web_api) see the same time left in **GET status**.

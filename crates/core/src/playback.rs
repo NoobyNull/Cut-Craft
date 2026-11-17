@@ -6,13 +6,12 @@
 //! from.
 
 use crate::simulation::Material;
-use crate::toolpath::{MoveKind, Tool, Toolpath};
+use crate::toolpath::{Tool, Toolpath};
 use glam::DVec3;
 
 /// One straight move of the tool.
 struct Step {
     tool: usize,
-    kind: MoveKind,
     from: DVec3,
     to: DVec3,
 }
@@ -68,16 +67,37 @@ pub struct Playback {
 }
 
 impl Playback {
-    /// `toolpaths` to be played, in order, into `start`. Says how far it has got
-    /// ([`crate::progress`]), as millions of moves take a while; asked to stop, it leaves
-    /// the rest out, for a job that is thrown away. Rapids run at `rapid_rate` (mm/min), as
-    /// does a move whose tool has no rate set.
+    /// `toolpaths` to be played, in order, into `start`, rapids at `rapid_rate` (mm/min):
+    /// [`Self::planned`] on a machine that starts and stops at once, with no top speeds.
     pub fn new(start: Material, toolpaths: &[&Toolpath], rapid_rate: f64) -> Self {
+        let rapid = if rapid_rate > 0.0 { rapid_rate } else { 5000.0 };
+        let motion = crate::cut_time::Motion {
+            rapid,
+            ..crate::cut_time::Motion::default()
+        };
+        Self::planned(start, toolpaths, &motion)
+    }
+
+    /// `toolpaths` to be played, in order, into `start`, each move taking as long as the
+    /// cutting time estimate says on `motion`'s machine ([`crate::cut_time::each_move`]).
+    /// Says how far it has got ([`crate::progress`]), as millions of moves take a while;
+    /// asked to stop, it leaves the rest out, for a job that is thrown away. A move whose
+    /// tool has no rate set runs at the rapid speed.
+    pub fn planned(
+        start: Material,
+        toolpaths: &[&Toolpath],
+        motion: &crate::cut_time::Motion,
+    ) -> Self {
         const EVERY: usize = 1 << 16;
         let total: usize = toolpaths.iter().map(|t| t.moves.len()).sum();
         let (mut tools, mut steps) = (vec![], Vec::with_capacity(total));
+        let mut times = Vec::with_capacity(total);
         'toolpaths: for t in toolpaths {
             tools.push(t.tool.clone());
+            if crate::progress::cancelled() {
+                break 'toolpaths;
+            }
+            times.extend(crate::cut_time::each_move(t, motion));
             for pair in t.moves.windows(2) {
                 if steps.len() % EVERY == 0 {
                     if crate::progress::cancelled() {
@@ -87,25 +107,17 @@ impl Playback {
                 }
                 steps.push(Step {
                     tool: tools.len() - 1,
-                    kind: pair[1].kind,
                     from: pair[0].to,
                     to: pair[1].to,
                 });
             }
         }
-        let rapid = if rapid_rate > 0.0 { rapid_rate } else { 5000.0 };
         let mut total = 0.0;
-        let ends: Vec<f64> = steps
+        let ends: Vec<f64> = times
             .iter()
-            .map(|s| {
-                let tool: &Tool = &tools[s.tool];
-                let rate = match s.kind {
-                    MoveKind::Rapid => rapid,
-                    MoveKind::Plunge => tool.plunge_rate,
-                    MoveKind::Cut => tool.feed_rate,
-                };
-                let per_second = if rate > 0.0 { rate } else { rapid } / 60.0;
-                total += s.from.distance(s.to) / per_second;
+            .take(steps.len())
+            .map(|seconds| {
+                total += seconds;
                 total
             })
             .collect();
@@ -349,7 +361,7 @@ impl Playback {
 mod tests {
     use super::*;
     use crate::document::Job;
-    use crate::toolpath::Move;
+    use crate::toolpath::{Move, MoveKind};
 
     /// A 100 × 100 job, and a cut 2 deep along y = 50 from x = 10 to 90 between a plunge and
     /// a retract.

@@ -66,10 +66,9 @@ pub struct Context {
     /// Today's date and the time, as they are shown.
     pub date: String,
     pub time: String,
-    /// The rapid rate run times assume, mm/min, the machine's accelerations (0s for none)
-    /// and the Toolpath Summary's scale factor.
-    pub rapid: f64,
-    pub acceleration: [f64; 3],
+    /// What run times go by (the rapid rate, the machine's speeds, accelerations and
+    /// cornering, and tool change times), and the Toolpath Summary's scale factor.
+    pub motion: crate::cut_time::Motion,
     pub scale: f64,
     /// How tall the 3D model is, mm; `None` when there is none.
     pub model_height: Option<f64>,
@@ -88,8 +87,7 @@ impl Default for Context {
             slots: vec![],
             date: String::new(),
             time: String::new(),
-            rapid: 5000.0,
-            acceleration: [0.0; 3],
+            motion: crate::cut_time::Motion::default(),
             scale: 1.0,
             model_height: None,
             holding: crate::collision::Holding::default(),
@@ -189,14 +187,45 @@ pub fn tools_used<'a>(doc: &'a Document, slots: &[Option<String>]) -> Vec<(u32, 
         .collect()
 }
 
-/// A toolpath's run time in minutes, as the Toolpath Summary estimates it.
-pub fn run_minutes(toolpath: &Toolpath, ctx: &Context) -> f64 {
-    let minutes = if ctx.acceleration.iter().any(|a| *a > 0.0) {
-        toolpath.machining_minutes_accelerating(ctx.rapid, ctx.acceleration)
-    } else {
-        toolpath.machining_minutes(ctx.rapid)
-    };
-    minutes * ctx.scale
+/// Each of `toolpaths`' run time in minutes, cut one after another from the job's home,
+/// and the whole job's (the trip back home included), as the Toolpath Summary estimates
+/// them.
+pub fn run_minutes(doc: &Document, toolpaths: &[&Toolpath], ctx: &Context) -> (Vec<f64>, f64) {
+    let home = doc.job.home();
+    let job = crate::cut_time::job(
+        toolpaths,
+        glam::DVec3::new(home.x, home.y, home.z),
+        &ctx.motion,
+    );
+    let minutes = |seconds: f64| seconds / 60.0 * ctx.scale;
+    (
+        job.toolpaths.iter().map(|t| minutes(t.total())).collect(),
+        minutes(job.total().total()),
+    )
+}
+
+/// Every toolpath's run time in minutes, by id: the shown ones cut one after another from
+/// the job's home (getting to each and its tool change included), a hidden one on its own;
+/// and the whole job's, every shown toolpath and the trip back home.
+pub fn job_minutes(
+    doc: &Document,
+    ctx: &Context,
+) -> (
+    std::collections::BTreeMap<crate::document::EntityId, f64>,
+    f64,
+) {
+    let shown: Vec<_> = doc.toolpaths.iter().filter(|(_, t)| t.visible).collect();
+    let paths: Vec<&Toolpath> = shown.iter().map(|(_, t)| *t).collect();
+    let (minutes, total) = run_minutes(doc, &paths, ctx);
+    let mut each: std::collections::BTreeMap<_, _> =
+        shown.iter().map(|&(&id, _)| id).zip(minutes).collect();
+    for (&id, t) in doc.toolpaths.iter().filter(|(_, t)| !t.visible) {
+        each.insert(
+            id,
+            crate::cut_time::toolpath(t, &ctx.motion).total() / 60.0 * ctx.scale,
+        );
+    }
+    (each, total)
 }
 
 /// The file's name without its folder or extension; `Untitled` before it is saved.
@@ -620,7 +649,6 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
     }
 
     // Toolpaths
-    let mut total = 0.0;
     let mut lines = vec![];
     let tool_number = |name: &str| {
         tools
@@ -629,10 +657,10 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             .map_or(0, |(n, _)| *n)
     };
     let paths: Vec<&Toolpath> = doc.toolpaths.values().collect();
-    for (place, t) in paths.iter().enumerate() {
+    let (times, total) = job_minutes(doc, ctx);
+    for (place, (id, t)) in doc.toolpaths.iter().enumerate() {
         let i = place + 1;
-        let minutes = run_minutes(t, ctx);
-        total += minutes;
+        let minutes = times.get(id).copied().unwrap_or_default();
         let n = tool_number(&t.tool.name);
         lines.push(format!(
             "{i}. {} ({}, {}) {}",
@@ -716,7 +744,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             &under,
             key("run_time"),
             "Run time",
-            "About how long it takes to cut",
+            "About how long it takes to cut, getting to it from the last one included",
             duration(minutes),
         );
         add(
@@ -749,7 +777,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         "",
         "toolpaths.run_time".into(),
         "Total run time",
-        "About how long every toolpath takes, one after another",
+        "About how long the whole job takes: every move, tool changes and the trip home",
         duration(total),
     );
 
@@ -1401,6 +1429,34 @@ pub fn toggle_check(text: &str, line: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_hidden_toolpath_is_left_out_of_the_job_s_run_and_timed_on_its_own() {
+        use crate::toolpath::{Move, MoveKind};
+        let mut doc = crate::testing::with_toolpath();
+        let first = doc.toolpaths.values().next().unwrap().clone();
+        let mut far = first.clone();
+        far.moves = vec![
+            Move {
+                kind: MoveKind::Rapid,
+                to: glam::DVec3::new(5000.0, 5000.0, 5.0),
+            },
+            Move {
+                kind: MoveKind::Cut,
+                to: glam::DVec3::new(5010.0, 5000.0, 5.0),
+            },
+        ];
+        far.visible = false;
+        far.tool.name = "Another bit".into();
+        let ctx = super::Context::default();
+        let (_, before) = super::job_minutes(&doc, &ctx);
+        let id = doc.next_id();
+        doc.toolpaths.insert(id, far.clone());
+        let (each, after) = super::job_minutes(&doc, &ctx);
+        assert!((after - before).abs() < 1e-12, "{before} then {after}");
+        let alone = crate::cut_time::toolpath(&far, &ctx.motion).total() / 60.0;
+        assert!((each[&id] - alone).abs() < 1e-12);
+    }
+
     use super::*;
     use crate::document::EntityId;
 

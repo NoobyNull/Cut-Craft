@@ -86,10 +86,9 @@ pub struct Setup {
     pub slots: Vec<Option<String>>,
     /// When the sheet was made, as it is printed.
     pub printed: String,
-    /// The rapid rate the run times assume, mm/min.
-    pub rapid: f64,
-    /// The machine's X, Y, Z accelerations, mm/s², for the run times (0 for none).
-    pub acceleration: [f64; 3],
+    /// What the run times go by: the rapid rate, the machine's speeds, accelerations and
+    /// cornering, and the tool change times.
+    pub motion: cut_craft_core::cut_time::Motion,
     /// The Toolpath Summary's run time scale factor (1 for none).
     pub scale: f64,
     /// How tall the 3D model is, mm; `None` when there is none.
@@ -111,8 +110,10 @@ impl Default for Setup {
             outputs: vec![],
             slots: vec![],
             printed: String::new(),
-            rapid: RAPID,
-            acceleration: [0.0; 3],
+            motion: cut_craft_core::cut_time::Motion {
+                rapid: RAPID,
+                ..cut_craft_core::cut_time::Motion::default()
+            },
             scale: 1.0,
             model_height: None,
             holding: cut_craft_core::collision::Holding::default(),
@@ -136,8 +137,7 @@ fn notes_context(setup: &Setup) -> cut_craft_core::notes::Context {
         slots: setup.slots.clone(),
         date,
         time,
-        rapid: setup.rapid,
-        acceleration: setup.acceleration,
+        motion: setup.motion.clone(),
         scale: setup.scale,
         model_height: setup.model_height,
         holding: setup.holding,
@@ -271,10 +271,13 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
     let _ = write!(h, "<h1>{title}</h1></header>");
     let visible: Vec<_> = doc.toolpaths.values().filter(|t| t.visible).collect();
     // as the Toolpath Summary and the notes' run times have them
+    let (times, total) = cut_craft_core::notes::run_minutes(doc, &visible, &notes_context(setup));
     let minutes = |t: &Toolpath| {
-        t.machining_minutes_accelerating(setup.rapid, setup.acceleration) * setup.scale
+        visible
+            .iter()
+            .position(|v| std::ptr::eq(*v, t))
+            .map_or(0.0, |i| times[i])
     };
-    let total: f64 = visible.iter().map(|t| minutes(t)).sum();
     let tools = cut_craft_post::tools_and_numbers(&visible, &setup.slots);
     let number = |name: &str| tools.iter().find(|(t, _)| t == name).map_or(0, |&(_, n)| n);
     let has_changer = !setup.slots.is_empty();
@@ -509,7 +512,10 @@ mod tests {
         }
         let time = |rapid| {
             let setup = Setup {
-                rapid,
+                motion: cut_craft_core::cut_time::Motion {
+                    rapid,
+                    ..Setup::default().motion
+                },
                 ..Setup::default()
             };
             let page = sheet_for(&doc, &Style::default(), &setup).unwrap();

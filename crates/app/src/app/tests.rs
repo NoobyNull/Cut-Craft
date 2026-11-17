@@ -10704,6 +10704,48 @@ fn the_summary_allows_for_the_active_machines_acceleration_when_asked() {
 }
 
 #[test]
+fn the_job_time_counts_every_move_tool_changes_and_the_trip_home() {
+    let mut h = Harness::new();
+    assert!(
+        h.app.summary.acceleration,
+        "accelerations count unless told not to"
+    );
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    let one: f64 = h
+        .app
+        .doc
+        .toolpaths
+        .values()
+        .map(|t| h.app.estimated_minutes(t))
+        .sum();
+    let alone = cut_craft_core::cut_time::toolpath(
+        h.app.doc.toolpaths.values().next().unwrap(),
+        &h.app.motion(),
+    )
+    .total()
+        / 60.0;
+    assert!(
+        one > alone,
+        "getting there from home counts: {one} against {alone}"
+    );
+    assert!(h.app.job_minutes() > one, "so does the trip back home");
+    // the same toolpath with another bit: a tool change by hand
+    let mut other = h.app.doc.toolpaths.values().next().unwrap().clone();
+    other.tool.name = "Another bit".into();
+    let id = h.app.doc.next_id();
+    h.app.doc.toolpaths.insert(id, other);
+    let changed = h.app.estimated_minutes(&h.app.doc.toolpaths[&id]);
+    assert!(
+        changed > 2.0,
+        "the 2 minute change by hand counts: {changed}"
+    );
+}
+
+#[test]
 fn a_shift_click_on_a_dimension_with_its_form_open_edits_it() {
     let mut h = Harness::new();
     let mut params = serde_json::to_value(cmd_dimensions::Params::default()).unwrap();
@@ -11656,7 +11698,7 @@ fn the_job_sheet_names_the_file_machine_post_and_slots() {
     );
     assert_eq!(setup.job_copy, "", "saved: no copy needed");
     assert_eq!(setup.slots.len(), 2);
-    assert!((setup.rapid - h.app.summary.rapid).abs() < 1e-9);
+    assert!((setup.motion.rapid - h.app.summary.rapid).abs() < 1e-9);
     assert!(h.app.available("print_job_sheet"));
     let _ = std::fs::remove_dir_all(&dir);
 }

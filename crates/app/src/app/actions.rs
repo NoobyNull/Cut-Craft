@@ -209,6 +209,7 @@ impl CutCraftApp {
             model_tall: std::cell::Cell::new(None),
             notes_ui: super::notes_panel::NotesUi::default(),
             note_vars: std::cell::RefCell::new(None),
+            cut_times: std::cell::RefCell::new(None),
             height_applied_at: None,
             job_epoch: 0,
             toolpath_keys: super::follow::Keys::default(),
@@ -3820,10 +3821,7 @@ impl CutCraftApp {
             outputs: vec![],
             slots: machine.map_or_default(|m| m.slots.clone()),
             printed: chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
-            rapid: self.summary.rapid,
-            acceleration: machine
-                .filter(|_| self.summary.acceleration)
-                .map_or([0.0; 3], |m| m.acceleration),
+            motion: self.motion(),
             scale: self.summary.scale,
             model_height: self.model_height_now(),
             holding: self.holding(),
@@ -4195,28 +4193,89 @@ impl CutCraftApp {
 
     /// The Toolpath Summary's rows: each toolpath with its estimated time and notes.
     fn summary_rows(&self) -> Vec<super::SummaryRow> {
+        let times = self.cut_times();
         self.doc
             .toolpaths
             .iter()
             .map(|(&id, t)| super::SummaryRow {
                 id,
                 name: t.name.clone(),
-                minutes: self.estimated_minutes(t),
+                minutes: times.each.get(&id).copied().unwrap_or_default(),
                 visible: t.visible,
                 notes: t.summary_notes().to_owned(),
             })
             .collect()
     }
 
-    /// A toolpath's time for the Toolpath Summary: at the rapid rate, allowing for the
-    /// active machine's accelerations when asked, times the scale factor.
+    /// A toolpath's time for the Toolpath Summary, minutes: see [`super::CutTimes`].
     pub(super) fn estimated_minutes(&self, t: &cut_craft_core::toolpath::Toolpath) -> f64 {
-        let s = &self.summary;
-        let minutes = match self.machines.active().filter(|_| s.acceleration) {
-            Some(m) => t.machining_minutes_accelerating(s.rapid, m.acceleration),
-            None => t.machining_minutes(s.rapid),
+        let times = self.cut_times();
+        self.doc
+            .toolpaths
+            .iter()
+            .find(|(_, v)| std::ptr::eq(*v, t))
+            .and_then(|(id, _)| times.each.get(id).copied())
+            .unwrap_or_else(|| {
+                cut_craft_core::cut_time::toolpath(t, &self.motion()).total() / 60.0
+                    * self.summary.scale
+            })
+    }
+
+    /// The whole job's cutting time, minutes: every shown toolpath, the moves between them,
+    /// the tool changes and the trip back home.
+    pub(super) fn job_minutes(&self) -> f64 {
+        self.cut_times().total
+    }
+
+    /// What the cutting times go by: the Toolpath Summary's rapid rate, the active
+    /// machine's top speeds, cornering and (unless the Toolpath Summary is told not to)
+    /// accelerations, its tool changer, and the tool change times in Options.
+    pub(super) fn motion(&self) -> cut_craft_core::cut_time::Motion {
+        let machine = self.machines.active();
+        let o = &self.options.toolpaths;
+        cut_craft_core::cut_time::Motion {
+            rapid: self.summary.rapid,
+            max_rate: machine.map_or([0.0; 3], |m| m.max_rate),
+            acceleration: machine
+                .filter(|_| self.summary.acceleration)
+                .map_or([0.0; 3], |m| m.acceleration),
+            junction_deviation: machine.map_or(0.0, |m| m.junction_deviation),
+            change_by_hand: o.change_by_hand * 60.0,
+            change_by_changer: o.change_by_changer * 60.0,
+            loaded: machine.map_or_default(|m| m.slots.iter().flatten().cloned().collect()),
+        }
+    }
+
+    /// Every toolpath's cutting time and the job's, worked out again only when the job or
+    /// what the times go by changes.
+    pub(super) fn cut_times(&self) -> std::rc::Rc<super::CutTimes> {
+        let motion = self.motion();
+        let shown: Vec<(EntityId, bool)> = self
+            .doc
+            .toolpaths
+            .iter()
+            .map(|(&id, t)| (id, t.visible))
+            .collect();
+        let key = format!(
+            "{}|{}|{motion:?}|{}|{shown:?}",
+            self.job_epoch,
+            self.history.revision(),
+            self.summary.scale
+        );
+        if let Some((at, times)) = self.cut_times.borrow().as_ref()
+            && *at == key
+        {
+            return times.clone();
+        }
+        let ctx = cut_craft_core::notes::Context {
+            motion,
+            scale: self.summary.scale,
+            ..cut_craft_core::notes::Context::default()
         };
-        minutes * s.scale
+        let (each, total) = cut_craft_core::notes::job_minutes(&self.doc, &ctx);
+        let times = std::rc::Rc::new(super::CutTimes { each, total });
+        *self.cut_times.borrow_mut() = Some((key, times.clone()));
+        times
     }
 
     /// Lets go of picked nodes that no longer stand for a node to move: all of them once
@@ -6827,6 +6886,7 @@ impl CutCraftApp {
             vec![]
         };
         let rows = self.summary_rows();
+        let total = self.job_minutes();
         let mut noted = None;
         let mut change_shortcuts = false;
         let machine = self
@@ -6838,7 +6898,9 @@ impl CutCraftApp {
         let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
             Info::Help(_) => unreachable!("returned above"),
-            Info::Summary => noted = summary_table(ui, &rows, summary, units, machine.clone()),
+            Info::Summary => {
+                noted = summary_table(ui, &rows, total, summary, units, machine.clone());
+            }
             Info::About => about(ui),
             Info::Shortcuts => {
                 if ui

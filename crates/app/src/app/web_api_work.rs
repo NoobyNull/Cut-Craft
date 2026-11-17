@@ -272,6 +272,7 @@ impl CutCraftApp {
             Ok(job::toolpaths(
                 &app.doc,
                 &|t| app.estimated_minutes(t),
+                Some(app.job_minutes()),
                 &checks,
             ))
         }))
@@ -378,7 +379,12 @@ impl CutCraftApp {
 
     /// The toolpaths as `GET toolpaths` lists them, without the checks before cutting.
     fn web_toolpath_rows(&self) -> Value {
-        job::toolpaths(&self.doc, &|t| self.estimated_minutes(t), &BTreeMap::new())
+        job::toolpaths(
+            &self.doc,
+            &|t| self.estimated_minutes(t),
+            Some(self.job_minutes()),
+            &BTreeMap::new(),
+        )
     }
 
     /// `POST calculate`: Recalculate on these toolpaths, with its progress window.
