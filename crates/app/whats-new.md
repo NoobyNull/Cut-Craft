@@ -1,3 +1,4 @@
-- One-click updates: press Install Now and Cut Craft downloads, checks and installs the new version, then reopens on your job
-- Open and import windows now start on the right file type, so you only see files that action can use
-- Pop-up windows stay in front of the main window until you close them, so they can't hide behind it
+- Checks before cutting: warns if the collet nut, spindle or holder would hit the material or a clamp
+- Settings windows wait for Apply, and Calculate no longer copies an unchanged toolpath
+- Place a model in the material and watch it move; job notes can show live values
+- Wiki-style help with picture tours, question search and 176 more tips
