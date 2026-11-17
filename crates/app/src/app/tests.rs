@@ -1690,6 +1690,21 @@ impl Harness {
     }
 
     /// The middle of `text` where the last frame drew it.
+    /// The middle of each drawing of `text`'s words, without the space a picture before
+    /// them on their line leaves at their start.
+    fn words_at(&self, text: &str) -> Vec<Pos2> {
+        self.shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(t) if t.galley.text() == text => {
+                    let row = t.galley.rows.first()?;
+                    Some(t.pos + row.rect_without_leading_space().center().to_vec2())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     fn text_at(&self, text: &str) -> Option<Pos2> {
         self.shapes.iter().find_map(|clipped| match &clipped.shape {
             egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos + t.galley.size() / 2.0),
@@ -3585,6 +3600,92 @@ fn the_3d_pencil_help_shows_what_it_cuts_with_pictures() {
 }
 
 #[test]
+fn a_tools_help_page_shows_its_toolbar_icon_by_its_name() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("3d_pencil_toolpath");
+    assert!(
+        page.contains(
+            "# ![3D Pencil Toolpath icon](bytes://help-icons/48/toolpaths/3d_pencil_toolpath.png) \
+             3D Pencil Toolpath\n"
+        ),
+        "the same picture as its button, beside its name: {page}"
+    );
+}
+
+#[test]
+fn the_toolpaths_help_lists_each_tool_by_its_icon() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("toolpaths");
+    assert!(
+        page.contains(
+            "- ![](bytes://help-icons/24/toolpaths/3d_pencil_toolpath.png) \
+             [3D Pencil Toolpath](help:3d_pencil_toolpath)\n"
+        ),
+        "{page}"
+    );
+    let design = h.app.help_markdown("design");
+    assert!(
+        design.contains("- ![](bytes://help-icons/24/drawing/create_vectors/draw_circle.png) "),
+        "{design}"
+    );
+}
+
+#[test]
+fn every_tools_help_page_shows_its_buttons_icon() {
+    let h = Harness::new();
+    let missing: Vec<&str> = h
+        .app
+        .help_topics()
+        .into_iter()
+        .filter(|t| !help::OWN_PAGES.contains(t))
+        .filter(|t| match h.app.help_icon_uri(t, help::PAGE_ICON) {
+            Some(uri) => !h.app.help_markdown(t).contains(&uri),
+            None => true,
+        })
+        .collect();
+    assert!(missing.is_empty(), "help with no icon: {missing:?}");
+}
+
+#[test]
+fn help_search_finds_tools_by_name_not_by_their_icons_file() {
+    let mut h = Harness::new();
+    let found = h.app.help_search_results("pencil");
+    assert_eq!(found[0].0, "3d_pencil_toolpath", "{found:?}");
+    assert_eq!(h.app.help_search_results("help-icons"), vec![]);
+    assert_eq!(
+        h.app.help_search_results("create_vectors"),
+        vec![],
+        "an icon's folder is no word of the help's"
+    );
+}
+
+#[test]
+fn the_help_window_shows_tool_icons_on_pages_and_in_search_results() {
+    let mut h = Harness::new();
+    h.app.info = Some(Info::Help("3d_pencil_toolpath"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let big = "bytes://help-icons/48/toolpaths/3d_pencil_toolpath.png";
+    let image = h.ctx.try_load_bytes(big);
+    assert!(
+        matches!(image, Ok(egui::load::BytesPoll::Ready { .. })),
+        "the page's icon handed to egui"
+    );
+    h.app.help_search = "pencil".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let small = "bytes://help-icons/24/toolpaths/3d_pencil_toolpath.png";
+    assert!(
+        matches!(
+            h.ctx.try_load_bytes(small),
+            Ok(egui::load::BytesPoll::Ready { .. })
+        ),
+        "each result beside its icon"
+    );
+    assert!(h.text_at("3D Pencil Toolpath").is_some());
+}
+
+#[test]
 fn the_tool_changer_window_loads_a_holder_with_select_tool() {
     let mut h = Harness::new();
     h.app.machines.add();
@@ -3700,7 +3801,11 @@ fn the_3d_view_shows_the_model_until_there_is_a_preview() {
     h.app.apply("create_shape", &shape).unwrap();
     h.app.view = View::ThreeD;
     h.frame(vec![]);
-    let raised = |app: &mut CutCraftApp| app.surface_3d().unwrap().heights.iter().any(|&z| z > 0.0);
+    // off the model: cut down to the model's base before a preview (the model in the
+    // material where Material Setup puts it), the material's uncut top in a preview that
+    // does not cut there
+    let off = job_corner(&h) + Point::new(1.0, 1.0);
+    let raised = |app: &mut CutCraftApp| app.surface_3d().unwrap().at(off).unwrap() < 0.0;
     assert!(raised(&mut h.app), "the model");
     let profile = h
         .app
@@ -4261,7 +4366,13 @@ fn the_3d_transform_handles_sit_on_top_of_a_raised_component() {
     let fit = h.app.fit_3d.unwrap();
     let surface = h.app.surface_3d().unwrap().into_owned();
     let top = surface.at(Point::new(20.0, 20.0)).unwrap();
-    assert!(top > 1.0, "the dome stands up: {top}");
+    // the model sits in the material (Material Setup's gap): its foot is the lowest point
+    let foot = surface
+        .heights
+        .iter()
+        .copied()
+        .fold(f64::INFINITY, f64::min);
+    assert!(top - foot > 1.0, "the dome stands up: {top} over {foot}");
     let camera = view3d::Camera::new(&surface, h.app.orbit, h.app.framing, fit, None);
     let at = |z: f64| {
         camera.screen(DVec3::new(
@@ -4275,7 +4386,7 @@ fn the_3d_transform_handles_sit_on_top_of_a_raised_component() {
         (cross - at(top)).length() < 2.0,
         "{cross:?} at the dome's top {:?}, not its foot {:?}",
         at(top),
-        at(0.0)
+        at(foot)
     );
     // and a drag on that plane still moves by what the pointer moved over
     let before = h.app.doc.components[&EntityId(1)].extent();
@@ -6940,6 +7051,50 @@ fn the_3d_views_help_shows_auto_rotate_with_its_moving_picture() {
 }
 
 #[test]
+fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("view_3d");
+    for words in [
+        "Changing a model's height",
+        "double-click",
+        "Transform",
+        "Total Height",
+        "Shape Height",
+        "Base Height",
+        "Esc",
+        "The 2D view never shows these buttons",
+        "Component Properties",
+    ] {
+        assert!(page.contains(words), "{words}");
+    }
+    for (picture, magic) in [
+        ("model-height-buttons.gif", &b"GIF8"[..]),
+        ("model-height-buttons.png", b"\x89PNG"),
+    ] {
+        assert!(
+            page.contains(&format!("bytes://help/{picture}")),
+            "{picture}"
+        );
+        assert!(
+            super::help::PICTURES
+                .iter()
+                .any(|(name, bytes)| *name == picture && bytes.starts_with(magic)),
+            "{picture} goes with the app"
+        );
+    }
+    assert!(
+        h.app.help_markdown("contents").contains("height buttons"),
+        "Contents names it"
+    );
+    for tool in ["transform", "scale_model_z_height"] {
+        assert!(
+            h.app.help_markdown(tool).contains("(help:view_3d)"),
+            "{tool} links it"
+        );
+    }
+}
+
+#[test]
 fn the_updates_help_shows_one_click_install_and_relaunch_with_pictures() {
     let h = Harness::new();
     assert!(h.app.help_topics().contains(&"updates"));
@@ -7055,6 +7210,8 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
     // a tall block on the right half; an outline on the floor left of it
     use cut_craft_core::component::{Combine, Component};
     let mut h = Harness::new();
+    // material thick enough for the wall, so it stands whole in it
+    h.app.doc.job.thickness = h.app.doc.job.width / 2.0 + 10.0;
     let job = h.app.doc.job;
     let o = job.area().min;
     let wall = cut_craft_core::geometry::Rect::new(
@@ -7316,6 +7473,8 @@ fn editing_placed_text_replaces_it() {
 #[test]
 fn help_contents_links_to_the_pages_and_their_tools() {
     let mut h = Harness::new();
+    // the tools are listed by their icons, drawn at their own size, as the app does
+    egui_extras::install_image_loaders(&h.ctx);
     h.app.pages.set_pinned(Page::Design, true);
     h.app.invoke(&h.ctx, "help_contents");
     assert_eq!(h.app.info, Some(Info::Help("contents")));
@@ -7330,8 +7489,24 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
     assert_eq!(h.app.info, Some(Info::Help("design")));
+    // listed by their icons: wheeled down to the first group's last tools
+    h.frame(vec![
+        Event::PointerMoved(Pos2::new(200.0, 400.0)),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -200.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Wheel,
+            modifiers: Modifiers::NONE,
+        },
+    ]);
+    // the wheel scrolls smoothly over a few frames
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    // beside its icon: the words themselves, not the space the icon leaves on their line
     let at = *h
-        .texts_at("Job Setup")
+        .words_at("Job Setup")
         .last()
         .expect("its tools are listed");
     h.click(at, Modifiers::NONE);
@@ -14099,16 +14274,76 @@ fn the_uncut_material_follows_job_setup_and_the_model_sits_on_it() {
     assert!(!h.app.showing_uncut_material(), "there is a model now");
     assert!(h.app.model_on_material());
     let model = h.app.surface_3d().unwrap().into_owned();
-    assert!(model.heights.iter().any(|&z| z > 0.0), "the model");
+    let top = model
+        .heights
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+    // Material Setup starts with Gap Above Model 0: the model's top flush with the top
+    assert!(
+        top.abs() < 1e-9,
+        "the model's top at the material's top: {top}"
+    );
     let off = model
         .at(cut_craft_core::geometry::Point::new(
             job_corner(&h).x + 1.0,
             job_corner(&h).y + 1.0,
         ))
         .unwrap();
-    assert_eq!(off, 0.0, "round the model, the material's uncut top");
+    assert!(
+        off < 0.0,
+        "round the model, cut down to its zero plane: {off}"
+    );
     assert!(model.heights.iter().all(|z| !z.is_nan()), "the whole block");
     assert_eq!(model.bottom, -30.0);
+}
+
+#[test]
+fn material_setups_model_position_moves_the_model_in_the_3d_view_on_apply() {
+    use cut_craft_core::document::{GapFrom, ModelPosition};
+    let mut h = Harness::new();
+    h.app.view = View::ThreeD;
+    h.app.doc.job.thickness = 30.0;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let shape = h.app.registry.get("create_shape").unwrap().default_params();
+    h.app.apply("create_shape", &shape).unwrap();
+    h.frame(vec![]);
+    let range = |h: &mut Harness| {
+        let m = h.app.surface_3d().unwrap().into_owned();
+        let lo = m.heights.iter().copied().fold(f64::INFINITY, f64::min);
+        let hi = m.heights.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        (lo, hi)
+    };
+    let (lo, hi) = range(&mut h);
+    let tall = hi - lo;
+    assert!(tall > 0.0 && tall < 30.0, "a model that fits: {tall}");
+    // Gap Below Model 0: its bottom on the material's bottom
+    let mut p = h
+        .app
+        .registry
+        .get("material_setup")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    p["position"] = serde_json::to_value(ModelPosition {
+        from: GapFrom::Below,
+        gap: 0.0,
+    })
+    .unwrap();
+    h.app.apply("material_setup", &p).unwrap();
+    h.frame(vec![]);
+    let (lo, hi) = range(&mut h);
+    assert!((lo + 30.0).abs() < 1e-6, "bottom on the bottom: {lo}");
+    assert!((hi - lo - tall).abs() < 1e-6, "the same model, moved");
+    // 2 mm under the top
+    p["position"] = serde_json::to_value(ModelPosition {
+        from: GapFrom::Above,
+        gap: 2.0,
+    })
+    .unwrap();
+    h.app.apply("material_setup", &p).unwrap();
+    h.frame(vec![]);
+    let (_, hi) = range(&mut h);
+    assert!((hi + 2.0).abs() < 1e-6, "top 2 mm down: {hi}");
 }
 
 fn job_corner(h: &Harness) -> cut_craft_core::geometry::Point {
@@ -17502,4 +17737,71 @@ fn the_collet_nut_coming_down_over_a_clamp_is_marked_after_a_preview() {
         "{}",
         collided.sentence
     );
+}
+#[test]
+fn material_setup_shows_both_gaps_and_says_in_red_when_the_model_sticks_out() {
+    use cut_craft_core::document::{GapFrom, ModelPosition};
+    let mut h = Harness::new();
+    h.app.doc.job.thickness = 20.0;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let shape = h.app.registry.get("create_shape").unwrap().default_params();
+    h.app.apply("create_shape", &shape).unwrap();
+    h.app.invoke(&h.ctx, "material_setup");
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let tall = h.app.placement_room().tall;
+    assert!(tall > 0.0 && tall < 20.0, "measured: {tall}");
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("Gap above the model:")),
+        "both gaps said under the setting"
+    );
+    assert!(!h.texts().iter().any(|t| t.starts_with("⚠ The model")));
+    // a gap below past the room left: kept, and said in red at the foot
+    let form = h.app.form.as_mut().unwrap();
+    form.params["position"] = serde_json::to_value(ModelPosition {
+        from: GapFrom::Below,
+        gap: 20.0 - tall + 1.0,
+    })
+    .unwrap();
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("⚠ The model sticks 1.0 mm out of the top")),
+        "{:?}",
+        h.texts()
+    );
+}
+
+#[test]
+fn model_position_help_is_on_both_forms_with_pictures_and_links_that_go_somewhere() {
+    let h = Harness::new();
+    let topics = h.app.help_topics();
+    assert!(topics.contains(&"material_setup"));
+    for form in ["material_setup", "orientate_3d_model"] {
+        let page = h.app.help_markdown(form);
+        for picture in [
+            "model-top-at-top.png",
+            "model-bottom-on-bottom.png",
+            "model-sticks-out.png",
+        ] {
+            assert!(
+                page.contains(&format!("bytes://help/{picture}")),
+                "{picture}"
+            );
+            assert!(
+                super::help::PICTURES
+                    .iter()
+                    .any(|(name, _)| *name == picture),
+                "{picture} is loaded"
+            );
+        }
+        for link in page.split("(help:").skip(1) {
+            let topic = link.split(')').next().unwrap();
+            assert!(topics.contains(&topic), "help:{topic} goes nowhere");
+        }
+    }
 }
