@@ -37,6 +37,9 @@ pub struct Display {
     /// A circle on each end of every open vector in the 2D view, so gaps that stop a shape
     /// being pocketed or carved can be seen.
     pub open_ends: bool,
+    /// Construction lines drawn (dashed) in the 2D view; hidden, they cannot be picked
+    /// either.
+    pub construction: bool,
     /// Previews play the tool cutting (Animate preview) rather than appearing cut.
     pub animate_preview: bool,
     /// What solid 2D previews are drawn in ([r, g, b]).
@@ -67,6 +70,7 @@ impl Default for Display {
             auto_wrapping: true,
             guides: true,
             open_ends: false,
+            construction: true,
             animate_preview: true,
             // the theme's warning colour, as the line previews are
             solid_colour: {
@@ -102,6 +106,7 @@ impl Display {
             "draw_origin" => &mut self.origin,
             "guides_visible" => &mut self.guides,
             "show_open_vector_ends" => &mut self.open_ends,
+            "show_construction_lines" => &mut self.construction,
             "animate_preview" => &mut self.animate_preview,
             "draw_modeling_plane" => &mut self.modeling_plane,
             "draw_material_block" => &mut self.material_block,

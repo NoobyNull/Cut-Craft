@@ -10,8 +10,8 @@ see-also: checks_before_cutting, check_spoilboard
 ## What it looks for
 
 How deep each toolpath cuts against how deep its bit can cut: its **Flute Length**, or for
-a V-bit the height of its V. A bit with no flute length set is checked as reaching half
-the material's thickness, and the message says so.
+a V-bit the height of its V. A bit with no flute length set is taken to have flutes as
+long as any cut, so it is never flagged: set its real Flute Length to have it checked.
 
 ## Why it matters
 

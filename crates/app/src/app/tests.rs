@@ -10448,6 +10448,66 @@ fn a_copy_pasted_on_its_original_shows_its_common_lines_in_red() {
 }
 
 #[test]
+fn the_right_click_menu_turns_vectors_into_construction_lines_and_back() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 30.0);
+    let menu = |app: &CutCraftApp| app.menus.selection_menu(&app.doc);
+    h.choose(menu, &["Make Construction Line"]);
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    assert!(h.app.doc.is_construction(id));
+    // all of the selection is construction lines now: the item turns them back
+    h.choose(menu, &["Make Real Line"]);
+    assert!(!h.app.doc.is_construction(id));
+    h.app.invoke(&h.ctx, "undo");
+    assert!(h.app.doc.is_construction(id), "undone, it is one again");
+}
+
+#[test]
+fn hiding_construction_lines_lets_go_of_them_and_showing_brings_them_back() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 30.0);
+    h.app.invoke(&h.ctx, "make_construction_line");
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    assert!(h.app.display.construction, "shown to start with");
+    h.app.invoke(&h.ctx, "show_construction_lines");
+    assert_eq!(
+        h.app.display.checked("show_construction_lines"),
+        Some(false)
+    );
+    assert!(!h.app.doc.shown(id) && !h.app.doc.editable(id));
+    assert!(
+        h.app.doc.selection.is_empty(),
+        "a hidden line is not left picked"
+    );
+    // a job opened while they are hidden keeps them hidden
+    h.app.doc.hide_construction = false;
+    h.frame(vec![]);
+    assert!(h.app.doc.hide_construction);
+    h.app.invoke(&h.ctx, "show_construction_lines");
+    assert!(h.app.doc.shown(id));
+}
+
+#[test]
+fn a_profile_never_cuts_a_selected_construction_line() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 30.0);
+    h.app.invoke(&h.ctx, "make_construction_line");
+    let err = h
+        .app
+        .apply(
+            "profile_toolpath",
+            &h.app
+                .registry
+                .get("profile_toolpath")
+                .unwrap()
+                .default_params(),
+        )
+        .unwrap_err();
+    assert!(err.contains("construction lines"), "{err}");
+    assert!(h.app.doc.toolpaths.is_empty());
+}
+
+#[test]
 fn show_open_vector_ends_is_a_view_menu_switch() {
     let mut h = Harness::new();
     assert!(!h.app.display.open_ends, "off to start with");
@@ -13453,12 +13513,7 @@ fn the_sample_project_opens_with_toolpaths_that_pass_the_checks() {
     assert_eq!(names, [super::sample::CARVE, super::sample::CUT_OUT]);
     let toolpaths: Vec<_> = h.app.doc.toolpaths.values().collect();
     let found = cut_craft_core::preflight::check(&h.app.doc, &toolpaths, &h.app.limits());
-    // the starter tools give no flute length, so how deep they reach goes unchecked: a
-    // note on every job, not a fault of the sample's
-    let faults: Vec<_> = found
-        .iter()
-        .filter(|f| !f.message.contains("has no flute length set"))
-        .collect();
+    let faults: Vec<_> = found.iter().collect();
     assert_eq!(faults, [] as [&cut_craft_core::preflight::Finding; 0]);
     assert!(
         !h.app.session.is_dirty(&h.app.history),
@@ -13881,7 +13936,7 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
     );
     assert!(h.text_at(line.text()).is_some(), "shown: {line:?}");
     assert!(line.text().contains("too wide for 1 spot"), "{line:?}");
-    // a wider shape fits; the starter bit has no flute length, so depth is not checked
+    // a wider shape fits; the starter bit has no flute length, so it reaches any depth
     h.app.form = None;
     h.rectangle(30.0, 10.0, 40.0, 50.0);
     h.click(h.at(70.0, 35.0), Modifiers::NONE);
@@ -13889,7 +13944,7 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
     h.app.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     let line = h.app.form_reach().expect("a reach line");
-    assert!(line.text().starts_with("Fits every spot"), "{line:?}");
+    assert_eq!(line.text(), "Reaches everything", "{line:?}");
 }
 
 #[test]

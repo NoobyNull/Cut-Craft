@@ -42,7 +42,6 @@ pub(super) fn show(ui: &mut egui::Ui, line: &Line) {
     let colour = match line {
         Line::Reaches(_) => ui.visuals().weak_text_color(),
         Line::Short(_) => ui.visuals().error_fg_color,
-        Line::Unknown(_) => ui.visuals().warn_fg_color,
     };
     let shown = ui.colored_label(colour, line.text());
     if matches!(line, Line::Short(_)) {

@@ -114,7 +114,8 @@ impl Selector {
         };
         doc.vectors
             .iter()
-            .filter(|(id, path)| on_layer(**id) && keep(path))
+            // construction lines are never cut
+            .filter(|(id, path)| !doc.is_construction(**id) && on_layer(**id) && keep(path))
             .map(|(&id, _)| id)
             .collect()
     }

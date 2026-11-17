@@ -191,6 +191,30 @@ pub trait Interactive: Command {
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct NoParams {}
 
+/// The menu groups whose commands make toolpaths from the selected vectors.
+pub const TOOLPATH_GROUPS: [&str; 2] = ["Toolpath Operations", "3D Toolpaths"];
+
+/// Whether a command with `meta` makes toolpaths, and so never sees construction lines.
+pub fn makes_toolpaths(meta: &Meta) -> bool {
+    TOOLPATH_GROUPS.contains(&meta.group)
+}
+
+/// What a toolpath says when only construction lines were selected for it: they are left
+/// out, so it found nothing to cut. Any other error is as it was.
+fn only_construction(doc: &Document, error: CommandError) -> CommandError {
+    let picked = !doc.selection.is_empty();
+    if picked && doc.selection.iter().all(|id| doc.is_construction(*id)) {
+        CommandError::Failed(CONSTRUCTION_ONLY.into())
+    } else {
+        error
+    }
+}
+
+/// The message for a toolpath given only construction lines.
+pub const CONSTRUCTION_ONLY: &str = "Only construction lines are selected, and toolpaths never \
+     cut along those. Select real vectors, or right-click a construction line and pick Make \
+     Real Line to cut along it";
+
 /// A command with its types erased, as the app and plugins see it.
 pub trait DynCommand: Send + Sync {
     fn id(&self) -> &'static str;
@@ -251,6 +275,10 @@ impl<C: Command> DynCommand for Erased<C> {
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError> {
         let params = C::Params::deserialize(params)
             .map_err(|e| CommandError::InvalidParams(format!("Check the tool's settings: {e}")))?;
+        if makes_toolpaths(&C::meta()) {
+            // a toolpath never cuts along a construction line, however it was picked
+            return C::run(&doc.for_cutting(), &params).map_err(|e| only_construction(doc, e));
+        }
         C::run(doc, &params)
     }
 
@@ -427,6 +455,19 @@ impl Registry {
                     == Some("selected_vectors")
             {
                 sources.selection.clone_from(&doc.selection);
+            }
+            // made since into construction lines: never cut
+            let kept = sources.selection.len();
+            sources.selection = (sources.selection.iter().copied())
+                .filter(|v| !doc.is_construction(*v))
+                .collect();
+            if kept > 0 && sources.selection.is_empty() {
+                return Err(CommandError::Failed(format!(
+                    "Every vector {0} was made from is a construction line now, and toolpaths \
+                     never cut along those. Right-click them and pick Make Real Line, or select \
+                     other vectors, then edit {0} and press Calculate.",
+                    toolpath.name
+                )));
             }
             // a toolpath made from no vectors (3D, rotary, picture) needs none to recalculate
             if sources.selection.is_empty() && !toolpath.vectors.is_empty() {

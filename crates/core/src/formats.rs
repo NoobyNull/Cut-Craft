@@ -37,6 +37,14 @@ pub struct ExportEntry {
     pub export: fn(&Document) -> Result<Vec<u8>, CommandError>,
 }
 
+impl ExportEntry {
+    /// The file for `doc`, its construction lines left out: they only place things, so they
+    /// are never part of what another program cuts or prints.
+    pub fn run(&self, doc: &Document) -> Result<Vec<u8>, CommandError> {
+        (self.export)(&doc.without_construction())
+    }
+}
+
 pub struct ImportEntry {
     pub id: &'static str,
     pub format: FileFormat,

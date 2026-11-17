@@ -66,16 +66,6 @@ pub fn problems_by_check(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<
         );
     } else if let Some(deep) = too_deep(name, tool, deepest, units) {
         found.push((Check::Reach, deep));
-    } else if tool.cutting_length().is_none() && deepest > 0.0 {
-        found.push((
-            Check::Reach,
-            format!(
-                "{name} cuts {} deep; {} has no flute length set, so whether it reaches is not \
-             checked: set it in the Tool Database",
-                units.length(deepest, 1),
-                tool.name
-            ),
-        ));
     }
     if let Some(loose) = comes_loose(doc, toolpath, deepest) {
         found.push((Check::LooseParts, loose));
@@ -537,8 +527,9 @@ mod tests {
             found[0].contains("1.000 in deep") && found[0].contains("0.866 in long"),
             "{found:?}"
         );
-        let unknown = problems(&doc, &toolpath(Tool::default(), "pocket", 5.0));
-        assert!(unknown[0].contains("no flute length"), "{unknown:?}");
+        // no flute length set (the starter bits): taken as long as any cut, so nothing said
+        let unknown = problems(&doc, &toolpath(Tool::default(), "pocket", 50.0));
+        assert_eq!(unknown, Vec::<String>::new());
     }
 
     #[test]
