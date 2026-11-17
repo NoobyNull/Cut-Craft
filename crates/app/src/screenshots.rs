@@ -30,7 +30,7 @@ const DARK: &str = "-dark";
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 43] = [
+const SCENES: [Scene; 44] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("design-2d-dark", |_, _| {}),
@@ -150,6 +150,13 @@ const SCENES: [Scene; 43] = [
     ("snapping-not-applied", snapping_not_applied),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
+    // Help: Reporting a bug (the details of the computer)
+    ("bug-report-form", |app, ctx| {
+        ctx.set_embed_viewports(true);
+        (app.info, app.form, app.tool_manager) = (None, None, None);
+        (app.snap_window, app.snap_draft) = (false, None);
+        cut_craft_bug_report::open_here(ctx);
+    }),
     // Help: Long jobs and the time left
     ("progress-window", progress_window),
 ];
