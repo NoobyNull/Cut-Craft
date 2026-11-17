@@ -7010,7 +7010,19 @@ fn the_settings_help_says_changes_wait_for_apply_with_pictures() {
     ] {
         assert!(page.contains(words), "{words}");
     }
-    for picture in ["options-not-applied.png", "options-apply-question.png"] {
+    for words in [
+        "Snapping Options",
+        "Machine Configuration",
+        "Tool Database",
+        "Materials Library",
+    ] {
+        assert!(page.contains(words), "{words}");
+    }
+    for picture in [
+        "options-not-applied.png",
+        "options-apply-question.png",
+        "snapping-not-applied.png",
+    ] {
         assert!(
             page.contains(&format!("bytes://help/{picture}")),
             "{picture}"
@@ -7649,6 +7661,120 @@ fn a_shortcut_set_in_options_waits_for_apply() {
             .contains(&("zoom_to_drawing".to_owned(), f8)),
         "used once applied"
     );
+}
+
+/// Untick (or tick) Smart snapping in the open Snapping Options, as its tick box does.
+fn toggle_smart_snapping(h: &mut Harness) {
+    let mut edited = h
+        .app
+        .snap_draft
+        .clone()
+        .unwrap_or_else(|| h.app.options.snapping.clone());
+    edited.smart_snapping = !edited.smart_snapping;
+    h.app.snap_draft = (edited != h.app.options.snapping).then_some(edited);
+    h.frame(vec![]);
+}
+
+#[test]
+fn snapping_options_changes_wait_for_apply_and_close_asks_first() {
+    let mut h = Harness::new();
+    h.app.options.snapping.smart_snapping = true;
+    h.app.snap_window = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+    toggle_smart_snapping(&mut h);
+    h.frame(vec![]);
+    assert!(h.app.options.snapping.smart_snapping, "not used yet");
+    assert!(h.text_at(super::options_apply::NOT_APPLIED).is_some());
+    // Apply uses it and leaves the window open
+    click_button(&mut h, "Apply");
+    assert!(!h.app.options.snapping.smart_snapping, "used now");
+    assert!(h.app.snap_window);
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+    // changed back, Close asks; Discard Changes keeps it as applied
+    toggle_smart_snapping(&mut h);
+    click_button(&mut h, "Close");
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ASK).is_some());
+    click_button(&mut h, "Discard Changes");
+    assert!(!h.app.snap_window);
+    assert!(!h.app.options.snapping.smart_snapping);
+    // Cancel throws changes away too
+    h.app.snap_window = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    toggle_smart_snapping(&mut h);
+    click_button(&mut h, "Cancel");
+    assert!(!h.app.snap_window);
+    assert!(!h.app.options.snapping.smart_snapping);
+}
+
+#[test]
+fn machine_configuration_says_when_changes_wait_and_apply_keeps_them() {
+    let mut h = Harness::new();
+    // tall enough for the whole window, buttons and all
+    h.window = vec2(1280.0, 2000.0);
+    h.app.invoke(&h.ctx, "machine_configuration");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+    let before = h.app.machines.machines.len();
+    h.app.machine_window.as_mut().unwrap().draft.add();
+    h.frame(vec![]);
+    assert!(
+        h.text_at(super::options_apply::NOT_APPLIED).is_some(),
+        "{:?}",
+        h.texts()
+    );
+    assert_eq!(h.app.machines.machines.len(), before, "not kept yet");
+    click_button(&mut h, "Apply");
+    assert_eq!(h.app.machines.machines.len(), before + 1, "kept");
+    assert!(h.app.machine_window.is_some(), "still open");
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+}
+
+#[test]
+fn the_tool_database_says_when_changes_wait_and_apply_keeps_them() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "tool_database");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+    let manager = h.app.tool_manager.as_mut().unwrap();
+    manager.new_material = "Cork".into();
+    manager.add_material();
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::NOT_APPLIED).is_some());
+    assert!(
+        !h.app.tools.materials.iter().any(|m| m == "Cork"),
+        "not kept yet"
+    );
+    click_button(&mut h, "Apply");
+    assert!(h.app.tools.materials.iter().any(|m| m == "Cork"), "kept");
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+}
+
+#[test]
+fn the_materials_library_says_when_changes_wait_and_apply_keeps_them() {
+    use cut_craft_tool_database::materials::MaterialsWindow;
+    let mut h = Harness::new();
+    h.app.materials_window = Some(MaterialsWindow::new(&h.app.materials, &h.app.tools));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+    let count = h.app.materials.materials.len();
+    h.app.materials_window.as_mut().unwrap().new_material();
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::NOT_APPLIED).is_some());
+    assert_eq!(h.app.materials.materials.len(), count, "not kept yet");
+    click_button(&mut h, "Apply");
+    assert_eq!(h.app.materials.materials.len(), count + 1, "kept");
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
 }
 
 #[test]

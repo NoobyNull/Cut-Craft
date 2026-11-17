@@ -35,9 +35,28 @@ Closing the window, with **Close** or its own close box, while changes are waiti
 2. **Discard Changes** throws them away and closes.
 3. **Keep Editing** takes you back to the settings. Pressing Esc does the same.
 
+## Snapping Options, Machine Configuration and the Tool Database
+
+The other windows that hold settings work the same way:
+
+- **Snapping Options** (F4) has the same **Close**, **Cancel** and **Apply** along its foot.
+  What drawing snaps to changes only once you press **Apply**.
+
+![Snapping Options with a change not applied yet](bytes://help/snapping-not-applied.png)
+
+- **Machine Configuration**, the **Tool Database** and the **Materials Library** keep their
+  **OK**, **Cancel** and **Apply** where they always were. **Apply** is greyed out until you
+  change something, the same **● Changes not applied yet** note shows beside it while
+  changes wait, and **OK** keeps them and closes.
+- Closing any of them with its own close box while changes wait asks **Apply your
+  changes?** first, just as Options does.
+
+**Material Setup** and the other forms on the Design and Toolpaths pages are not windows:
+their **Apply** button uses what you typed, as before.
+
 ## Shortcuts too
 
 A shortcut you set or remove in **Mouse and Shortcuts** also waits for **Apply**. Until
 then the old shortcut still runs.
 
-See also: [Web API](help:web_api), [3D View](help:view_3d), [Did You Know?](help:tips).
+See also: [Toolpaths](help:toolpaths), [Web API](help:web_api), [3D View](help:view_3d), [Did You Know?](help:tips).

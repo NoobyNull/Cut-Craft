@@ -1317,6 +1317,10 @@ struct CutCraftApp {
     save_checks: Vec<SaveChecks>,
     /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
     snap_window: bool,
+    /// Snapping Options changed and not applied yet; `None` when it shows them as they are.
+    snap_draft: Option<cut_craft_core::snap::SnapOptions>,
+    /// Close was pressed on Snapping Options with changes not applied: it asks first.
+    snap_closing: bool,
     /// Gadgets ▸ Job Setup Sheet Editor is open.
     job_sheet_window: bool,
     /// Toolpaths ▸ Print Part Labels is open.

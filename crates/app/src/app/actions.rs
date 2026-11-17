@@ -171,6 +171,8 @@ impl CutCraftApp {
             summary: super::Summary::default(),
             stroke: Vec::new(),
             snap_window: false,
+            snap_draft: None,
+            snap_closing: false,
             job_sheet_window: false,
             part_labels_window: false,
             clearing_window: false,
@@ -2193,6 +2195,8 @@ impl CutCraftApp {
                     self.machines = draft;
                     if outcome == MachineOutcome::Ok {
                         self.machine_window = None;
+                    } else if let Some(w) = &mut self.machine_window {
+                        w.applied();
                     }
                     self.machines_changed("Machines saved");
                     if self.sync_machine_keep_out() {

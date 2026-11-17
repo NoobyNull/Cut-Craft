@@ -95,6 +95,11 @@ pub struct Manager {
     asking: Option<Question>,
     /// The database as last kept (opened, or Apply): what the edits since would delete.
     saved: ToolDatabase,
+    /// The tool changer as last kept, once the window has drawn (it is loaded after
+    /// opening): edits to it wait for Apply too.
+    saved_changer: Option<Option<Changer>>,
+    /// Closed with changes not applied: it asks Apply or Discard first.
+    closing: bool,
     /// The tool each of the open job's toolpaths cuts with, one name per toolpath: Delete
     /// says how many of them cut with the tools it would take.
     pub job_tools: Vec<String>,
@@ -287,6 +292,8 @@ impl Manager {
             renames: vec![],
             asking: None,
             saved: db.clone(),
+            saved_changer: None,
+            closing: false,
             job_tools: vec![],
             #[cfg(test)]
             tree_rect: egui::Rect::NOTHING,
@@ -415,10 +422,23 @@ impl Manager {
         report
     }
 
+    /// There are edits Apply or OK hasn't kept yet.
+    pub fn dirty(&self) -> bool {
+        self.draft != self.saved
+            || self
+                .saved_changer
+                .as_ref()
+                .is_some_and(|c| *c != self.changer)
+    }
+
     /// Draws the window; what it asks of the app, if anything.
     pub fn show(&mut self, ctx: &egui::Context, look: &Look) -> Option<Outcome> {
+        use cut_craft_bug_report::unapplied::{self, Answer};
         let mut open = true;
         let mut outcome = None;
+        let changer = self.changer.clone();
+        self.saved_changer.get_or_insert(changer);
+        let dirty = self.dirty();
         let size = ctx.content_rect().size() * WINDOW_SHARE;
         cut_craft_bug_report::dialog_with_panels(
             ctx,
@@ -432,6 +452,15 @@ impl Manager {
             &mut open,
             |ui| {
                 cut_craft_bug_report::mark(ui, "Tool Database window");
+                unapplied::hold_close(ui, dirty);
+                if self.closing {
+                    match unapplied::question(ui.ctx(), "tool_database_apply_question") {
+                        Some(Answer::ApplyAndClose) => outcome = Some(Outcome::Ok),
+                        Some(Answer::Discard) => outcome = Some(Outcome::Cancel),
+                        Some(Answer::KeepEditing) => self.closing = false,
+                        None => {}
+                    }
+                }
                 egui::Panel::bottom("tool_database_buttons").show(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("Cancel").clicked() {
@@ -495,17 +524,26 @@ impl Manager {
                 egui::CentralPanel::default().show(ui, |ui| {
                     egui::Panel::bottom("tool_database_apply").show(ui, |ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("Apply").clicked() {
+                            if unapplied::apply_button(ui, dirty) {
                                 outcome = Some(Outcome::Apply);
                             }
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| unapplied::note(ui, dirty),
+                            );
                         });
                     });
                     egui::ScrollArea::vertical().show(ui, |ui| self.details(ui, look));
                 });
             },
         );
+        // the close box drops the edits only once asked, while some wait
         if !open {
-            outcome = Some(Outcome::Cancel);
+            if dirty {
+                self.closing = true;
+            } else {
+                outcome = Some(Outcome::Cancel);
+            }
         }
         if let Some(asked) = self.pending.take() {
             outcome = outcome.or(Some(asked));
@@ -519,6 +557,8 @@ impl Manager {
     /// The edits so far are kept (Apply): Cancel goes back to here from now on.
     pub fn applied(&mut self) {
         self.saved = self.draft.clone();
+        self.saved_changer = Some(self.changer.clone());
+        self.closing = false;
     }
 
     /// Materials Library…: opens it, keeping the edits so far as Apply does; when they

@@ -42,6 +42,10 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
         include_bytes!("../../help/pictures/options-not-applied.png"),
     ),
     (
+        "snapping-not-applied.png",
+        include_bytes!("../../help/pictures/snapping-not-applied.png"),
+    ),
+    (
         "options-apply-question.png",
         include_bytes!("../../help/pictures/options-apply-question.png"),
     ),

@@ -21,7 +21,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 22] = [
+const SCENES: [Scene; 23] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -76,7 +76,17 @@ const SCENES: [Scene; 22] = [
     ("options-apply-question", |app, _| {
         app.options_closing = true;
     }),
+    ("snapping-not-applied", snapping_not_applied),
 ];
+
+/// Snapping Options (F4) with Smart snapping unticked and not applied yet.
+fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
+    (app.options_window, app.options_draft, app.options_closing) = (false, None, false);
+    app.snap_window = true;
+    let mut edited = app.options.snapping.clone();
+    edited.smart_snapping = !edited.smart_snapping;
+    app.snap_draft = Some(edited);
+}
 
 /// Edit ▸ Options on Appearance with the dark theme picked and not applied yet.
 fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
