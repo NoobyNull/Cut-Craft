@@ -165,7 +165,8 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
     }
     if !progress::cancelled() {
         progress::stage(&Phase::Collisions.stage(""));
-        let hits = crate::collision::find(&doc.job, toolpaths, &limits.holding);
+        let clamps: Vec<_> = doc.named_keep_out().cloned().collect();
+        let hits = crate::collision::find(&doc.job, toolpaths, &limits.holding, &clamps);
         // a warning never switched off: saved only once the user agrees
         found.extend(toolpaths.iter().zip(&hits).filter_map(|(t, hits)| {
             crate::collision::sentence(&t.name, &t.tool, hits, doc.job.units)

@@ -11,7 +11,8 @@ see-also: checks_before_cutting, collisions, check_reach
 
 While cutting the job in order, after every move deep enough to matter, whether the parts
 above the flutes run into wood that is still there: the plain shank (where it is wider than
-the cut), the **collet nut** that holds the bit, and the **spindle** body above it. It uses
+the cut), the **collet nut** that holds the bit, and the **spindle** body above it, and
+whether they come down over a clamp (a keep-out zone given a height). It uses
 the sizes in Machine Configuration ▸ Spindle and Collet Nut, and each bit's **Stick-out**
 from the Tool Database.
 

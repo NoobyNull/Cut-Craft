@@ -29,11 +29,28 @@ const TOUCH: f64 = 0.001;
 /// What a zone is called when it was made without a name (jobs saved before zones had them).
 pub const UNNAMED: &str = "Zone";
 
-/// A keep-out zone: its outline and the name its label shows.
+/// How tall a clamp is taken to stand above the material's top when its zone does not say,
+/// mm: most hobby hold-down and cam clamps stand 15 to 25 mm proud.
+pub const CLAMP_STANDS: f64 = 20.0;
+
+/// A keep-out zone: its outline, the name its label shows, and how tall what is there (a
+/// clamp) stands above the material's top.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct KeepOutZone {
     pub name: String,
     pub path: Path,
+    /// How far it stands above the material's top, mm, for the collet and spindle checks;
+    /// 0 for not given, taken as [`CLAMP_STANDS`] (added with collision checks)
+    #[serde(skip_serializing_if = "is_nothing")]
+    pub stands: f64,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if"
+)]
+fn is_nothing(n: &f64) -> bool {
+    *n == 0.0
 }
 
 impl KeepOutZone {
@@ -41,7 +58,36 @@ impl KeepOutZone {
         Self {
             name: name.into(),
             path,
+            stands: 0.0,
         }
+    }
+
+    /// It standing `stands` mm above the material's top.
+    #[must_use]
+    pub fn standing(mut self, stands: f64) -> Self {
+        self.stands = stands.max(0.0);
+        self
+    }
+
+    /// How tall it stands above the material's top, mm, and whether that was taken rather
+    /// than given.
+    #[must_use]
+    pub fn height(&self) -> (f64, bool) {
+        if self.stands.is_finite() && self.stands > 0.0 {
+            (self.stands, false)
+        } else {
+            (CLAMP_STANDS, true)
+        }
+    }
+
+    /// Where the axis of a round part `radius` out from it must not pass for the part to
+    /// stay clear of the zone, seen from above: worked out once, asked of many moves.
+    #[must_use]
+    pub fn around(&self, radius: f64) -> Around {
+        Around(grown_rings(
+            std::slice::from_ref(&self.path),
+            radius.max(0.0) + TOUCH,
+        ))
     }
 
     /// What its label says.
@@ -57,17 +103,34 @@ impl KeepOutZone {
     }
 }
 
+/// A zone grown by a part's radius ([`KeepOutZone::around`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Around(Vec<Vec<Point>>);
+
+impl Around {
+    /// Whether the part's axis going straight from `a` to `b` brings the part over the zone.
+    #[must_use]
+    pub fn crossed(&self, a: Point, b: Point) -> bool {
+        crosses(&self.0, a, b)
+    }
+}
+
 // jobs saved before zones had names keep each one as a bare outline
 impl<'de> Deserialize<'de> for KeepOutZone {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
         #[serde(untagged)]
         enum Saved {
-            Named { name: String, path: Path },
+            Named {
+                name: String,
+                path: Path,
+                #[serde(default)]
+                stands: f64,
+            },
             Bare(Path),
         }
         Ok(match Saved::deserialize(d)? {
-            Saved::Named { name, path } => Self { name, path },
+            Saved::Named { name, path, stands } => Self { name, path, stands },
             Saved::Bare(path) => Self::new(UNNAMED, path),
         })
     }

@@ -2328,8 +2328,14 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         width: 20.0,
         height: 60.0,
         name: String::new(),
+        stands: 30.0,
     }];
     assert!(h.app.sync_machine_keep_out());
+    assert_eq!(
+        h.app.doc.machine_keep_out[0].height(),
+        (30.0, false),
+        "its height comes too"
+    );
     h.app.keep_out_changed();
     assert!(!crossed(&h.app.doc.keep_out_zones(), &moves(&h.app)));
     assert!(rapids(&h.app) > straight, "round the machine's clamp");
@@ -4393,6 +4399,106 @@ fn the_3d_transform_handles_sit_on_top_of_a_raised_component() {
     h.drag(cross, corner);
     let moved = h.app.doc.components[&EntityId(1)].extent();
     assert!((moved.center() - before.max).length() < 0.5, "{moved:?}");
+}
+
+/// A harness on the domed test job, looking down on it in the 3D view, and where on the
+/// screen the dome's middle is.
+fn dome_from_above() -> (Harness, Pos2) {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let fit = h.app.fit_3d.unwrap();
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
+    let z = surface.at(Point::new(20.0, 20.0)).unwrap();
+    let middle = screen(cut_craft_core::glam::DVec3::new(
+        20.0 - surface.origin.x,
+        20.0 - surface.origin.y,
+        z,
+    ));
+    (h, middle)
+}
+
+#[test]
+fn one_click_on_a_model_in_3d_picks_it_and_shows_its_height_buttons() {
+    let (mut h, dome) = dome_from_above();
+    assert!(h.app.doc.selected_components.is_empty());
+    h.click(dome, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.selected_components, [EntityId(1)].into());
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+    for which in [Handle3d::Total, Handle3d::Height, Handle3d::Base] {
+        assert!(
+            h.app.handles_3d.iter().any(|(k, _)| *k == which),
+            "{which:?} shows"
+        );
+    }
+    // clicking it again, or double-clicking it, keeps it picked with its buttons
+    h.click(dome, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+    h.double_click(dome);
+    h.frame(vec![]);
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+    assert_eq!(h.app.doc.selected_components, [EntityId(1)].into());
+    // a click off every model lets it go
+    let off = h.app.fit_3d.unwrap().left_top() + vec2(4.0, 4.0);
+    h.click(off, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.doc.selected_components.is_empty());
+    assert_eq!(h.app.handles_3d, vec![], "no buttons with nothing picked");
+}
+
+#[test]
+fn a_click_in_3d_leaves_another_view_tool_alone() {
+    let (mut h, dome) = dome_from_above();
+    h.app.view_tool = Some(ViewTool::Measure);
+    h.click(dome, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.selected_components, [EntityId(1)].into());
+    assert_eq!(h.app.view_tool, Some(ViewTool::Measure));
+}
+
+#[test]
+fn a_picked_model_is_outlined_in_3d_even_out_of_transform_mode() {
+    let (mut h, _) = dome_from_above();
+    assert!(h.app.picked_outline.is_none());
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.frame(vec![]);
+    let (_, rings) = h.app.picked_outline.as_ref().expect("an outline");
+    assert!(!rings.is_empty() && rings.iter().all(|r| r.len() > 3));
+    h.app.doc.selected_components.clear();
+    h.frame(vec![]);
+    assert!(h.app.picked_outline.is_none());
+    // a new job forgets the old one's outline (its revisions start again)
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.frame(vec![]);
+    h.app.reset_job();
+    assert!(h.app.picked_outline.is_none());
+}
+
+#[test]
+fn the_height_buttons_are_bigger_than_an_ordinary_button() {
+    let (mut h, dome) = dome_from_above();
+    h.click(dome, Modifiers::NONE);
+    h.frame(vec![]);
+    let at = |which: Handle3d| {
+        h.app
+            .handles_3d
+            .iter()
+            .find(|(k, _)| *k == which)
+            .map(|(_, at)| *at)
+            .unwrap()
+    };
+    let apart = (at(Handle3d::Height) - at(Handle3d::Total)).length();
+    let button = h.ctx.global_style().spacing.interact_size.y;
+    assert!(
+        apart >= button * super::panels::HEIGHT_BUTTON,
+        "{apart} apart, buttons {button}"
+    );
 }
 
 #[test]
@@ -7055,7 +7161,9 @@ fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
     let page = h.app.help_markdown("view_3d");
     for words in [
         "Changing a model's height",
-        "double-click",
+        "**click** the model",
+        "blue line",
+        "Shift",
         "Transform",
         "Total Height",
         "Shape Height",
@@ -18162,6 +18270,8 @@ fn the_collision_help_explains_the_sizes_with_a_picture() {
         "Holder per bit",
         "Own holder",
         "This question cannot be switched",
+        "Clamp Height",
+        "(help:keep_out_zones)",
         "pictures/collet-hits.png",
     ] {
         assert!(page.contains(words), "{words}");
@@ -18171,6 +18281,66 @@ fn the_collision_help_explains_the_sizes_with_a_picture() {
             .iter()
             .any(|(name, bytes)| *name == "collet-hits.png" && bytes.starts_with(b"\x89PNG")),
         "its picture goes with the app"
+    );
+}
+
+#[test]
+fn the_collet_nut_coming_down_over_a_clamp_is_marked_after_a_preview() {
+    // Matthew 2026-11-17: keep-out zones get a height, so the collet is checked against
+    // clamps too
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    for toolpath in h.app.doc.toolpaths.values_mut() {
+        // the bit reaches the whole cut, so only the clamp is in the nut's way
+        toolpath.tool.flute_length = 60.0;
+        toolpath.tool.stickout = 60.0;
+    }
+    let deepest = h
+        .app
+        .doc
+        .toolpaths
+        .values()
+        .next()
+        .unwrap()
+        .moves
+        .iter()
+        .map(|m| m.to.z)
+        .fold(0.0, f64::min);
+    // a clamp just outside the profile, standing taller than the nut is above the deepest
+    // pass
+    let o = h.app.doc.job.area().min;
+    let at = |x: f64, y: f64| cut_craft_core::geometry::Point::new(o.x + x, o.y + y);
+    let clamp = cut_craft_core::geometry::Path::polyline(
+        &[
+            at(64.0, 20.0),
+            at(74.0, 20.0),
+            at(74.0, 30.0),
+            at(64.0, 30.0),
+        ],
+        true,
+    );
+    h.app.doc.keep_out = vec![
+        cut_craft_core::keep_out::KeepOutZone::new("Clamp 1", clamp)
+            .standing(60.0 + deepest + 10.0),
+    ];
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.frame(vec![]);
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    let collided = h
+        .app
+        .collisions
+        .get(&id)
+        .expect("the nut comes over the clamp");
+    assert!(
+        collided.sentence.contains("below the top of Clamp 1"),
+        "{}",
+        collided.sentence
     );
 }
 #[test]

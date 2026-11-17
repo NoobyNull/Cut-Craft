@@ -72,6 +72,9 @@ pub struct Zone {
     pub height: f64,
     /// Its name ("Front clamp"); empty for "Machine clamp 1" and so on, by its place.
     pub name: String,
+    /// How tall the clamp stands above the material's top, mm, for the collet and spindle
+    /// checks; 0 for not given (taken as the usual clamp's; added with collision checks).
+    pub stands: f64,
 }
 
 impl Zone {

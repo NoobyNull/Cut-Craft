@@ -205,7 +205,7 @@ impl Check {
             }
             Self::Collisions => {
                 "On deep cuts, the plain shank, the collet nut that holds the bit and the \
-                 spindle body stay clear of the wood still standing, so they do not hit it, \
+                 spindle body stay clear of the wood still standing and of clamps, so they do not hit it, \
                  spoil the part or pull the bit out of the collet. Always asked about, \
                  even when ticked"
             }
