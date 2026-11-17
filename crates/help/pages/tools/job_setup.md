@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-17
 see-also: draw_rectangle, draw_circle, draw_text
 ---
 
@@ -23,8 +23,10 @@ see-also: draw_rectangle, draw_circle, draw_text
 
    ![Step 4](pictures/job_setup/step-4.png)
 
-5. Press **OK**. The sheet on screen is now your board, ready to draw on.
+5. Pick what the board is under **Material** (Pine, Hard Maple, MDF…), from the Materials Library. Toolpaths over the 3D model take their bits' feeds for it. Layers name their own material in [Layer Properties](help:layer_properties): a layer left without one cuts as the hardest class, so name it on each layer you cut (see [Toolpaths](help:toolpaths)).
 
-   ![Step 5](pictures/job_setup/step-5.png)
+6. Press **OK**. The sheet on screen is now your board, ready to draw on.
+
+   ![Step 6](pictures/job_setup/step-5.png)
 
 Next, draw what you want to cut: [Draw Rectangle](help:draw_rectangle), [Draw Circle](help:draw_circle) or [Draw Text](help:draw_text).

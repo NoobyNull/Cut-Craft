@@ -146,6 +146,14 @@ Its Materials Library… button keeps your changes first, as Apply does; when th
 or materials it asks first, as Cancel could not bring those back afterwards (a tool only
 renamed is not counted).
 
+Which material a toolpath's feeds are for: name the material on each layer (Layer Properties
+▸ Material) and in [Job Setup](help:job_setup) ▸ Material. A toolpath cuts with its bit's
+feeds for the hardest material its vectors are on. A vector on a layer that names no material
+counts as the hardest class (Hard Metals), even when Job Setup names one, so a forgotten
+layer cuts slowly rather than too fast. A toolpath over no vectors (over the 3D model) uses
+Job Setup's material, or the hardest class if that is empty. A job where no layer or sheet
+names a material keeps cutting with the Tool Database's active material, as before.
+
 Toolpaths ▸ Clearing Settings (or Clearing Settings… in a Pocket or Profile form's Cutting
 window) sets how the light-cut clearing styles cut, for the whole job. It is saved with the
 job, so the job cuts the same on any computer, whatever that computer's own defaults are;
