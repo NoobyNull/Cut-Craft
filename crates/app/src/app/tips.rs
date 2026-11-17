@@ -710,8 +710,22 @@ pub(super) const TIPS: &[Tip] = &[
     tool(
         Area::Modelling,
         "material_setup",
-        "**Material Setup** places the 3D model in the material by the gap above its top or below \
-         its bottom, so you can sink a carving below the surface or start it right at the top.",
+        "A 3D model is usually thinner than its board. **Material Setup**'s **Model Position in \
+         Material** sets the gap above and below it: type one, and the other is what is left.",
+    ),
+    icon(
+        Area::Modelling,
+        "job_setup/material_size_xyz.png",
+        "Not sure where to put the model in the board? In **Material Setup**, press **⬆ Top at \
+         material top**: the least material is cut away, and it is the usual choice.",
+        "material_setup",
+    ),
+    icon(
+        Area::Safety,
+        "slice",
+        "A model drawn in red pokes out of the material: out of the bottom, the bit would cut \
+         your spoilboard. Lower the model, or cut it into boards with **Slice Model**.",
+        "material_setup",
     ),
     icon(
         Area::Modelling,
