@@ -4,7 +4,8 @@
 //! changer) and for settings that cannot cut (no moves, no feed rate). These
 //! are Cut Craft's own. Every message says how to put the problem right.
 
-use crate::checks::{LEFT, problems_over};
+pub use crate::check_list::{Check, Phase};
+use crate::checks::{LEFT, problems_by_check};
 use crate::document::Document;
 use crate::progress;
 use crate::simulation::{Material, each};
@@ -52,45 +53,53 @@ const MOST_CELLS: f64 = 800.0;
 /// Whether a finding stops the save.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
-    /// Saved only once the user agrees, unless Options ▸ Confirmation Choices say to save
-    /// without asking.
+    /// Saved only once the user has ticked it as read (or agreed to Save Anyway).
     Warning,
-    /// Saved only once the user agrees, whatever Options say: the collet or spindle hitting
-    /// the material (a warning that can never be switched off).
+    /// Saved only once the user agrees to Save Anyway, even when ticked: the collet or
+    /// spindle hitting the material.
     MustAsk,
     /// Not saved until it is put right.
     Error,
 }
 
-/// One thing found, as a sentence saying what is wrong and how to fix it.
+/// One thing found, as a sentence saying what is wrong and how to fix it, and the check
+/// that found it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
     pub severity: Severity,
     pub message: String,
+    pub check: Check,
 }
 
 impl Finding {
-    fn error(message: String) -> Self {
+    pub fn error(check: Check, message: String) -> Self {
         Self {
             severity: Severity::Error,
             message,
+            check,
         }
     }
 
-    fn must_ask(message: String) -> Self {
+    pub fn must_ask(check: Check, message: String) -> Self {
         Self {
             severity: Severity::MustAsk,
             message,
+            check,
         }
     }
 
-    fn warning(message: String) -> Self {
+    pub fn warning(check: Check, message: String) -> Self {
         Self {
             severity: Severity::Warning,
             message,
+            check,
         }
     }
 }
+
+/// How far a bit's feed rate, plunge rate or spindle speed may be from its maker's figure
+/// before it is called out, as a share of the figure.
+const MAKERS_SHARE: f64 = 0.1;
 
 /// What the machine can do, as Machine Configuration has it; 0 (or empty) is not given and
 /// is not checked.
@@ -111,6 +120,11 @@ pub struct Limits {
     /// Material left behind is mentioned only where it is more than this, mm (Options ▸
     /// Confirmation Choices); `None` for the usual [`crate::checks::LEFT`].
     pub left: Option<f64>,
+    /// The Tool Database's copy of each bit the toolpaths use, by name, with the cutting
+    /// data for the active material: a maker's catalogue copy where there is one. A bit
+    /// not in it is not in the Tool Database. `None` when the bits are not compared with
+    /// the Tool Database at all.
+    pub library: Option<std::collections::BTreeMap<String, Tool>>,
     /// How the machine holds its bits, for the collet and holder checks.
     pub holding: crate::collision::Holding,
 }
@@ -133,27 +147,30 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
             if progress::cancelled() {
                 return;
             }
-            progress::stage(&format!(
-                "Checking the settings and reach of {}",
-                toolpath.name
-            ));
+            progress::stage(&Phase::Settings.stage(&toolpath.name));
             progress::part(i, toolpaths.len(), || {
                 settings(doc, toolpath, limits, &mut found);
             });
         }
     });
-    machine(doc, toolpaths, limits, &mut found);
+    if !progress::cancelled() {
+        progress::stage(&Phase::Machine.stage(""));
+        machine(doc, toolpaths, limits, &mut found);
+        keep_out(doc, toolpaths, &mut found);
+        tool_numbers(toolpaths, &mut found);
+    }
     if doc.job.rotary.is_none() && !progress::cancelled() {
-        progress::stage("Cutting the toolpaths in order to look for crashes and air cutting");
+        progress::stage(&Phase::Cutting.stage(""));
         progress::part(1, 2, || simulate(doc, toolpaths, &mut found));
     }
     if !progress::cancelled() {
-        progress::stage("Looking for the collet or spindle hitting the material");
+        progress::stage(&Phase::Collisions.stage(""));
         let clamps: Vec<_> = doc.named_keep_out().cloned().collect();
         let hits = crate::collision::find(&doc.job, toolpaths, &limits.holding, &clamps);
         // a warning never switched off: saved only once the user agrees
         found.extend(toolpaths.iter().zip(&hits).filter_map(|(t, hits)| {
-            crate::collision::sentence(&t.name, &t.tool, hits, doc.job.units).map(Finding::must_ask)
+            crate::collision::sentence(&t.name, &t.tool, hits, doc.job.units)
+                .map(|m| Finding::must_ask(Check::Collisions, m))
         }));
     }
     // stable: each severity keeps toolpath order
@@ -194,46 +211,64 @@ fn told_apart(toolpaths: &[&Toolpath]) -> Vec<Option<Toolpath>> {
 fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Vec<Finding>) {
     let (name, tool) = (&toolpath.name, &toolpath.tool);
     if toolpath.moves.is_empty() {
-        found.push(Finding::error(format!(
-            "{name} has no moves: recalculate it, or untick it in the toolpath list so it \
+        found.push(Finding::error(
+            Check::CanCut,
+            format!(
+                "{name} has no moves: recalculate it, or untick it in the toolpath list so it \
              is not saved"
-        )));
+            ),
+        ));
         return;
     }
     if toolpath.stale {
-        found.push(Finding::warning(format!(
-            "{name} is out of date: what it was made from has changed since. Recalculate it \
+        found.push(Finding::warning(
+            Check::UpToDate,
+            format!(
+                "{name} is out of date: what it was made from has changed since. Recalculate it \
              so it cuts what the design shows now"
-        )));
+            ),
+        ));
     }
     let has = |kind| toolpath.moves.iter().any(|m| m.kind == kind);
     if has(MoveKind::Cut)
         && let Some(drill) = drill_sideways(&toolpath.strategy, tool)
     {
-        found.push(Finding::warning(format!("{name}: {drill}")));
+        found.push(Finding::warning(
+            Check::Drilling,
+            format!("{name}: {drill}"),
+        ));
     }
     if has(MoveKind::Cut) && tool.feed_rate <= 0.0 {
-        found.push(Finding::error(format!(
-            "{name}: {} has no feed rate, so the machine would not move while cutting. Set \
+        found.push(Finding::error(
+            Check::CanCut,
+            format!(
+                "{name}: {} has no feed rate, so the machine would not move while cutting. Set \
              the feed rate in the toolpath's tool settings",
-            tool.name
-        )));
+                tool.name
+            ),
+        ));
     }
     if has(MoveKind::Plunge) && tool.plunge_rate <= 0.0 {
-        found.push(Finding::error(format!(
-            "{name}: {} has no plunge rate, so the machine would not move down into the \
+        found.push(Finding::error(
+            Check::CanCut,
+            format!(
+                "{name}: {} has no plunge rate, so the machine would not move down into the \
              material. Set the plunge rate in the toolpath's tool settings",
-            tool.name
-        )));
+                tool.name
+            ),
+        ));
     }
     // a laser has no spindle
     let laser = !toolpath.power.is_empty();
     if !laser && tool.spindle_speed <= 0.0 {
-        found.push(Finding::warning(format!(
-            "{name}: {} has no spindle speed, so the spindle may not turn on. Set the \
+        found.push(Finding::warning(
+            Check::CanCut,
+            format!(
+                "{name}: {} has no spindle speed, so the spindle may not turn on. Set the \
              spindle speed in the toolpath's tool settings",
-            tool.name
-        )));
+                tool.name
+            ),
+        ));
     }
     on_machine(toolpath, laser, limits, doc.job.units, found);
     let deepest = toolpath
@@ -244,22 +279,29 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
         .fold(0.0, f64::max);
     let below = deepest - doc.job.thickness;
     if flattens_spoilboard(toolpath) {
-        found.push(Finding::warning(format!(
-            "{name} flattens the spoilboard, not the material: take everything off the bed, \
+        found.push(Finding::warning(
+            Check::Spoilboard,
+            format!(
+                "{name} flattens the spoilboard, not the material: take everything off the bed, \
              zero X and Y at the spoilboard's front-left corner and Z on top of it"
-        )));
+            ),
+        ));
     } else if doc.job.thickness > 0.0 && below > SPOILBOARD {
-        found.push(Finding::warning(format!(
-            "{name} cuts {} below the material, into the spoilboard. Check the material \
+        found.push(Finding::warning(
+            Check::Spoilboard,
+            format!(
+                "{name} cuts {} below the material, into the spoilboard. Check the material \
              thickness in Job Setup and the toolpath's cut depth",
-            doc.job.units.length(below, 1)
-        )));
+                doc.job.units.length(below, 1)
+            ),
+        ));
     }
     found.extend(
-        problems_over(doc, toolpath, limits.left.unwrap_or(LEFT))
+        problems_by_check(doc, toolpath, limits.left.unwrap_or(LEFT))
             .into_iter()
-            .map(Finding::warning),
+            .map(|(check, problem)| Finding::warning(check, problem)),
     );
+    library(toolpath, limits, doc.job.units, found);
 }
 
 /// Whether `toolpath` is a Surfacing Toolpath flattening the spoilboard: it cuts below the
@@ -280,20 +322,26 @@ fn on_machine(
     let [slowest, fastest] = limits.spindle;
     if !laser && tool.spindle_speed > 0.0 {
         if slowest > 0.0 && tool.spindle_speed < slowest {
-            found.push(Finding::warning(format!(
-                "{name}: {} turns at {:.0} rpm, but the spindle of {} turns no slower than \
+            found.push(Finding::warning(
+                Check::SpindleRange,
+                format!(
+                    "{name}: {} turns at {:.0} rpm, but the spindle of {} turns no slower than \
                  {slowest:.0} rpm. Raise the spindle speed (and the feed rate with it, to \
                  keep the chip load)",
-                tool.name, tool.spindle_speed, limits.name
-            )));
+                    tool.name, tool.spindle_speed, limits.name
+                ),
+            ));
         }
         if fastest > 0.0 && tool.spindle_speed > fastest {
-            found.push(Finding::warning(format!(
-                "{name}: {} turns at {:.0} rpm, but the spindle of {} turns no faster than \
+            found.push(Finding::warning(
+                Check::SpindleRange,
+                format!(
+                    "{name}: {} turns at {:.0} rpm, but the spindle of {} turns no faster than \
                  {fastest:.0} rpm. Lower the spindle speed (and the feed rate with it, to \
                  keep the chip load)",
-                tool.name, tool.spindle_speed, limits.name
-            )));
+                    tool.name, tool.spindle_speed, limits.name
+                ),
+            ));
         }
     }
     let [x, y, z] = limits.max_rate;
@@ -304,25 +352,31 @@ fn on_machine(
         (false, false) => 0.0,
     };
     if sideways > 0.0 && tool.feed_rate > sideways {
-        found.push(Finding::warning(format!(
-            "{name}: the feed rate of {} is {}, faster than {} moves ({}). It will cut slower \
+        found.push(Finding::warning(
+            Check::MachineSpeeds,
+            format!(
+                "{name}: the feed rate of {} is {}, faster than {} moves ({}). It will cut slower \
              than planned; lower the feed rate to match",
-            tool.name,
-            units.feed(tool.feed_rate, 0),
-            limits.name,
-            units.feed(sideways, 0)
-        )));
+                tool.name,
+                units.feed(tool.feed_rate, 0),
+                limits.name,
+                units.feed(sideways, 0)
+            ),
+        ));
     }
     let plunges = toolpath.moves.iter().any(|m| m.kind == MoveKind::Plunge);
     if z > 0.0 && plunges && tool.plunge_rate > z {
-        found.push(Finding::warning(format!(
-            "{name}: the plunge rate of {} is {}, faster than {} moves in Z ({}). Lower the \
+        found.push(Finding::warning(
+            Check::MachineSpeeds,
+            format!(
+                "{name}: the plunge rate of {} is {}, faster than {} moves in Z ({}). Lower the \
              plunge rate to match",
-            tool.name,
-            units.feed(tool.plunge_rate, 0),
-            limits.name,
-            units.feed(z, 0)
-        )));
+                tool.name,
+                units.feed(tool.plunge_rate, 0),
+                limits.name,
+                units.feed(z, 0)
+            ),
+        ));
     }
     if !limits.slots.is_empty()
         && !limits
@@ -330,13 +384,215 @@ fn on_machine(
             .iter()
             .any(|s| s.as_deref() == Some(tool.name.as_str()))
     {
-        found.push(Finding::warning(format!(
-            "{name}: {} is not loaded in the tool changer of {}, so the machine will stop \
+        found.push(Finding::warning(
+            Check::ToolChanger,
+            format!(
+                "{name}: {} is not loaded in the tool changer of {}, so the machine will stop \
              and ask for it. Load it in a slot in Machine Configuration; if it is no longer \
              in the Tool Database, pick a tool again with the toolpath's Select…",
-            tool.name, limits.name
-        )));
+                tool.name, limits.name
+            ),
+        ));
     }
+}
+
+/// Whether each bit is from a maker's catalogue, and its feeds and speeds near the maker's
+/// figures, as the Tool Database has them ([`Limits::library`]).
+fn library(
+    toolpath: &Toolpath,
+    limits: &Limits,
+    units: crate::document::Units,
+    found: &mut Vec<Finding>,
+) {
+    let Some(library) = &limits.library else {
+        return;
+    };
+    let (name, tool) = (&toolpath.name, &toolpath.tool);
+    let Some(listed) = library.get(&tool.name) else {
+        found.push(Finding::warning(
+            Check::GenericTool,
+            format!(
+                "{name}: {} is not in the Tool Database, so its feeds and speeds cannot be \
+                 compared with a maker's figures. Pick the bit with the toolpath's Select…, \
+                 or add it to the Tool Database",
+                tool.name
+            ),
+        ));
+        return;
+    };
+    let maker = listed.manufacturer.trim();
+    if maker.is_empty() {
+        found.push(Finding::warning(
+            Check::GenericTool,
+            format!(
+                "{name}: {} is a generic bit, not one from a maker's catalogue, so its feeds \
+                 and speeds are starting values, not figures made for your bit. Watch the \
+                 first cut with a hand near the stop button, or pick your own bit from a \
+                 maker's catalogue in the Tool Database",
+                tool.name
+            ),
+        ));
+        return;
+    }
+    let mut changed = vec![];
+    let mut compare = |what: &str, ours: f64, makers: f64, shown: &dyn Fn(f64) -> String| {
+        if makers > 0.0 && (ours - makers).abs() > makers * MAKERS_SHARE {
+            let share = 100.0 * (ours - makers).abs() / makers;
+            let way = if ours > makers { "above" } else { "below" };
+            changed.push(format!(
+                "{what} of {} is {share:.0}% {way} the maker's {}",
+                shown(ours),
+                shown(makers)
+            ));
+        }
+    };
+    let rate = |v: f64| units.feed(v, 0);
+    compare("feed rate", tool.feed_rate, listed.feed_rate, &rate);
+    compare("plunge rate", tool.plunge_rate, listed.plunge_rate, &rate);
+    if toolpath.power.is_empty() {
+        compare(
+            "spindle speed",
+            tool.spindle_speed,
+            listed.spindle_speed,
+            &|v| format!("{v:.0} rpm"),
+        );
+    }
+    if !changed.is_empty() {
+        found.push(Finding::warning(
+            Check::MakersFigures,
+            format!(
+                "{name}: {}'s {}. Faster than the maker says can break the bit; slower can \
+                 rub and burn the wood. If you did not mean to change them, pick the bit \
+                 again with the toolpath's Select… to put {maker}'s figures back",
+                tool.name,
+                changed.join("; ")
+            ),
+        ));
+    }
+}
+
+/// Whether the toolpaths keep out of the keep-out zones, the job's and the machine's.
+fn keep_out(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
+    for toolpath in toolpaths {
+        let radius = toolpath.tool.diameter / 2.0;
+        let zones = crate::keep_out::entered(doc.named_keep_out(), &toolpath.moves, radius);
+        if zones.is_empty() {
+            continue;
+        }
+        let names: Vec<String> = zones.iter().map(|z| format!("\"{}\"", z.name)).collect();
+        found.push(Finding::error(
+            Check::KeepOut,
+            format!(
+                "{} would cut into the keep-out zone{} {}, where the bit could hit a clamp. \
+                 Move the part or the zone, then recalculate the toolpath",
+                toolpath.name,
+                if zones.len() == 1 { "" } else { "s" },
+                names.join(" and ")
+            ),
+        ));
+    }
+}
+
+/// Whether two different bits share a tool number other than 0 (changed by hand).
+fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
+    let mut by_number: std::collections::BTreeMap<u32, Vec<&str>> =
+        std::collections::BTreeMap::new();
+    for toolpath in toolpaths {
+        let tool = &toolpath.tool;
+        if tool.number == 0 {
+            continue;
+        }
+        let bits = by_number.entry(tool.number).or_default();
+        if !bits.contains(&tool.name.as_str()) {
+            bits.push(&tool.name);
+        }
+    }
+    for (number, bits) in by_number {
+        if bits.len() < 2 {
+            continue;
+        }
+        let (last, rest) = bits.split_last().unwrap_or((&"", &[]));
+        found.push(Finding::warning(
+            Check::ToolNumbers,
+            format!(
+                "Tool number {number} is given to both {} and {last}: a tool changer picks \
+                 bits by number, so one of them would cut with the wrong bit. Give each bit \
+                 its own number in the Tool Database (0 means the bit is changed by hand, \
+                 and any number of bits may share 0)",
+                rest.join(", ")
+            ),
+        ));
+    }
+}
+
+/// The checks that cannot be made on `toolpaths` with `limits`, each with why: the
+/// machine not saying what it can do, no tool changer or keep-out zones, a rotary job.
+#[must_use]
+pub fn not_checked(
+    doc: &Document,
+    toolpaths: &[&Toolpath],
+    limits: &Limits,
+) -> Vec<(Check, String)> {
+    let machine = if limits.name.is_empty() {
+        "the machine".to_owned()
+    } else {
+        limits.name.clone()
+    };
+    let config = |what: &str| format!("{machine} has no {what} in Machine Configuration");
+    let rotary = doc.job.rotary.is_some();
+    let mut skipped = vec![];
+    if rotary {
+        skipped.push((
+            Check::Bed,
+            "A rotary job wraps round the material, not along the bed".to_owned(),
+        ));
+    } else if limits.bed[0] <= 0.0 || limits.bed[1] <= 0.0 {
+        skipped.push((Check::Bed, config("bed size")));
+    }
+    if limits.z_travel <= 0.0 {
+        skipped.push((Check::ZTravel, config("Z travel")));
+    }
+    if limits.max_rate.iter().all(|&r| r <= 0.0) {
+        skipped.push((Check::MachineSpeeds, config("top speeds")));
+    }
+    if limits.spindle.iter().all(|&r| r <= 0.0) {
+        skipped.push((Check::SpindleRange, config("spindle speed range")));
+    }
+    if limits.slots.is_empty() {
+        skipped.push((
+            Check::ToolChanger,
+            "No tool changer is used: you change the bits".to_owned(),
+        ));
+    }
+    if doc.named_keep_out().next().is_none() {
+        skipped.push((
+            Check::KeepOut,
+            "The job and the machine have no keep-out zones".to_owned(),
+        ));
+    }
+    if rotary {
+        for check in [Check::Rapids, Check::AirCutting] {
+            skipped.push((
+                check,
+                "A rotary job is not cut through in order yet: watch its first moves".to_owned(),
+            ));
+        }
+    }
+    if limits.library.is_none() {
+        for check in [Check::GenericTool, Check::MakersFigures] {
+            skipped.push((
+                check,
+                "The bits were not compared with the Tool Database".to_owned(),
+            ));
+        }
+    }
+    if toolpaths.iter().all(|t| t.tool.number == 0) {
+        skipped.push((
+            Check::ToolNumbers,
+            "Every bit is changed by hand (tool number 0)".to_owned(),
+        ));
+    }
+    skipped
 }
 
 /// What to say when a toolpath of `strategy` (a command id such as `profile_toolpath`)
@@ -401,26 +657,32 @@ fn machine(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits, found: &mut
     let wraps = doc.job.rotary.is_some();
     let units = doc.job.units;
     if !wraps && width > 0.0 && height > 0.0 && (span.x > width || span.y > height) {
-        found.push(Finding::error(format!(
-            "The toolpaths cover {} × {}, more than the bed of {} ({} × {}). Make the job \
+        found.push(Finding::error(
+            Check::Bed,
+            format!(
+                "The toolpaths cover {} × {}, more than the bed of {} ({} × {}). Make the job \
              smaller, split it with Toolpath Tiling (or make its tiles smaller), or pick the \
              right machine",
-            units.length(span.x, 0),
-            units.length(span.y, 0),
-            limits.name,
-            units.length(width, 0),
-            units.length(height, 0)
-        )));
+                units.length(span.x, 0),
+                units.length(span.y, 0),
+                limits.name,
+                units.length(width, 0),
+                units.length(height, 0)
+            ),
+        ));
     }
     if limits.z_travel > 0.0 && span.z > limits.z_travel {
-        found.push(Finding::error(format!(
-            "The toolpaths go from {} above the material to {} below it, more than the {} \
+        found.push(Finding::error(
+            Check::ZTravel,
+            format!(
+                "The toolpaths go from {} above the material to {} below it, more than the {} \
              the Z axis of {} travels. Lower the clearance (Z1) in Job Setup or cut less deep",
-            units.length(hi.z.max(0.0), 1),
-            units.length((-lo.z).max(0.0), 1),
-            units.length(limits.z_travel, 0),
-            limits.name
-        )));
+                units.length(hi.z.max(0.0), 1),
+                units.length((-lo.z).max(0.0), 1),
+                units.length(limits.z_travel, 0),
+                limits.name
+            ),
+        ));
     }
 }
 
@@ -487,15 +749,18 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
                 1 => String::new(),
                 n => format!(" ({n} rapid moves in all)"),
             };
-            found.push(Finding::error(format!(
-                "{name} would crash: a rapid move to X{} Y{} goes {} into material that is \
+            found.push(Finding::error(
+                Check::Rapids,
+                format!(
+                    "{name} would crash: a rapid move to X{} Y{} goes {} into material that is \
                  still there{more}. Rapid moves run at full speed and are meant to stay clear \
                  of the material. Raise the clearance (Z1) in Job Setup, or recalculate the \
                  toolpath",
-                position(at.x),
-                position(at.y),
-                units.length(into, 1)
-            )));
+                    position(at.x),
+                    position(at.y),
+                    units.length(into, 1)
+                ),
+            ));
         }
         if cutting > 0.0 && air > AIR_LENGTH && air / cutting > AIR_SHARE {
             let minutes = if tool.feed_rate > 0.0 {
@@ -503,13 +768,16 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
             } else {
                 String::new()
             };
-            found.push(Finding::warning(format!(
-                "{name} cuts air for {:.0}% of its cutting ({:.1} m{minutes}), where the \
+            found.push(Finding::warning(
+                Check::AirCutting,
+                format!(
+                    "{name} cuts air for {:.0}% of its cutting ({:.1} m{minutes}), where the \
                  material is already gone. If an earlier toolpath cleared this area, cut \
                  less with this one: a smaller area, fewer passes or a shallower start depth",
-                100.0 * air / cutting,
-                air / 1000.0
-            )));
+                    100.0 * air / cutting,
+                    air / 1000.0
+                ),
+            ));
         }
     }
 }
@@ -684,6 +952,226 @@ mod tests {
         }
     }
 
+    fn checks_of(found: &[Finding]) -> Vec<Check> {
+        found.iter().map(|f| f.check).collect()
+    }
+
+    #[test]
+    fn each_finding_names_the_check_that_found_it() {
+        let limits = Limits {
+            name: "Shapeoko".into(),
+            bed: [100.0, 100.0],
+            slots: vec![Some("3 mm Ball Nose".into())],
+            ..Limits::default()
+        };
+        let crash = Toolpath {
+            moves: vec![
+                mv(MoveKind::Rapid, 10.0, 10.0, 5.0),
+                mv(MoveKind::Rapid, 10.0, 10.0, -5.0),
+            ],
+            ..slot("Crash", 10.0, 10.0, 10.0, 0.0)
+        };
+        let found = check(
+            &job(),
+            &[&slot("Slot", 50.0, 20.0, 180.0, 3.0), &crash],
+            &limits,
+        );
+        let checks = checks_of(&found);
+        assert!(checks.contains(&Check::Bed), "{found:?}");
+        assert!(checks.contains(&Check::ToolChanger), "{found:?}");
+        assert!(checks.contains(&Check::Rapids), "{found:?}");
+    }
+
+    #[test]
+    fn cutting_into_a_keep_out_zone_must_be_fixed() {
+        let mut doc = job();
+        let clamp = crate::testing::square(90.0, 40.0, 20.0);
+        doc.keep_out = vec![crate::keep_out::KeepOutZone::new("Clamp 1", clamp)];
+        let found = check(
+            &doc,
+            &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)],
+            &Limits::default(),
+        );
+        let zone: Vec<&Finding> = found.iter().filter(|f| f.check == Check::KeepOut).collect();
+        assert_eq!(zone.len(), 1, "{found:?}");
+        assert_eq!(zone[0].severity, Severity::Error);
+        assert!(
+            zone[0].message.contains("\"Clamp 1\""),
+            "{}",
+            zone[0].message
+        );
+        // clear of the zone: nothing to say
+        let found = check(
+            &doc,
+            &[&slot("Slot", 150.0, 20.0, 180.0, 3.0)],
+            &Limits::default(),
+        );
+        assert!(!checks_of(&found).contains(&Check::KeepOut), "{found:?}");
+    }
+
+    #[test]
+    fn two_bits_with_one_tool_number_are_called_out_but_hand_changed_ones_are_not() {
+        let mut first = slot("Pocket", 50.0, 20.0, 180.0, 3.0);
+        let mut second = slot("V-Carve", 100.0, 20.0, 180.0, 1.0);
+        second.tool.name = "60° V-Bit".into();
+        first.tool.number = 3;
+        second.tool.number = 3;
+        let found = check(&job(), &[&first, &second], &Limits::default());
+        let numbers: Vec<&Finding> = found
+            .iter()
+            .filter(|f| f.check == Check::ToolNumbers)
+            .collect();
+        assert_eq!(numbers.len(), 1, "{found:?}");
+        assert!(
+            numbers[0]
+                .message
+                .starts_with("Tool number 3 is given to both 6 mm End Mill and 60° V-Bit"),
+            "{}",
+            numbers[0].message
+        );
+        // the same bit twice, or bits changed by hand (0), share a number safely
+        let mut again = slot("Profile", 150.0, 20.0, 180.0, 3.0);
+        again.tool.number = 3;
+        second.tool.number = 0;
+        first.tool.number = 3;
+        let mut hand = second.clone();
+        hand.tool.name = "1/4\" Ball Nose".into();
+        let found = check(
+            &job(),
+            &[&first, &again, &second, &hand],
+            &Limits::default(),
+        );
+        assert!(
+            !checks_of(&found).contains(&Check::ToolNumbers),
+            "{found:?}"
+        );
+    }
+
+    fn with_library(tools: Vec<Tool>) -> Limits {
+        Limits {
+            library: Some(tools.into_iter().map(|t| (t.name.clone(), t)).collect()),
+            ..Limits::default()
+        }
+    }
+
+    #[test]
+    fn a_generic_bit_or_one_not_in_the_tool_database_is_called_out() {
+        let slot = slot("Slot", 50.0, 20.0, 180.0, 3.0);
+        let found = check(&job(), &[&slot], &with_library(vec![tool()]));
+        let generic: Vec<&str> = found
+            .iter()
+            .filter(|f| f.check == Check::GenericTool)
+            .map(|f| f.message.as_str())
+            .collect();
+        assert_eq!(generic.len(), 1, "{found:?}");
+        assert!(generic[0].contains("is a generic bit"), "{}", generic[0]);
+        let found = check(&job(), &[&slot], &with_library(vec![]));
+        assert!(
+            found
+                .iter()
+                .any(|f| f.check == Check::GenericTool
+                    && f.message.contains("not in the Tool Database")),
+            "{found:?}"
+        );
+        // not compared at all: nothing said, and the list says why
+        let found = check(&job(), &[&slot], &Limits::default());
+        assert!(
+            !checks_of(&found).contains(&Check::GenericTool),
+            "{found:?}"
+        );
+        let skipped = not_checked(&job(), &[&slot], &Limits::default());
+        assert!(skipped.iter().any(|(c, _)| *c == Check::GenericTool));
+    }
+
+    #[test]
+    fn feeds_and_speeds_changed_from_the_makers_figures_are_called_out() {
+        let makers = Tool {
+            manufacturer: "Amana".into(),
+            feed_rate: 1000.0,
+            plunge_rate: 480.0,
+            spindle_speed: 18000.0,
+            ..tool()
+        };
+        // feed 1500 is 50% above 1000; plunge 500 within a tenth of 480; spindle the same
+        let found = check(
+            &job(),
+            &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)],
+            &with_library(vec![makers.clone()]),
+        );
+        let changed: Vec<&str> = found
+            .iter()
+            .filter(|f| f.check == Check::MakersFigures)
+            .map(|f| f.message.as_str())
+            .collect();
+        assert_eq!(changed.len(), 1, "{found:?}");
+        assert!(
+            changed[0].contains("feed rate of 1500 mm/min is 50% above the maker's 1000 mm/min"),
+            "{}",
+            changed[0]
+        );
+        assert!(!changed[0].contains("plunge"), "{}", changed[0]);
+        assert!(changed[0].contains("Amana's figures"), "{}", changed[0]);
+        assert!(
+            !checks_of(&found).contains(&Check::GenericTool),
+            "{found:?}"
+        );
+        // as the maker gives: nothing to say
+        let same = Tool {
+            feed_rate: 1500.0,
+            ..makers
+        };
+        let found = check(
+            &job(),
+            &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)],
+            &with_library(vec![same]),
+        );
+        assert!(
+            !checks_of(&found).contains(&Check::MakersFigures),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn checks_that_cannot_be_made_say_why() {
+        let slot = slot("Slot", 50.0, 20.0, 180.0, 3.0);
+        let skipped = not_checked(&job(), &[&slot], &Limits::default());
+        let checks: Vec<Check> = skipped.iter().map(|(c, _)| *c).collect();
+        for check in [
+            Check::Bed,
+            Check::ZTravel,
+            Check::MachineSpeeds,
+            Check::SpindleRange,
+            Check::ToolChanger,
+            Check::KeepOut,
+            Check::ToolNumbers,
+        ] {
+            assert!(checks.contains(&check), "{check:?} in {skipped:?}");
+        }
+        assert!(
+            skipped.iter().any(|(c, why)| *c == Check::Bed
+                && why == "the machine has no bed size in Machine Configuration"),
+            "{skipped:?}"
+        );
+        let limits = Limits {
+            name: "Shapeoko".into(),
+            bed: [800.0, 800.0],
+            z_travel: 100.0,
+            max_rate: [5000.0, 5000.0, 1000.0],
+            spindle: [10000.0, 24000.0],
+            slots: vec![Some("6 mm End Mill".into())],
+            left: None,
+            library: Some(std::collections::BTreeMap::new()),
+            holding: crate::collision::Holding::default(),
+        };
+        let skipped = not_checked(&job(), &[&slot], &limits);
+        assert!(
+            skipped
+                .iter()
+                .all(|(c, _)| matches!(c, Check::KeepOut | Check::ToolNumbers)),
+            "{skipped:?}"
+        );
+    }
+
     #[test]
     fn the_collet_hitting_the_material_asks_first() {
         let mut deep = slot("Deep slot", 100.0, 50.0, 150.0, 30.0);
@@ -703,6 +1191,13 @@ mod tests {
                 .iter()
                 .any(|m| m.starts_with("Deep slot: the collet nut would hit the material")),
             "{warned:?}"
+        );
+        assert!(
+            found
+                .iter()
+                .filter(|f| f.severity == Severity::MustAsk)
+                .all(|f| f.check == Check::Collisions),
+            "{found:?}"
         );
     }
 
@@ -953,6 +1448,7 @@ mod tests {
             spindle: [10000.0, 16000.0],
             slots: vec![Some("3 mm Ball Nose".into()), None],
             left: None,
+            library: None,
             holding: crate::collision::Holding::default(),
         };
         let found = check(&job(), &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)], &limits);

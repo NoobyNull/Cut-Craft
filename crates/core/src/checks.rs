@@ -1,6 +1,7 @@
 //! Checks before cutting: what in a toolpath the tool may not manage on the machine. These
 //! checks are Cut Craft's own.
 
+use crate::check_list::Check;
 use crate::component::placed_model;
 use crate::document::{Document, EntityId};
 use crate::drag_knife;
@@ -37,6 +38,14 @@ pub fn problems(doc: &Document, toolpath: &Toolpath) -> Vec<String> {
 /// [`problems`], mentioning material left behind only where it is more than `left` mm
 /// (Options ▸ Confirmation Choices).
 pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<String> {
+    problems_by_check(doc, toolpath, left)
+        .into_iter()
+        .map(|(_, problem)| problem)
+        .collect()
+}
+
+/// [`problems_over`], each with the check before cutting that finds it.
+pub fn problems_by_check(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<(Check, String)> {
     let (name, tool) = (&toolpath.name, &toolpath.tool);
     let mut found = vec![];
     // the material's surface is z 0
@@ -50,19 +59,26 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
     // a drag knife has no flutes: it cuts its set depth below the surface it rides on,
     // which must be flat
     if toolpath.strategy == drag_knife::STRATEGY {
-        found.extend(drag_knife::misplaced(doc, toolpath));
+        found.extend(
+            drag_knife::misplaced(doc, toolpath)
+                .into_iter()
+                .map(|p| (Check::CanCut, p)),
+        );
     } else if let Some(deep) = too_deep(name, tool, deepest, units) {
-        found.push(deep);
+        found.push((Check::Reach, deep));
     } else if tool.cutting_length().is_none() && deepest > 0.0 {
-        found.push(format!(
-            "{name} cuts {} deep; {} has no flute length set, so whether it reaches is not \
+        found.push((
+            Check::Reach,
+            format!(
+                "{name} cuts {} deep; {} has no flute length set, so whether it reaches is not \
              checked: set it in the Tool Database",
-            units.length(deepest, 1),
-            tool.name
+                units.length(deepest, 1),
+                tool.name
+            ),
         ));
     }
     if let Some(loose) = comes_loose(doc, toolpath, deepest) {
-        found.push(loose);
+        found.push((Check::LooseParts, loose));
     }
     if toolpath.strategy == DRILLING {
         let holes: Vec<Path> = toolpath
@@ -72,13 +88,25 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
             .filter(|v| v.closed)
             .cloned()
             .collect();
-        found.extend(drill_sizes(name, tool, &holes, units));
+        found.extend(
+            drill_sizes(name, tool, &holes, units)
+                .into_iter()
+                .map(|p| (Check::Drilling, p)),
+        );
     }
     if let Some(missed) = missed_spots(doc, toolpath, left) {
-        found.push(missed);
+        found.push((Check::MissedSpots, missed));
     }
-    found.extend(fell_back(toolpath, units));
-    found.extend(past_material(doc, toolpath));
+    found.extend(
+        fell_back(toolpath, units)
+            .into_iter()
+            .map(|p| (Check::Plunges, p)),
+    );
+    found.extend(
+        past_material(doc, toolpath)
+            .into_iter()
+            .map(|p| (Check::OnMaterial, p)),
+    );
     found
 }
 

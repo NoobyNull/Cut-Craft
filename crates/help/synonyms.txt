@@ -48,3 +48,7 @@ rotary, 4th axis, fourth axis, wrap
 nest, nesting, layout parts, fit parts
 array, copy along, repeat, duplicate
 measure, ruler, distance, dimension, dimensions
+crash, crashing, collision, hit, hitting, rapid into material
+checks, pre-cut checks, preflight, verify, safety check, sanity check, acknowledge, tick
+tool number, tool numbers, t number, atc, tool changer, automatic tool change
+generic bit, generic tool, maker's figures, manufacturer, catalogue, library

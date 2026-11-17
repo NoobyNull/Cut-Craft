@@ -4,6 +4,7 @@
 mod actions;
 mod background;
 mod calculate_again;
+mod check_list;
 mod commit;
 mod cutting;
 mod depth;
@@ -460,8 +461,6 @@ pub(super) struct EarlierAsk {
     post: cut_craft_post::Post,
     /// Where the files go, as named.
     path: std::path::PathBuf,
-    /// What the checks before cutting add to the saved message.
-    told: String,
     /// The earlier save's files there.
     earlier: Vec<std::path::PathBuf>,
     /// Keep the answer as the default.
@@ -1254,6 +1253,9 @@ struct CutCraftApp {
     form_back: Option<SaveForm>,
     /// Save Anyway was answered: the next save goes on despite what the checks found.
     checks_accepted: bool,
+    /// The warnings of the checks before cutting ticked as read, by what they say: Save
+    /// and Send to Machine wait until each one found is ticked.
+    acknowledged: std::collections::BTreeSet<String>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.
