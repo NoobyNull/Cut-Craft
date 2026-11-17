@@ -365,11 +365,31 @@ pub(super) fn collided(
                 super::Collided {
                     sentence,
                     hits: found.hits,
-                    moves: toolpath.moves.len(),
+                    moves: fingerprint(toolpath),
                 },
             ))
         })
         .collect()
+}
+
+/// A quick stamp of `toolpath`'s moves and bit, which changes when it is recalculated or its
+/// bit is edited: its length and up to 64 moves spread through it.
+pub(super) fn fingerprint(toolpath: &cut_craft_core::toolpath::Toolpath) -> u64 {
+    use std::hash::{Hash as _, Hasher as _};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    let moves = &toolpath.moves;
+    moves.len().hash(&mut hasher);
+    let step = (moves.len() / 64).max(1);
+    for m in moves.iter().step_by(step).chain(moves.last()) {
+        for v in [m.to.x, m.to.y, m.to.z] {
+            v.to_bits().hash(&mut hasher);
+        }
+    }
+    let tool = &toolpath.tool;
+    for v in [tool.diameter, tool.stickout, tool.flute_length] {
+        v.to_bits().hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 /// The status bar's word on `collided`: which toolpaths hit, and where to look; `None` when

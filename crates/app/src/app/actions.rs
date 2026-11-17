@@ -2215,6 +2215,8 @@ impl CutCraftApp {
             match outcome {
                 MachineOutcome::Apply | MachineOutcome::Ok => {
                     self.machines = draft;
+                    // the checks made so far used the holder and limits just replaced
+                    self.save_checks.clear();
                     if outcome == MachineOutcome::Ok {
                         self.machine_window = None;
                     }

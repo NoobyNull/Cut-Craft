@@ -109,8 +109,9 @@ pub(crate) struct Collided {
     /// What hits, where, and how to put it right.
     pub sentence: String,
     pub hits: Vec<cut_craft_core::collision::Hit>,
-    /// The toolpath's moves when checked: once recalculated, what was found no longer holds.
-    pub moves: usize,
+    /// A stamp of the toolpath when checked ([`background::fingerprint`]): once it is
+    /// recalculated or its bit edited, what was found no longer holds.
+    pub moves: u64,
 }
 
 fn preview_mark(id: EntityId) -> u32 {

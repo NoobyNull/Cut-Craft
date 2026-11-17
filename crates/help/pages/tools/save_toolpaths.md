@@ -17,6 +17,6 @@ see-also: profile_toolpath, pocket_toolpath, collisions
 
 Always check the toolpaths in the preview first: what you save is exactly what the machine cuts.
 
-If the collet nut, spindle or shank would hit the wood (or a clamp) beside a deep cut, the
+If the collet nut, spindle or shank would hit the wood beside a deep cut, the
 checks list it as **⚠ Check** and Save always asks before writing the file, whatever
 Options say. See [Collet and Holder Collisions](help:collisions).
