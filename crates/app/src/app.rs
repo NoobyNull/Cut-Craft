@@ -39,6 +39,7 @@ mod units_ask;
 mod updates;
 mod views;
 mod web_api;
+mod web_api_work;
 
 use crate::files::{self, Session};
 use crate::form::{self, Field};
