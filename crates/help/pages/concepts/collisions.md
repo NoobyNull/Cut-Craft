@@ -44,8 +44,10 @@ The check is only as good as the sizes it knows. Measure them once with a ruler.
 3. Set the bit's **Flute length** and **Shank diameter** too, so a narrow bit on a wider
    shank (a 1/8 in bit with a 1/4 in shank) is checked for its shank rubbing.
 
-Until you set a bit's Stick-out, Cut Craft takes it as its flute length plus 5 mm
-(1 inch for a bit with no flute length either), and the warning says so.
+Until you set a bit's Stick-out, Cut Craft guesses it, and the warning says so. The guess
+is the length that cuts (the flutes, or the V's height on a V-bit), plus the neck if the bit
+has one, plus 5 mm of shank showing. A bit with none of these is taken as 25 mm. The check
+uses this guess to decide how high the nut sits, so measure and set the real figure.
 
 ### Tool changers: Holder per bit
 

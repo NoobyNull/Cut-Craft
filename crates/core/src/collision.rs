@@ -352,8 +352,12 @@ fn cut_and_look(
         }
         material.sweep_each(&batch, tool);
         batch.clear();
-        // the move's own cut first: the flutes clear what is in their way as they go
-        material.sweep(a, b, tool);
+        if progress::cancelled() {
+            return;
+        }
+        // look before the move's own cut: the parts are above the flutes and at least as
+        // wide, so material in the flutes' way that stands above a part's bottom meets that
+        // part too, and an island the cut would clear later in the move must still count
         for band in bands {
             if let Some((into, at)) = material.above_part(a, b, band.radius, band.rise, &peaks)
                 && into > TOUCHES
@@ -371,6 +375,7 @@ fn cut_and_look(
                 break;
             }
         }
+        material.sweep(a, b, tool);
     }
     material.sweep_each(&batch, tool);
 }

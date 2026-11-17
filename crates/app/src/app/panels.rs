@@ -1199,6 +1199,13 @@ impl CutCraftApp {
             .copied()
             .filter(|id| source.toolpaths.contains_key(id))
             .collect();
+        // the toolpaths cut before these clear material out of the parts' way, so they are
+        // checked too (in cutting order), though only these are reported
+        let earlier: Vec<(EntityId, cut_craft_core::toolpath::Toolpath)> = (source.toolpaths)
+            .iter()
+            .take_while(|(id, _)| !checked.contains(id))
+            .map(|(&id, t)| (id, t.clone()))
+            .collect();
         let (job, holding) = (source.job, self.holding());
         let clamps: Vec<_> = source.named_keep_out().cloned().collect();
         drop(source);
@@ -1216,8 +1223,19 @@ impl CutCraftApp {
             &what,
             move || {
                 let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
-                let collided =
-                    super::background::collided(&job, &checked, &list, (&holding, &clamps));
+                let collided = {
+                    let ids: Vec<EntityId> =
+                        earlier.iter().map(|(id, _)| *id).chain(checked).collect();
+                    let all: Vec<&cut_craft_core::toolpath::Toolpath> = earlier
+                        .iter()
+                        .map(|(_, t)| t)
+                        .chain(list.iter().copied())
+                        .collect();
+                    let mut collided =
+                        super::background::collided(&job, &ids, &all, (&holding, &clamps));
+                    collided.retain(|id, _| !earlier.iter().any(|(e, _)| e == id));
+                    collided
+                };
                 let playback =
                     cut_craft_core::playback::Playback::new(start, &list, rapid).marked(&marks);
                 (playback, collided)
@@ -1857,7 +1875,7 @@ impl CutCraftApp {
             self.doc
                 .toolpaths
                 .get(&id)
-                .is_some_and(|t| t.moves.len() == c.moves)
+                .is_some_and(|t| super::background::fingerprint(t) == c.moves)
                 .then_some((id, c))
         })
     }
@@ -4327,7 +4345,7 @@ impl CutCraftApp {
                             let collided = self
                                 .collisions
                                 .get(&id)
-                                .filter(|c| c.moves == toolpath.moves.len())
+                                .filter(|c| c.moves == super::background::fingerprint(toolpath))
                                 .map(|c| c.sentence.as_str());
                             let (label, ticked, rgb) =
                                 toolpath_row(ui, toolpath, (selected, collided), swatch, *in_group);
