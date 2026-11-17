@@ -191,8 +191,7 @@ fn detect() -> System {
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .ok()
-            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-            .unwrap_or_default();
+            .map_or_default(|o| String::from_utf8_lossy(&o.stdout).into_owned());
         windows(&key, arch)
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
