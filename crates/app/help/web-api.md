@@ -104,4 +104,71 @@ the header `Authorization: Bearer <token>`. Calls that send settings use POST wi
 A call that cannot be done changes nothing and answers with `{"error": "..."}` saying why
 and what to do. While Cut Craft is busy (a toolpath calculating), calls wait their turn.
 
+## Seeing the job, and making its G-code
+
+These calls show what the job looks like and makes, and run the same slow jobs as the
+Toolpaths page's buttons, each with its progress window as usual.
+
+- **GET view.png**: a picture of the job, as a PNG. Open
+  `http://localhost:7340/api/v1/view.png?view=iso` in your web browser to see it.
+  - `view` is `2d` (the 2D view), or the 3D view from the `top`, `front`, `right` or at an
+    angle, `iso` (the default).
+  - `preview=after` (the default) shows the toolpath preview, if there is one;
+    `preview=before` shows the model as it is before cutting.
+  - `width=800` makes the picture 800 pixels wide; left out, it is the view's own size.
+
+  The window shows that view for a moment while the picture is taken, then goes back to how
+  you left it. Cut Craft's window must be open on screen (not minimised) to take it.
+- **GET state**: the material (size, thickness, where Z zero and the datum are), where the
+  3D model sits in it, each part of the model with its heights, and what is picked:
+  vectors, model parts and the toolpath picked in the toolpath list.
+- **GET toolpaths**: every toolpath with its tool, its run time (as the Toolpath Summary
+  works it out, for example `"time": "12m 30s"`) and what to look at before cutting it:
+  `warnings` (out of date, entries made another way, what the checks before cutting found)
+  and `errors`, which stop its G-code being made. The shown toolpaths' times are added up.
+- **POST calculate** `{"toolpaths": "all"}`: recalculates toolpaths, as **Recalculate**
+  does. `toolpaths` is `all` (the default), `visible` (the ticked ones), one toolpath's id,
+  or a list of ids.
+- **POST preview** `{"toolpaths": "all"}`: previews toolpaths into fresh material, as
+  **Preview** does, cut at once rather than played. **GET view.png** then shows it.
+- **POST preview/reset**: **Reset Preview**. **Undo Last Preview** brings it back.
+- **GET progress**: while a calculation or preview runs, what it is doing and how far along
+  (`"fraction"`, 0 to 1). It is answered straight away, even while Cut Craft is busy.
+  **POST cancel** presses **Cancel** on the progress window: nothing changes.
+
+  **POST calculate** and **POST preview** answer once they are done. Send `"wait": false`
+  to have them answer straight away, then follow them with **GET progress**.
+- **GET posts**: the post processors for this job on the active machine, and the one used
+  when a call names none.
+- **POST gcode** `{}`: the G-code **Save Toolpaths** would write for every shown toolpath:
+  each file's name and text. It runs the same checks before cutting first:
+  - `"toolpath": 3` makes one toolpath's G-code; `"group": "Lid"` a toolpath group's;
+    `"each": true` puts each shown toolpath in a file of its own.
+  - `"post": "GRBL (mm)"` uses that post processor (from **GET posts**).
+  - `"save_to": "/home/me/sign.nc"` saves the files there as well. Give the whole path,
+    with its folder. A file already there is kept unless you send `"replace": true`.
+  - An error the checks find stops it: nothing is made. A warning (or a toolpath out of
+    date) stops it too, as **Save Toolpaths** asks you, until you send
+    `"accept_warnings": true`, which is like answering **Save Anyway**.
+
+  The G-code is only made and saved: it is never sent to your machine.
+- **POST job/save** `{}`: **Save**. With `{"path": "/home/me/sign.ccjob"}` it is
+  **Save As**: the job is that file from then on.
+- **POST job/export** `{"format": "export_dxf", "path": "/home/me/sign.dxf"}`: an
+  **Export** menu item. The docs page lists each format.
+
+### An example: see a job, then make its G-code
+
+```
+curl "http://localhost:7340/api/v1/view.png?view=iso" -o before.png
+curl -X POST http://localhost:7340/api/v1/calculate -H "Content-Type: application/json" -d "{}"
+curl -X POST http://localhost:7340/api/v1/preview -H "Content-Type: application/json" -d "{}"
+curl "http://localhost:7340/api/v1/view.png?view=top&width=800" -o after.png
+curl http://localhost:7340/api/v1/toolpaths
+curl -X POST http://localhost:7340/api/v1/gcode -H "Content-Type: application/json" -d "{\"save_to\": \"/home/me/sign.nc\"}"
+```
+
+[Toolpaths](help:toolpaths) explains the Toolpath Summary's run times and what the checks
+before cutting look for.
+
 See also: [Toolpaths](help:toolpaths), [Design](help:design).
