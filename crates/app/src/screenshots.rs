@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 26] = [
+const SCENES: [Scene; 28] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -82,6 +82,12 @@ const SCENES: [Scene; 26] = [
     ("model-sticks-out", |app, ctx| {
         model_position(app, ctx, GapFrom::Below, 15.0, false);
     }),
+    ("help-wiki", |app, _| {
+        help_window(app, "pocket_toolpath", "");
+    }),
+    ("help-question", |app, _| {
+        help_window(app, "contents", "how do I cut out a sign with bridges?");
+    }),
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {
@@ -89,6 +95,14 @@ const SCENES: [Scene; 26] = [
     }),
     ("snapping-not-applied", snapping_not_applied),
 ];
+
+/// The Help window over the job on page `topic`, with `search` typed in its search box.
+fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
+    app.updates = crate::update::Updates::default();
+    app.form = None;
+    search.clone_into(&mut app.help_search);
+    app.info = Some(super::Info::Help(topic));
+}
 
 /// Snapping Options (F4) with Smart snapping unticked and not applied yet.
 fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
@@ -107,6 +121,7 @@ fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
 fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.updates = crate::update::Updates::default();
     app.gcode_view = None;
+    app.info = None;
     app.options_window = true;
     app.options_goto = Some("appearance");
     let mut edited = app.options.clone();
