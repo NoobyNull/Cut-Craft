@@ -31,7 +31,7 @@ read the warning.
 
 The check is only as good as the sizes it knows. Measure them once with a ruler.
 
-1. Open **Machine ▸ Machine Configuration**. In **Spindle and Collet Nut**, set
+1. Open **Machine ▸ Machine Configuration** and click **Spindle and Collet Nut** to open it. Set
    **Collet nut across** (an ER20 nut is about 35 mm, a trim router's about 25 mm),
    **Collet nut height** (from the nut's bottom face up to the spindle body) and
    **Spindle across** (65 mm or 80 mm for most spindles).

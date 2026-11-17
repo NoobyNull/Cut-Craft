@@ -454,3 +454,16 @@ mod packages {
         }
     }
 }
+
+#[cfg(test)]
+mod holder_tests {
+    use super::Machine;
+
+    #[test]
+    fn a_machine_saved_before_holders_has_the_usual_one() {
+        let machine: Machine = serde_json::from_str(r#"{"name": "Shapeoko"}"#).unwrap();
+        let holding = machine.holding();
+        assert_eq!(holding.holder, cut_craft_core::collision::Holder::default());
+        assert!(!holding.per_bit);
+    }
+}
