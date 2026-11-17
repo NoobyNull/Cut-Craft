@@ -31,8 +31,14 @@ angle hides: a shallow pocket, a groove on the far side, a V-carve in shadow.
 3. To stop, click **Auto-rotate** again, or just drag in the view (or on the cube) to take
    over: the job stays where it stopped. Top, Front, Right and Iso stop it too.
 
-The job turns about its own upright, keeping the tilt you gave it, so tilt the view first
-to look at the job from lower down or higher up while it turns. On a slower computer the
+A flat job turns about its own upright, keeping the tilt you gave it, so tilt the view
+first to look at the job from lower down or higher up while it turns.
+
+A **rotary job** (a cylinder on a 4th axis) turns round the cylinder's own long axis
+instead, as the rotary axis on your machine turns it: the axis stays where it is on the
+screen and the whole way round the cylinder comes past you, so you can check every cut on
+its round side. With View ▸ Auto-Wrapping View off, the rotary job is drawn flat and turns on
+the spot like a flat job. On a slower computer the
 model is drawn a little coarser while it turns, and sharp again once you stop it.
 
 See also: [Design page](help:design), [Toolpaths page](help:toolpaths).

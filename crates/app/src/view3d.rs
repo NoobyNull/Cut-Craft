@@ -110,6 +110,20 @@ impl Orbit {
         }
     }
 
+    /// Spun about the job's own `axis` (x, y or its vertical z) as [`Orbit::spun`] spins
+    /// it about the vertical: a rotary job turns round its cylinder's axis, so all of its
+    /// round side comes past the viewer, the axis staying where it is on the screen.
+    #[must_use]
+    pub fn spun_about(self, axis: DVec3, seconds: f64, degrees_per_second: f64) -> Self {
+        if axis == DVec3::Z {
+            return self.spun(seconds, degrees_per_second);
+        }
+        let turn = seconds.clamp(0.0, SPIN_LONGEST_STEP) * degrees_per_second.to_radians();
+        Self::from_matrix(
+            self.matrix() * cut_craft_core::glam::DMat3::from_axis_angle(axis.normalize(), turn),
+        )
+    }
+
     /// Turned about the screen's axes as [`Orbit::turned`] says, freely, or as a turntable
     /// takes it: the turn about the screen's y spins the job about its vertical, the one
     /// about x tilts it (between straight down and straight up), and roll is left out.
@@ -1715,6 +1729,30 @@ fn wrapped_quads(m: &Material, wrap: Wrap, light: DVec3) -> Vec<([DVec3; 4], f64
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spinning_a_rotary_job_turns_it_round_its_own_axis() {
+        // a cylinder along x: its axis stays put on the screen while its round side comes past
+        let start = Orbit::default();
+        let spun = start.spun_about(DVec3::X, 0.5, 90.0);
+        let (axis_before, _) = start.project(DVec3::X);
+        let (axis_after, _) = spun.project(DVec3::X);
+        assert!(
+            (axis_after - axis_before).length() < 1e-9,
+            "the axis keeps its place"
+        );
+        // half a second at 90 degrees a second: 45 degrees round x
+        let turned = start.towards_viewer().angle_between(spun.towards_viewer());
+        assert!(turned > 1e-3, "the side facing the viewer moves");
+        let round_x = |v: DVec3| DVec3::new(0.0, v.y, v.z).normalize();
+        let a = round_x(start.towards_viewer()).angle_between(round_x(spun.towards_viewer()));
+        assert!((a - 45f64.to_radians()).abs() < 1e-9, "{}", a.to_degrees());
+        // along y the same, about y
+        let spun = start.spun_about(DVec3::Y, 0.5, 90.0);
+        assert!((spun.project(DVec3::Y).0 - start.project(DVec3::Y).0).length() < 1e-9);
+        // about the vertical it is the flat job's spin
+        assert_eq!(start.spun_about(DVec3::Z, 0.5, 90.0), start.spun(0.5, 90.0));
+    }
 
     #[test]
     fn spinning_turns_the_job_about_its_vertical_and_keeps_the_tilt() {
