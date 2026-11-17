@@ -13,6 +13,7 @@ mod depth;
 mod display;
 #[cfg(test)]
 mod error_messages;
+mod file_filters;
 mod files;
 mod flyout;
 mod form;

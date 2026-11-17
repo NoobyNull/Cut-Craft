@@ -5,7 +5,7 @@
 // ponytail: the files are read and written as the window is used, so a share that hangs
 // holds the window until the system gives up on it (as the system's file dialog does)
 
-use super::{CutCraftApp, SaveForm, dialog_size, file_dialog, message_dialog};
+use super::{CutCraftApp, SaveForm, dialog_size, message_dialog};
 use crate::options::EarlierGcode;
 use cut_craft_machines::send::{
     Folder, Item, SendTo, Store, distinct_names, safe_file_name, safe_name, size_text,
@@ -206,7 +206,10 @@ impl CutCraftApp {
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| {
             upload = files.show(ui);
         });
-        if upload && let Some(paths) = file_dialog().pick_files() {
+        if upload
+            && let Some(paths) =
+                super::filtered_dialog(super::Dialog::UploadToMachine, &self.registry).pick_files()
+        {
             files.upload(&paths);
         }
         if !open {
