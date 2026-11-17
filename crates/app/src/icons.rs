@@ -150,6 +150,20 @@ impl Icons {
         }
     }
 
+    /// An indexed icon made small, `edge` across its longer side, as a PNG: help pages show
+    /// a tool's button picture beside its name, and Markdown draws a picture at its own size.
+    pub fn small_png(&self, key: &str, edge: u32) -> Option<Vec<u8>> {
+        let bytes: std::borrow::Cow<'_, [u8]> = match self.by_path.get(key)? {
+            Source::BuiltIn(bytes) => (*bytes).into(),
+            Source::File(path) => fs::read(path).ok()?.into(),
+        };
+        let image = image::load_from_memory(&bytes).ok()?;
+        let small = image.resize(edge, edge, image::imageops::FilterType::Lanczos3);
+        let mut png = std::io::Cursor::new(vec![]);
+        small.write_to(&mut png, image::ImageFormat::Png).ok()?;
+        Some(png.into_inner())
+    }
+
     /// The icon a command names explicitly, else one whose file stem is the command id.
     pub fn find(&self, explicit: &str, id: &str) -> Option<&str> {
         self.by_path
@@ -294,6 +308,17 @@ mod tests {
             assert!(uri.starts_with("bytes://icons/"), "{uri}");
             assert!(decoded(&ctx, &uri).is_ok(), "{key} decodes");
         }
+    }
+
+    #[test]
+    fn an_icon_comes_small_as_a_png_for_the_help() {
+        let icons = Icons::built_in();
+        let png = icons
+            .small_png("toolpaths/3d_pencil_toolpath.png", 24)
+            .expect("made");
+        let image = image::load_from_memory(&png).expect("a picture");
+        assert_eq!((image.width(), image.height()), (24, 24));
+        assert_eq!(icons.small_png("no/such/icon.png", 24), None);
     }
 
     #[test]
