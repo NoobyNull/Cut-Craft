@@ -4625,6 +4625,18 @@ fn save_part(
     area: egui::Rect,
     path: &std::path::Path,
 ) -> Result<(), String> {
+    part_of(picture, area, "the 3D view")?
+        .save(path)
+        .map_err(|e| crate::messages::could_not_save_picture(path, &e))
+}
+
+/// The `area` (pixels) of the window's `picture`: `what` is the view it should show, named
+/// when it was not on screen.
+pub(super) fn part_of(
+    picture: &egui::ColorImage,
+    area: egui::Rect,
+    what: &str,
+) -> Result<image::RgbaImage, String> {
     let [width, height] = picture.size;
     let clamp = |v: f32, most: usize| {
         #[expect(
@@ -4638,7 +4650,7 @@ fn save_part(
     let (x0, y0) = (clamp(area.min.x, width), clamp(area.min.y, height));
     let (x1, y1) = (clamp(area.max.x, width), clamp(area.max.y, height));
     if x1 <= x0 || y1 <= y0 {
-        return Err("the 3D view was not on screen to save".into());
+        return Err(format!("{what} was not on screen to save"));
     }
     let mut out = image::RgbaImage::new(
         u32::try_from(x1 - x0).map_err(|e| e.to_string())?,
@@ -4651,8 +4663,7 @@ fn save_part(
             out.put_pixel(x, y, image::Rgba(c.to_srgba_unmultiplied()));
         }
     }
-    out.save(path)
-        .map_err(|e| crate::messages::could_not_save_picture(path, &e))
+    Ok(out)
 }
 
 /// Whether `path` is a mesh, imported through Orientate 3D Model.

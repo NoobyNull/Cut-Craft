@@ -276,3 +276,197 @@ fn overlay(base: &mut Value, top: &Value) {
         (base, top) => *base = top.clone(),
     }
 }
+
+/// A name as calls write it: the setting's own serialised name (`material_surface`).
+fn named(value: impl serde::Serialize) -> Value {
+    let v = serde_json::to_value(value).unwrap_or(Value::Null);
+    match v {
+        Value::String(s) => Value::String(snake(&s)),
+        other => other,
+    }
+}
+
+/// `MaterialSurface` as `material_surface`; already snake case is left as it is.
+fn snake(name: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                out.push('_');
+            }
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// `GET state`: the material as Job Setup has it, where the 3D model sits in it (Material
+/// Setup) and each part of the model, and what is picked: vectors, model parts and the
+/// toolpath picked in the toolpath list (`toolpath`). Lengths are in the job's units.
+pub fn state(doc: &Document, toolpath: Option<EntityId>) -> Value {
+    let u = doc.job.units;
+    let j = &doc.job;
+    // the model's placement as it is kept, its gaps shown in the job's units: whatever gaps
+    // Material Setup keeps are read the same way
+    let mut position = serde_json::to_value(j.model_position).unwrap_or(Value::Null);
+    if let Value::Object(fields) = &mut position {
+        for (key, value) in fields.iter_mut() {
+            if key.contains("gap")
+                && let Some(mm) = value.as_f64()
+            {
+                *value = json!(shown(mm, u));
+            }
+        }
+    }
+    let components: Vec<Value> = doc
+        .components
+        .iter()
+        .map(|(&id, c)| {
+            #[expect(clippy::cast_precision_loss, reason = "a grid's size")]
+            let (w, h) = (c.columns as f64 * c.cell, c.rows as f64 * c.cell);
+            let range = c.height_range();
+            json!({
+                "id": id.0,
+                "name": c.name,
+                "visible": c.visible,
+                "selected": doc.selected_components.contains(&id),
+                "min": [shown(c.origin.x, u), shown(c.origin.y, u)],
+                "max": [shown(c.origin.x + w, u), shown(c.origin.y + h, u)],
+                "lowest": range.map(|(lo, _)| shown(lo, u)),
+                "highest": range.map(|(_, hi)| shown(hi, u)),
+                "height": range.map(|(lo, hi)| shown(hi - lo, u)),
+            })
+        })
+        .collect();
+    json!({
+        "units": units_name(u),
+        "material": {
+            "width": shown(j.width, u),
+            "height": shown(j.height, u),
+            "thickness": shown(j.thickness, u),
+            "z_zero": named(j.z_zero),
+            "datum": named(j.datum),
+            "offset": [shown(j.offset.x, u), shown(j.offset.y, u)],
+            "clearance": shown(j.clearance, u),
+            "plunge": j.plunge.map(|p| shown(p, u)),
+            "colour": j.colour,
+            "double_sided": j.double_sided.is_some(),
+            "rotary": j.rotary.is_some(),
+        },
+        "model": {
+            "position": position,
+            "components": components,
+        },
+        "selection": {
+            "vectors": doc.selection.iter().map(|v| v.0).collect::<Vec<_>>(),
+            "components": doc.selected_components.iter().map(|v| v.0).collect::<Vec<_>>(),
+            "toolpath": toolpath.map(|t| t.0),
+        },
+    })
+}
+
+/// A run time as the Toolpath Summary says it: `1h 05m 30s`, `4m 10s`, `12s`.
+pub fn time_said(minutes: f64) -> String {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a run time, rounded to seconds"
+    )]
+    let seconds = (minutes.max(0.0) * 60.0).round() as u64;
+    let (h, m, s) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+    match (h, m) {
+        (0, 0) => format!("{s}s"),
+        (0, _) => format!("{m}m {s:02}s"),
+        _ => format!("{h}h {m:02}m {s:02}s"),
+    }
+}
+
+/// `GET toolpaths`: each toolpath in list order with its tool, its run time as the
+/// Toolpath Summary works it out (`minutes`), and what to look at before cutting it: its
+/// own warnings (out of date, entries made another way) and what the checks before cutting
+/// found (`checks`), errors apart. The shown ones' times are added up.
+pub fn toolpaths(
+    doc: &Document,
+    minutes: &dyn Fn(&cut_craft_core::toolpath::Toolpath) -> f64,
+    checks: &std::collections::BTreeMap<EntityId, Vec<cut_craft_core::preflight::Finding>>,
+) -> Value {
+    use cut_craft_core::preflight::Severity;
+    let mut total = 0.0;
+    let rows: Vec<Value> = doc
+        .toolpaths
+        .iter()
+        .map(|(id, t)| {
+            let time = minutes(t);
+            if t.visible {
+                total += time;
+            }
+            let mut warnings = vec![];
+            if t.stale {
+                warnings.push(
+                    "Out of date: what it was made from has changed since. Recalculate it \
+                     before cutting."
+                        .to_owned(),
+                );
+            }
+            warnings.extend(fallbacks_said(&t.fallbacks));
+            let found = checks.get(id).map_or(&[][..], Vec::as_slice);
+            let said = |severity| {
+                found
+                    .iter()
+                    .filter(|f| f.severity == severity)
+                    .map(|f| f.message.clone())
+                    .collect::<Vec<_>>()
+            };
+            warnings.extend(said(Severity::Warning));
+            json!({
+                "id": id.0,
+                "name": t.name,
+                "command": t.strategy,
+                "tool": t.tool.name,
+                "group": t.group,
+                "visible": t.visible,
+                "out_of_date": t.stale,
+                "moves": t.moves.len(),
+                "minutes": (time * 100.0).round() / 100.0,
+                "time": time_said(time),
+                "warnings": warnings,
+                "errors": said(Severity::Error),
+            })
+        })
+        .collect();
+    json!({
+        "units": units_name(doc.job.units),
+        "toolpaths": rows,
+        "total_minutes": (total * 100.0).round() / 100.0,
+        "total_time": time_said(total),
+    })
+}
+
+/// Where a toolpath's entries went down another way than asked, there being no room: one
+/// line for each change ("3 entries went down by zig-zag, not helix: no room for it").
+fn fallbacks_said(fallbacks: &[cut_craft_core::entry::Fallback]) -> Vec<String> {
+    let mut counted: Vec<(&str, &str, usize)> = vec![];
+    for f in fallbacks {
+        let (wanted, used) = (f.wanted.said(), f.used.said());
+        match counted
+            .iter_mut()
+            .find(|(w, u, _)| *w == wanted && *u == used)
+        {
+            Some((_, _, n)) => *n += 1,
+            None => counted.push((wanted, used, 1)),
+        }
+    }
+    counted
+        .into_iter()
+        .map(|(wanted, used, n)| {
+            let entries = if n == 1 {
+                "1 entry".to_owned()
+            } else {
+                format!("{n} entries")
+            };
+            format!("{entries} went down by {used}, not {wanted}: there was no room for it")
+        })
+        .collect()
+}
