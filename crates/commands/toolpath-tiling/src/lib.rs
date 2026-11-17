@@ -12,7 +12,7 @@
 //! tile with nothing to cut at all gets no file. Each tile is numbered in the 2D view as
 //! its file is named. Saving again where an earlier save left tile files (from another
 //! layout too, or from before tiling was turned off) asks to Replace or Archive them, as
-//! Edit ▸ Options ▸ Confirmations sets.
+//! Edit ▸ Options ▸ Confirmation Choices sets.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::tiling::Tiling;
