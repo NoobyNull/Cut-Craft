@@ -198,7 +198,8 @@ impl CutCraftApp {
                 material
             },
             move |app, material| {
-                let fine_bit = crate::display::fine_bit_note(&tools, material.cell);
+                let fine_bit =
+                    crate::display::fine_bit_note(&tools, material.cell, app.display.quality);
                 app.simulation = Some(material);
                 app.kept_playback = None;
                 (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);

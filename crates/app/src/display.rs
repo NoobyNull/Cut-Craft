@@ -147,18 +147,46 @@ impl Display {
     }
 }
 
-/// A word under the preview when a bit is narrower than two of its `cell`-wide squares:
-/// its thin cuts can show broken or dotted, so a finer quality draws them truer.
+/// The preview quality menu's names, as Toolpaths ▸ Preview Simulation Quality lists them.
+const QUALITY_NAMES: [(u32, &str); 5] = [
+    (1, "Standard"),
+    (2, "High (2x Slower)"),
+    (4, "Very High (4x Slower)"),
+    (8, "Extremely High (8x Slower)"),
+    (25, "Maximum (25x Slower)"),
+];
+
+/// A word under the preview when a bit is narrower than two of its `cell`-wide squares
+/// (made at `quality`): its thin cuts can show broken, dotted or not at all, though the
+/// toolpath is right. It names the quality that draws them, or the finest there is. A tiny
+/// pencil or detail bit on a big job is where this comes up.
 pub fn fine_bit_note<'a>(
     tools: impl IntoIterator<Item = &'a cut_craft_core::toolpath::Tool>,
     cell: f64,
+    quality: u32,
 ) -> Option<String> {
-    let tool = tools.into_iter().find(|t| t.diameter < 2.0 * cell)?;
+    let tool = tools
+        .into_iter()
+        .filter(|t| t.diameter > 0.0 && t.diameter < 2.0 * cell)
+        .min_by(|a, b| a.diameter.total_cmp(&b.diameter))?;
+    // a square's size at quality q: the cells across grow with the square root of it
+    let at = |q: u32| cell * (f64::from(quality.max(1)) / f64::from(q)).sqrt();
+    let fits = QUALITY_NAMES
+        .iter()
+        .find(|&&(q, _)| q > quality && 2.0 * at(q) <= tool.diameter);
+    let fix = match fits {
+        Some(&(_, name)) => format!(
+            "To see them, pick Toolpaths ▸ Preview Simulation Quality ▸ {name} and preview again"
+        ),
+        None if quality < 25 => "Toolpaths ▸ Preview Simulation Quality ▸ Maximum (25x Slower) \
+             shows them best; preview again"
+            .to_owned(),
+        None => "This is the finest preview there is".to_owned(),
+    };
     Some(format!(
-        "⚠ {} is narrower than two of the preview's squares, so its thin cuts may \
-         show broken or dotted (the toolpath itself is fine): pick a finer Toolpaths ▸ \
-         Preview Simulation Quality and preview again",
-        tool.name
+        "⚠ {} ({:.2} mm) is finer than the preview's {:.2} mm squares, so its cuts may look \
+         broken or be missing here. The toolpath and its G-code are right. {fix}.",
+        tool.name, tool.diameter, cell
     ))
 }
 
@@ -178,11 +206,49 @@ mod tests {
             diameter: 6.0,
             ..Tool::default()
         };
-        assert_eq!(fine_bit_note([&wide], 2.44), None);
-        let note = fine_bit_note([&wide, &fine], 2.44).expect("1.6 mm under 4.88 mm");
+        assert_eq!(fine_bit_note([&wide], 2.44, 1), None);
+        let note = fine_bit_note([&wide, &fine], 2.44, 1).expect("1.6 mm under 4.88 mm");
         assert!(note.contains("1/16 End Mill"), "{note}");
         assert!(note.contains("Preview Simulation Quality"), "{note}");
-        assert_eq!(fine_bit_note([&fine], 0.5), None, "finer squares draw it");
+        assert!(note.contains("toolpath and its G-code are right"), "{note}");
+        assert_eq!(
+            fine_bit_note([&fine], 0.5, 1),
+            None,
+            "finer squares draw it"
+        );
+    }
+
+    #[test]
+    fn a_fine_bit_note_names_the_quality_that_draws_the_bit() {
+        use cut_craft_core::toolpath::Tool;
+        // a 1/64 in pencil bit on a 600 mm job at Standard: 0.6 mm squares
+        let pencil = Tool {
+            name: "1/64 TBN".into(),
+            diameter: 25.4 / 64.0,
+            ..Tool::default()
+        };
+        let note = fine_bit_note([&pencil], 0.6, 1).unwrap();
+        assert!(note.contains("1/64 TBN (0.40 mm)"), "{note}");
+        assert!(note.contains("0.60 mm squares"), "{note}");
+        // 0.6 / sqrt(q) at most 0.198 mm wants q >= 9.2: Maximum
+        assert!(
+            note.contains("▸ Maximum (25x Slower) and preview again"),
+            "{note}"
+        );
+        // a 1.6 mm bit with 1 mm squares: High makes them 0.71 mm
+        let sixteenth = Tool {
+            name: "1/16 Ball".into(),
+            diameter: 1.6,
+            ..Tool::default()
+        };
+        let note = fine_bit_note([&sixteenth], 1.0, 1).unwrap();
+        assert!(
+            note.contains("▸ High (2x Slower) and preview again"),
+            "{note}"
+        );
+        // already at Maximum and still too coarse
+        let note = fine_bit_note([&pencil], 0.5, 25).unwrap();
+        assert!(note.contains("finest preview there is"), "{note}");
     }
 
     #[test]

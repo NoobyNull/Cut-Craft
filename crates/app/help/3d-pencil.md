@@ -36,6 +36,11 @@ takes minutes, not the hours a second full finish with a small bit would.
 - A warning in red at the foot of the form, never a refusal, says when something looks
   wrong: a pencil bit no smaller than the finishing bit, a bit that is not a ball nose, or
   no valleys found (lower the angle, or pick a smaller pencil bit).
+- **Previewing a tiny pencil bit:** the preview carves a grid of small squares, about half
+  a millimetre across on a big job at Standard quality. A 1/64" (0.4 mm) bit is finer than
+  that, so its cuts can look broken or not show at all, and a ⚠ line under the preview
+  says so. The toolpath and its G-code are right. The line names the Toolpaths ▸ Preview
+  Simulation Quality to pick to see them; preview again after.
 - Walls that stand straight up keep a little fillet the size of the pencil bit's own
   radius. Pick a smaller pencil bit for a sharper corner.
 - Programs can make it through the [Web API](help:web_api), as `3d_pencil_toolpath`.
