@@ -98,5 +98,13 @@ rm "$work/dist/cut-craft-1.2.3.dmg"
 rm "$work/dist"/*
 run exists && fail "an empty folder passed"
 
+# one publisher per computer and tag: a pushed tag and the same tag started by hand share a
+# concurrency group (GitHub runs them one after the other), so two never upload one file
+for os in linux windows macos; do
+  wf="$here/../.github/workflows/builds-$os.yml"
+  grep -qxF "  group: builds-$os-\${{ inputs.tag || github.ref_name }}" "$wf" \
+    || fail "builds-$os.yml: a pushed tag and a started one don't share a concurrency group"
+done
+
 if [[ $failed == 0 ]]; then echo "publish-release: all tests pass"; fi
 exit $failed
