@@ -162,9 +162,12 @@ impl CutCraftApp {
                 let params = job::notes_params(&self.doc, body)?;
                 cut_craft_bug_report::logs::step("Web API changed the notes");
                 self.apply("notes", &params).map_err(ApiError::refused)?;
-                // an open Notes form shows them as they are now
+                // an open Notes form takes what was sent and keeps the rest of its draft;
+                // Cancel there no longer takes back this change
+                let depth = self.history.undo_depth();
                 if let Some(form) = self.form.as_mut().filter(|f| f.id == "notes") {
-                    form.params = params;
+                    form_takes_notes(&mut form.params, body, &params);
+                    form.undo_from = depth;
                 }
                 Ok(job::notes(&self.doc, &self.note_variables()))
             }
@@ -547,3 +550,24 @@ pub(super) fn example_call(port: u16, token: bool) -> String {
 
 /// The status bar's green: readable on the light and the dark theme alike.
 const RUNNING_GREEN: egui::Color32 = egui::Color32::from_rgb(0x2e, 0x9e, 0x44);
+
+/// An open Notes form's `draft` after `POST notes` sent `body` (made into `sent`): the text,
+/// the open mark and the G-code tick each change only when sent.
+fn form_takes_notes(
+    draft: &mut serde_json::Value,
+    body: &cut_craft_web_api::NotesBody,
+    sent: &serde_json::Value,
+) {
+    use cut_craft_core::notes;
+    if body.text.is_some() {
+        draft["notes"] = sent["notes"].clone();
+    } else if let Some(opens) = body.opens_with_job {
+        let text = draft["notes"].as_str().unwrap_or_default();
+        let words = notes::strip_open_mark(text);
+        let mark = if opens { "." } else { "" };
+        draft["notes"] = serde_json::Value::String(format!("{mark}{words}"));
+    }
+    if body.in_gcode.is_some() {
+        draft["in_gcode"] = sent["in_gcode"].clone();
+    }
+}

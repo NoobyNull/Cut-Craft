@@ -801,6 +801,33 @@ fn the_help_page_explains_the_new_calls() {
 }
 
 #[test]
+fn a_notes_change_from_a_script_keeps_the_open_form_s_draft() {
+    let (mut h, at) = switched_on();
+    h.app.doc.notes = "A".into();
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.app.form.as_mut().unwrap().params["notes"] = json!("B, not applied yet");
+    let (status, set) = call(
+        &mut h,
+        at,
+        "POST",
+        "notes",
+        Some(json!({ "in_gcode": true, "opens_with_job": true })),
+    );
+    assert_eq!(status, 200, "{set}");
+    assert!(h.app.doc.notes_in_gcode);
+    assert_eq!(h.app.doc.notes, ".A");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["notes"], ".B, not applied yet",
+        "the draft is kept"
+    );
+    assert_eq!(form.params["in_gcode"], true);
+    // Cancel on the form keeps what the script did
+    assert_eq!(form.undo_from, h.app.history.undo_depth());
+}
+
+#[test]
 fn notes_are_read_and_written_with_their_variables_filled_in() {
     let (mut h, at) = switched_on();
     let (status, set) = call(

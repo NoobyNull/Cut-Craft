@@ -18462,6 +18462,27 @@ fn model_position_help_is_on_both_forms_with_pictures_and_links_that_go_somewher
 }
 
 #[test]
+fn long_notes_scroll_and_the_variable_explorer_stays_in_sight() {
+    use std::fmt::Write as _;
+    let mut h = Harness::new();
+    h.app.doc.notes = (1..=200).fold(String::new(), |mut text, n| {
+        let _ = writeln!(text, "Line {n}");
+        text
+    });
+    h.app.invoke(&h.ctx, "notes");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let explorer = h
+        .text_at("Variable Explorer")
+        .expect("the Variable Explorer shows");
+    let screen = h.ctx.content_rect();
+    assert!(
+        explorer.y < screen.bottom() - 100.0,
+        "{explorer:?} in {screen:?}"
+    );
+}
+
+#[test]
 fn notes_fill_the_panel_and_a_double_clicked_variable_goes_in_live() {
     let mut h = Harness::new();
     h.app.doc.notes = "Plain old notes".into();

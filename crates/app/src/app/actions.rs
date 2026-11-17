@@ -3786,6 +3786,9 @@ impl CutCraftApp {
             acceleration: machine
                 .filter(|_| self.summary.acceleration)
                 .map_or([0.0; 3], |m| m.acceleration),
+            scale: self.summary.scale,
+            model_height: self.model_height_now(),
+            holding: self.holding(),
             variables: (*self.note_variables()).clone(),
         }
     }

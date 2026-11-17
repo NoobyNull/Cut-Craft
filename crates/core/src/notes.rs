@@ -992,13 +992,13 @@ fn spans(text: &str) -> Vec<Span> {
                     let url = &rest[close + 2..close + 2 + end];
                     if !label.contains('[') && safe_link(url) {
                         flush(&mut out, &mut current, bold, italic);
-                        out.push(Span {
-                            text: label.into(),
-                            bold,
-                            italic,
-                            link: Some(url.trim().into()),
-                            variable: None,
-                        });
+                        // the words may hold variables and looks of their own
+                        for mut span in spans(label) {
+                            span.bold |= bold;
+                            span.italic |= italic;
+                            span.link = Some(url.trim().into());
+                            out.push(span);
+                        }
                         i += close + 2 + end + 1;
                         continue;
                     }
@@ -1056,14 +1056,20 @@ pub fn plain(text: &str, vars: &[Variable]) -> String {
     parse_resolved(text, vars)
         .iter()
         .map(|line| {
-            let words: String = line
-                .spans
-                .iter()
-                .map(|s| match &s.link {
-                    Some(url) if *url != s.text => format!("{} ({url})", s.text),
-                    _ => s.text.clone(),
-                })
-                .collect();
+            // a link's address once, after all its words
+            let mut words = String::new();
+            let mut label = String::new();
+            for (n, s) in line.spans.iter().enumerate() {
+                words.push_str(&s.text);
+                let Some(url) = &s.link else { continue };
+                label.push_str(&s.text);
+                if line.spans.get(n + 1).and_then(|next| next.link.as_ref()) != Some(url) {
+                    if *url != label {
+                        let _ = write!(words, " ({url})");
+                    }
+                    label.clear();
+                }
+            }
             match &line.kind {
                 Kind::Text | Kind::Heading(_) => words,
                 Kind::Bullet => format!("- {words}"),
@@ -1104,8 +1110,19 @@ pub fn html(text: &str, vars: &[Variable]) -> String {
             if let Some(tag) = list {
                 let _ = write!(out, "</{tag}>");
             }
-            if let Some(tag) = wanted {
-                let _ = write!(out, "<{tag}>");
+            let start = match &line.kind {
+                Kind::Numbered(n) => n.parse::<u64>().ok().filter(|n| *n != 1),
+                _ => None,
+            };
+            match (wanted, start) {
+                // a list that starts past 1 keeps its numbers
+                (Some(tag), Some(n)) => {
+                    let _ = write!(out, "<{tag} start=\"{n}\">");
+                }
+                (Some(tag), _) => {
+                    let _ = write!(out, "<{tag}>");
+                }
+                (None, _) => {}
             }
             list = wanted;
         }
@@ -1664,6 +1681,32 @@ mod tests {
         assert_eq!(
             plain(notes, &[]),
             "Setup\n- clamp corners\n1. zero Z\n[x] sand\nsee docs (https://a.dev)"
+        );
+    }
+
+    #[test]
+    fn a_numbered_list_keeps_its_first_number_and_a_link_fills_in_its_variables() {
+        assert_eq!(
+            html("3. Clamp\n4. Zero", &[]),
+            "<ol start=\"3\"><li>Clamp</li><li>Zero</li></ol>"
+        );
+        let vars = vec![Variable {
+            key: "job.name".into(),
+            group: "Job",
+            under: String::new(),
+            label: "Name".into(),
+            description: "x".into(),
+            value: "Sign".into(),
+        }];
+        let text = "See [the {{job.name}} page](https://example.com) now";
+        assert_eq!(
+            plain(text, &vars),
+            "See the Sign page (https://example.com) now"
+        );
+        assert!(
+            html(text, &vars).contains("<a href=\"https://example.com\">Sign</a>"),
+            "{}",
+            html(text, &vars)
         );
     }
 

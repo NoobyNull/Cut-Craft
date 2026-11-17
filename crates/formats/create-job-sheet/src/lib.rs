@@ -90,6 +90,12 @@ pub struct Setup {
     pub rapid: f64,
     /// The machine's X, Y, Z accelerations, mm/s², for the run times (0 for none).
     pub acceleration: [f64; 3],
+    /// The Toolpath Summary's run time scale factor (1 for none).
+    pub scale: f64,
+    /// How tall the 3D model is, mm; `None` when there is none.
+    pub model_height: Option<f64>,
+    /// How the machine holds its bits (collet nut, spindle, holder per bit).
+    pub holding: cut_craft_core::collision::Holding,
     /// The notes' variables as the app has them (machine, model height…); empty: worked out
     /// from the job and this setup.
     pub variables: Vec<cut_craft_core::notes::Variable>,
@@ -107,6 +113,9 @@ impl Default for Setup {
             printed: String::new(),
             rapid: RAPID,
             acceleration: [0.0; 3],
+            scale: 1.0,
+            model_height: None,
+            holding: cut_craft_core::collision::Holding::default(),
             variables: vec![],
         }
     }
@@ -129,6 +138,9 @@ fn notes_context(setup: &Setup) -> cut_craft_core::notes::Context {
         time,
         rapid: setup.rapid,
         acceleration: setup.acceleration,
+        scale: setup.scale,
+        model_height: setup.model_height,
+        holding: setup.holding,
         ..cut_craft_core::notes::Context::default()
     }
 }
@@ -188,13 +200,15 @@ pub fn sheets(
             .chars()
             .map(|ch| if ch.is_alphanumeric() { ch } else { '_' })
             .collect();
-        // the notes' values from this sheet's own toolpaths and material; what only the app
-        // knows (the machine, the model's height, the time) as it gave them
+        // the notes' values from this sheet's own toolpaths, material and model placement;
+        // what only the app knows (the job's file, the machine, the time) as it gave them
         let mut vars = cut_craft_core::notes::variables(&on, &notes_context(setup));
         for v in &mut vars {
-            if let Some(given) = setup.variables.iter().find(|g| {
-                g.key == v.key && matches!(g.group, "Job" | "Model" | "Machine" | "System")
-            }) {
+            if let Some(given) = setup
+                .variables
+                .iter()
+                .find(|g| g.key == v.key && matches!(g.group, "Job" | "Machine" | "System"))
+            {
                 v.value.clone_from(&given.value);
             }
         }
@@ -586,13 +600,13 @@ mod tests {
         let doc = cut_craft_core::testing::with_toolpath();
         let mut two = cut_craft_core::testing::two_sheets();
         two.toolpaths = doc.toolpaths.clone();
-        two.notes = "{{toolpath.1.name}} on {{machine.name}}".into();
+        two.notes = "{{toolpath.1.name}} on {{machine.name}}|{{model.measured_from}}".into();
         // what the app had for its active sheet: another toolpath, and the machine
         let mut vars =
             cut_craft_core::notes::variables(&doc, &cut_craft_core::notes::Context::default());
         for v in &mut vars {
             match v.key.as_str() {
-                "toolpath.1.name" => v.value = "Wrong".into(),
+                "toolpath.1.name" | "model.measured_from" => v.value = "Wrong".into(),
                 "machine.name" => v.value = "Shop".into(),
                 _ => {}
             }
@@ -602,11 +616,9 @@ mod tests {
             ..Setup::default()
         };
         let pages = sheets(&two, &Style::default(), &setup).unwrap();
-        assert!(
-            pages[0].1.contains("<p>Profile on Shop</p>"),
-            "{}",
-            pages[0].1
-        );
+        assert!(pages[0].1.contains("<p>Profile on Shop|"), "{}", pages[0].1);
+        // the model's placement is the sheet's own, not the active sheet's
+        assert!(!pages[0].1.contains("Wrong"), "{}", pages[0].1);
     }
 
     #[test]

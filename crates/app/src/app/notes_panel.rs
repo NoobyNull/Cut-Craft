@@ -140,7 +140,7 @@ impl super::CutCraftApp {
 
     /// The 3D model's height, lowest point to highest; `None` with no model. Measured once
     /// a change.
-    fn model_height_now(&self) -> Option<f64> {
+    pub(super) fn model_height_now(&self) -> Option<f64> {
         if self.doc.components.is_empty() {
             return None;
         }
@@ -238,21 +238,31 @@ impl super::CutCraftApp {
                 let galley_job = chips(ui, text.as_str(), &known, wrap);
                 ui.fonts_mut(|f| f.layout_job(galley_job))
             };
-            let output = egui::TextEdit::multiline(&mut body)
-                .id(text_id)
-                .hint_text(
-                    "Notes for this job: what to clamp, which bit goes first…\n\
+            // long notes scroll inside the box, so the Variable Explorer stays in sight
+            let scrolled = egui::ScrollArea::vertical()
+                .id_salt("notes-text")
+                .max_height(text_height)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    egui::TextEdit::multiline(&mut body)
+                        .id(text_id)
+                        .hint_text(
+                            "Notes for this job: what to clamp, which bit goes first…\n\
                      The buttons above make headings and lists; drag a variable in from \
                      the Variable Explorer to show a live value.",
-                )
-                .desired_width(f32::INFINITY)
-                .min_size(size)
-                .layouter(&mut layouter)
-                .show(ui);
+                        )
+                        .desired_width(f32::INFINITY)
+                        .min_size(size)
+                        .layouter(&mut layouter)
+                        .show(ui)
+                });
+            let output = scrolled.inner;
             if output.response.changed() {
                 changed = true;
             }
-            if let Some(range) = output.cursor_range {
+            // what was picked while typing stays picked for the toolbar and Insert, which
+            // take the focus away from the box
+            if let Some(range) = output.cursor_range.filter(|_| output.response.has_focus()) {
                 let r = range.as_sorted_char_range();
                 state.selection = Some(r.start.0..r.end.0);
             }
