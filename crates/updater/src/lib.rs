@@ -2,14 +2,29 @@
 //! downloads it, checks it was signed with Cut Craft's release key (minisign) and matches
 //! GitHub's checksum, and swaps it in for the running program, ready for a restart. Only
 //! GitHub is asked, never a mirror.
+//!
+//! One click does it all from the app's side: "Install Now" downloads, checks and swaps in
+//! the new version, then Cut Craft closes (asking to save unsaved work first) and
+//! [`restart`] opens the new version on the same job. Self-replacing installs are the
+//! `AppImage`, the Linux `.tar.gz` and the Windows `.zip`; a package manager's copy (.deb,
+//! .rpm, AUR) and a Flatpak are told how to update instead, with the command to run.
+//!
+//! Planned, not built (awaiting the go-ahead): small patch updates. Each release would carry
+//! a full build, as now, plus a small patch from the version before it (for example a
+//! `.patch` asset named for both versions, signed like every download). An install one
+//! version behind would download the patch, apply it to its own program, and check the
+//! result against the full build's checksum before swapping it in, falling back to the full
+//! download when anything does not match. [`install`] is where that would start.
 
 pub mod addon;
 mod install;
 mod package;
+mod relaunch;
 mod release;
 
 pub use install::{Install, Probe, packaged_note_path};
 pub use package::clean_up;
+pub use relaunch::{appimage_destination, launcher_folders, relaunch_env, repoint_launchers};
 pub use release::{Asset, Release, version_of};
 pub use semver::Version;
 
@@ -73,6 +88,7 @@ impl Found {
     pub fn for_release(install: &Install, release: Release) -> Self {
         let ready = match install {
             Install::Packaged { why } | Install::Elsewhere { why } => Err(why.clone()),
+            Install::Flatpak => Err(Install::flatpak_steps(&release.version)),
             _ => match install.asset_suffix().and_then(|s| release.asset(s)) {
                 None => Err(format!(
                     "Version {} has no download for this kind of install. Download it from \
@@ -146,7 +162,10 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
             package::verify(&bytes, asset.digest.as_deref())?;
             package::verify_signature(&bytes, &signature, RELEASE_KEY, &asset.name)?;
             let program = match install {
-                Install::AppImage { .. } => bytes,
+                Install::AppImage { file } => {
+                    step(Step::Installing);
+                    return install_appimage(file, &asset.name, &bytes, &release.version);
+                }
                 Install::Archive { windows, .. } => {
                     let name = if *windows {
                         "cut-craft.exe"
@@ -155,7 +174,7 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
                     };
                     package::program_from(&bytes, *windows, name)?
                 }
-                Install::Packaged { .. } | Install::Elsewhere { .. } => {
+                Install::Packaged { .. } | Install::Flatpak | Install::Elsewhere { .. } => {
                     unreachable!("only downloads have an asset")
                 }
             };
@@ -174,12 +193,52 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
     }
 }
 
-/// Starts `program`, the new version, apart from this one (which is closing).
-pub fn restart(program: &Path) -> std::io::Result<()> {
+/// Swaps in a downloaded `AppImage`: over the old file, or beside it under the release's
+/// name when the old file is named for the running version, with the links and menu
+/// entries that started the old one pointed at the new one. The new `AppImage`, to start.
+fn install_appimage(
+    file: &Path,
+    asset_name: &str,
+    bytes: &[u8],
+    version: &Version,
+) -> Result<PathBuf, String> {
+    let dest = appimage_destination(file, &current_version(), asset_name);
+    if dest == file {
+        package::replace(file, bytes)?;
+    } else {
+        package::write_beside(&dest, bytes)?;
+        let data_home = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from);
+        let folders = launcher_folders(
+            file.parent().unwrap_or(Path::new(".")),
+            home().as_deref(),
+            data_home.as_deref(),
+        );
+        for changed in repoint_launchers(file, &dest, &folders) {
+            log::info!("{} now starts {}", changed.display(), dest.display());
+        }
+        package::set_aside(file, &dest);
+    }
+    log::info!("updated {} to {version}", dest.display());
+    Ok(dest)
+}
+
+/// Starts `program`, the new version, apart from this one (which is closing), opening the
+/// job `open` when there is one.
+pub fn restart(program: &Path, open: Option<&Path>) -> std::io::Result<()> {
     let mut command = std::process::Command::new(program);
+    if let Some(job) = open {
+        command.arg(job);
+    }
     // not the old program's folder, which an AppImage unmounts as it closes
     if let Some(dir) = home() {
         command.current_dir(dir);
+    }
+    let vars: Vec<_> = std::env::vars_os().collect();
+    for (name, value) in relaunch_env(&vars) {
+        match value {
+            Some(value) => command.env(name, value),
+            None => command.env_remove(name),
+        };
     }
     command.spawn().map(drop)
 }
@@ -331,6 +390,35 @@ mod tests {
             ready: Err("by hand".into()),
         };
         assert_eq!(install(&LINUX, &blocked, &|_| {}), Err("by hand".into()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_version_named_appimage_is_installed_under_the_new_name_and_its_link_follows() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-appimage-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = std::fs::canonicalize(dir).unwrap();
+        let old = dir.join(format!("CutCraft-{}-x86_64.AppImage", current_version()));
+        std::fs::write(&old, b"old").unwrap();
+        let link = dir.join("cut-craft");
+        std::os::unix::fs::symlink(&old, &link).unwrap();
+
+        let new_name = "CutCraft-99.0.0-x86_64.AppImage";
+        let started = install_appimage(&old, new_name, b"new", &Version::new(99, 0, 0)).unwrap();
+
+        assert_eq!(
+            started,
+            dir.join(new_name),
+            "the new version starts from its own name"
+        );
+        assert_eq!(std::fs::read(&started).unwrap(), b"new");
+        assert!(!old.exists(), "no file is left with the old version's name");
+        assert_eq!(std::fs::read_link(&link).unwrap(), started);
+        // the next start, from the new AppImage, removes the old one
+        package::clean_up(&started);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     /// Asks the real GitHub: `cargo test -p cut-craft-updater -- --ignored`.

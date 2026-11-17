@@ -1238,7 +1238,7 @@ struct CutCraftApp {
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.
     updates: crate::update::Updates,
-    /// Restart Now: the new version, started once the window has closed.
+    /// Install Now or Relaunch Now: the new version, started once the window has closed.
     restart_after_close: Option<std::path::PathBuf>,
     /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
     unsigned_gadgets: std::collections::HashMap<String, String>,

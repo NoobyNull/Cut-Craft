@@ -230,7 +230,14 @@ pub(super) fn gaps(app: &CutCraftApp) -> Vec<Gap> {
         .filter(|t| {
             !matches!(
                 *t,
-                "contents" | "design" | "toolpaths" | "tips" | "web_api" | "groups" | "view_3d"
+                "contents"
+                    | "design"
+                    | "toolpaths"
+                    | "tips"
+                    | "web_api"
+                    | "groups"
+                    | "view_3d"
+                    | "updates"
             )
         })
         .map(String::from)

@@ -31,8 +31,11 @@ pub enum Install {
     /// Installed by the system's package manager (an AUR, .deb or .rpm package), which owns
     /// the files and offers new versions itself; the reason says how to update, for the user.
     Packaged { why: String },
-    /// Updated some other way (a Flatpak, a Mac, a build from the source code); the reason
-    /// says how, for the user.
+    /// A Flatpak bundle: it cannot replace itself, so the user installs the new bundle
+    /// (the words, with the command, are made for each release by [`Install::flatpak_steps`]).
+    Flatpak,
+    /// Updated some other way (a Mac, a build from the source code); the reason says how,
+    /// for the user.
     Elsewhere { why: String },
 }
 
@@ -78,11 +81,7 @@ impl Install {
             };
         }
         if p.flatpak {
-            return Self::Elsewhere {
-                why: "This copy of Cut Craft is a Flatpak. Download the new .flatpak file from \
-                      the release page and open it to install it over this one."
-                    .to_owned(),
-            };
+            return Self::Flatpak;
         }
         if let Some(source) = source_checkout(&p.exe, p.exists) {
             return source;
@@ -118,8 +117,20 @@ impl Install {
             Self::Archive { windows: true, .. } => Some("windows-x86_64.zip"),
             Self::Archive { windows: false, .. } => Some("linux-x86_64.tar.gz"),
             Self::AppImage { .. } => Some("x86_64.AppImage"),
-            Self::Packaged { .. } | Self::Elsewhere { .. } => None,
+            Self::Packaged { .. } | Self::Flatpak | Self::Elsewhere { .. } => None,
         }
+    }
+
+    /// How a Flatpak copy installs `version`: the bundle to download and the command that
+    /// installs it over this one.
+    pub fn flatpak_steps(version: &semver::Version) -> String {
+        let bundle = format!("cut-craft-{version}-x86_64.flatpak");
+        format!(
+            "This copy of Cut Craft is a Flatpak, which cannot replace itself. Download \
+             {bundle} from the release page, then open it in your software centre, or run \
+             `flatpak install --user {bundle}` in the folder you saved it to. Your jobs and \
+             settings are kept."
+        )
     }
 
     /// Whether Cut Craft asks GitHub about new versions when it starts. A package manager
@@ -134,7 +145,7 @@ impl Install {
         match self {
             Self::Archive { exe, .. } => Some(exe),
             Self::AppImage { file } => Some(file),
-            Self::Packaged { .. } | Self::Elsewhere { .. } => None,
+            Self::Packaged { .. } | Self::Flatpak | Self::Elsewhere { .. } => None,
         }
     }
 }
@@ -285,10 +296,18 @@ mod tests {
     fn flatpak_mac_and_other_processors_say_how_to_update() {
         let mut p = probe("/app/bin/cut-craft", "linux", NOTHING);
         p.flatpak = true;
-        let Install::Elsewhere { why } = Install::detect(&p) else {
-            panic!("a Flatpak cannot replace itself")
-        };
-        assert!(why.contains(".flatpak"));
+        let flatpak = Install::detect(&p);
+        assert_eq!(flatpak, Install::Flatpak, "a Flatpak cannot replace itself");
+        assert_eq!(flatpak.program(), None);
+        assert!(
+            flatpak.checks_at_startup(),
+            "nothing else tells it of new versions"
+        );
+        let steps = Install::flatpak_steps(&semver::Version::new(0, 6, 14));
+        assert!(
+            steps.contains("`flatpak install --user cut-craft-0.6.14-x86_64.flatpak`"),
+            "{steps}"
+        );
         let mac = Install::detect(&probe("/Applications/x", "macos", NOTHING));
         assert!(matches!(mac, Install::Elsewhere { .. }));
         let mut arm = probe("/home/a/cut-craft", "linux", NOTHING);

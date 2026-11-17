@@ -45,16 +45,26 @@ impl CutCraftApp {
         }
     }
 
-    /// Closing went ahead after Restart Now: starts the new version.
+    /// Closing went ahead after Install Now or Relaunch Now: starts the new version, on the
+    /// job that was open (as saved, if the save question was answered).
     pub(super) fn restart_into_update(&mut self) {
-        if let Some(program) = self.restart_after_close.take()
-            && let Err(e) = crate::update::restart(&program)
-        {
-            log::warn!("{e}");
-            let _ = rfd::MessageDialog::new()
-                .set_title(super::APP_NAME)
-                .set_description(e)
-                .show();
+        if let Some(program) = self.restart_after_close.take() {
+            let job = self.job_to_reopen();
+            if let Err(e) = crate::update::restart(&program, job.as_deref()) {
+                log::warn!("{e}");
+                let _ = rfd::MessageDialog::new()
+                    .set_title(super::APP_NAME)
+                    .set_description(e)
+                    .show();
+            }
         }
+    }
+
+    /// The job file the new version opens: the open job's, when it has one on disk.
+    pub(super) fn job_to_reopen(&self) -> Option<std::path::PathBuf> {
+        if matches!(self.screen, super::Screen::Start) {
+            return None;
+        }
+        self.session.path.clone().filter(|p| p.is_file())
     }
 }

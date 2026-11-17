@@ -21,7 +21,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 12] = [
+const SCENES: [Scene; 17] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -35,7 +35,60 @@ const SCENES: [Scene; 12] = [
     ("rotary-import", rotary_import),
     // Help: Toolpaths ▸ Looking at the G-code
     ("view-gcode", view_gcode),
+    // Help: Updates (one-click install and relaunch)
+    ("update-offer", |app, _| {
+        update_window(app, update_offer(Ok(())));
+    }),
+    ("update-downloading", |app, _| {
+        update_window(
+            app,
+            crate::update::Phase::Working(cut_craft_updater::Step::Downloading {
+                done: 9_200_000,
+                total: 21_400_000,
+            }),
+        );
+    }),
+    ("update-checking", |app, _| {
+        update_window(
+            app,
+            crate::update::Phase::Working(cut_craft_updater::Step::Checking),
+        );
+    }),
+    ("update-installing", |app, _| {
+        update_window(
+            app,
+            crate::update::Phase::Working(cut_craft_updater::Step::Installing),
+        );
+    }),
+    ("update-by-hand", |app, _| {
+        let version = cut_craft_updater::Version::new(0, 6, 14);
+        let steps = cut_craft_updater::Install::flatpak_steps(&version);
+        update_window(app, update_offer(Err(steps)));
+    }),
 ];
+
+/// The Updates window over the job, at `phase`.
+fn update_window(app: &mut CutCraftApp, phase: crate::update::Phase) {
+    app.gcode_view = None;
+    app.updates.show(phase);
+}
+
+/// Version 0.6.14 offered, as GitHub would describe it; `ready` says whether it installs.
+fn update_offer(ready: Result<(), String>) -> crate::update::Phase {
+    let version = cut_craft_updater::Version::new(0, 6, 14);
+    crate::update::Phase::Found(cut_craft_updater::Found::Release {
+        release: cut_craft_updater::Release {
+            tag: format!("v{version}"),
+            version,
+            notes: "- Install Now downloads, installs and reopens Cut Craft on your job\n\
+                    - Pocket and Profile remember the last bit you picked"
+                .into(),
+            page: cut_craft_updater::RELEASES_PAGE.into(),
+            assets: vec![],
+        },
+        ready,
+    })
+}
 
 /// Where the run is.
 pub struct Shots {

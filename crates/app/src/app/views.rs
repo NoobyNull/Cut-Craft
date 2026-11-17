@@ -350,7 +350,7 @@ impl CutCraftApp {
                 self.restart_into_update();
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                // Cancel at "Save changes?" cancels Restart Now too
+                // Cancel at "Save changes?" cancels the relaunch after an update too
                 self.restart_after_close = None;
             }
         }

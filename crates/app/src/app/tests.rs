@@ -6934,6 +6934,63 @@ fn the_3d_views_help_shows_auto_rotate_with_its_moving_picture() {
 }
 
 #[test]
+fn the_updates_help_shows_one_click_install_and_relaunch_with_pictures() {
+    let h = Harness::new();
+    assert!(h.app.help_topics().contains(&"updates"));
+    assert!(
+        h.app.help_markdown("contents").contains("(help:updates)"),
+        "linked from Contents"
+    );
+    let page = h.app.help_markdown("updates");
+    for words in [
+        "Download, install and relaunch?",
+        "Install Now",
+        "Later",
+        "Skip This Version",
+        "Relaunch Now",
+        "save",
+        "Copy",
+    ] {
+        assert!(page.contains(words), "{words}");
+    }
+    for (picture, magic) in [
+        ("update-offer.png", &b"\x89PNG"[..]),
+        ("update-steps.gif", b"GIF8"),
+        ("update-by-hand.png", b"\x89PNG"),
+    ] {
+        assert!(
+            page.contains(&format!("bytes://help/{picture}")),
+            "{picture}"
+        );
+        assert!(
+            super::help::PICTURES
+                .iter()
+                .any(|(name, bytes)| *name == picture && bytes.starts_with(magic)),
+            "{picture} goes with the app"
+        );
+    }
+}
+
+#[test]
+fn the_new_version_reopens_the_job_that_was_open() {
+    let mut h = Harness::new();
+    let job = std::env::temp_dir().join(format!("cut-craft-reopen-{}.ccjob", std::process::id()));
+    std::fs::write(&job, b"job").unwrap();
+    h.app.session.path = Some(job.clone());
+    h.app.screen = Screen::Job;
+    assert_eq!(h.app.job_to_reopen(), Some(job.clone()));
+    // the start page has no job open
+    h.app.screen = Screen::Start;
+    assert_eq!(h.app.job_to_reopen(), None);
+    // a job never saved, or whose file has gone, opens nothing
+    h.app.screen = Screen::Job;
+    std::fs::remove_file(&job).unwrap();
+    assert_eq!(h.app.job_to_reopen(), None);
+    h.app.session.path = None;
+    assert_eq!(h.app.job_to_reopen(), None);
+}
+
+#[test]
 fn auto_rotate_turns_a_rotary_job_round_its_own_axis() {
     use cut_craft_core::document::{Along, Job};
     use cut_craft_core::glam::DVec3;
