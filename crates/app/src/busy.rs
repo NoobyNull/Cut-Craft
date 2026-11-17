@@ -88,6 +88,21 @@ impl<A: 'static> Busy<A> {
         &self.what
     }
 
+    /// How far along it is, 0 to 1, once it can tell.
+    pub fn fraction(&self) -> Option<f64> {
+        self.progress.fraction()
+    }
+
+    /// The step it is on ("Pocket (2 of 3)").
+    pub fn stage(&self) -> String {
+        self.progress.stage()
+    }
+
+    /// How long it has been running.
+    pub fn elapsed(&self) -> Duration {
+        self.started.elapsed()
+    }
+
     pub fn is_done(&self) -> bool {
         self.done.load(Ordering::Acquire)
     }

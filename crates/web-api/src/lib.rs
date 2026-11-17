@@ -23,7 +23,7 @@ mod docs;
 pub mod job;
 pub mod openapi;
 
-pub use call::{Call, Pick};
+pub use call::{Call, Gcode, Look, Pick, Picture, Shown, Which};
 
 /// The port the Web API listens on unless Options says another.
 pub const DEFAULT_PORT: u16 = 7340;
@@ -107,17 +107,29 @@ impl ApiError {
 /// What the app answers a call with: the JSON to send back, or why it could not.
 pub type Answer = Result<Value, ApiError>;
 
+/// What goes back to the caller: JSON, or a picture.
+#[derive(Debug)]
+enum Reply {
+    Json(Value),
+    Png(Vec<u8>),
+}
+
 /// A call waiting for the app to run it and answer.
 #[derive(Debug)]
 pub struct Pending {
     pub call: Call,
-    reply: Sender<Answer>,
+    reply: Sender<Result<Reply, ApiError>>,
 }
 
 impl Pending {
     /// Sends the app's answer back to the caller. A caller that gave up waiting is ignored.
     pub fn answer(self, answer: Answer) {
-        let _ = self.reply.send(answer);
+        let _ = self.reply.send(answer.map(Reply::Json));
+    }
+
+    /// Sends a PNG picture back to the caller.
+    pub fn answer_png(self, png: Vec<u8>) {
+        let _ = self.reply.send(Ok(Reply::Png(png)));
     }
 }
 
@@ -390,7 +402,8 @@ fn read_call(request: &mut tiny_http::Request) -> Result<Call, ApiError> {
         }
     };
     let post = method == tiny_http::Method::Post;
-    call::parse(route.trim_end_matches('/'), post, body)
+    let query = url.split_once('?').map_or("", |(_, q)| q);
+    call::parse(route.trim_end_matches('/'), post, body, query)
 }
 
 fn read_json(request: &mut tiny_http::Request) -> Result<Value, ApiError> {
@@ -413,7 +426,7 @@ fn read_json(request: &mut tiny_http::Request) -> Result<Value, ApiError> {
     serde_json::from_str(&text).map_err(|e| ApiError::bad(format!("The body is not JSON: {e}.")))
 }
 
-fn ask_app(call: Call, calls: &Sender<Pending>, wake: &impl Fn()) -> Answer {
+fn ask_app(call: Call, calls: &Sender<Pending>, wake: &impl Fn()) -> Result<Reply, ApiError> {
     let (reply, answer) = mpsc::channel();
     calls.send(Pending { call, reply }).map_err(|_| closing())?;
     wake();
@@ -436,16 +449,25 @@ fn closing() -> ApiError {
     }
 }
 
-fn response(answer: Answer) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
-    let (status, body) = match answer {
-        Ok(body) => (200, body),
-        Err(e) => (e.status, serde_json::json!({ "error": e.message })),
+fn response(answer: Result<Reply, ApiError>) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
+    let (status, kind, bytes) = match answer {
+        Ok(Reply::Json(body)) => (200, "application/json", pretty(&body)),
+        Ok(Reply::Png(png)) => (200, "image/png", png),
+        Err(e) => (
+            e.status,
+            "application/json",
+            pretty(&serde_json::json!({ "error": e.message })),
+        ),
     };
-    let json = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
+    let kind = tiny_http::Header::from_bytes(&b"Content-Type"[..], kind.as_bytes())
         .expect("a fixed header is valid");
-    tiny_http::Response::from_data(serde_json::to_vec_pretty(&body).unwrap_or_default())
+    tiny_http::Response::from_data(bytes)
         .with_status_code(status)
-        .with_header(json)
+        .with_header(kind)
+}
+
+fn pretty(body: &Value) -> Vec<u8> {
+    serde_json::to_vec_pretty(body).unwrap_or_default()
 }
 
 #[cfg(test)]

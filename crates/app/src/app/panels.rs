@@ -512,6 +512,7 @@ impl CutCraftApp {
             .selected(self.status.current_tool == label);
         let available = self.available(id);
         let response = tool_cell(ui, edge, |ui| ui.add_enabled(available, button));
+        crate::marks::note(ui, &format!("tool:{id}"), response.rect);
         self.with_guidance(response, id)
             .on_disabled_hover_text(self.unavailable_why(id))
     }
@@ -551,6 +552,9 @@ impl CutCraftApp {
             .selected(in_hand);
         let response = tool_cell(ui, edge, |ui| ui.add_enabled(any_available, face));
         super::guide::hover(&response, &tip);
+        for m in &button.members {
+            crate::marks::note(ui, &format!("tool:{m}"), response.rect);
+        }
         let response = response
             .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
             .on_disabled_hover_text(self.unavailable_why(id));
@@ -1362,7 +1366,11 @@ impl CutCraftApp {
         };
         let (at, length) = (playback.at(), playback.length());
         // from the playback itself: while it plays there is no finished simulation
-        let fine_bit = crate::display::fine_bit_note(playback.tools(), playback.material().cell);
+        let fine_bit = crate::display::fine_bit_note(
+            playback.tools(),
+            playback.material().cell,
+            self.display.quality,
+        );
         let guessed_shank = playback
             .tool()
             .filter(|(_, tool)| tool.shank_diameter.is_nan() || tool.shank_diameter <= 0.0)
@@ -4559,6 +4567,7 @@ impl CutCraftApp {
                 "Check the toolpaths and write the G-code file your machine runs, using its \
                  post processor",
             );
+        crate::marks::note(ui, "tool:save_toolpaths", save.rect);
         if !ready {
             ui.weak(SAVE_NEEDS);
         }
@@ -4722,6 +4731,18 @@ fn save_part(
     area: egui::Rect,
     path: &std::path::Path,
 ) -> Result<(), String> {
+    part_of(picture, area, "the 3D view")?
+        .save(path)
+        .map_err(|e| crate::messages::could_not_save_picture(path, &e))
+}
+
+/// The `area` (pixels) of the window's `picture`: `what` is the view it should show, named
+/// when it was not on screen.
+pub(super) fn part_of(
+    picture: &egui::ColorImage,
+    area: egui::Rect,
+    what: &str,
+) -> Result<image::RgbaImage, String> {
     let [width, height] = picture.size;
     let clamp = |v: f32, most: usize| {
         #[expect(
@@ -4735,7 +4756,7 @@ fn save_part(
     let (x0, y0) = (clamp(area.min.x, width), clamp(area.min.y, height));
     let (x1, y1) = (clamp(area.max.x, width), clamp(area.max.y, height));
     if x1 <= x0 || y1 <= y0 {
-        return Err("the 3D view was not on screen to save".into());
+        return Err(format!("{what} was not on screen to save"));
     }
     let mut out = image::RgbaImage::new(
         u32::try_from(x1 - x0).map_err(|e| e.to_string())?,
@@ -4748,8 +4769,7 @@ fn save_part(
             out.put_pixel(x, y, image::Rgba(c.to_srgba_unmultiplied()));
         }
     }
-    out.save(path)
-        .map_err(|e| crate::messages::could_not_save_picture(path, &e))
+    Ok(out)
 }
 
 /// Whether `path` is a mesh, imported through Orientate 3D Model.

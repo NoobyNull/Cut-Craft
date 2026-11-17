@@ -1,7 +1,8 @@
 #!/bin/bash
 # Scaffold a command crate whose contract tests fail until it is implemented.
 #   scripts/new-command draw-rectangle "Draw Rectangle" "Create Vectors" drawing/create_vectors/draw_rectangle.svg
-# Then: write behaviour tests in its src/lib.rs and implement run(). The app registration is done here.
+# Then: write behaviour tests in its src/lib.rs and implement run(), and its help page. The app
+# registration and the help page's header are done here.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 name="$1" label="$2" group="$3" icon="${4:-}"
@@ -66,4 +67,7 @@ EOF
 # register it in the app: dependency + one line in src/commands.rs
 sed -i "/^# Commands: one line per crate/a cmd-$name = { path = \"../commands/$name\" }" crates/app/Cargo.toml
 sed -i "s|^    // scripts/new-command adds new commands above this line|    r.add::<cmd_${id}::$type>();\n&|" crates/app/src/commands.rs
-echo "created $dir ($type, id \"$id\") and registered it in crates/app"
+# its help page: a header to start; write its steps, pictures and links before the pull request
+printf -- '---\nreviewed: %s\nsee-also:\n---\n' "$(date +%F)" >"crates/help/pages/tools/$id.md"
+echo "created $dir ($type, id \"$id\"), registered it in crates/app, and started its help page"
+echo "crates/help/pages/tools/$id.md"
