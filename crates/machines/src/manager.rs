@@ -121,6 +121,10 @@ pub enum FolderFor {
 /// The open Machine Configuration Management window: the machines being edited.
 pub struct MachineManager {
     pub draft: Machines,
+    /// The machines as last kept (opened, or Apply): the draft differs while changes wait.
+    applied: Machines,
+    /// Closed with changes not applied: it asks Apply or Discard first.
+    closing: bool,
     /// The associated post picked in the list.
     picked: Option<usize>,
     viewing: Option<(String, String)>,
@@ -130,6 +134,8 @@ impl MachineManager {
     pub fn new(machines: &Machines) -> Self {
         Self {
             draft: machines.clone(),
+            applied: machines.clone(),
+            closing: false,
             picked: None,
             viewing: None,
         }
@@ -142,23 +148,45 @@ impl MachineManager {
         m
     }
 
+    /// There are edits Apply or OK hasn't kept yet.
+    pub fn dirty(&self) -> bool {
+        self.draft != self.applied
+    }
+
+    /// The edits were kept (Apply): the window has none waiting from here.
+    pub fn applied(&mut self) {
+        self.applied = self.draft.clone();
+        self.closing = false;
+    }
+
     pub fn show(
         &mut self,
         ctx: &egui::Context,
         library: &Library,
         look: &Look,
     ) -> Option<MachineOutcome> {
+        use cut_craft_bug_report::unapplied::{self, Answer};
         let mut open = true;
         let (mut outcome, mut row) = (None, None);
+        let dirty = self.dirty();
         let (id, title) = (machine_window(), "Machine Configuration Management");
         cut_craft_bug_report::dialog(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
             cut_craft_bug_report::mark(ui, "Machine Configuration Management");
+            unapplied::hold_close(ui, dirty);
+            if self.closing {
+                match unapplied::question(ui.ctx(), "machines_apply_question") {
+                    Some(Answer::ApplyAndClose) => outcome = Some(MachineOutcome::Ok),
+                    Some(Answer::Discard) => outcome = Some(MachineOutcome::Cancel),
+                    Some(Answer::KeepEditing) => self.closing = false,
+                    None => {}
+                }
+            }
             row = self.machine_row(ui, look);
             ui.separator();
             let names_clash = self.draft.names_clash();
             let Some(machine) = self.draft.active_mut() else {
                 ui.weak("No machines yet: Add Machine makes one");
-                outcome = buttons(ui, false);
+                outcome = buttons(ui, false, dirty).or(outcome.take());
                 return;
             };
             details(ui, machine, library);
@@ -187,11 +215,16 @@ impl MachineManager {
             ) {
                 outcome = Some(asked);
             }
-            outcome = buttons(ui, !names_clash).or(outcome.take());
+            outcome = buttons(ui, !names_clash, dirty).or(outcome.take());
         });
         viewer(ctx, &mut self.viewing);
+        // the close box drops the edits only once asked, while some wait
         if !open {
-            outcome = Some(MachineOutcome::Cancel);
+            if dirty {
+                self.closing = true;
+            } else {
+                outcome = Some(MachineOutcome::Cancel);
+            }
         }
         outcome.or(row)
     }
@@ -554,11 +587,16 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
         );
         let mut gone = None;
         egui::Grid::new("machine_keep_out")
-            .num_columns(6)
+            .num_columns(7)
             .show(ui, |ui| {
                 for heading in ["Name", "X", "Y", "Width", "Height"] {
                     ui.label(heading);
                 }
+                ui.label("Tall").on_hover_hint(
+                    "How tall the clamp stands above the top of the material, so the checks \
+                     see the collet nut or spindle coming down over it beside a deep cut; 0 \
+                     takes 20 mm",
+                );
                 ui.end_row();
                 for (i, zone) in machine.keep_out.iter_mut().enumerate() {
                     // what its label in the views says, after "Keep-out: "
@@ -579,7 +617,7 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
                             *value = shown * per;
                         }
                     }
-                    for value in [&mut zone.width, &mut zone.height] {
+                    for value in [&mut zone.width, &mut zone.height, &mut zone.stands] {
                         measure(ui, value, per, &format!(" {length}"));
                     }
                     if ui.button("Remove").clicked() {
@@ -967,19 +1005,20 @@ fn posts_section(
     asked
 }
 
-/// Apply on its own line, then OK and Cancel.
-fn buttons(ui: &mut egui::Ui, can_keep: bool) -> Option<MachineOutcome> {
+/// Apply on its own line (greyed out until something changes, with whether changes wait
+/// beside it), then OK and Cancel.
+fn buttons(ui: &mut egui::Ui, can_keep: bool, dirty: bool) -> Option<MachineOutcome> {
     let mut outcome = None;
     // in a row of its own: a right-to-left layout on its own takes all the height left, and
     // the window grew down the screen with it
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui
-                .add_enabled(can_keep, egui::Button::new("Apply"))
-                .clicked()
-            {
+            if cut_craft_bug_report::unapplied::apply_button(ui, can_keep && dirty) {
                 outcome = Some(MachineOutcome::Apply);
             }
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                cut_craft_bug_report::unapplied::note(ui, dirty);
+            });
         });
     });
     ui.separator();

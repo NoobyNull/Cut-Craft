@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-14
-see-also: material_setup, profile_toolpath
+reviewed: 2026-11-17
+see-also: material_setup, profile_toolpath, collisions
 ---
 
 ## Steps
@@ -19,6 +19,8 @@ see-also: material_setup, profile_toolpath
 
    ![Step 3](pictures/keep_out_zones/step-3.png)
 
-4. Give the zones a **Name** (they are labelled Clamp 1, Clamp 2…), then press **OK**. A toolpath that would cut into a zone is not made.
+4. Set the **Clamp Height**: how tall the clamps stand above the top of the material (measure to the highest point; a screw head counts). The bit already keeps out of the zones, but the wider collet nut and spindle can come down over a clamp beside a deep cut; with the height set, the checks warn of it. See [Collet and Holder Collisions](help:collisions).
 
-   ![Step 4](pictures/keep_out_zones/step-4.png)
+5. Give the zones a **Name** (they are labelled Clamp 1, Clamp 2…), then press **OK**. A toolpath that would cut into a zone is not made.
+
+   ![Naming the zones](pictures/keep_out_zones/step-4.png)

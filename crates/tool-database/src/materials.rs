@@ -44,6 +44,10 @@ pub struct MaterialsWindow {
     /// The tools as the window opened on them: what it changed is told from them, so its
     /// OK keeps edits made in the Tool Database meanwhile.
     opened_on: ToolDatabase,
+    /// The library as last kept (opened, or Apply): it differs while changes wait.
+    saved_library: MaterialLibrary,
+    /// Closed with changes not applied: it asks Apply or Discard first.
+    closing: bool,
 }
 
 /// The window's share of the screen when it first opens.
@@ -56,6 +60,8 @@ impl MaterialsWindow {
             tools: tools.clone(),
             pick: None,
             opened_on: tools.clone(),
+            saved_library: library.clone(),
+            closing: false,
         }
     }
 
@@ -117,6 +123,13 @@ impl MaterialsWindow {
     pub fn applied(&mut self, tools: &ToolDatabase) {
         self.tools = tools.clone();
         self.opened_on = tools.clone();
+        self.saved_library = self.library.clone();
+        self.closing = false;
+    }
+
+    /// There are edits Apply or OK hasn't kept yet.
+    pub fn dirty(&self) -> bool {
+        self.library != self.saved_library || self.tools != self.opened_on
     }
 
     /// The Tool Database kept edits (the Add Tool picker's Select, say): the window goes
@@ -232,8 +245,10 @@ impl MaterialsWindow {
 
     /// Draws the window; what it asks of the app, if anything.
     pub fn show(&mut self, ctx: &egui::Context) -> Option<MaterialsOutcome> {
+        use cut_craft_bug_report::unapplied::{self, Answer};
         let mut open = true;
         let mut outcome = None;
+        let dirty = self.dirty();
         let size = ctx.content_rect().size() * WINDOW_SHARE;
         cut_craft_bug_report::dialog_with_panels(
             ctx,
@@ -243,6 +258,15 @@ impl MaterialsWindow {
             &mut open,
             |ui| {
                 cut_craft_bug_report::mark(ui, "Materials Library window");
+                unapplied::hold_close(ui, dirty);
+                if self.closing {
+                    match unapplied::question(ui.ctx(), "materials_apply_question") {
+                        Some(Answer::ApplyAndClose) => outcome = Some(MaterialsOutcome::Ok),
+                        Some(Answer::Discard) => outcome = Some(MaterialsOutcome::Cancel),
+                        Some(Answer::KeepEditing) => self.closing = false,
+                        None => {}
+                    }
+                }
                 egui::Panel::bottom("materials_buttons").show(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("Cancel").clicked() {
@@ -251,9 +275,12 @@ impl MaterialsWindow {
                         if ui.button("OK").clicked() {
                             outcome = Some(MaterialsOutcome::Ok);
                         }
-                        if ui.button("Apply").clicked() {
+                        if unapplied::apply_button(ui, dirty) {
                             outcome = Some(MaterialsOutcome::Apply);
                         }
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            unapplied::note(ui, dirty);
+                        });
                     });
                 });
                 egui::Panel::left("materials_tree")
@@ -288,8 +315,13 @@ impl MaterialsWindow {
                 });
             },
         );
+        // the close box drops the edits only once asked, while some wait
         if !open {
-            outcome = Some(MaterialsOutcome::Cancel);
+            if dirty {
+                self.closing = true;
+            } else {
+                outcome = Some(MaterialsOutcome::Cancel);
+            }
         }
         outcome
     }

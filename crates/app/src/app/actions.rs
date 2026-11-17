@@ -174,6 +174,8 @@ impl CutCraftApp {
             summary: super::Summary::default(),
             stroke: Vec::new(),
             snap_window: false,
+            snap_draft: None,
+            snap_closing: false,
             job_sheet_window: false,
             part_labels_window: false,
             clearing_window: false,
@@ -224,6 +226,7 @@ impl CutCraftApp {
             trace_view: None,
             moved_3d: 0.0,
             spinning_3d: None,
+            picked_outline: None,
             pacer: crate::frame_rate::Pacer::default(),
             detail_3d: (crate::options::Detail::default(), false),
             paced_pass: u64::MAX,
@@ -1229,7 +1232,10 @@ impl CutCraftApp {
             .iter()
             .enumerate()
             .filter(|(_, z)| z.width > 0.0 && z.height > 0.0)
-            .map(|(i, z)| cut_craft_core::keep_out::KeepOutZone::new(z.name_at(i), z.path()))
+            .map(|(i, z)| {
+                cut_craft_core::keep_out::KeepOutZone::new(z.name_at(i), z.path())
+                    .standing(z.stands)
+            })
             .collect();
         let clip = self.options.toolpaths.clip_at_keep_out_zones;
         let changed = zones != self.doc.machine_keep_out || clip != self.doc.clip_keep_out;
@@ -2226,6 +2232,8 @@ impl CutCraftApp {
                     self.save_checks.clear();
                     if outcome == MachineOutcome::Ok {
                         self.machine_window = None;
+                    } else if let Some(w) = &mut self.machine_window {
+                        w.applied();
                     }
                     self.machines_changed("Machines saved");
                     if self.sync_machine_keep_out() {
@@ -2754,6 +2762,7 @@ impl CutCraftApp {
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
         self.picked_constraint = None;
+        self.picked_outline = None;
         self.job_epoch += 1;
         // measured for the job before: a new history can be at the same revision
         self.model_tall.set(None);
@@ -6500,6 +6509,8 @@ impl CutCraftApp {
         if let Some(changer) = &manager.changer {
             manager.draft.number_by_slots(&changer.slots);
         }
+        // what it opens on, slots and all, is as kept: nothing waits for Apply yet
+        manager.applied();
         self.tool_manager = Some(manager);
     }
 

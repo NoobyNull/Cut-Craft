@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 34] = [
+const SCENES: [Scene; 35] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -67,8 +67,16 @@ const SCENES: [Scene; 34] = [
         update_window(app, update_offer(Err(steps)));
     }),
     // Help: 3D View ▸ Changing a model's height (each builds on the one before)
-    ("height-picked", height_picked),
+    ("height-start", height_start),
     ("height-buttons", |app, ctx| {
+        // one click on the medallion: picked, outlined, its height buttons shown
+        let medallion = app
+            .doc
+            .components
+            .iter()
+            .find(|(_, k)| k.name == "Medallion")
+            .map(|(&id, _)| id);
+        app.doc.selected_components = medallion.into_iter().collect();
         app.view_action(ctx, "transform");
     }),
     ("height-taller", height_taller),
@@ -118,6 +126,7 @@ const SCENES: [Scene; 34] = [
     ("options-apply-question", |app, _| {
         app.options_closing = true;
     }),
+    ("snapping-not-applied", snapping_not_applied),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
 ];
@@ -172,6 +181,19 @@ fn notes(app: &mut CutCraftApp, ctx: &egui::Context, text: &str, preview: bool, 
     app.notes_ui.picked = None;
 }
 
+/// Snapping Options (F4) with Smart snapping unticked and not applied yet.
+fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
+    (app.options_window, app.options_draft, app.options_closing) = (false, None, false);
+    // Material Setup's page put away, so nothing covers the window
+    app.form = None;
+    app.pages.set_pinned(super::Page::Toolpaths, false);
+    app.view = View::TwoD;
+    app.snap_window = true;
+    let mut edited = app.options.snapping.clone();
+    edited.smart_snapping = !edited.smart_snapping;
+    app.snap_draft = Some(edited);
+}
+
 /// Edit ▸ Options on Appearance with the dark theme picked and not applied yet.
 fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.updates = crate::update::Updates::default();
@@ -217,6 +239,7 @@ fn model_position(
 /// form says it is already up to date and offers Calculate as New.
 fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
     (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
+    (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
     app.form = None;
     app.gcode_view = None;
     app.updates = crate::update::Updates::default();
@@ -550,9 +573,9 @@ fn import(app: &mut CutCraftApp, _: &egui::Context) {
     app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, ZOOM_3D);
 }
 
-/// A flat job again with the medallion picked in the 3D view, Transform mode off: the
-/// first step of Help ▸ 3D View ▸ Changing a model's height.
-fn height_picked(app: &mut CutCraftApp, ctx: &egui::Context) {
+/// A flat job again with the medallion in the 3D view, nothing picked: the first step of
+/// Help ▸ 3D View ▸ Changing a model's height.
+fn height_start(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.updates.open = false;
     ctx.set_embed_viewports(false);
     app.pages.set_pinned(super::Page::Toolpaths, false);
@@ -562,13 +585,6 @@ fn height_picked(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.doc = cut_craft_core::document::Document::default();
     draw_shapes(app);
     model(app, ctx);
-    let medallion = app
-        .doc
-        .components
-        .iter()
-        .find(|(_, k)| k.name == "Medallion")
-        .map(|(&id, _)| id);
-    app.doc.selected_components = medallion.into_iter().collect();
     // the medallion in the middle of the view, its height buttons in sight below it
     let medallion_at = egui::vec2(-275.0, 40.0);
     app.framing = crate::view3d::Framing::default()

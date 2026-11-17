@@ -190,7 +190,7 @@ say "not implemented yet".
   Selection, Text ▸ (Convert to Vectors), Join / Close Vectors..., Node Edit Mode, Appearance,
   Component ▸ with Create Vector Boundary, Copy To ▸, Move To ▸; the vector items greyed for a
   component; the components under the click are listed first, the selected ticked, a click
-  picking one). In Transform mode (a second double-click on a selected component, or the
+  picking one). In Transform mode (one click on a component, or the
   Transform icon) Aspire 12's component editing icons sit along the near edge of the
   selected component's box: Total Height, Shape Height and Base Height (drag up or down; a
   quarter of the view doubles, the base height moves the material's thickness over it,
