@@ -246,6 +246,8 @@ impl CutCraftApp {
             rotating: false,
             options: crate::options::Options::default(),
             options_window: false,
+            options_draft: None,
+            options_closing: false,
             options_page: 0,
             show_advanced: false,
             web_api: super::web_api::WebApi::default(),
@@ -4535,8 +4537,17 @@ impl CutCraftApp {
     /// Every shortcut in use: [`Self::default_bindings`] with those set in Options in their
     /// place, and on a Mac its own keys for some of them ([`super::mac::extra_bindings`]).
     pub(super) fn bindings(&self, ctx: &egui::Context) -> Vec<(String, shortcut::Trigger)> {
-        let mut bindings =
-            shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts);
+        self.bindings_with(ctx, &self.options.controls.shortcuts)
+    }
+
+    /// [`Self::bindings`] with `set` as the shortcuts set in Options: those in the Options
+    /// window, not applied yet, when a new one is checked for clashes.
+    pub(super) fn bindings_with(
+        &self,
+        ctx: &egui::Context,
+        set: &std::collections::BTreeMap<String, Vec<String>>,
+    ) -> Vec<(String, shortcut::Trigger)> {
+        let mut bindings = shortcut::effective(self.default_bindings(), set);
         if super::mac::is_mac(ctx) {
             // ⌘Q quits there: Quick Engrave's Ctrl+Q is no shortcut on a Mac
             bindings.retain(

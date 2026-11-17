@@ -83,7 +83,7 @@ impl CutCraftApp {
 
     /// `t` pressed for `id`: set it, unless another action has it, which is asked about first.
     fn offer(&mut self, ctx: &egui::Context, id: &str, t: Trigger) {
-        let bindings = self.bindings(ctx);
+        let bindings = self.bindings_with(ctx, &self.edited_options().controls.shortcuts);
         if let Some(other) = shortcut::clash(&bindings, t, id) {
             let other = other.to_owned();
             if let Some(c) = &mut self.capture {
@@ -98,26 +98,31 @@ impl CutCraftApp {
 
     /// `id`'s shortcuts as they are now: those set in Options, else its own.
     pub(super) fn shortcuts_of(&self, id: &str) -> Vec<Trigger> {
-        shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts)
-            .into_iter()
-            .filter(|(a, _)| a == id)
-            .map(|(_, t)| t)
-            .collect()
+        shortcut::effective(
+            self.default_bindings(),
+            &self.edited_options().controls.shortcuts,
+        )
+        .into_iter()
+        .filter(|(a, _)| a == id)
+        .map(|(_, t)| t)
+        .collect()
     }
 
-    /// Sets `id`'s shortcuts, kept in Options; Cut Craft's own set is kept as no change.
+    /// Sets `id`'s shortcuts in the Options window, used once Apply is pressed; Cut Craft's
+    /// own set is kept as no change.
     fn set_shortcuts(&mut self, id: &str, set: &[Trigger]) {
         let own: Vec<Trigger> = (self.default_bindings().into_iter())
             .filter(|(a, _)| a == id)
             .map(|(_, t)| t)
             .collect();
-        let shortcuts = &mut self.options.controls.shortcuts;
+        let mut edited = self.edited_options().clone();
+        let shortcuts = &mut edited.controls.shortcuts;
         if set == own.as_slice() {
             shortcuts.remove(id);
         } else {
             shortcuts.insert(id.to_owned(), set.iter().map(|t| t.text()).collect());
         }
-        self.save_options();
+        self.options_edited(edited);
     }
 
     pub(super) fn add_shortcut(&mut self, id: &str, t: Trigger) {
@@ -137,7 +142,10 @@ impl CutCraftApp {
     /// Every action's row, narrowed to those whose name or shortcut has `search` in it;
     /// panning first, then by name.
     pub(super) fn shortcut_rows(&self, search: &str) -> Vec<Row> {
-        let all = shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts);
+        let all = shortcut::effective(
+            self.default_bindings(),
+            &self.edited_options().controls.shortcuts,
+        );
         let search = search.trim().to_lowercase();
         self.shortcut_actions()
             .into_iter()
@@ -146,7 +154,7 @@ impl CutCraftApp {
                     .filter(|(a, _)| *a == id)
                     .map(|(_, t)| *t)
                     .collect();
-                let changed = self.options.controls.shortcuts.contains_key(&id);
+                let changed = self.edited_options().controls.shortcuts.contains_key(&id);
                 Row {
                     id,
                     label,
@@ -170,17 +178,20 @@ impl CutCraftApp {
             .filter(|(a, _)| a == id)
             .map(|(_, t)| t)
             .collect();
-        let others: Vec<(String, Trigger)> =
-            shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts)
-                .into_iter()
-                .filter(|(a, _)| a != id)
-                .collect();
+        let others: Vec<(String, Trigger)> = shortcut::effective(
+            self.default_bindings(),
+            &self.edited_options().controls.shortcuts,
+        )
+        .into_iter()
+        .filter(|(a, _)| a != id)
+        .collect();
         let clash = own
             .iter()
             .find_map(|&t| shortcut::clash(&others, t, id).map(|other| (t, other.to_owned())));
         let Some((taken, other)) = clash else {
-            self.options.controls.shortcuts.remove(id);
-            self.save_options();
+            let mut edited = self.edited_options().clone();
+            edited.controls.shortcuts.remove(id);
+            self.options_edited(edited);
             return;
         };
         let free: Vec<Trigger> = (own.iter().copied())

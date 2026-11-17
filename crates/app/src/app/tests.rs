@@ -1679,6 +1679,12 @@ impl Harness {
             .unwrap_or_else(|| panic!("{text}"))
     }
 
+    /// Presses Apply on the changes waiting in the Options window.
+    fn apply_options(&mut self) {
+        self.app
+            .options_button(&self.ctx, super::options_apply::Button::Apply);
+    }
+
     /// Every text the last frame drew.
     fn texts(&self) -> Vec<String> {
         (self.shapes.iter())
@@ -7085,6 +7091,44 @@ fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
 }
 
 #[test]
+fn the_settings_help_says_changes_wait_for_apply_with_pictures() {
+    let h = Harness::new();
+    assert!(h.app.all_help_topics().contains(&"settings"));
+    assert!(
+        h.app.help_markdown("contents").contains("(help:settings)"),
+        "linked from Contents"
+    );
+    assert!(
+        h.app.help_markdown("web_api").contains("(help:settings)"),
+        "and from the Web API's steps"
+    );
+    let page = h.app.help_markdown("settings");
+    for words in [
+        "Apply",
+        "Cancel",
+        "Close",
+        super::options_apply::NOT_APPLIED,
+        super::options_apply::ALL_APPLIED,
+        super::options_apply::ASK,
+        "Apply and Close",
+        "Discard Changes",
+        "Keep Editing",
+        "Reset to defaults",
+    ] {
+        assert!(page.contains(words), "{words}");
+    }
+    for picture in ["options-not-applied.png", "options-apply-question.png"] {
+        assert!(page.contains(&format!("pictures/{picture}")), "{picture}");
+        assert!(
+            cut_craft_help::PICTURES
+                .iter()
+                .any(|(name, bytes)| *name == picture && bytes.starts_with(b"\x89PNG")),
+            "{picture} goes with the app"
+        );
+    }
+}
+
+#[test]
 fn the_updates_help_shows_one_click_install_and_relaunch_with_pictures() {
     let h = Harness::new();
     assert!(h.app.all_help_topics().contains(&"updates"));
@@ -7754,6 +7798,149 @@ fn advanced_options_show_only_once_ticked_and_warn_first() {
     );
 }
 
+/// Opens Edit ▸ Options on General Settings, with the recent file list at 9, and presses
+/// Reset to defaults there: a change waiting for Apply.
+fn options_with_a_change_not_applied() -> Harness {
+    let mut h = Harness::new();
+    h.app.options.general.recent_file_list_size = 9;
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = *h.texts_at("General Settings").last().expect("listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+    let reset = h.text_at("Reset to defaults").expect("the page's reset");
+    h.click(reset, Modifiers::NONE);
+    h.frame(vec![]);
+    h
+}
+
+/// Clicks the button named `label`, then draws a frame.
+fn click_button(h: &mut Harness, label: &str) {
+    let at = h
+        .text_at(label)
+        .unwrap_or_else(|| panic!("{label}: {:?}", h.texts()));
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+}
+
+#[test]
+fn options_changes_wait_for_apply_which_keeps_the_window_open() {
+    let mut h = options_with_a_change_not_applied();
+    assert_eq!(
+        h.app.options.general.recent_file_list_size, 9,
+        "not used yet"
+    );
+    assert!(h.app.options_dirty());
+    assert!(h.text_at(super::options_apply::NOT_APPLIED).is_some());
+    click_button(&mut h, "Apply");
+    assert_eq!(
+        h.app.options.recent_count(),
+        files::RECENT_COUNT,
+        "used now"
+    );
+    assert!(!h.app.options_dirty());
+    assert!(h.app.options_window, "still open");
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+}
+
+#[test]
+fn options_cancel_throws_away_changes_not_applied() {
+    let mut h = options_with_a_change_not_applied();
+    click_button(&mut h, "Cancel");
+    assert!(!h.app.options_window, "closed");
+    assert_eq!(h.app.options.general.recent_file_list_size, 9, "as it was");
+    assert!(!h.app.options_dirty());
+    // opened again, it shows the options as they are
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
+}
+
+#[test]
+fn options_close_with_changes_not_applied_asks_first() {
+    let mut h = options_with_a_change_not_applied();
+    click_button(&mut h, "Close");
+    h.frame(vec![]);
+    assert!(h.app.options_window, "not closed yet");
+    assert!(
+        h.text_at(super::options_apply::ASK).is_some(),
+        "{:?}",
+        h.texts()
+    );
+    // Keep Editing: back to the settings, the change still waiting
+    click_button(&mut h, "Keep Editing");
+    assert!(h.app.options_window);
+    assert!(h.app.options_dirty());
+    h.frame(vec![]);
+    assert!(h.text_at(super::options_apply::ASK).is_none());
+    // Discard Changes: closed, nothing used
+    click_button(&mut h, "Close");
+    h.frame(vec![]);
+    click_button(&mut h, "Discard Changes");
+    assert!(!h.app.options_window);
+    assert_eq!(h.app.options.general.recent_file_list_size, 9);
+}
+
+#[test]
+fn options_close_can_apply_the_changes_on_the_way_out() {
+    let mut h = options_with_a_change_not_applied();
+    click_button(&mut h, "Close");
+    h.frame(vec![]);
+    click_button(&mut h, "Apply and Close");
+    assert!(!h.app.options_window);
+    assert_eq!(h.app.options.recent_count(), files::RECENT_COUNT);
+}
+
+#[test]
+fn options_close_with_nothing_changed_just_closes() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let options = h.app.options.clone();
+    // Apply does nothing while nothing has changed
+    click_button(&mut h, "Apply");
+    assert_eq!(h.app.options, options);
+    click_button(&mut h, "Close");
+    assert!(!h.app.options_window, "closed without asking");
+}
+
+#[test]
+fn a_shortcut_set_in_options_waits_for_apply() {
+    use super::shortcuts_page::Edit;
+    let mut h = Harness::new();
+    h.app.options_window = true;
+    h.app.options_goto = Some(super::shortcuts_page::CATEGORY);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.app
+        .apply_shortcut_edit(Edit::Start("zoom_to_drawing".to_owned()));
+    h.frame(vec![key(Key::F8)]);
+    let f8 = shortcut::parse_trigger("F8").unwrap();
+    assert!(
+        h.app.shortcuts_of("zoom_to_drawing").contains(&f8),
+        "listed"
+    );
+    assert!(
+        !h.app
+            .bindings(&h.ctx)
+            .contains(&("zoom_to_drawing".to_owned(), f8)),
+        "not used yet"
+    );
+    h.frame(vec![]);
+    click_button(&mut h, "Apply");
+    assert!(
+        h.app
+            .bindings(&h.ctx)
+            .contains(&("zoom_to_drawing".to_owned(), f8)),
+        "used once applied"
+    );
+}
+
 #[test]
 fn reset_to_defaults_puts_back_only_the_page_shown() {
     let mut h = Harness::new();
@@ -7768,6 +7955,7 @@ fn reset_to_defaults_puts_back_only_the_page_shown() {
     let reset = h.text_at("Reset to defaults").expect("the page's reset");
     h.click(reset, Modifiers::NONE);
     h.frame(vec![]);
+    click_button(&mut h, "Apply");
     assert_eq!(h.app.options.appearance.theme, crate::options::Theme::Light);
     assert_eq!(
         h.app.options.general.recent_file_list_size, 9,
@@ -7793,6 +7981,7 @@ fn appearance_sets_the_2d_sheet_and_grid_colours_for_each_theme() {
     let reset = h.text_at("Reset to defaults").expect("the page's reset");
     h.click(reset, Modifiers::NONE);
     h.frame(vec![]);
+    click_button(&mut h, "Apply");
     assert_eq!(
         h.app.options.appearance.dark_2d,
         crate::options::CanvasColours::dark()
@@ -15189,6 +15378,7 @@ fn a_thumb_button_set_to_pan_pans_both_views() {
         shortcut::PAN_DRAG,
         shortcut::parse_trigger("Mouse Back").unwrap(),
     );
+    h.apply_options();
     assert_eq!(
         h.app.options.controls.shortcuts[shortcut::PAN_DRAG],
         ["Wheel Click", "Mouse Back"]
@@ -15260,6 +15450,7 @@ fn a_mouse_button_set_as_a_shortcut_runs_its_action() {
     let mut h = Harness::new();
     let forward = shortcut::parse_trigger("Mouse Forward").unwrap();
     h.app.add_shortcut("pan", forward);
+    h.apply_options();
     assert_eq!(h.app.view_tool, None);
     let at = view_middle(&h);
     h.frame(vec![mouse(PointerButton::Extra2, at, true)]);
@@ -16211,6 +16402,7 @@ fn a_shift_shortcut_set_in_options_beats_the_plain_keys_own() {
     h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
     let shift_m = shortcut::parse_trigger("Shift+M").unwrap();
     h.app.add_shortcut("draw_circle", shift_m);
+    h.apply_options();
     h.frame_holding(Modifiers::SHIFT, vec![key_with(Key::M, Modifiers::SHIFT)]);
     assert_eq!(
         h.app.form.as_ref().map(|f| f.id),
@@ -16328,9 +16520,11 @@ fn ctrl_c_taken_away_in_options_no_longer_copies() {
     h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
     let ctrl_c = shortcut::parse_trigger("Ctrl+C").unwrap();
     h.app.remove_shortcut("copy", ctrl_c);
+    h.apply_options();
     h.frame(vec![Event::Copy]);
     assert!(h.app.clipboard.is_empty(), "Ctrl+C runs nothing now");
     h.app.add_shortcut("copy", ctrl_c);
+    h.apply_options();
     h.frame(vec![Event::Copy]);
     assert!(!h.app.clipboard.is_empty(), "given back, it copies");
 }
@@ -16449,8 +16643,10 @@ fn f1_f2_and_f3_are_shortcuts_like_any_other() {
     assert_eq!(h.app.view, View::ThreeD);
     // moved to F8, F2 no longer switches
     h.app.remove_shortcut("view_2d", f2);
+    h.apply_options();
     h.app
         .add_shortcut("view_2d", shortcut::parse_trigger("F8").unwrap());
+    h.apply_options();
     h.frame(vec![key(Key::F2)]);
     assert_eq!(h.app.view, View::ThreeD);
     h.frame(vec![key(Key::F8)]);
@@ -16660,6 +16856,7 @@ fn a_smaller_recent_file_list_only_hides_the_rest_until_it_grows_again() {
     let reset = h.text_at("Reset to defaults").expect("the page's reset");
     h.click(reset, Modifiers::NONE);
     h.frame(vec![]);
+    click_button(&mut h, "Apply");
     assert_eq!(h.app.options.recent_count(), files::RECENT_COUNT);
     assert_eq!(h.app.recent_shown().len(), files::RECENT_COUNT);
     h.app.options.general.recent_file_list_size = 9;
