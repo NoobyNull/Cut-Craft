@@ -583,6 +583,14 @@ fn variable_row(ui: &mut egui::Ui, state: &mut NotesUi, v: &Variable) -> Option<
     response.double_clicked().then(|| v.key.clone())
 }
 
+/// A variable's value now, by key (for the tests).
+#[cfg(test)]
+pub(super) fn value_now(app: &super::CutCraftApp, key: &str) -> String {
+    notes::value(&app.note_variables(), key)
+        .unwrap_or_default()
+        .to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -613,12 +621,4 @@ mod tests {
         assert_eq!(short("T1: 6 mm\nT2: 3 mm"), "T1: 6 mm…");
         assert_eq!(short(&"x".repeat(40)).chars().count(), 29);
     }
-}
-
-/// A variable's value now, by key (for the tests).
-#[cfg(test)]
-pub(super) fn value_now(app: &super::CutCraftApp, key: &str) -> String {
-    notes::value(&app.note_variables(), key)
-        .unwrap_or_default()
-        .to_owned()
 }

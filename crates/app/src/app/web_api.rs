@@ -148,6 +148,21 @@ impl CutCraftApp {
                 Ok(job::summary(&self.doc))
             }
             Call::Invoke(action) => self.web_invoke(ctx, action),
+            Call::Notes => {
+                self.job_needed()?;
+                Ok(job::notes(&self.doc, &self.note_variables()))
+            }
+            Call::SetNotes(body) => {
+                self.job_needed()?;
+                let params = job::notes_params(&self.doc, body);
+                cut_craft_bug_report::logs::step("Web API changed the notes");
+                self.apply("notes", &params).map_err(ApiError::refused)?;
+                // an open Notes form shows them as they are now
+                if let Some(form) = self.form.as_mut().filter(|f| f.id == "notes") {
+                    form.params = params;
+                }
+                Ok(job::notes(&self.doc, &self.note_variables()))
+            }
             Call::Run { command, params } => self.web_run(command, params),
             // run by web_start, before this
             Call::View(_)

@@ -83,19 +83,21 @@ const SCENES: [Scene; 29] = [
         model_position(app, ctx, GapFrom::Below, 15.0, false);
     }),
     // Help: Notes (the four steps make notes-steps.gif)
-    ("notes-step-1", |app, ctx| notes(app, ctx, "", false, "")),
+    ("notes-step-1", |app, ctx| {
+        notes(app, ctx, "", false, "");
+    }),
     ("notes-step-2", |app, ctx| {
-        notes(app, ctx, NOTES_TYPED, false, "")
+        notes(app, ctx, NOTES_TYPED, false, "");
     }),
     ("notes-step-3", |app, ctx| {
         notes(app, ctx, NOTES_FULL, false, "thickness");
         app.notes_ui.picked = Some("material.thickness".into());
     }),
     ("notes-step-4", |app, ctx| {
-        notes(app, ctx, NOTES_FULL, true, "")
+        notes(app, ctx, NOTES_FULL, true, "");
     }),
     ("notes-explorer", |app, ctx| {
-        notes(app, ctx, NOTES_FULL, false, "pocket")
+        notes(app, ctx, NOTES_FULL, false, "pocket");
     }),
     ("notes-gcode", |app, ctx| {
         notes(app, ctx, NOTES_FULL, false, "");

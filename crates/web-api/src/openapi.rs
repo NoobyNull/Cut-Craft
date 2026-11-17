@@ -431,6 +431,40 @@ fn more_paths(
     } }),
     );
     paths.insert(
+        "/notes".into(),
+        json!({
+            "get": {
+                "summary": "The job's notes, with their variables filled in",
+                "description": "The notes as typed (Markdown-like: # headings, - lists, \
+                    - [ ] check boxes, **bold**, *italic*, [links](https://…) and \
+                    {{variables}}; never HTML), whether they open with the job and go at the \
+                    top of the G-code, the notes filled in as plain text and as HTML, and \
+                    every variable (key, group, name, what it is, value now): the Variable \
+                    Explorer's list.",
+                "responses": answer("The notes"),
+            },
+            "post": {
+                "summary": "Change the job's notes",
+                "description": "Sets the notes (one undo, as Apply on the Notes form). What \
+                    is left out stays as it is. Answers as GET notes.",
+                "requestBody": body(json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "The notes, with {{variables}}" },
+                        "in_gcode": { "type": "boolean", "description": "Put them at the top of the G-code" },
+                        "opens_with_job": { "type": "boolean", "description": "Open them when the job opens" },
+                    },
+                }), examples(&[
+                    ("write", "Notes with a check list and a variable", json!({
+                        "text": "# Setup\n- [ ] Clamp the {{material.thickness}} board",
+                        "in_gcode": true,
+                    })),
+                ])),
+                "responses": answer("The notes"),
+            },
+        }),
+    );
+    paths.insert(
         "/job/export".into(),
         json!({ "post": {
         "summary": "Export the job",

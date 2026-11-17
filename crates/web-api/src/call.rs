@@ -51,6 +51,27 @@ pub enum Call {
     Save { path: Option<String> },
     /// `POST job/export {"format", "path"}`: an Export menu item, saving to `path`.
     Export { format: String, path: String },
+    /// `GET notes`: the job's notes as typed, with their variables filled in (plain text
+    /// and HTML), and every variable notes can show with its value now.
+    Notes,
+    /// `POST notes {"text", "in_gcode", "opens_with_job"}`: change the notes (one undo);
+    /// what is left out stays as it is.
+    SetNotes(NotesBody),
+}
+
+/// What `POST notes` changes; each left out stays as it is.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NotesBody {
+    /// The notes, written like Markdown with `{{variables}}`.
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Put the notes at the top of the G-code.
+    #[serde(default)]
+    pub in_gcode: Option<bool>,
+    /// Open the notes by themselves when the job is opened.
+    #[serde(default)]
+    pub opens_with_job: Option<bool>,
 }
 
 /// What `GET view.png` shows.
@@ -206,6 +227,7 @@ struct RunBody {
 }
 
 /// The call that `route` (the path after the prefix, no trailing slash) asks for.
+#[expect(clippy::too_many_lines, reason = "one arm a call")]
 pub(crate) fn parse(route: &str, post: bool, body: Value, query: &str) -> Result<Call, ApiError> {
     let wrong_method = |want: &str| ApiError {
         status: 405,
@@ -275,6 +297,11 @@ pub(crate) fn parse(route: &str, post: bool, body: Value, query: &str) -> Result
             let b: SaveBody = from(body, r#"{"path": "/home/me/sign.ccjob"}"#)?;
             Ok(Call::Save { path: b.path })
         }
+        ("notes", false) => Ok(Call::Notes),
+        ("notes", true) => Ok(Call::SetNotes(from(
+            body,
+            r#"{"text": "Clamp the {{material.thickness}} board", "in_gcode": true}"#,
+        )?)),
         ("job/export", true) => {
             let b: ExportBody = from(
                 body,

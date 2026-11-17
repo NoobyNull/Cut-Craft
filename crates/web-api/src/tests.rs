@@ -681,6 +681,20 @@ fn the_new_calls_are_read_from_their_path_query_and_body() {
         "View(Picture { view: Iso, preview: After, width: None })"
     );
     assert_eq!(got("/api/v1/state"), "State");
+    assert_eq!(got("/api/v1/notes"), "Notes");
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/notes",
+            r##"{"text":"# Hi","in_gcode":true}"##
+        )),
+        "SetNotes(NotesBody { text: Some(\"# Hi\"), in_gcode: Some(true), opens_with_job: None })"
+    );
+    assert_eq!(
+        post(address, "/api/v1/notes", r#"{"txt":"x"}"#).status,
+        400,
+        "a misspelt field is refused"
+    );
     assert_eq!(got("/api/v1/toolpaths"), "Toolpaths");
     assert_eq!(got("/api/v1/posts"), "Posts");
     assert_eq!(got("/api/v1/progress"), "Progress");
@@ -805,6 +819,8 @@ fn the_description_lists_the_new_calls_and_shows_the_picture_as_one() {
         ("/gcode", "post"),
         ("/job/save", "post"),
         ("/job/export", "post"),
+        ("/notes", "get"),
+        ("/notes", "post"),
     ] {
         assert!(doc["paths"][path][method].is_object(), "{method} {path}");
     }
@@ -815,4 +831,52 @@ fn the_description_lists_the_new_calls_and_shows_the_picture_as_one() {
         *views,
         serde_json::json!(["2d", "top", "front", "right", "iso"])
     );
+}
+
+#[test]
+fn notes_come_filled_in_and_a_change_keeps_what_is_left_out() {
+    use crate::call::NotesBody;
+    let doc = cut_craft_core::document::Document {
+        notes: ".# Cut\n- **{{material.thickness}}** board".into(),
+        ..Default::default()
+    };
+    let vars = cut_craft_core::notes::variables(&doc, &cut_craft_core::notes::Context::default());
+    let n = crate::job::notes(&doc, &vars);
+    assert_eq!(n["text"], "# Cut\n- **{{material.thickness}}** board");
+    assert_eq!(n["opens_with_job"], true);
+    assert_eq!(n["in_gcode"], false);
+    assert_eq!(n["plain"], "Cut\n- 20 mm board");
+    assert!(
+        n["html"]
+            .as_str()
+            .unwrap()
+            .contains("<strong>20 mm</strong>")
+    );
+    let thick = n["variables"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["key"] == "material.thickness")
+        .expect("the variables are listed");
+    assert_eq!(thick["value"], "20 mm");
+    assert_eq!(thick["group"], "Material");
+    // only the setting given changes
+    let p = crate::job::notes_params(
+        &doc,
+        &NotesBody {
+            in_gcode: Some(true),
+            ..NotesBody::default()
+        },
+    );
+    assert_eq!(p["notes"], doc.notes);
+    assert_eq!(p["in_gcode"], true);
+    let p = crate::job::notes_params(
+        &doc,
+        &NotesBody {
+            text: Some("new".into()),
+            opens_with_job: Some(false),
+            ..NotesBody::default()
+        },
+    );
+    assert_eq!(p["notes"], "new");
 }

@@ -797,3 +797,39 @@ fn the_help_page_explains_the_new_calls() {
         assert!(page.contains(call), "{call} is explained");
     }
 }
+
+#[test]
+fn notes_are_read_and_written_with_their_variables_filled_in() {
+    let (mut h, at) = switched_on();
+    let (status, set) = call(
+        &mut h,
+        at,
+        "POST",
+        "notes",
+        Some(json!({ "text": "# Cut\n- [ ] {{material.thickness}} board", "in_gcode": true })),
+    );
+    assert_eq!(status, 200, "{set}");
+    assert_eq!(h.app.doc.notes, "# Cut\n- [ ] {{material.thickness}} board");
+    assert!(h.app.doc.notes_in_gcode);
+    let thick = super::notes_panel::value_now(&h.app, "material.thickness");
+    assert_eq!(set["plain"], format!("Cut\n[ ] {thick} board"));
+    // one undo takes it back
+    let (status, _) = call(
+        &mut h,
+        at,
+        "POST",
+        "invoke",
+        Some(json!({ "action": "undo" })),
+    );
+    assert_eq!(status, 200);
+    assert_eq!(h.app.doc.notes, "");
+    let (status, got) = call(&mut h, at, "GET", "notes", None);
+    assert_eq!(status, 200, "{got}");
+    assert_eq!(got["text"], "");
+    assert!(
+        got["variables"]
+            .as_array()
+            .is_some_and(|v| v.iter().any(|v| v["key"] == "toolpaths.list")),
+        "{got}"
+    );
+}

@@ -18,3 +18,7 @@ Merge Visible brings the other sheets' vectors onto the layer it merges into.
 Hover over a tool's button to see what it does, and what to do next, in the box under the
 buttons. The buttons stay where they are while you hover; tools that do one job different
 ways sit together in a box named for that job.
+
+**Notes** keeps notes with the job, with headings, lists, check boxes, links and live
+values (the material's thickness, each toolpath's bit and run time…) picked from its
+Variable Explorer. See [Notes](help:notes).

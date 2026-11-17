@@ -17647,9 +17647,12 @@ fn notes_fill_the_panel_and_a_double_clicked_variable_goes_in_live() {
     ] {
         assert!(h.text_at(button).is_some(), "{button}");
     }
-    // Material is open: a double-click on its Height puts it in where the cursor is
+    // found by searching, a double-click on the material's Width puts it in at the cursor
+    h.app.notes_ui.search = "material width".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
     let row = *h
-        .texts_at("Height")
+        .texts_at("Width")
         .last()
         .unwrap_or_else(|| panic!("{:?}", h.texts()));
     h.double_click(row);
@@ -17658,12 +17661,12 @@ fn notes_fill_the_panel_and_a_double_clicked_variable_goes_in_live() {
         .as_str()
         .unwrap()
         .to_owned();
-    assert_eq!(notes, "Plain old notes{{material.height}}");
+    assert_eq!(notes, "Plain old notes{{material.width}}");
     // Preview shows its value now
     let preview = h.text_at("Preview").unwrap();
     h.click(preview, Modifiers::NONE);
     h.frame(vec![]);
-    let tall = super::notes_panel::value_now(&h.app, "material.height");
+    let tall = super::notes_panel::value_now(&h.app, "material.width");
     assert!(
         h.text_at(&tall).is_some(),
         "{tall} in the preview: {:?}",
@@ -17672,7 +17675,7 @@ fn notes_fill_the_panel_and_a_double_clicked_variable_goes_in_live() {
     let apply = h.text_at("Apply").unwrap();
     h.click(apply, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.doc.notes, "Plain old notes{{material.height}}");
+    assert_eq!(h.app.doc.notes, "Plain old notes{{material.width}}");
 }
 
 #[test]

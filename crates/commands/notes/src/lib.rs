@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 
 pub struct Notes;
 
+/// Notes kept with the job: rich text with headings, lists, check boxes and links, and live
+/// values from the job, the machine and the toolpaths, shown on the job sheet and, if you
+/// like, at the top of the G-code.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The notes, written like Markdown: `# heading`, `- bullet`, `1. numbered`,

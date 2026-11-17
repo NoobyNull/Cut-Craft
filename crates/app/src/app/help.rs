@@ -14,6 +14,7 @@ const GROUPS: &str = include_str!("../../help/groups.md");
 const PENCIL: &str = include_str!("../../help/3d-pencil.md");
 const UPDATES: &str = include_str!("../../help/updates.md");
 const MODEL_POSITION: &str = include_str!("../../help/model-position.md");
+const NOTES: &str = include_str!("../../help/notes.md");
 
 /// The help's own pages: every other topic is a tool's, headed by its button's icon.
 pub(super) const OWN_PAGES: [&str; 8] = [
@@ -41,6 +42,7 @@ fn tool_extra(id: &str) -> Option<&'static str> {
     match id {
         "3d_pencil_toolpath" => Some(PENCIL),
         "material_setup" | "orientate_3d_model" => Some(MODEL_POSITION),
+        "notes" => Some(NOTES),
         _ => None,
     }
 }
@@ -58,6 +60,22 @@ const HEIGHT_TOOLS: [&str; 2] = ["transform", "scale_model_z_height"];
 
 /// The help's own pictures, by the `bytes://help/` name its pages show them by.
 pub(super) const PICTURES: &[(&str, &[u8])] = &[
+    (
+        "notes-steps.gif",
+        include_bytes!("../../help/pictures/notes-steps.gif"),
+    ),
+    (
+        "notes-explorer.png",
+        include_bytes!("../../help/pictures/notes-explorer.png"),
+    ),
+    (
+        "notes-gcode.png",
+        include_bytes!("../../help/pictures/notes-gcode.png"),
+    ),
+    (
+        "notes-preview.png",
+        include_bytes!("../../help/pictures/notes-preview.png"),
+    ),
     (
         "web-api-options.png",
         include_bytes!("../../help/pictures/web-api-options.png"),

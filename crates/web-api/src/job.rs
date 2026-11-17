@@ -302,6 +302,39 @@ fn snake(name: &str) -> String {
     out
 }
 
+/// `GET notes`: the notes as typed (`text`, the open mark left off), whether they open with
+/// the job and go at the top of the G-code, the notes with `variables` filled in as plain
+/// text and as HTML, and every variable with its value now.
+pub fn notes(doc: &Document, variables: &[cut_craft_core::notes::Variable]) -> Value {
+    use cut_craft_core::notes;
+    json!({
+        "text": notes::strip_open_mark(&doc.notes),
+        "opens_with_job": notes::opens_with_job(&doc.notes),
+        "in_gcode": doc.notes_in_gcode,
+        "plain": notes::plain(&doc.notes, variables),
+        "html": notes::html(&doc.notes, variables),
+        "variables": variables,
+    })
+}
+
+/// The `notes` command's settings for `POST notes`: what `body` gives, the rest as the job
+/// has it now.
+pub fn notes_params(doc: &Document, body: &crate::call::NotesBody) -> Value {
+    use cut_craft_core::notes;
+    let text = body
+        .text
+        .clone()
+        .unwrap_or_else(|| notes::strip_open_mark(&doc.notes).to_owned());
+    let opens = body
+        .opens_with_job
+        .unwrap_or_else(|| notes::opens_with_job(&doc.notes));
+    let mark = if opens { "." } else { "" };
+    json!({
+        "notes": format!("{mark}{text}"),
+        "in_gcode": body.in_gcode.unwrap_or(doc.notes_in_gcode),
+    })
+}
+
 /// `GET state`: the material as Job Setup has it, where the 3D model sits in it (Material
 /// Setup) and each part of the model, and what is picked: vectors, model parts and the
 /// toolpath picked in the toolpath list (`toolpath`). Lengths are in the job's units.
