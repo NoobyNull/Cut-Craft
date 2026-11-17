@@ -47,6 +47,7 @@ jobs:
             echo "main's version is already tagged: nothing to release." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          failed=0
           while read -r version commit; do
             tag="v$version"
             if [[ -n $newest ]] && [[ $(printf '%s\n' "${newest#v}" "$version" | sort -V | tail -1) != "$version" ]]; then
@@ -68,10 +69,25 @@ jobs:
               exit 1
             fi
             # each computer on its own: the first to finish publishes the release, the others add
-            # to it, and one that fails or waits for a runner holds back none of the others
+            # to it, and one that fails or waits for a runner holds back none of the others; a
+            # start GitHub refuses is tried again, and the others are started anyway
+            not_started=()
             for os in linux windows macos; do
-              gh workflow run "builds-$os.yml" --ref main -f tag="$tag"
+              started=0
+              for wait in 0 10 30; do
+                sleep "$wait"
+                if gh workflow run "builds-$os.yml" --ref main -f tag="$tag"; then
+                  started=1
+                  break
+                fi
+              done
+              (( started )) || not_started+=("$os")
             done
-            echo "Tagged $tag on ${commit::7} and started **Builds** (Linux, Windows, macOS) on it." >> "$GITHUB_STEP_SUMMARY"
+            echo "Tagged $tag on ${commit::7} and started **Builds** on it." >> "$GITHUB_STEP_SUMMARY"
+            if (( ${#not_started[@]} )); then
+              echo "::error::Could not start Builds for ${not_started[*]} on $tag. Start each from Actions → Builds (…) → Run workflow, with tag $tag."
+              failed=1
+            fi
           done <<< "$versions"
+          if (( failed )); then exit 1; fi
           echo "Each release appears on the Releases page when its Builds run finishes." >> "$GITHUB_STEP_SUMMARY"

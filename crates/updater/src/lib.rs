@@ -133,9 +133,13 @@ pub fn platform_suffix(os: &str) -> &'static str {
 /// What `releases` offer `install` (on `os`), running `current`: the newest release that
 /// has this computer's own signed build, when it is newer.
 fn pick(install: &Install, os: &str, releases: &[Release], current: &Version) -> Found {
-    let suffix = install
-        .asset_suffix()
-        .unwrap_or_else(|| platform_suffix(os));
+    let suffix = match install {
+        // told to install the release's bundle, so it waits for that file
+        Install::Flatpak => "x86_64.flatpak",
+        _ => install
+            .asset_suffix()
+            .unwrap_or_else(|| platform_suffix(os)),
+    };
     match newest_for(releases, suffix) {
         Some(release) if release.is_newer_than(current) => {
             Found::for_release(install, release.clone())
@@ -436,6 +440,18 @@ mod tests {
             pick(&windows, "windows", &releases, &Version::new(0, 5, 0)),
             Found::UpToDate
         );
+        // a Flatpak is told to install the release's .flatpak, so it waits for that file
+        let flatpak = Install::Flatpak;
+        assert_eq!(offered(&flatpak, "linux"), None);
+        let with_bundle = [signed(
+            "v0.5.2",
+            Version::new(0, 5, 2),
+            &["c-linux-x86_64.tar.gz", "c-x86_64.flatpak"],
+        )];
+        assert!(matches!(
+            pick(&flatpak, "linux", &with_bundle, &current),
+            Found::Release { release, .. } if release.tag == "v0.5.2"
+        ));
         assert_eq!(platform_suffix("macos"), ".dmg");
         assert_eq!(platform_suffix("windows"), "windows-x86_64.zip");
         assert_eq!(platform_suffix("linux"), "linux-x86_64.tar.gz");

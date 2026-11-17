@@ -17,7 +17,10 @@ cat >"$work/bin/gh" <<'GH'
 #!/bin/bash
 echo "$*" >>"$GH_LOG"
 case "$1 $2" in
-  "release view") [[ -f $GH_STATE/exists ]] ;;
+  "release view")
+    [[ -f $GH_STATE/exists ]] || exit 1
+    # --json assets: the names already on the release
+    if [[ $* == *--json* ]]; then cat "$GH_STATE/assets" 2>/dev/null || true; fi ;;
   "release create")
     if [[ -f $GH_STATE/race ]]; then touch "$GH_STATE/exists"; exit 1; fi
     [[ -f $GH_STATE/exists ]] && exit 1
@@ -57,6 +60,21 @@ log | grep -q "release upload" || fail "race: did not upload: $(log)"
 first_upload=$(log | grep -m1 "release upload")
 [[ $first_upload == *.minisig* && $first_upload != *".zip -R"* ]] \
   || fail "the first upload is not the signatures alone: $first_upload"
+
+# published before (a re-run): a file and its signature already there are left alone, never
+# deleted and uploaded again, which could lose a working download if the upload failed
+rm -rf "$work/state" "$work/log"; mkdir -p "$work/state"; touch "$work/state/exists"
+printf '%s\n' cut-craft-1.2.3-windows-x86_64.zip cut-craft-1.2.3-windows-x86_64.zip.minisig >"$work/state/assets"
+PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
+  "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "complete pair: failed: $(cat "$work/out")"
+log | grep -q "release upload" && fail "complete pair: uploaded again: $(log)"
+grep -q "already" "$work/out" || fail "complete pair: did not say it was already there: $(cat "$work/out")"
+# only the signature got there last time: both go up again, signature first
+printf '%s\n' cut-craft-1.2.3-windows-x86_64.zip.minisig >"$work/state/assets"
+rm -f "$work/log"
+PATH="$work/bin:$PATH" GH_LOG="$work/log" GH_STATE="$work/state" GITHUB_REPOSITORY=o/r \
+  "$here/publish-release" v1.2.3 "$work/dist" >"$work/out" 2>&1 || fail "half pair: failed: $(cat "$work/out")"
+[[ $(log | grep -c "release upload") == 2 ]] || fail "half pair: not signature then file: $(log)"
 
 # a failed upload fails the step
 run exists upload-fails && fail "a failed upload passed"

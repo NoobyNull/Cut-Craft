@@ -23,10 +23,9 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # two computers finishing at once: one makes the release, then the other adds to it
-    concurrency:
-      group: publish-${{ inputs.tag }}
-      cancel-in-progress: false
+    # no concurrency group: a third waiting publisher would cancel the second one queued.
+    # Two finishing at once is safe: scripts/publish-release lets one make the release and the
+    # other add to it.
     env:
       TAG: ${{ inputs.tag }}
     steps:
