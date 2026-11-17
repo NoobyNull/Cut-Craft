@@ -1359,7 +1359,11 @@ impl CutCraftApp {
         };
         let (at, length) = (playback.at(), playback.length());
         // from the playback itself: while it plays there is no finished simulation
-        let fine_bit = crate::display::fine_bit_note(playback.tools(), playback.material().cell);
+        let fine_bit = crate::display::fine_bit_note(
+            playback.tools(),
+            playback.material().cell,
+            self.display.quality,
+        );
         let guessed_shank = playback
             .tool()
             .filter(|(_, tool)| tool.shank_diameter.is_nan() || tool.shank_diameter <= 0.0)
@@ -1834,11 +1838,10 @@ impl CutCraftApp {
         if let Some(was) = was {
             show(&mut self.doc, was);
         }
-        // the model sits on the material: where no component is, the material's uncut top
+        // the model in the material where Material Setup's Model Position puts it, as the
+        // 3D toolpaths will cut it: where no component is, the model's zero plane
         if self.model_on_material() {
-            for z in shape.heights.iter_mut().filter(|z| z.is_nan()) {
-                *z = 0.0;
-            }
+            cut_craft_core::component::seat_in_material(&self.doc.job, &mut shape);
         }
         shape
     }
