@@ -29,6 +29,7 @@ image.workspace = true
 # the help pictures (--help-pictures): saved as small 64-colour PNGs
 color_quant = "1.1"
 png = "0.18"
+gif = "0.14"
 log = "0.4"
 rfd.workspace = true
 # keeps dialog windows above the main window, and file dialogs with the window that opened them

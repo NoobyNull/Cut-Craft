@@ -75,16 +75,59 @@ impl CutCraftApp {
     /// A form's Apply or Calculate for command `id` off the window's thread. What goes
     /// wrong shows on the form, if it is still open, else in the status bar.
     pub(super) fn apply_in_background(&mut self, id: &str, params: &Value) -> Result<(), String> {
-        self.crossings_allowed(id, params)?;
+        self.calculate_in_background(id, params, None)
+    }
+
+    /// [`Self::apply_in_background`], what it makes put in place of the toolpaths `onto`
+    /// made last time (Calculate pressed again on a toolpath form after a change), from the
+    /// vectors they were made from when none are picked now. A toolpath form follows what
+    /// it made, so its next Calculate updates that.
+    pub(super) fn calculate_in_background(
+        &mut self,
+        id: &str,
+        params: &Value,
+        onto: Option<super::calculate_again::Made>,
+    ) -> Result<(), String> {
+        let mut doc = self.doc.clone();
+        let mut old = Vec::new();
+        if let Some(made) = onto {
+            if doc.selection.is_empty()
+                && let Some(picked) = made.selection
+            {
+                doc.selection = picked;
+            }
+            // cut after what comes before them, not after themselves (rest machining)
+            doc.remaking = made.ids.iter().min().copied();
+            old = made.ids;
+        }
+        let selection = doc.selection.clone();
+        let picked = std::mem::replace(&mut self.doc.selection, selection.clone());
+        let allowed = self.crossings_allowed(id, params);
+        self.doc.selection = picked;
+        allowed?;
         let what = self.doing(id);
-        let (registry, doc) = (Arc::clone(&self.registry), self.doc.clone());
+        let registry = Arc::clone(&self.registry);
         let (command, settings) = (id.to_owned(), params.clone());
         let (id, params) = (id.to_owned(), params.clone());
         self.in_background(
             &what,
-            move || command_change(&registry, &doc, &command, &settings),
+            move || {
+                command_change(&registry, &doc, &command, &settings).map(|c| {
+                    if old.is_empty() {
+                        c
+                    } else {
+                        c.onto_toolpaths(&old, &doc)
+                    }
+                })
+            },
             move |app, change| {
+                let made = change
+                    .as_ref()
+                    .map_or_else(|_| Vec::new(), Change::toolpaths_made);
                 let applied = app.applied(&id, &params, change);
+                if applied.is_ok() {
+                    app.follow_made(&id, &params, made, Some(selection));
+                }
                 app.form_failed(&id, applied);
             },
         );
@@ -101,6 +144,7 @@ impl CutCraftApp {
             .map_or_else(|| self.doing(id), |t| format!("Calculating {}", t.name));
         let (registry, doc, settings) =
             (Arc::clone(&self.registry), self.doc.clone(), params.clone());
+        let settings_kept = params.clone();
         let id = id.to_owned();
         self.in_background(
             &what,
@@ -113,6 +157,9 @@ impl CutCraftApp {
                 });
                 let failed = change.as_ref().err().map(ToString::to_string);
                 app.record(change, "Toolpath edited");
+                if failed.is_none() {
+                    app.follow_made(&id, &settings_kept, vec![toolpath], None);
+                }
                 app.form_failed(&id, failed.map_or(Ok(()), Err));
             },
         );

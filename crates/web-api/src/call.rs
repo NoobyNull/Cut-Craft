@@ -51,6 +51,11 @@ pub enum Call {
     Save { path: Option<String> },
     /// `POST job/export {"format", "path"}`: an Export menu item, saving to `path`.
     Export { format: String, path: String },
+    /// `POST job/new {"settings", "discard"}`: New, with Job Setup's OK pressed on these
+    /// settings over what it starts with; `discard` throws away unsaved work.
+    NewJob { settings: Value, discard: bool },
+    /// `POST job/open {"path", "discard"}`: Open this job file.
+    Open { path: String, discard: bool },
 }
 
 /// What `GET view.png` shows.
@@ -186,6 +191,23 @@ struct SaveBody {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct NewBody {
+    #[serde(default)]
+    settings: Option<Value>,
+    #[serde(default)]
+    discard: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OpenBody {
+    path: String,
+    #[serde(default)]
+    discard: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ExportBody {
     format: String,
     path: String,
@@ -271,20 +293,7 @@ pub(crate) fn parse(route: &str, post: bool, body: Value, query: &str) -> Result
             }
             Ok(Call::Gcode(g))
         }
-        ("job/save", true) => {
-            let b: SaveBody = from(body, r#"{"path": "/home/me/sign.ccjob"}"#)?;
-            Ok(Call::Save { path: b.path })
-        }
-        ("job/export", true) => {
-            let b: ExportBody = from(
-                body,
-                r#"{"format": "export_dxf", "path": "/home/me/sign.dxf"}"#,
-            )?;
-            Ok(Call::Export {
-                format: b.format,
-                path: b.path,
-            })
-        }
+        ("job/save" | "job/export" | "job/new" | "job/open", true) => job_file(route, body),
         (
             "status" | "commands" | "actions" | "job" | "view.png" | "state" | "toolpaths"
             | "posts" | "progress",
@@ -292,7 +301,7 @@ pub(crate) fn parse(route: &str, post: bool, body: Value, query: &str) -> Result
         ) => Err(wrong_method("GET")),
         (
             "invoke" | "run" | "select" | "cancel" | "calculate" | "preview" | "preview/reset"
-            | "gcode" | "job/save" | "job/export",
+            | "gcode" | "job/save" | "job/export" | "job/new" | "job/open",
             false,
         ) => Err(wrong_method("POST")),
         (route, false) if route.starts_with("commands/") => {
@@ -421,4 +430,47 @@ fn work(body: Value, example: &str) -> Result<(Which, bool), ApiError> {
         }
     };
     Ok((which, b.wait.unwrap_or(true)))
+}
+
+/// The calls on the job's file: save, export, new and open.
+fn job_file(route: &str, body: Value) -> Result<Call, ApiError> {
+    match route {
+        "job/save" => {
+            let b: SaveBody = from(body, r#"{"path": "/home/me/sign.ccjob"}"#)?;
+            Ok(Call::Save { path: b.path })
+        }
+        "job/export" => {
+            let b: ExportBody = from(
+                body,
+                r#"{"format": "export_dxf", "path": "/home/me/sign.dxf"}"#,
+            )?;
+            Ok(Call::Export {
+                format: b.format,
+                path: b.path,
+            })
+        }
+        "job/new" => {
+            let b: NewBody = from(body, r#"{"settings": {"size": {"width": 300}}}"#)?;
+            let settings = b
+                .settings
+                .unwrap_or_else(|| Value::Object(serde_json::Map::new()));
+            if !settings.is_object() {
+                return Err(ApiError::bad(
+                    "\"settings\" must be an object of Job Setup's settings.",
+                ));
+            }
+            Ok(Call::NewJob {
+                settings,
+                discard: b.discard,
+            })
+        }
+        "job/open" => {
+            let b: OpenBody = from(body, r#"{"path": "/home/me/sign.ccjob"}"#)?;
+            Ok(Call::Open {
+                path: b.path,
+                discard: b.discard,
+            })
+        }
+        _ => unreachable!("not a job file call: {route}"),
+    }
 }
