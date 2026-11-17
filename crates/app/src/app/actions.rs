@@ -5289,9 +5289,13 @@ impl CutCraftApp {
         }
     }
 
-    /// A tool picked from a page: a page that flew out for it goes away again, unless the
-    /// tool opened a form there.
+    /// A tool picked from a page, counted in the options: a page that flew out for it goes
+    /// away again, unless the tool opened a form there.
     pub(super) fn pick(&mut self, ctx: &egui::Context, page: Page, id: &str) {
+        // counted, so the Ribbon keeps the groups used most open when it runs out of room
+        let uses = self.options.tool_uses.entry(id.to_owned()).or_default();
+        *uses = uses.saturating_add(1);
+        self.save_options();
         self.invoke(ctx, id);
         // a button that opens another design tab leaves the page out to show it
         let navigates = matches!(id, "clipart_library" | "component_levels");
