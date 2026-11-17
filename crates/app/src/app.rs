@@ -1912,7 +1912,13 @@ impl<W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle
 {
 }
 
+/// The window a file dialog or message box opened now belongs to: the dialog window that has
+/// the keyboard (its button opened it), otherwise Cut Craft's main window. A file dialog that
+/// belonged to the main window could open behind a dialog window kept above it.
 fn dialog_parent() -> Option<std::sync::Arc<dyn Window>> {
+    if let Some(dialog) = cut_craft_window_owner::focused_dialog() {
+        return Some(std::sync::Arc::new(dialog));
+    }
     DIALOG_PARENT.lock().ok()?.clone()
 }
 
@@ -2811,6 +2817,9 @@ impl eframe::App for CutCraftApp {
         if let (Some(window), Ok(mut parent)) = (frame.winit_window(), DIALOG_PARENT.lock()) {
             *parent = Some(window.clone());
         }
+        // dialog windows are kept above this one ([`cut_craft_window_owner`])
+        let pass = ui.ctx().cumulative_pass_nr_for(egui::ViewportId::ROOT);
+        cut_craft_window_owner::set_main_window(frame.winit_window(), pass);
         let job_folder = (self.options.general.file_dialog_default
             == crate::options::FileDialogDefault::Job)
             .then(|| self.session.path.as_deref()?.parent().map(Into::into))

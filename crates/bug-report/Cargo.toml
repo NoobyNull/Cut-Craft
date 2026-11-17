@@ -8,6 +8,8 @@ license-file.workspace = true
 [dependencies]
 base64.workspace = true
 chrono.workspace = true
+# keeps each dialog window above the main window
+cut-craft-window-owner.workspace = true
 eframe.workspace = true
 image.workspace = true
 log = "0.4"
