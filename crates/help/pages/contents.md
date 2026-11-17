@@ -23,6 +23,8 @@ a CNC machine cuts them with.
   shown each time Cut Craft starts. Each links to the page that says more.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.
+- [Reporting a bug](help:bug_reports): right-click ▸ Report a Bug Here…, what each report
+  sends (the details of your computer included), and how to switch those off.
 - [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
   hitting wood beside a deep cut, shown red in the preview and asked about before saving.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
@@ -104,6 +106,10 @@ A number field takes a sum as well as a number, worked out when it is entered:
 - **{name}**: a [document variable](help:document_variables)
 
 ## Keys
+
+On a Mac, read **⌘** (Command) where this help says **Ctrl**, and **⌥** (Option) for
+**Alt**. The menus show each shortcut the Mac way, ⌘S for Save, and the delete key
+deletes the selection.
 
 - **F1** the open tool's help, **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options. Edit ▸ Options ▸ Mouse and Shortcuts can move these like any other key; the arrow keys always nudge the selection
 - **F11** the designing layout, **F12** the machining layout

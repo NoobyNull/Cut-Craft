@@ -1,11 +1,11 @@
-# Cut Craft for macOS (a DMG, Apple Silicon and Intel in one app), Linux (x86-64: .tar.gz,
-# AppImage and Flatpak) and Windows (x86-64, .zip), built side by side on GitHub's runners. It runs when the
-# packaging changes on a pushed branch and from the Actions tab (once on the default
-# branch); each build is the run's artifact. On a v* tag (pushed, or started on the tag by
-# Release tag) it signs them all and attaches them to that release; it is the only workflow
-# that publishes versioned releases. Unsigned by Apple/Microsoft: macOS and Windows ask before
-# the first open.
-name: Builds
+# Cut Craft for Linux (x86-64): .tar.gz, AppImage, Flatpak, .deb and .rpm, each started or
+# installed where it is meant to run. It runs when the packaging changes on a pushed branch,
+# from the Actions tab, and on a release tag; each build is the run's artifact.
+# Each computer is built by its own workflow (builds-linux.yml, builds-windows.yml,
+# builds-macos.yml), so one failing or waiting for a runner holds back none of the others.
+# On a v* tag (pushed, or started on the tag by Release tag) each signs its own files and adds
+# them to the release, and whichever finishes first publishes it (publish-release.yml).
+name: Builds (Linux)
 
 on:
   workflow_dispatch:
@@ -16,43 +16,29 @@ on:
         default: ""
   push:
     tags: ["v*"]
-    # macOS and Windows runners cost private repositories more minutes: not on every push
+    # not on every push: CI already builds and tests each one
     branches: ["**"]
     paths:
-      - ".github/workflows/builds.yml"
-      - "scripts/macos-dmg"
+      - ".github/workflows/builds-linux.yml"
+      - "scripts/start-check"
       - "scripts/linux-packages"
+      - "scripts/linux-distro-packages"
+      - ".github/workflows/publish-release.yml"
+      - "scripts/publish-release"
+      - ".github/workflows/platform-tests.yml"
+      - "scripts/sign-release"
       - "packaging/**"
 
 permissions:
   contents: write
 
-# one build per branch or tag at a time; a tag's build is never cancelled part-way
+# one build per branch or tag at a time (a tag pushed and the same tag started by hand share
+# it, so two never publish the same files at once); a tag's build is never cancelled part-way
 concurrency:
-  group: builds-${{ inputs.tag || github.ref }}
+  group: builds-linux-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: ${{ !inputs.tag && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  macos:
-    # macos-14 is retired: GitHub cancels its jobs at once ("configuration not supported")
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }} # empty: the commit this run is for
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
-      - name: Tools for the app icon
-        run: brew install librsvg
-      - name: Build the app and its DMG
-        run: scripts/macos-dmg
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cut-craft-macos
-          path: dist/*.dmg
-
   linux:
     # the oldest supported Ubuntu, so the program runs on most distributions since
     runs-on: ubuntu-22.04
@@ -180,76 +166,23 @@ jobs:
             dist/*.deb
             dist/*.rpm
 
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }} # empty: the commit this run is for
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --release -p cut-craft
-      # needs no Visual C++ runtime, and keeps running with its window set up
-      - name: Start the program
-        shell: pwsh
-        run: scripts/start-check.ps1 target/release/cut-craft.exe
-      - name: Package the program
-        shell: pwsh
-        run: |
-          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
-          $name = "cut-craft-$version-windows-x86_64"
-          New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
-          Copy-Item target/release/cut-craft.exe, README.md, LICENSE -Destination "dist/$name"
-          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cut-craft-windows
-          path: dist/*.zip
+  # On a v* tag: this computer's own tests (format, Clippy, every test) on the tagged code.
+  # Its files are published only once these pass.
+  tests:
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/platform-tests.yml
+    with:
+      os: ubuntu-latest
+      ref: ${{ inputs.tag }}
 
-  # Publishes once Linux and Windows are built. The macOS DMG is attached when its build ran:
-  # GitHub sometimes cancels macOS jobs before they start (no runner, minutes used up), and
-  # that mustn't hold back the release for everyone else.
+  # On a v* tag: signs these and adds them to the release, publishing it if this computer's
+  # builds are the first to finish. The other computers' builds don't wait for these, nor
+  # these for them.
   release:
-    if: >-
-      always() && (inputs.tag != '' || startsWith(github.ref, 'refs/tags/'))
-      && needs.linux.result == 'success' && needs.linux-packages.result == 'success'
-      && needs.windows.result == 'success'
-    needs: [macos, linux, linux-packages, windows]
-    runs-on: ubuntu-latest
-    env:
-      TAG: ${{ inputs.tag || github.ref_name }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }} # empty: the commit this run is for
-      - name: The tag matches the version it was built from
-        run: |
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          if [[ $TAG != "v$version" ]]; then
-            echo "::error::Tag $TAG is on a commit whose Cargo.toml says $version; not publishing."
-            exit 1
-          fi
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: cut-craft-*
-          merge-multiple: true
-      - name: Say when the macOS DMG is missing
-        if: needs.macos.result != 'success'
-        run: echo "::warning::The macOS build did not finish (${{ needs.macos.result }}), so this release has no DMG yet. Run Builds again with this tag to add it."
-      # FILE.minisig beside each: Help > Check for Updates installs nothing unsigned
-      - name: Sign them
-        env:
-          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
-          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
-          REQUIRE_SIGNING: "1"
-        run: scripts/sign-release dist
-      - name: Attach them all to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-            || gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag \
-                 --title "Cut Craft $TAG" --generate-notes
-          gh release upload "$TAG" dist/* -R "$GITHUB_REPOSITORY" --clobber
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/')
+    needs: [tests, linux, linux-packages]
+    uses: ./.github/workflows/publish-release.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+      artifacts: "cut-craft-linux*"
+    secrets: inherit

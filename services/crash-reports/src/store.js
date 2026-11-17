@@ -1,6 +1,6 @@
 // Reading and writing the D1 database. Each function takes the D1 binding, so tests can pass
 // a stand-in backed by node:sqlite and run the same SQL.
-import { waitBeforeNext, dayOf, daysBefore, SAMPLES_PER_CRASH } from './rules.js';
+import { waitBeforeNext, dayOf, daysBefore, SAMPLES_PER_CRASH, FAMILIES, familyOf, familySql } from './rules.js';
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -77,27 +77,41 @@ async function keepSample(db, signature, version, os, log, nowIso) {
   await db.batch([db.prepare('DELETE FROM samples WHERE id = ?').bind(results[0].id), insert]);
 }
 
-/** Everything the dashboard's overview needs for the last `days` days. */
-export async function summary(db, days, now = new Date()) {
+/**
+ * Everything the dashboard's overview needs for the last `days` days; with `family` ('windows',
+ * 'macos' or 'linux'), only reports from that kind of system and the crashes they hit.
+ */
+export async function summary(db, days, now = new Date(), family = null) {
   const from = dayOf(daysBefore(now, days - 1));
   const q = (sql, ...args) => db.prepare(sql).bind(...args).all().then((r) => r.results);
-  const [perDay, byVersion, byOs, crashes, held] = await Promise.all([
-    q('SELECT day, SUM(count) AS count FROM daily WHERE day >= ? GROUP BY day ORDER BY day', from),
-    q('SELECT version, SUM(count) AS count FROM daily WHERE day >= ? GROUP BY version ORDER BY count DESC', from),
-    q('SELECT os, SUM(count) AS count FROM daily WHERE day >= ? GROUP BY os ORDER BY count DESC', from),
+  const kind = FAMILIES.includes(family) ? family : null;
+  const os = familySql(kind);
+  const dOs = familySql(kind, 'd.os');
+  const [perDay, byVersion, byOs, crashes, held, families] = await Promise.all([
+    q(`SELECT day, SUM(count) AS count FROM daily WHERE day >= ? AND ${os} GROUP BY day ORDER BY day`, from),
+    q(`SELECT version, SUM(count) AS count FROM daily WHERE day >= ? AND ${os} GROUP BY version ORDER BY count DESC`, from),
+    q(`SELECT os, SUM(count) AS count FROM daily WHERE day >= ? AND ${os} GROUP BY os ORDER BY count DESC`, from),
     q(`SELECT c.signature, c.title, c.status, c.issue_url, c.note, c.count, c.installs, c.first_seen, c.last_seen,
               c.first_version, c.last_version,
-              (SELECT COALESCE(SUM(d.count), 0) FROM daily d WHERE d.signature = c.signature AND d.day >= ?) AS recent,
+              (SELECT COALESCE(SUM(d.count), 0) FROM daily d WHERE d.signature = c.signature AND d.day >= ? AND ${dOs}) AS recent,
               (SELECT COUNT(*) FROM samples s WHERE s.signature = c.signature) AS samples
-       FROM crashes c ORDER BY CASE c.status WHEN 'back' THEN 0 WHEN 'new' THEN 1 WHEN 'issue' THEN 2 ELSE 3 END,
+       FROM crashes c
+       ${kind ? `WHERE EXISTS (SELECT 1 FROM daily d WHERE d.signature = c.signature AND ${dOs})` : ''}
+       ORDER BY CASE c.status WHEN 'back' THEN 0 WHEN 'new' THEN 1 WHEN 'issue' THEN 2 ELSE 3 END,
                                c.last_seen DESC`, from),
     q('SELECT COUNT(*) AS logs, COALESCE(SUM(LENGTH(log)), 0) AS bytes, MIN(received_at) AS oldest FROM samples'),
+    q('SELECT os, SUM(count) AS count FROM daily WHERE day >= ? GROUP BY os', from),
   ]);
+  // reports per kind of system, whatever is shown, for the filter's counts
+  const byFamily = FAMILIES.map((f) => ({
+    family: f,
+    count: families.filter((r) => familyOf(r.os) === f).reduce((n, r) => n + r.count, 0),
+  }));
   const total = perDay.reduce((n, d) => n + d.count, 0);
   const refused = await q(
     `SELECT reason, SUM(count) AS count, COUNT(DISTINCT CASE WHEN who NOT IN ('-', 'many') THEN day || who END) AS networks
      FROM refusals WHERE day >= ? GROUP BY reason ORDER BY count DESC`, from);
-  return { days, from, total, perDay, byVersion, byOs, crashes, held: held[0], refused };
+  return { days, from, family: kind, total, perDay, byVersion, byOs, byFamily, crashes, held: held[0], refused };
 }
 
 /** One crash with its example logs and its counts by version and system. */

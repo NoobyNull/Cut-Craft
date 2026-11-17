@@ -62,7 +62,7 @@ For the CutCraft project. The crash-report relay from PR #268 (`services/crash-r
 | Field | Rule |
 | --- | --- |
 | `version` | 1–40 printable ASCII, e.g. `0.6.4` (`CARGO_PKG_VERSION`) |
-| `os` | 1–40 printable ASCII, e.g. `Windows 11 x64` |
+| `os` | 1–40 printable ASCII, e.g. `Windows 11 23H2 x86_64`, `macOS 14 Sonoma aarch64`, `Debian GNU/Linux 12 x86_64`; just `windows` / `macos` / `linux` when the person switched the computer's details off |
 | `title` | plain-language crash title, 1–200 chars, no control characters |
 | `signature` | 8–64 of `A-Z a-z 0-9 _ -` |
 | `install_id` | 8–64 of `A-Z a-z 0-9 -` (a UUID) |

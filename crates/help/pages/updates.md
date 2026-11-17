@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-17
-see-also: web_api, contents
+see-also: web_api, contents, settings
 ---
 
 # Updates
@@ -18,6 +18,20 @@ GitHub whether there is a new version. If there is, it asks you:
   is still offered, and **Help ▸ Check for Updates** still finds it.
 
 **Help ▸ Check for Updates** asks GitHub straight away, whenever you like.
+
+### Why a friend was offered a version before you
+
+Each new version is built separately for Linux, Windows and Mac, and each is added to the
+release page as soon as it is ready. Cut Craft only offers you a version once the download
+for **your** kind of computer is there and signed. So for a little while after a release,
+a Linux computer may be offered it while a Windows computer or a Mac still says it is up to
+date. Check again later and it will be there. You are never offered a version you cannot
+download.
+
+Each kind of computer's download is only added once its own tests pass. If one kind is held
+back long enough that a newer version comes out first, it skips the older version and goes
+straight to the newer one. So now and then Linux, Windows and Mac are on different version
+numbers. That is expected: each is offered the newest version made for it.
 
 ## What Install Now does
 
@@ -67,7 +81,8 @@ can paste it into a terminal:
   offers new versions itself.
 - **Flatpak**: download the new `.flatpak` file from the release page, then open it, or run
   `flatpak install --user` with its name in the folder you saved it to.
-- **Mac**: download the new `.dmg` and drag Cut Craft to Applications again.
+- **Mac**: Cut Craft tells you when a new version's `.dmg` is ready. Download it and drag
+  Cut Craft to Applications again.
 - **Built from the source code**: `git pull`, then `cargo build --release`.
 
 The AppImage, the Linux `.tar.gz` and the Windows `.zip` replace themselves. An AppImage

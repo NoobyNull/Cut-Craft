@@ -25,15 +25,17 @@ mod release;
 pub use install::{Install, Probe, packaged_note_path};
 pub use package::clean_up;
 pub use relaunch::{appimage_destination, launcher_folders, relaunch_env, repoint_launchers};
-pub use release::{Asset, Release, version_of};
+pub use release::{Asset, Release, newest_for, version_of};
 pub use semver::Version;
 
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// The newest release that is not a test build.
-pub const LATEST: &str = "https://api.github.com/repos/NoobyNull/Cut-Craft/releases/latest";
+/// The newest releases, test builds among them (left out when read). Not `/releases/latest`:
+/// each computer's builds are attached as they finish, so the newest release may not have
+/// this computer's yet, and the one before it is what this computer is offered meanwhile.
+pub const RELEASES: &str = "https://api.github.com/repos/NoobyNull/Cut-Craft/releases?per_page=20";
 /// Where releases are listed, for downloading by hand.
 pub const RELEASES_PAGE: &str = "https://github.com/NoobyNull/Cut-Craft/releases";
 /// How long after one check the next start checks again.
@@ -114,12 +116,36 @@ impl Found {
 
 /// Asks GitHub whether there is something newer than `current` for `install`.
 pub fn check(install: &Install, current: &Version) -> Result<Found, String> {
-    let release = Release::parse(&get_text(LATEST)?)?;
-    Ok(if release.is_newer_than(current) {
-        Found::for_release(install, release)
-    } else {
-        Found::UpToDate
-    })
+    let releases = Release::parse_list(&get_text(RELEASES)?)?;
+    Ok(pick(install, std::env::consts::OS, &releases, current))
+}
+
+/// The end of the name of the build a computer running `os` is updated from, or told to
+/// download: its release counts for that computer only once this file is attached.
+pub fn platform_suffix(os: &str) -> &'static str {
+    match os {
+        "macos" => ".dmg",
+        "windows" => "windows-x86_64.zip",
+        _ => "linux-x86_64.tar.gz",
+    }
+}
+
+/// What `releases` offer `install` (on `os`), running `current`: the newest release that
+/// has this computer's own signed build, when it is newer.
+fn pick(install: &Install, os: &str, releases: &[Release], current: &Version) -> Found {
+    let suffix = match install {
+        // told to install the release's bundle, so it waits for that file
+        Install::Flatpak => "x86_64.flatpak",
+        _ => install
+            .asset_suffix()
+            .unwrap_or_else(|| platform_suffix(os)),
+    };
+    match newest_for(releases, suffix) {
+        Some(release) if release.is_newer_than(current) => {
+            Found::for_release(install, release.clone())
+        }
+        _ => Found::UpToDate,
+    }
 }
 
 /// How far an update has got.
@@ -366,6 +392,69 @@ mod tests {
             panic!()
         };
         assert_eq!(ready, Err("use the .flatpak".into()));
+    }
+
+    /// A Mac (which updates by hand, from the .dmg) and a Windows copy are not told about a
+    /// release before their own build is attached to it.
+    #[test]
+    fn each_computer_is_offered_the_newest_release_with_its_own_build() {
+        let signed = |tag: &str, version, files: &[&str]| Release {
+            tag: tag.into(),
+            version,
+            notes: String::new(),
+            page: String::new(),
+            assets: files
+                .iter()
+                .flat_map(|f| [(*f).to_owned(), format!("{f}.minisig")])
+                .map(|name| Asset {
+                    name,
+                    url: String::new(),
+                    size: 1,
+                    digest: Some("sha256:00".into()),
+                })
+                .collect(),
+        };
+        let releases = [
+            signed("v0.5.1", Version::new(0, 5, 1), &["c-linux-x86_64.tar.gz"]),
+            signed(
+                "v0.5.0",
+                Version::new(0, 5, 0),
+                &["c-linux-x86_64.tar.gz", "c-windows-x86_64.zip", "c.dmg"],
+            ),
+        ];
+        let current = Version::new(0, 4, 9);
+        let offered = |install: &Install, os| match pick(install, os, &releases, &current) {
+            Found::Release { release, .. } => Some(release.tag),
+            Found::UpToDate => None,
+        };
+        assert_eq!(offered(&LINUX, "linux").as_deref(), Some("v0.5.1"));
+        let windows = Install::Archive {
+            exe: PathBuf::new(),
+            windows: true,
+        };
+        assert_eq!(offered(&windows, "windows").as_deref(), Some("v0.5.0"));
+        let mac = Install::Elsewhere { why: "dmg".into() };
+        assert_eq!(offered(&mac, "macos").as_deref(), Some("v0.5.0"));
+        // a Windows copy already on 0.5.0 waits for 0.5.1's Windows build
+        assert_eq!(
+            pick(&windows, "windows", &releases, &Version::new(0, 5, 0)),
+            Found::UpToDate
+        );
+        // a Flatpak is told to install the release's .flatpak, so it waits for that file
+        let flatpak = Install::Flatpak;
+        assert_eq!(offered(&flatpak, "linux"), None);
+        let with_bundle = [signed(
+            "v0.5.2",
+            Version::new(0, 5, 2),
+            &["c-linux-x86_64.tar.gz", "c-x86_64.flatpak"],
+        )];
+        assert!(matches!(
+            pick(&flatpak, "linux", &with_bundle, &current),
+            Found::Release { release, .. } if release.tag == "v0.5.2"
+        ));
+        assert_eq!(platform_suffix("macos"), ".dmg");
+        assert_eq!(platform_suffix("windows"), "windows-x86_64.zip");
+        assert_eq!(platform_suffix("linux"), "linux-x86_64.tar.gz");
     }
 
     #[test]

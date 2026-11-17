@@ -5,7 +5,7 @@
 # Both install the same files: the program in /usr/bin, the desktop entry and icon, the
 # licence, and /usr/lib/cut-craft/packaged-by, the note that tells the program its package
 # manager updates it (so Help > Check for Updates says how, and replaces nothing).
-# .github/workflows/builds.yml runs it on GitHub. Needs dpkg-deb, rpmbuild (package rpm)
+# .github/workflows/builds-linux.yml runs it on GitHub. Needs dpkg-deb, rpmbuild (package rpm)
 # and rsvg-convert. MAINTAINER sets the packages' maintainer.
 set -euo pipefail
 cd "$(dirname "$0")/.."
