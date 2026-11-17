@@ -682,6 +682,40 @@ impl Change {
         self
     }
 
+    /// This change's new toolpaths put in place of `old` (what a toolpath form made last
+    /// time), in turn: each takes the id, so its place in the cut order, and the group of
+    /// the one it replaces. Old ones left over are taken away and new ones left over added,
+    /// so pressing Calculate again never leaves a second copy. Any of `old` no longer in
+    /// `doc` is left out.
+    #[must_use]
+    pub fn onto_toolpaths(mut self, old: &[EntityId], doc: &Document) -> Self {
+        let mut old = old
+            .iter()
+            .filter_map(|id| Some((*id, doc.toolpaths.get(id)?)));
+        for edit in &mut self.edits {
+            let Edit::AddToolpath { toolpath, .. } = edit else {
+                continue;
+            };
+            let Some((id, before)) = old.next() else {
+                break;
+            };
+            let mut after = toolpath.as_ref().clone();
+            after.group.clone_from(&before.group);
+            *edit = Edit::ReplaceToolpath {
+                id,
+                before: Box::new(before.clone()),
+                after: Box::new(after),
+            };
+        }
+        for (id, toolpath) in old {
+            self.edits.push(Edit::RemoveToolpath {
+                id,
+                toolpath: Box::new(toolpath.clone()),
+            });
+        }
+        self
+    }
+
     /// The toolpaths this change adds, and those it replaces others with, as they will be.
     pub fn toolpaths_making(&self) -> impl Iterator<Item = &Toolpath> {
         self.edits.iter().filter_map(|e| match e {
