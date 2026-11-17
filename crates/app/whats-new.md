@@ -1,2 +1,3 @@
-- New 3D Pencil toolpath: a small bit cleans the creases and corners a big ball nose can't reach
-- Rotary jobs: Auto-rotate now spins the part round its own long axis, like it turns on the machine
+- One-click updates: press Install Now and Cut Craft downloads, checks and installs the new version, then reopens on your job
+- Open and import windows now start on the right file type, so you only see files that action can use
+- Pop-up windows stay in front of the main window until you close them, so they can't hide behind it
