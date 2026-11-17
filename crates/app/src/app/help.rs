@@ -11,6 +11,16 @@ const TOOLPATHS: &str = include_str!("../../help/toolpaths.md");
 const WEB_API: &str = include_str!("../../help/web-api.md");
 const VIEW_3D: &str = include_str!("../../help/view-3d.md");
 const GROUPS: &str = include_str!("../../help/groups.md");
+const PENCIL: &str = include_str!("../../help/3d-pencil.md");
+
+/// More help for a tool than its settings' doc comments give: pictures and steps, added
+/// under its settings.
+fn tool_extra(id: &str) -> Option<&'static str> {
+    match id {
+        "3d_pencil_toolpath" => Some(PENCIL),
+        _ => None,
+    }
+}
 
 /// The tools whose help pages link the Groups page.
 const GROUP_TOOLS: [&str; 4] = [
@@ -61,6 +71,14 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "group-step-inside.png",
         include_bytes!("../../help/pictures/group-step-inside.png"),
+    ),
+    (
+        "pencil-before-after.png",
+        include_bytes!("../../help/pictures/pencil-before-after.png"),
+    ),
+    (
+        "pencil-pass.gif",
+        include_bytes!("../../help/pictures/pencil-pass.gif"),
     ),
 ];
 
@@ -247,6 +265,9 @@ impl CutCraftApp {
                 );
                 for (label, help) in fields {
                     let _ = writeln!(md, "- **{label}**: {help}");
+                }
+                if let Some(extra) = tool_extra(id) {
+                    md.push_str(extra);
                 }
                 if GROUP_TOOLS.contains(&id) {
                     md.push_str(

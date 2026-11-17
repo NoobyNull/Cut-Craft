@@ -419,6 +419,15 @@ percentages and passes get no letter.
 - **Boundary Offset**: every unmachined area is grown by this before it is machined; small values give many small areas, large values fewer, larger ones.
 - Finishing is always one pass at full depth (it ignores pass depth); the usual tool is a ball nose with an 8–12 % stepover.
 
+### 3D Pencil Toolpath [inf] (Cut Craft only, beyond Aspire)
+- Aspire has no pencil toolpath: its users clean the valleys a big ball leaves with a second, slow 3D Finishing pass using a smaller bit (rest machining). Pencil milling (pencil tracing) is a high-end CAM finishing pass; Cut Craft gives it its own tool in 3D Toolpaths, after 3D Finishing. Cut Craft's own method, from public descriptions of the idea only.
+- **Tool:** the pencil bit, a ball nose smaller than the finishing bit (starter: 3 mm ball). **Bits that finished before:** a list picked with Select… / Add a tool… (starter: the 6 mm ball 3D Finishing starts with); only where every one of them left material (Options ▸ Advanced rest threshold, at least Minimum Detail across, grown by Overlap and the pencil's radius) is cut. With none, every valley is cut.
+- **Valleys:** where the surface the pencil bit's tip can reach (the tool dropped at every cell, the cells a twentieth of the bit) bends up on both sides by at least **Valleys sharper than** (20° by default; 90° is a wall meeting the floor), at the bottom of the bend; thinned to one-cell lines, traced end to end (closed loops stay closed), smoothed, and specks shorter than the bit's radius dropped.
+- **Extra passes each side** (3 by default): offsets of each valley line a finishing stepover apart, cut from the outside in, one side then the other, then the valley line; back and forth so they link without lifting. Each pass is dropped onto the model (every move checked against the 3D finishing accuracy) and stops where the bits before already cut.
+- **Machining Limit Boundary:** as 3D Finishing.
+- Never refused (beyond there being no model): a pencil bit no smaller than a bit before, a bit that is not a ball nose, a finishing stepover out of range (10% used) and finding no valleys are said in red at the foot of the form; the toolpath is still made.
+- The Web API lists and runs it as `3d_pencil_toolpath`, like every other tool.
+
 ### Fluting [obs] (help: Fluting Toolpath)
 - Cuts along each selected vector from its start point. **Start Depth** is where it begins (0 at the surface, or a pocket floor); **Flute Depth** is added below it.
 - **Flute Type:** ramp over the complete length (start depth at the start → full depth at the end); ramp at start (then full depth to the end); ramp at start and end.

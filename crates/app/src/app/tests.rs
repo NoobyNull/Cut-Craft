@@ -3531,6 +3531,54 @@ fn rest_machining_picks_its_earlier_tools_in_the_tool_database() {
 }
 
 #[test]
+fn three_d_pencil_picks_the_bits_that_finished_before_in_the_tool_database() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "3d_pencil_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Bits that finished before").is_some(),
+        "its own list, under its own heading"
+    );
+    assert!(
+        h.text_at("Rest Machining").is_none(),
+        "not a second list of earlier bits"
+    );
+    h.app
+        .ask_listed(&h.ctx, ToolList::Before, ListAsk::Select(ListSlot::At(0)));
+    select_in_tool_database(&mut h, "6 mm End Mill");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["bits_before"][0]["name"], "6 mm End Mill");
+    assert_eq!(form.params["bits_before"].as_array().unwrap().len(), 1);
+    assert_ne!(
+        form.params["tool"]["name"], "6 mm End Mill",
+        "the pencil bit is left as it was"
+    );
+    h.app
+        .ask_listed(&h.ctx, ToolList::Before, ListAsk::Select(ListSlot::New));
+    select_in_tool_database(&mut h, "6 mm Ball Nose");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["bits_before"][1]["name"], "6 mm Ball Nose");
+}
+
+#[test]
+fn the_3d_pencil_help_shows_what_it_cuts_with_pictures() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("3d_pencil_toolpath");
+    assert!(page.contains("bytes://help/pencil-before-after.png"));
+    assert!(page.contains("bytes://help/pencil-pass.gif"));
+    assert!(
+        page.contains("help:3d_finishing_toolpath"),
+        "linked to 3D Finishing"
+    );
+    assert!(
+        page.contains("**Extra passes each side**"),
+        "its settings listed"
+    );
+}
+
+#[test]
 fn the_tool_changer_window_loads_a_holder_with_select_tool() {
     let mut h = Harness::new();
     h.app.machines.add();

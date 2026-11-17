@@ -5732,8 +5732,9 @@ impl CutCraftApp {
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         // a form that only uses its tool's shape (Relief from Photo) has no passes to cut
         let cuts = open.id != "relief_from_photo";
-        // a surfacing toolpath flattens all it covers: no rest machining or vector selector
-        let extras = cuts && open.id != "surfacing_toolpath";
+        // a surfacing toolpath flattens all it covers, and 3D Pencil has its own bits that
+        // finished before and follows the model: no rest machining or vector selector
+        let extras = cuts && !["surfacing_toolpath", "3d_pencil_toolpath"].contains(&open.id);
         let suggested = open.suggested.clone();
         let form_id = open.id;
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
@@ -5757,7 +5758,7 @@ impl CutCraftApp {
                 let (changed, ask) = super::tools_section(ui, key, params, tools, &slots, units);
                 listed.set(listed.get() | changed);
                 if let Some(ask) = ask {
-                    *list_ask.borrow_mut() = Some((super::ToolList::Tools, ask));
+                    *list_ask.borrow_mut() = Some((super::ToolList::of_key(key), ask));
                 }
                 return;
             }
@@ -5830,6 +5831,7 @@ impl CutCraftApp {
                         let list = match which {
                             super::ToolList::Clearing => &form.params["clearance_tools"],
                             super::ToolList::Tools => &form.params["tools"],
+                            super::ToolList::Before => &form.params["bits_before"],
                             super::ToolList::Rest => &form.params["rest"]["after"],
                         };
                         list[i]["name"].as_str().map(str::to_owned)
