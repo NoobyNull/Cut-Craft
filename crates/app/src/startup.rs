@@ -16,6 +16,9 @@ pub enum Start {
     Help,
     /// `--screenshots [DIR]`: the README's pictures (see app/screenshots.rs).
     Screenshots(PathBuf),
+    /// `--help-pictures [DIR [TOOL…]]`: the help pages' step pictures (see `help_pictures.rs`),
+    /// every tour's or only the tools named.
+    HelpPictures(PathBuf, Vec<String>),
     /// Anything else: the app, opening the file named if there is one (Open With, or a
     /// file dragged onto the launcher: the desktop entry passes it as `%f`).
     App(Option<PathBuf>),
@@ -30,6 +33,12 @@ pub fn parse(mut args: impl Iterator<Item = String>) -> Start {
             args.next()
                 .map_or_else(|| "docs/screenshots".into(), Into::into),
         ),
+        Some("--help-pictures") => {
+            let dir = args
+                .next()
+                .map_or_else(|| "crates/help/pictures".into(), Into::into);
+            Start::HelpPictures(dir, args.collect())
+        }
         Some(file) if !file.starts_with('-') => Start::App(Some(file.into())),
         _ => Start::App(None),
     }
@@ -49,7 +58,9 @@ pub fn help() -> String {
                               into a new job, made with Job Setup)\n  \
          -V, --version        print the version and stop\n  \
          -h, --help           print this and stop\n  \
-         --screenshots [DIR]  save the README's pictures in DIR (docs/screenshots)\n",
+         --screenshots [DIR]  save the README's pictures in DIR (docs/screenshots)\n  \
+         --help-pictures [DIR [TOOL...]]\n                       \
+         save the help pages' step pictures in DIR (crates/help/pictures)\n",
         version()
     )
 }
@@ -260,6 +271,26 @@ mod tests {
         assert_eq!(
             parse(args(&["--screenshots"])),
             Start::Screenshots("docs/screenshots".into())
+        );
+    }
+
+    #[test]
+    fn help_pictures_keep_their_folder_and_tools() {
+        assert_eq!(
+            parse(args(&["--help-pictures"])),
+            Start::HelpPictures("crates/help/pictures".into(), vec![])
+        );
+        assert_eq!(
+            parse(args(&[
+                "--help-pictures",
+                "out",
+                "pocket_toolpath",
+                "draw_circle"
+            ])),
+            Start::HelpPictures(
+                "out".into(),
+                vec!["pocket_toolpath".into(), "draw_circle".into()]
+            )
         );
     }
 

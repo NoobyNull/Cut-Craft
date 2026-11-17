@@ -1,4 +1,5 @@
-# The pre-commit gate (.githooks/pre-commit) on Linux and Windows, so both keep building.
+# The pre-commit gate (.githooks/pre-commit) on Linux and Windows, so both keep building, and
+# on pull requests the help rule: a changed tool's help page changes too (scripts/help-touched).
 name: CI
 
 on:
@@ -17,6 +18,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # a pull request is checked out as a merge commit: its first parent is main, so the
+          # help rule can see what the pull request changed
+          fetch-depth: 2
+
+      - name: Help updated for every tool changed
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        run: |
+          scripts/test-help-touched
+          scripts/help-touched HEAD^1
 
       - name: Linux GUI libraries
         if: runner.os == 'Linux'

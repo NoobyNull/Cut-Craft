@@ -1,0 +1,50 @@
+# Words that mean the same in the help search: one group per line, separated by commas.
+# A question saying any of them also finds pages saying the others. Phrases are fine
+# ("cut out"). Add a line whenever someone searches with a word the help doesn't use.
+tabs, tab, bridges, bridge, hold-downs, hold downs, holding tabs, onion skin
+profile, cut out, cut around, cut through, outline cut, contour
+pocket, clear out, clearing, hollow out, recess, cavity
+v-carve, vcarve, v carve, engrave, engraving, chip carve
+drill, drilling, holes, peck
+inlay, insert, plug
+fluting, flutes, grooves, reeding
+texture, texturing, hammered
+surfacing, flattening, flatten, spoilboard, skim
+stepover, step over, overlap, cut width
+stepdown, step down, pass depth, depth per pass, depth of cut
+feed rate, feed, feeds, speed, speeds, feeds and speeds, spindle speed, rpm
+bit, bits, cutter, end mill, endmill, router bit
+ball nose, ballnose, round nose
+v-bit, v bit, vee bit, chamfer bit
+tool database, tool library, bit library
+job setup, material, stock, blank, workpiece, board
+material thickness, thickness, board thickness
+zero, origin, home, datum, xy zero, z zero
+save toolpaths, export, g-code, gcode, nc file, post processor, post
+send to machine, send, upload, transfer
+preview, simulate, simulation, preview toolpaths
+text, lettering, letters, font, sign
+circle, round
+rectangle, square, box
+offset, inset, outset, grow, shrink
+fillet, round corners, rounded corners, radius corner
+dogbone, dog bone, t-bone, corner relief
+weld, merge, union, combine, join shapes
+trim, cut away, scissors
+mirror, flip
+rotate, spin
+scale, resize, size, stretch
+group, ungroup, combine together
+nodes, node editing, edit points, points
+import, open drawing, dxf, svg, pdf, picture, image, bitmap
+trace, trace bitmap, quick trace, vectorize, vectorise
+model, 3d model, relief, component
+3d roughing, roughing, rough
+3d finishing, finishing, finish pass
+layers, layer
+undo, go back, mistake
+laser, burn, engrave with laser
+rotary, 4th axis, fourth axis, wrap
+nest, nesting, layout parts, fit parts
+array, copy along, repeat, duplicate
+measure, ruler, distance, dimension, dimensions
