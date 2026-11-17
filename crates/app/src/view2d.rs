@@ -535,8 +535,7 @@ impl Canvas {
                 };
                 let start = t.to_screen(was.truncate());
                 let vertical = (was.truncate() - m.to.truncate()).length() < 1e-9;
-                // ponytail: a join is a feed move wholly above the material [inf]
-                let join = m.kind == MoveKind::Cut && was.z >= 0.0 && m.to.z >= 0.0;
+                let join = is_join(&toolpath.strategy, m.kind, was.z, m.to.z);
                 let (seen, full) = (
                     view.intersects(Rect::from_two_pos(start, to)),
                     marks.len() + cuts.used() >= room,
@@ -998,6 +997,20 @@ pub const MOST_TOOLPATH_POINTS: usize = 1_000_000;
 /// How far a thinned line strays from the cuts it stands for, in points (the screen's).
 const THINNED_WITHIN: f32 = 0.25;
 
+/// Whether a move of a toolpath made by `strategy` from height `was` to `to` is a join: a
+/// feed move wholly above the material, dotted rather than drawn as a cut. A laser marks the
+/// surface at height 0, so its moves there are its cuts.
+fn is_join(strategy: &str, kind: MoveKind, was: f64, to: f64) -> bool {
+    // ponytail: a join is a feed move wholly above the material [inf]
+    let laser = strategy.starts_with("laser_");
+    kind == MoveKind::Cut
+        && if laser {
+            was > 0.0 && to > 0.0
+        } else {
+            was >= 0.0 && to >= 0.0
+        }
+}
+
 /// Cuts as lines on screen, thinned to what shows: a cut too short to see is joined to the
 /// next, cuts in a line are drawn as one, and those wholly off the view are left out. Each
 /// point kept stays within half a point of the cuts.
@@ -1454,5 +1467,15 @@ mod tests {
         };
         let p = Point::new(123.4, -56.7);
         assert!(t.to_job(t.to_screen(p)).distance(p) < 1e-3);
+    }
+
+    #[test]
+    fn a_lasers_marks_at_the_surface_are_cuts_not_joins() {
+        assert!(is_join("profile_toolpath", MoveKind::Cut, 0.0, 0.0));
+        assert!(!is_join("profile_toolpath", MoveKind::Cut, 0.0, -1.0));
+        assert!(!is_join("laser_cut_fill_toolpath", MoveKind::Cut, 0.0, 0.0));
+        assert!(!is_join("laser_picture_toolpath", MoveKind::Cut, 0.0, 0.0));
+        assert!(is_join("laser_cut_fill_toolpath", MoveKind::Cut, 2.0, 2.0));
+        assert!(!is_join("profile_toolpath", MoveKind::Rapid, 5.0, 5.0));
     }
 }
