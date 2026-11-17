@@ -1,13 +1,13 @@
 # Tags each version as it lands on main, so no one has to push a tag by hand.
 # Each version on main's line since the last tag that has no vX.Y.Z tag yet (a "chore: version
 # X.Y.Z" pull request just merged, or a tag was never pushed) is tagged on the commit it arrived
-# in (scripts/release-commit untagged), and Builds is started on that tag, which builds, signs and publishes the
-# release. A version that already has its tag is left alone: v* tags are never moved or deleted.
+# in (scripts/release-commit untagged), and the three Builds workflows (Linux, Windows, macOS)
+# are started on that tag; each builds, signs and adds its own files to the release. A version that already has its tag is left alone: v* tags are never moved or deleted.
 #
 # The tag is pushed with the workflow's own token. "Protect release tags" lets anyone make a new
 # v* tag; it only stops one being moved or deleted, so no key or secret is needed. A tag pushed
-# with that token starts no workflows by itself, so Builds is started for it explicitly, with
-# main's copy of Builds (the newest fixes) building the tag's code.
+# with that token starts no workflows by itself, so the Builds are started for it explicitly,
+# with main's copies of them (the newest fixes) building the tag's code.
 # Versions arrive only through "chore: version X.Y.Z" pull requests (scripts/release-version);
 # nothing bumps the version on its own.
 name: Release tag
@@ -19,7 +19,7 @@ on:
 
 permissions:
   contents: write # the tag
-  actions: write # start Builds on it
+  actions: write # start the Builds on it
 
 concurrency:
   group: release-tag
@@ -47,6 +47,7 @@ jobs:
             echo "main's version is already tagged: nothing to release." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          failed=0
           while read -r version commit; do
             tag="v$version"
             if [[ -n $newest ]] && [[ $(printf '%s\n' "${newest#v}" "$version" | sort -V | tail -1) != "$version" ]]; then
@@ -67,7 +68,26 @@ jobs:
               echo "::error::Could not push $tag. Check Settings → Rules → Rulesets: \"Protect release tags\" must allow creating v* tags."
               exit 1
             fi
-            gh workflow run builds.yml --ref main -f tag="$tag"
+            # each computer on its own: the first to finish publishes the release, the others add
+            # to it, and one that fails or waits for a runner holds back none of the others; a
+            # start GitHub refuses is tried again, and the others are started anyway
+            not_started=()
+            for os in linux windows macos; do
+              started=0
+              for wait in 0 10 30; do
+                sleep "$wait"
+                if gh workflow run "builds-$os.yml" --ref main -f tag="$tag"; then
+                  started=1
+                  break
+                fi
+              done
+              (( started )) || not_started+=("$os")
+            done
             echo "Tagged $tag on ${commit::7} and started **Builds** on it." >> "$GITHUB_STEP_SUMMARY"
+            if (( ${#not_started[@]} )); then
+              echo "::error::Could not start Builds for ${not_started[*]} on $tag. Start each from Actions → Builds (…) → Run workflow, with tag $tag."
+              failed=1
+            fi
           done <<< "$versions"
+          if (( failed )); then exit 1; fi
           echo "Each release appears on the Releases page when its Builds run finishes." >> "$GITHUB_STEP_SUMMARY"

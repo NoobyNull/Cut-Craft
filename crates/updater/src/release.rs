@@ -32,6 +32,24 @@ impl Release {
     pub fn parse(json: &str) -> Result<Self, String> {
         let v: Value = serde_json::from_str(json)
             .map_err(|e| format!("GitHub sent something that is not a release ({e})"))?;
+        Self::from_value(&v)
+    }
+
+    /// Reads the GitHub API's list of releases, leaving out drafts, pre-releases and tags
+    /// that are not a version.
+    pub fn parse_list(json: &str) -> Result<Vec<Self>, String> {
+        let v: Value = serde_json::from_str(json)
+            .map_err(|e| format!("GitHub sent something that is not a list of releases ({e})"))?;
+        let list = v
+            .as_array()
+            .ok_or("GitHub sent something that is not a list of releases")?;
+        Ok(list
+            .iter()
+            .filter_map(|r| Self::from_value(r).ok())
+            .collect())
+    }
+
+    fn from_value(v: &Value) -> Result<Self, String> {
         let text = |key: &str| v.get(key).and_then(Value::as_str).unwrap_or_default();
         let flag = |key: &str| v.get(key).and_then(Value::as_bool).unwrap_or(false);
         if flag("draft") || flag("prerelease") {
@@ -76,8 +94,27 @@ impl Release {
 
     /// The download whose name ends with `suffix` (see [`crate::Install::asset_suffix`]).
     pub fn asset(&self, suffix: &str) -> Option<&Asset> {
-        self.assets.iter().find(|a| a.name.ends_with(suffix))
+        self.assets
+            .iter()
+            .find(|a| a.name.ends_with(suffix) && !a.name.ends_with(".minisig"))
     }
+
+    /// Whether the download ending `suffix` and its signature are both attached yet.
+    pub fn has_signed(&self, suffix: &str) -> bool {
+        self.asset(suffix)
+            .is_some_and(|a| self.signature_of(a).is_some())
+    }
+}
+
+/// The newest of `releases` with a signed download ending `suffix`: the newest release for
+/// that kind of computer. Each computer's builds are attached to a release as they finish
+/// (Linux, Windows and macOS are built apart), so a release only counts for a computer once
+/// its own file and signature are there.
+pub fn newest_for<'a>(releases: &'a [Release], suffix: &str) -> Option<&'a Release> {
+    releases
+        .iter()
+        .filter(|r| r.has_signed(suffix))
+        .max_by(|a, b| a.version.cmp(&b.version))
 }
 
 /// The version a tag names: `v0.4.3` or `0.4.3`.
@@ -155,6 +192,45 @@ mod tests {
         );
         assert!(r.asset("linux-x86_64.tar.gz").is_some());
         assert!(r.asset("x86_64.AppImage").is_none());
+    }
+
+    /// Each computer's builds are added to a release as they finish, so for a while a
+    /// release can have the Linux files and not yet the Windows or Mac ones (or a file
+    /// before its signature). A computer is offered only a release with its own file and
+    /// that file's signature; until then it keeps being offered the one before.
+    #[test]
+    fn a_release_counts_for_a_computer_only_once_its_signed_file_is_there() {
+        let list = format!(
+            "[{}, {}, {}, {}]",
+            // the newest: Linux done, Windows's file there but not yet its signature
+            r#"{"tag_name": "v0.4.5", "draft": false, "prerelease": false, "assets": [
+                {"name": "cut-craft-0.4.5-linux-x86_64.tar.gz", "browser_download_url": "l"},
+                {"name": "cut-craft-0.4.5-linux-x86_64.tar.gz.minisig", "browser_download_url": "l"},
+                {"name": "cut-craft-0.4.5-windows-x86_64.zip", "browser_download_url": "w"}]}"#,
+            // the nightly is never an update
+            r#"{"tag_name": "nightly", "draft": false, "prerelease": true, "assets": [
+                {"name": "cut-craft-nightly-windows-x86_64.zip", "browser_download_url": "w"},
+                {"name": "cut-craft-nightly-windows-x86_64.zip.minisig", "browser_download_url": "w"}]}"#,
+            V043,
+            // everything there; listed out of order
+            r#"{"tag_name": "v0.4.4", "draft": false, "prerelease": false, "assets": [
+                {"name": "cut-craft-0.4.4-linux-x86_64.tar.gz", "browser_download_url": "l"},
+                {"name": "cut-craft-0.4.4-linux-x86_64.tar.gz.minisig", "browser_download_url": "l"},
+                {"name": "cut-craft-0.4.4-windows-x86_64.zip", "browser_download_url": "w"},
+                {"name": "cut-craft-0.4.4-windows-x86_64.zip.minisig", "browser_download_url": "w"}]}"#,
+        );
+        let releases = Release::parse_list(&list).unwrap();
+        assert_eq!(releases.len(), 3, "the nightly is left out");
+        let newest = |suffix| newest_for(&releases, suffix).map(|r| r.tag.clone());
+        assert_eq!(newest("linux-x86_64.tar.gz").as_deref(), Some("v0.4.5"));
+        assert_eq!(newest("windows-x86_64.zip").as_deref(), Some("v0.4.4"));
+        // no Mac build yet in any of them
+        assert_eq!(newest(".dmg"), None);
+        assert!(
+            Release::parse_list(V043).is_err(),
+            "one release is not a list"
+        );
+        assert!(Release::parse_list("<html>rate limited</html>").is_err());
     }
 
     #[test]

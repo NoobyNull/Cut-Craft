@@ -1,0 +1,84 @@
+# Cut Craft for macOS: a DMG with one app for Apple Silicon and Intel, started on the runner
+# to check it runs. It runs when the packaging changes on a pushed branch, from the Actions
+# tab, and on a release tag; the DMG is the run's artifact. Not signed or notarized by Apple
+# (no Apple Developer account): macOS asks before the first open.
+# Each computer is built by its own workflow (builds-linux.yml, builds-windows.yml,
+# builds-macos.yml), so one failing or waiting for a runner holds back none of the others.
+# On a v* tag (pushed, or started on the tag by Release tag) each signs its own files and adds
+# them to the release, and whichever finishes first publishes it (publish-release.yml).
+name: Builds (macOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release this v* tag (built from the tag, with this branch's workflow). Empty: just build this branch."
+        required: false
+        default: ""
+  push:
+    tags: ["v*"]
+    # not on every push: CI already builds and tests each one
+    branches: ["**"]
+    paths:
+      - ".github/workflows/builds-macos.yml"
+      - "scripts/start-check"
+      - "scripts/macos-dmg"
+      - ".github/workflows/publish-release.yml"
+      - "scripts/publish-release"
+      - ".github/workflows/platform-tests.yml"
+      - "scripts/sign-release"
+      - "packaging/**"
+
+permissions:
+  contents: write
+
+# one build per branch or tag at a time (a tag pushed and the same tag started by hand share
+# it, so two never publish the same files at once); a tag's build is never cancelled part-way
+concurrency:
+  group: builds-macos-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: ${{ !inputs.tag && !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  macos:
+    # macos-14 is retired: GitHub cancels its jobs at once ("configuration not supported")
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }} # empty: the commit this run is for
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: Tools for the app icon
+        run: brew install librsvg
+      - name: Build the app and its DMG
+        run: scripts/macos-dmg
+      # the app in the DMG keeps running with its window set up, on Metal
+      - name: Start the program
+        run: scripts/start-check "dist/Cut Craft.app/Contents/MacOS/cut-craft"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cut-craft-macos
+          path: dist/*.dmg
+
+  # On a v* tag: this computer's own tests (format, Clippy, every test) on the tagged code.
+  # Its files are published only once these pass.
+  tests:
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/platform-tests.yml
+    with:
+      os: macos-latest
+      ref: ${{ inputs.tag }}
+
+  # On a v* tag: signs these and adds them to the release, publishing it if this computer's
+  # builds are the first to finish. The other computers' builds don't wait for these, nor
+  # these for them.
+  release:
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/')
+    needs: [tests, macos]
+    uses: ./.github/workflows/publish-release.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+      artifacts: "cut-craft-macos"
+    secrets: inherit
