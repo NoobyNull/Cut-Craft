@@ -1,5 +1,5 @@
-# The AUR package cut-craft-bin (packaging/aur/cut-craft-bin): once Builds has published a
-# release, points the PKGBUILD at it (scripts/aur-update checks the download is signed by
+# The AUR package cut-craft-bin (packaging/aur/cut-craft-bin): once Builds (Linux) has added
+# its files to a release, points the PKGBUILD at it (scripts/aur-update checks the download is signed by
 # Cut Craft's release key), writes .SRCINFO and pushes both to the AUR.
 #
 # Off until the repository variable PUBLISH_AUR is "true", and needs the secret AUR_SSH_KEY:
@@ -10,7 +10,7 @@ name: AUR
 
 on:
   workflow_run:
-    workflows: [Builds]
+    workflows: ["Builds (Linux)"]
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -27,12 +27,11 @@ concurrency:
 
 jobs:
   publish:
-    # a release's Builds run is on its v* tag; a macOS build GitHub cancelled fails the run
-    # but not the release, so only a cancelled run is passed over
+    # a release's Builds (Linux) run is on its v* tag; only a finished one has the files
     if: >-
       vars.PUBLISH_AUR == 'true' && (github.event_name == 'workflow_dispatch'
       || (startsWith(github.event.workflow_run.head_branch, 'v')
-          && github.event.workflow_run.conclusion != 'cancelled'))
+          && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     env:

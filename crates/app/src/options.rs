@@ -1358,7 +1358,7 @@ impl WebApi {
 }
 
 /// Bug reports, and what happens after Cut Craft closes because of an error.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct BugReports {
     /// If Cut Craft closes because of an error, it keeps a crash log saying what it was
     /// doing. The next time it starts it can open a bug report with that log, for you to
@@ -1367,11 +1367,28 @@ pub struct BugReports {
     #[serde(default)]
     #[schemars(title = "If Cut Craft crashes")]
     pub crash_logs: CrashLogs,
+    /// Send which system and version this computer runs (Windows 11 23H2, macOS 14 Sonoma,
+    /// Ubuntu 24.04...), its processor (Intel/AMD or ARM) and graphics card with crash and
+    /// bug reports: some bugs happen only on some computers. Never the computer's name or
+    /// your user name. Off: only the report and its log are sent
+    #[serde(default = "yes")]
+    #[schemars(title = "Send details of my computer")]
+    pub computer_details: bool,
     /// A random number for this install, made when a crash report is first sent, so the
     /// crash-report service can tell one install from another. Nothing about the person.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub install_id: Option<String>,
+}
+
+impl Default for BugReports {
+    fn default() -> Self {
+        Self {
+            crash_logs: CrashLogs::default(),
+            computer_details: true,
+            install_id: None,
+        }
+    }
 }
 
 /// Whether a crash's log is offered as a bug report at the next start.

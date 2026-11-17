@@ -2936,6 +2936,17 @@ impl CutCraftApp {
     }
 }
 
+/// Tells bug reports which graphics card draws Cut Craft, and how; `info` back.
+fn graphics_for_bug_reports(info: eframe::wgpu::AdapterInfo) -> eframe::wgpu::AdapterInfo {
+    cut_craft_bug_report::system::set_graphics(
+        &info.name,
+        &format!("{:?}", info.backend),
+        &info.driver,
+        &info.driver_info,
+    );
+    info
+}
+
 /// Opens the main window and runs until it is closed; with `shots`, takes those pictures
 /// instead and quits. `open` is a file named on the command line, opened once the window is up.
 pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>) {
@@ -2999,7 +3010,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             let mut app = CutCraftApp::new();
             app.title_bar_at_start = frame;
             if let Some(rs) = &cc.wgpu_render_state {
-                let info = rs.adapter.get_info();
+                let info = graphics_for_bug_reports(rs.adapter.get_info());
                 log::info!(
                     "GPU: {} ({:?}, driver: {}), buffers up to {} MB",
                     info.name,

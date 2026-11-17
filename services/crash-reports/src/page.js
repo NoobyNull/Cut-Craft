@@ -119,6 +119,13 @@ tbody tr.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accen
       <option value="90">Last 90 days</option>
       <option value="365">Last year</option>
     </select>
+    <label class="small muted" for="family">from</label>
+    <select id="family">
+      <option value="">Every system</option>
+      <option value="windows">Windows</option>
+      <option value="macos">macOS</option>
+      <option value="linux">Linux</option>
+    </select>
     <button id="refresh">Refresh</button>
     <button id="signout">Sign out</button>
   </div>
@@ -160,7 +167,7 @@ tbody tr.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accen
     <div class="grid2">
       <div class="card chart"><h3>Reports per day</h3><div id="perday"></div></div>
       <div class="card"><h3>By version</h3><div id="byversion"></div></div>
-      <div class="card"><h3>By system</h3><div id="byos"></div></div>
+      <div class="card"><h3>By system</h3><div id="byfamily"></div><h3>By exact system</h3><div id="byos"></div></div>
     </div>
     <div class="card refused">
       <h3>Refused reports</h3>
@@ -356,7 +363,14 @@ function render(s) {
   $('th-recent').textContent = s.days + ' days';
   perDayChart(s);
   hbars('byversion', s.byVersion, 'version');
+  const familyNames = { windows: 'Windows', macos: 'macOS', linux: 'Linux' };
+  hbars('byfamily', (s.byFamily || []).filter((f) => f.count)
+    .map((f) => ({ family: familyNames[f.family], count: f.count })), 'family');
   hbars('byos', s.byOs, 'os');
+  for (const o of $('family').options) {
+    const f = (s.byFamily || []).find((x) => x.family === o.value);
+    if (f) o.textContent = familyNames[f.family] + ' (' + f.count + ')';
+  }
   const refused = s.refused || [];
   const nRefused = refused.reduce((n, r) => n + r.count, 0);
   const nets = refused.reduce((n, r) => n + r.networks, 0);
@@ -369,6 +383,7 @@ function render(s) {
   const body = $('crashes');
   body.replaceChildren();
   $('no-crashes').hidden = s.crashes.length > 0;
+  $('no-crashes').textContent = s.family ? 'No crashes reported from this kind of system.' : 'No crashes reported yet.';
   for (const c of s.crashes) {
     const versions = c.first_version === c.last_version ? c.last_version : c.first_version + ' – ' + c.last_version;
     const tr = el('tr', { tabindex: '0', onclick: () => openCrash(c.signature),
@@ -390,7 +405,8 @@ function render(s) {
 
 async function load() {
   try {
-    render(await api('/admin/api/summary?days=' + $('range').value));
+    const family = $('family').value;
+    render(await api('/admin/api/summary?days=' + $('range').value + (family ? '&os=' + family : '')));
     if (selected) await openCrash(selected, true);
   } catch (e) {
     if (e.message !== 'signed out') $('footer').textContent = 'Could not load: ' + e.message;
@@ -620,6 +636,7 @@ $('signout').addEventListener('click', async () => {
 });
 $('refresh').addEventListener('click', load);
 $('range').addEventListener('change', load);
+$('family').addEventListener('change', load);
 
 (async () => {
   token = stored();

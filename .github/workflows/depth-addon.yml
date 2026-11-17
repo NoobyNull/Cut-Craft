@@ -65,7 +65,7 @@ jobs:
   # Apple Silicon Macs, on their own: GitHub sometimes cancels macOS jobs before they start
   # (no runner, minutes used up), and that mustn't hold back Linux and Windows. Run the
   # workflow again later and publish adds the Mac zip to the same release.
-  # (macos-14 is retired: see builds.yml)
+  # (macos-14 is retired: see builds-macos.yml)
   build-macos:
     runs-on: macos-latest
     steps:

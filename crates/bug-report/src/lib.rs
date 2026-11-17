@@ -18,6 +18,7 @@ pub mod number;
 pub mod privacy;
 pub mod relay;
 mod spot;
+pub mod system;
 pub mod unapplied;
 
 use eframe::egui;
@@ -56,7 +57,6 @@ struct Frame {
     number: u64,
     regions: Vec<Region>,
     claimed: bool,
-    asked: bool,
 }
 
 fn frame_id() -> egui::Id {
@@ -218,7 +218,12 @@ pub fn claim(ctx: &egui::Context) {
 
 /// Opens the report form for the last right-click (from another right-click menu's item).
 pub fn open_here(ctx: &egui::Context) {
-    with_frame(ctx, |f| f.asked = true);
+    // kept until the reporter next looks, whichever frame that is
+    ctx.data_mut(|d| d.insert_temp(asked_id(), true));
+}
+
+fn asked_id() -> egui::Id {
+    egui::Id::unique("bug_report_asked")
 }
 
 /// `response`'s right-click menu, with Report a Bug Here… at its foot: the right-click is
@@ -247,6 +252,10 @@ pub fn regions_at(regions: &[Region], at: egui::Pos2) -> Vec<Region> {
 }
 
 /// A report being written.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each thing a report may send has its own tick"
+)]
 struct Draft {
     title: String,
     text: String,
@@ -264,6 +273,9 @@ struct Draft {
     error: Option<String>,
     /// A report of the last run's crash, its log the crash log.
     crash: bool,
+    /// The details of the computer ([`system::report_lines`]), sent only when ticked.
+    computer: Vec<String>,
+    send_computer: bool,
 }
 
 impl Draft {
@@ -279,9 +291,16 @@ impl Draft {
                 .map(|r| (r.name.clone(), format!("{}:{}", r.at.file(), r.at.line())))
                 .collect(),
             widget: self.widget.clone(),
-            state: self.state.clone(),
-            log: if self.send_log {
+            state: if self.send_computer {
+                format!("{}\n{}", self.state, self.computer.join("\n"))
+            } else {
+                self.state.clone()
+            },
+            log: if self.send_log && self.send_computer {
                 self.log.clone()
+            } else if self.send_log {
+                // a crash log names the computer: only when that is ticked too
+                system::without_details(&self.log)
             } else {
                 String::new()
             },
@@ -295,6 +314,10 @@ impl Draft {
 }
 
 /// Where reports go and the right-click being reported on.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "separate switches the app sets, each on its own"
+)]
 pub struct Reporter {
     /// The GitHub repository issues are made in (`owner/name`).
     pub repo: String,
@@ -330,6 +353,9 @@ pub struct Reporter {
     /// Where a crash log that could not be sent for now is put back, to be sent at the next
     /// start (the folder `crash.log` is kept in).
     pub retry_dir: Option<PathBuf>,
+    /// Whether the details of the computer go with a report unless unticked, and with a
+    /// crash log sent by itself (Edit ▸ Options ▸ Bug Reports; on unless switched off).
+    pub computer_details: bool,
     /// A crash log on its way to the service, and how that went.
     crash_sending: Option<(String, mpsc::Receiver<Result<(), relay::Failure>>)>,
 }
@@ -359,6 +385,7 @@ impl Reporter {
             post: relay::post_https,
             work_bits: relay::WORK_BITS,
             retry_dir: None,
+            computer_details: true,
             crash_sending: None,
         }
     }
@@ -375,7 +402,12 @@ impl Reporter {
         let (post, bits, text, install, ctx) = (
             self.post,
             self.work_bits,
-            crash.clone(),
+            // the computer's details go only when the person said they may
+            if self.computer_details {
+                crash.clone()
+            } else {
+                system::without_details(&crash)
+            },
             install.to_owned(),
             ctx.clone(),
         );
@@ -443,8 +475,10 @@ impl Reporter {
         if let Some((crash, send_log)) = self.crash.take() {
             self.open_crash(&crash, send_log, host);
         }
-        let (regions, claimed, asked) =
-            with_frame(ctx, |f| (f.regions.clone(), f.claimed, f.asked));
+        let (regions, claimed) = with_frame(ctx, |f| (f.regions.clone(), f.claimed));
+        let asked = ctx
+            .data_mut(|d| d.remove_temp::<bool>(asked_id()))
+            .unwrap_or(false);
         let clicked = ctx.input(|i| {
             i.pointer
                 .secondary_clicked()
@@ -489,6 +523,8 @@ impl Reporter {
             pictures: vec![],
             error: None,
             crash: false,
+            computer: computer_lines(),
+            send_computer: self.computer_details,
         });
     }
 
@@ -509,6 +545,8 @@ impl Reporter {
             pictures: vec![],
             error: None,
             crash: true,
+            computer: computer_lines(),
+            send_computer: self.computer_details,
         });
     }
 
@@ -656,6 +694,14 @@ impl Reporter {
     }
 }
 
+/// The details of this computer as a report shows them.
+fn computer_lines() -> Vec<String> {
+    privacy::scrub(&system::report_lines().join("\n"))
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
 /// The form's question: may the screenshot and the log go too? Each starts unticked
 /// (a crash's log ticked when crash logs were allowed), each shows exactly what it is, and
 /// what always goes is shown as well.
@@ -700,6 +746,19 @@ fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
                 .max_height(ui.text_style_height(&egui::TextStyle::Monospace) * LOG_ROWS)
                 .stick_to_bottom(true)
                 .show(ui, |ui| ui.monospace(&draft.log));
+        });
+    }
+    if !draft.computer.is_empty() {
+        ui.checkbox(&mut draft.send_computer, "Details of my computer");
+        ui.weak(
+            "Which system and version it runs, its processor and graphics card: some bugs \
+             happen only on some computers. Never your computer's name or your user name.",
+        );
+        // a few lines: shown as they are, so it is plain what goes
+        ui.indent("computer_details", |ui| {
+            for line in &draft.computer {
+                ui.monospace(line);
+            }
         });
     }
     ui.collapsing("Always sent: the version and where you clicked", |ui| {
@@ -868,6 +927,11 @@ mod tests {
         reporter.open(&host);
         let draft = reporter.draft.as_mut().unwrap();
         draft.log = "Saved /home/sam/a.nc".into();
+        assert!(
+            draft.send_computer,
+            "the computer's details go unless switched off"
+        );
+        draft.send_computer = false;
         let report = draft.report();
         assert!(
             report.screenshot.is_none(),
@@ -880,6 +944,11 @@ mod tests {
         let report = draft.report();
         assert!(report.screenshot.is_some());
         assert_ne!(report.log, "");
+        assert!(!report.state.contains("System: "));
+        draft.send_computer = true;
+        let report = draft.report();
+        assert!(report.state.contains("\nSystem: "), "{}", report.state);
+        assert!(report.state.contains("\nProcessor: "));
     }
 
     #[test]
@@ -898,6 +967,66 @@ mod tests {
             assert_eq!(draft.send_log, allowed);
             assert!(draft.log.contains("at ~/src/a.rs"), "{}", draft.log);
         }
+    }
+
+    #[test]
+    fn a_crash_log_sent_by_itself_names_the_computer_unless_switched_off() {
+        static SENT: Mutex<String> = Mutex::new(String::new());
+        #[expect(clippy::unnecessary_wraps, reason = "as the post it stands in for")]
+        fn keep(_: &str, body: &str) -> Result<(), relay::Failure> {
+            *SENT.lock().unwrap() = body.to_owned();
+            Ok(())
+        }
+        let crash = "Cut Craft 0.6.16 on Ubuntu 24.04 aarch64 crashed: panicked at src/a.rs:1:1:\n\
+                     boom\n\nBacktrace:\n  0: a\n\nSystem: Ubuntu 24.04.1 LTS\n\nLog:\n";
+        let ctx = egui::Context::default();
+        for details in [true, false] {
+            let mut reporter = Reporter::new("me/app", None);
+            reporter.crash_service = Some("https://crash.example/v1/crash".into());
+            reporter.post = keep;
+            reporter.work_bits = 1;
+            reporter.computer_details = details;
+            reporter.send_crash(&ctx, crash.into(), "install-1");
+            let (_, rx) = reporter.crash_sending.as_ref().unwrap();
+            rx.recv_timeout(std::time::Duration::from_secs(20))
+                .unwrap()
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_str(&SENT.lock().unwrap()).unwrap();
+            let log = body["log"].as_str().unwrap();
+            if details {
+                assert_eq!(body["os"], "Ubuntu 24.04 aarch64");
+                assert!(log.contains("System: Ubuntu 24.04.1 LTS"), "{log}");
+            } else {
+                assert_eq!(body["os"], std::env::consts::OS);
+                assert!(!log.contains("Ubuntu"), "only the crash and its log: {log}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crash_log_names_the_computer_only_when_that_is_ticked() {
+        let host = Host {
+            state: &|| "state".into(),
+            pick_pictures: &Vec::new,
+        };
+        let crash = "Cut Craft 0.6.16 on Debian GNU/Linux 12 x86_64 crashed: panicked at \
+                     src/a.rs:1:1:\nboom\n\nBacktrace:\n  0: a\n\nSystem: Debian GNU/Linux 12 \
+                     (bookworm)\n\nLog:\n";
+        let mut reporter = Reporter::new("me/app", None);
+        reporter.computer_details = false;
+        reporter.open_crash(crash, true, &host);
+        let draft = reporter.draft.as_mut().unwrap();
+        assert!(!draft.send_computer, "switched off in Options: unticked");
+        let report = draft.report();
+        assert!(!report.log.contains("Debian"), "{}", report.log);
+        assert!(report.log.contains("boom"));
+        draft.send_computer = true;
+        assert!(
+            draft
+                .report()
+                .log
+                .contains("System: Debian GNU/Linux 12 (bookworm)")
+        );
     }
 
     #[test]

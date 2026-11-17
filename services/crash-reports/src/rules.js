@@ -48,6 +48,32 @@ export function waitBeforeNext(lastAtIso, nowMs) {
   return Math.max(0, last + HOUR_MS - nowMs);
 }
 
+/** The kinds of system the dashboard can show on their own. */
+export const FAMILIES = ['windows', 'macos', 'linux'];
+
+/**
+ * The kind of system a report's `os` names: CutCraft sends "Windows 11 23H2 x86_64",
+ * "macOS 14 Sonoma aarch64" or a Linux distribution ("Debian GNU/Linux 12 x86_64"), or just
+ * "windows" / "macos" / "linux" when the person switched the computer's details off.
+ */
+export function familyOf(os) {
+  const s = String(os ?? '').trim().toLowerCase();
+  if (s.startsWith('windows')) return 'windows';
+  if (s.startsWith('macos') || s.startsWith('mac os') || s.startsWith('os x')) return 'macos';
+  return 'linux';
+}
+
+/** SQL (no user text in it) keeping rows whose `column` is of `family`; '1' for any family. */
+export function familySql(family, column = 'os') {
+  const c = `lower(${column})`;
+  const windows = `${c} LIKE 'windows%'`;
+  const macos = `(${c} LIKE 'macos%' OR ${c} LIKE 'mac os%' OR ${c} LIKE 'os x%')`;
+  if (family === 'windows') return windows;
+  if (family === 'macos') return macos;
+  if (family === 'linux') return `NOT (${windows} OR ${macos})`;
+  return '1';
+}
+
 /** YYYY-MM-DD in UTC. */
 export const dayOf = (iso) => iso.slice(0, 10);
 
