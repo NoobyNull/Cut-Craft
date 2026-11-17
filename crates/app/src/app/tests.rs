@@ -6934,6 +6934,50 @@ fn the_3d_views_help_shows_auto_rotate_with_its_moving_picture() {
 }
 
 #[test]
+fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
+    let h = Harness::new();
+    let page = h.app.help_markdown("view_3d");
+    for words in [
+        "Changing a model's height",
+        "double-click",
+        "Transform",
+        "Total Height",
+        "Shape Height",
+        "Base Height",
+        "Esc",
+        "The 2D view never shows these buttons",
+        "Component Properties",
+    ] {
+        assert!(page.contains(words), "{words}");
+    }
+    for (picture, magic) in [
+        ("model-height-buttons.gif", &b"GIF8"[..]),
+        ("model-height-buttons.png", b"\x89PNG"),
+    ] {
+        assert!(
+            page.contains(&format!("bytes://help/{picture}")),
+            "{picture}"
+        );
+        assert!(
+            super::help::PICTURES
+                .iter()
+                .any(|(name, bytes)| *name == picture && bytes.starts_with(magic)),
+            "{picture} goes with the app"
+        );
+    }
+    assert!(
+        h.app.help_markdown("contents").contains("height buttons"),
+        "Contents names it"
+    );
+    for tool in ["transform", "scale_model_z_height"] {
+        assert!(
+            h.app.help_markdown(tool).contains("(help:view_3d)"),
+            "{tool} links it"
+        );
+    }
+}
+
+#[test]
 fn the_updates_help_shows_one_click_install_and_relaunch_with_pictures() {
     let h = Harness::new();
     assert!(h.app.help_topics().contains(&"updates"));
