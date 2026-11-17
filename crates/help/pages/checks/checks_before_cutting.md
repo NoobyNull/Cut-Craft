@@ -72,6 +72,7 @@ back, it stays ticked; a new or changed warning needs a new tick.
 
 - [Rapid moves clear of the material](help:check_rapids)
 - [Not cutting air](help:check_air_cutting)
+- [Collet and spindle clear of the material](help:check_collisions)
 
 **The bit and the cut**
 

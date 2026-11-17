@@ -209,6 +209,7 @@ impl CutCraftApp {
             toolpath_keys: super::follow::Keys::default(),
             preview_marks: std::collections::BTreeMap::new(),
             tool_note: None,
+            collisions: std::collections::BTreeMap::new(),
             stale_known: 0,
             stale_while_form: false,
             recalculate_ask: None,
@@ -247,6 +248,8 @@ impl CutCraftApp {
             rotating: false,
             options: crate::options::Options::default(),
             options_window: false,
+            options_draft: None,
+            options_closing: false,
             options_page: 0,
             show_advanced: false,
             web_api: super::web_api::WebApi::default(),
@@ -1589,10 +1592,15 @@ impl CutCraftApp {
             self.status.set_message(&refused);
             return None;
         }
-        // every one ticked as read in Save Toolpaths: that was the asking
+        // every one ticked as read in Save Toolpaths: that was the asking, but for the
+        // collet or spindle hitting the material, which is always asked about
         let ticked = self.all_acknowledged(&found);
+        let must_ask = found
+            .iter()
+            .any(|f| f.severity == cut_craft_core::preflight::Severity::MustAsk);
         let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
-        if !problems.is_empty() && !ticked && !std::mem::take(&mut self.checks_accepted) {
+        let ask = must_ask || !ticked;
+        if !problems.is_empty() && ask && !std::mem::take(&mut self.checks_accepted) {
             // asked over the window: the answer saves (or sends) again
             self.ask_save_anyway(form, problems, sending);
             return None;
@@ -2011,6 +2019,7 @@ impl CutCraftApp {
                     slots: m.slots.clone(),
                     left: None,
                     library: None,
+                    holding: m.holding(),
                 });
         limits.left = Some(self.options.confirmations.left());
         limits
@@ -2067,6 +2076,14 @@ impl CutCraftApp {
             .iter()
             .filter(|f| f.severity != cut_craft_core::preflight::Severity::Error)
             .all(|f| self.acknowledged.contains(&f.message))
+    }
+
+    /// How the active machine holds its bits, for the collet and holder checks (the usual
+    /// holder without a machine).
+    pub(super) fn holding(&self) -> cut_craft_core::collision::Holding {
+        self.machines
+            .active()
+            .map_or_default(cut_craft_machines::Machine::holding)
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.
@@ -2230,6 +2247,8 @@ impl CutCraftApp {
             match outcome {
                 MachineOutcome::Apply | MachineOutcome::Ok => {
                     self.machines = draft;
+                    // the checks made so far used the holder and limits just replaced
+                    self.save_checks.clear();
                     if outcome == MachineOutcome::Ok {
                         self.machine_window = None;
                     }
@@ -2394,6 +2413,9 @@ impl CutCraftApp {
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
         self.fill_drill_bank(cmd.id(), &mut params);
+        // the untouched default bit given the sizes a real one has, so a new form warns of
+        // nothing the beginner did not set
+        starter_tool(&mut params);
         // a toolpath's form in the standard order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)
@@ -4565,8 +4587,17 @@ impl CutCraftApp {
     /// Every shortcut in use: [`Self::default_bindings`] with those set in Options in their
     /// place, and on a Mac its own keys for some of them ([`super::mac::extra_bindings`]).
     pub(super) fn bindings(&self, ctx: &egui::Context) -> Vec<(String, shortcut::Trigger)> {
-        let mut bindings =
-            shortcut::effective(self.default_bindings(), &self.options.controls.shortcuts);
+        self.bindings_with(ctx, &self.options.controls.shortcuts)
+    }
+
+    /// [`Self::bindings`] with `set` as the shortcuts set in Options: those in the Options
+    /// window, not applied yet, when a new one is checked for clashes.
+    pub(super) fn bindings_with(
+        &self,
+        ctx: &egui::Context,
+        set: &std::collections::BTreeMap<String, Vec<String>>,
+    ) -> Vec<(String, shortcut::Trigger)> {
+        let mut bindings = shortcut::effective(self.default_bindings(), set);
         if super::mac::is_mac(ctx) {
             // ⌘Q quits there: Quick Engrave's Ctrl+Q is no shortcut on a Mac
             bindings.retain(
@@ -7268,6 +7299,16 @@ fn calculate_as_new_row(ui: &mut egui::Ui) -> bool {
     ui.button("Calculate as New")
         .on_hover_hint("Add another toolpath with these settings, keeping the one already made")
         .clicked()
+}
+
+/// A form's starting bit, when it is the bare default ([`Tool::default`]), made the
+/// starter bit ([`Tool::starter`]): the same 6 mm end mill with its flute length and shank.
+fn starter_tool(params: &mut Value) {
+    use cut_craft_core::toolpath::Tool;
+    let bare = serde_json::to_value(Tool::default()).expect("tools serialize");
+    if let Some(tool) = params.get_mut("tool").filter(|t| **t == bare) {
+        *tool = serde_json::to_value(Tool::starter()).expect("tools serialize");
+    }
 }
 
 /// Embellish's samples and random sequences, for the pattern maker under its Sequence box.

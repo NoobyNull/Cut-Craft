@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-17
-see-also: pocket_toolpath, profile_toolpath, stepover, check_tool_numbers, check_makers_figures
+see-also: pocket_toolpath, profile_toolpath, stepover, collisions, check_tool_numbers, check_makers_figures
 ---
 
 ## Steps
@@ -33,3 +33,16 @@ A bit copied from a maker's catalogue keeps the maker's feeds and speeds. When a
 feed rate, plunge rate or spindle speed ends up more than a tenth away from them, the checks
 before cutting ask you to tick it, so a typing slip is not cut
 ([Feeds and speeds as the maker gives](help:check_makers_figures)).
+
+## Stick-out and Own holder
+
+Under **Tool Shape**, **Stick-out** is how far the bit pokes out below the collet nut, from
+its tip up to the nut's face. Measure it once the bit is tightened in. Until you set it,
+Cut Craft guesses it from the length that cuts (flutes, or a V-bit's V height) plus any neck
+plus 5 mm, or 25 mm when none of those are set, and says so.
+On a deep cut the collet nut or spindle can hit wood beside the cut: see
+[Collet and Holder Collisions](help:collisions).
+
+**Own holder** (folded below it) gives this bit its own collet nut and spindle sizes. It is
+only used on a machine with **Holder per bit** ticked in Machine Configuration, such as one
+with a tool changer; otherwise every bit uses the machine's sizes.

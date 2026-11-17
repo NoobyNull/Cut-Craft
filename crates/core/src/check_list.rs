@@ -28,6 +28,8 @@ pub enum Check {
     Rapids,
     /// Cutting that takes material off, not air.
     AirCutting,
+    /// The shank, collet nut and spindle clear of the material.
+    Collisions,
     /// No cutting deeper than the bit's flutes reach.
     Reach,
     /// No cutting well below the material, into the spoilboard.
@@ -58,12 +60,15 @@ pub enum Phase {
     Machine,
     /// The toolpaths cut in order from uncut material.
     Cutting,
+    /// The shank, collet nut and spindle followed down every deep cut.
+    Collisions,
 }
 
 /// What the progress says while each phase runs: [`Phase::of_stage`] reads it back.
 const SETTINGS_STAGE: &str = "Checking the settings and reach of ";
 const MACHINE_STAGE: &str = "Checking the toolpaths fit the machine";
 const CUTTING_STAGE: &str = "Cutting the toolpaths in order to look for crashes and air cutting";
+const COLLISIONS_STAGE: &str = "Looking for the collet or spindle hitting the material";
 
 impl Phase {
     /// What the progress says while this phase runs (the settings' for `toolpath`).
@@ -73,6 +78,7 @@ impl Phase {
             Self::Settings => format!("{SETTINGS_STAGE}{toolpath}"),
             Self::Machine => MACHINE_STAGE.to_owned(),
             Self::Cutting => CUTTING_STAGE.to_owned(),
+            Self::Collisions => COLLISIONS_STAGE.to_owned(),
         }
     }
 
@@ -85,6 +91,8 @@ impl Phase {
             Some(Self::Machine)
         } else if stage == CUTTING_STAGE {
             Some(Self::Cutting)
+        } else if stage == COLLISIONS_STAGE {
+            Some(Self::Collisions)
         } else {
             None
         }
@@ -93,7 +101,7 @@ impl Phase {
 
 impl Check {
     /// Every check, in the order they are listed.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::CanCut,
         Self::UpToDate,
         Self::Bed,
@@ -105,6 +113,7 @@ impl Check {
         Self::KeepOut,
         Self::Rapids,
         Self::AirCutting,
+        Self::Collisions,
         Self::Reach,
         Self::Spoilboard,
         Self::Plunges,
@@ -131,6 +140,7 @@ impl Check {
             Self::KeepOut => "Keeps out of keep-out zones",
             Self::Rapids => "Rapid moves clear of the material",
             Self::AirCutting => "Not cutting air",
+            Self::Collisions => "Collet and spindle clear of the material",
             Self::Reach => "Bit long enough for the depth",
             Self::Spoilboard => "Not cutting into the spoilboard",
             Self::Plunges => "Going down into the material",
@@ -193,6 +203,12 @@ impl Check {
                 "The cutting moves take material off rather than cutting where it is \
                  already gone, so the job does not waste time"
             }
+            Self::Collisions => {
+                "On deep cuts, the plain shank, the collet nut that holds the bit and the \
+                 spindle body stay clear of the wood still standing, so they do not hit it, \
+                 spoil the part or pull the bit out of the collet. Always asked about, \
+                 even when ticked"
+            }
             Self::Reach => {
                 "No toolpath cuts deeper than the bit's flutes reach, so the shank does not \
                  rub and burn, and the bit does not snap"
@@ -248,6 +264,7 @@ impl Check {
             Self::KeepOut => "check_keep_out",
             Self::Rapids => "check_rapids",
             Self::AirCutting => "check_air_cutting",
+            Self::Collisions => "check_collisions",
             Self::Reach => "check_reach",
             Self::Spoilboard => "check_spoilboard",
             Self::Plunges => "check_plunges",
@@ -266,6 +283,7 @@ impl Check {
         match self {
             Self::Bed | Self::ZTravel | Self::KeepOut | Self::ToolNumbers => Phase::Machine,
             Self::Rapids | Self::AirCutting => Phase::Cutting,
+            Self::Collisions => Phase::Collisions,
             _ => Phase::Settings,
         }
     }
@@ -290,7 +308,12 @@ mod tests {
 
     #[test]
     fn the_running_phase_is_read_back_from_the_progress() {
-        for phase in [Phase::Settings, Phase::Machine, Phase::Cutting] {
+        for phase in [
+            Phase::Settings,
+            Phase::Machine,
+            Phase::Cutting,
+            Phase::Collisions,
+        ] {
             assert_eq!(Phase::of_stage(&phase.stage("Pocket 1")), Some(phase));
         }
         assert_eq!(Phase::of_stage(""), None);

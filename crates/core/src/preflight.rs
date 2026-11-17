@@ -53,8 +53,11 @@ const MOST_CELLS: f64 = 800.0;
 /// Whether a finding stops the save.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
-    /// Saved only once the user agrees.
+    /// Saved only once the user has ticked it as read (or agreed to Save Anyway).
     Warning,
+    /// Saved only once the user agrees to Save Anyway, even when ticked: the collet or
+    /// spindle hitting the material.
+    MustAsk,
     /// Not saved until it is put right.
     Error,
 }
@@ -72,6 +75,14 @@ impl Finding {
     pub fn error(check: Check, message: String) -> Self {
         Self {
             severity: Severity::Error,
+            message,
+            check,
+        }
+    }
+
+    pub fn must_ask(check: Check, message: String) -> Self {
+        Self {
+            severity: Severity::MustAsk,
             message,
             check,
         }
@@ -114,6 +125,8 @@ pub struct Limits {
     /// not in it is not in the Tool Database. `None` when the bits are not compared with
     /// the Tool Database at all.
     pub library: Option<std::collections::BTreeMap<String, Tool>>,
+    /// How the machine holds its bits, for the collet and holder checks.
+    pub holding: crate::collision::Holding,
 }
 
 /// Everything found checking `toolpaths`, cut in the order given, on `limits`' machine:
@@ -149,6 +162,15 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
     if doc.job.rotary.is_none() && !progress::cancelled() {
         progress::stage(&Phase::Cutting.stage(""));
         progress::part(1, 2, || simulate(doc, toolpaths, &mut found));
+    }
+    if !progress::cancelled() {
+        progress::stage(&Phase::Collisions.stage(""));
+        let hits = crate::collision::find(&doc.job, toolpaths, &limits.holding);
+        // a warning never switched off: saved only once the user agrees
+        found.extend(toolpaths.iter().zip(&hits).filter_map(|(t, hits)| {
+            crate::collision::sentence(&t.name, &t.tool, hits, doc.job.units)
+                .map(|m| Finding::must_ask(Check::Collisions, m))
+        }));
     }
     // stable: each severity keeps toolpath order
     found.sort_by_key(|f| std::cmp::Reverse(f.severity));
@@ -1138,6 +1160,7 @@ mod tests {
             slots: vec![Some("6 mm End Mill".into())],
             left: None,
             library: Some(std::collections::BTreeMap::new()),
+            holding: crate::collision::Holding::default(),
         };
         let skipped = not_checked(&job(), &[&slot], &limits);
         assert!(
@@ -1145,6 +1168,35 @@ mod tests {
                 .iter()
                 .all(|(c, _)| matches!(c, Check::KeepOut | Check::ToolNumbers)),
             "{skipped:?}"
+        );
+    }
+
+    #[test]
+    fn the_collet_hitting_the_material_asks_first() {
+        let mut deep = slot("Deep slot", 100.0, 50.0, 150.0, 30.0);
+        deep.tool.flute_length = 32.0;
+        deep.tool.stickout = 25.0;
+        let doc = Document {
+            job: Job {
+                thickness: 40.0,
+                ..job().job
+            },
+            ..Document::default()
+        };
+        let found = check(&doc, &[&deep], &Limits::default());
+        let warned = messages(&found, Severity::MustAsk);
+        assert!(
+            warned
+                .iter()
+                .any(|m| m.starts_with("Deep slot: the collet nut would hit the material")),
+            "{warned:?}"
+        );
+        assert!(
+            found
+                .iter()
+                .filter(|f| f.severity == Severity::MustAsk)
+                .all(|f| f.check == Check::Collisions),
+            "{found:?}"
         );
     }
 
@@ -1396,6 +1448,7 @@ mod tests {
             slots: vec![Some("3 mm Ball Nose".into()), None],
             left: None,
             library: None,
+            holding: crate::collision::Holding::default(),
         };
         let found = check(&job(), &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)], &limits);
         let errors = messages(&found, Severity::Error);

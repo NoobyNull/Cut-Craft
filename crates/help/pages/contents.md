@@ -17,10 +17,14 @@ a CNC machine cuts them with.
   group stays editable.
 - [Checks before cutting](help:checks_before_cutting): what Cut Craft checks before
   it saves your toolpaths, what each check protects you from, and how to fix what it finds.
+- [Changing settings](help:settings): Edit ▸ Options, and how Apply, Cancel and Close
+  keep or throw away your changes.
 - [Did You Know?](help:tips): short tips by subject, from drawing to cutting safely, one
   shown each time Cut Craft starts. Each links to the page that says more.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.
+- [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
+  hitting wood beside a deep cut, shown red in the preview and asked about before saving.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
   switch it on in Options.
 

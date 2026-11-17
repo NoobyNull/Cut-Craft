@@ -1321,6 +1321,13 @@ pub(super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Program,
+        "common/materials_appearance.png",
+        "Changes in **Edit ▸ Options** wait for **Apply**, so you can try a setting and \
+         **Cancel** it. **Close** asks first if anything is still waiting.",
+        "settings",
+    ),
+    icon(
+        Area::Program,
         "common/edit.png",
         "Hover over a greyed-out menu item or tool to see what it is waiting for, such as a \
          selection or a toolpath picked in the list.",
