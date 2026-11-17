@@ -6,8 +6,11 @@
 //! A job that is over quickly never shows the bar: the window waits a moment for it first
 //! ([`Busy::wait`]) and goes on as if it had run in place.
 
+use cut_craft_core::eta::{self, Estimate, Estimator};
 use cut_craft_core::progress::Progress;
 use eframe::egui;
+use serde_json::{Value, json};
+use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -22,6 +25,9 @@ pub struct Busy<A> {
     what: String,
     progress: Progress,
     started: Instant,
+    /// Works out the time left from how the job is going and how long its kind took last
+    /// time ([`eta`]).
+    estimator: RefCell<Estimator>,
     done: Arc<AtomicBool>,
     /// Waits for the answer and hands it to the state.
     finish: Box<dyn FnOnce(&mut A)>,
@@ -39,28 +45,62 @@ impl Drop for Done {
     }
 }
 
+/// Whether a job's answer is one worth timing for [`eta`]'s history: a calculation that
+/// was refused (an `Err`) took no real time, so it would throw the next guess off.
+pub trait Outcome {
+    fn succeeded(&self) -> bool {
+        true
+    }
+}
+
+impl<T, E> Outcome for Result<T, E> {
+    fn succeeded(&self) -> bool {
+        self.is_ok()
+    }
+}
+
+// answers that are always worth timing: a preview's material, the checks' findings
+impl Outcome for () {}
+impl Outcome for u32 {}
+impl Outcome for cut_craft_core::simulation::Material {}
+impl Outcome for cut_craft_core::playback::Playback {}
+impl<T> Outcome for Vec<T> {}
+impl<K, V> Outcome for std::collections::BTreeMap<K, V> {}
+impl<A, B> Outcome for (A, B) {}
+
 impl<A: 'static> Busy<A> {
     /// Starts `work` on its own thread, `then` to be given its answer (or why there is none)
-    /// on the window's; `ctx` is woken when it is done.
-    pub fn start<T: Send + 'static>(
+    /// on the window's; `ctx` is woken when it is done. `kind` names the sort of job for
+    /// [`eta`]'s history ("calculate:pocket-toolpath"): its time left starts from how long
+    /// the last one took, and a job that succeeds ([`Outcome`]) without being cancelled is
+    /// remembered under it, timed as its thread finishes.
+    pub fn start<T: Outcome + Send + 'static>(
         what: &str,
+        kind: &str,
         ctx: Option<&egui::Context>,
         work: impl FnOnce() -> T + Send + 'static,
         then: impl FnOnce(&mut A, Result<T, String>) + 'static,
     ) -> Self {
         let progress = Progress::new();
+        let started = Instant::now();
         let done = Arc::new(AtomicBool::new(false));
         let (tracked, flag, wake) = (progress.clone(), Arc::clone(&done), ctx.cloned());
+        let timed = kind.to_owned();
         let spawned = std::thread::Builder::new()
             .name("cut-craft job".into())
             .spawn(move || {
                 let _done = Done(flag, wake);
-                tracked.track(work)
+                let answer = tracked.track(work);
+                if answer.succeeded() && !tracked.is_cancelled() {
+                    eta::record(&timed, started.elapsed().as_secs_f64());
+                }
+                answer
             });
         // logged as started now and as finished or failed once its answer is used; a crash
         // meanwhile names it and the step it was on
         let at = progress.clone();
         let doing = cut_craft_bug_report::logs::doing_with(what, move || at.stage());
+        let estimator = RefCell::new(Estimator::new(eta::usual(kind)));
         let finish: Box<dyn FnOnce(&mut A)> = if let Ok(handle) = spawned {
             Box::new(move |state| {
                 let answer = handle.join().map_err(|panic| failed(&*panic));
@@ -78,7 +118,8 @@ impl<A: 'static> Busy<A> {
         Self {
             what: what.to_owned(),
             progress,
-            started: Instant::now(),
+            started,
+            estimator,
             done,
             finish,
         }
@@ -86,21 +127,6 @@ impl<A: 'static> Busy<A> {
 
     pub fn what(&self) -> &str {
         &self.what
-    }
-
-    /// How far along it is, 0 to 1, once it can tell.
-    pub fn fraction(&self) -> Option<f64> {
-        self.progress.fraction()
-    }
-
-    /// The step it is on ("Pocket (2 of 3)").
-    pub fn stage(&self) -> String {
-        self.progress.stage()
-    }
-
-    /// How long it has been running.
-    pub fn elapsed(&self) -> Duration {
-        self.started.elapsed()
     }
 
     pub fn is_done(&self) -> bool {
@@ -124,6 +150,36 @@ impl<A: 'static> Busy<A> {
         (self.finish)(state);
     }
 
+    /// The step it is on now.
+    pub fn stage(&self) -> String {
+        self.progress.stage()
+    }
+
+    /// How long the job has left, as it looks now.
+    pub fn estimate(&self) -> Estimate {
+        let elapsed = self.started.elapsed().as_secs_f64();
+        self.estimator
+            .borrow_mut()
+            .update(elapsed, self.progress.fraction())
+    }
+
+    /// The job as the Web API's `GET progress` (and `GET status`) tells it: what it is
+    /// doing, the step, how far it has got, how long it has run, and the time left worked
+    /// out as the progress window's.
+    pub fn status(&self) -> Value {
+        let estimate = self.estimate();
+        let round = |s: f64| (s * 10.0).round() / 10.0;
+        json!({
+            "busy": true,
+            "doing": self.what,
+            "step": self.progress.stage(),
+            "fraction": self.progress.fraction(),
+            "seconds": round(self.started.elapsed().as_secs_f64()),
+            "seconds_left": estimate.seconds_left().map(round),
+            "time_left": estimate.words(),
+        })
+    }
+
     /// Asks the job to stop. The window lets it go at once; what it makes is thrown away.
     pub fn cancel(self) {
         self.progress.cancel();
@@ -135,6 +191,7 @@ impl<A: 'static> Busy<A> {
     pub fn window(&self, ctx: &egui::Context) -> bool {
         let elapsed = self.started.elapsed();
         let fraction = self.progress.fraction();
+        let estimate = self.estimate();
         let stage = self.progress.stage();
         let note = self.progress.note();
         let mut cancel = false;
@@ -159,7 +216,7 @@ impl<A: 'static> Busy<A> {
                     });
                 }
             }
-            ui.weak(time_line(elapsed, fraction));
+            ui.weak(time_line(elapsed, estimate));
             ui.add_space(ui.spacing().item_spacing.y);
             cancel = ui
                 .button("Cancel")
@@ -217,14 +274,12 @@ fn failed(panic: &(dyn std::any::Any + Send)) -> String {
     format!("Something went wrong: {why}. Please report it (Help ▸ Report a Problem)")
 }
 
-/// "12 s so far, about 30 s left": the time left only once enough is done to judge it.
-pub fn time_line(elapsed: Duration, fraction: Option<f64>) -> String {
+/// "12 s so far, about 30 seconds left": the time taken, and what [`eta`] makes of the
+/// time left when it has anything to say.
+pub fn time_line(elapsed: Duration, estimate: Estimate) -> String {
     let so_far = format!("{} so far", seconds(elapsed.as_secs_f64()));
-    match fraction.filter(|f| (0.05..1.0).contains(f)) {
-        Some(f) => {
-            let left = elapsed.as_secs_f64() * (1.0 - f) / f;
-            format!("{so_far}, about {} left", seconds(left))
-        }
+    match estimate.words() {
+        Some(left) => format!("{so_far}, {left}"),
         None => so_far,
     }
 }
@@ -274,7 +329,7 @@ mod tests {
 
     #[test]
     fn the_answer_reaches_the_state_once_finished() {
-        let busy = Busy::start("Adding", None, || 2 + 2, keep);
+        let busy = Busy::start("Adding", "test:adding", None, || 2 + 2, keep);
         assert!(busy.wait(Duration::from_secs(10)));
         let mut state = State::default();
         busy.finish(&mut state);
@@ -286,6 +341,7 @@ mod tests {
         let (go, wait) = std::sync::mpsc::channel::<()>();
         let busy = Busy::start(
             "Waiting",
+            "test:waiting",
             None,
             move || {
                 wait.recv().ok();
@@ -301,7 +357,13 @@ mod tests {
 
     #[test]
     fn a_job_that_panics_says_so_instead_of_taking_the_app_down() {
-        let busy = Busy::start("Failing", None, || -> u32 { panic!("no model") }, keep);
+        let busy = Busy::start(
+            "Failing",
+            "test:failing",
+            None,
+            || -> u32 { panic!("no model") },
+            keep,
+        );
         assert!(busy.wait(Duration::from_secs(10)), "a panic still ends it");
         let mut state = State::default();
         busy.finish(&mut state);
@@ -318,6 +380,7 @@ mod tests {
         let (seen, saw) = std::sync::mpsc::channel::<bool>();
         let busy = Busy::start(
             "Counting",
+            "test:counting",
             None,
             move || {
                 progress::stage("Halfway");
@@ -344,6 +407,7 @@ mod tests {
         let (go, wait) = std::sync::mpsc::channel::<()>();
         let busy: Busy<State> = Busy::start(
             "Calculating 3D Roughing",
+            "test:window",
             Some(&ctx),
             move || {
                 progress::report(0.25);
@@ -386,6 +450,7 @@ mod tests {
         let (said, heard) = std::sync::mpsc::channel::<()>();
         let busy: Busy<State> = Busy::start(
             "Calculating Pocket",
+            "test:holds-still",
             Some(&ctx),
             move || {
                 progress::report(0.1);
@@ -428,22 +493,104 @@ mod tests {
     }
 
     #[test]
-    fn the_time_line_guesses_what_is_left_once_it_can() {
+    fn the_time_line_says_the_time_taken_and_what_is_left() {
         let secs = Duration::from_secs;
-        assert_eq!(time_line(secs(3), None), "3 s so far");
+        assert_eq!(time_line(secs(3), Estimate::Unknown), "3 s so far");
         assert_eq!(
-            time_line(secs(3), Some(0.01)),
-            "3 s so far",
-            "too early to tell"
+            time_line(secs(3), Estimate::Estimating),
+            "3 s so far, working out how long it will take…"
         );
         assert_eq!(
-            time_line(secs(10), Some(0.25)),
-            "10 s so far, about 30 s left"
+            time_line(secs(10), Estimate::Left(31.0)),
+            "10 s so far, about 30 seconds left"
         );
         assert_eq!(
-            time_line(secs(125), Some(0.5)),
-            "2 min 5 s so far, about 2 min 5 s left"
+            time_line(secs(125), Estimate::Left(125.0)),
+            "2 min 5 s so far, about 2 minutes left"
         );
-        assert_eq!(time_line(secs(120), Some(1.0)), "2 min so far");
+        assert_eq!(
+            time_line(secs(20), Estimate::Usually(45.0)),
+            "20 s so far, usually takes about 45 seconds"
+        );
+    }
+
+    #[test]
+    fn a_finished_job_is_remembered_and_starts_the_next_ones_guess() {
+        let kind = "test:remembered";
+        let busy = Busy::start(
+            "Remembering",
+            kind,
+            None,
+            || std::thread::sleep(Duration::from_millis(30)),
+            |_: &mut State, _| {},
+        );
+        assert!(busy.wait(Duration::from_secs(10)));
+        busy.finish(&mut State::default());
+        let took = eta::usual(kind).expect("remembered");
+        assert!(took >= 0.03, "{took}");
+        // the next one, saying nothing of how far it is, is told how long it usually takes
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let next: Busy<State> = Busy::start(
+            "Remembering",
+            kind,
+            None,
+            move || {
+                wait.recv().ok();
+            },
+            |_, _| {},
+        );
+        assert_eq!(next.estimate(), Estimate::Usually(took));
+        let status = next.status();
+        assert_eq!(status["doing"], "Remembering");
+        assert!(
+            status["time_left"]
+                .as_str()
+                .unwrap()
+                .starts_with("usually takes")
+        );
+        assert_eq!(status["seconds_left"], Value::Null);
+        go.send(()).unwrap();
+    }
+
+    #[test]
+    fn a_refused_or_cancelled_job_is_not_remembered() {
+        let kind = "test:refused";
+        let busy = Busy::start(
+            "Refusing",
+            kind,
+            None,
+            || -> Result<u32, String> { Err("select a vector".into()) },
+            |_: &mut State, _| {},
+        );
+        assert!(busy.wait(Duration::from_secs(10)));
+        busy.finish(&mut State::default());
+        assert_eq!(eta::usual(kind), None, "refused: not timed");
+        let kind = "test:cancelled";
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let (seen, saw) = std::sync::mpsc::channel::<()>();
+        let busy: Busy<State> = Busy::start(
+            "Cancelling",
+            kind,
+            None,
+            move || {
+                wait.recv().ok();
+                seen.send(()).ok();
+            },
+            |_, _| {},
+        );
+        busy.cancel();
+        go.send(()).unwrap();
+        saw.recv().unwrap();
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(eta::usual(kind), None, "cancelled: not timed");
+    }
+
+    #[test]
+    fn a_failed_job_is_not_remembered() {
+        let kind = "test:not-remembered";
+        let busy = Busy::start("Failing", kind, None, || -> u32 { panic!("no") }, keep);
+        assert!(busy.wait(Duration::from_secs(10)));
+        busy.finish(&mut State::default());
+        assert_eq!(eta::usual(kind), None);
     }
 }

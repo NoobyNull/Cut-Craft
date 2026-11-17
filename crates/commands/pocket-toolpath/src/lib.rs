@@ -236,17 +236,21 @@ impl Command for PocketToolpath {
                 strategy: if i == 0 { p.strategy } else { Strategy::Offset },
                 ..p.clone()
             };
-            let mut toolpath = pocket(doc, &own)?;
-            if i > 0 {
-                let rest = cut_craft_core::rest::Rest {
-                    after: tools[..i].iter().map(|&t| t.clone()).collect(),
-                    ..Default::default()
-                };
-                toolpath.params["rest"] =
-                    serde_json::to_value(&rest).expect("rest settings serialise");
-                let params = toolpath.params.clone();
-                cut_craft_core::rest::apply(&doc.job, &mut toolpath, &params)?;
-            }
+            // each bit its share of the progress bar, its rest machining included
+            let toolpath = cut_craft_core::progress::part(i, tools.len(), || {
+                let mut toolpath = pocket(doc, &own)?;
+                if i > 0 {
+                    let rest = cut_craft_core::rest::Rest {
+                        after: tools[..i].iter().map(|&t| t.clone()).collect(),
+                        ..Default::default()
+                    };
+                    toolpath.params["rest"] =
+                        serde_json::to_value(&rest).expect("rest settings serialise");
+                    let params = toolpath.params.clone();
+                    cut_craft_core::rest::apply(&doc.job, &mut toolpath, &params)?;
+                }
+                Ok::<_, CommandError>(toolpath)
+            })?;
             c.add_toolpath(toolpath);
         }
         Ok(c.finish())

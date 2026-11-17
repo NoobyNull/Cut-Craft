@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 33] = [
+const SCENES: [Scene; 34] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -114,6 +114,8 @@ const SCENES: [Scene; 33] = [
     ("snapping-not-applied", snapping_not_applied),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
+    // Help: Long jobs and the time left
+    ("progress-window", progress_window),
 ];
 
 /// The Help window over the job on page `topic`, with `search` typed in its search box.
@@ -122,6 +124,29 @@ fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
     app.form = None;
     search.clone_into(&mut app.help_search);
     app.info = Some(super::Info::Help(topic));
+}
+
+/// A long calculation's progress window: its step, how far it has got and the time left,
+/// started from how long the last one took.
+fn progress_window(app: &mut CutCraftApp, _: &egui::Context) {
+    app.info = None;
+    (app.snap_window, app.snap_draft) = (false, None);
+    let kind = "screenshots:progress-window";
+    cut_craft_core::eta::record(kind, 150.0);
+    let (keep, wait) = std::sync::mpsc::channel::<()>();
+    // never told to finish: the app quits once the picture is taken
+    std::mem::forget(keep);
+    app.in_background(
+        "Calculating 3D Finishing",
+        kind,
+        move || {
+            cut_craft_core::progress::stage("Following the model's surface");
+            cut_craft_core::progress::note("Steep areas take a little longer than flat ones.");
+            cut_craft_core::progress::report(0.2);
+            wait.recv().ok();
+        },
+        |_, ()| {},
+    );
 }
 
 /// The sample sign's toolpaths on a machine that says what it can do, Save Toolpaths open.
@@ -198,6 +223,7 @@ fn checks_running(app: &mut CutCraftApp, ctx: &egui::Context) {
     }];
     app.in_background(
         super::CHECKING,
+        "check",
         || {
             cut_craft_core::progress::stage(&cut_craft_core::preflight::Phase::Machine.stage(""));
             cut_craft_core::progress::report(0.55);
