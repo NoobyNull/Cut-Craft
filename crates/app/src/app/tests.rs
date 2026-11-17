@@ -3127,8 +3127,9 @@ fn a_tool_chosen_for_a_toolpath_cuts_the_hardest_material_its_vectors_are_on() {
     }
     h.app.tools.put(tool);
     h.app.tools.material = "Oak".into();
-    // Job Setup names the job's material: it wins over the active material
+    // the job and its layer name their material: it wins over the active material
     h.app.doc.sheets[0].material = "Pine".into();
+    h.app.doc.layers[0].material = "Pine".into();
     let feed = |h: &mut Harness| {
         h.app.invoke(&h.ctx, "pocket_toolpath");
         h.app.choose_tool("3 mm End Mill");

@@ -223,32 +223,42 @@ impl crate::document::Document {
     }
 
     /// The material a toolpath over the vectors `ids` cuts with: the hardest of their
-    /// layers' materials, a layer naming none being the job's material. Where neither is
-    /// named it counts as the hardest class, the safe side. Empty when nothing is named
-    /// anywhere, so jobs made before materials keep cutting with the active material.
+    /// layers' materials, a layer naming none counting as the hardest class (the safe side,
+    /// whatever the job's material). With no vectors (a toolpath over the model), Job
+    /// Setup's material, else the hardest class. Empty when no sheet or layer names a
+    /// material at all, so jobs made before materials keep cutting with the active
+    /// material.
     pub fn cutting_material(
         &self,
         ids: impl IntoIterator<Item = crate::document::EntityId>,
         library: &MaterialLibrary,
     ) -> String {
-        let job = self.job_material();
+        fn or_hardest(name: &str) -> &str {
+            if name.is_empty() {
+                MaterialClass::HARDEST.name()
+            } else {
+                name
+            }
+        }
+        let named_anywhere = self.sheets.iter().any(|s| !s.material.is_empty())
+            || self.layers.iter().any(|l| !l.material.is_empty());
+        if !named_anywhere {
+            return String::new();
+        }
+        let unnamed = MaterialClass::HARDEST.name();
         let on: Vec<&str> = ids
             .into_iter()
             .map(|id| {
-                let layer = self
-                    .layer(self.layer_of(id))
-                    .map_or("", |l| l.material.as_str());
-                if layer.is_empty() { job } else { layer }
+                or_hardest(
+                    self.layer(self.layer_of(id))
+                        .map_or("", |l| l.material.as_str()),
+                )
             })
             .collect();
-        if on.iter().all(|n| n.is_empty()) {
-            return job.to_owned();
+        if on.is_empty() {
+            return or_hardest(self.job_material()).to_owned();
         }
-        let unnamed = MaterialClass::HARDEST.name();
-        let names = on
-            .into_iter()
-            .map(|n| if n.is_empty() { unnamed } else { n });
-        library.hardest(names).unwrap_or_default().to_owned()
+        library.hardest(on).unwrap_or(unnamed).to_owned()
     }
 }
 
@@ -348,27 +358,26 @@ mod tests {
     #[test]
     fn a_toolpath_cuts_with_the_hardest_material_its_vectors_are_on() {
         let lib = MaterialLibrary::starter();
+        let hardest = MaterialClass::HARDEST.name();
         let mut doc = crate::testing::two_layers();
         let ids: Vec<_> = doc.vectors.keys().copied().collect();
-        // nothing named: as before materials, the active material
+        // nothing named anywhere: as before materials, the active material
         assert_eq!(doc.cutting_material(ids.clone(), &lib), "");
-        // the job's material
+        // a vector on a layer naming no material cuts as the hardest class, whatever the
+        // job's material
         doc.sheets[0].material = "Pine".into();
-        assert_eq!(doc.cutting_material(ids.clone(), &lib), "Pine");
-        // one vector on a layer of maple: the harder wins
+        assert_eq!(doc.cutting_material(ids.clone(), &lib), hardest);
+        // every layer named: the hardest of them
         let second = doc.layers[1].id;
         doc.vector_layers.insert(ids[0], second);
+        doc.layers[0].material = "Pine".into();
         doc.layers[1].material = "Hard Maple".into();
         assert_eq!(doc.cutting_material(ids.clone(), &lib), "Hard Maple");
-        // only the pine ones
         assert_eq!(doc.cutting_material(ids[1..].to_vec(), &lib), "Pine");
-        // the job's material not named: the rest count as the hardest class
+        // no vectors (a toolpath over the model): the job's material, else the hardest
+        assert_eq!(doc.cutting_material([], &lib), "Pine");
         doc.sheets[0].material.clear();
-        assert_eq!(
-            doc.cutting_material(ids.clone(), &lib),
-            MaterialClass::HARDEST.name()
-        );
-        assert_eq!(doc.cutting_material([ids[0]], &lib), "Hard Maple");
+        assert_eq!(doc.cutting_material([], &lib), hardest);
     }
 
     #[test]
