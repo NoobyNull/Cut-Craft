@@ -33,6 +33,9 @@ const GROUP_TOOLS: [&str; 4] = [
     "edit_text",
 ];
 
+/// The tools whose help pages link the 3D View's model height buttons.
+const HEIGHT_TOOLS: [&str; 2] = ["transform", "scale_model_z_height"];
+
 /// The help's own pictures, by the `bytes://help/` name its pages show them by.
 pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
@@ -62,6 +65,14 @@ pub(super) const PICTURES: &[(&str, &[u8])] = &[
     (
         "auto-rotate.gif",
         include_bytes!("../../help/pictures/auto-rotate.gif"),
+    ),
+    (
+        "model-height-buttons.gif",
+        include_bytes!("../../help/pictures/model-height-buttons.gif"),
+    ),
+    (
+        "model-height-buttons.png",
+        include_bytes!("../../help/pictures/model-height-buttons.png"),
     ),
     (
         "line-colors-dark.png",
@@ -303,6 +314,13 @@ impl CutCraftApp {
                     md.push_str(
                         "\nDouble-click a group to step inside it and change one thing in it. \
                          See [Groups](help:groups).\n",
+                    );
+                }
+                if HEIGHT_TOOLS.contains(&id) {
+                    md.push_str(
+                        "\nTo make one model taller or lower, double-click it in the 3D view, \
+                         then double-click it again for its height buttons. See \
+                         [3D View](help:view_3d), Changing a model's height.\n",
                     );
                 }
                 md
