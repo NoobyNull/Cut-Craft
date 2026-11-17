@@ -1,7 +1,4 @@
-- Before cutting, Cut Craft now warns if the collet nut, spindle or bit holder would hit the material or a clamp, and lists every check by name so you tick each warning before saving
-- Choose where a model sits in the material and watch it move; one click on a model in 3D shows its height buttons
-- Settings windows (Options, Snapping, Machine Configuration, Tool Database, Materials) now wait for Apply, and Cancel or Close never throws your changes away by surprise
-- Pressing Calculate again no longer makes a copy of an unchanged toolpath; a changed one is updated in place
-- Job notes can hold bold text, lists and live values like the material thickness, picked from a Variable Explorer
-- Help now works like a wiki, with a side bar of related pages, Back and Forward, search that understands questions, picture tours and 176 more Did You Know tips
-- Time-left estimates are steadier for every long job
+- Checks before cutting: warns if the collet nut, spindle or holder would hit the material or a clamp
+- Settings windows wait for Apply, and Calculate no longer copies an unchanged toolpath
+- Place a model in the material and watch it move; job notes can show live values
+- Wiki-style help with picture tours, question search and 176 more tips
