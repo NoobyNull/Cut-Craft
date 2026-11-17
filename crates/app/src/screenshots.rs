@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 28] = [
+const SCENES: [Scene; 29] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -101,6 +101,7 @@ const SCENES: [Scene; 28] = [
     ("options-apply-question", |app, _| {
         app.options_closing = true;
     }),
+    ("snapping-not-applied", snapping_not_applied),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
 ];
@@ -111,6 +112,19 @@ fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
     app.form = None;
     search.clone_into(&mut app.help_search);
     app.info = Some(super::Info::Help(topic));
+}
+
+/// Snapping Options (F4) with Smart snapping unticked and not applied yet.
+fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
+    (app.options_window, app.options_draft, app.options_closing) = (false, None, false);
+    // Material Setup's page put away, so nothing covers the window
+    app.form = None;
+    app.pages.set_pinned(super::Page::Toolpaths, false);
+    app.view = View::TwoD;
+    app.snap_window = true;
+    let mut edited = app.options.snapping.clone();
+    edited.smart_snapping = !edited.smart_snapping;
+    app.snap_draft = Some(edited);
 }
 
 /// Edit ▸ Options on Appearance with the dark theme picked and not applied yet.
@@ -158,6 +172,7 @@ fn model_position(
 /// form says it is already up to date and offers Calculate as New.
 fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
     (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
+    (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
     app.form = None;
     app.gcode_view = None;
     app.updates = crate::update::Updates::default();

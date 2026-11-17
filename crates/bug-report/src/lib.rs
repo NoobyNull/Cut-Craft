@@ -18,6 +18,7 @@ pub mod number;
 pub mod privacy;
 pub mod relay;
 mod spot;
+pub mod unapplied;
 
 use eframe::egui;
 use std::panic::Location;

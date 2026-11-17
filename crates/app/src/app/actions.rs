@@ -174,6 +174,8 @@ impl CutCraftApp {
             summary: super::Summary::default(),
             stroke: Vec::new(),
             snap_window: false,
+            snap_draft: None,
+            snap_closing: false,
             job_sheet_window: false,
             part_labels_window: false,
             clearing_window: false,
@@ -2225,6 +2227,8 @@ impl CutCraftApp {
                     self.save_checks.clear();
                     if outcome == MachineOutcome::Ok {
                         self.machine_window = None;
+                    } else if let Some(w) = &mut self.machine_window {
+                        w.applied();
                     }
                     self.machines_changed("Machines saved");
                     if self.sync_machine_keep_out() {
@@ -6489,6 +6493,8 @@ impl CutCraftApp {
         if let Some(changer) = &manager.changer {
             manager.draft.number_by_slots(&changer.slots);
         }
+        // what it opens on, slots and all, is as kept: nothing waits for Apply yet
+        manager.applied();
         self.tool_manager = Some(manager);
     }
 
