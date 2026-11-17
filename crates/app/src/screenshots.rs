@@ -22,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 27] = [
+const SCENES: [Scene; 29] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -88,6 +88,11 @@ const SCENES: [Scene; 27] = [
     ("help-question", |app, _| {
         help_window(app, "contents", "how do I cut out a sign with bridges?");
     }),
+    // Help: Changing settings (Apply, Cancel and Close)
+    ("options-not-applied", options_not_applied),
+    ("options-apply-question", |app, _| {
+        app.options_closing = true;
+    }),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
     // Help: Long jobs and the time left
@@ -124,6 +129,20 @@ fn progress_window(app: &mut CutCraftApp, _: &egui::Context) {
     );
 }
 
+/// Edit ▸ Options on Appearance with the dark theme picked and not applied yet.
+fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.updates = crate::update::Updates::default();
+    app.gcode_view = None;
+    app.info = None;
+    app.options_window = true;
+    app.options_goto = Some("appearance");
+    let mut edited = app.options.clone();
+    edited.appearance.theme = crate::options::Theme::Dark;
+    app.options_edited(edited);
+    // its window drawn inside Cut Craft's, where the picture is taken
+    ctx.set_embed_viewports(true);
+}
+
 /// The medallion in the 3D view with Material Setup open beside it, its Model Position in
 /// Material set to `from` and `gap`; `apply`, pressed Apply (else only typed in).
 fn model_position(
@@ -154,6 +173,7 @@ fn model_position(
 /// A Profile toolpath calculated, then Calculate pressed again with nothing changed: the
 /// form says it is already up to date and offers Calculate as New.
 fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
+    (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
     app.form = None;
     app.gcode_view = None;
     app.updates = crate::update::Updates::default();
