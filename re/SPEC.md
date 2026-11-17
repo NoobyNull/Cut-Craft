@@ -980,6 +980,24 @@ instead of half-cell steps.
   described, so we show it from the start.
 - Not on a rotary job (the model wraps round the axis) or while a 3D model is imported (it is
   placed down in the material, which would hide it): there the model is shown alone.
+- Before a preview, the model is drawn where Material Setup's Model Position in Material puts
+  it, as the 3D toolpaths cut it: its top (Gap Above Model) or bottom (Gap Below Model) the
+  gap from that face, and round it the board cut down to the model's zero plane; anything
+  past the material's bottom is drawn cut through. Apply in Material Setup visibly moves it.
+  [inf] Earlier the model sat on top of the block whatever the gap, so the setting looked
+  dead (Matthew, 2026-11-16).
+
+## Model Position in Material (deliberate difference)
+
+- Material Setup's Gap Above Model / Gap Below Model and gap, as Aspire's [inf]. Added for a
+  novice: both gaps are shown as they change (they add up to the material less the model), a
+  picture of the model in the board drawn to scale, one-click "Top at material top" (Gap
+  Above 0) and "Bottom on material bottom" (Gap Below 0), and a red note at the form's foot
+  when the model pokes out of the top or bottom (a model taller than the material points to
+  Slice Model). A gap too big is kept, never refused.
+- Import 3D Model's form has the same section, setting the job's position as the model is
+  imported, so where it sits is chosen at import, not found later in Material Setup. Its
+  "Depth Below Top" (where the zero plane cuts the model) is unchanged and separate.
 
 ## Drawing in the 3D view [inf] (help: What's New in Aspire V12.0, "Drawing in the 3D View")
 

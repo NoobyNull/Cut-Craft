@@ -7,6 +7,7 @@
 use super::{CutCraftApp, Split, View};
 use crate::options::WindowLayout;
 use cut_craft_core::component::{Combine, Component};
+use cut_craft_core::document::{GapFrom, ModelPosition};
 use cut_craft_core::geometry::Point;
 use eframe::egui;
 use std::path::PathBuf;
@@ -21,7 +22,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 20] = [
+const SCENES: [Scene; 23] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -79,7 +80,44 @@ const SCENES: [Scene; 20] = [
         app.view_action(ctx, "transform");
     }),
     ("height-taller", height_taller),
+    // Help: Material Setup ▸ Model Position in Material
+    ("model-top-at-top", |app, ctx| {
+        model_position(app, ctx, GapFrom::Above, 0.0, true);
+    }),
+    ("model-bottom-on-bottom", |app, ctx| {
+        model_position(app, ctx, GapFrom::Below, 0.0, true);
+    }),
+    ("model-sticks-out", |app, ctx| {
+        model_position(app, ctx, GapFrom::Below, 15.0, false);
+    }),
 ];
+
+/// The medallion in the 3D view with Material Setup open beside it, its Model Position in
+/// Material set to `from` and `gap`; `apply`, pressed Apply (else only typed in).
+fn model_position(
+    app: &mut CutCraftApp,
+    ctx: &egui::Context,
+    from: GapFrom,
+    gap: f64,
+    apply: bool,
+) {
+    app.updates = crate::update::Updates::default();
+    if app.form.as_ref().is_none_or(|f| f.id != "material_setup") {
+        app.doc = cut_craft_core::document::Document::default();
+        (app.simulation, app.playback) = (None, None);
+        model(app, ctx);
+        app.invoke(ctx, "material_setup");
+    }
+    let position = serde_json::to_value(ModelPosition { from, gap }).expect("serializes");
+    if let Some(form) = app.form.as_mut() {
+        form.params["position"] = position;
+        if apply {
+            let params = form.params.clone();
+            let _ = app.apply("material_setup", &params);
+        }
+    }
+    app.view = View::ThreeD;
+}
 
 /// The Updates window over the job, at `phase`.
 fn update_window(app: &mut CutCraftApp, phase: crate::update::Phase) {
@@ -240,6 +278,9 @@ fn model(app: &mut CutCraftApp, _: &egui::Context) {
         }
     }
     app.doc.selection.clear();
+    // material thick enough for the model, so it sits in it whole
+    let tall = cmd_scale_model_z_height::model_height(&app.doc);
+    app.doc.job.thickness = app.doc.job.thickness.max((tall + 4.0).ceil());
     app.form = None;
     app.view = View::ThreeD;
     app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, ZOOM_3D);
