@@ -304,9 +304,9 @@ impl CutCraftApp {
                 }
                 if HEIGHT_TOOLS.contains(&id) {
                     md.push_str(
-                        "\nTo make one model taller or lower, double-click it in the 3D view, \
-                         then double-click it again for its height buttons. See \
-                         [3D View](help:view_3d), Changing a model's height.\n",
+                        "\nTo make one model taller or lower, click it in the 3D view and drag \
+                         one of its height buttons. See [3D View](help:view_3d), Changing a \
+                         model's height.\n",
                     );
                 }
                 md

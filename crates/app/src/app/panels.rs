@@ -16,6 +16,9 @@ use cut_craft_core::document::{MachinedArea, Units};
 /// The push-pin's two drawings (`scripts/make_icons.py`).
 pub(super) const PIN_ICON: &str = "view/pin.png";
 pub(super) const PINNED_ICON: &str = "view/pinned.png";
+/// How many times a button's height the 3D view's height buttons are: big enough to tell
+/// their pictures apart at a glance.
+pub(super) const HEIGHT_BUTTON: f32 = 1.75;
 
 impl CutCraftApp {
     /// The Materials Library window; its edits (to the library and the bits' feeds) are
@@ -2141,7 +2144,7 @@ impl CutCraftApp {
         if response.hovered() && sideways != 0.0 {
             self.framing = self.framing.panned(egui::vec2(sideways, 0.0));
         }
-        // a double-click picks the component under it; off the model it fits
+        // a click picks the component under it (its handles shown); a double-click off it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         self.fit_3d = Some(fit);
         // F fits too, with the pointer over the view
@@ -2164,9 +2167,11 @@ impl CutCraftApp {
         self.view_3d_menu(ui, &response, fit);
     }
 
-    /// A double-click in the 3D view (not while drawing): on a preview it takes away the
-    /// piece cut free under it, on a component it picks it, off the model it fits the view,
-    /// as `fit_now` (F) does.
+    /// A click in the 3D view (not while drawing): on a component it picks it and shows its
+    /// handles and height buttons (Transform mode, unless another view tool is in use), Shift
+    /// adding or taking it away; off every component it lets go of the picked ones. A
+    /// double-click on a preview takes away the piece cut free under it, on a component picks
+    /// it as a click does, and off the model fits the view, as `fit_now` (F) does.
     fn double_click_3d(
         &mut self,
         ui: &egui::Ui,
@@ -2175,37 +2180,43 @@ impl CutCraftApp {
         picking: bool,
         fit_now: bool,
     ) {
-        let double = response
-            .double_clicked()
-            .then(|| response.interact_pointer_pos())
-            .flatten()
-            .filter(|_| picking);
+        let at = response.interact_pointer_pos().filter(|_| picking);
+        let double = at.filter(|_| response.double_clicked());
+        // a single click picks while the model shows, not over a preview, where a click
+        // is the first half of a double-click taking a piece away
+        let clicked = at
+            .filter(|_| response.clicked() && self.simulation.is_none() && self.playback.is_none());
         // while a preview shows, a double-click takes away the piece cut free under it
         let removed = double
             .filter(|_| self.playback.is_none() && self.simulation.is_some())
             .is_some_and(|at| self.remove_preview_piece(fit, at));
-        let picked = double
+        let picked = clicked
+            .or(double)
             .filter(|_| !removed)
             .and_then(|at| self.component_at_3d(fit, at));
+        let shift = ui.input(|i| i.modifiers.shift);
         if removed {
         } else if let Some(id) = picked {
-            self.pick_3d(ui, id);
-        } else if double.is_some() || fit_now {
+            self.pick_3d(ui, id, shift);
+        } else if clicked.is_some() && !shift {
+            self.doc.selected_components.clear();
+        }
+        if !removed && picked.is_none() && (double.is_some() || fit_now) {
             self.framing = self.framing.fitted();
         }
     }
 
-    /// A double-click on component `id`: Shift adds or takes it away; again on a selected
-    /// one, its editing handles; else it alone is selected.
-    fn pick_3d(&mut self, ui: &egui::Ui, id: EntityId) {
-        if ui.input(|i| i.modifiers.shift) {
-            if !self.doc.selected_components.remove(&id) {
-                self.doc.selected_components.insert(id);
-            }
-        } else if self.doc.selected_components.contains(&id) {
-            self.invoke(ui.ctx(), "transform");
-        } else {
+    /// A click on component `id`: Shift adds or takes it away, else it alone is picked;
+    /// with any picked, Transform mode shows their handles and height buttons (when no
+    /// other view tool is in use). Clicking again keeps it so.
+    fn pick_3d(&mut self, ui: &egui::Ui, id: EntityId, shift: bool) {
+        if !shift {
             self.doc.selected_components = [id].into();
+        } else if !self.doc.selected_components.remove(&id) {
+            self.doc.selected_components.insert(id);
+        }
+        if !self.doc.selected_components.is_empty() && self.view_tool.is_none() {
+            self.view_action(ui.ctx(), "transform");
         }
     }
 
@@ -2526,8 +2537,8 @@ impl CutCraftApp {
         }
     }
 
-    /// The component editing icons along the near edge of component `id`'s box, a
-    /// button's height below it (the transform handles sit on the edge itself).
+    /// The component editing icons along the near edge of component `id`'s box, just
+    /// below it (the transform handles sit on the edge itself).
     fn component_icons_3d(
         &mut self,
         ui: &egui::Ui,
@@ -2540,8 +2551,9 @@ impl CutCraftApp {
             plane.screen(extent.min),
             plane.screen(Point::new(extent.max.x, extent.min.y)),
         );
-        // a button's height apart; an edge seen end-on runs to the right
-        let edge = ui.spacing().interact_size.y;
+        // big enough to tell the pictures apart (HEIGHT_BUTTON times a button's height), a
+        // button's size apart; an edge seen end-on runs to the right
+        let edge = ui.spacing().interact_size.y * HEIGHT_BUTTON;
         let mut along = (far - near).normalized();
         if !along.is_finite() || along == egui::Vec2::ZERO {
             along = egui::Vec2::X;
@@ -2552,7 +2564,7 @@ impl CutCraftApp {
         }
         for (i, handle) in Handle3d::ALL.into_iter().enumerate() {
             #[expect(clippy::cast_precision_loss, reason = "four handles")]
-            let centre = near + along * edge * (1.0 + 1.5 * i as f32) + below * edge;
+            let centre = near + along * edge * (0.75 + 1.25 * i as f32) + below * edge * 0.8;
             let rect = egui::Rect::from_center_size(centre, egui::Vec2::splat(edge));
             let response = ui
                 .interact(
@@ -3610,6 +3622,7 @@ impl CutCraftApp {
             }
         }
         self.overlays_3d(ui, &painter, surface, (orbit, framing), fit);
+        self.picked_outline_3d(ui, &painter, surface, (orbit, framing), fit);
         // a playing preview's tool standing upright on its tip, its own shape and size: the
         // cutting end highlighted, the shank above it steel; over the vectors, which would
         // otherwise print onto it
@@ -3628,6 +3641,91 @@ impl CutCraftApp {
                     fill,
                     selection.stroke,
                 ));
+            }
+        }
+    }
+
+    /// The picked components' outlines over the 3D view's (unwrapped) `surface`, thick and
+    /// in the selection colour, lying on the model, so a picked model looks picked in any
+    /// mode. Traced once per pick and change, then kept.
+    fn picked_outline_3d(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        surface: &Material,
+        (orbit, framing): (view3d::Orbit, view3d::Framing),
+        fit: egui::Rect,
+    ) {
+        let picked: Vec<EntityId> = (self.doc.selected_components.iter())
+            .copied()
+            .filter(|id| self.doc.components.get(id).is_some_and(|k| k.visible))
+            .collect();
+        if picked.is_empty() {
+            self.picked_outline = None;
+            return;
+        }
+        let key = (picked, self.history.revision());
+        if self
+            .picked_outline
+            .as_ref()
+            .is_none_or(|(kept, _)| *kept != key)
+        {
+            let parts: Vec<_> = key.0.iter().map(|id| &self.doc.components[id]).collect();
+            let rings = cut_craft_core::component::silhouette(&parts)
+                .iter()
+                .map(|path| {
+                    let mut points = path.flatten(cut_craft_core::polygon::TOLERANCE);
+                    points.extend(points.first().copied());
+                    points
+                })
+                .collect();
+            self.picked_outline = Some((key, rings));
+        }
+        let Some((_, rings)) = &self.picked_outline else {
+            return;
+        };
+        let stroke = ui.visuals().selection.stroke;
+        let stroke = egui::Stroke::new(stroke.width.max(1.0) * 3.0, stroke.color);
+        let screen = view3d::screen_of(surface, orbit, framing, fit, None);
+        let seen = view3d::seen_of(surface, orbit, framing);
+        // round the model's foot: the lowest surface within a cell of the outline (what is
+        // just outside it), a cell above that so the surface does not hide it
+        let (cell, lift) = (surface.cell, surface.cell);
+        let foot = |p: cut_craft_core::geometry::Point| {
+            [
+                (0.0, 0.0),
+                (cell, 0.0),
+                (-cell, 0.0),
+                (0.0, cell),
+                (0.0, -cell),
+            ]
+            .into_iter()
+            .filter_map(|(x, y)| surface.at(p + cut_craft_core::geometry::Point::new(x, y)))
+            .filter(|z| z.is_finite())
+            .reduce(f64::min)
+            .unwrap_or(0.0)
+        };
+        for ring in rings {
+            let line: Vec<_> = ring
+                .iter()
+                .map(|&p| {
+                    let z = foot(p);
+                    cut_craft_core::glam::DVec3::new(
+                        p.x - surface.origin.x,
+                        p.y - surface.origin.y,
+                        z + lift,
+                    )
+                })
+                .collect();
+            // all the way round, thin where the model hides it, so the whole outline shows
+            let behind = egui::Stroke::new(stroke.width / 2.0, stroke.color.gamma_multiply(0.6));
+            painter.add(egui::Shape::line(
+                line.iter().map(|&p| screen(p)).collect(),
+                behind,
+            ));
+            for run in view3d::visible_runs(&line, surface.cell, &seen) {
+                let run: Vec<_> = run.into_iter().map(&screen).collect();
+                painter.add(egui::Shape::line(run, stroke));
             }
         }
     }

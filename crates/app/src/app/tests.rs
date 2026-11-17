@@ -4279,6 +4279,101 @@ fn the_3d_transform_handles_sit_on_top_of_a_raised_component() {
     assert!((moved.center() - before.max).length() < 0.5, "{moved:?}");
 }
 
+/// A harness on the domed test job, looking down on it in the 3D view, and where on the
+/// screen the dome's middle is.
+fn dome_from_above() -> (Harness, Pos2) {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let fit = h.app.fit_3d.unwrap();
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
+    let z = surface.at(Point::new(20.0, 20.0)).unwrap();
+    let middle = screen(cut_craft_core::glam::DVec3::new(
+        20.0 - surface.origin.x,
+        20.0 - surface.origin.y,
+        z,
+    ));
+    (h, middle)
+}
+
+#[test]
+fn one_click_on_a_model_in_3d_picks_it_and_shows_its_height_buttons() {
+    let (mut h, dome) = dome_from_above();
+    assert!(h.app.doc.selected_components.is_empty());
+    h.click(dome, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.selected_components, [EntityId(1)].into());
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+    for which in [Handle3d::Total, Handle3d::Height, Handle3d::Base] {
+        assert!(
+            h.app.handles_3d.iter().any(|(k, _)| *k == which),
+            "{which:?} shows"
+        );
+    }
+    // clicking it again, or double-clicking it, keeps it picked with its buttons
+    h.click(dome, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+    h.double_click(dome);
+    h.frame(vec![]);
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+    assert_eq!(h.app.doc.selected_components, [EntityId(1)].into());
+    // a click off every model lets it go
+    let off = h.app.fit_3d.unwrap().left_top() + vec2(4.0, 4.0);
+    h.click(off, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.doc.selected_components.is_empty());
+    assert_eq!(h.app.handles_3d, vec![], "no buttons with nothing picked");
+}
+
+#[test]
+fn a_click_in_3d_leaves_another_view_tool_alone() {
+    let (mut h, dome) = dome_from_above();
+    h.app.view_tool = Some(ViewTool::Measure);
+    h.click(dome, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.selected_components, [EntityId(1)].into());
+    assert_eq!(h.app.view_tool, Some(ViewTool::Measure));
+}
+
+#[test]
+fn a_picked_model_is_outlined_in_3d_even_out_of_transform_mode() {
+    let (mut h, _) = dome_from_above();
+    assert!(h.app.picked_outline.is_none());
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.frame(vec![]);
+    let (_, rings) = h.app.picked_outline.as_ref().expect("an outline");
+    assert!(!rings.is_empty() && rings.iter().all(|r| r.len() > 3));
+    h.app.doc.selected_components.clear();
+    h.frame(vec![]);
+    assert!(h.app.picked_outline.is_none());
+}
+
+#[test]
+fn the_height_buttons_are_bigger_than_an_ordinary_button() {
+    let (mut h, dome) = dome_from_above();
+    h.click(dome, Modifiers::NONE);
+    h.frame(vec![]);
+    let at = |which: Handle3d| {
+        h.app
+            .handles_3d
+            .iter()
+            .find(|(k, _)| *k == which)
+            .map(|(_, at)| *at)
+            .unwrap()
+    };
+    let apart = (at(Handle3d::Height) - at(Handle3d::Total)).length();
+    let button = h.ctx.global_style().spacing.interact_size.y;
+    assert!(
+        apart >= button * super::panels::HEIGHT_BUTTON,
+        "{apart} apart, buttons {button}"
+    );
+}
+
 #[test]
 fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     use cut_craft_core::component::Combine;
@@ -6939,7 +7034,9 @@ fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
     let page = h.app.help_markdown("view_3d");
     for words in [
         "Changing a model's height",
-        "double-click",
+        "**click** the model",
+        "blue line",
+        "Shift",
         "Transform",
         "Total Height",
         "Shape Height",

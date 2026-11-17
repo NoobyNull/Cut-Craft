@@ -217,6 +217,7 @@ impl CutCraftApp {
             trace_view: None,
             moved_3d: 0.0,
             spinning_3d: None,
+            picked_outline: None,
             pacer: crate::frame_rate::Pacer::default(),
             detail_3d: (crate::options::Detail::default(), false),
             paced_pass: u64::MAX,
