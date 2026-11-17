@@ -68,9 +68,23 @@ such as `v0.2.0`). A release carries:
 GitHub's SHA-256 checksum of every file must match, or the install is refused.
 
 `.github/workflows/depth-addon.yml` is a worked example. It builds `cutcraft-depth` for
-Linux and Windows, zips each with `addon.toml`, converts the Small model's weights and
-publishes the release on `NoobyNull/CutCraft-Depth`. It does not sign (see Signing), so
-it needs only the `ADDON_RELEASE_TOKEN` secret.
+Linux, Windows and Apple Silicon Macs, zips each with `addon.toml`, converts the Small
+model's weights and publishes the release on `NoobyNull/CutCraft-Depth`. It does not sign
+(see Signing), so it needs only the `ADDON_RELEASE_TOKEN` secret.
+
+Publishing Depth the first time (until this is done, Install Depth Add-on says the add-on
+"is not available to download yet"; issue #567):
+
+1. Create the public repository `NoobyNull/CutCraft-Depth` (it may stay empty: releases
+   need no code in it).
+2. Make a fine-grained token with **Contents: Read and write** on that repository only,
+   and add it to this repository as the Actions secret `ADDON_RELEASE_TOKEN`.
+3. Actions ▸ Depth add-on ▸ Run workflow. Its release appears on `CutCraft-Depth`, and
+   every Cut Craft already installed finds it: no Cut Craft release is needed.
+
+When GitHub has no release of an add-on, `addon::no_release` words the error: an
+official add-on is "not available to download yet"; any other repository is checked for
+spelling.
 
 ## Install, update and remove
 

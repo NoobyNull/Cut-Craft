@@ -243,11 +243,29 @@ impl Offer {
     }
 }
 
+/// What to say when GitHub has no release of `repo` (or no such repository). For an add-on
+/// Cut Craft offers by name, that only means it has not been published yet, so it says so
+/// without blaming the person; for any other, it points at the likely typo.
+pub fn no_release(repo: &Repo) -> String {
+    let full = repo.to_string();
+    match OFFICIAL.iter().find(|a| a.repo.eq_ignore_ascii_case(&full)) {
+        Some(official) => format!(
+            "The {} add-on is not available to download yet. Nothing is wrong on your \
+             computer: try again after the next Cut Craft update.",
+            official.name
+        ),
+        None => format!(
+            "GitHub has no release of {full} to install. Check its spelling, or ask its \
+             author to publish a release."
+        ),
+    }
+}
+
 /// Asks GitHub for `repo`'s newest release, as an add-on for this computer.
 pub fn find(repo: &Repo) -> Result<Offer, String> {
     let json = crate::get_text(&repo.latest_url()).map_err(|e| {
         if e.contains("no releases") {
-            format!("{repo} has no releases on GitHub (or there is no such repository)")
+            no_release(repo)
         } else {
             e
         }
@@ -555,6 +573,21 @@ mod tests {
             want.latest_url()
                 .ends_with("/repos/NoobyNull/CutCraft-Depth/releases/latest")
         );
+    }
+
+    #[test]
+    fn a_missing_release_explains_itself_in_plain_words() {
+        // issue #567: the official Depth add-on had no release yet
+        let official = repo();
+        let e = no_release(&official);
+        assert!(e.contains("Depth (Relief from Photo)"), "{e}");
+        assert!(e.contains("not available to download yet"), "{e}");
+        assert!(!e.contains("no such repository"), "{e}");
+        // anyone else's repository: name it, and say what might be wrong
+        let other = Repo::parse("someone/thing").unwrap();
+        let e = no_release(&other);
+        assert!(e.contains("someone/thing"), "{e}");
+        assert!(e.contains("spelling"), "{e}");
     }
 
     fn sha(bytes: &[u8]) -> String {

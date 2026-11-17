@@ -1,7 +1,8 @@
 # The Depth add-on's release, published on its own repository (DEPTH_REPO) so Gadgets >
 # Add-ons finds it as that repository's newest release (crates/updater/src/addon.rs):
-#   depth-linux-x86_64.zip, depth-windows-x86_64.zip   addon.toml and cutcraft-depth
-#   depth_anything_v2_vits.safetensors                 the weights, once for both
+#   depth-linux-x86_64.zip, depth-windows-x86_64.zip,  addon.toml and cutcraft-depth
+#   depth-macos-aarch64.zip
+#   depth_anything_v2_vits.safetensors                 the weights, once for all
 # Unsigned by Matthew's choice: Cut Craft installs it after its "not responsible" warning.
 # Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs one
 # secret, ADDON_RELEASE_TOKEN: a token that may write releases on DEPTH_REPO (the
@@ -35,6 +36,10 @@ jobs:
           - os: windows-latest
             name: windows-x86_64
             exe: cutcraft-depth.exe
+          # Apple Silicon Macs (macos-14 is retired: see builds.yml)
+          - os: macos-latest
+            name: macos-aarch64
+            exe: cutcraft-depth
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
