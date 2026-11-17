@@ -222,6 +222,7 @@ impl CutCraftApp {
             trace_view: None,
             moved_3d: 0.0,
             spinning_3d: None,
+            picked_outline: None,
             pacer: crate::frame_rate::Pacer::default(),
             detail_3d: (crate::options::Detail::default(), false),
             paced_pass: u64::MAX,
@@ -2752,6 +2753,7 @@ impl CutCraftApp {
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
         self.picked_constraint = None;
+        self.picked_outline = None;
         self.job_epoch += 1;
         if let Some(job) = self.options.default_job {
             self.doc.job = job;

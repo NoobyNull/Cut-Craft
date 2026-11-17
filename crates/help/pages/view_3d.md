@@ -21,22 +21,22 @@ previewed, the cuts your [toolpaths](help:toolpaths) make in it.
 
 ## Changing a model's height
 
-Every model (component) has four round buttons for changing its height right in the 3D
-view. They only show in **Transform** mode, with the model picked, so a single click on
-the model will not bring them up.
+Every model (component) has round buttons for changing its height right in the 3D view.
 
-![Double-click the model to pick it, double-click it again for its height buttons, then drag one up or down](pictures/model-height-buttons.gif)
+![Click the model: it is outlined in blue and its height buttons appear; drag one up or down](pictures/model-height-buttons.gif)
 
-1. In the 3D view, **double-click** the model. It is now picked.
-2. **Double-click it again**, or click **Transform** (Design page, Select and Edit). A row
-   of four round buttons appears along the front edge of the model's box, with the move,
-   scale and rotate handles over it.
-3. Drag a button **up** to make the model taller, **down** to make it lower. The model
+1. In the 3D view, **click** the model. A thick blue line goes round it to show it is
+   picked, and a row of round buttons appears along the front edge of its box, with the
+   move, scale and rotate handles over it (this is **Transform** mode).
+2. Drag a button **up** to make the model taller, **down** to make it lower. The model
    follows as you drag, and its size shows in the status bar along the bottom. Let go when
    it looks right. **Ctrl+Z** undoes the whole drag in one go; **Esc** while dragging
    cancels it.
 
-![The four height buttons: Total Height, Shape Height, Base Height and Settings](pictures/model-height-buttons.png)
+![The height buttons: Total Height, Shape Height, Base Height and Settings](pictures/model-height-buttons.png)
+
+Each picture shows the model from the side: the orange part is what the button changes,
+and the blue arrow how far it reaches.
 
 - **Total Height**: the whole model, shape and base together, taller or lower.
 - **Shape Height**: only the raised shape, as a percentage of its own height (100% is as
@@ -45,15 +45,17 @@ the model will not bring them up.
 - **Settings**: click it for the rest: how it combines with the models under it, fade,
   tilt and its color.
 
-The buttons go away when you press **Esc**, click **Transform** again, or pick another
-tool. Pick the model again the same way to bring them back.
+**Shift**-click adds another model to the ones picked, or takes one away. Click anywhere
+off the models to let go of them. The buttons also go away when you press **Esc** or click
+**Transform** again; click the model to bring them back. While another view tool such as
+Measure is in use, a click picks the model (blue outline) without changing the tool.
 
 The 2D view never shows these buttons. To set the heights by typing numbers instead,
 right-click the model in the 3D view and choose **Component ▸ Properties** (or pick it and
 use **Model ▸ Selected Component Properties**, or right-click it in the **Components** tab
 and choose **Properties**): **Shape Height** and **Base Height** there are the same
-settings. To
-change the height of every model at once, use **Scale Model Z Height** on the Design page.
+settings. To change the height of every model at once, use **Scale Model Z Height** on the
+Design page.
 
 ## Auto-rotate
 

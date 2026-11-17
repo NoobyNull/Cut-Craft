@@ -916,6 +916,12 @@ enum Split {
     SideBySide,
 }
 
+/// The picked components' outlines, with the components and revision they were traced for.
+type PickedOutline = (
+    (Vec<EntityId>, u64),
+    Vec<Vec<cut_craft_core::geometry::Point>>,
+);
+
 /// The component editing icons in the 3D view (help: Editing in the 3D View):
 /// Total Height, Shape Height, Base Height and Additional Settings, a row of round buttons
 /// along the near edge of the selected component's box in Transform mode.
@@ -1440,6 +1446,9 @@ struct CutCraftApp {
     moved_3d: f64,
     /// While Auto-rotate spins the 3D view: when it last turned it (input time, seconds).
     spinning_3d: Option<f64>,
+    /// The picked components' outlines the 3D view draws (job coordinates, closed), kept
+    /// with what they were traced for: the components and the document's revision.
+    picked_outline: Option<PickedOutline>,
     /// Picks the 3D view's detail while it moves from how quickly frames come (Options ▸
     /// Adjust detail to keep the view smooth).
     pacer: crate::frame_rate::Pacer,

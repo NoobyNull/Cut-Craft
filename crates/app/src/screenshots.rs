@@ -67,8 +67,16 @@ const SCENES: [Scene; 28] = [
         update_window(app, update_offer(Err(steps)));
     }),
     // Help: 3D View ▸ Changing a model's height (each builds on the one before)
-    ("height-picked", height_picked),
+    ("height-start", height_start),
     ("height-buttons", |app, ctx| {
+        // one click on the medallion: picked, outlined, its height buttons shown
+        let medallion = app
+            .doc
+            .components
+            .iter()
+            .find(|(_, k)| k.name == "Medallion")
+            .map(|(&id, _)| id);
+        app.doc.selected_components = medallion.into_iter().collect();
         app.view_action(ctx, "transform");
     }),
     ("height-taller", height_taller),
@@ -483,9 +491,9 @@ fn import(app: &mut CutCraftApp, _: &egui::Context) {
     app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, ZOOM_3D);
 }
 
-/// A flat job again with the medallion picked in the 3D view, Transform mode off: the
-/// first step of Help ▸ 3D View ▸ Changing a model's height.
-fn height_picked(app: &mut CutCraftApp, ctx: &egui::Context) {
+/// A flat job again with the medallion in the 3D view, nothing picked: the first step of
+/// Help ▸ 3D View ▸ Changing a model's height.
+fn height_start(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.updates.open = false;
     ctx.set_embed_viewports(false);
     app.pages.set_pinned(super::Page::Toolpaths, false);
@@ -495,13 +503,6 @@ fn height_picked(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.doc = cut_craft_core::document::Document::default();
     draw_shapes(app);
     model(app, ctx);
-    let medallion = app
-        .doc
-        .components
-        .iter()
-        .find(|(_, k)| k.name == "Medallion")
-        .map(|(&id, _)| id);
-    app.doc.selected_components = medallion.into_iter().collect();
     // the medallion in the middle of the view, its height buttons in sight below it
     let medallion_at = egui::vec2(-275.0, 40.0);
     app.framing = crate::view3d::Framing::default()
