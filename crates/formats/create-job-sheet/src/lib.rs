@@ -622,6 +622,35 @@ mod tests {
     }
 
     #[test]
+    fn two_sheets_with_different_model_placements_each_show_their_own() {
+        use cut_craft_core::document::GapFrom;
+        let with = cut_craft_core::testing::with_toolpath();
+        let mut doc = cut_craft_core::testing::two_sheets();
+        doc.toolpaths = with.toolpaths.clone();
+        doc.sheets[1].objects.toolpaths = with.toolpaths.clone();
+        doc.job.model_position.from = GapFrom::Above;
+        doc.sheets[0].job.model_position.from = GapFrom::Above;
+        doc.sheets[1].job.model_position.from = GapFrom::Below;
+        doc.notes = "Gap from {{model.measured_from}}".into();
+        // what the app has: the active (first) sheet's values
+        let setup = Setup {
+            variables: cut_craft_core::notes::variables(
+                &doc,
+                &cut_craft_core::notes::Context::default(),
+            ),
+            ..Setup::default()
+        };
+        let pages = sheets(&doc, &Style::default(), &setup).unwrap();
+        assert_eq!(pages.len(), 2);
+        assert!(pages[0].1.contains("<p>Gap from Top</p>"), "{}", pages[0].1);
+        assert!(
+            pages[1].1.contains("<p>Gap from Bottom</p>"),
+            "{}",
+            pages[1].1
+        );
+    }
+
+    #[test]
     fn the_printout_names_the_files_machine_run_times_and_each_tool_s_slot() {
         let mut doc = cut_craft_core::testing::with_toolpath();
         let first = doc.toolpaths.values().next().unwrap().clone();
