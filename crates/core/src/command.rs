@@ -488,12 +488,26 @@ impl Registry {
     ) -> Result<Change, CommandError> {
         let ids = sources_first(doc, ids);
         let steps: Vec<(usize, EntityId)> = ids.iter().copied().enumerate().collect();
+        // each toolpath's share of the bar: how long its kind took last time
+        let kinds: Vec<Option<String>> = ids
+            .iter()
+            .map(|id| (doc.toolpaths.get(id)).map(|t| crate::eta::calculating(&t.strategy)))
+            .collect();
+        let weights = crate::eta::weights(&kinds);
         Change::chain_over(doc, &steps, |d, &(i, id)| {
             crate::progress::stop_if_cancelled()?;
             if let Some(t) = d.toolpaths.get(&id) {
                 crate::progress::stage(&format!("{} ({} of {})", t.name, i + 1, steps.len()));
             }
-            crate::progress::part(i, steps.len(), || self.recalculate(d, id))
+            let started = std::time::Instant::now();
+            let made = crate::progress::part_weighted(i, &weights, || self.recalculate(d, id));
+            if made.is_ok()
+                && !crate::progress::cancelled()
+                && let Some(kind) = &kinds[i]
+            {
+                crate::eta::record(kind, started.elapsed().as_secs_f64());
+            }
+            made
         })
     }
 

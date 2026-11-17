@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-17
 see-also: profile_toolpath, vcarve_engrave_toolpath, stepover
 ---
 
@@ -40,3 +40,7 @@ see-also: profile_toolpath, vcarve_engrave_toolpath, stepover
    ![Step 8](pictures/pocket_toolpath/step-8.png)
 
 The bit clears the inside in rows that overlap a little. How far over each row moves is the [stepover](help:stepover), set with the bit in the Tool Database.
+
+With clearance bits added, a big pocket can take a while to calculate. The progress window
+gives each bit its share of the bar and says about how long is left
+([Long jobs and the time left](help:progress)).

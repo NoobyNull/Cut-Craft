@@ -190,17 +190,23 @@ impl Command for VcarveEngraveToolpath {
                 clearing: Some(tool.clone()),
                 ..p.clone()
             };
-            let mut toolpath = vcarve(doc, &own)?;
-            if i > 0 {
-                let rest = cut_craft_core::rest::Rest {
-                    after: p.clearance_tools[..i].to_vec(),
-                    ..Default::default()
-                };
-                toolpath.params["rest"] =
-                    serde_json::to_value(&rest).expect("rest settings serialise");
-                let params = toolpath.params.clone();
-                cut_craft_core::rest::apply(&doc.job, &mut toolpath, &params)?;
-            }
+            // each bit its share of the progress bar, its rest machining included, the
+            // V-bit's last
+            let bits = p.clearance_tools.len() + 1;
+            let toolpath = cut_craft_core::progress::part(i, bits, || {
+                let mut toolpath = vcarve(doc, &own)?;
+                if i > 0 {
+                    let rest = cut_craft_core::rest::Rest {
+                        after: p.clearance_tools[..i].to_vec(),
+                        ..Default::default()
+                    };
+                    toolpath.params["rest"] =
+                        serde_json::to_value(&rest).expect("rest settings serialise");
+                    let params = toolpath.params.clone();
+                    cut_craft_core::rest::apply(&doc.job, &mut toolpath, &params)?;
+                }
+                Ok::<_, CommandError>(toolpath)
+            })?;
             c.add_toolpath(toolpath);
         }
         let vbit = Params {
@@ -209,7 +215,10 @@ impl Command for VcarveEngraveToolpath {
             cleared_within: Some(smallest),
             ..p.clone()
         };
-        c.add_toolpath(vcarve(doc, &vbit)?);
+        let last = p.clearance_tools.len();
+        c.add_toolpath(cut_craft_core::progress::part(last, last + 1, || {
+            vcarve(doc, &vbit)
+        })?);
         Ok(c.finish())
     }
 }
@@ -265,9 +274,13 @@ fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         let bottom =
             (!p.project_onto_model && doc.job.thickness > 0.0).then_some(doc.job.thickness);
         let notes = Fallbacks::default();
-        let mut moves = carve_above(&paths, p, doc.job.clearance, bottom, &notes);
+        // dropping onto the model takes its own share of the progress bar after the carving
+        let steps = if p.project_onto_model { 2 } else { 1 };
+        let mut moves = cut_craft_core::progress::part(0, steps, || {
+            carve_above(&paths, p, doc.job.clearance, bottom, &notes)
+        });
         if p.project_onto_model {
-            moves = project_onto_model(doc, tool, &moves)?;
+            moves = cut_craft_core::progress::part(1, 2, || project_onto_model(doc, tool, &moves))?;
         }
         let mut toolpath =
             made_by::<VcarveEngraveToolpath>(p, p.name.clone(), tool.clone(), ids, moves);
@@ -357,9 +370,15 @@ fn carve_above(
     if !p.use_vector_selection_order {
         return carve_together(paths, p, safe, bottom, notes);
     }
-    shapes(paths)
+    let shapes = shapes(paths);
+    shapes
         .iter()
-        .flat_map(|shape| carve_together(shape, p, safe, bottom, notes))
+        .enumerate()
+        .flat_map(|(i, shape)| {
+            cut_craft_core::progress::part(i, shapes.len(), || {
+                carve_together(shape, p, safe, bottom, notes)
+            })
+        })
         .collect()
 }
 
@@ -513,9 +532,22 @@ fn carve_together(
         .or_else(|| pieces.first().and_then(|(_, marks)| marks.first().copied()))
         .unwrap_or(Point::ZERO);
     let mut moves = vec![];
+    // the progress bar moves on as each piece is carved, by how many points it has: the
+    // centre lines of a big piece take longer to find than a small one's
+    let size = |piece: &[Path]| {
+        piece
+            .iter()
+            .map(|path| cut_points(path).len())
+            .sum::<usize>()
+    };
+    let total: usize = pieces.iter().map(|(piece, _)| size(piece)).sum();
+    let mut carved = 0;
     // each piece of the shapes (an outline with its holes) carved in full, the bit staying
     // down from its first cut to its last, then the nearest piece next
     while !pieces.is_empty() {
+        if cut_craft_core::progress::cancelled() {
+            break;
+        }
         let away = |marks: &[Point]| {
             marks
                 .iter()
@@ -526,6 +558,7 @@ fn carve_together(
             .min_by(|&i, &k| away(&pieces[i].1).total_cmp(&away(&pieces[k].1)))
             .expect("pieces are left");
         let (piece, _) = pieces.swap_remove(nearest);
+        carved += size(&piece);
         let lines = medial::centre_lines(&piece, CENTRE_SPACING);
         let runs = carving.runs(&piece, &lines, from);
         if let Some(last) = runs.last().and_then(Run::end) {
@@ -534,6 +567,7 @@ fn carve_together(
         let ways = link::Links::new(&piece, &lines, |r| carving.depth_at(r));
         let enter = |run: &Run| entered(run, -p.start_depth, v_entry(p), p.tool.diameter, notes);
         moves.extend(run_moves(&runs, safe, |a, b| ways.between(a, b), enter));
+        cut_craft_core::progress::report_steps(carved, total);
     }
     moves
 }

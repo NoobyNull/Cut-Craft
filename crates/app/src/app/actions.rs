@@ -83,6 +83,7 @@ impl CutCraftApp {
             ribbon_tab: 0,
             options_path: None,
             words_path: None,
+            job_times_path: None,
             speller: None,
             speller_looked: false,
             session: Session::default(),
@@ -1781,6 +1782,7 @@ impl CutCraftApp {
             let started = key.clone();
             self.in_background(
                 super::CHECKING,
+                "check",
                 move || {
                     let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
                         ids.iter().filter_map(|id| doc.toolpaths.get(id)).collect();
@@ -2549,6 +2551,7 @@ impl CutCraftApp {
         let what = format!("Opening {}", super::file_name(&path));
         self.in_background(
             &what,
+            "open",
             move || {
                 let mut session = Session::default();
                 session
@@ -6038,6 +6041,7 @@ impl CutCraftApp {
         let finishing = params.tool.name.clone();
         self.in_background(
             "Suggesting clearing bits",
+            "suggest-clearing",
             move || {
                 cmd_pocket_toolpath::suggest(
                     &doc,

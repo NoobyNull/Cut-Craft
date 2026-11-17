@@ -1184,6 +1184,9 @@ struct CutCraftApp {
     options_path: Option<std::path::PathBuf>,
     /// The user's own spelling words, one a line; none in tests.
     words_path: Option<std::path::PathBuf>,
+    /// Where how long each kind of slow job took is kept between runs
+    /// ([`cut_craft_core::eta`]); `None` in tests.
+    job_times_path: Option<std::path::PathBuf>,
     /// Draw Text's dictionary, looked for once when spelling is first wanted.
     speller: Option<cut_craft_core::spell::Speller>,
     speller_looked: bool,
@@ -3006,7 +3009,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             app.load_materials();
             app.load_machines();
             app.load_options();
-            app.words_path = files::config_dir().map(|d| d.join("words.txt"));
+            app.load_words_and_job_times();
             app.addons = crate::addons::Addons::new(crate::depth::addons_dir());
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();

@@ -88,7 +88,7 @@ the header `Authorization: Bearer <token>`. Calls that send settings use POST wi
 `"units": "mm"` or `"in"`.
 
 - **GET status**: the version, whether a job is open, whether it is busy, the job's units,
-  the open form and the status bar's message.
+  the open form and the status bar's message, and **progress** as GET progress gives it.
 - **GET commands**: every tool, by id, with its name and group.
 - **GET commands/draw_circle**: one tool's settings: what each one is and what its form
   starts with.
@@ -139,7 +139,10 @@ Toolpaths page's buttons, each with its progress window as usual.
   **Preview** does, cut at once rather than played. **GET view.png** then shows it.
 - **POST preview/reset**: **Reset Preview**. **Undo Last Preview** brings it back.
 - **GET progress**: while a calculation or preview runs, what it is doing and how far along
-  (`"fraction"`, 0 to 1). It is answered straight away, even while Cut Craft is busy.
+  (`"fraction"`, 0 to 1), how long it has run (`"seconds"`), and the time left worked out
+  just as the progress window does ([Long jobs and the time left](help:progress)):
+  `"seconds_left"` once it can judge, and `"time_left"` in words ("about 2 minutes left").
+  It is answered straight away, even while Cut Craft is busy.
   **POST cancel** presses **Cancel** on the progress window: nothing changes.
 
   **POST calculate** and **POST preview** answer once they are done. Send `"wait": false`

@@ -183,8 +183,9 @@ the bit can't be reached by it: clear it with a smaller bit or a V-bit.
 
 Adaptive works out every step the bit takes, so a big pocket can take a little while to
 calculate. The progress window says which step it is on (finding the narrow channels,
-sweeping each one, clearing the wider areas) and how far it has got; big open areas take
-longer than the rest. Cancel stops it and leaves the toolpath as it was.
+sweeping each one, clearing the wider areas), how far it has got and about how long is
+left ([Long jobs and the time left](help:progress)); big open areas take longer than the
+rest. Cancel stops it and leaves the toolpath as it was.
 
 ![Leave for Edge Pass: the clearing stops A short of the wall, then the bit goes round once at the full depth D and skims A off](bytes://icons/diagrams/edge_pass.png)
 

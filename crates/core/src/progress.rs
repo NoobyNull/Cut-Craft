@@ -175,6 +175,32 @@ pub fn part<R>(index: usize, count: usize, work: impl FnOnce() -> R) -> R {
     answer
 }
 
+/// Runs `work` as step `index` of steps that take `weights` of the work running now (in
+/// any units: seconds each took last time, say), so a long step fills more of the bar than
+/// a quick one. Without a usable weight for it, the steps share it equally ([`part`]).
+pub fn part_weighted<R>(index: usize, weights: &[f64], work: impl FnOnce() -> R) -> R {
+    let usable = |w: &f64| w.is_finite() && *w > 0.0;
+    let total: f64 = weights.iter().filter(|w| usable(w)).sum();
+    if index >= weights.len() || !weights.iter().all(usable) || total <= 0.0 {
+        return part(index, weights.len(), work);
+    }
+    let Some(span) = current() else {
+        return work();
+    };
+    let before: f64 = weights[..index].iter().sum();
+    let inner = Span {
+        progress: span.progress.clone(),
+        start: span.start + span.width * before / total,
+        width: span.width * weights[index] / total,
+    };
+    let end = inner.start + inner.width;
+    let outer = CURRENT.with(|c| c.replace(Some(inner)));
+    let _restore = Restore(outer);
+    let answer = work();
+    span.progress.set(end);
+    answer
+}
+
 /// Whether the person asked the job running on this thread to stop.
 pub fn cancelled() -> bool {
     current().is_some_and(|s| s.progress.is_cancelled())
@@ -270,6 +296,31 @@ mod tests {
         let early = Progress::new();
         early.track(|| part(2, 4, || report(0.5)));
         assert_eq!(early.fraction(), Some(0.75));
+    }
+
+    #[test]
+    fn weighted_parts_fill_their_share_of_the_bar() {
+        let progress = Progress::new();
+        let weights = [1.0, 3.0];
+        let inside = progress.track(|| {
+            part_weighted(0, &weights, || ());
+            let after_first = progress.fraction();
+            part_weighted(1, &weights, || {
+                report(0.5);
+                (after_first, progress.fraction())
+            })
+        });
+        assert_eq!(
+            inside,
+            (Some(0.25), Some(0.625)),
+            "a quarter, then half of the rest"
+        );
+        assert_eq!(progress.fraction(), Some(1.0));
+        // a weight that will not do: equal shares
+        let equal = Progress::new();
+        equal.track(|| part_weighted(0, &[0.0, 5.0], || ()));
+        assert_eq!(equal.fraction(), Some(0.5));
+        assert_eq!(part_weighted(0, &[2.0], || 9), 9, "off a tracked thread");
     }
 
     #[test]
