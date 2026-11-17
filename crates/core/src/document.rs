@@ -88,6 +88,9 @@ pub struct SheetObjects {
     pub bitmaps: BTreeMap<EntityId, Bitmap>,
     #[serde(default)]
     pub toolpaths: BTreeMap<EntityId, Toolpath>,
+    /// Which of `vectors` are construction lines (added with construction lines).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub construction: std::collections::BTreeSet<EntityId>,
     /// Double-sided jobs: the bottom side was being worked on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bottom: bool,
@@ -736,6 +739,15 @@ pub struct Document {
     /// the first use of the Toolpaths page (added with that).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub material_checked: bool,
+    /// Construction lines: vectors used only to place things (Embellish along them, bend a
+    /// drawing along them, snap to them), never cut. Toolpaths never take them, and
+    /// exported files leave them out (added with construction lines).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub construction: std::collections::BTreeSet<EntityId>,
+    /// View ▸ Show Construction Lines turned off: construction lines are neither drawn nor
+    /// picked. View state like `selection`, never saved.
+    #[serde(skip)]
+    pub hide_construction: bool,
 }
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
@@ -881,6 +893,8 @@ impl Default for Document {
             part_names: BTreeMap::new(),
             constraints: vec![],
             material_checked: false,
+            construction: std::collections::BTreeSet::new(),
+            hide_construction: false,
             tiling: None,
             tiling_kept: None,
             bottom_side: false,
@@ -1268,15 +1282,60 @@ impl Document {
         found
     }
 
-    /// On a visible layer: drawn in the views.
+    /// On a visible layer, and not a construction line while those are hidden: drawn in
+    /// the views.
     pub fn shown(&self, id: EntityId) -> bool {
-        self.layer(self.layer_of(id)).is_some_and(|l| l.visible)
+        self.layer(self.layer_of(id)).is_some_and(|l| l.visible) && !self.hidden_construction(id)
     }
 
-    /// On a visible, unlocked layer: can be picked and edited.
+    /// On a visible, unlocked layer, and not a hidden construction line: can be picked and
+    /// edited.
     pub fn editable(&self, id: EntityId) -> bool {
         self.layer(self.layer_of(id))
             .is_some_and(|l| l.visible && !l.locked)
+            && !self.hidden_construction(id)
+    }
+
+    /// Whether vector `id` is a construction line: used to place things, never cut.
+    pub fn is_construction(&self, id: EntityId) -> bool {
+        self.construction.contains(&id)
+    }
+
+    fn hidden_construction(&self, id: EntityId) -> bool {
+        self.hide_construction && self.is_construction(id)
+    }
+
+    /// This job as a toolpath sees it: construction lines taken out of the selection, so
+    /// nothing is ever cut along one.
+    pub fn for_cutting(&self) -> std::borrow::Cow<'_, Self> {
+        if self.selection.iter().any(|id| self.is_construction(*id)) {
+            let mut doc = self.clone();
+            doc.selection = self
+                .selection
+                .iter()
+                .copied()
+                .filter(|id| !self.is_construction(*id))
+                .collect();
+            std::borrow::Cow::Owned(doc)
+        } else {
+            std::borrow::Cow::Borrowed(self)
+        }
+    }
+
+    /// This job as an exported file has it: without its construction lines.
+    pub fn without_construction(&self) -> std::borrow::Cow<'_, Self> {
+        if self.construction.is_empty() {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut doc = self.clone();
+        for id in &self.construction {
+            doc.vectors.remove(id);
+            doc.vector_layers.remove(id);
+            doc.vector_groups.remove(id);
+            doc.selection.remove(id);
+        }
+        doc.construction.clear();
+        std::borrow::Cow::Owned(doc)
     }
 
     /// How many of the selected vectors are closed and how many open.
