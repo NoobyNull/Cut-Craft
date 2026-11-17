@@ -15,7 +15,7 @@ use crate::geometry::Point;
 use crate::keep_out::KeepOutZone;
 use crate::progress;
 use crate::simplify::simplify;
-use crate::simulation::Material;
+use crate::simulation::{Material, Tiles};
 use crate::toolpath::{MoveKind, Tool, ToolShape, Toolpath};
 use glam::DVec3;
 use schemars::JsonSchema;
@@ -355,29 +355,58 @@ fn cut_and_look(
         if progress::cancelled() {
             return;
         }
-        // look before the move's own cut: the parts are above the flutes and at least as
-        // wide, so material in the flutes' way that stands above a part's bottom meets that
-        // part too, and an island the cut would clear later in the move must still count
-        for band in bands {
-            if let Some((into, at)) = material.above_part(a, b, band.radius, band.rise, &peaks)
-                && into > TOUCHES
-            {
-                found.add(Hit {
-                    part: band.part,
-                    from: a,
-                    to: b,
-                    radius: band.radius,
-                    rise: band.rise,
-                    into,
-                    at,
-                });
-                // the lowest part that hits says enough for this move
-                break;
-            }
+        // in short steps, each cut then looked at: a part only meets what the flutes have
+        // not reached yet, and material further along (an island ahead) is still there when
+        // the part comes over it
+        let step = (tool.diameter / 2.0).max(material.cell);
+        let pieces = ((b - a).truncate().length() / step).ceil().max(1.0);
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a positive count of steps"
+        )]
+        let count = pieces as usize;
+        let mut hit = false;
+        for piece in 0..count {
+            #[expect(clippy::cast_precision_loss, reason = "a small count of steps")]
+            let (from, to) = (
+                a.lerp(b, piece as f64 / pieces),
+                a.lerp(b, (piece + 1) as f64 / pieces),
+            );
+            material.sweep(from, to, tool);
+            // the first hit says enough for this move, which is still cut to its end
+            hit = hit || look(material, (from, to), bands, &peaks, found);
         }
-        material.sweep(a, b, tool);
     }
     material.sweep_each(&batch, tool);
+}
+
+/// Adds to `found` the lowest of `bands` that stands in `material` on the way from `a` to
+/// `b`; whether one did.
+fn look(
+    material: &Material,
+    (a, b): (DVec3, DVec3),
+    bands: &[Band],
+    peaks: &Tiles,
+    found: &mut Found,
+) -> bool {
+    for band in bands {
+        if let Some((into, at)) = material.above_part(a, b, band.radius, band.rise, peaks)
+            && into > TOUCHES
+        {
+            found.add(Hit {
+                part: band.part,
+                from: a,
+                to: b,
+                radius: band.radius,
+                rise: band.rise,
+                into,
+                at,
+            });
+            return true;
+        }
+    }
+    false
 }
 
 /// What to say about `found` for the toolpath `name` cutting with `tool` held by `machine`'s
@@ -607,6 +636,100 @@ mod tests {
             &Holding::default(),
             &[],
         );
+        assert!(!found[1].any(), "{:?}", found[1].worst);
+    }
+
+    /// A toolpath named `name` cutting with `tool` along `moves` (x, y, z), each a cut.
+    fn path(name: &str, tool: Tool, moves: &[(f64, f64, f64)]) -> Toolpath {
+        let mut path = slot(tool, 0.0);
+        path.name = name.into();
+        path.moves = moves
+            .iter()
+            .enumerate()
+            .map(|(i, &(x, y, z))| Move {
+                to: DVec3::new(x, y, z),
+                kind: if i == 0 {
+                    MoveKind::Rapid
+                } else {
+                    MoveKind::Cut
+                },
+            })
+            .collect();
+        path
+    }
+
+    /// Clears the whole job 45 deep but for an island at the top, x 97 to 103 and y 90 to
+    /// 110: no wider than the 6 mm bit's slot along x = 100.
+    fn island() -> Toolpath {
+        let tool = Tool {
+            diameter: 60.0,
+            flute_length: 50.0,
+            stickout: 60.0,
+            ..bit()
+        };
+        let d = -45.0;
+        path(
+            "Clear",
+            tool,
+            &[
+                (0.0, 0.0, 5.0),
+                (67.0, -40.0, d),
+                (67.0, 240.0, d),
+                (40.0, 240.0, d),
+                (40.0, -40.0, d),
+                (10.0, -40.0, d),
+                (10.0, 240.0, d),
+                (133.0, 240.0, d),
+                (133.0, -40.0, d),
+                (160.0, -40.0, d),
+                (160.0, 240.0, d),
+                (190.0, 240.0, d),
+                (190.0, -40.0, d),
+                (100.0, -40.0, d),
+                (100.0, 60.0, d),
+                (100.0, 60.0, 5.0),
+                (100.0, 140.0, 5.0),
+                (100.0, 140.0, d),
+                (100.0, 240.0, d),
+                (100.0, 240.0, 5.0),
+            ],
+        )
+    }
+
+    #[test]
+    fn an_island_ahead_meets_the_nut_before_the_flutes_cut_it() {
+        // level at 30 deep: the nut's face is 5 below the island's top as it comes over it
+        let through = path(
+            "Slot",
+            bit(),
+            &[
+                (100.0, 50.0, 5.0),
+                (100.0, 50.0, -30.0),
+                (100.0, 150.0, -30.0),
+            ],
+        );
+        let found = find(&job(), &[&island(), &through], &Holding::default());
+        assert!(!found[0].any(), "the clearing hits nothing");
+        let worst = found[1].worst.expect("the nut meets the island");
+        assert_eq!(worst.part, Part::ColletNut);
+        assert!(worst.at.y < 112.0, "{:?}", worst.at);
+    }
+
+    #[test]
+    fn a_ramp_cuts_an_island_before_the_nut_comes_down_to_it() {
+        // down from the top to 40 deep: the flutes reach the island (16 deep there, the nut
+        // 9 above the top) before the nut is low enough, and the nut only passes over what
+        // they have cut
+        let ramp = path(
+            "Ramp",
+            bit(),
+            &[
+                (100.0, 50.0, 5.0),
+                (100.0, 50.0, 0.0),
+                (100.0, 150.0, -40.0),
+            ],
+        );
+        let found = find(&job(), &[&island(), &ramp], &Holding::default());
         assert!(!found[1].any(), "{:?}", found[1].worst);
     }
 
