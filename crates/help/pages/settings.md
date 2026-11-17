@@ -62,4 +62,34 @@ their **Apply** button uses what you typed, as before.
 A shortcut you set or remove in **Mouse and Shortcuts** also waits for **Apply**. Until
 then the old shortcut still runs.
 
-See also: [Web API](help:web_api), [3D View](help:view_3d), [Did You Know?](help:tips).
+## How the window looks: three layouts, light or dark
+
+Cut Craft can arrange its tools three ways. Pick one in **Options ▸ General ▸ Window
+layout** (or **View ▸ Window Layout**) and press **Apply**. Every tool is in every layout;
+only where the buttons sit changes. **Ctrl+K** finds a tool by name whichever you use.
+
+Each layout also comes light or dark: **Options ▸ Appearance ▸ Theme** picks **Light**,
+**Dark**, or **System** to follow your desktop. In the pictures below the light theme is on
+the left and the dark theme on the right.
+
+**Classic** (the one Cut Craft starts with): the Design page with its tool groups down the
+left, tabs down the side for Sheets, Layers, Components and Library, and the Toolpaths page
+on the right.
+
+![The Classic layout, light theme on the left and dark on the right](pictures/layouts/classic-light-and-dark.png)
+
+**Rail**: one icon for each tool group down the far left. Click one and that group's tools
+are listed by name beside it. The open tool's form sits in the inspector on the right.
+
+![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
+
+**Ribbon**: Design, Model and Toolpaths tabs across the top, each a row of tool groups, the
+sheets, layers and toolpath list on the left, and the open form on the right.
+
+![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
+
+To move panels about within a layout, or save an arrangement of your own, use
+[Interface Layout](help:interface_layout).
+
+See also: [Web API](help:web_api), [3D View](help:view_3d), [Did You Know?](help:tips),
+[Interface Layout](help:interface_layout).

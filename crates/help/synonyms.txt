@@ -52,3 +52,5 @@ crash, crashing, collision, hit, hitting, rapid into material
 checks, pre-cut checks, preflight, verify, safety check, sanity check, acknowledge, tick
 tool number, tool numbers, t number, atc, tool changer, automatic tool change
 generic bit, generic tool, maker's figures, manufacturer, catalogue, library
+theme, dark mode, light mode, night mode, dark theme, light theme
+window layout, menu style, menu layout, ribbon, rail, classic layout, toolbar layout
