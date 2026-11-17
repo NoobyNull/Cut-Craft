@@ -20,6 +20,7 @@ mod layouts;
 mod mac;
 mod panels;
 mod passes;
+mod placement;
 mod reach;
 mod sample;
 #[path = "screenshots.rs"]
@@ -1340,6 +1341,9 @@ struct CutCraftApp {
     /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
     /// made once a change, not every frame.
     rough_3d: Option<(RoughKey, Material)>,
+    /// The model's height, lowest point to highest, and the history's revision it was
+    /// measured at: Model Position in Material's picture and warning, measured once a change.
+    model_tall: std::cell::Cell<Option<(u64, f64)>>,
     /// How many toolpaths were out of date last frame.
     stale_known: usize,
     /// Toolpaths went out of date while a form was open: once it closes, ask whether to
