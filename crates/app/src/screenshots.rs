@@ -142,7 +142,7 @@ const SCENES: [Scene; 41] = [
     // Help: Reporting a bug (the details of the computer)
     ("bug-report-form", |app, ctx| {
         ctx.set_embed_viewports(true);
-        app.info = None;
+        (app.info, app.form, app.tool_manager) = (None, None, None);
         (app.snap_window, app.snap_draft) = (false, None);
         cut_craft_bug_report::open_here(ctx);
     }),

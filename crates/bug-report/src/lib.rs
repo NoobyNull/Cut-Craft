@@ -57,7 +57,6 @@ struct Frame {
     number: u64,
     regions: Vec<Region>,
     claimed: bool,
-    asked: bool,
 }
 
 fn frame_id() -> egui::Id {
@@ -219,7 +218,12 @@ pub fn claim(ctx: &egui::Context) {
 
 /// Opens the report form for the last right-click (from another right-click menu's item).
 pub fn open_here(ctx: &egui::Context) {
-    with_frame(ctx, |f| f.asked = true);
+    // kept until the reporter next looks, whichever frame that is
+    ctx.data_mut(|d| d.insert_temp(asked_id(), true));
+}
+
+fn asked_id() -> egui::Id {
+    egui::Id::unique("bug_report_asked")
 }
 
 /// `response`'s right-click menu, with Report a Bug Here… at its foot: the right-click is
@@ -471,8 +475,10 @@ impl Reporter {
         if let Some((crash, send_log)) = self.crash.take() {
             self.open_crash(&crash, send_log, host);
         }
-        let (regions, claimed, asked) =
-            with_frame(ctx, |f| (f.regions.clone(), f.claimed, f.asked));
+        let (regions, claimed) = with_frame(ctx, |f| (f.regions.clone(), f.claimed));
+        let asked = ctx
+            .data_mut(|d| d.remove_temp::<bool>(asked_id()))
+            .unwrap_or(false);
         let clicked = ctx.input(|i| {
             i.pointer
                 .secondary_clicked()
