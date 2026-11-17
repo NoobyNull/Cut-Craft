@@ -414,6 +414,99 @@ fn the_ribbon_layout_shows_a_tabs_groups() {
     );
 }
 
+/// Rail and Ribbon have what Classic has beside its buttons (Matthew, 2026-11-17): the
+/// checks before cutting, the favourites and the hovered tool's guidance.
+#[test]
+fn rail_and_ribbon_browsers_show_the_checks_before_cutting() {
+    use crate::options::WindowLayout;
+    for layout in [WindowLayout::Rail, WindowLayout::Ribbon] {
+        let mut h = Harness::new();
+        h.app.options.general.layout = layout;
+        h.frame(vec![]);
+        assert!(
+            h.text_at("Checks").is_some(),
+            "{layout:?}: the browser's tab"
+        );
+        h.app.inspector_tab = INSPECTOR_TABS.iter().position(|&t| t == "Checks").unwrap();
+        h.frame(vec![]);
+        assert!(
+            h.text_at("Make a toolpath (or tick one in the list) to check it here")
+                .is_some(),
+            "{layout:?}: the Analyse checks"
+        );
+    }
+}
+
+#[test]
+fn a_rail_rows_menu_adds_a_favourite_and_the_star_lists_them() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Rail;
+    let menu = h.app.rail_menu("draw_circle");
+    assert_eq!(menu[0].name, "Add to Favourites");
+    h.app.invoke(&h.ctx, &menu[0].action);
+    let menu = h.app.rail_menu("pocket_toolpath");
+    h.app.invoke(&h.ctx, &menu[0].action);
+    assert_eq!(h.app.options.favourites.design, ["draw_circle"]);
+    assert_eq!(h.app.options.favourites.toolpaths, ["pocket_toolpath"]);
+    assert_eq!(
+        h.app.rail_menu("draw_circle")[0].name,
+        "Remove from Favourites"
+    );
+    h.frame(vec![]);
+    let star = h.text_at("★").expect("the Rail's favourites button");
+    h.press(star, true, Modifiers::NONE);
+    h.press(star, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.rail_favourites);
+    for name in ["Favourites", "Draw Circle", "Pocket Toolpath"] {
+        assert!(h.text_at(name).is_some(), "{name}");
+    }
+    assert!(h.text_at("Draw Rectangle").is_none(), "only the favourites");
+}
+
+#[test]
+fn the_ribbons_favourites_tab_shows_each_pages_favourites() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    h.app.ribbon_tab = RIBBON_TABS.iter().position(|&t| t == "Favourites").unwrap();
+    h.frame(vec![]);
+    assert!(
+        h.text_at("No favourites yet: right-click a tool ▸ Add to Favourites")
+            .is_some()
+    );
+    h.app.options.favourites.design = vec!["draw_circle".into()];
+    h.app.options.favourites.toolpaths = vec!["pocket_toolpath".into(), "gone".into()];
+    h.frame(vec![]);
+    assert!(h.text_at("Design Favourites").is_some());
+    assert!(h.text_at("Toolpath Favourites").is_some());
+    assert_eq!(h.app.favourite_tools(Page::Toolpaths), ["pocket_toolpath"]);
+}
+
+#[test]
+fn rail_and_ribbon_show_the_hovered_tools_guidance_in_a_tip_box() {
+    use crate::options::WindowLayout;
+    let mut h = Harness::new();
+    h.app.options.general.layout = WindowLayout::Ribbon;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // nothing hovered: the tool in hand and its next step, at the browser's foot
+    assert_eq!(h.texts_at("Next:").len(), 1, "the Ribbon's tip box");
+    let mut h = Harness::new();
+    h.app.options.general.layout = WindowLayout::Rail;
+    h.frame(vec![]);
+    assert!(h.texts_at("Next:").is_empty(), "no list open, no tip box");
+    h.app.rail_group = h
+        .app
+        .all_groups()
+        .iter()
+        .position(|g| g.name == "Create Vectors");
+    h.frame(vec![]);
+    let row = h.text_at("Draw Rectangle").expect("a tool row");
+    h.frame(vec![Event::PointerMoved(row)]);
+    h.frame(vec![]);
+    assert_eq!(h.texts_at("Next:").len(), 1, "under the Rail's list");
+}
+
 #[test]
 fn notes_starting_with_a_dot_open_with_the_job() {
     let dir = std::env::temp_dir().join(format!("cut-craft-notes-{}", std::process::id()));

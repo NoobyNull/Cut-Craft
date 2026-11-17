@@ -9,7 +9,8 @@ see-also: toolpaths, save_toolpaths
 
 Before Cut Craft saves your toolpaths or sends them to the machine, it checks them for the
 things that break bits, spoil the work or stop the machine half-way. It does this in
-**Save Toolpaths** and on the Toolpaths page's **Analyse** tab.
+**Save Toolpaths** and on the Toolpaths page's **Analyse** tab (the **Checks** tab in the
+Rail and Ribbon [window layouts](help:settings)).
 
 While the checks run, every check is listed by name:
 

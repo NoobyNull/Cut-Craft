@@ -77,6 +77,7 @@ impl CutCraftApp {
             inspector_tab: 0,
             rail_group: None,
             rail_pinned: false,
+            rail_favourites: false,
             page_rects: [None, None],
             flyout_rect: None,
             buttons_across: std::cell::Cell::new(0.0),

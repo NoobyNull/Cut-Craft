@@ -167,17 +167,45 @@ impl CutCraftApp {
                     "Sheets" => self.sheets_panel(ui),
                     "Layers" => self.layers_panel(ui),
                     "Components" => self.component_list(ui),
+                    // the Classic Toolpaths page's Analyse tab: what would stop or spoil
+                    // the cut, before Save is pressed
+                    "Checks" => self.analyse(ui),
                     _ => self.clipart_panel(ui),
                 });
             }
         }
     }
 
-    /// A group's tools by icon and name, one per row; whether one was picked.
-    pub(super) fn tool_rows(&mut self, ui: &mut egui::Ui, group: gui::ToolGroup) -> bool {
+    /// `page`'s favourites that are still tools, in the order picked.
+    pub(super) fn favourite_tools(&self, page: Page) -> Vec<&'static str> {
+        let all = self.all_groups();
+        self.options
+            .favourites
+            .of(page)
+            .0
+            .iter()
+            .filter_map(|f| {
+                all.iter()
+                    .flat_map(|g| g.tools.iter().copied())
+                    .find(|id| id == f)
+            })
+            .collect()
+    }
+
+    /// A Rail row's right-click menu: the tool added to its page's favourites, or taken off.
+    pub(super) fn rail_menu(&self, id: &str) -> Vec<gui::MenuItem> {
+        let page = self.page_of(id);
+        let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
+        vec![gui::favourite_item(page, id, favourite)]
+    }
+
+    /// Tools by icon and name, one per row, each with its right-click menu; whether one was
+    /// picked.
+    pub(super) fn tool_rows(&mut self, ui: &mut egui::Ui, tools: &[&'static str]) -> bool {
         let edge = ui.spacing().interact_size.y;
         let mut clicked = None;
-        for &id in group.tools {
+        let mut chosen = None;
+        for &id in tools {
             let label = self.tool_label(id);
             let explicit = self.explicit_icon(id);
             let button = match self.icons.find(explicit, id) {
@@ -197,6 +225,12 @@ impl CutCraftApp {
             if response.clicked() {
                 clicked = Some(id);
             }
+            if let Some(action) = self.popup(&response, || self.rail_menu(id)) {
+                chosen = Some(action);
+            }
+        }
+        if let Some(action) = chosen {
+            self.invoke(ui.ctx(), &action);
         }
         if let Some(id) = clicked {
             self.pick(ui.ctx(), self.page_of(id), id);
@@ -240,15 +274,40 @@ impl CutCraftApp {
                             .selected(self.rail_group == Some(i));
                             if ui.add(button).on_hover_hint(group.name).clicked() {
                                 self.rail_group = (self.rail_group != Some(i)).then_some(i);
+                                self.rail_favourites = false;
                             }
+                        }
+                        // after the groups, so none of their buttons moves for it
+                        let star = egui::Button::new(egui::RichText::new("★").size(0.8 * edge))
+                            .min_size(egui::vec2(edge, edge))
+                            .selected(self.rail_favourites);
+                        if ui
+                            .add(star)
+                            .on_hover_hint(
+                                "Favourites: the tools you keep at hand. Right-click any tool \
+                                 ▸ Add to Favourites",
+                            )
+                            .clicked()
+                        {
+                            self.rail_favourites = !self.rail_favourites;
+                            self.rail_group = None;
                         }
                     });
             });
-        if let Some(group) = self.rail_group.and_then(|i| groups.get(i).copied()) {
+        let list = if self.rail_favourites {
+            let mut tools = self.favourite_tools(Page::Design);
+            tools.extend(self.favourite_tools(Page::Toolpaths));
+            Some(("Favourites", tools))
+        } else {
+            self.rail_group
+                .and_then(|i| groups.get(i))
+                .map(|g| (g.name, g.tools.to_vec()))
+        };
+        if let Some((name, tools)) = list {
             side_panel(egui::Panel::left("rail_flyout"), ui.ctx()).show(ui, |ui| {
                 cut_craft_bug_report::mark(ui, "Rail flyout");
                 ui.horizontal(|ui| {
-                    ui.strong(group.name);
+                    ui.strong(name);
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         let row = ui.spacing().interact_size.y;
                         if ui
@@ -262,10 +321,20 @@ impl CutCraftApp {
                 });
                 ui.separator();
                 let picked = egui::ScrollArea::vertical()
-                    .show(ui, |ui| self.tool_rows(ui, group))
+                    .show(ui, |ui| {
+                        if tools.is_empty() {
+                            ui.weak(NO_FAVOURITES);
+                        }
+                        let picked = self.tool_rows(ui, &tools);
+                        // the hovered tool's guidance under its list, as under Classic's icons
+                        ui.add_space(ui.spacing().item_spacing.y);
+                        self.tip_contents(ui);
+                        picked
+                    })
                     .inner;
                 if picked && !self.rail_pinned {
                     self.rail_group = None;
+                    self.rail_favourites = false;
                 }
             });
         }
@@ -295,6 +364,10 @@ impl CutCraftApp {
                 }
             });
             ui.separator();
+            if RIBBON_TABS[self.ribbon_tab] == "Favourites" {
+                self.ribbon_favourites(ui, edge);
+                return;
+            }
             let (groups, page) = self.ribbon_groups();
             egui::ScrollArea::horizontal().show(ui, |ui| {
                 ui.horizontal_top(|ui| {
@@ -323,9 +396,64 @@ impl CutCraftApp {
                 });
             });
         });
-        side_panel(egui::Panel::left("browser"), ui.ctx()).show(ui, |ui| self.browser(ui));
+        side_panel(egui::Panel::left("browser"), ui.ctx()).show(ui, |ui| {
+            // the hovered tool's guidance at the browser's foot, a fixed height so the
+            // browser above never moves as it changes
+            let row = ui.spacing().interact_size.y;
+            egui::Panel::bottom("ribbon_tip")
+                .resizable(false)
+                .exact_size(RIBBON_TIP_ROWS * row)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("ribbon tip")
+                        .auto_shrink(false)
+                        .show(ui, |ui| self.tip_contents(ui));
+                });
+            self.browser(ui);
+        });
         if self.form.is_some() {
             side_panel(egui::Panel::right("inspector"), ui.ctx()).show(ui, |ui| self.inspector(ui));
         }
     }
+
+    /// The Ribbon's Favourites tab: each page's favourites as a group of icons, in the order
+    /// picked; a right-click moves one along them or takes it off.
+    fn ribbon_favourites(&mut self, ui: &mut egui::Ui, edge: f32) {
+        let pages = [
+            (Page::Design, "Design Favourites"),
+            (Page::Toolpaths, "Toolpath Favourites"),
+        ];
+        let lists: Vec<_> = pages
+            .into_iter()
+            .map(|(page, name)| (page, name, self.favourite_tools(page)))
+            .filter(|(_, _, tools)| !tools.is_empty())
+            .collect();
+        if lists.is_empty() {
+            ui.weak(NO_FAVOURITES);
+            return;
+        }
+        let spacing = ui.spacing().clone();
+        let cell = edge + 2.0 * spacing.button_padding.x + spacing.item_spacing.x;
+        egui::ScrollArea::horizontal()
+            .id_salt("ribbon favourites")
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    for (page, name, tools) in lists {
+                        ui.vertical(|ui| {
+                            let columns =
+                                u16::try_from(tools.len().div_ceil(2).max(2)).unwrap_or(u16::MAX);
+                            ui.set_max_width(f32::from(columns) * cell);
+                            self.tool_sections(ui, &[(name, tools)], page, true);
+                        });
+                        ui.separator();
+                    }
+                });
+            });
+    }
 }
+
+/// What a favourites list says while it has none, and how to add one.
+const NO_FAVOURITES: &str = "No favourites yet: right-click a tool ▸ Add to Favourites";
+
+/// How many rows of text the Ribbon keeps for the tool tip at the browser's foot.
+const RIBBON_TIP_ROWS: f32 = 6.0;
