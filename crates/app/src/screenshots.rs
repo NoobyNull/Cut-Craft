@@ -21,7 +21,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 19] = [
+const SCENES: [Scene; 22] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -65,6 +65,12 @@ const SCENES: [Scene; 19] = [
         let steps = cut_craft_updater::Install::flatpak_steps(&version);
         update_window(app, update_offer(Err(steps)));
     }),
+    // Help: 3D View ▸ Changing a model's height (each builds on the one before)
+    ("height-picked", height_picked),
+    ("height-buttons", |app, ctx| {
+        app.view_action(ctx, "transform");
+    }),
+    ("height-taller", height_taller),
     ("help-wiki", |app, _| {
         help_window(app, "pocket_toolpath", "");
     }),
@@ -386,4 +392,45 @@ fn import(app: &mut CutCraftApp, _: &egui::Context) {
     }
     app.view = View::ThreeD;
     app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, ZOOM_3D);
+}
+
+/// A flat job again with the medallion picked in the 3D view, Transform mode off: the
+/// first step of Help ▸ 3D View ▸ Changing a model's height.
+fn height_picked(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.updates.open = false;
+    ctx.set_embed_viewports(false);
+    app.pages.set_pinned(super::Page::Toolpaths, false);
+    app.pages.done_with(super::Page::Toolpaths);
+    app.form = None;
+    app.view_tool = None;
+    app.doc = cut_craft_core::document::Document::default();
+    draw_shapes(app);
+    model(app, ctx);
+    let medallion = app
+        .doc
+        .components
+        .iter()
+        .find(|(_, k)| k.name == "Medallion")
+        .map(|(&id, _)| id);
+    app.doc.selected_components = medallion.into_iter().collect();
+    // the medallion in the middle of the view, its height buttons in sight below it
+    let medallion_at = egui::vec2(-275.0, 40.0);
+    app.framing = crate::view3d::Framing::default()
+        .zoomed_about(egui::Vec2::ZERO, ZOOM_3D)
+        .zoomed_about(medallion_at, 1.5)
+        .panned(egui::vec2(275.0, -90.0));
+}
+
+/// The picked medallion's Shape Height raised to 180 %, as a drag up on its Shape Height
+/// button leaves it, Transform mode still on.
+fn height_taller(app: &mut CutCraftApp, _: &egui::Context) {
+    let Some(&id) = app.doc.selected_components.iter().next() else {
+        return;
+    };
+    let mut params = cmd_component_properties::Params::of(id, &app.doc.components[&id]);
+    params.shape_height = 180.0;
+    if let Ok(params) = serde_json::to_value(&params) {
+        let _ = app.apply("component_properties", &params);
+    }
+    app.status.set_message("Shape height 180%");
 }
