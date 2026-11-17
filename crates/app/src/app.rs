@@ -3,6 +3,7 @@
 
 mod actions;
 mod background;
+mod calculate_again;
 mod commit;
 mod cutting;
 mod depth;
@@ -1058,6 +1059,12 @@ struct OpenForm {
     in_list: bool,
     /// How its drag is read: another way for a toolbox variant (Draw Circle from Edge).
     way: crate::flyout::DragWay,
+    /// A toolpath form's toolpaths from its last Calculate: Calculate again updates them in
+    /// place, or leaves them be when nothing has changed ([`calculate_again`]).
+    made: Option<calculate_again::Made>,
+    /// What its last press said that is not a warning ("Already up to date"), with the
+    /// settings it was said for: shown while they are unchanged.
+    note: Option<(Value, String)>,
 }
 
 /// See [`CutCraftApp::sketch_areas`].
