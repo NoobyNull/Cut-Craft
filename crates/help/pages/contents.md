@@ -15,7 +15,8 @@ a CNC machine cuts them with.
   height with its height buttons, and Auto-rotate to see the job from every side.
 - [Groups](help:groups): step inside a group to change one thing in it; text in a
   group stays editable.
-- [Did You Know?](help:tips): short tips, one shown each time Cut Craft starts.
+- [Did You Know?](help:tips): short tips by subject, from drawing to cutting safely, one
+  shown each time Cut Craft starts. Each links to the page that says more.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.
 - [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
@@ -100,6 +101,7 @@ A number field takes a sum as well as a number, worked out when it is entered:
 
 - **F1** the open tool's help, **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options. Edit ▸ Options ▸ Mouse and Shortcuts can move these like any other key; the arrow keys always nudge the selection
 - **F11** the designing layout, **F12** the machining layout
+- **Ctrl+K** Find Tool: type part of a tool's name and press Enter to open it, wherever it is in the menus
 - **Ctrl+Alt+S** Increment and Save: a new numbered copy (sign_1), leaving the file you opened as it was. **Ctrl+S** saves over it
 - **Ctrl+Y** redoes; on a Mac **⇧⌘Z** does too, as in other Mac apps
 - **Ctrl+Q** starts Quick Engrave, except on a Mac, where **⌘Q** quits: set it another key in Edit ▸ Options ▸ Mouse and Shortcuts

@@ -3505,7 +3505,7 @@ impl CutCraftApp {
             ui.add_space(ui.spacing().item_spacing.y);
             ui.checkbox(&mut ask.remember, "Do this every time")
                 .on_hover_hint(
-                    "Keep this answer and stop asking. Edit ▸ Options ▸ Confirmations ▸ G-code \
+                    "Keep this answer and stop asking. Edit ▸ Options ▸ Confirmation Choices ▸ G-code \
                      from an earlier save changes it",
                 );
             ui.separator();

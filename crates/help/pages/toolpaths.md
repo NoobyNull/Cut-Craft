@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-17
 see-also:
 ---
 
@@ -20,6 +20,30 @@ makes again, notes being written in the Toolpath Summary stay with their toolpat
 what the preview has cut keeps each toolpath's colour. A change made in the list (a
 reorder, group, delete, or a tick showing or hiding a toolpath) while a tool's form is open
 beside it is kept when that form is cancelled: Cancel takes back only what the form did.
+
+## Pressing Calculate again
+
+A toolpath's form stays open after Calculate, so it is easy to press Calculate a second
+time without noticing the toolpath is already made. That never makes a second copy:
+
+1. **Nothing changed** (the same settings, the same vectors picked, and the toolpath not
+   edited or out of date since): the toolpath is kept as it is, and the form says
+   *Already up to date* under its settings. Nothing is added to Undo.
+2. **A setting changed** (a deeper cut, another bit, a new name), or the vectors or the
+   material changed so the toolpath is marked ⚠ out of date: Calculate works the same
+   toolpath out again **in its place**. It keeps its spot in the cut order and its group in
+   the list, and one Undo takes the update back.
+3. **Other vectors picked**: Calculate makes a new toolpath for them and keeps the first
+   one. With nothing picked, it uses the vectors the toolpath was made from.
+
+To add another toolpath with the same settings on purpose (a second pass, say), press
+**Calculate as New**, just above Calculate once a toolpath is made. The form then follows the
+new one. A toolpath opened with Edit Toolpath (double-click it in the list) works the same
+way: Calculate with nothing changed says *Already up to date*. This is about toolpaths in
+the job; what happens to G-code files saved before is set when you save them
+([Save Toolpaths](help:save_toolpaths)).
+
+![The Profile form after Calculate was pressed again with nothing changed: Already up to date, and Calculate as New above Calculate](pictures/calculate-again.png)
 
 While a preview plays, its controls sit over the 2D and 3D views: Pause or Run, Single
 Step, Run to Retract, Stop, the speed, Progress to drag the tool along the whole job, and
@@ -76,7 +100,7 @@ toolpath you have since removed is not left to run by mistake. Archive moves the
 dated folder under Archive beside them (a second one saved in the same second gets its own
 folder), then adds the new ones. If the new files cannot be saved (a toolpath crossing a
 keep-out zone, say), the earlier ones are put back as they were. Tick Do this every time to
-stop being asked; Edit ▸ Options ▸ Confirmations ▸ G-code from an earlier save changes it.
+stop being asked; Edit ▸ Options ▸ Confirmation Choices ▸ G-code from an earlier save changes it.
 Send to Machine asks the same of an earlier send's files in the project's folder on the
 machine (old tile files from another layout too): Replace sends the new files and deletes
 the old ones left over; Archive moves them into a dated folder under Archive there first.
