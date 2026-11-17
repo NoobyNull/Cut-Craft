@@ -282,6 +282,7 @@ impl CutCraftApp {
         }
         self.in_background(
             CHECKING_FOR_API,
+            "check",
             move || {
                 let mut found: BTreeMap<EntityId, Vec<Finding>> = BTreeMap::new();
                 for plan in plans {
