@@ -12,6 +12,7 @@
 
 use crate::document::{Job, Units};
 use crate::geometry::Point;
+use crate::keep_out::KeepOutZone;
 use crate::progress;
 use crate::simplify::simplify;
 use crate::simulation::{Material, Tiles};
@@ -189,6 +190,24 @@ pub struct Found {
     pub worst: Option<Hit>,
     /// The first [`KEPT`] hits, to show in the preview.
     pub hits: Vec<Hit>,
+    /// Moves where a part comes down over a clamp (a keep-out zone), in all.
+    pub clamp_count: usize,
+    /// The first of them.
+    pub clamp: Option<ClampHit>,
+}
+
+/// A part above the flutes coming down over a clamp: a keep-out zone standing above the
+/// material's top.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClampHit {
+    pub part: Part,
+    /// The zone's name ("Clamp 1"), how tall it stands, and whether that was taken.
+    pub zone: String,
+    pub stands: f64,
+    pub guessed: bool,
+    /// How far below the clamp's top the part's bottom comes, mm, and where the tip was.
+    pub below: f64,
+    pub at: Point,
 }
 
 impl Found {
@@ -204,7 +223,7 @@ impl Found {
 
     /// Whether anything hits.
     pub fn any(&self) -> bool {
-        self.count > 0
+        self.count > 0 || self.clamp_count > 0
     }
 }
 
@@ -216,17 +235,30 @@ fn cuts_nothing(toolpath: &Toolpath) -> bool {
 }
 
 /// What the parts above the flutes hit cutting `toolpaths` in the order given into `job`'s
-/// uncut material, held by `machine`'s holder (or the bit's own): one [`Found`] for each.
-/// Quick when no move goes deep enough for anything above the flutes to reach the top.
+/// uncut material, held by `machine`'s holder (or the bit's own), with `clamps` (the
+/// keep-out zones) standing on it: one [`Found`] for each. Quick when no move goes deep
+/// enough for anything above the flutes to reach the top or a clamp.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "a cell count within bounds"
 )]
-pub fn find(job: &Job, toolpaths: &[&Toolpath], machine: &Holding) -> Vec<Found> {
+pub fn find(
+    job: &Job,
+    toolpaths: &[&Toolpath],
+    machine: &Holding,
+    clamps: &[KeepOutZone],
+) -> Vec<Found> {
     let mut found = vec![Found::default(); toolpaths.len()];
     let bands: Vec<Vec<Band>> = toolpaths.iter().map(|t| bands(&t.tool, machine)).collect();
     let lowest = |bands: &[Band]| bands.iter().map(|b| b.rise).fold(f64::INFINITY, f64::min);
+    if job.rotary.is_none() {
+        for ((toolpath, bands), found) in toolpaths.iter().zip(&bands).zip(&mut found) {
+            if !cuts_nothing(toolpath) {
+                over_clamps(toolpath, bands, clamps, found);
+            }
+        }
+    }
     let deep_anywhere = toolpaths.iter().zip(&bands).any(|(t, bands)| {
         let rise = lowest(bands);
         !cuts_nothing(t) && t.moves.iter().any(|m| m.to.z + rise < 0.0)
@@ -254,6 +286,40 @@ pub fn find(job: &Job, toolpaths: &[&Toolpath], machine: &Holding) -> Vec<Found>
         cut_and_look(&mut material, toolpath, bands, lowest(bands), found);
     }
     found
+}
+
+/// Adds to `found` each move of `toolpath` that brings one of `bands` down over one of the
+/// `clamps` lower than it stands.
+fn over_clamps(toolpath: &Toolpath, bands: &[Band], clamps: &[KeepOutZone], found: &mut Found) {
+    let lowest = bands.iter().map(|b| b.rise).fold(f64::INFINITY, f64::min);
+    for clamp in clamps {
+        let (stands, guessed) = clamp.height();
+        // nothing comes low enough near any clamp: no outline to grow
+        if !toolpath.moves.iter().any(|m| m.to.z + lowest < stands) {
+            continue;
+        }
+        let grown: Vec<_> = bands.iter().map(|b| clamp.around(b.radius)).collect();
+        for pair in toolpath.moves.windows(2) {
+            let (a, b) = (pair[0].to, pair[1].to);
+            let low = a.z.min(b.z);
+            let hit = bands.iter().zip(&grown).find(|(band, around)| {
+                low + band.rise < stands && around.crossed(a.truncate(), b.truncate())
+            });
+            if let Some((band, _)) = hit {
+                found.clamp_count += 1;
+                if found.clamp.is_none() {
+                    found.clamp = Some(ClampHit {
+                        part: band.part,
+                        zone: clamp.name.clone(),
+                        stands,
+                        guessed,
+                        below: stands - (low + band.rise),
+                        at: b.truncate(),
+                    });
+                }
+            }
+        }
+    }
 }
 
 /// Cuts `toolpath` into `material`, adding to `found` each move after which one of `bands`
@@ -347,6 +413,48 @@ fn look(
 /// holder (or the bit's own), as a sentence that says how to put it right; `None` when
 /// nothing hits.
 pub fn sentence(name: &str, tool: &Tool, found: &Found, units: Units) -> Option<String> {
+    let said: Vec<String> = [
+        material_sentence(name, tool, found, units),
+        clamp_sentence(name, tool, found, units),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    (!said.is_empty()).then(|| said.join(". "))
+}
+
+/// What to say of a part coming down over a clamp; `None` when none does.
+fn clamp_sentence(name: &str, tool: &Tool, found: &Found, units: Units) -> Option<String> {
+    let hit = found.clamp.as_ref()?;
+    let times = match found.clamp_count {
+        1 => String::new(),
+        n => format!(" ({n} moves in all)"),
+    };
+    let stands = units.length(hit.stands, 1);
+    let taken = if hit.guessed {
+        format!(
+            ", taken as {stands} tall because its height is not set: set how tall it stands \
+             in Keep-Out Zones"
+        )
+    } else {
+        format!(", which stands {stands} tall")
+    };
+    let part = match hit.part {
+        Part::Shank => format!("shank of {}", tool.name),
+        part => part.name().to_owned(),
+    };
+    Some(format!(
+        "{name}: the {part} would come down {} below the top of {}{taken}, near X{} Y{}{times}. \
+         Move the clamp further from the cut, or let the bit stick out further",
+        units.length(hit.below, 1),
+        hit.zone,
+        position(hit.at.x, units),
+        position(hit.at.y, units),
+    ))
+}
+
+/// What to say of a part hitting the material; `None` when none does.
+fn material_sentence(name: &str, tool: &Tool, found: &Found, units: Units) -> Option<String> {
     let worst = found.worst?;
     let where_ = format!(
         "near X{} Y{}",
@@ -498,13 +606,13 @@ mod tests {
 
     #[test]
     fn a_shallow_cut_hits_nothing() {
-        let found = find(&job(), &[&slot(bit(), 10.0)], &Holding::default());
+        let found = find(&job(), &[&slot(bit(), 10.0)], &Holding::default(), &[]);
         assert!(!found[0].any());
     }
 
     #[test]
     fn a_cut_deeper_than_the_stickout_hits_the_collet_nut() {
-        let found = find(&job(), &[&slot(bit(), 30.0)], &Holding::default());
+        let found = find(&job(), &[&slot(bit(), 30.0)], &Holding::default(), &[]);
         let worst = found[0].worst.expect("the nut hits");
         assert_eq!(worst.part, Part::ColletNut);
         // the nut's face is 25 above the tip at -30: the uncut top stands 5 above it
@@ -522,7 +630,12 @@ mod tests {
             stickout: 45.0,
             ..bit()
         };
-        let found = find(&job(), &[&clear, &slot(bit(), 30.0)], &Holding::default());
+        let found = find(
+            &job(),
+            &[&clear, &slot(bit(), 30.0)],
+            &Holding::default(),
+            &[],
+        );
         assert!(!found[1].any(), "{:?}", found[1].worst);
     }
 
@@ -595,7 +708,7 @@ mod tests {
                 (100.0, 150.0, -30.0),
             ],
         );
-        let found = find(&job(), &[&island(), &through], &Holding::default());
+        let found = find(&job(), &[&island(), &through], &Holding::default(), &[]);
         assert!(!found[0].any(), "the clearing hits nothing");
         let worst = found[1].worst.expect("the nut meets the island");
         assert_eq!(worst.part, Part::ColletNut);
@@ -616,7 +729,7 @@ mod tests {
                 (100.0, 150.0, -40.0),
             ],
         );
-        let found = find(&job(), &[&island(), &ramp], &Holding::default());
+        let found = find(&job(), &[&island(), &ramp], &Holding::default(), &[]);
         assert!(!found[1].any(), "{:?}", found[1].worst);
     }
 
@@ -630,7 +743,7 @@ mod tests {
             stickout: 30.0,
             ..bit()
         };
-        let found = find(&job(), &[&slot(tool, 10.0)], &Holding::default());
+        let found = find(&job(), &[&slot(tool, 10.0)], &Holding::default(), &[]);
         assert_eq!(found[0].worst.map(|w| w.part), Some(Part::Shank));
     }
 
@@ -643,20 +756,25 @@ mod tests {
             spindle_diameter: 0.0,
         });
         // only once the machine takes holders per bit
-        let found = find(&job(), &[&slot(tool.clone(), 30.0)], &Holding::default());
+        let found = find(
+            &job(),
+            &[&slot(tool.clone(), 30.0)],
+            &Holding::default(),
+            &[],
+        );
         assert!(found[0].any());
         let per_bit = Holding {
             per_bit: true,
             ..Holding::default()
         };
-        let found = find(&job(), &[&slot(tool, 30.0)], &per_bit);
+        let found = find(&job(), &[&slot(tool, 30.0)], &per_bit, &[]);
         assert!(!found[0].any());
     }
 
     #[test]
     fn the_stock_hit_is_marked_for_the_preview() {
         let toolpath = slot(bit(), 30.0);
-        let found = find(&job(), &[&toolpath], &Holding::default());
+        let found = find(&job(), &[&toolpath], &Holding::default(), &[]);
         let mut material = Material::new(&job(), 200);
         material.cut(&toolpath);
         let struck = struck_cells(&material, &found[0].hits);
@@ -667,6 +785,46 @@ mod tests {
             let at = material.centre(i % material.columns, i / material.columns);
             let off = distance_to_line(at, a, b);
             assert!(off > 3.0 && off <= 17.5 + 1.0, "{at:?}");
+        }
+    }
+
+    /// A clamp 10 mm square beside the slot, its near edge `gap` from the slot's line.
+    fn clamp(gap: f64, stands: f64) -> KeepOutZone {
+        let (x, y) = (100.0 + gap, 95.0);
+        let corners = [
+            Point::new(x, y),
+            Point::new(x + 10.0, y),
+            Point::new(x + 10.0, y + 10.0),
+            Point::new(x, y + 10.0),
+        ];
+        KeepOutZone::new("Clamp 1", crate::geometry::Path::polyline(&corners, true))
+            .standing(stands)
+    }
+
+    #[test]
+    fn the_collet_nut_coming_down_over_a_clamp_is_found() {
+        // 10 deep, the nut's face is 15 above the top: a 20 mm clamp 10 mm away is under it
+        let found = find(
+            &job(),
+            &[&slot(bit(), 10.0)],
+            &Holding::default(),
+            &[clamp(10.0, 0.0)],
+        );
+        let hit = found[0]
+            .clamp
+            .as_ref()
+            .expect("the nut comes over the clamp");
+        assert_eq!(hit.part, Part::ColletNut);
+        assert!(hit.guessed && (hit.below - 5.0).abs() < 1e-9);
+        let said = sentence("Slot", &bit(), &found[0], Units::Mm).unwrap();
+        assert!(
+            said.contains("below the top of Clamp 1, taken as 20.0 mm tall"),
+            "{said}"
+        );
+        // a lower clamp, or one further off, is clear
+        for clear in [clamp(10.0, 12.0), clamp(30.0, 0.0)] {
+            let found = find(&job(), &[&slot(bit(), 10.0)], &Holding::default(), &[clear]);
+            assert!(!found[0].any(), "{:?}", found[0].clamp);
         }
     }
 
@@ -682,7 +840,12 @@ mod tests {
     #[test]
     fn the_sentence_says_what_hits_and_how_to_fix_it() {
         let tool = bit();
-        let found = find(&job(), &[&slot(tool.clone(), 30.0)], &Holding::default());
+        let found = find(
+            &job(),
+            &[&slot(tool.clone(), 30.0)],
+            &Holding::default(),
+            &[],
+        );
         let said = sentence("Slot", &tool, &found[0], Units::Mm).unwrap();
         assert!(said.starts_with("Slot: the collet nut would hit the material near X"));
         assert!(said.contains("sticks out 25.0 mm below the collet nut."));

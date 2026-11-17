@@ -2328,8 +2328,14 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         width: 20.0,
         height: 60.0,
         name: String::new(),
+        stands: 30.0,
     }];
     assert!(h.app.sync_machine_keep_out());
+    assert_eq!(
+        h.app.doc.machine_keep_out[0].height(),
+        (30.0, false),
+        "its height comes too"
+    );
     h.app.keep_out_changed();
     assert!(!crossed(&h.app.doc.keep_out_zones(), &moves(&h.app)));
     assert!(rapids(&h.app) > straight, "round the machine's clamp");
@@ -18089,6 +18095,8 @@ fn the_collision_help_explains_the_sizes_with_a_picture() {
         "Holder per bit",
         "Own holder",
         "This question cannot be switched",
+        "Clamp Height",
+        "(help:keep_out_zones)",
         "pictures/collet-hits.png",
     ] {
         assert!(page.contains(words), "{words}");
@@ -18098,6 +18106,66 @@ fn the_collision_help_explains_the_sizes_with_a_picture() {
             .iter()
             .any(|(name, bytes)| *name == "collet-hits.png" && bytes.starts_with(b"\x89PNG")),
         "its picture goes with the app"
+    );
+}
+
+#[test]
+fn the_collet_nut_coming_down_over_a_clamp_is_marked_after_a_preview() {
+    // Matthew 2026-11-17: keep-out zones get a height, so the collet is checked against
+    // clamps too
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    for toolpath in h.app.doc.toolpaths.values_mut() {
+        // the bit reaches the whole cut, so only the clamp is in the nut's way
+        toolpath.tool.flute_length = 60.0;
+        toolpath.tool.stickout = 60.0;
+    }
+    let deepest = h
+        .app
+        .doc
+        .toolpaths
+        .values()
+        .next()
+        .unwrap()
+        .moves
+        .iter()
+        .map(|m| m.to.z)
+        .fold(0.0, f64::min);
+    // a clamp just outside the profile, standing taller than the nut is above the deepest
+    // pass
+    let o = h.app.doc.job.area().min;
+    let at = |x: f64, y: f64| cut_craft_core::geometry::Point::new(o.x + x, o.y + y);
+    let clamp = cut_craft_core::geometry::Path::polyline(
+        &[
+            at(64.0, 20.0),
+            at(74.0, 20.0),
+            at(74.0, 30.0),
+            at(64.0, 30.0),
+        ],
+        true,
+    );
+    h.app.doc.keep_out = vec![
+        cut_craft_core::keep_out::KeepOutZone::new("Clamp 1", clamp)
+            .standing(60.0 + deepest + 10.0),
+    ];
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.frame(vec![]);
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    let collided = h
+        .app
+        .collisions
+        .get(&id)
+        .expect("the nut comes over the clamp");
+    assert!(
+        collided.sentence.contains("below the top of Clamp 1"),
+        "{}",
+        collided.sentence
     );
 }
 #[test]

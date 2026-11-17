@@ -1207,6 +1207,7 @@ impl CutCraftApp {
             .map(|(&id, t)| (id, t.clone()))
             .collect();
         let (job, holding) = (source.job, self.holding());
+        let clamps: Vec<_> = source.named_keep_out().cloned().collect();
         drop(source);
         let start = (self.simulation.clone())
             .filter(|m| !fresh && m.covers(&self.doc.job))
@@ -1230,7 +1231,8 @@ impl CutCraftApp {
                         .map(|(_, t)| t)
                         .chain(list.iter().copied())
                         .collect();
-                    let mut collided = super::background::collided(&job, &ids, &all, &holding);
+                    let mut collided =
+                        super::background::collided(&job, &ids, &all, (&holding, &clamps));
                     collided.retain(|id, _| !earlier.iter().any(|(e, _)| e == id));
                     collided
                 };

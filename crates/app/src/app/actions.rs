@@ -1227,7 +1227,10 @@ impl CutCraftApp {
             .iter()
             .enumerate()
             .filter(|(_, z)| z.width > 0.0 && z.height > 0.0)
-            .map(|(i, z)| cut_craft_core::keep_out::KeepOutZone::new(z.name_at(i), z.path()))
+            .map(|(i, z)| {
+                cut_craft_core::keep_out::KeepOutZone::new(z.name_at(i), z.path())
+                    .standing(z.stands)
+            })
             .collect();
         let clip = self.options.toolpaths.clip_at_keep_out_zones;
         let changed = zones != self.doc.machine_keep_out || clip != self.doc.clip_keep_out;
