@@ -554,11 +554,16 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
         );
         let mut gone = None;
         egui::Grid::new("machine_keep_out")
-            .num_columns(6)
+            .num_columns(7)
             .show(ui, |ui| {
                 for heading in ["Name", "X", "Y", "Width", "Height"] {
                     ui.label(heading);
                 }
+                ui.label("Tall").on_hover_hint(
+                    "How tall the clamp stands above the top of the material, so the checks \
+                     see the collet nut or spindle coming down over it beside a deep cut; 0 \
+                     takes 20 mm",
+                );
                 ui.end_row();
                 for (i, zone) in machine.keep_out.iter_mut().enumerate() {
                     // what its label in the views says, after "Keep-out: "
@@ -579,7 +584,7 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
                             *value = shown * per;
                         }
                     }
-                    for value in [&mut zone.width, &mut zone.height] {
+                    for value in [&mut zone.width, &mut zone.height, &mut zone.stands] {
                         measure(ui, value, per, &format!(" {length}"));
                     }
                     if ui.button("Remove").clicked() {
