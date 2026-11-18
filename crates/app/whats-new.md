@@ -1,4 +1,4 @@
-- Cutting times now count speeding up, slowing down, corners, tool changes and the trip home
-- Construction lines help you place things and are never cut
-- A layer with no material named cuts at the safest (hardest material) speeds
-- Bits with no flute length set no longer show a "not checked" reach warning
+- Rail and Ribbon now have the Checks tab, Favourites and the tip box, like Classic
+- Right-click a tool in Rail to add it to Favourites; the ★ at the foot lists them
+- Ribbon has a Favourites tab
+- When the window is narrow, the Ribbon folds the groups you use least into ▾ buttons
