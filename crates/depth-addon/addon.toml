@@ -5,12 +5,15 @@
 id = "depth"
 name = "Depth (Relief from Photo)"
 kind = "tool"
-version = "0.1.0"
+version = "0.2.0"
 needs_cutcraft = ">=0.5.0"
-platforms = ["windows-x64", "linux-x64"]
+platforms = ["windows-x64", "linux-x64", "macos-arm64"]
 # the program is Cut Craft's own; the weights are Depth Anything V2 Small (Apache 2.0),
-# converted with `cutcraft-depth convert depth_anything_v2_vits.pth`
-license = "LicenseRef-CutCraft AND Apache-2.0"
+# converted with `cutcraft-depth convert depth_anything_v2_vits.pth`, and, optionally,
+# Large (CC-BY-NC 4.0: non-commercial use only), stored at half precision
+license = "LicenseRef-CutCraft AND Apache-2.0 AND CC-BY-NC-4.0"
 # the program (.exe added on Windows), and what is downloaded beside the zip
 program = "cutcraft-depth"
 downloads = ["depth_anything_v2_vits.safetensors"]
+# fetched only when asked for (Relief from Photo's Get High Detail Model)
+optional = ["depth_anything_v2_vitl.safetensors"]

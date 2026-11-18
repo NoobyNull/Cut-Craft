@@ -91,6 +91,14 @@ impl Repo {
         }
     }
 
+    /// The API address of its release tagged `tag`.
+    pub fn tag_url(&self, tag: &str) -> String {
+        format!(
+            "https://api.github.com/repos/{}/{}/releases/tags/{tag}",
+            self.owner, self.name
+        )
+    }
+
     /// The API address of its newest release.
     pub fn latest_url(&self) -> String {
         format!(
@@ -124,6 +132,11 @@ pub struct Manifest {
     /// Files fetched from the same release beside the zip, once for every computer.
     #[serde(default)]
     pub downloads: Vec<String>,
+    /// Files of the same release fetched only when the person asks for them (see
+    /// [`fetch_optional`]), such as a larger model; an update keeps them while the release
+    /// still carries the same file.
+    #[serde(default)]
+    pub optional: Vec<String>,
 }
 
 impl Manifest {
@@ -140,6 +153,7 @@ impl Manifest {
         if let Some(name) = m
             .downloads
             .iter()
+            .chain(&m.optional)
             .chain(&m.program)
             .find(|d| !plain_name(d))
         {
@@ -376,6 +390,7 @@ fn install_with(
             let bytes = get(asset)?;
             fs::write(staging.join(&asset.name), bytes).map_err(|e| cannot(&staging, &e))?;
         }
+        keep_optional(&addons.join(&manifest.id), &staging, &manifest, release);
         if let Some(program) = &manifest.program {
             runnable(&staging.join(format!("{program}{}", std::env::consts::EXE_SUFFIX)))?;
         }
@@ -400,6 +415,85 @@ fn install_with(
         offer.repo
     );
     Ok(manifest)
+}
+
+/// Moves the optional files the person fetched from the add-on's folder (`old`) into its
+/// new one (`staging`) when `release` carries the very same file; one it changed is left to
+/// be fetched again.
+fn keep_optional(old: &Path, staging: &Path, manifest: &Manifest, release: &Release) {
+    for name in &manifest.optional {
+        let (from, to) = (old.join(name), staging.join(name));
+        let Some(asset) = release.assets.iter().find(|a| a.name == *name) else {
+            continue;
+        };
+        let same = fs::metadata(&from).is_ok_and(|m| m.len() == asset.size)
+            && fs::read(&from).is_ok_and(|b| package::verify(&b, asset.digest.as_deref()).is_ok());
+        if same && fs::rename(&from, &to).is_err() {
+            let _ = fs::copy(&from, &to);
+        }
+    }
+}
+
+/// Fetches `name`, one of the installed add-on `id`'s optional files, from the release it
+/// was installed from, into its folder. Checked like every download; nothing is left
+/// behind if it fails. `progress` hears (bytes so far, bytes in all).
+pub fn fetch_optional(
+    addons: &Path,
+    id: &str,
+    name: &str,
+    progress: &dyn Fn(u64, u64),
+) -> Result<(), String> {
+    let record = installed(addons, id).ok_or("that add-on is not installed")?;
+    let json = crate::get_text(&record.repo.tag_url(&record.tag))?;
+    fetch_optional_with(
+        addons,
+        id,
+        name,
+        &Release::parse(&json)?,
+        crate::RELEASE_KEY,
+        &|asset, done| crate::download(asset, done),
+        progress,
+    )
+}
+
+/// [`fetch_optional`], with the release, release key and downloader given.
+fn fetch_optional_with(
+    addons: &Path,
+    id: &str,
+    name: &str,
+    release: &Release,
+    key: &str,
+    fetch: &Fetch<'_>,
+    progress: &dyn Fn(u64, u64),
+) -> Result<(), String> {
+    let dir = addons.join(id);
+    let manifest = fs::read_to_string(dir.join(MANIFEST))
+        .map_err(|_| "that add-on is not installed".to_string())
+        .and_then(|text| Manifest::parse(&text))?;
+    if !manifest.optional.iter().any(|o| o == name) {
+        return Err(format!("{} has no optional {name}", manifest.name));
+    }
+    let asset = release
+        .assets
+        .iter()
+        .find(|a| a.name == name)
+        .ok_or_else(|| format!("the add-on's release has no {name}"))?;
+    let bytes = fetch(asset, &|done| progress(done, asset.size))?;
+    package::verify(&bytes, asset.digest.as_deref())?;
+    if let Some(sig) = release.signature_of(asset) {
+        let sig = String::from_utf8(fetch(sig, &|_| {})?)
+            .map_err(|_| format!("{name}'s signature is not text"))?;
+        package::verify_signature(&bytes, &sig, key, name)?;
+    }
+    // written beside, then put in place whole: never a half file under its real name
+    let part = dir.join(format!(".{name}.part"));
+    let written = fs::write(&part, bytes).and_then(|()| fs::rename(&part, dir.join(name)));
+    if let Err(e) = written {
+        let _ = fs::remove_file(&part);
+        return Err(cannot(&dir, &e));
+    }
+    log::info!("fetched {name} for add-on {id} ({})", release.tag);
+    Ok(())
 }
 
 /// Whether `repo`'s add-on may go in the folder its manifest names: never in place of one
@@ -573,6 +667,10 @@ mod tests {
             want.latest_url()
                 .ends_with("/repos/NoobyNull/CutCraft-Depth/releases/latest")
         );
+        assert!(
+            want.tag_url("v0.2.0")
+                .ends_with("/repos/NoobyNull/CutCraft-Depth/releases/tags/v0.2.0")
+        );
     }
 
     #[test]
@@ -733,6 +831,118 @@ mod tests {
             ],
             signed,
         )
+    }
+
+    const DEPTH_WITH_LARGE: &str = r#"
+        id = "depth"
+        name = "Depth (Relief from Photo)"
+        kind = "tool"
+        version = "0.2.0"
+        program = "cutcraft-depth"
+        downloads = ["weights.safetensors"]
+        optional = ["large.safetensors"]
+    "#;
+
+    fn release_with_large(large: &[u8]) -> Fake {
+        let here = zip(&[
+            ("addon.toml", DEPTH_WITH_LARGE.as_bytes()),
+            (&program(), b"the program"),
+        ]);
+        fake(
+            &[
+                (&format!("depth-{}.zip", platform()), here),
+                ("weights.safetensors", b"weights".to_vec()),
+                ("large.safetensors", large.to_vec()),
+            ],
+            false,
+        )
+    }
+
+    impl Fake {
+        fn fetch_optional(&self, addons: &Path, name: &str) -> Result<(), String> {
+            fetch_optional_with(
+                addons,
+                "depth",
+                name,
+                &self.release,
+                &self.key,
+                &|asset, done| {
+                    let bytes = self.files[&asset.url].clone();
+                    done(bytes.len() as u64);
+                    Ok(bytes)
+                },
+                &|_, _| {},
+            )
+        }
+    }
+
+    #[test]
+    fn an_optional_file_comes_only_when_asked_for() {
+        let addons = scratch("optional");
+        let fake = release_with_large(b"large weights");
+        fake.install(&addons, &platform()).unwrap();
+        let large = addons.join("depth").join("large.safetensors");
+        assert!(!large.exists(), "not part of the install");
+        fake.fetch_optional(&addons, "large.safetensors").unwrap();
+        assert_eq!(fs::read(&large).unwrap(), b"large weights");
+        // only what the add-on lists as optional
+        let e = fake.fetch_optional(&addons, "README.md").unwrap_err();
+        assert!(e.contains("README.md"), "{e}");
+        fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn an_optional_file_needs_the_add_on_installed() {
+        let addons = scratch("optional-none");
+        let fake = release_with_large(b"large weights");
+        let e = fake
+            .fetch_optional(&addons, "large.safetensors")
+            .unwrap_err();
+        assert!(e.contains("not installed"), "{e}");
+    }
+
+    #[test]
+    fn an_optional_file_that_does_not_check_out_is_not_kept() {
+        let addons = scratch("optional-bad");
+        let mut fake = release_with_large(b"large weights");
+        fake.install(&addons, &platform()).unwrap();
+        let asset = fake
+            .release
+            .assets
+            .iter_mut()
+            .find(|a| a.name == "large.safetensors")
+            .unwrap();
+        asset.digest = Some(sha(b"something else"));
+        assert!(fake.fetch_optional(&addons, "large.safetensors").is_err());
+        let dir = addons.join("depth");
+        assert!(!dir.join("large.safetensors").exists());
+        assert!(
+            fs::read_dir(&dir).unwrap().all(|e| !e
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains("large")),
+            "no part-file left behind"
+        );
+        fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn an_update_keeps_an_optional_file_unless_the_release_changed_it() {
+        let addons = scratch("optional-update");
+        let fake = release_with_large(b"large weights");
+        fake.install(&addons, &platform()).unwrap();
+        fake.fetch_optional(&addons, "large.safetensors").unwrap();
+        let large = addons.join("depth").join("large.safetensors");
+        // the same file in the new release: kept, not downloaded again
+        fake.install(&addons, &platform()).unwrap();
+        assert_eq!(fs::read(&large).unwrap(), b"large weights");
+        // a new file: the old one is dropped, to be fetched again when wanted
+        release_with_large(b"newer large weights")
+            .install(&addons, &platform())
+            .unwrap();
+        assert!(!large.exists());
+        fs::remove_dir_all(addons).unwrap();
     }
 
     fn scratch(name: &str) -> PathBuf {
