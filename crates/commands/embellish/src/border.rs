@@ -22,6 +22,8 @@ pub enum Style {
     Feathers,
     Chevrons,
     BandBeads,
+    /// Strands plaited over and under, as a Celtic knot band ([`crate::celtic`]).
+    Celtic,
     /// A vine with scrolls, flowers, leaves and dots ([`crate::vine`]).
     Vine(crate::vine::Kind),
 }
@@ -52,6 +54,8 @@ pub struct Spec {
     pub sequence: Seq,
     /// Repeats of different sizes or turns, and the pieces' shape.
     pub vary: Vary,
+    /// The Celtic weave's strands.
+    pub weave: crate::celtic::Weave,
 }
 
 /// What the vine pattern has, and how it is drawn.
@@ -104,6 +108,18 @@ pub struct Loop {
     pub len: f64,
     ds: f64,
     closed: bool,
+    /// Between two lines: the band's two sides, the pattern stretched across from one to the
+    /// other.
+    sides: Option<Sides>,
+}
+
+/// The two sides of a band between two lines, matched point for point (`l` on the left),
+/// how far along the middle each pair is, and the band's half width on average.
+struct Sides {
+    l: Vec<Point>,
+    r: Vec<Point>,
+    along: Vec<f64>,
+    hw: f64,
 }
 
 fn wrap(a: f64) -> f64 {
@@ -137,6 +153,22 @@ impl Loop {
     /// The board point `v` across the line at `s` along it. Past an open line's ends, the
     /// line goes on straight.
     pub fn at(&self, s: f64, v: f64) -> Point {
+        if let Some(sd) = &self.sides {
+            // across from one side to the other, the middle at 0 and the sides at the
+            // average half width
+            let k = sd.along.len();
+            let s = s.clamp(0.0, sd.along[k - 1]);
+            let i = sd.along.partition_point(|&a| a <= s).clamp(1, k - 1) - 1;
+            let span = sd.along[i + 1] - sd.along[i];
+            let f = if span > 1e-12 {
+                (s - sd.along[i]) / span
+            } else {
+                0.0
+            };
+            let (l, r) = (sd.l[i].lerp(sd.l[i + 1], f), sd.r[i].lerp(sd.r[i + 1], f));
+            let mid = l.lerp(r, 0.5);
+            return mid + (l - mid) * (v / sd.hw);
+        }
         let n = self.p.len();
         let nf = n as f64;
         if !self.closed {
@@ -161,6 +193,9 @@ impl Loop {
 
     /// How much a length along the line shrinks (or grows) at `v` across it.
     fn stretch(&self, s: f64, v: f64) -> f64 {
+        if self.sides.is_some() {
+            return 1.0;
+        }
         let n = self.p.len();
         let nf = n as f64;
         let i = if self.closed {
@@ -238,6 +273,7 @@ pub fn centre_loops(field: &Field, d: f64, hw: f64) -> Vec<Loop> {
             len,
             ds,
             closed: true,
+            sides: None,
         });
     }
     out
@@ -335,6 +371,7 @@ pub fn open_line(line: &[Point], hw: f64) -> Option<Loop> {
         len,
         ds,
         closed: false,
+        sides: None,
     })
 }
 
@@ -579,6 +616,97 @@ pub fn design_loops(field: &Field, b: &Spec, g: f64) -> (Vec<Vec<Item>>, f64) {
     (loops, dc + hw + rails)
 }
 
+/// `n` points along `line`, evenly spread by length from end to end.
+fn by_length(line: &[Point], n: usize) -> Vec<Point> {
+    let total: f64 = line.windows(2).map(|w| w[0].distance(w[1])).sum();
+    let mut out = Vec::with_capacity(n);
+    let (mut i, mut acc) = (0, 0.0);
+    for k in 0..n {
+        let want = total * k as f64 / (n - 1) as f64;
+        while i + 2 < line.len() && acc + line[i].distance(line[i + 1]) < want {
+            acc += line[i].distance(line[i + 1]);
+            i += 1;
+        }
+        let d = line[i].distance(line[i + 1]);
+        let f = if d > 1e-12 {
+            ((want - acc) / d).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        out.push(line[i].lerp(line[i + 1], f));
+    }
+    out
+}
+
+/// The two open lines `a` and `b` matched up as the sides of a band: `b` turned to run the
+/// same way as `a`, each spread evenly along its length, the left one first.
+pub fn sides(a: &[Point], b: &[Point]) -> Option<(Vec<Point>, Vec<Point>)> {
+    if a.len() < 2 || b.len() < 2 {
+        return None;
+    }
+    let len = |p: &[Point]| -> f64 { p.windows(2).map(|w| w[0].distance(w[1])).sum() };
+    let n = ((len(a).max(len(b)) / 0.5).ceil() as usize).clamp(8, 20_000);
+    let mut b = b.to_vec();
+    let (a0, a1) = (a[0], a[a.len() - 1]);
+    let (b0, b1) = (b[0], b[b.len() - 1]);
+    if a0.distance(b0) + a1.distance(b1) > a0.distance(b1) + a1.distance(b0) {
+        b.reverse();
+    }
+    let (l, r) = (by_length(a, n), by_length(&b, n));
+    // which is on the left going along the middle
+    let left: f64 = (0..n - 1)
+        .map(|i| {
+            let (m0, m1) = (l[i].lerp(r[i], 0.5), l[i + 1].lerp(r[i + 1], 0.5));
+            (m1 - m0).perp_dot(l[i] - m0)
+        })
+        .sum();
+    Some(if left >= 0.0 { (l, r) } else { (r, l) })
+}
+
+/// The band between the matched sides `l` and `r` (from [`sides`]) as a line to lay a
+/// pattern along, and its half width on average.
+fn between(l: &[Point], r: &[Point]) -> Option<(Loop, f64)> {
+    let mid: Vec<Point> = l.iter().zip(r).map(|(a, b)| a.lerp(*b, 0.5)).collect();
+    let hw = l.iter().zip(r).map(|(a, b)| a.distance(*b)).sum::<f64>() / (2.0 * l.len() as f64);
+    if hw < 1e-6 {
+        return None;
+    }
+    let mut lp = open_line(&mid, 0.01)?;
+    let mut along = vec![0.0];
+    for w in mid.windows(2) {
+        along.push(along[along.len() - 1] + w[0].distance(w[1]));
+    }
+    lp.len = along[along.len() - 1];
+    lp.sides = Some(Sides {
+        l: l.to_vec(),
+        r: r.to_vec(),
+        along,
+        hw,
+    });
+    Some((lp, hw))
+}
+
+/// The pattern filling the band between the matched sides `l` and `r` (from [`sides`]): as
+/// wide as the band, stretched across it where it widens and narrows, its edge lines (if
+/// any) on the sides themselves.
+pub fn between_lines(l: &[Point], r: &[Point], b: &Spec, g: f64) -> Vec<Item> {
+    let Some((lp, hw)) = between(l, r) else {
+        return vec![];
+    };
+    // the pattern's own half width: what is left once the edge lines and their gaps are in
+    let mut inner = hw;
+    if b.rails {
+        for _ in 0..8 {
+            inner = hw - g - (g * 1.1).max(inner * 0.16);
+        }
+    }
+    let spec = Spec {
+        width: 2.0 * inner.max(0.0),
+        ..*b
+    };
+    lay(&lp, &spec, g)
+}
+
 /// The pattern along the open line `line`: whole repeats, the first and last as near its ends
 /// as they fit, the band centred on it.
 pub fn along(line: &[Point], b: &Spec, g: f64) -> Vec<Item> {
@@ -592,6 +720,20 @@ fn lay(lp: &Loop, b: &Spec, g: f64) -> Vec<Item> {
     }
     let hw = b.width / 2.0;
     let rw = (g * 1.1).max(hw * 0.16);
+    if b.style == Style::Celtic {
+        let weave = crate::celtic::weave(lp.len, lp.closed, hw, b.repeat, g, b.weave, b.reverse);
+        let mut items: Vec<Item> = weave
+            .iter()
+            .map(|it| it.map(&|q: Point| lp.at(q.x, q.y)))
+            .collect();
+        if b.rails && !items.is_empty() {
+            for side in [1.0, -1.0] {
+                let v = side * (hw + g + rw / 2.0);
+                items.push(strip(lp, v, rw, 0.0, lp.len, 0.85));
+            }
+        }
+        return items;
+    }
     let p = b.repeat * b.width;
     let (parts, starts) = match b.style {
         Style::Rope => rope(lp, hw, p * 0.5, g, b.lay),
@@ -603,7 +745,7 @@ fn lay(lp: &Loop, b: &Spec, g: f64) -> Vec<Item> {
         Style::Feathers => feathers(lp, hw, p * 2.8, g),
         Style::Chevrons => chevrons(lp, hw, p * 0.6, g),
         Style::BandBeads => beads_beside_band(lp, hw, p * 0.5, g),
-        Style::Vine(_) => unreachable!("laid by lay_vine"),
+        Style::Vine(_) | Style::Celtic => unreachable!("laid on their own"),
     };
     // the repeats, each its pieces; a plait is one piece all along, with no repeats to turn
     let turns = !starts.is_empty();
@@ -1039,6 +1181,7 @@ mod tests {
             upright: false,
             sequence: Seq::EMPTY,
             vary: Vary::default(),
+            weave: crate::celtic::Weave::default(),
         }
     }
 

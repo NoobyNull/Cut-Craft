@@ -15,6 +15,11 @@ pub enum Profile {
     Round(f64),
     /// A dome, as a bead.
     Ball,
+    /// A round strand: its outline a band (one side along, the other back, no caps, as
+    /// [`band`] draws it), rounded over across like a cord, and falling along its length to
+    /// `low` of its height at the ends marked in `dips` (where it passes under another), over
+    /// `len` from them.
+    Strand { dips: [bool; 2], len: f64, low: f64 },
 }
 
 /// One piece: a raised (or, `sink`, sunk) shape, or a V-carved line.

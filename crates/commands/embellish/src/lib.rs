@@ -2,9 +2,10 @@
 //! pattern. A closed shape is filled: Folk mix, Scrolls and Flowers are designed for it
 //! (a vine down its middle with scrolls, leaf fans in its points, flowers where it is
 //! roomiest, mirrored when the shape repeats round its middle), and the patterns (Band and
-//! beads, Rope, Chain, Twist, Braid, Bead and reel, Laurel leaves, Feathers, Chevrons) fill
-//! it row after row inward from the edge. An open line has the style run along it, end to
-//! end. Reverse runs a pattern the other way along its line; Reset puts every setting back
+//! beads, Rope, Chain, Twist, Braid, Celtic weave, Bead and reel, Laurel leaves, Feathers,
+//! Chevrons) fill it row after row inward from the edge. An open line has the style run along
+//! it, end to end; two open lines have it fill the band between them, stretched across from
+//! one to the other. Reverse runs a pattern the other way along its line; Reset puts every setting back
 //! to its default and makes it again as new; Apply makes changes to one already made (select
 //! it, or press E on it, to open it again). The Sequence says how each repeat is drawn in
 //! turn (a space, flipped, back to front, turned, a random size or lean), typed or added
@@ -31,6 +32,7 @@
 )]
 
 mod border;
+mod celtic;
 mod design;
 mod field;
 mod free;
@@ -84,6 +86,10 @@ pub enum Style {
     /// Three strands plaited over and under
     #[schemars(title = "Braid")]
     Braid,
+    /// Several strands plaited over and under, each grooved into cords, as a carved Celtic
+    /// knot band
+    #[schemars(title = "Celtic weave")]
+    CelticWeave,
     /// Oval beads with a pair of thin discs between each two
     #[schemars(title = "Bead and reel")]
     BeadAndReel,
@@ -117,6 +123,7 @@ impl Style {
             Self::Chain => border::Style::Chain,
             Self::Twist => border::Style::Twist,
             Self::Braid => border::Style::Braid,
+            Self::CelticWeave => border::Style::Celtic,
             Self::BeadAndReel => border::Style::BeadAndReel,
             Self::Laurel => border::Style::Laurel,
             Self::Feathers => border::Style::Feathers,
@@ -126,6 +133,29 @@ impl Style {
             Self::Scrolls => border::Style::Vine(vine::Kind::Scrolls),
             Self::Flowers => border::Style::Vine(vine::Kind::Flowers),
         })
+    }
+}
+
+/// What a Celtic weave's strands do at the ends of an open line.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Ends {
+    /// Each strand loops back into the band, so the band is one finished knot (needs an
+    /// even number of strands)
+    #[default]
+    #[schemars(title = "Loop back")]
+    TurnBack,
+    /// The strands stop, cut off square across the band
+    #[schemars(title = "Cut off")]
+    CutOff,
+}
+
+impl From<Ends> for celtic::Ends {
+    fn from(e: Ends) -> Self {
+        match e {
+            Ends::TurnBack => Self::TurnBack,
+            Ends::CutOff => Self::CutOff,
+        }
     }
 }
 
@@ -174,9 +204,24 @@ pub struct Params {
     #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-group" = "Pattern", "x-unit" = "%", "x-widget" = "slider"))]
     pub repeat: u32,
     /// Run the pattern the other way along its line: chevrons, feathers, leaves and scrolls
-    /// point back, and the rope and plaits twist the other way
+    /// point back, the rope and plaits twist the other way, and a Celtic weave's strands
+    /// swap over and under
     #[schemars(extend("x-group" = "Pattern"))]
     pub reverse: bool,
+    /// With two open lines selected, fill the band between them, the pattern stretched
+    /// from one line to the other (the Width is not used). Off, it runs along each line
+    #[schemars(title = "Fill between two lines", extend("x-group" = "Pattern"))]
+    pub between: bool,
+    /// How many strands are plaited together across the band
+    #[schemars(range(min = 2, max = 12), extend("x-group" = "Pattern", "x-show-when" = {"style": "celtic_weave"}))]
+    pub strands: u32,
+    /// How many grooves run along each strand, splitting it into cords (0 for plain
+    /// strands)
+    #[schemars(title = "Grooves per strand", range(min = 0, max = 4), extend("x-group" = "Pattern", "x-show-when" = {"style": "celtic_weave"}))]
+    pub strand_lines: u32,
+    /// What the strands do at the ends of an open line
+    #[schemars(title = "Ends", extend("x-group" = "Pattern", "x-widget" = "row", "x-show-when" = {"style": "celtic_weave"}))]
+    pub ends: Ends,
     /// How steeply the rope's strands lie
     #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-group" = "Pattern", "x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"style": "rope"}))]
     pub twist: u32,
@@ -189,7 +234,7 @@ pub struct Params {
     /// reaches all inside, as ST(1,2). Split entries with commas. It starts again when it
     /// runs out, nothing added between. Empty is 1 over and over; 12 makes the vine wave.
     /// The buttons under it add each sample
-    #[schemars(extend("x-group" = "Sequence", "x-widget" = "sequence", "x-hide-when" = {"style": ["twist", "braid"]}))]
+    #[schemars(extend("x-group" = "Sequence", "x-widget" = "sequence", "x-hide-when" = {"style": ["twist", "braid", "celtic_weave"]}))]
     pub sequence: String,
     /// Thin raised lines along both sides of the pattern, framing it
     #[schemars(title = "Edge lines", extend("x-group" = "Pattern"))]
@@ -222,11 +267,11 @@ pub struct Params {
     pub turn_with_line: bool,
     /// Each repeat a different size, from the Layout number (off: every repeat the same
     /// size)
-    #[schemars(extend("x-group" = "Sequence", "x-hide-when" = {"style": ["twist", "braid"]}))]
+    #[schemars(extend("x-group" = "Sequence", "x-hide-when" = {"style": ["twist", "braid", "celtic_weave"]}))]
     pub random_size: bool,
     /// Each repeat leaning a different way, up to 45° either side, from the Layout number
     /// (off: every repeat turned only as the Sequence says)
-    #[schemars(extend("x-group" = "Sequence", "x-hide-when" = {"style": ["twist", "braid"]}))]
+    #[schemars(extend("x-group" = "Sequence", "x-hide-when" = {"style": ["twist", "braid", "celtic_weave"]}))]
     pub random_rotation: bool,
     /// No longer used: the patterns repeat evenly
     #[schemars(skip)]
@@ -241,7 +286,7 @@ pub struct Params {
     /// Picks the shape of the pieces: how tight the scrolls curl, the flowers' petals, how
     /// wide the leaves fan, the same in every repeat; with Random size or Random rotation,
     /// also how the repeats differ. 1 is the pattern as designed
-    #[schemars(title = "Layout", extend("x-group" = "Sequence", "x-widget" = "seed", "x-hide-when" = {"style": ["twist", "braid"]}))]
+    #[schemars(title = "Layout", extend("x-group" = "Sequence", "x-widget" = "seed", "x-hide-when" = {"style": ["twist", "braid", "celtic_weave"]}))]
     pub seed: u32,
     /// Names the new layer the ornament's vectors go on, and its 3D component
     #[schemars(extend("x-group" = "Make"))]
@@ -287,6 +332,10 @@ impl Default for Params {
             twist: 45,
             border_inset: 3.0,
             rails: false,
+            between: true,
+            strands: 4,
+            strand_lines: 2,
+            ends: Ends::TurnBack,
             sequence: String::new(),
             reverse: false,
             refinement: 6,
@@ -350,6 +399,11 @@ impl Params {
                 turn: self.random_rotation,
                 seed: self.seed,
             },
+            weave: celtic::Weave {
+                strands: self.strands.clamp(2, 12),
+                lines: self.strand_lines.min(4),
+                ends: self.ends.into(),
+            },
         })
     }
 
@@ -383,6 +437,9 @@ struct Region {
     field: Field,
     offset: Point,
     line: Option<Vec<Point>>,
+    /// Between two lines: the band's two sides (in the field's frame), the pattern filling
+    /// the band from one to the other.
+    sides: Option<(Vec<Point>, Vec<Point>)>,
 }
 
 /// The selected outlines grouped into shapes: each outer outline with the holes directly
@@ -426,6 +483,7 @@ fn regions(rings: &[Vec<Point>]) -> Vec<Region> {
             field: Field::new(local, size.x, size.y),
             offset,
             line: None,
+            sides: None,
         });
     }
     out
@@ -444,6 +502,10 @@ fn band_rings(line: &Path, half: f64) -> Vec<Vec<Point>> {
 /// along each line; otherwise a band the pattern's width round each, filled as a shape.
 fn line_regions(lines: &[Path], p: &Params) -> Vec<Region> {
     let mut out = vec![];
+    if let Some(region) = between_region(lines, p) {
+        out.push(region);
+        return out;
+    }
     for line in lines {
         match p.pattern() {
             Some(spec) => {
@@ -474,6 +536,26 @@ fn line_regions(lines: &[Path], p: &Params) -> Vec<Region> {
         }
     }
     out
+}
+
+/// With Fill between two lines, two open lines selected and a pattern: the band between
+/// them as one shape, its sides kept for the pattern to fill from one to the other.
+fn between_region(lines: &[Path], p: &Params) -> Option<Region> {
+    let [a, b] = lines else { return None };
+    if !p.between || p.pattern().is_none() {
+        return None;
+    }
+    let flat = |l: &Path| l.flatten(cut_craft_core::polygon::TOLERANCE);
+    let (l, r) = border::sides(&flat(a), &flat(b))?;
+    let mut ring = l.clone();
+    ring.extend(r.iter().rev());
+    let mut region = regions(&[ring])
+        .into_iter()
+        .max_by(|a, b| (a.field.w * a.field.h).total_cmp(&(b.field.w * b.field.h)))?;
+    let local = |v: &[Point]| v.iter().map(|&q| q - region.offset).collect::<Vec<_>>();
+    region.sides = Some((local(&l), local(&r)));
+    region.line = Some(local(&l));
+    Some(region)
 }
 
 /// The ornament for one shape, in its field's frame: a patterned border when there is one,
@@ -882,7 +964,10 @@ impl Command for Embellish {
             let (made, _n) = loop {
                 let (made, n) = match (&region.line, p.pattern()) {
                     (Some(line), Some(spec)) => {
-                        let made = border::along(line, &spec, g);
+                        let made = match &region.sides {
+                            Some((l, r)) => border::between_lines(l, r, &spec, g),
+                            None => border::along(line, &spec, g),
+                        };
                         let n = made.len();
                         (made, n)
                     }
@@ -1023,6 +1108,17 @@ impl Command for Embellish {
             }
         }
         let mut change = c.finish();
+        if p.style == Style::CelticWeave
+            && p.ends == Ends::TurnBack
+            && !celtic::turns_back(p.strands.clamp(2, 12))
+            && !lines.is_empty()
+        {
+            change.notes.push(format!(
+                "{} strands can't loop back at the line's ends without running into a corner, \
+                 so the ends are cut off. Pick an even number of strands to loop them back",
+                p.strands.clamp(2, 12)
+            ));
+        }
         if gap < p.gap() - 1e-9 {
             let wide = wide(&regions);
             change.notes.push(format!(
@@ -1131,6 +1227,129 @@ mod tests {
     use cut_craft_core::Change;
     use cut_craft_core::testing::{document_with, square};
     use std::f64::consts::TAU;
+
+    /// A straight line along the bottom and a wavy one above it, the band between them
+    /// 20 to 40 mm wide.
+    fn two_lines() -> (Path, Path, impl Fn(f64) -> f64) {
+        let top = |x: f64| 130.0 + 10.0 * (x / 200.0 * TAU).sin();
+        let bottom = Path::polyline(&[Point::new(20.0, 100.0), Point::new(220.0, 100.0)], false);
+        // drawn the other way, right to left
+        let pts: Vec<Point> = (0..=100)
+            .rev()
+            .map(|i| {
+                let x = 20.0 + f64::from(i) * 2.0;
+                Point::new(x, top(x - 20.0))
+            })
+            .collect();
+        (bottom, Path::polyline(&pts, false), top)
+    }
+
+    #[test]
+    fn a_celtic_weave_fills_the_band_between_two_lines_from_side_to_side() {
+        let (bottom, top, y_top) = two_lines();
+        let doc = document_with(vec![bottom, top]);
+        let p = Params {
+            style: Style::CelticWeave,
+            make: Make::Both,
+            ..Params::default()
+        };
+        let change = Embellish::run(&doc, &p).unwrap();
+        assert_eq!(change.notes, Vec::<String>::new());
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        let made: Vec<Point> = after
+            .vectors
+            .values()
+            .filter(|v| !doc.vectors.values().any(|o| o == *v))
+            .flat_map(|v| v.flatten(0.1))
+            .collect();
+        assert!(made.len() > 100, "{}", made.len());
+        // every piece between the lines, reaching near both of them and both ends
+        for q in &made {
+            assert!(q.y >= 100.0 - 0.3, "{q:?}");
+            assert!(q.y <= y_top(q.x - 20.0) + 0.3, "{q:?}");
+            assert!((19.7..=220.3).contains(&q.x), "{q:?}");
+        }
+        let near = |f: &dyn Fn(&Point) -> bool| made.iter().any(f);
+        assert!(near(&|q| q.y < 101.5), "reaches the bottom line");
+        assert!(
+            near(&|q| q.y > y_top(q.x - 20.0) - 1.5),
+            "reaches the top line"
+        );
+        assert!(
+            near(&|q| q.x < 22.0) && near(&|q| q.x > 218.0),
+            "end to end"
+        );
+        // and as a carving in the band
+        let part = after.components.values().next().unwrap();
+        assert!(part.heights.iter().any(|&h| h > 2.5));
+    }
+
+    #[test]
+    fn two_lines_run_along_each_when_not_filling_between() {
+        let (bottom, top, _) = two_lines();
+        let doc = document_with(vec![bottom, top]);
+        let p = Params {
+            style: Style::CelticWeave,
+            make: Make::Vectors,
+            between: false,
+            border_width: 10.0,
+            ..Params::default()
+        };
+        let mut after = doc.clone();
+        after.apply(&Embellish::run(&doc, &p).unwrap()).unwrap();
+        let made: Vec<Point> = after
+            .vectors
+            .values()
+            .filter(|v| !doc.vectors.values().any(|o| o == *v))
+            .flat_map(|v| v.flatten(0.1))
+            .collect();
+        // two bands 10 mm wide, each on its line: nothing in the middle of the gap
+        assert!(
+            made.iter().any(|q| q.y < 100.0),
+            "below the bottom line too"
+        );
+        assert!(
+            !made
+                .iter()
+                .any(|q| (107.0..112.0).contains(&q.y) && (60.0..80.0).contains(&q.x))
+        );
+    }
+
+    #[test]
+    fn an_odd_strand_count_cannot_loop_back_so_its_ends_are_cut_off_with_a_red_note() {
+        let line = Path::polyline(&[Point::new(20.0, 100.0), Point::new(220.0, 100.0)], false);
+        let doc = document_with(vec![line]);
+        let p = |strands| Params {
+            style: Style::CelticWeave,
+            make: Make::Vectors,
+            strands,
+            ..Params::default()
+        };
+        let change = Embellish::run(&doc, &p(3)).unwrap();
+        assert_eq!(change.notes.len(), 1, "{:?}", change.notes);
+        assert!(
+            change.notes[0].contains("even number"),
+            "{:?}",
+            change.notes
+        );
+        assert!(!change.edits.is_empty());
+        let change = Embellish::run(&doc, &p(4)).unwrap();
+        assert_eq!(change.notes, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_celtic_weave_goes_round_a_closed_shape() {
+        let doc = document_with(vec![square(0.0, 0.0, 160.0)]);
+        let p = Params {
+            style: Style::CelticWeave,
+            make: Make::Vectors,
+            border_width: 24.0,
+            ..Params::default()
+        };
+        let change = Embellish::run(&doc, &p).unwrap();
+        assert!(change.edits.len() > 20, "{}", change.edits.len());
+    }
 
     fn framed() -> Document {
         document_with(vec![square(0.0, 0.0, 200.0)])
@@ -1800,6 +2019,120 @@ mod tests {
 mod pictures {
     use super::*;
     use std::f64::consts::{PI, TAU};
+
+    /// Celtic weaves between two lines, along one and round a shape, as 3D carvings and
+    /// outlines: `EMBELLISH_OUT=dir cargo nextest run -p cmd-embellish celtic_pictures
+    /// --run-ignored only`.
+    #[test]
+    #[ignore = "writes pictures to look at"]
+    fn celtic_pictures() {
+        let out = std::path::PathBuf::from(std::env::var("EMBELLISH_OUT").unwrap());
+        let straight = |y: f64| Path::polyline(&[Point::new(10.0, y), Point::new(310.0, y)], false);
+        let curve = |y: f64, amp: f64| {
+            let pts: Vec<Point> = (0..=150)
+                .map(|i| {
+                    let x = 10.0 + f64::from(i) * 2.0;
+                    Point::new(x, y + amp * ((x - 10.0) / 300.0 * TAU).sin())
+                })
+                .collect();
+            Path::polyline(&pts, false)
+        };
+        let widening: Vec<Point> = (0..=150)
+            .map(|i| {
+                let x = 10.0 + f64::from(i) * 2.0;
+                Point::new(x, 128.0 + 22.0 * ((x - 10.0) / 300.0 * PI).sin())
+            })
+            .collect();
+        let cases: Vec<(&str, Vec<Path>, Params)> = vec![
+            (
+                "band",
+                vec![straight(100.0), straight(150.0)],
+                Params::default(),
+            ),
+            (
+                "band-cut-off",
+                vec![straight(100.0), straight(150.0)],
+                Params {
+                    ends: Ends::CutOff,
+                    ..Params::default()
+                },
+            ),
+            (
+                "band-6-strands",
+                vec![straight(100.0), straight(160.0)],
+                Params {
+                    strands: 6,
+                    ..Params::default()
+                },
+            ),
+            (
+                "wave",
+                vec![curve(100.0, 30.0), curve(140.0, 30.0)],
+                Params::default(),
+            ),
+            (
+                "widening",
+                vec![straight(100.0), Path::polyline(&widening, false)],
+                Params::default(),
+            ),
+            (
+                "rails",
+                vec![straight(100.0), straight(150.0)],
+                Params {
+                    rails: true,
+                    ..Params::default()
+                },
+            ),
+        ];
+        let mut cases = cases;
+        cases.push((
+            "close-up",
+            vec![
+                Path::polyline(&[Point::new(10.0, 100.0), Point::new(190.0, 100.0)], false),
+                Path::polyline(&[Point::new(10.0, 142.0), Point::new(190.0, 142.0)], false),
+            ],
+            Params {
+                tightness: 10,
+                height: 5.0,
+                ..Params::default()
+            },
+        ));
+        cases.push((
+            "square",
+            vec![cut_craft_core::testing::square(0.0, 0.0, 200.0)],
+            Params {
+                border_width: 34.0,
+                ..Params::default()
+            },
+        ));
+        for (name, shapes, p) in cases {
+            let p = Params {
+                style: Style::CelticWeave,
+                make: Make::Both,
+                ..p
+            };
+            let doc = cut_craft_core::testing::document_with(shapes);
+            let t = std::time::Instant::now();
+            let change = Embellish::run(&doc, &p).unwrap();
+            eprintln!("{name}: {} ms {:?}", t.elapsed().as_millis(), change.notes);
+            let mut after = doc.clone();
+            after.apply(&change).unwrap();
+            shade(
+                after.components.values().next().unwrap(),
+                &out.join(format!("celtic-{name}.png")),
+            );
+            let rings: Vec<Vec<[f64; 2]>> = after
+                .vectors
+                .values()
+                .map(|v| v.flatten(0.1).iter().map(|q| [q.x, q.y]).collect())
+                .collect();
+            std::fs::write(
+                out.join(format!("celtic-{name}.json")),
+                serde_json::to_string(&rings).unwrap(),
+            )
+            .unwrap();
+        }
+    }
 
     fn shade(part: &Component, path: &std::path::Path) {
         let (w, h) = (part.columns, part.rows);

@@ -93,6 +93,10 @@ pub fn raise(grid: &mut Grid, items: &[Item], sunk: &[bool], up: f64, down: f64)
                     .collect();
                 let mut f = vec![0.0; bw * bh];
                 fill_rings(&mut f, bw, bh, 1.0, &local, 1e20);
+                // a strand's own centre line, to round it over across and dip it along
+                let strand = matches!(profile, Profile::Strand { .. })
+                    .then(|| Spine::of(&rings[0]))
+                    .flatten();
                 if !f.iter().any(|&v| v > 0.0) {
                     continue;
                 }
@@ -129,6 +133,22 @@ pub fn raise(grid: &mut Grid, items: &[Item], sunk: &[bool], up: f64, down: f64)
                             Profile::Ball => {
                                 let rho = (most - d).max(0.0) / most;
                                 top * (1.0 - rho * rho).max(0.0).sqrt()
+                            }
+                            Profile::Strand { dips, len, low } => {
+                                let q = base + Point::new(i as f64, j as f64) * cell;
+                                let Some((across, along)) = strand.as_ref().map(|s| s.at(q)) else {
+                                    continue;
+                                };
+                                let total = strand.as_ref().map_or(0.0, |s| s.len);
+                                let to_end = [along, total - along]
+                                    .iter()
+                                    .zip(dips)
+                                    .filter(|(_, d)| **d)
+                                    .map(|(e, _)| *e)
+                                    .fold(f64::INFINITY, f64::min);
+                                let f = crate::motif::smoothstep(0.0, *len, to_end);
+                                let round = (1.0 - across * across).max(0.0).sqrt();
+                                top * round * (*low + (1.0 - *low) * f)
                             }
                         };
                         let o = (j0 + j) * grid.columns + i0 + i;
@@ -180,6 +200,58 @@ pub fn raise(grid: &mut Grid, items: &[Item], sunk: &[bool], up: f64, down: f64)
                 }
             }
         }
+    }
+}
+
+/// A band's centre line, from its outline (one side along, the other back): each point
+/// with its half width and how far along it is.
+struct Spine {
+    p: Vec<Point>,
+    half: Vec<f64>,
+    along: Vec<f64>,
+    len: f64,
+}
+
+impl Spine {
+    fn of(ring: &[Point]) -> Option<Self> {
+        let n = ring.len() / 2;
+        if n < 2 || ring.len() % 2 != 0 {
+            return None;
+        }
+        let p: Vec<Point> = (0..n)
+            .map(|i| ring[i].lerp(ring[2 * n - 1 - i], 0.5))
+            .collect();
+        let half = (0..n)
+            .map(|i| ring[i].distance(ring[2 * n - 1 - i]) / 2.0)
+            .collect();
+        let mut along = vec![0.0];
+        for w in p.windows(2) {
+            along.push(along[along.len() - 1] + w[0].distance(w[1]));
+        }
+        let len = along[n - 1];
+        Some(Self {
+            p,
+            half,
+            along,
+            len,
+        })
+    }
+
+    /// How far across `q` is, as a share of the half width (0 on the centre line, 1 at the
+    /// sides), and how far along.
+    fn at(&self, q: Point) -> (f64, f64) {
+        let mut best = (f64::INFINITY, 1.0, 0.0);
+        for i in 0..self.p.len() - 1 {
+            let (a, b) = (self.p[i], self.p[i + 1]);
+            let ab = b - a;
+            let t = ((q - a).dot(ab) / ab.length_squared().max(1e-12)).clamp(0.0, 1.0);
+            let d = q.distance(a + ab * t);
+            if d < best.0 {
+                let half = self.half[i] + (self.half[i + 1] - self.half[i]) * t;
+                best = (d, d / half.max(1e-9), self.along[i] + ab.length() * t);
+            }
+        }
+        (best.1, best.2)
     }
 }
 
