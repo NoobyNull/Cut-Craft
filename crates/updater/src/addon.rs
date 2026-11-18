@@ -138,7 +138,8 @@ pub struct Manifest {
     #[serde(default)]
     pub optional: Vec<String>,
     /// Gadget add-ons only: the web hosts its gadgets may fetch from over https, such as
-    /// `relay.example.com`. Shown to the person before installing. Empty: no web at all.
+    /// `relay.example.com`. Empty: no web at all. (Showing the list before installing is
+    /// planned, issue #587.)
     #[serde(default)]
     pub network: Vec<String>,
 }

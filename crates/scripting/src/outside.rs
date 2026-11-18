@@ -16,6 +16,11 @@
 //! - `cutcraft.sleep(seconds)`, at most a minute, and `cutcraft.message(text)` / `print`.
 //!
 //! Redirects are followed by hand, at most five, and each one must stay on a listed host.
+//! `Authorization` and `Cookie` are dropped when a redirect leaves the first origin.
+//!
+//! The caller keeps [`Outside::folder`] outside the add-on's install folder (so an update,
+//! which replaces that folder, keeps settings and downloads) and never runs two outside
+//! gadgets of one add-on at the same time.
 
 use crate::{Limits, ScriptError, budget, sandbox, script_error};
 use mlua::chunk::ChunkMode;
@@ -33,7 +38,8 @@ use std::time::Duration;
 pub struct Outside {
     /// Host names from the add-on's `network` list, such as `relay.example.com`.
     pub hosts: Vec<String>,
-    /// The add-on's own folder: downloads go in its `files` folder, settings in `store.json`.
+    /// The add-on's data folder, such as `<config>/addon-data/<id>/`, kept apart from its
+    /// install folder: downloads go in its `files` folder, settings in `store.json`.
     pub folder: PathBuf,
     /// Largest text answer `cutcraft.http` returns, in bytes.
     pub max_body: u64,
@@ -115,10 +121,12 @@ pub fn plain_file_name(name: &str) -> bool {
         })
 }
 
-fn agent() -> ureq::Agent {
+/// Text answers must arrive whole within a minute; a download may take up to `body` in all.
+fn agent(body: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_connect(Some(Duration::from_secs(15)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
+        .timeout_recv_body(Some(body))
         .user_agent(concat!("Cut-Craft/", env!("CARGO_PKG_VERSION")))
         .http_status_as_error(false)
         .max_redirects(0)
@@ -142,13 +150,19 @@ fn send(
 ) -> Result<ureq::http::Response<ureq::Body>, String> {
     let mut url = url.to_owned();
     let (mut method, mut body) = (method.to_ascii_uppercase(), body.map(str::to_owned));
+    let first_origin = origin(&url);
     for _ in 0..=5 {
         let uri = outside.check(&url)?;
+        let same_origin = origin(&url) == first_origin;
         let mut request = ureq::http::Request::builder()
             .method(method.as_str())
             .uri(uri);
         for (k, v) in headers {
-            request = request.header(k.as_str(), v.as_str());
+            let secret =
+                k.eq_ignore_ascii_case("authorization") || k.eq_ignore_ascii_case("cookie");
+            if same_origin || !secret {
+                request = request.header(k.as_str(), v.as_str());
+            }
         }
         let request = request
             .body(body.clone().unwrap_or_default())
@@ -156,7 +170,7 @@ fn send(
         let response = agent
             .run(request)
             .map_err(|e| format!("could not reach {url}: {e}"))?;
-        if !response.status().is_redirection() {
+        if !matches!(response.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
             return Ok(response);
         }
         let next = response
@@ -172,16 +186,42 @@ fn send(
     Err("the address redirected too many times".to_owned())
 }
 
-/// `next` from a `Location` header, made whole against `from`.
+/// `scheme://host[:port]` of `url`, lower-cased.
+fn origin(url: &str) -> String {
+    let start = url.find("://").map_or(0, |s| s + 3);
+    let end = url[start..]
+        .find(['/', '?', '#'])
+        .map_or(url.len(), |p| start + p);
+    url[..end].to_ascii_lowercase()
+}
+
+/// `next` from a `Location` header, resolved against `from` as a URI reference (RFC 3986):
+/// absolute, `//host/...`, `/path`, `?query` or a path relative to `from`'s folder.
 fn resolve(from: &str, next: &str) -> String {
-    if next.contains("://") {
+    let base = origin(from);
+    let scheme_end = base.find("://").map_or(0, |s| s + 3);
+    let has_scheme = next.split_once(':').is_some_and(|(s, _)| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c))
+    });
+    if has_scheme {
         return next.to_owned();
     }
-    let origin_end = from
-        .find("://")
-        .and_then(|s| from[s + 3..].find('/').map(|p| s + 3 + p))
-        .unwrap_or(from.len());
-    format!("{}/{}", &from[..origin_end], next.trim_start_matches('/'))
+    if let Some(rest) = next.strip_prefix("//") {
+        return format!("{}{rest}", &base[..scheme_end]);
+    }
+    let rest = from.get(base.len()..).unwrap_or("");
+    let path = rest.split(['?', '#']).next().unwrap_or("");
+    let path = if path.is_empty() { "/" } else { path };
+    if next.starts_with('/') {
+        format!("{base}{next}")
+    } else if next.starts_with('?') {
+        format!("{base}{path}{next}")
+    } else {
+        let folder = &path[..=path.rfind('/').unwrap_or(0)];
+        format!("{base}{folder}{next}")
+    }
 }
 
 /// The add-on's saved settings.
@@ -204,8 +244,10 @@ pub fn run_outside_gadget(
     let lua = sandbox(limits)?;
     let stopped = Rc::new(Cell::new(false));
     budget(&lua, limits.instructions, Rc::clone(&stopped))?;
-    let agent = agent();
+    let agent = agent(Duration::from_secs(60));
+    let download_agent = self::agent(Duration::from_hours(1));
     let notes = RefCell::new(Vec::<String>::new());
+    let note_bytes = Cell::new(0_usize);
     let store_path = outside.folder.join("store.json");
     let store = RefCell::new(load_store(&store_path));
 
@@ -214,13 +256,23 @@ pub fn run_outside_gadget(
         cutcraft.set(
             "message",
             scope.create_function(|_, text: String| {
-                notes.borrow_mut().push(text);
+                // at most 200 messages and 64 KB in all; the rest are dropped
+                let mut notes = notes.borrow_mut();
+                if notes.len() < 200 && note_bytes.get() + text.len() <= 64 * 1024 {
+                    note_bytes.set(note_bytes.get() + text.len());
+                    notes.push(text);
+                }
                 Ok(())
             })?,
         )?;
         cutcraft.set(
             "sleep",
             scope.create_function(|_, seconds: f64| {
+                if !seconds.is_finite() {
+                    return Err(mlua::Error::runtime(
+                        "cutcraft.sleep needs a number of seconds",
+                    ));
+                }
                 std::thread::sleep(Duration::from_secs_f64(seconds.clamp(0.0, 60.0)));
                 Ok(())
             })?,
@@ -233,8 +285,8 @@ pub fn run_outside_gadget(
         cutcraft.set(
             "download",
             scope.create_function(|lua, (url, file_name): (String, String)| {
-                let saved =
-                    download(outside, &agent, &url, &file_name).map_err(mlua::Error::runtime)?;
+                let saved = download(outside, &download_agent, &url, &file_name)
+                    .map_err(mlua::Error::runtime)?;
                 let answer = lua.create_table()?;
                 answer.set("path", saved.0.to_string_lossy().into_owned())?;
                 answer.set("size", saved.1)?;
@@ -322,15 +374,22 @@ fn store_set(
     if key.len() > 100 || value.as_ref().is_some_and(|v| v.len() > 4096) {
         return Err(mlua::Error::runtime("a saved setting is too long"));
     }
-    let mut s = store.borrow_mut();
+    // change a copy, save it, and only then keep it: a failed save changes nothing
+    let mut next = store.borrow().clone();
     match value {
-        Some(v) => s.insert(key, v),
-        None => s.remove(&key),
-    };
-    if s.len() > 100 {
-        return Err(mlua::Error::runtime("too many saved settings"));
+        Some(v) => {
+            if next.len() >= 100 && !next.contains_key(&key) {
+                return Err(mlua::Error::runtime("too many saved settings"));
+            }
+            next.insert(key, v);
+        }
+        None => {
+            next.remove(&key);
+        }
     }
-    save_store(path, &s).map_err(mlua::Error::runtime)
+    save_store(path, &next).map_err(mlua::Error::runtime)?;
+    *store.borrow_mut() = next;
+    Ok(())
 }
 
 /// `print` goes to the person's messages, as in job gadgets.
@@ -342,10 +401,23 @@ print = function(...)
 end
 "##;
 
+/// Writes the settings beside `path` first and puts them in place only once written.
 fn save_store(path: &Path, store: &BTreeMap<String, String>) -> Result<(), String> {
+    let failed = |e: std::io::Error| format!("the add-on's settings could not be saved: {e}");
     let text = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
-    std::fs::write(path, text).map_err(|e| format!("the add-on's settings could not be saved: {e}"))
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(failed)?;
+    }
+    let part = path.with_extension("json.part");
+    std::fs::write(&part, text).map_err(failed)?;
+    std::fs::rename(&part, path).map_err(|e| {
+        let _ = std::fs::remove_file(&part);
+        failed(e)
+    })
 }
+
+/// Numbers each download's temporary file.
+static NEXT_PART: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Saves `url` as `file_name` in the add-on's `files` folder: written beside it first, and
 /// put in place only once it is whole.
@@ -367,9 +439,15 @@ fn download(
     std::fs::create_dir_all(&folder)
         .map_err(|e| format!("could not make the downloads folder: {e}"))?;
     let path = folder.join(file_name);
-    let part = folder.join(format!(".{file_name}.part"));
+    // a name of its own for each download, so two never write into one file
+    let n = NEXT_PART.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let part = folder.join(format!(".{file_name}.{}-{n}.part", std::process::id()));
     let written = (|| -> Result<u64, String> {
-        let mut file = std::fs::File::create(&part).map_err(|e| e.to_string())?;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&part)
+            .map_err(|e| e.to_string())?;
         let mut reader = response
             .body_mut()
             .as_reader()
@@ -392,17 +470,15 @@ fn download(
         file.sync_all().map_err(|e| e.to_string())?;
         Ok(total)
     })();
-    match written {
-        Ok(size) => {
-            std::fs::rename(&part, &path)
-                .map_err(|e| format!("could not save {file_name}: {e}"))?;
-            Ok((path, size))
-        }
-        Err(why) => {
-            let _ = std::fs::remove_file(&part);
-            Err(why)
-        }
+    let saved = written.and_then(|size| {
+        std::fs::rename(&part, &path)
+            .map(|()| size)
+            .map_err(|e| format!("could not save {file_name}: {e}"))
+    });
+    if saved.is_err() {
+        let _ = std::fs::remove_file(&part);
     }
+    saved.map(|size| (path, size))
 }
 
 #[cfg(test)]
@@ -416,20 +492,31 @@ mod tests {
     fn server() -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = format!("http://{}", listener.local_addr().unwrap());
+        let listener_port = listener.local_addr().unwrap().port();
         std::thread::spawn(move || {
-            for stream in listener.incoming().flatten() {
+            'conn: for stream in listener.incoming().flatten() {
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut first = String::new();
                 reader.read_line(&mut first).unwrap();
-                let (mut length, mut line) = (0_usize, String::new());
-                while reader.read_line(&mut line).is_ok() && line != "\r\n" {
-                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                let (mut length, mut line, mut auth) = (0_usize, String::new(), false);
+                loop {
+                    match reader.read_line(&mut line) {
+                        Ok(0) | Err(_) => continue 'conn,
+                        Ok(_) if line == "\r\n" => break,
+                        Ok(_) => {}
+                    }
+                    let lower = line.to_ascii_lowercase();
+                    if let Some(v) = lower.strip_prefix("content-length:") {
                         length = v.trim().parse().unwrap_or(0);
                     }
+                    auth |= lower.starts_with("authorization:");
                     line.clear();
                 }
                 let mut body = vec![0; length];
-                reader.read_exact(&mut body).unwrap();
+                if reader.read_exact(&mut body).is_err() {
+                    continue;
+                }
+                let port = listener_port;
                 let path = first.split(' ').nth(1).unwrap_or("/").to_owned();
                 let (status, extra, reply): (&str, String, Vec<u8>) = match path.as_str() {
                     "/list" => ("200 OK", String::new(), b"a\tb".to_vec()),
@@ -437,6 +524,24 @@ mod tests {
                     "/file" => ("200 OK", String::new(), vec![7; 3000]),
                     "/big" => ("200 OK", String::new(), vec![1; 5000]),
                     "/hop" => ("302 Found", "Location: /file\r\n".into(), vec![]),
+                    "/dir/hop" => ("302 Found", "Location: here\r\n".into(), vec![]),
+                    "/dir/here" => ("200 OK", String::new(), b"relative".to_vec()),
+                    "/whoami" => (
+                        "200 OK",
+                        String::new(),
+                        if auth {
+                            b"auth".to_vec()
+                        } else {
+                            b"none".to_vec()
+                        },
+                    ),
+                    "/hop-same" => ("302 Found", "Location: /whoami\r\n".into(), vec![]),
+                    "/hop-host" => (
+                        "302 Found",
+                        format!("Location: http://localhost:{port}/whoami\r\n"),
+                        vec![],
+                    ),
+                    "/same" => ("304 Not Modified", String::new(), vec![]),
                     "/away" => (
                         "302 Found",
                         "Location: http://elsewhere.example/x\r\n".into(),
@@ -465,7 +570,7 @@ mod tests {
     }
 
     fn outside(name: &str) -> Outside {
-        let mut o = Outside::new(vec!["127.0.0.1".into()], folder(name));
+        let mut o = Outside::new(vec!["127.0.0.1".into(), "localhost".into()], folder(name));
         o.plain_http_for_tests = true;
         o.max_download = 4000;
         o
@@ -584,6 +689,67 @@ mod tests {
             .flatten()
             .collect();
         assert_eq!(left.len(), 0, "{left:?}");
+    }
+
+    #[test]
+    fn redirects_resolve_like_a_browser_and_keep_keys_on_their_own_site() {
+        let base = server();
+        let notes = run(
+            &outside("redirects"),
+            r#"function run(s)
+                 local key = { Authorization = "Bearer k" }
+                 print(cutcraft.http{ url = s.base .. "/dir/hop" }.body,
+                       cutcraft.http{ url = s.base .. "/hop-same", headers = key }.body,
+                       cutcraft.http{ url = s.base .. "/hop-host", headers = key }.body,
+                       cutcraft.http{ url = s.base .. "/same" }.status)
+               end"#,
+            &base,
+        )
+        .unwrap();
+        assert_eq!(notes, vec!["relative\tauth\tnone\t304"]);
+        for (from, next, want) in [
+            ("https://a.example/x/y?q=1", "z", "https://a.example/x/z"),
+            ("https://a.example/x/y", "/z", "https://a.example/z"),
+            (
+                "https://a.example/x/y?q=1",
+                "?r=2",
+                "https://a.example/x/y?r=2",
+            ),
+            (
+                "https://a.example/x",
+                "//b.example/z",
+                "https://b.example/z",
+            ),
+            ("https://a.example", "z", "https://a.example/z"),
+            (
+                "https://a.example/x",
+                "https://b.example/",
+                "https://b.example/",
+            ),
+        ] {
+            assert_eq!(resolve(from, next), want, "{from} + {next}");
+        }
+    }
+
+    #[test]
+    fn a_bad_sleep_or_a_full_store_is_an_error_not_a_crash() {
+        let o = outside("limits");
+        let err = run(&o, "function run() cutcraft.sleep(0/0) end", "")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("number of seconds"), "{err}");
+        let notes = run(
+            &o,
+            r#"function run()
+                 for i = 1, 100 do cutcraft.store.set("k" .. i, "v") end
+                 local ok = pcall(cutcraft.store.set, "one-more", "v")
+                 cutcraft.store.set("k1", "changed")
+                 print(ok, cutcraft.store.get("one-more"), cutcraft.store.get("k1"))
+               end"#,
+            "",
+        )
+        .unwrap();
+        assert_eq!(notes, vec!["false\tnil\tchanged"]);
     }
 
     #[test]

@@ -40,7 +40,6 @@ needs_cutcraft = ">=0.5.0"           # optional: semver range of Cut Craft versi
 program = "cutcraft-depth"           # tool only: its program; .exe is added on Windows
 downloads = ["depth_anything_v2_vits.safetensors"]  # optional: large files beside the zip
 optional = ["depth_anything_v2_vitl.safetensors"]   # optional: fetched only when asked for
-network = ["relay.example.com"]      # gadget only: web hosts its gadgets may fetch from
 license = "LicenseRef-CutCraft AND Apache-2.0"      # informational
 ```
 
@@ -246,13 +245,16 @@ are never run for a preview. Beside the usual libraries they get:
   host on the usual port, a text answer of at most 1 MB, redirects followed by hand (at most
   five, each to a listed host).
 - `cutcraft.download(url, file_name)` → `{ path, size }`: saved under a plain file name in
-  `addons/<id>/files/`, written beside it first and put in place only once whole, at most 2 GB.
+  `addon-data/<id>/files/` (kept apart from `addons/<id>/` so an update keeps it), written beside it first and put in place only once whole, at most 2 GB.
 - `cutcraft.store.get(key)` / `cutcraft.store.set(key, value)`: up to 100 short strings kept in
-  `addons/<id>/store.json` between runs.
+  `addon-data/<id>/store.json` between runs.
 - `cutcraft.sleep(seconds)` (at most 60) and `cutcraft.message(text)` / `print`.
 
 Everything else stays closed: no `io`, `os`, `require` or `load`, no other folders, no other
-hosts, no plain `http://`. Not wired into the Gadgets menu yet: the app still needs to run an
+hosts, no plain `http://`. `Authorization` and `Cookie` headers are dropped when a redirect
+leaves the first site. The app must not run two of one add-on's outside gadgets at once.
+Until the app runs them, gadget add-ons that list `network` stay out of the Gadgets menu.
+Not wired into the Gadgets menu yet: the app still needs to run an
 outside gadget on a background thread with the shared progress display, and to show the
 `network` hosts on install (issue #587).
 
