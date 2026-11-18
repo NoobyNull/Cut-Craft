@@ -1295,8 +1295,8 @@ struct CutCraftApp {
     /// The gadgets the user installed (not Cut Craft's own), by name: label and command id.
     my_gadgets: Vec<(String, &'static str)>,
     /// The add-ons installed that are not gadgets, by name, each with the tool it brings
-    /// when Cut Craft knows it (`crate::addons::installed_tools`).
-    installed_addons: Vec<(String, Option<&'static str>)>,
+    /// when Cut Craft knows it, and whether it is official (`crate::addons::installed_tools`).
+    installed_addons: Vec<(String, Option<&'static str>, bool)>,
     /// Rail: the Gadgets list is open.
     rail_gadgets: bool,
     /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.

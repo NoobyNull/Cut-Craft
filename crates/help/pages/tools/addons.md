@@ -12,7 +12,7 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
 
 ![The steps, one after another](pictures/addons/tour.gif)
 
-1. Open **Gadgets ▸ Add-ons...** and press **Install** beside the add-on you want. One that is not signed asks before it installs.
+1. Open **Gadgets ▸ Add-ons...** and press **Install** beside the add-on you want. One that is not official asks before it installs.
 
    ![Step 1](pictures/addons/step-1.png)
 
@@ -26,8 +26,9 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
 2. Press **Install** beside the add-on you want. For one that is not on the list, type its
    GitHub repository under **Install from GitHub** (such as `owner/name`, or paste its link)
    and press **Install**.
-3. If the add-on is **not signed**, Cut Craft says so and asks before installing it. Nobody
-   has checked what an unsigned add-on does, so install it only if you trust whoever made it.
+3. If the add-on is **not official**, Cut Craft says so (**⚠ Not official**) and asks before
+   installing it. You can still install it with **Install Anyway**, but nobody has checked
+   what it does, so do that only if you trust whoever made it.
 4. When it is done, the add-on shows in **Gadgets ▸ My Gadgets** straight away.
 
 ## Use what you installed
@@ -46,12 +47,21 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
 While nothing is installed, My Gadgets says **Nothing installed yet** and there is no
 Gadgets section.
 
-## Signed and not signed
+## Official and not official
 
-An add-on signed with Cut Craft's release key has been checked by Cut Craft's author. One
-that is **not signed** still works, but Cut Craft asks before it first runs each time you
-start Cut Craft. The Add-ons window says which each one is, such as
-**Version 0.1.0 installed, not signed**.
+An **official** add-on is signed with Cut Craft's release key: Cut Craft's author made or
+checked it, and Cut Craft checks the signature when it downloads it. The Depth add-on is
+official. A copy installed before it was signed still says **not official**: press
+**Remove**, then **Install** again.
+
+Anything else is **not official**: a gadget you put in the My Gadgets folder yourself, or an
+add-on from someone else's GitHub repository. It still installs and works, but:
+
+- Cut Craft warns you before installing it, and asks before it first runs each time you
+  start Cut Craft.
+- The Add-ons window says so beside it, such as
+  **Version 0.1.0 installed, ⚠ not official (not signed)**.
+- **Gadgets ▸ My Gadgets** shows **⚠ (not official)** after its name.
 
 ## Update or remove
 

@@ -4,10 +4,12 @@
 #   depth-macos-aarch64.zip, depth-macos-x86_64.zip     Apple Silicon and Intel Macs
 #   depth_anything_v2_vits.safetensors                 the weights, once for all
 #   depth_anything_v2_vitl.safetensors                 High detail (optional, non-commercial)
-# Unsigned by Matthew's choice: Cut Craft installs it after its "not responsible" warning.
-# Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs one
-# secret, ADDON_RELEASE_TOKEN: a token that may write releases on DEPTH_REPO (the
-# workflow's own token can only write to this repository).
+# Each file signed with Cut Craft's release key (FILE.minisig beside it), so Add-ons
+# installs it as official, with no "not official" warning (Matthew, 2026-11-18).
+# Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs
+# ADDON_RELEASE_TOKEN, a token that may write releases on DEPTH_REPO (the workflow's own
+# token can only write to this repository), and the release key the app's releases use:
+# MINISIGN_SECRET_KEY and MINISIGN_PASSWORD.
 name: Depth add-on
 
 on:
@@ -106,6 +108,13 @@ jobs:
         with:
           path: out
           merge-multiple: true
+      # every file, the weights too: Cut Craft counts an add-on official only when all are
+      - name: Sign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          REQUIRE_SIGNING: '1'
+        run: scripts/sign-release out
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.ADDON_RELEASE_TOKEN }}
