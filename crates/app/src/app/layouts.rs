@@ -1,6 +1,7 @@
 //! The Rail and Ribbon window layouts, and the Find Tool window and inspector every layout
 //! can use (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`).
 
+use super::installed::GADGETS;
 use super::{
     Align, CutCraftApp, INSPECTOR_TABS, Layout, Page, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui,
     side_panel,
@@ -246,6 +247,9 @@ impl CutCraftApp {
         let margin = spacing.item_spacing.y;
         let edge = TOOL_ICON_ROWS * spacing.interact_size.y;
         let groups = self.all_groups();
+        let gadgets = self.gadget_tools();
+        // what was installed can be removed while its list is open
+        self.rail_gadgets &= !gadgets.is_empty();
         egui::Panel::left("rail")
             .resizable(false)
             .exact_size(edge + 2.0 * (spacing.button_padding.x + margin))
@@ -274,7 +278,7 @@ impl CutCraftApp {
                             .selected(self.rail_group == Some(i));
                             if ui.add(button).on_hover_hint(group.name).clicked() {
                                 self.rail_group = (self.rail_group != Some(i)).then_some(i);
-                                self.rail_favourites = false;
+                                (self.rail_favourites, self.rail_gadgets) = (false, false);
                             }
                         }
                         // after the groups, so none of their buttons moves for it
@@ -291,13 +295,18 @@ impl CutCraftApp {
                         {
                             self.rail_favourites = !self.rail_favourites;
                             self.rail_group = None;
+                            self.rail_gadgets = false;
                         }
+                        // last of all, once something is installed
+                        self.rail_gadgets_button(ui, &gadgets, edge);
                     });
             });
         let list = if self.rail_favourites {
             let mut tools = self.favourite_tools(Page::Design);
             tools.extend(self.favourite_tools(Page::Toolpaths));
             Some(("Favourites", tools))
+        } else if self.rail_gadgets {
+            Some((GADGETS, gadgets))
         } else {
             self.rail_group
                 .and_then(|i| groups.get(i))
@@ -334,11 +343,39 @@ impl CutCraftApp {
                     .inner;
                 if picked && !self.rail_pinned {
                     self.rail_group = None;
-                    self.rail_favourites = false;
+                    (self.rail_favourites, self.rail_gadgets) = (false, false);
                 }
             });
         }
         side_panel(egui::Panel::right("inspector"), ui.ctx()).show(ui, |ui| self.inspector(ui));
+    }
+
+    /// The Rail's last button, after Favourites, once something is installed: opens the
+    /// list of the installed gadgets and add-ons' tools.
+    fn rail_gadgets_button(&mut self, ui: &mut egui::Ui, gadgets: &[&'static str], edge: f32) {
+        if gadgets.is_empty() {
+            return;
+        }
+        let icon = gadgets
+            .iter()
+            .find_map(|&id| self.icons.find(self.explicit_icon(id), id));
+        let button = match icon {
+            Some(path) => egui::Button::image(
+                self.icons
+                    .image(path)
+                    .fit_to_exact_size(egui::vec2(edge, edge)),
+            ),
+            None => egui::Button::new(GADGETS).wrap_mode(egui::TextWrapMode::Truncate),
+        }
+        .selected(self.rail_gadgets);
+        if ui
+            .add(button)
+            .on_hover_hint("Gadgets: the gadgets and add-ons you installed")
+            .clicked()
+        {
+            self.rail_gadgets = !self.rail_gadgets;
+            (self.rail_group, self.rail_favourites) = (None, false);
+        }
     }
 
     /// The ribbon tab's groups, and the page their tools count as picked from.
@@ -358,15 +395,29 @@ impl CutCraftApp {
         let edge = TOOL_ICON_ROWS * spacing.interact_size.y;
         egui::Panel::top("ribbon").show(ui, |ui| {
             cut_craft_bug_report::mark(ui, "Ribbon");
+            let gadgets = self.gadget_tools();
+            // Gadgets is the last tab, there once something is installed
+            if gadgets.is_empty() && RIBBON_TABS[self.ribbon_tab] == GADGETS {
+                self.ribbon_tab = 0;
+            }
             ui.horizontal(|ui| {
                 for (i, tab) in RIBBON_TABS.iter().enumerate() {
-                    ui.selectable_value(&mut self.ribbon_tab, i, *tab);
+                    if *tab != GADGETS || !gadgets.is_empty() {
+                        ui.selectable_value(&mut self.ribbon_tab, i, *tab);
+                    }
                 }
             });
             ui.separator();
-            if RIBBON_TABS[self.ribbon_tab] == "Favourites" {
-                self.ribbon_favourites(ui, edge);
-                return;
+            match RIBBON_TABS[self.ribbon_tab] {
+                "Favourites" => {
+                    self.ribbon_favourites(ui, edge);
+                    return;
+                }
+                GADGETS => {
+                    self.tool_sections(ui, &[(GADGETS, gadgets)], Page::Design, false);
+                    return;
+                }
+                _ => {}
             }
             let (groups, page) = self.ribbon_groups();
             let font = egui::TextStyle::Body.resolve(ui.style());

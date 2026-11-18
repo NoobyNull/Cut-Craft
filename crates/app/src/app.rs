@@ -22,6 +22,7 @@ mod help_coverage;
 mod help_pictures;
 #[path = "help_tours.rs"]
 mod help_tours;
+mod installed;
 mod layouts;
 mod mac;
 mod notes_panel;
@@ -81,7 +82,8 @@ const INSPECTOR_TABS: [&str; 6] = [
     "Checks",
 ];
 /// The ribbon's tabs: the drawing, modeling and toolpath groups.
-const RIBBON_TABS: [&str; 4] = ["Design", "Model", "Toolpaths", "Favourites"];
+/// The Ribbon's tabs; Gadgets shows only once a gadget or add-on is installed.
+const RIBBON_TABS: [&str; 5] = ["Design", "Model", "Toolpaths", "Favourites", "Gadgets"];
 /// Actions the app handles itself rather than through a command.
 /// What the 3D view's fine mesh was made for: the model as at this revision, seen so.
 #[derive(Clone, Debug, PartialEq)]
@@ -317,7 +319,7 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 104] = [
+const BUILT_INS: [&str; 105] = [
     "import_into_shape",
     "try_sample_project",
     "machine_files",
@@ -385,6 +387,7 @@ const BUILT_INS: [&str; 104] = [
     "about_cut_craft",
     "check_for_updates",
     "addons",
+    "open_gadgets_folder",
     "undo",
     "redo",
     "exit",
@@ -1284,6 +1287,13 @@ struct CutCraftApp {
     updates: crate::update::Updates,
     /// Install Now or Relaunch Now: the new version, started once the window has closed.
     restart_after_close: Option<std::path::PathBuf>,
+    /// The gadgets the user installed (not Cut Craft's own), by name: label and command id.
+    my_gadgets: Vec<(String, &'static str)>,
+    /// The add-ons installed that are not gadgets, by name, each with the tool it brings
+    /// when Cut Craft knows it (`crate::addons::installed_tools`).
+    installed_addons: Vec<(String, Option<&'static str>)>,
+    /// Rail: the Gadgets list is open.
+    rail_gadgets: bool,
     /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
     unsigned_gadgets: std::collections::HashMap<String, String>,
     /// The unsigned gadgets the user has said yes to running this session.
@@ -3053,7 +3063,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             app.load_machines();
             app.load_options();
             app.load_words_and_job_times();
-            app.addons = crate::addons::Addons::new(crate::depth::addons_dir());
+            app.load_addons();
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
             app.start_recovery();

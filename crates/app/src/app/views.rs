@@ -401,7 +401,9 @@ impl CutCraftApp {
         self.tool_changer_window(ctx);
         self.fit_import_window(ctx);
         self.updates_window(ctx);
-        self.addons.window(ctx);
+        if self.addons.window(ctx) {
+            self.refresh_installed();
+        }
         self.welcome_windows(ctx);
         match self.screen {
             Screen::Start => {

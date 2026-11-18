@@ -32,8 +32,16 @@ impl CutCraftApp {
         let addon_gadgets =
             crate::depth::addons_dir().map_or_default(|dir| crate::gadgets::from_addons(&dir));
         let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
+        let mine: Vec<(String, &'static str)> = gadgets
+            .installed()
+            .filter_map(|g| Some((g.label.clone(), registry.get(&g.id)?.id())))
+            .collect();
         let mut menus = gui::MenuSystem::new();
-        menus.add_gadgets(&gadgets, my_gadgets.as_deref());
+        let items: Vec<(String, String)> = mine
+            .iter()
+            .map(|(label, id)| (label.clone(), (*id).to_owned()))
+            .collect();
+        menus.add_gadgets(&gadgets.built_in, &items);
         let mut status = gui::StatusBar::new();
         if !gadgets.problems.is_empty() {
             status.set_message(&format!(
@@ -130,6 +138,9 @@ impl CutCraftApp {
             shots: None,
             help_shots: None,
             space_mouse: None,
+            my_gadgets: mine,
+            installed_addons: vec![],
+            rail_gadgets: false,
             unsigned_gadgets: gadgets
                 .mine
                 .iter()
@@ -672,6 +683,7 @@ impl CutCraftApp {
                 }
             }
             "addons" => self.addons.show(ctx),
+            gui::OPEN_GADGETS_FOLDER => self.open_gadgets_folder(),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);
@@ -4973,6 +4985,7 @@ impl CutCraftApp {
                             self.tools_or_favourites(ui, &groups, Page::Design);
                         } else {
                             self.design_subtabs(ui);
+                            self.gadgets_section(ui);
                         }
                     }
                     "Sheets" => self.sheets_panel(ui),
