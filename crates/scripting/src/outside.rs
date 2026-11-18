@@ -153,7 +153,7 @@ fn send(
     let first_origin = origin(&url);
     for _ in 0..=5 {
         let uri = outside.check(&url)?;
-        let same_origin = origin(&url) == first_origin;
+        let same_origin = first_origin.is_some() && origin(&url) == first_origin;
         let mut request = ureq::http::Request::builder()
             .method(method.as_str())
             .uri(uri);
@@ -186,13 +186,10 @@ fn send(
     Err("the address redirected too many times".to_owned())
 }
 
-/// `scheme://host[:port]` of `url`, lower-cased.
-fn origin(url: &str) -> String {
-    let start = url.find("://").map_or(0, |s| s + 3);
-    let end = url[start..]
-        .find(['/', '?', '#'])
-        .map_or(url.len(), |p| start + p);
-    url[..end].to_ascii_lowercase()
+/// The origin of `url` (scheme, host and effective port), so `https://a:443` and
+/// `https://a` are the same site; `None` when `url` cannot be read.
+fn origin(url: &str) -> Option<url::Origin> {
+    url::Url::parse(url).ok().map(|u| u.origin())
 }
 
 /// `next` from a `Location` header, resolved against `from` as a URI reference (RFC 3986,
@@ -688,6 +685,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(notes, vec!["relative\tauth\tnone\t304"]);
+        // the default port is the same site; another port, host or scheme is not
+        assert_eq!(
+            origin("https://A.example:443/x"),
+            origin("https://a.example/y")
+        );
+        assert_ne!(
+            origin("https://a.example:8443/"),
+            origin("https://a.example/")
+        );
+        assert_ne!(origin("https://b.example/"), origin("https://a.example/"));
+        assert_ne!(origin("http://a.example/"), origin("https://a.example/"));
         for (from, next, want) in [
             ("https://a.example/x/y?q=1", "z", "https://a.example/x/z"),
             ("https://a.example/x/y", "/z", "https://a.example/z"),
