@@ -1528,11 +1528,7 @@ pub fn tool_menu(
     folded: bool,
 ) -> Vec<MenuItem> {
     let action = |what: &str| format!("{FAVOURITE}{}:{what}:{id}", page_key(page));
-    let mut menu = vec![if favourite {
-        MenuItem::with_action("Remove from Favourites", &action("remove"))
-    } else {
-        MenuItem::with_action("Add to Favourites", &action("add"))
-    }];
+    let mut menu = vec![favourite_item(page, id, favourite)];
     if among {
         menu.push(MenuItem::with_action("Move Earlier", &action("earlier")));
         menu.push(MenuItem::with_action("Move Later", &action("later")));
@@ -1547,6 +1543,16 @@ pub fn tool_menu(
         });
     }
     menu
+}
+
+/// A tool's Add to Favourites (or Remove from Favourites, when it is one) for `page`.
+pub fn favourite_item(page: crate::pages::Page, id: &str, favourite: bool) -> MenuItem {
+    let action = |what: &str| format!("{FAVOURITE}{}:{what}:{id}", page_key(page));
+    if favourite {
+        MenuItem::with_action("Remove from Favourites", &action("remove"))
+    } else {
+        MenuItem::with_action("Add to Favourites", &action("add"))
+    }
 }
 
 /// Folding each group of tools that do one job different ways into one button, or spreading

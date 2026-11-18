@@ -72,9 +72,16 @@ use std::borrow::Cow;
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Library"];
 /// The browser's tabs in the Rail and Ribbon layouts: the design tabs' panels and the
 /// toolpath list under one row of tabs.
-const INSPECTOR_TABS: [&str; 5] = ["Sheets", "Layers", "Components", "Library", "Toolpaths"];
+const INSPECTOR_TABS: [&str; 6] = [
+    "Sheets",
+    "Layers",
+    "Components",
+    "Library",
+    "Toolpaths",
+    "Checks",
+];
 /// The ribbon's tabs: the drawing, modeling and toolpath groups.
-const RIBBON_TABS: [&str; 3] = ["Design", "Model", "Toolpaths"];
+const RIBBON_TABS: [&str; 4] = ["Design", "Model", "Toolpaths", "Favourites"];
 /// Actions the app handles itself rather than through a command.
 /// What the 3D view's fine mesh was made for: the model as at this revision, seen so.
 #[derive(Clone, Debug, PartialEq)]
@@ -1187,6 +1194,8 @@ struct CutCraftApp {
     /// stays open after a tool is picked.
     rail_group: Option<usize>,
     rail_pinned: bool,
+    /// Whether the Rail layout's list shows the favourites (its ★ button) instead of a group.
+    rail_favourites: bool,
     /// The Ribbon layout's tab (`RIBBON_TABS`).
     ribbon_tab: usize,
     /// Where the options are saved; `None` keeps them in memory (tests).

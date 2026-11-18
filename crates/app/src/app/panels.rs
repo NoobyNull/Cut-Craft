@@ -310,7 +310,7 @@ impl CutCraftApp {
     /// or takes it off (`among` them, it moves along them too). Tools that do one job
     /// different ways show together in a labelled box, or share a flyout button when
     /// Options ▸ General folds tool groups (see [`crate::flyout`]).
-    fn tool_sections(
+    pub(super) fn tool_sections(
         &mut self,
         ui: &mut egui::Ui,
         sections: &[(&str, Vec<&'static str>)],
@@ -3980,7 +3980,7 @@ impl CutCraftApp {
     /// The Analyse sub-tab: the checks Save Toolpaths makes before cutting, run on the shown
     /// toolpaths in the order they cut, each with how to put it right; then any toolpath
     /// out of date, with the button that brings them all up to date.
-    fn analyse(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn analyse(&mut self, ui: &mut egui::Ui) {
         step_heading(ui, 3, "Analyse: check before cutting");
         let shown: Vec<EntityId> = self
             .doc

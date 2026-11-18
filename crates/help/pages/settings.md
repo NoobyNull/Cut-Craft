@@ -84,9 +84,32 @@ are listed by name beside it. The open tool's form sits in the inspector on the 
 ![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
 
 **Ribbon**: Design, Model and Toolpaths tabs across the top, each a row of tool groups, the
-sheets, layers and toolpath list on the left, and the open form on the right.
+sheets, layers and toolpath list on the left, and the open form on the right. A fourth tab,
+**Favourites**, holds the tools you keep at hand.
 
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
+
+In Rail and Ribbon, the panel that lists sheets, layers, components, the library and the
+toolpaths has a **Checks** tab too. It runs the same
+[checks before cutting](help:checks_before_cutting) as the Classic Toolpaths page's
+**Analyse** tab, so you can see what would spoil the cut before you press Save.
+
+Each layout shows the tool you point at with what it does and the next step: under the
+icons in Classic, under the open list in Rail, and at the foot of the left-hand panel in
+Ribbon.
+
+## Favourites: the tools you keep at hand
+
+1. Right-click any tool button and pick **Add to Favourites**.
+2. Find your favourites:
+   - **Classic**: right-click the **Design** or **Toolpaths** side tab and pick
+     **Show Favourites**. **Show All Tools** brings every tool back.
+   - **Rail**: click the **★** button at the foot of the column of group icons.
+   - **Ribbon**: open the **Favourites** tab.
+3. To take a tool off, right-click it and pick **Remove from Favourites**. Among your
+   favourites, **Move Earlier** and **Move Later** change their order.
+
+Favourites are kept between runs and are the same in every layout.
 
 To move panels about within a layout, or save an arrangement of your own, use
 [Interface Layout](help:interface_layout).
