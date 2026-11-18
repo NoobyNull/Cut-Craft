@@ -35,14 +35,19 @@ Every add-on's zip has `addon.toml` at its top.
 id = "depth"                         # its folder name: a-z, 0-9, - and _ only
 name = "Depth (Relief from Photo)"   # shown to users
 kind = "tool"                        # tool, gadget or content
-version = "0.1.0"                    # the add-on's own version
+version = "0.2.0"                    # the add-on's own version
 needs_cutcraft = ">=0.5.0"           # optional: semver range of Cut Craft versions it works with
 program = "cutcraft-depth"           # tool only: its program; .exe is added on Windows
 downloads = ["depth_anything_v2_vits.safetensors"]  # optional: large files beside the zip
+optional = ["depth_anything_v2_vitl.safetensors"]   # optional: fetched only when asked for
 license = "LicenseRef-CutCraft AND Apache-2.0"      # informational
 ```
 
-- `program` and every name in `downloads` must be plain file names, with no folders,
+- `optional` files are in the same release but are not part of the install. A tool fetches
+  one when the person asks (`addon::fetch_optional`, from the release the add-on was
+  installed from, checked like every download). An update keeps a fetched one while the
+  new release carries the very same file, and drops it otherwise, to be fetched again.
+- `program` and every name in `downloads` or `optional` must be plain file names, with no folders,
   `..` or absolute paths. A manifest that breaks this is refused.
 - Unknown keys (`license`, `platforms` and so on) are ignored, so a manifest can carry
   notes for people.

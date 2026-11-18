@@ -1,6 +1,8 @@
-//! The Depth add-on: Depth Anything V2 Small, run on the CPU with candle, turns a photo into
-//! relative depth (bigger is nearer) at the photo's own size. Only the Small model's weights
-//! are Apache 2.0; the larger ones are for non-commercial use and must not be offered.
+//! The Depth add-on: Depth Anything V2, run on the CPU with candle, turns a photo into
+//! relative depth (bigger is nearer) at the photo's own size. Small (Apache 2.0) is what
+//! everyone gets; Large (CC-BY-NC 4.0, non-commercial use only) is an optional download for
+//! finer detail, shipped at half precision to halve its size. Which one a file holds is read
+//! from its weights.
 
 use candle_core::{DType, Device, Module, Tensor};
 use candle_nn::VarBuilder;
@@ -89,23 +91,35 @@ impl Estimator {
     /// Loads the weights: the official `depth_anything_v2_vits.pth` or that converted to
     /// safetensors ([`convert`]); the backbone under `pretrained.`, the head under
     /// `depth_head.`.
+    /// Small or Large, whichever the file holds.
     pub fn load(weights: &Path) -> candle_core::Result<Self> {
         let tensors = read_weights(weights)?;
-        Self::with(VarBuilder::from_tensors(
-            completed(tensors)?,
-            DType::F32,
-            &Device::Cpu,
-        ))
+        let size = Size::of(&tensors)?;
+        Self::with(
+            VarBuilder::from_tensors(completed(tensors, size)?, DType::F32, &Device::Cpu),
+            size,
+        )
     }
 
-    /// The network with every weight zero: for checking the plumbing without the download.
+    /// The Small network with every weight zero: for checking the plumbing without the
+    /// download.
     pub fn untrained() -> candle_core::Result<Self> {
-        Self::with(VarBuilder::zeros(DType::F32, &Device::Cpu))
+        Self::with(VarBuilder::zeros(DType::F32, &Device::Cpu), Size::Small)
     }
 
-    fn with(vb: VarBuilder) -> candle_core::Result<Self> {
-        let backbone = Arc::new(dinov2::vit_small(vb.pp("pretrained"))?);
-        let model = DepthAnythingV2::new(backbone, DepthAnythingV2Config::vit_small(), vb)?;
+    fn with(vb: VarBuilder, size: Size) -> candle_core::Result<Self> {
+        let (backbone, config) = match size {
+            Size::Small => (
+                dinov2::vit_small(vb.pp("pretrained"))?,
+                DepthAnythingV2Config::vit_small(),
+            ),
+            // ViT-L/14: 24 blocks, 1024 wide, 16 heads
+            Size::Large => (
+                dinov2::DinoVisionTransformer::new(vb.pp("pretrained"), 24, 1024, 16)?,
+                DepthAnythingV2Config::vit_large(),
+            ),
+        };
+        let model = DepthAnythingV2::new(Arc::new(backbone), config, vb)?;
         Ok(Self { model })
     }
 
@@ -139,25 +153,76 @@ fn read_weights(path: &Path) -> candle_core::Result<HashMap<String, Tensor>> {
     {
         Ok(candle_core::pickle::read_all(path)?.into_iter().collect())
     } else {
-        // read whole (about 100 MB) rather than mapped, which would need unsafe code
+        // read whole (100 to 670 MB) rather than mapped, which would need unsafe code
         candle_core::safetensors::load_buffer(&std::fs::read(path)?, &Device::Cpu)
     }
 }
 
-/// The official `.pth` converted to safetensors, the form the add-on ships in.
+/// The backbone's class token, whose width says which model the weights are.
+const CLS_TOKEN: &str = "pretrained.cls_token";
+
+/// Which Depth Anything V2 model a file of weights holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Size {
+    /// ViT-S, Apache 2.0: about 100 MB.
+    Small,
+    /// ViT-L, CC-BY-NC 4.0 (non-commercial use only): about 670 MB at half precision.
+    Large,
+}
+
+impl Size {
+    /// Read from the width of the backbone (`pretrained.cls_token`).
+    pub fn of(tensors: &HashMap<String, Tensor>) -> candle_core::Result<Self> {
+        let width = tensors
+            .get(CLS_TOKEN)
+            .and_then(|t| t.dims().last().copied())
+            .ok_or_else(|| {
+                candle_core::Error::Msg("these are not Depth Anything weights".into())
+            })?;
+        match width {
+            384 => Ok(Self::Small),
+            1024 => Ok(Self::Large),
+            _ => Err(candle_core::Error::Msg(format!(
+                "these weights ({width} wide) are not Depth Anything V2 Small or Large"
+            ))),
+        }
+    }
+
+    fn width(self) -> usize {
+        match self {
+            Self::Small => 384,
+            Self::Large => 1024,
+        }
+    }
+}
+
+/// The official `.pth` converted to safetensors, the form the add-on ships in. Large is
+/// stored at half precision, which halves its download and makes no visible difference to
+/// the depth; Small is kept as it is.
 pub fn convert(pth: &Path, out: &Path) -> candle_core::Result<()> {
-    candle_core::safetensors::save(&read_weights(pth)?, out)
+    let tensors = read_weights(pth)?;
+    let tensors = match Size::of(&tensors)? {
+        Size::Small => tensors,
+        Size::Large => tensors
+            .into_iter()
+            .map(|(name, t)| Ok((name, t.to_dtype(DType::F16)?)))
+            .collect::<candle_core::Result<_>>()?,
+    };
+    candle_core::safetensors::save(&tensors, out)
 }
 
 /// The weights with what candle's backbone asks for but Depth Anything never uses: the
-/// backbone's classifier (`pretrained.head`), absent from the official file, as zeros.
-fn completed(mut tensors: HashMap<String, Tensor>) -> candle_core::Result<HashMap<String, Tensor>> {
+/// backbone's classifier (`pretrained.head`), absent from the official file, as zeros; and
+/// everything made f32 for the network.
+fn completed(
+    mut tensors: HashMap<String, Tensor>,
+    size: Size,
+) -> candle_core::Result<HashMap<String, Tensor>> {
     const CLASSES: usize = 1000;
-    const EMBED: usize = 384;
     if !tensors.contains_key("pretrained.head.weight") {
         tensors.insert(
             "pretrained.head.weight".into(),
-            Tensor::zeros((CLASSES, 2 * EMBED), DType::F32, &Device::Cpu)?,
+            Tensor::zeros((CLASSES, 2 * size.width()), DType::F32, &Device::Cpu)?,
         );
         tensors.insert(
             "pretrained.head.bias".into(),
@@ -201,10 +266,60 @@ mod tests {
         assert_eq!(grey.into_raw(), vec![0, 32_768, 65_535]);
     }
 
+    fn token(width: usize) -> HashMap<String, Tensor> {
+        HashMap::from([(
+            CLS_TOKEN.to_string(),
+            Tensor::zeros((1, 1, width), DType::F32, &Device::Cpu).unwrap(),
+        )])
+    }
+
+    #[test]
+    fn the_model_size_is_read_from_the_weights() {
+        assert_eq!(Size::of(&token(384)).unwrap(), Size::Small);
+        assert_eq!(Size::of(&token(1024)).unwrap(), Size::Large);
+        let e = Size::of(&token(768)).unwrap_err().to_string();
+        assert!(e.contains("Small or Large"), "{e}");
+        assert!(Size::of(&HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn a_large_model_gets_a_classifier_its_own_width() {
+        let tensors = completed(token(1024), Size::Large).unwrap();
+        assert_eq!(tensors["pretrained.head.weight"].dims(), [1000, 2048]);
+    }
+
+    #[test]
+    fn large_weights_are_stored_at_half_size_and_read_back_whole() {
+        let dir = std::env::temp_dir().join(format!("cutcraft-depth-l-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (pth, out) = (dir.join("large.safetensors"), dir.join("out.safetensors"));
+        candle_core::safetensors::save(&token(1024), &pth).unwrap();
+        convert(&pth, &out).unwrap();
+        assert_eq!(read_weights(&out).unwrap()[CLS_TOKEN].dtype(), DType::F16);
+        let small = (
+            dir.join("small.safetensors"),
+            dir.join("small-out.safetensors"),
+        );
+        candle_core::safetensors::save(&token(384), &small.0).unwrap();
+        convert(&small.0, &small.1).unwrap();
+        assert_eq!(
+            read_weights(&small.1).unwrap()[CLS_TOKEN].dtype(),
+            DType::F32
+        );
+        // made whole again for the network
+        let back = completed(read_weights(&out).unwrap(), Size::Large).unwrap();
+        assert_eq!(back[CLS_TOKEN].dtype(), DType::F32);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn the_unused_classifier_is_filled_in_and_everything_made_f32() {
         let half = Tensor::zeros(4, DType::F16, &Device::Cpu).unwrap();
-        let tensors = completed(HashMap::from([("depth_head.x".to_string(), half)])).unwrap();
+        let tensors = completed(
+            HashMap::from([("depth_head.x".to_string(), half)]),
+            Size::Small,
+        )
+        .unwrap();
         assert_eq!(tensors["pretrained.head.weight"].dims(), [1000, 768]);
         assert_eq!(tensors["pretrained.head.bias"].dims(), [1000]);
         assert_eq!(tensors["depth_head.x"].dtype(), DType::F32);
@@ -220,6 +335,14 @@ mod tests {
         let back = read_weights(&file).unwrap();
         assert_eq!(back["a"].to_vec1::<f32>().unwrap(), [1.0, 2.0, 3.0]);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    #[ignore = "builds the 1.3 GB Large network: cargo nextest run -p cut-craft-depth --run-ignored all"]
+    fn the_untrained_large_network_runs_too() {
+        let large = Estimator::with(VarBuilder::zeros(DType::F32, &Device::Cpu), Size::Large);
+        let depth = large.unwrap().estimate(&[128; 3 * 2 * 2], 2, 2).unwrap();
+        assert_eq!(depth.len(), 4);
     }
 
     #[test]

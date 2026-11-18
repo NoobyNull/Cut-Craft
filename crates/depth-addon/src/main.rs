@@ -1,7 +1,8 @@
 //! `cutcraft-depth WEIGHTS PHOTO OUT.png`: the photo's estimated depth as a 16-bit grey
 //! picture the photo's size, white nearest. Cut Craft runs it; it can be run by hand too.
-//! `cutcraft-depth convert depth_anything_v2_vits.pth OUT.safetensors` makes the shipped
-//! weights from the official file.
+//! `cutcraft-depth convert depth_anything_v2_vits.pth OUT.safetensors` (or `_vitl.pth`) makes
+//! the shipped weights from the official file. Small and Large both run; the weights say
+//! which.
 
 use cut_craft_depth::{Estimator, to_grey16};
 use std::path::{Path, PathBuf};

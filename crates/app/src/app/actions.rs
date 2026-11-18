@@ -99,6 +99,9 @@ impl CutCraftApp {
                 job_sheet: false,
             },
             depth_estimate: None,
+            depth_high_detail: None,
+            depth_detail_fetch: None,
+            depth_detail_failed: None,
             busy: None,
             wait_before_showing: crate::busy::SHOW_AFTER,
             addons: crate::addons::Addons::new(None),
@@ -6397,15 +6400,85 @@ impl CutCraftApp {
                 .on_hover_hint("Works out the photo's depth on this computer; nothing is uploaded")
                 .on_disabled_hover_text("Import a photo first")
                 .clicked();
+            self.depth_detail(
+                ui,
+                installed
+                    .as_ref()
+                    .and_then(|i| i.detailed.as_ref())
+                    .is_some(),
+            );
         });
         let name = "The Depth add-on";
+        let high_detail = installed
+            .as_ref()
+            .is_some_and(|i| self.depth_high_detail.unwrap_or(i.detailed.is_some()));
         if let (true, Some(installed), Some(id)) = (start, installed, chosen)
             && self.addons.may_run(crate::depth::ADDON_ID, name)
         {
+            let installed = installed.with_high_detail(high_detail);
             match crate::depth::Estimating::start(&installed, id, &self.doc.bitmaps[&id], ui.ctx())
             {
                 Ok(running) => self.depth_estimate = Some(running),
                 Err(e) => self.status.set_message(&e),
+            }
+        }
+    }
+
+    /// Relief from Photo's High detail: the tick once the model is here (`have`), else the
+    /// offer to fetch it, or how its download is going.
+    fn depth_detail(&mut self, ui: &mut egui::Ui, have: bool) {
+        if let Some(answer) = self
+            .depth_detail_fetch
+            .as_ref()
+            .and_then(crate::depth::FetchingDetail::answer)
+        {
+            self.depth_detail_fetch = None;
+            match answer {
+                Ok(()) => {
+                    self.depth_detail_failed = None;
+                    self.depth_high_detail = Some(true);
+                }
+                Err(e) => self.depth_detail_failed = Some(e),
+            }
+        }
+        if let Some(fetch) = &self.depth_detail_fetch {
+            ui.label("Downloading the High detail model (about 670 MB)...");
+            ui.add(egui::ProgressBar::new(fetch.fraction()).show_percentage());
+            return;
+        }
+        if have {
+            let mut on = self.depth_high_detail.unwrap_or(true);
+            if ui
+                .checkbox(&mut on, "High detail")
+                .on_hover_hint(crate::depth::DETAILED_NOTE)
+                .changed()
+            {
+                self.depth_high_detail = Some(on);
+            }
+            if on {
+                ui.label("Slower, and for personal, non-commercial use only.");
+            }
+            return;
+        }
+        ui.label(
+            "Want finer detail? The free High detail model (about 670 MB, downloaded once) \
+             sees more, but is slower and for personal, non-commercial use only.",
+        );
+        if let Some(e) = &self.depth_detail_failed {
+            ui.colored_label(ui.visuals().error_fg_color, e);
+        }
+        if ui
+            .button("Get High Detail Model")
+            .on_hover_hint(crate::depth::DETAILED_NOTE)
+            .clicked()
+            && let Some(addons) = self.addons.dir().map(std::path::Path::to_path_buf)
+        {
+            match crate::depth::FetchingDetail::start(&addons, ui.ctx()) {
+                Ok(fetch) => {
+                    self.depth_detail_failed = None;
+                    self.depth_detail_fetch = Some(fetch);
+                }
+                Err(e) => self.depth_detail_failed = Some(e),
             }
         }
     }
