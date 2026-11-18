@@ -369,28 +369,45 @@ impl CutCraftApp {
                 return;
             }
             let (groups, page) = self.ribbon_groups();
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let text_width = |text: String| {
+                ui.painter()
+                    .layout_no_wrap(text, font.clone(), egui::Color32::PLACEHOLDER)
+                    .size()
+                    .x
+            };
+            let cell = edge + 2.0 * spacing.button_padding.x + spacing.item_spacing.x;
+            // what each group takes open and folded, with the separator after it
+            let gap = 2.0 * spacing.item_spacing.x + 1.0;
+            let fits: Vec<GroupFit> = groups
+                .iter()
+                .map(|group| {
+                    // two rows of icons: half the tools across, rounded up, but never
+                    // narrower than the group's name
+                    let columns = u16::try_from(group.tools.len().div_ceil(2)).unwrap_or(u16::MAX);
+                    let name = text_width(group.name.to_owned());
+                    let folded =
+                        text_width(folded_label(group.name)) + 2.0 * spacing.button_padding.x + gap;
+                    GroupFit {
+                        open: (f32::from(columns) * cell).max(name + cell) + gap,
+                        folded,
+                        uses: self.group_uses(group),
+                        kept: self.holds_a_favourite(group),
+                    }
+                })
+                .collect();
+            let folds = fold_plan(&fits, ui.available_width());
             egui::ScrollArea::horizontal().show(ui, |ui| {
                 ui.horizontal_top(|ui| {
-                    for group in &groups {
-                        ui.vertical(|ui| {
-                            // two rows of icons: half the tools across, rounded up, but
-                            // never narrower than the group's name
-                            let columns =
-                                u16::try_from(group.tools.len().div_ceil(2)).unwrap_or(u16::MAX);
-                            let cell =
-                                edge + 2.0 * spacing.button_padding.x + spacing.item_spacing.x;
-                            let name = ui
-                                .painter()
-                                .layout_no_wrap(
-                                    group.name.to_owned(),
-                                    egui::TextStyle::Body.resolve(ui.style()),
-                                    egui::Color32::PLACEHOLDER,
-                                )
-                                .size()
-                                .x;
-                            ui.set_max_width((f32::from(columns) * cell).max(name + cell));
-                            self.tool_groups(ui, std::slice::from_ref(group), page);
-                        });
+                    for ((group, fit), folded) in groups.iter().zip(&fits).zip(folds) {
+                        if folded {
+                            self.folded_group(ui, *group);
+                        } else {
+                            ui.vertical(|ui| {
+                                ui.set_max_width(fit.open - gap);
+                                self.tool_groups(ui, std::slice::from_ref(group), page);
+                            });
+                        }
                         ui.separator();
                     }
                 });
@@ -414,6 +431,45 @@ impl CutCraftApp {
         if self.form.is_some() {
             side_panel(egui::Panel::right("inspector"), ui.ctx()).show(ui, |ui| self.inspector(ui));
         }
+    }
+
+    /// How many times a group's tools have been picked, all told.
+    fn group_uses(&self, group: &gui::ToolGroup) -> u32 {
+        group
+            .tools
+            .iter()
+            .filter_map(|id| self.options.tool_uses.get(*id))
+            .fold(0, |sum, n| sum.saturating_add(*n))
+    }
+
+    /// Whether any of a group's tools is a favourite of either page: such a group never folds.
+    fn holds_a_favourite(&self, group: &gui::ToolGroup) -> bool {
+        [Page::Design, Page::Toolpaths].into_iter().any(|page| {
+            self.options
+                .favourites
+                .of(page)
+                .0
+                .iter()
+                .any(|f| group.tools.contains(&f.as_str()))
+        })
+    }
+
+    /// A group folded into one button for want of room: a click lists its tools by icon and
+    /// name, as the Rail does.
+    fn folded_group(&mut self, ui: &mut egui::Ui, group: gui::ToolGroup) {
+        ui.vertical(|ui| {
+            ui.add_space(ui.spacing().item_spacing.y);
+            let response = ui.menu_button(folded_label(group.name), |ui| {
+                if self.tool_rows(ui, group.tools) {
+                    ui.close();
+                }
+            });
+            response.response.on_hover_hint(format!(
+                "{}: folded to make room, as you use it least. Click for its tools, or widen \
+                 the window to see them all",
+                group.name
+            ));
+        });
     }
 
     /// The Ribbon's Favourites tab: each page's favourites as a group of icons, in the order
@@ -457,3 +513,40 @@ const NO_FAVOURITES: &str = "No favourites yet: right-click a tool ▸ Add to Fa
 
 /// How many rows of text the Ribbon keeps for the tool tip at the browser's foot.
 const RIBBON_TIP_ROWS: f32 = 6.0;
+
+/// A folded group's button: its name and a down arrow.
+fn folded_label(name: &str) -> String {
+    format!("{name} ▾")
+}
+
+/// How wide a Ribbon group is open and folded, how often its tools are used, and whether it
+/// is kept open whatever (it holds a favourite).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct GroupFit {
+    pub open: f32,
+    pub folded: f32,
+    pub uses: u32,
+    pub kept: bool,
+}
+
+/// Which groups fold into one button so the row fits in `room`: the least used first, the
+/// rightmost of those used alike first (the end of the row goes first, as a reader expects),
+/// never one kept open. Nothing folds while all fit; when folding all it can still leaves the
+/// row too wide, the row scrolls.
+pub(super) fn fold_plan(groups: &[GroupFit], room: f32) -> Vec<bool> {
+    let mut folded = vec![false; groups.len()];
+    let mut width: f32 = groups.iter().map(|g| g.open).sum();
+    while width > room {
+        let next = groups
+            .iter()
+            .enumerate()
+            .filter(|&(i, g)| !folded[i] && !g.kept && g.folded < g.open)
+            .min_by(|(i, a), (j, b)| a.uses.cmp(&b.uses).then(j.cmp(i)));
+        let Some((i, g)) = next else {
+            break;
+        };
+        folded[i] = true;
+        width -= g.open - g.folded;
+    }
+    folded
+}

@@ -1819,6 +1819,11 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
     pub flyout_faces: crate::flyout::Faces,
+    /// How many times each tool has been picked from a tool button, by id: the Ribbon folds
+    /// the groups used least first when the window is too narrow for them all.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[schemars(skip)]
+    pub tool_uses: std::collections::BTreeMap<String, u32>,
 }
 
 /// Each tool page's favourite tools, in the order shown, and whether it shows only those.
@@ -1925,6 +1930,7 @@ impl Default for Options {
             design_sections: vec![],
             toolpath_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
+            tool_uses: std::collections::BTreeMap::new(),
         }
     }
 }
