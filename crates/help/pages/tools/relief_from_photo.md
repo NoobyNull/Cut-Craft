@@ -33,6 +33,20 @@ If it says the add-on **is not available to download yet**, nothing is wrong on 
 computer: it simply has not been published for your kind of computer yet. Try again after
 the next Cut Craft update.
 
+### High detail
+
+Once the add-on is installed, the form offers **Get High Detail Model**. It is a second,
+bigger model (about 670 MB, downloaded once) that sees finer detail, such as hair, folds in
+cloth and lettering. After it arrives a **High detail** tick box appears, ticked. Untick it
+to go back to the standard model.
+
+Two things to know before you get it:
+
+- It is slower: an estimate takes several times longer, and needs about 4 GB of free
+  memory.
+- Its licence allows **personal, non-commercial use only**. Do not use it for pieces you
+  sell. The standard model has no such limit.
+
 You do not need the add-on if your picture is already a depth map (a grey picture where
 white is nearest). Set **Depth from** to **Picture**, and the picture is used as the heights
 directly. Tick **Invert** if its black is nearest instead. A ready-made depth map can also
