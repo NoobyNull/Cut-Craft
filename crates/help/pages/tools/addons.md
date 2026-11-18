@@ -34,9 +34,12 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
 
 - **From the menu**: open **Gadgets ▸ My Gadgets** and click it. An add-on opens the tool
   it brings: **Depth (Relief from Photo)** opens Relief from Photo.
-- **From the tool buttons**: once something is installed, a **Gadgets** section appears.
+- **From the tool buttons**: once a gadget, or an add-on that brings a tool (such as Depth),
+  is installed, a **Gadgets** section appears. An add-on Cut Craft has no tool for is only
+  in My Gadgets, where clicking it opens Add-ons.
   It always comes after every other group, so no button you know moves for it.
-  - **Classic**: on the Design page, under the sub-tabs.
+  - **Classic**: on the Design page, under the sub-tabs. If the page shows only your
+    favourites, right-click the **Design** side tab and pick **Show All Tools** first.
   - **Rail**: the last button in the column of group icons, after **★** Favourites.
   - **Ribbon**: a **Gadgets** tab, after Favourites.
 
