@@ -1,4 +1,4 @@
-- Bug and crash reports now say which system, processor and graphics card you have
-- Macs: the app opens without a "damaged" message; use Open Anyway in Privacy & Security
-- Very large jobs that don't fit on the graphics card are worked out on the processor instead of stopping
-- The Depth add-on is built for Intel and Apple Silicon Macs, and says plainly when it isn't ready yet
+- Cutting times now count speeding up, slowing down, corners, tool changes and the trip home
+- Construction lines help you place things and are never cut
+- A layer with no material named cuts at the safest (hardest material) speeds
+- Bits with no flute length set no longer show a "not checked" reach warning
