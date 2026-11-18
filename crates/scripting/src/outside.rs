@@ -178,7 +178,7 @@ fn send(
             .get("location")
             .and_then(|l| l.to_str().ok())
             .ok_or_else(|| format!("{url} sent a redirect with nowhere to go"))?;
-        url = resolve(&url, next);
+        url = resolve(&url, next)?;
         if response.status() == 303 {
             (method, body) = ("GET".to_owned(), None);
         }
@@ -195,33 +195,14 @@ fn origin(url: &str) -> String {
     url[..end].to_ascii_lowercase()
 }
 
-/// `next` from a `Location` header, resolved against `from` as a URI reference (RFC 3986):
-/// absolute, `//host/...`, `/path`, `?query` or a path relative to `from`'s folder.
-fn resolve(from: &str, next: &str) -> String {
-    let base = origin(from);
-    let scheme_end = base.find("://").map_or(0, |s| s + 3);
-    let has_scheme = next.split_once(':').is_some_and(|(s, _)| {
-        !s.is_empty()
-            && s.chars()
-                .all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c))
-    });
-    if has_scheme {
-        return next.to_owned();
-    }
-    if let Some(rest) = next.strip_prefix("//") {
-        return format!("{}{rest}", &base[..scheme_end]);
-    }
-    let rest = from.get(base.len()..).unwrap_or("");
-    let path = rest.split(['?', '#']).next().unwrap_or("");
-    let path = if path.is_empty() { "/" } else { path };
-    if next.starts_with('/') {
-        format!("{base}{next}")
-    } else if next.starts_with('?') {
-        format!("{base}{path}{next}")
-    } else {
-        let folder = &path[..=path.rfind('/').unwrap_or(0)];
-        format!("{base}{folder}{next}")
-    }
+/// `next` from a `Location` header, resolved against `from` as a URI reference (RFC 3986,
+/// by the standard resolver): absolute, `//host/...`, `/path`, `?query`, `#fragment`, or a
+/// path relative to `from`'s folder, with `.` and `..` segments removed.
+fn resolve(from: &str, next: &str) -> Result<String, String> {
+    url::Url::parse(from)
+        .and_then(|base| base.join(next))
+        .map(String::from)
+        .map_err(|e| format!("{from} redirected to an address that is not valid ({e})"))
 }
 
 /// The add-on's saved settings.
@@ -722,12 +703,23 @@ mod tests {
             ),
             ("https://a.example", "z", "https://a.example/z"),
             (
+                "https://a.example/x/y?q=1",
+                "#part",
+                "https://a.example/x/y?q=1#part",
+            ),
+            ("https://a.example/x/y/z", "../w", "https://a.example/x/w"),
+            (
+                "https://a.example/x/y",
+                "/a/./b/../c",
+                "https://a.example/a/c",
+            ),
+            (
                 "https://a.example/x",
                 "https://b.example/",
                 "https://b.example/",
             ),
         ] {
-            assert_eq!(resolve(from, next), want, "{from} + {next}");
+            assert_eq!(resolve(from, next).as_deref(), Ok(want), "{from} + {next}");
         }
     }
 

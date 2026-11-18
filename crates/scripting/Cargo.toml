@@ -11,6 +11,7 @@ mlua = { version = "0.12.2", features = ["lua54", "vendored", "serde"] }
 serde_json.workspace = true
 # outside gadgets: web requests to the hosts an add-on lists
 ureq = { version = "3", features = ["platform-verifier"] }
+url = "2"
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }
