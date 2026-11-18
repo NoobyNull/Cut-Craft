@@ -40,6 +40,7 @@ needs_cutcraft = ">=0.5.0"           # optional: semver range of Cut Craft versi
 program = "cutcraft-depth"           # tool only: its program; .exe is added on Windows
 downloads = ["depth_anything_v2_vits.safetensors"]  # optional: large files beside the zip
 optional = ["depth_anything_v2_vitl.safetensors"]   # optional: fetched only when asked for
+network = ["relay.example.com"]      # gadget only: web hosts its gadgets may fetch from
 license = "LicenseRef-CutCraft AND Apache-2.0"      # informational
 ```
 
@@ -225,6 +226,38 @@ end
   no files, programs, network, `require` or compiled Lua. A run is stopped after about a
   second of work, 64 MB of memory, or 10,000 commands, and the user is told in plain
   words.
+
+### Gadgets that reach the web (`network`)
+
+A gadget add-on may list web hosts in `addon.toml`:
+
+```toml
+network = ["daily3d-relay.example.workers.dev", "drive.usercontent.google.com"]
+```
+
+Bare host names only: no `https://`, port, path or user name, and only `kind = "gadget"`.
+The list is meant to be shown to the person before installing.
+
+Such gadgets run through `cut_craft_scripting::run_outside_gadget` with an `Outside` naming
+the hosts and the add-on's folder. They never change the job, so they are not commands and
+are never run for a preview. Beside the usual libraries they get:
+
+- `cutcraft.http{ method, url, headers, body }` → `{ status, body }`: `https://` to a listed
+  host on the usual port, a text answer of at most 1 MB, redirects followed by hand (at most
+  five, each to a listed host).
+- `cutcraft.download(url, file_name)` → `{ path, size }`: saved under a plain file name in
+  `addons/<id>/files/`, written beside it first and put in place only once whole, at most 2 GB.
+- `cutcraft.store.get(key)` / `cutcraft.store.set(key, value)`: up to 100 short strings kept in
+  `addons/<id>/store.json` between runs.
+- `cutcraft.sleep(seconds)` (at most 60) and `cutcraft.message(text)` / `print`.
+
+Everything else stays closed: no `io`, `os`, `require` or `load`, no other folders, no other
+hosts, no plain `http://`. Not wired into the Gadgets menu yet: the app still needs to run an
+outside gadget on a background thread with the shared progress display, and to show the
+`network` hosts on install (issue #587).
+
+Shared gadget code meant to run in other Lua programs too should keep to Lua 5.1: no `goto`,
+`//`, `utf8` or integer-only features.
 
 ## Content packs
 
