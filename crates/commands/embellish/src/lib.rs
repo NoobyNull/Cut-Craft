@@ -2121,6 +2121,10 @@ mod pictures {
                 after.components.values().next().unwrap(),
                 &out.join(format!("celtic-{name}.png")),
             );
+            let part = after.components.values().next().unwrap();
+            let mut raw = format!("{} {} {}\n", part.columns, part.rows, part.cell).into_bytes();
+            raw.extend(part.heights.iter().flat_map(|&h| (h as f32).to_le_bytes()));
+            std::fs::write(out.join(format!("celtic-{name}.raw")), raw).unwrap();
             let rings: Vec<Vec<[f64; 2]>> = after
                 .vectors
                 .values()
