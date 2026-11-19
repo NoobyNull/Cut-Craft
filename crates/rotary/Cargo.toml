@@ -10,3 +10,9 @@ cut-craft-core.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+cut-craft-post = { path = "../post" }
+cmd-rotary-machining-toolpath = { path = "../commands/rotary-machining-toolpath" }
+chrono.workspace = true

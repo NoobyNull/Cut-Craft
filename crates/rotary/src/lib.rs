@@ -15,9 +15,12 @@
 //! - [`Voxels`]: the material as a fine grid of solid cells, cut by the bit moving exactly
 //!   as a file moves it (A, along, across and height all together), and its surface for
 //!   drawing.
+//! - [`gcode::read`]: a rotary file read back as the bit's poses, for the simulator to cut
+//!   exactly what the machine will.
 
 mod cutter;
 mod frame;
+pub mod gcode;
 mod mesh;
 mod stock;
 mod voxels;

@@ -2603,7 +2603,10 @@ dependencies = [
 name = "cut-craft-rotary"
 version = "0.6.18"
 dependencies = [
+ "chrono",
+ "cmd-rotary-machining-toolpath",
  "cut-craft-core",
+ "cut-craft-post",
 ]
 
 [[package]]
