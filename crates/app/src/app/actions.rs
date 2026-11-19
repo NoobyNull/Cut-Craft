@@ -1758,7 +1758,7 @@ impl CutCraftApp {
             return Err(why);
         }
         let post = match form.post.as_deref() {
-            Some(name) => self.posts.load(name),
+            Some(name) => self.posts.load(name).map(|p| self.on_machine(p)),
             None => self.output_post(),
         }?;
         let changer = self.has_tool_changer();
@@ -2045,6 +2045,20 @@ impl CutCraftApp {
     /// for a cylinder along X and X for one along Y. Without a machine, Cut Craft's
     /// `FluidNC` post for this kind of job.
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
+        self.output_post_as_written().map(|p| self.on_machine(p))
+    }
+
+    /// `post` writing for the active machine: a rotary post winds A as its rotary allows
+    /// (Machine Configuration ▸ Rotary), with its backlash and top speed.
+    fn on_machine(&self, post: cut_craft_post::Post) -> cut_craft_post::Post {
+        match self.machines.active() {
+            Some(m) if m.has_rotary() && post.wraps().is_some() => post.with_rotary(m.rotary_axis),
+            _ => post,
+        }
+    }
+
+    /// [`Self::output_post`] as its file is written, not yet told the machine's rotary.
+    fn output_post_as_written(&self) -> Result<cut_craft_post::Post, String> {
         use cut_craft_core::document::Along;
         if let Some(why) = self.no_a_axis() {
             return Err(why);

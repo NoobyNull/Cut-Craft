@@ -58,6 +58,34 @@ Once the 4th axis is ticked, Machine Configuration shows **Rotary (4th axis)**. 
 8. Set **A top speed** from the controller's settings, and how far the **Chuck** and
    **Tailstock** reach along the axis.
 
+## How far A turns
+
+Below those, three more settings say how A may turn while it cuts:
+
+![A can turn, At the limit and Backlash in Rotary (4th axis)](pictures/concepts/rotary_winding.png)
+
+- **A can turn**: **Freely** if nothing stops the chuck turning one way for as long as the job
+  likes, like a lathe. A then never turns back by itself: the next ring of cutting carries on
+  from where the last one ended. Choose **Up to … turns each way** when a cable, a hose or a
+  limit switch on the rotary means it must not wind on and on. It counts from where A was
+  zeroed.
+- **At the limit** (with **Up to**): what the file does when the next pass would turn A too far.
+  - **Cut both ways**: the next pass is cut the other way round, so A comes back as it cuts and
+    no time is spent spinning. A pass that ramps into the material can't be cut backwards, so it
+    spins back instead. Cutting the other way round turns climb cuts into conventional ones, so
+    the finish on alternate passes can differ a little.
+  - **Lift and spin back**: the bit lifts clear, then A spins back whole turns before the next
+    pass, and the file ends with A back where it started. If A has lost steps, the work no
+    longer lines up with the start: an easy way to spot it.
+- **Backlash**: how far A turns before the material moves when it changes direction, from a
+  little play in its gears or belt. Turn A one way, then the other, and watch the chuck: the
+  degrees before it starts moving are the backlash. The file turns that much further each time
+  A changes direction. Leave it at 0 if you see none.
+
+Turning whole turns further cuts the same place on the material, so none of these change what
+is carved, only how A gets there. Rotary files are timed where the bit actually cuts (nearer
+the axis when it cuts deep), and A is never asked to turn faster than **A top speed**.
+
 The [Rotary set up](help:check_rotary_setup) check before cutting asks until **Centre line
 found** is ticked.
 

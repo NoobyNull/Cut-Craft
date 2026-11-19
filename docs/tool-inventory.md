@@ -148,7 +148,12 @@ say "not implemented yet".
   (A) tick adds the G93 Rotary A twins of its Cut Craft posts; a rotary job saves through
   the machine's post wrapping its side (Y for a cylinder along X), and is refused on a
   machine without the 4th axis, on standard GRBL, or without such a post. Flat jobs
-  skip rotary posts. Post-Processor Management's Inspect has Edit for custom
+  skip rotary posts. Its Rotary (4th axis) section sets where the axis lies, its centre
+  line, which way +A turns, A's top speed, chuck and tailstock, and how A winds: Freely
+  (each pass on the whole turn nearest where A is) or Up to N turns each way, then Cut both
+  ways (the next pass cut backwards when it goes straight down) or Lift and spin back
+  (ends unwound); Backlash is added on each change of direction. G93 feeds are timed at
+  the bit's depth and kept within A's top speed. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows
   its version (the date of its last change). Post-Processor Management and Machine

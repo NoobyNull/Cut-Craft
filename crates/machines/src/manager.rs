@@ -640,6 +640,7 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                         );
                     ui.end_row();
                     turning(ui, axis, per, length);
+                    winding(ui, axis);
                 });
         });
 }
@@ -692,6 +693,55 @@ fn turning(
         measure(ui, value, per, length);
         ui.end_row();
     }
+}
+
+/// How far A may wind one way, what happens at the limit, and its backlash.
+fn winding(ui: &mut egui::Ui, axis: &mut cut_craft_core::rotary_axis::RotaryAxis) {
+    use cut_craft_core::rotary_axis::{AtLimit, Turning};
+    ui.label("A can turn").on_hover_hint(
+        "Freely: A keeps turning one way as long as the job needs, like a lathe. Choose a \
+         number of turns when a cable, a hose or a limit switch on the rotary stops it \
+         winding on and on",
+    );
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut axis.turning, Turning::Free, "Freely");
+        ui.radio_value(&mut axis.turning, Turning::Unwind, "Up to");
+        ui.add_enabled(
+            axis.turning == Turning::Unwind,
+            Number::new(&mut axis.turns)
+                .range(0.5..=1000.0)
+                .speed(0.5)
+                .max_decimals(1)
+                .suffix(" turns each way"),
+        );
+    });
+    ui.end_row();
+    ui.label("At the limit").on_hover_hint(
+        "When the next pass would turn A past its turns. Cut both ways: the next pass is \
+         cut the other way round, so A comes back as it cuts. Lift and spin back: the bit \
+         lifts clear and A spins back whole turns before the next pass; spinning back to \
+         the start also shows up any steps A has lost",
+    );
+    ui.add_enabled_ui(axis.turning == Turning::Unwind, |ui| {
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut axis.at_limit, AtLimit::CutBothWays, "Cut both ways");
+            ui.radio_value(&mut axis.at_limit, AtLimit::SpinBack, "Lift and spin back");
+        });
+    });
+    ui.end_row();
+    ui.label("Backlash").on_hover_hint(
+        "How far A turns before the material moves when it changes direction (a little \
+         play in its gears or belt). The file turns that much further each time A changes \
+         direction. 0 for none",
+    );
+    ui.add(
+        Number::new(&mut axis.backlash)
+            .range(0.0..=10.0)
+            .speed(0.01)
+            .max_decimals(3)
+            .suffix(" °"),
+    );
+    ui.end_row();
 }
 
 /// A length for a summary line: no more decimals than it needs.

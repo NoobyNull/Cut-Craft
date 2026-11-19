@@ -167,6 +167,9 @@ const SCENES: [Scene; 49] = [
             .and_then(|w| w.draft.active_mut())
         {
             m.firmware = Some(cut_craft_machines::Firmware::FluidNc);
+            // the help's winding picture shows a limited rotary
+            m.rotary_axis.turning = cut_craft_core::rotary_axis::Turning::Unwind;
+            m.rotary_axis.backlash = 0.2;
         }
     }),
     // Help: Changing settings (Apply, Cancel and Close)
