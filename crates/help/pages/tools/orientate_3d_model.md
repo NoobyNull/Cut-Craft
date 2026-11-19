@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-17
-see-also: import_component_3d_model, scale_model_z_height, slice, view_3d, material_setup
+see-also: import_component_3d_model, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath
 ---
 
 ## Where the model sits in the material
@@ -51,6 +51,15 @@ largest gap that fits.
   (Material Setup's **Model Thickness**, or
   [Scale Model Z Height](help:scale_model_z_height)), or cut it into boards with
   [Slice Model](help:slice) and glue them up.
+
+## On a rotary job
+
+On a [rotary](help:job_setup) job, a **Full** 3D model is turned round the job's axis and
+fitted to the material. Cut Craft keeps it two ways: as heights round the axis, for the 3D
+view and most tools, and as the model itself, every triangle as it really is round the axis.
+[4-Axis Rotary Machining](help:rotary_machining_toolpath) cuts round the model itself, so a bit
+held off centre can reach under a ledge or into a hollow the heights would have filled in.
+Keeping the model makes the job file bigger, by about the size of the model's file.
 
 ## See also
 

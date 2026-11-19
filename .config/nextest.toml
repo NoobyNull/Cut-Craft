@@ -11,4 +11,4 @@ default-filter = "test(/^app::help_coverage::/)"
 # axis, the bit's drop, the cutting simulator) and every test elsewhere about rotary jobs, A,
 # its posts and its checks. `cargo nextest run --profile rotary`.
 [profile.rotary]
-default-filter = "package(cut-craft-rotary) | test(/rotary|winding|turn|held_off|indexed|off_centre|across/)"
+default-filter = "package(cut-craft-rotary) | package(cmd-rotary-machining-toolpath) | test(/rotary|winding|turn|held_off|indexed|off_centre|across/)"

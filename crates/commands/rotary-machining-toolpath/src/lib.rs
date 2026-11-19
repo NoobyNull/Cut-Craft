@@ -12,7 +12,7 @@
 //! on the unrolled material, with how far across the bit is held beside them, so the preview
 //! shows them true and the post works out A, the across axis and Z.
 
-use cut_craft_core::component::placed_model;
+use cut_craft_core::component::{Combine, model, placed_model};
 use cut_craft_core::document::{Along, Document};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
@@ -21,6 +21,7 @@ use cut_craft_core::rotary_axis;
 use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, Toolpath, follow, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_rotary::{Cutter, Mesh};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -147,13 +148,19 @@ impl Turned {
         clippy::cast_precision_loss,
         reason = "cell counts are small and positive"
     )]
-    fn of(surface: &Material, radius: f64, along_x: bool, size: (f64, f64), cell: f64) -> Self {
+    fn of(
+        surface: Option<&Material>,
+        radius: f64,
+        along_x: bool,
+        size: (f64, f64),
+        cell: f64,
+    ) -> Self {
         let (length, circumference) = size;
         let along = ((length / cell).ceil() as usize).max(1);
         let round = ((circumference / cell).ceil() as usize).max(3);
         let (along_cell, round_cell) = (length / along as f64, circumference / round as f64);
         // a few samples across each cell, as fine as the surface's own
-        let samples = ((cell / surface.cell).ceil() as usize).clamp(1, 4);
+        let samples = surface.map_or(1, |m| ((cell / m.cell).ceil() as usize).clamp(1, 4));
         let mut radii = Vec::with_capacity(along * round);
         for j in 0..round {
             for i in 0..along {
@@ -167,7 +174,7 @@ impl Turned {
                         } else {
                             Point::new(w, a)
                         };
-                        if let Some(h) = surface.at(at).filter(|h| h.is_finite()) {
+                        if let Some(h) = surface.and_then(|m| m.at(at)).filter(|h| h.is_finite()) {
                             highest = highest.max(h);
                         }
                     }
@@ -255,6 +262,56 @@ impl Turned {
     }
 }
 
+/// Full 3D models as they really are round the axis: undercuts, holes through and all.
+struct Solid {
+    mesh: Mesh,
+    /// The bit grown by the allowance all round.
+    cutter: Cutter,
+    allowance: f64,
+    /// How far out the model was moved to sit in the material where Material Setup puts it.
+    out: f64,
+}
+
+impl Solid {
+    /// Every shown full 3D model of `doc` kept round the axis, raised or merged onto the
+    /// rest (one sunk into the rest, or multiplying it, is left to its heights), moved `out`
+    /// from the axis.
+    fn of(doc: &Document, tool: &Tool, allowance: f64, out: f64) -> Option<Self> {
+        let triangles: Vec<_> = doc
+            .components
+            .values()
+            .filter(|k| k.visible && takes_solid(k))
+            .flat_map(cut_craft_core::component::Component::solid_triangles)
+            .collect();
+        if triangles.is_empty() {
+            return None;
+        }
+        let grown = Tool {
+            diameter: tool.diameter + 2.0 * allowance.max(0.0),
+            ..tool.clone()
+        };
+        Some(Self {
+            mesh: Mesh::new(triangles),
+            cutter: Cutter::new(&grown),
+            allowance: allowance.max(0.0),
+            out,
+        })
+    }
+
+    /// [`Turned::drop`] on the models themselves, A turned `turn` radians.
+    fn drop(&self, along: f64, turn: f64, across: f64) -> f64 {
+        self.mesh
+            .drop(&self.cutter, along, across, turn)
+            .map_or(0.0, |tip| tip + self.allowance + self.out)
+    }
+}
+
+/// Whether a component is cut as its real 3D shape: a full model on a rotary job, raised
+/// onto or merged with what is under it.
+fn takes_solid(k: &cut_craft_core::component::Component) -> bool {
+    !k.solid.is_empty() && matches!(k.combine, Combine::Add | Combine::Merge)
+}
+
 /// One pass of the bit: points (along, A as mm round the surface, the bit's height from the
 /// material's top) each with how far across the axis the bit is held there.
 type Pass = Vec<(DVec3, f64)>;
@@ -262,6 +319,10 @@ type Pass = Vec<(DVec3, f64)>;
 /// The part as the passes are worked out on it.
 struct Work<'a> {
     turned: &'a Turned,
+    /// The full 3D models kept as they really are round the axis, the bit to drop on them
+    /// (grown by the allowance), and how far out from the axis their heights were moved to
+    /// sit in the material as the rest of the model was.
+    solid: Option<&'a Solid>,
     tool: &'a Tool,
     allowance: f64,
     along_x: bool,
@@ -285,13 +346,13 @@ impl Work<'_> {
     /// The bit as low as it goes `along` the part with A at `round`, held `across`.
     fn down(&self, along: f64, round: f64, across: f64) -> (DVec3, f64) {
         let radius = self.turned.radius;
-        let tip = self.turned.drop(
-            self.tool,
-            along,
-            round.rem_euclid(self.circumference),
-            across,
-            self.allowance,
-        );
+        let turned = round.rem_euclid(self.circumference);
+        let mut tip = self
+            .turned
+            .drop(self.tool, along, turned, across, self.allowance);
+        if let Some(solid) = self.solid {
+            tip = tip.max(solid.drop(along, turned / radius, across));
+        }
         (self.point(along, round, (tip - radius).min(0.0)), across)
     }
 
@@ -377,6 +438,47 @@ impl Work<'_> {
     }
 }
 
+/// The model in two parts: the rest as heights (`None` when there is none), and full 3D
+/// models cut round as they really are, each moved as the whole model was (`surface`) to
+/// sit in the material.
+fn parts(
+    doc: &Document,
+    tool: &Tool,
+    allowance: f64,
+    radius: f64,
+    surface: Material,
+) -> (Option<Material>, Option<Solid>) {
+    // full 3D models are cut round as they really are; the rest from their heights, moved
+    // as the whole model was to sit in the material
+    let shift = {
+        let raw = model(doc, surface.columns.max(surface.rows));
+        let top = |m: &Material| m.heights.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        top(&surface) - top(&raw)
+    };
+    let solid = Solid::of(doc, tool, allowance, radius + shift);
+    let rest = if solid.is_some() {
+        let rest = Document {
+            components: doc
+                .components
+                .iter()
+                .filter(|(_, k)| !takes_solid(k))
+                .map(|(id, k)| (*id, k.clone()))
+                .collect(),
+            ..doc.clone()
+        };
+        (!rest.components.is_empty()).then(|| {
+            let mut m = model(&rest, surface.columns.max(surface.rows));
+            for h in &mut m.heights {
+                *h += shift;
+            }
+            m
+        })
+    } else {
+        Some(surface)
+    };
+    (rest, solid)
+}
+
 /// The toolpath: rings round the part at each step along it, each from A=0 all the way round
 /// (over the axis, or held to one side of it), or each side in turn cut back and forth with A
 /// held still; the bit as low as it goes without touching the model.
@@ -404,7 +506,14 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
     progress::stage("Placing the model");
     let surface = placed_model(doc, tool)?;
     let cell = (tool.diameter / 16.0).max(surface.cell);
-    let turned = Turned::of(&surface, radius, along_x, (length, circumference), cell);
+    let (rest, solid) = parts(doc, tool, p.allowance, radius, surface);
+    let turned = Turned::of(
+        rest.as_ref(),
+        radius,
+        along_x,
+        (length, circumference),
+        cell,
+    );
     let start = p.start.clamp(0.0, length);
     let end = if p.end > 0.0 {
         p.end.min(length)
@@ -418,6 +527,7 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
     }
     let work = Work {
         turned: &turned,
+        solid: solid.as_ref(),
         tool,
         allowance: p.allowance,
         along_x,
@@ -590,7 +700,7 @@ mod tests {
         doc.apply(&c.finish()).unwrap();
         let tool = ball(6.0);
         let surface = placed_model(&doc, &tool).unwrap();
-        let round = Turned::of(&surface, 20.0, true, (60.0, circumference), 0.1);
+        let round = Turned::of(Some(&surface), 20.0, true, (60.0, circumference), 0.1);
         let rb = 3.0;
         for w in [
             0.0,
@@ -724,7 +834,7 @@ mod tests {
         doc.apply(&c.finish()).unwrap();
         let tool = ball(6.0);
         let surface = placed_model(&doc, &tool).unwrap();
-        let turned = Turned::of(&surface, 20.0, true, (60.0, circumference), 0.1);
+        let turned = Turned::of(Some(&surface), 20.0, true, (60.0, circumference), 0.1);
         let rb = 3.0;
         for across in [-6.0, -2.0, 4.0, 9.0] {
             for w in [0.0, 1.0, 3.0, 6.0, 10.0, circumference - 2.0] {
@@ -798,5 +908,108 @@ mod tests {
         let doc = cut_craft_core::testing::sample_document();
         let why = machine(&doc, &Params::default()).unwrap_err().to_string();
         assert!(why.contains("rotary"), "{why}");
+    }
+
+    /// A rotary job 40 mm across, 60 long along X, holding a box off to one side of the
+    /// axis as a full 3D model kept as it really is, heights and all.
+    fn boxed() -> Document {
+        let mut doc = Document {
+            job: Job::rotary(60.0, 40.0, Along::X),
+            ..Document::default()
+        };
+        let (lo, hi) = (DVec3::new(10.0, -6.0, -8.0), DVec3::new(50.0, 12.0, 10.0));
+        let at = |i: usize| {
+            DVec3::new(
+                if i & 1 == 1 { hi.x } else { lo.x },
+                if i & 2 == 2 { hi.y } else { lo.y },
+                if i & 4 == 4 { hi.z } else { lo.z },
+            )
+        };
+        let triangles: Vec<[DVec3; 3]> = [
+            [0, 2, 3, 1],
+            [4, 5, 7, 6],
+            [0, 1, 5, 4],
+            [2, 6, 7, 3],
+            [0, 4, 6, 2],
+            [1, 3, 7, 5],
+        ]
+        .iter()
+        .flat_map(|&[a, b, c, d]| [[at(a), at(b), at(c)], [at(a), at(c), at(d)]])
+        .collect();
+        // its heights as an import wraps them: reaching the material's surface
+        let mut model =
+            Component::from_fn("Box", Combine::Add, doc.job.area(), 0.25, |_| Some(20.0));
+        model.set_solid(&triangles);
+        let mut c = Change::builder(&doc);
+        c.add_new_component(model);
+        doc.apply(&c.finish()).unwrap();
+        doc
+    }
+
+    /// Each cut as the bit is held: along, A turned (radians), height above the axis, across.
+    fn poses(toolpath: &Toolpath) -> Vec<(f64, f64, f64, f64)> {
+        toolpath
+            .moves
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.kind == MoveKind::Cut)
+            .map(|(i, m)| {
+                let d = toolpath.across.get(i).copied().unwrap_or(0.0);
+                let (w, z) = rotary_axis::held_at(20.0, m.to.y, m.to.z, d);
+                (m.to.x, w / 20.0, 20.0 + z, d)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_full_model_on_a_rotary_job_is_cut_round_as_it_really_is() {
+        let doc = boxed();
+        let mesh = Mesh::new(doc.components.values().next().unwrap().solid_triangles());
+        for (strategy, offset) in [(Strategy::Radial, 0.0), (Strategy::OffCentre, 5.0)] {
+            let p = Params {
+                tool: ball(6.0),
+                strategy,
+                offset,
+                ..Params::default()
+            };
+            let cutter = Cutter::new(&p.tool);
+            let toolpath = machine(&doc, &p).unwrap();
+            let mut on = 0;
+            for (along, turn, height, across) in poses(&toolpath) {
+                // exactly where the bit rests on the box, looked for on every triangle
+                let rests = mesh
+                    .drop_every(&cutter, along, across, turn)
+                    .unwrap_or(0.0)
+                    .clamp(0.0, 20.0);
+                assert!(
+                    (height - rests).abs() < 1e-6,
+                    "{strategy:?} at {along}, {turn}: {height} against {rests}"
+                );
+                on += usize::from(rests > 1.0);
+            }
+            assert!(on > 100, "{strategy:?}: the box is cut round ({on})");
+        }
+    }
+
+    #[test]
+    fn an_allowance_leaves_at_least_that_much_on_a_full_model() {
+        let doc = boxed();
+        let mesh = Mesh::new(doc.components.values().next().unwrap().solid_triangles());
+        let p = Params {
+            tool: ball(6.0),
+            allowance: 0.5,
+            ..Params::default()
+        };
+        let cutter = Cutter::new(&p.tool);
+        for (along, turn, height, across) in poses(&machine(&doc, &p).unwrap()) {
+            if let Some(rests) = mesh.drop_every(&cutter, along, across, turn)
+                && rests + 0.5 < 20.0
+            {
+                assert!(
+                    height >= rests + 0.5 - 1e-6,
+                    "{along}, {turn}: {height} vs {rests}"
+                );
+            }
+        }
     }
 }

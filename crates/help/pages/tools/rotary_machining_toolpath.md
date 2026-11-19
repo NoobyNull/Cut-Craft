@@ -86,6 +86,14 @@ warns until it is. The preview shows where the tip really cuts, and the file mov
 machine's own axis across the rotary (Y beside a rotary along X) as well as A. Cut Craft's
 **Rotary A** posts write it; a post of your own needs `[ACROSS]` in its move lines.
 
+## Cut round the model as it really is
+
+A full 3D model imported into a rotary job (see [Orientate 3D Model](help:orientate_3d_model))
+is cut round as it really is, triangle by triangle, not as the heights the 3D view shows. With
+**Off centre** the side of the ball can reach under a ledge or into a hollow that a bit pointing
+at the axis would miss, and it is never let into the model. A model drawn or sculpted in Cut
+Craft, or one sunk into another, is cut from its heights as before.
+
 ## How the rings join up
 
 Every ring starts at A=0 and goes once round. Between rings the bit lifts clear: by

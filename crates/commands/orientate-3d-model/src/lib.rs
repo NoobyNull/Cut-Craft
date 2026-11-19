@@ -799,6 +799,14 @@ impl Turning {
         )
     }
 
+    /// A vertex in the part's own frame, which turns with A: along the job's axis, then
+    /// across it and up from it at A=0.
+    fn part(&self, v: DVec3) -> DVec3 {
+        let off = (self.across(v) - self.middle) * self.scale + self.shift;
+        let along = self.first + (self.along(v) - self.start) * self.scale;
+        DVec3::new(along, off.x, off.y)
+    }
+
     /// A vertex where the turned model has it: along the job, across and up from the axis.
     fn placed(&self, v: DVec3) -> DVec3 {
         let off = (self.across(v) - self.middle) * self.scale + self.shift;
@@ -842,6 +850,9 @@ fn wrapped(
             .map(|(a, angle, out)| (a, unrolled.round_from + angle / TAU * unrolled.round, out));
         unrolled.draw(&mut made, corners);
     }
+    // kept as it really is round the axis too, for rotary toolpaths to cut round
+    let solid: Vec<[DVec3; 3]> = tris.iter().map(|t| t.map(|v| turning.part(v))).collect();
+    made.set_solid(&solid);
     Ok(made)
 }
 
@@ -1376,6 +1387,52 @@ mod rotary {
             ((first - job.min.x) - (job.max.x - last)).abs() < 1e-6,
             "centred"
         );
+    }
+
+    #[test]
+    fn a_full_model_on_a_rotary_job_is_kept_as_it_really_is_round_the_axis() {
+        let p = Params {
+            model_type: ModelType::Full,
+            fit_material: true,
+            ..Params::default()
+        };
+        let faces = cylinder(10.0, 50.0);
+        let (doc, k) = import("kept", &faces, &p);
+        let solid = k.solid_triangles();
+        assert_eq!(solid.len(), faces.len(), "every triangle kept");
+        // what the 3D view shows turned round the axis, to the micrometre
+        let shown = preview(
+            &rotary_job(),
+            &Params {
+                file: stl("kept", &faces),
+                ..p
+            },
+        )
+        .unwrap()
+        .unwrap();
+        for (kept, (seen, _)) in solid.iter().zip(&shown) {
+            for (a, b) in kept.iter().zip(seen) {
+                assert!(a.distance(*b) < 1e-3, "{a} vs {b}");
+            }
+        }
+        // and saved and opened again with the job
+        let json = serde_json::to_string(&doc).unwrap();
+        let opened: Document = serde_json::from_str(&json).unwrap();
+        let again = opened.components.values().next().unwrap();
+        assert_eq!(again.solid, k.solid);
+        // a flat job's model keeps none
+        let (_, flat) = {
+            let mut doc = Document::default();
+            let p = Params {
+                file: stl("flat", &faces),
+                ..Params::default()
+            };
+            doc.apply(&Orientate3dModel::run(&doc, &p).unwrap())
+                .unwrap();
+            let k = doc.components.values().next().unwrap().clone();
+            (doc, k)
+        };
+        assert_eq!(flat.solid, Vec::<f32>::new());
     }
 
     #[test]
