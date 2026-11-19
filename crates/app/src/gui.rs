@@ -908,26 +908,40 @@ pub fn node_menu(doc: &Document, at: &cut_craft_core::nodes::NodeAt) -> Vec<Menu
     items
 }
 
+/// The Gadgets menu's submenu of what the user installed.
+pub const MY_GADGETS: &str = "My Gadgets";
+/// Gadgets ▸ My Gadgets ▸ Open My Gadgets Folder: where the user's own `.lua` gadgets go.
+pub const OPEN_GADGETS_FOLDER: &str = "open_gadgets_folder";
+
+/// Gadgets ▸ My Gadgets: each gadget and add-on the user installed, `(name, action)`, or a
+/// line saying there is none yet; then the way to add more.
+fn my_gadgets_items(installed: &[(String, String)]) -> Vec<MenuItem> {
+    let mut items: Vec<MenuItem> = installed
+        .iter()
+        .map(|(name, action)| MenuItem::with_action(name, action))
+        .collect();
+    if items.is_empty() {
+        items.push(MenuItem {
+            is_enabled: false,
+            ..MenuItem::with_action("Nothing installed yet", "")
+        });
+    }
+    items.extend([
+        MenuItem::separator(),
+        MenuItem::with_action("Open My Gadgets Folder", OPEN_GADGETS_FOLDER),
+        MenuItem::with_action("Add-ons...", "addons"),
+    ]);
+    items
+}
+
 impl MenuSystem {
-    /// Adds the Lua gadgets to the Gadgets menu, below the built-in ones: Cut Craft's own,
-    /// then the user's in a My Gadgets submenu that says where to put them when it is empty.
+    /// Adds Cut Craft's own Lua gadgets to the Gadgets menu, below the built-in ones, then
+    /// the My Gadgets submenu listing what the user installed (see [`Self::set_my_gadgets`]).
     pub fn add_gadgets(
         &mut self,
-        loaded: &crate::gadgets::Loaded,
-        folder: Option<&std::path::Path>,
+        built_in: &[crate::gadgets::Listed],
+        installed: &[(String, String)],
     ) {
-        let item = |g: &crate::gadgets::Listed| MenuItem::with_action(&g.label, &g.id);
-        let mut mine: Vec<MenuItem> = loaded.mine.iter().map(item).collect();
-        if mine.is_empty() {
-            let hint = folder.map_or_else(
-                || "Put .lua gadget files in Cut Craft's settings folder".to_owned(),
-                |f| format!("Put .lua gadget files in {}", f.display()),
-            );
-            mine.push(MenuItem {
-                is_enabled: false,
-                ..MenuItem::with_action(&hint, "")
-            });
-        }
         let Some(menu) = self.menus.iter_mut().find(|m| m.name == "Gadgets") else {
             return;
         };
@@ -936,9 +950,28 @@ impl MenuSystem {
         let tail: Vec<MenuItem> =
             addons.map_or_default(|at| menu.items.drain(at.saturating_sub(1)..).collect());
         menu.items.push(MenuItem::separator());
-        menu.items.extend(loaded.built_in.iter().map(item));
-        menu.items.push(MenuItem::submenu("My Gadgets", mine));
+        menu.items.extend(
+            built_in
+                .iter()
+                .map(|g| MenuItem::with_action(&g.label, &g.id)),
+        );
+        menu.items
+            .push(MenuItem::submenu(MY_GADGETS, my_gadgets_items(installed)));
         menu.items.extend(tail);
+    }
+
+    /// Gadgets ▸ My Gadgets lists `installed` (each name with the action that runs it) in
+    /// place of what it listed, as add-ons come and go.
+    pub fn set_my_gadgets(&mut self, installed: &[(String, String)]) {
+        let mine = self
+            .menus
+            .iter_mut()
+            .filter(|m| m.name == "Gadgets")
+            .flat_map(|m| m.items.iter_mut())
+            .find(|i| i.name == MY_GADGETS);
+        if let Some(mine) = mine {
+            mine.children = my_gadgets_items(installed);
+        }
     }
 
     fn menu(&self, name: &str) -> &Menu {
@@ -2256,14 +2289,12 @@ impl MenuSystem {
                         sub(
                             "Preview Simulation Quality",
                             vec![
-                                MenuItem::with_action("Standard", "preview_quality_1"),
-                                MenuItem::with_action("High (2x Slower)", "preview_quality_2"),
-                                MenuItem::with_action("Very High (4x Slower)", "preview_quality_4"),
-                                MenuItem::with_action(
-                                    "Extremely High (8x Slower)",
-                                    "preview_quality_8",
-                                ),
-                                MenuItem::with_action("Maximum (25x Slower)", "preview_quality_25"),
+                                // quick picks on the Preview tab's detail slider
+                                MenuItem::with_action("Standard (20%)", "preview_quality_1"),
+                                MenuItem::with_action("High (40%)", "preview_quality_2"),
+                                MenuItem::with_action("Very High (60%)", "preview_quality_4"),
+                                MenuItem::with_action("Extremely High (80%)", "preview_quality_8"),
+                                MenuItem::with_action("Maximum (100%)", "preview_quality_25"),
                             ],
                         ),
                         sep(),

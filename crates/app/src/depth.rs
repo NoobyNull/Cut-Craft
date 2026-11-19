@@ -2,17 +2,28 @@
 //! runs it on the chosen picture in the background and gives the picture its depth (for
 //! Relief from Photo). The add-on is a separate download (a program and about 100 MB of
 //! model weights) so the app and its updates stay small; Gadgets ▸ Add-ons installs it
-//! (`crate::addons`).
+//! (`crate::addons`). The High detail model (Depth Anything V2 Large) is an optional
+//! extra download, offered in Relief from Photo's form.
 
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::EntityId;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 
 /// The add-on's id: its folder under the add-ons folder.
 pub const ADDON_ID: &str = "depth";
-/// The model weights' file in the add-on's folder.
+/// The model weights' file in the add-on's folder: Depth Anything V2 Small, which everyone
+/// gets.
 pub const WEIGHTS: &str = "depth_anything_v2_vits.safetensors";
+/// The High detail model's weights (Depth Anything V2 Large), one of the add-on's optional
+/// files: fetched only when asked for, with [`FetchingDetail`].
+pub const WEIGHTS_DETAILED: &str = "depth_anything_v2_vitl.safetensors";
+/// What the High detail model costs, said wherever it is offered or used.
+pub const DETAILED_NOTE: &str = "Sees finer detail, but takes several times longer and \
+    needs about 4 GB of free memory. Its licence allows personal, non-commercial use only: \
+    not for work you sell.";
 
 /// The add-on's program file name on this system.
 pub fn program_name() -> String {
@@ -28,17 +39,95 @@ pub fn addons_dir() -> Option<PathBuf> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Installed {
     pub program: PathBuf,
+    /// The weights an estimate uses.
     pub weights: PathBuf,
+    /// The High detail model's weights, once fetched.
+    pub detailed: Option<PathBuf>,
+}
+
+impl Installed {
+    /// Using the High detail model when `on` and it has been fetched.
+    #[must_use]
+    pub fn with_high_detail(self, on: bool) -> Self {
+        match (&self.detailed, on) {
+            (Some(detailed), true) => Self {
+                weights: detailed.clone(),
+                ..self
+            },
+            _ => self,
+        }
+    }
 }
 
 /// The add-on in `addons` (the add-ons folder), if both its program and weights are there.
 pub fn find(addons: &Path) -> Option<Installed> {
     let dir = addons.join(ADDON_ID);
+    let detailed = dir.join(WEIGHTS_DETAILED);
     let installed = Installed {
         program: dir.join(program_name()),
         weights: dir.join(WEIGHTS),
+        detailed: detailed.is_file().then_some(detailed),
     };
     (installed.program.is_file() && installed.weights.is_file()).then_some(installed)
+}
+
+/// The High detail model on its way, fetched in the background into the add-on's folder.
+pub struct FetchingDetail {
+    /// Bytes so far and in all.
+    progress: Arc<(AtomicU64, AtomicU64)>,
+    answer: mpsc::Receiver<Result<(), String>>,
+}
+
+impl FetchingDetail {
+    /// Starts fetching it from the installed add-on's release; `ctx` is woken as it goes.
+    pub fn start(addons: &Path, ctx: &eframe::egui::Context) -> Result<Self, String> {
+        let progress = Arc::new((AtomicU64::new(0), AtomicU64::new(0)));
+        let (send, answer) = mpsc::channel();
+        let (addons, ctx, shared) = (addons.to_path_buf(), ctx.clone(), progress.clone());
+        std::thread::Builder::new()
+            .name("depth high detail".into())
+            .spawn(move || {
+                let done = cut_craft_updater::addon::fetch_optional(
+                    &addons,
+                    ADDON_ID,
+                    WEIGHTS_DETAILED,
+                    &|done, total| {
+                        shared.0.store(done, Ordering::Relaxed);
+                        shared.1.store(total, Ordering::Relaxed);
+                        ctx.request_repaint();
+                    },
+                );
+                let _ = send.send(done);
+                ctx.request_repaint();
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(Self { progress, answer })
+    }
+
+    /// How far it has got, 0 to 1.
+    pub fn fraction(&self) -> f32 {
+        let (done, total) = (
+            self.progress.0.load(Ordering::Relaxed),
+            self.progress.1.load(Ordering::Relaxed),
+        );
+        #[expect(clippy::cast_precision_loss, reason = "a fraction for the bar")]
+        if total == 0 {
+            0.0
+        } else {
+            (done as f32 / total as f32).min(1.0)
+        }
+    }
+
+    /// The answer once there is one.
+    pub fn answer(&self) -> Option<Result<(), String>> {
+        match self.answer.try_recv() {
+            Ok(answer) => Some(answer),
+            Err(mpsc::TryRecvError::Empty) => None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                Some(Err("the download stopped unexpectedly".into()))
+            }
+        }
+    }
 }
 
 /// The picture as a PNG for the add-on: its colours when it has them, else its greys.
@@ -206,6 +295,28 @@ mod tests {
         assert_eq!(find(&addons), None, "no weights yet");
         std::fs::write(dir.join(WEIGHTS), b"").unwrap();
         assert_eq!(find(&addons).unwrap().weights, dir.join(WEIGHTS));
+        std::fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn high_detail_is_used_only_once_fetched_and_chosen() {
+        let addons =
+            std::env::temp_dir().join(format!("cutcraft-addons-hd-{}", std::process::id()));
+        let dir = addons.join(ADDON_ID);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(program_name()), b"").unwrap();
+        std::fs::write(dir.join(WEIGHTS), b"").unwrap();
+        let standard = find(&addons).unwrap();
+        assert_eq!(standard.detailed, None);
+        assert_eq!(standard.with_high_detail(true).weights, dir.join(WEIGHTS));
+        std::fs::write(dir.join(WEIGHTS_DETAILED), b"").unwrap();
+        let both = find(&addons).unwrap();
+        assert_eq!(both.detailed, Some(dir.join(WEIGHTS_DETAILED)));
+        assert_eq!(
+            both.clone().with_high_detail(true).weights,
+            dir.join(WEIGHTS_DETAILED)
+        );
+        assert_eq!(both.with_high_detail(false).weights, dir.join(WEIGHTS));
         std::fs::remove_dir_all(addons).unwrap();
     }
 

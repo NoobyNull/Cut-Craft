@@ -397,7 +397,7 @@ impl Addons {
             }
             Phase::Asking(offer) => {
                 ui.group(|ui| {
-                    ui.strong("Not signed");
+                    ui.strong("\u{26a0} Not official");
                     ui.label(unsigned_warning(offer));
                     ui.horizontal(|ui| {
                         if ui.button("Install Anyway").clicked() {
@@ -462,8 +462,7 @@ impl Addons {
                 }
             }
             Some(record) => {
-                let signed = if record.signed { "" } else { ", not signed" };
-                ui.label(format!("Version {} installed{signed}", record.version));
+                ui.label(installed_line(&record.version, record.signed));
                 if let Some(offer) = self.updates.get(id) {
                     let words = format!("Update to {}", offer.release.version);
                     if ui.add_enabled(!busy, egui::Button::new(words)).clicked() {
@@ -533,6 +532,27 @@ fn installed_words(m: &Manifest) -> String {
     format!("{} {} is installed.{more}", m.name, m.version)
 }
 
+/// The tool the installed add-on `id` brings, when Cut Craft knows it: the Depth add-on's
+/// is Relief from Photo.
+pub fn tool_of(id: &str) -> Option<&'static str> {
+    (id == crate::depth::ADDON_ID).then_some("relief_from_photo")
+}
+
+/// The add-ons installed in `dir` that are not gadgets (a gadget lists itself), by name in
+/// the order of their ids, each with the tool it brings when Cut Craft knows it, and whether
+/// it is official (signed with Cut Craft's release key).
+pub fn installed_tools(dir: &Path) -> Vec<(String, Option<&'static str>, bool)> {
+    installed_ids(dir)
+        .into_iter()
+        .filter_map(|id| {
+            let text = std::fs::read_to_string(dir.join(&id).join(addon::MANIFEST)).ok()?;
+            let manifest = Manifest::parse(&text).ok()?;
+            let signed = addon::installed(dir, &id).is_some_and(|r| r.signed);
+            (manifest.kind != "gadget").then(|| (manifest.name, tool_of(&id), signed))
+        })
+        .collect()
+}
+
 /// The ids of the add-ons installed in `dir` (folders with an install record).
 fn installed_ids(dir: &Path) -> Vec<String> {
     let mut ids: Vec<String> = std::fs::read_dir(dir)
@@ -547,11 +567,24 @@ fn installed_ids(dir: &Path) -> Vec<String> {
     ids
 }
 
-/// What the user is told before installing an add-on that is not signed.
+/// An installed add-on's line in the Add-ons window: its version, and whether it is official
+/// (signed with Cut Craft's release key) or not, marked so it is seen.
+pub fn installed_line(version: &str, signed: bool) -> String {
+    let official = if signed {
+        "official"
+    } else {
+        "\u{26a0} not official (not signed)"
+    };
+    format!("Version {version} installed, {official}")
+}
+
+/// What the user is told before installing an add-on that is not signed. It still installs
+/// once they say so.
 pub fn unsigned_warning(offer: &Offer) -> String {
     format!(
-        "{} {} is not signed with Cut Craft's release key, so nobody has checked what it \
-         does. {NOT_RESPONSIBLE} Install it only if you trust {}.",
+        "{} {} is not an official Cut Craft add-on: it is not signed with Cut Craft's release \
+         key, so nobody has checked what it does. {NOT_RESPONSIBLE} Install it only if you \
+         trust {}.",
         offer.repo, offer.release.tag, offer.repo.owner
     )
 }
@@ -564,15 +597,15 @@ pub const NOT_RESPONSIBLE: &str = "Cut Craft and its author are not responsible 
 /// What the user is asked before an unsigned add-on's program first runs each session.
 pub fn run_warning(name: &str) -> String {
     format!(
-        "{name} is not signed with Cut Craft's release key, so nobody has checked what it \
-         does.\n\n{NOT_RESPONSIBLE}\n\nRun it?"
+        "{name} is not an official Cut Craft add-on: it is not signed with Cut Craft's \
+         release key, so nobody has checked what it does.\n\n{NOT_RESPONSIBLE}\n\nRun it?"
     )
 }
 
 /// Asks, in a system dialog, whether to run the unsigned add-on `name`.
 fn ask_to_run(name: &str) -> bool {
     let answer = rfd::MessageDialog::new()
-        .set_title("Unsigned add-on")
+        .set_title("Unofficial add-on")
         .set_description(run_warning(name))
         .set_level(rfd::MessageLevel::Warning)
         .set_buttons(rfd::MessageButtons::OkCancelCustom(
@@ -730,6 +763,19 @@ mod tests {
             words.contains("not responsible") && words.contains("someone"),
             "{words}"
         );
+        assert!(
+            words.contains("not an official Cut Craft add-on"),
+            "{words}"
+        );
+        assert!(run_warning("Thing").contains("not an official Cut Craft add-on"));
+        assert_eq!(
+            installed_line("0.1.0", false),
+            "Version 0.1.0 installed, \u{26a0} not official (not signed)"
+        );
+        assert_eq!(
+            installed_line("0.2.0", true),
+            "Version 0.2.0 installed, official"
+        );
         // nothing more happens until the user says yes
         a.poll(&ctx);
         assert!(matches!(a.phase, Phase::Asking(_)));
@@ -830,6 +876,47 @@ mod tests {
         let mut a = Addons::with(dir.clone(), signed_repo, installs, newer);
         a.show(&ctx);
         wait(&mut a, &ctx, |a| a.updates.contains_key("depth"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn installed_tool_add_ons_name_the_tool_they_bring() {
+        let dir =
+            std::env::temp_dir().join(format!("cut-craft-addon-tools-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let add = |id: &str, name: &str, kind: &str, record: Option<bool>| {
+            let folder = dir.join(id);
+            std::fs::create_dir_all(&folder).unwrap();
+            std::fs::write(
+                folder.join(addon::MANIFEST),
+                format!("id = \"{id}\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"1.0.0\""),
+            )
+            .unwrap();
+            if let Some(signed) = record {
+                let record = format!(
+                    r#"{{"repo":{{"owner":"o","name":"{id}"}},"tag":"v1.0.0","version":"1.0.0","signed":{signed}}}"#
+                );
+                std::fs::write(folder.join(addon::RECORD), record).unwrap();
+            }
+        };
+        add("depth", "Depth (Relief from Photo)", "tool", Some(true));
+        // gadgets list themselves; a folder without a record is not installed
+        add("snowflake", "Snowflake", "gadget", Some(true));
+        add("loose", "Loose", "tool", None);
+        add("pack", "Chess Pieces", "content", Some(false));
+        assert_eq!(
+            installed_tools(&dir),
+            [
+                (
+                    "Depth (Relief from Photo)".to_owned(),
+                    Some("relief_from_photo"),
+                    true
+                ),
+                ("Chess Pieces".to_owned(), None, false),
+            ],
+            "each with whether it is official (signed)"
+        );
+        assert_eq!(installed_tools(&dir.join("none")), []);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

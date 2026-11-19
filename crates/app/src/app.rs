@@ -2,6 +2,7 @@
 //! document, its undo history and the command registry.
 
 mod actions;
+mod app_icon;
 mod background;
 mod calculate_again;
 mod check_list;
@@ -24,6 +25,7 @@ mod help_coverage;
 mod help_pictures;
 #[path = "help_tours.rs"]
 mod help_tours;
+mod installed;
 mod layouts;
 mod mac;
 mod notes_panel;
@@ -83,7 +85,8 @@ const INSPECTOR_TABS: [&str; 6] = [
     "Checks",
 ];
 /// The ribbon's tabs: the drawing, modeling and toolpath groups.
-const RIBBON_TABS: [&str; 4] = ["Design", "Model", "Toolpaths", "Favourites"];
+/// The Ribbon's tabs; Gadgets shows only once a gadget or add-on is installed.
+const RIBBON_TABS: [&str; 5] = ["Design", "Model", "Toolpaths", "Favourites", "Gadgets"];
 /// Actions the app handles itself rather than through a command.
 /// What the 3D view's fine mesh was made for: the model as at this revision, seen so.
 #[derive(Clone, Debug, PartialEq)]
@@ -131,6 +134,10 @@ fn preview_mark(id: EntityId) -> u32 {
     u32::try_from(id.0).unwrap_or(u32::MAX)
 }
 
+/// What a preview grid was worked out for: the job opened, the history's revision and the
+/// toolpaths' moves, the detail slider and the block.
+type GridKey = ((u64, u64, usize), u8, cut_craft_core::document::Job);
+
 /// What the 3D view's surface on the GPU was built from: the model as at this revision,
 /// wrapped and sided so (light is the shader's, so not these), at most this many cells (the
 /// detail when still).
@@ -161,6 +168,12 @@ struct SurfaceGpu {
     levels: Vec<SurfaceLevel>,
     /// The surface at the detail when still, painted, that the coarser ones are made from.
     fine: Option<std::sync::Arc<Material>>,
+    /// A preview drawn at its own detail: the sheet round it (with a hole where it goes)
+    /// and the preview itself, both painted.
+    preview: Option<(
+        std::sync::Arc<view3d::gpu::Geometry>,
+        std::sync::Arc<view3d::gpu::Geometry>,
+    )>,
     /// Coarser ones being made, by their cells.
     making: Vec<(usize, std::thread::JoinHandle<SurfaceLevel>)>,
 }
@@ -171,6 +184,7 @@ impl SurfaceGpu {
             key,
             levels: Vec::new(),
             fine: None,
+            preview: None,
             making: Vec::new(),
         }
     }
@@ -319,7 +333,7 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 104] = [
+const BUILT_INS: [&str; 105] = [
     "import_into_shape",
     "try_sample_project",
     "machine_files",
@@ -387,6 +401,7 @@ const BUILT_INS: [&str; 104] = [
     "about_cut_craft",
     "check_for_updates",
     "addons",
+    "open_gadgets_folder",
     "undo",
     "redo",
     "exit",
@@ -1229,6 +1244,11 @@ struct CutCraftApp {
     immediate_output: SaveForm,
     /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
     depth_estimate: Option<crate::depth::Estimating>,
+    /// Relief from Photo's High detail tick: unset means on once the model is fetched.
+    depth_high_detail: Option<bool>,
+    /// The High detail model downloading, or why its last download failed.
+    depth_detail_fetch: Option<crate::depth::FetchingDetail>,
+    depth_detail_failed: Option<String>,
     /// A slow job running off the window's thread, its progress shown over the window.
     busy: Option<crate::busy::Busy<CutCraftApp>>,
     /// How long a job may take before its progress is shown; quicker ones finish as if
@@ -1295,6 +1315,13 @@ struct CutCraftApp {
     updates: crate::update::Updates,
     /// Install Now or Relaunch Now: the new version, started once the window has closed.
     restart_after_close: Option<std::path::PathBuf>,
+    /// The gadgets the user installed (not Cut Craft's own), by name: label and command id.
+    my_gadgets: Vec<(String, &'static str)>,
+    /// The add-ons installed that are not gadgets, by name, each with the tool it brings
+    /// when Cut Craft knows it, and whether it is official (`crate::addons::installed_tools`).
+    installed_addons: Vec<(String, Option<&'static str>, bool)>,
+    /// Rail: the Gadgets list is open.
+    rail_gadgets: bool,
     /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
     unsigned_gadgets: std::collections::HashMap<String, String>,
     /// The unsigned gadgets the user has said yes to running this session.
@@ -1409,6 +1436,11 @@ struct CutCraftApp {
     layers_on_sheet: bool,
     /// What the views draw.
     display: crate::display::Display,
+    /// The Preview tab's detail slider while it is dragged, before it is let go.
+    held_detail: Option<u8>,
+    /// The preview grid last worked out, and what it was for: the job opened, the
+    /// revision and the toolpaths' moves, the detail and the block.
+    preview_grid_kept: std::cell::Cell<Option<(GridKey, crate::preview_detail::Grid)>>,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
     simulation: Option<Material>,
     /// `simulation` at the 3D view's moving detail, and that detail (mesh cells).
@@ -2967,6 +2999,22 @@ fn graphics_for_bug_reports(info: eframe::wgpu::AdapterInfo) -> eframe::wgpu::Ad
     info
 }
 
+/// The main window: its title, its icon (its pop-out windows take it too), its id for the
+/// desktop, and its frame; with `shots`, the same size each time.
+fn main_viewport(shots: Option<&Pictures>, title: &str, frame: bool) -> egui::ViewportBuilder {
+    window_frame(
+        match shots {
+            // the same size each time, whatever window size the user's runs keep
+            Some(_) => egui::ViewportBuilder::default().with_inner_size(screenshots::WINDOW),
+            None => egui::ViewportBuilder::default(),
+        }
+        .with_title(title)
+        .with_app_id(APP_ID)
+        .with_icon(app_icon::window_icon()),
+        frame,
+    )
+}
+
 /// Opens the main window and runs until it is closed; with `shots`, takes those pictures
 /// instead and quits. `open` is a file named on the command line, opened once the window is up.
 pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>) {
@@ -2989,16 +3037,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             #[cfg(not(all(unix, not(target_os = "macos"))))]
             let _ = (builder, x11);
         })),
-        viewport: window_frame(
-            match shots {
-                // the same size each time, whatever window size the user's runs keep
-                Some(_) => egui::ViewportBuilder::default().with_inner_size(screenshots::WINDOW),
-                None => egui::ViewportBuilder::default(),
-            }
-            .with_title(title)
-            .with_app_id(APP_ID),
-            frame,
-        ),
+        viewport: main_viewport(shots.as_ref(), title, frame),
         persist_window: shots.is_none(),
         renderer: eframe::Renderer::Wgpu,
         multisampling: settings.view_3d.anti_aliasing.samples(),
@@ -3064,7 +3103,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             app.load_machines();
             app.load_options();
             app.load_words_and_job_times();
-            app.addons = crate::addons::Addons::new(crate::depth::addons_dir());
+            app.load_addons();
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
             app.start_recovery();

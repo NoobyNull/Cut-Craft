@@ -3,10 +3,13 @@
 #   depth-linux-x86_64.zip, depth-windows-x86_64.zip,  addon.toml and cutcraft-depth
 #   depth-macos-aarch64.zip, depth-macos-x86_64.zip     Apple Silicon and Intel Macs
 #   depth_anything_v2_vits.safetensors                 the weights, once for all
-# Unsigned by Matthew's choice: Cut Craft installs it after its "not responsible" warning.
-# Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs one
-# secret, ADDON_RELEASE_TOKEN: a token that may write releases on DEPTH_REPO (the
-# workflow's own token can only write to this repository).
+#   depth_anything_v2_vitl.safetensors                 High detail (optional, non-commercial)
+# Each file signed with Cut Craft's release key (FILE.minisig beside it), so Add-ons
+# installs it as official, with no "not official" warning (Matthew, 2026-11-18).
+# Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs
+# ADDON_RELEASE_TOKEN, a token that may write releases on DEPTH_REPO (the workflow's own
+# token can only write to this repository), and the release key the app's releases use:
+# MINISIGN_SECRET_KEY and MINISIGN_PASSWORD.
 name: Depth add-on
 
 on:
@@ -22,6 +25,8 @@ env:
   DEPTH_REPO: NoobyNull/CutCraft-Depth
   # Depth Anything V2 Small (Apache 2.0); Base and Large are non-commercial, never these
   WEIGHTS_URL: https://huggingface.co/depth-anything/Depth-Anything-V2-Small/resolve/main/depth_anything_v2_vits.pth
+  # Large (CC-BY-NC 4.0, non-commercial): only an optional download, with that said in the app
+  LARGE_WEIGHTS_URL: https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth
 
 jobs:
   build:
@@ -57,6 +62,9 @@ jobs:
         run: |
           curl -fsSL --retry 3 -o vits.pth "$WEIGHTS_URL"
           target/release/cutcraft-depth convert vits.pth out/depth_anything_v2_vits.safetensors
+          curl -fsSL --retry 3 -o vitl.pth "$LARGE_WEIGHTS_URL"
+          target/release/cutcraft-depth convert vitl.pth out/depth_anything_v2_vitl.safetensors
+          rm vits.pth vitl.pth
       - uses: actions/upload-artifact@v4
         with:
           name: depth-${{ matrix.name }}
@@ -100,6 +108,31 @@ jobs:
         with:
           path: out
           merge-multiple: true
+      # A second run of a version re-uploads only what it built. Files already on the release
+      # that this run didn't build (the Mac zips, when the Mac build failed this time) are
+      # fetched so they get signed too, but only those with no signature yet.
+      - name: Fetch unsigned files already on the release
+        env:
+          GH_TOKEN: ${{ secrets.ADDON_RELEASE_TOKEN }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/depth-addon/addon.toml)
+          if [[ -n "$GH_TOKEN" ]] && gh release view "v$version" --repo "$DEPTH_REPO" >/dev/null 2>&1; then
+            gh release view "v$version" --repo "$DEPTH_REPO" --json assets --jq '.assets[].name' > names
+            while read -r name; do
+              [[ $name == *.minisig || -e "out/$name" ]] && continue
+              grep -qxF "$name.minisig" names && continue
+              echo "fetching $name to sign it"
+              gh release download "v$version" --repo "$DEPTH_REPO" --pattern "$name" --dir out
+            done < names
+            rm names
+          fi
+      # every file, the weights too: Cut Craft counts an add-on official only when all are
+      - name: Sign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          REQUIRE_SIGNING: '1'
+        run: scripts/sign-release out
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.ADDON_RELEASE_TOKEN }}
