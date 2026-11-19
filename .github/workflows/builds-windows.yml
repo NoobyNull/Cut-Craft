@@ -26,6 +26,7 @@ on:
       - ".github/workflows/platform-tests.yml"
       - "scripts/sign-release"
       - "packaging/**"
+      - "assets/windows/**"
 
 permissions:
   contents: write
@@ -47,6 +48,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release -p cut-craft
+      # the icon and name build.rs puts in the .exe (Explorer, shortcuts, the taskbar)
+      - name: Check the program carries its icon and name
+        shell: pwsh
+        run: |
+          $info = (Get-Item target/release/cut-craft.exe).VersionInfo
+          if ($info.FileDescription -ne "Cut Craft" -or $info.ProductName -ne "Cut Craft") {
+            throw "cut-craft.exe has no Cut Craft resources: '$($info.FileDescription)'"
+          }
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon("target/release/cut-craft.exe")
+          "Icon {0}x{1}, version {2}" -f $icon.Width, $icon.Height, $info.FileVersion
       # needs no Visual C++ runtime, and keeps running with its window set up
       - name: Start the program
         shell: pwsh

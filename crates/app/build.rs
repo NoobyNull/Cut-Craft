@@ -1,7 +1,7 @@
 //! Puts the commit Cut Craft is built from into bug reports (`CUT_CRAFT_COMMIT`), lists
 //! every icon under `assets/icons` for `include_bytes!`, so the program carries its icons, and
 //! gathers what each command does (the first sentence of its crate's docs) for the status
-//! bar.
+//! bar. On Windows it also builds the app icon and name into `cut-craft.exe`.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -58,6 +58,27 @@ fn main() {
     let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
     std::fs::write(out.join("icons.rs"), table).expect("the icon table is written");
     std::fs::write(out.join("abouts.rs"), abouts()).expect("the command table is written");
+    windows_resources();
+}
+
+/// For a Windows build: the app icon (Explorer, the desktop, shortcuts, the taskbar) and the
+/// name Task Manager and a file's Properties show, built into `cut-craft.exe`.
+fn windows_resources() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        return;
+    }
+    let ico = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/windows/cut-craft.ico");
+    println!("cargo:rerun-if-changed={}", ico.display());
+    let mut resources = winresource::WindowsResource::new();
+    resources
+        .set_icon(&ico.to_string_lossy())
+        .set("ProductName", "Cut Craft")
+        .set("FileDescription", "Cut Craft")
+        .set("OriginalFilename", "cut-craft.exe")
+        .set("InternalName", "cut-craft");
+    resources
+        .compile()
+        .expect("the icon is built into cut-craft.exe (needs the Windows SDK's rc.exe)");
 }
 
 /// Each command's id and the first sentence of its crate's `//!` docs, then the same with

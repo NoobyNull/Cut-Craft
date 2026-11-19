@@ -2,6 +2,7 @@
 //! document, its undo history and the command registry.
 
 mod actions;
+mod app_icon;
 mod background;
 mod calculate_again;
 mod check_list;
@@ -2961,6 +2962,22 @@ fn graphics_for_bug_reports(info: eframe::wgpu::AdapterInfo) -> eframe::wgpu::Ad
     info
 }
 
+/// The main window: its title, its icon (its pop-out windows take it too), its id for the
+/// desktop, and its frame; with `shots`, the same size each time.
+fn main_viewport(shots: Option<&Pictures>, title: &str, frame: bool) -> egui::ViewportBuilder {
+    window_frame(
+        match shots {
+            // the same size each time, whatever window size the user's runs keep
+            Some(_) => egui::ViewportBuilder::default().with_inner_size(screenshots::WINDOW),
+            None => egui::ViewportBuilder::default(),
+        }
+        .with_title(title)
+        .with_app_id(APP_ID)
+        .with_icon(app_icon::window_icon()),
+        frame,
+    )
+}
+
 /// Opens the main window and runs until it is closed; with `shots`, takes those pictures
 /// instead and quits. `open` is a file named on the command line, opened once the window is up.
 pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>) {
@@ -2983,16 +3000,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             #[cfg(not(all(unix, not(target_os = "macos"))))]
             let _ = (builder, x11);
         })),
-        viewport: window_frame(
-            match shots {
-                // the same size each time, whatever window size the user's runs keep
-                Some(_) => egui::ViewportBuilder::default().with_inner_size(screenshots::WINDOW),
-                None => egui::ViewportBuilder::default(),
-            }
-            .with_title(title)
-            .with_app_id(APP_ID),
-            frame,
-        ),
+        viewport: main_viewport(shots.as_ref(), title, frame),
         persist_window: shots.is_none(),
         renderer: eframe::Renderer::Wgpu,
         multisampling: settings.view_3d.anti_aliasing.samples(),
