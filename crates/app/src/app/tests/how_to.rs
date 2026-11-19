@@ -29,6 +29,10 @@ fn play_tours<'a>(tours: impl Iterator<Item = &'a crate::app::help_pictures::Tou
     let mut lost = vec![];
     for tour in tours {
         for (n, step) in tour.steps.iter().enumerate() {
+            if let Mark::At(name) = step.mark {
+                // found only if this step draws it, not from an earlier step
+                crate::marks::forget(&h.ctx, name);
+            }
             (step.setup)(&mut h.app, &h.ctx);
             if let Mark::At(name) = step.mark {
                 crate::marks::want(&h.ctx, name);

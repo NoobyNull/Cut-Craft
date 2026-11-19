@@ -296,8 +296,9 @@ def nextest_args(plan: Plan, names: list[str]) -> list[str]:
 
 
 def changed_files(base: str) -> list[str]:
+    """Every file changed since `base`; a moved file counts at its old place and its new."""
     out = subprocess.run(
-        ["git", "diff", "--name-only", f"{base}...HEAD"],
+        ["git", "diff", "--name-only", "--no-renames", f"{base}...HEAD"],
         cwd=ROOT, check=True, capture_output=True, text=True,
     ).stdout
     return [line for line in out.splitlines() if line]

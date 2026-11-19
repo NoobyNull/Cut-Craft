@@ -41,7 +41,8 @@ expect "help how-to" "the app's help window" crates/app/src/app/help.rs
 expect "how-to" "a tour (moved into the app module by #[path])" crates/app/src/help_tours.rs
 expect "how-to" "where to ring" crates/app/src/marks.rs
 expect "how-to" "the tours' test" crates/app/src/app/tests/how_to.rs
-expect "workflows" "the whole-app tests" crates/app/src/app/tests.rs
+expect "help how-to app workflows" "the whole-app tests, whose Harness the tours and web API tests use" \
+  crates/app/src/app/tests.rs
 expect "help how-to app workflows" "the web API's tests" crates/app/src/app/web_api_tests.rs
 expect "help how-to app workflows" "the updater" crates/updater/src/lib.rs
 expect "help how-to app workflows" "an app module nobody owns" crates/app/src/startup.rs
@@ -49,6 +50,28 @@ expect "help how-to app workflows" "the app's own words" crates/app/whats-new.md
 expect "help how-to app workflows" "an icon" assets/splash-logo.jpg
 expect "toolpaths design display help how-to workflows" "two areas at once" \
   crates/commands/draw-circle/src/lib.rs crates/commands/profile-toolpath/src/lib.rs
+
+# a moved file counts at its old place too: git, not stdin, decides that
+repo=$(mktemp -d)
+trap 'git -C .. worktree remove --force "$repo" >/dev/null 2>&1; rm -rf "$repo"' EXIT
+git -C .. worktree add -q --detach "$repo" HEAD
+cp ./pick-suites "$repo/scripts/pick-suites"
+(
+  cd "$repo"
+  git -c user.name=test -c user.email=test@example.invalid commit -qam "this pick-suites" \
+    --allow-empty
+  mkdir -p docs/moved
+  git mv crates/help/pages/tools/pocket_toolpath.md docs/moved/pocket_toolpath.md
+  git -c user.name=test -c user.email=test@example.invalid commit -qm "move a help page"
+  scripts/pick-suites HEAD^
+) > "$repo.out" 2>&1
+got=$(sed -n 's/^  \([a-z-]*\) (.*/\1/p' "$repo.out" | tr '\n' ' ')
+if [[ ${got% } != "help how-to" ]]; then
+  echo "FAIL: a help page moved out of the help crate: got \"${got% }\", want \"help how-to\""
+  cat "$repo.out"
+  failed=1
+fi
+rm -f "$repo.out"
 
 if ((failed)); then exit 1; fi
 echo "pick-suites: all tests pass"

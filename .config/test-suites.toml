@@ -158,13 +158,16 @@ modules = [
   "marks",
   "app::tests::how_to",
 ]
+# its tests drive the app with the whole-app tests' Harness
+paths = ["crates/app/src/app/tests.rs"]
 
 [suites.app]
 title = "App: windows, settings, updates, add-ons"
 # every package and module of the app nobody above owns
 rest = true
 modules = ["app::tests::web_api"]
-paths = ["assets/**"]
+# the web API's tests drive the app with the whole-app tests' Harness
+paths = ["assets/**", "crates/app/src/app/tests.rs"]
 affects = ["help", "how-to", "workflows"]
 
 [suites.workflows]
