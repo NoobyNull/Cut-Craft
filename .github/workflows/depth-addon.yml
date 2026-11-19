@@ -108,6 +108,24 @@ jobs:
         with:
           path: out
           merge-multiple: true
+      # A second run of a version re-uploads only what it built. Files already on the release
+      # that this run didn't build (the Mac zips, when the Mac build failed this time) are
+      # fetched so they get signed too, but only those with no signature yet.
+      - name: Fetch unsigned files already on the release
+        env:
+          GH_TOKEN: ${{ secrets.ADDON_RELEASE_TOKEN }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/depth-addon/addon.toml)
+          if [[ -n "$GH_TOKEN" ]] && gh release view "v$version" --repo "$DEPTH_REPO" >/dev/null 2>&1; then
+            gh release view "v$version" --repo "$DEPTH_REPO" --json assets --jq '.assets[].name' > names
+            while read -r name; do
+              [[ $name == *.minisig || -e "out/$name" ]] && continue
+              grep -qxF "$name.minisig" names && continue
+              echo "fetching $name to sign it"
+              gh release download "v$version" --repo "$DEPTH_REPO" --pattern "$name" --dir out
+            done < names
+            rm names
+          fi
       # every file, the weights too: Cut Craft counts an add-on official only when all are
       - name: Sign
         env:
