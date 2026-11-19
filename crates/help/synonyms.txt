@@ -59,4 +59,5 @@ window layout, menu style, menu layout, ribbon, rail, classic layout, toolbar la
 favourites, favourite, favorites, favorite, starred, pinned tools, quick tools, most used
 fold, folded, collapse, collapsed, hidden tools, missing buttons, narrow window
 construction line, construction lines, construction geometry, reference line, helper line, guide path, layout line
+add-on, add-ons, addon, addons, plugin, plugins, extension, extensions, gadget, gadgets, script, scripts, lua
 high detail, large model, finer detail, more detail
