@@ -70,6 +70,8 @@ impl Catalogue {
         // language Cut Craft ships reads left to right
         bundle.set_use_isolating(false);
         let mut keys = Vec::new();
+        // every message's name, with or without words of its own: a name given twice
+        let mut messages: Vec<String> = Vec::new();
         let mut problems = Vec::new();
         for (name, text) in files {
             let resource = match FluentResource::try_new((*text).to_owned()) {
@@ -86,7 +88,7 @@ impl Catalogue {
             for entry in resource.entries() {
                 if let ast::Entry::Message(m) = entry {
                     let key = m.id.name.to_owned();
-                    if keys.contains(&key) || added.contains(&key) {
+                    if messages.contains(&key) {
                         problems.push(format!("{name}: {key} is given twice"));
                         continue;
                     }
@@ -95,8 +97,12 @@ impl Catalogue {
                         .iter()
                         .map(|a| format!("{key}.{}", a.id.name))
                         .collect();
-                    added.push(key);
+                    // a message with only attributes has no words of its own
+                    if m.value.is_some() {
+                        added.push(key.clone());
+                    }
                     added.extend(attributes);
+                    messages.push(key);
                 }
             }
             // a key given twice is listed above, and the first one stays
@@ -133,8 +139,21 @@ impl Catalogue {
         self.keys.iter().any(|k| k == key)
     }
 
-    /// Its words for `key`, or `None` when it has none.
+    /// Its words for `key`, or `None` when it has none or they will not write (a `{ $value }`
+    /// not given, or misspelt in a pack), so the caller can use English instead.
     pub fn format(&self, key: &str, args: Option<&FluentArgs>) -> Option<String> {
+        let (text, wrote) = self.write(key, args)?;
+        wrote.then_some(text)
+    }
+
+    /// Its words for `key` however they write: a `{ $value }` not given shows its name. For
+    /// checking the words themselves, and English's last resort.
+    pub fn words(&self, key: &str, args: Option<&FluentArgs>) -> Option<String> {
+        self.write(key, args).map(|(text, _)| text)
+    }
+
+    /// Its words for `key`, and whether they wrote with no errors.
+    fn write(&self, key: &str, args: Option<&FluentArgs>) -> Option<(String, bool)> {
         let (message, attribute) = match key.split_once('.') {
             Some((m, a)) => (m, Some(a)),
             None => (key, None),
@@ -147,11 +166,12 @@ impl Catalogue {
         // a missing { $value } still writes the rest, with the value's name in its place
         let mut errors = Vec::new();
         let text = self.bundle.format_pattern(pattern, args, &mut errors);
-        Some(if self.pseudo {
+        let text = if self.pseudo {
             format!("[{text}]")
         } else {
             text.into_owned()
-        })
+        };
+        Some((text, errors.is_empty()))
     }
 
     /// How many of English's keys it has words for, of how many.
@@ -249,7 +269,7 @@ pub fn tr_args(key: &str, args: Option<&FluentArgs>) -> String {
         .clone();
     active
         .and_then(|l| l.format(key, args))
-        .or_else(|| english().format(key, args))
+        .or_else(|| english().words(key, args))
         .unwrap_or_else(|| key.to_owned())
 }
 
@@ -293,7 +313,7 @@ start-whats-new = Neu in v{ $version }
     #[test]
     fn every_english_key_has_words() {
         for key in english().keys() {
-            let text = english().format(key, None).unwrap();
+            let text = english().words(key, None).unwrap();
             assert!(!text.trim().is_empty(), "{key} is blank");
         }
     }
@@ -353,6 +373,38 @@ start-whats-new = Neu in v{ $version }
     }
 
     #[test]
+    fn a_message_with_only_attributes_has_no_words_of_its_own() {
+        let (de, problems) =
+            Catalogue::parse("de", &[("a.ftl", "commit-create =\n    .tooltip = Neu\n")]);
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(de.keys(), ["commit-create.tooltip"]);
+        assert!(!de.has("commit-create"));
+        let (_, problems) = Catalogue::parse(
+            "de",
+            &[(
+                "a.ftl",
+                "commit-create =\n    .tooltip = Neu\ncommit-create = Neu\n",
+            )],
+        );
+        assert_eq!(problems, ["a.ftl: commit-create is given twice"]);
+    }
+
+    #[test]
+    fn words_that_will_not_write_are_left_to_english() {
+        let (de, _) = Catalogue::parse(
+            "de",
+            &[("a.ftl", "start-whats-new = Neu in v{ $versoin }\n")],
+        );
+        let mut args = FluentArgs::new();
+        args.set("version", "1.0");
+        assert_eq!(de.format("start-whats-new", Some(&args)), None);
+        assert_eq!(
+            de.words("start-whats-new", Some(&args)).unwrap(),
+            "Neu in v{$versoin}"
+        );
+    }
+
+    #[test]
     fn a_key_given_twice_keeps_the_first() {
         let a = ("a.ftl", "same = Erste\n");
         let b = ("b.ftl", "same = Zweite\n");
@@ -393,8 +445,8 @@ start-whats-new = Neu in v{ $version }
     fn the_test_language_is_longer_and_keeps_its_values() {
         let p = pseudo();
         for key in english().keys() {
-            let plain = english().format(key, None).unwrap();
-            let long = p.format(key, None).unwrap();
+            let plain = english().words(key, None).unwrap();
+            let long = p.words(key, None).unwrap();
             assert!(long.starts_with('[') && long.ends_with(']'), "{long}");
             if plain.chars().filter(|c| c.is_alphabetic()).count() > 4 {
                 assert!(
@@ -422,6 +474,18 @@ start-whats-new = Neu in v{ $version }
         assert_eq!(tr("commit-calculate"), "Calculate");
         // nobody has: the key, which the tests catch
         assert_eq!(tr("no-such-key"), "no-such-key");
+        assert_eq!(
+            tr!("start-whats-new", version = "1.2.3"),
+            "What's new in v1.2.3"
+        );
+        // German's words will not write (a misspelt value): English
+        use_language(Some(
+            Catalogue::parse(
+                "de",
+                &[("a.ftl", "start-whats-new = Neu in v{ $versoin }\n")],
+            )
+            .0,
+        ));
         assert_eq!(
             tr!("start-whats-new", version = "1.2.3"),
             "What's new in v1.2.3"

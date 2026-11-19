@@ -86,9 +86,13 @@ fn short(path: &Path) -> String {
 /// A file's program code: up to its test module (not a single test-only function above it),
 /// with comments blanked out.
 fn program(source: &str) -> String {
-    let tests = source
-        .match_indices("#[cfg(test)]")
-        .find(|(at, attr)| source[at + attr.len()..].trim_start().starts_with("mod "));
+    // an inline `#[cfg(test)] mod tests {` runs to the end of the file; `mod tests;` (a test
+    // file of its own) does not, so the code after it is still scanned
+    let tests = source.match_indices("#[cfg(test)]").find(|(at, attr)| {
+        let next = source[at + attr.len()..].trim_start();
+        let line = next.lines().next().unwrap_or_default().trim_end();
+        next.starts_with("mod ") && line.ends_with('{')
+    });
     let code = &source[..tests.map_or(source.len(), |(at, _)| at)];
     code.lines()
         .map(|line| {
@@ -168,9 +172,15 @@ fn shown_literals(code: &[u8], open: usize) -> Vec<String> {
                 continue;
             }
             b'(' | b'[' | b'{' => {
+                let before = code[..i].trim_ascii_end();
+                let shown_here = shown_depths.last() == Some(&depth);
                 depth += 1;
-                let before = &code[..i];
-                if before.ends_with(b"format!") || before.ends_with(b"concat!") {
+                // a format!'s text is shown; so is a block's in shown text (the branches of
+                // `if ready { "Ready" } else { "Waiting" }`, a match's arms), but not a
+                // closure's body, whose calls are scanned themselves
+                let format = before.ends_with(b"format!") || before.ends_with(b"concat!");
+                let block = code[i] == b'{' && shown_here && !before.ends_with(b"|");
+                if format || block {
                     shown_depths.push(depth);
                 }
             }
@@ -193,8 +203,14 @@ fn shown_literals(code: &[u8], open: usize) -> Vec<String> {
 /// Whether a literal is words a person reads, not an id, a path or a format.
 fn is_words(text: &str) -> bool {
     let letters = text.chars().any(char::is_alphabetic);
+    // `open_recent:`, `file/new`, `view.zoom`: punctuation inside, not a word's own ending
+    // (`Name:`, `Loading...`)
+    let inner = text.trim_end_matches([':', '.', '…', '?', '!']);
     let id = !text.contains(' ')
-        && (text.contains('_') || text.contains('/') || text.contains(':') || text.contains('.'));
+        && (inner.contains('_')
+            || inner.contains('/')
+            || inner.contains(':')
+            || inner.contains('.'));
     let picture = [".png", ".svg", ".gif"].iter().any(|e| text.ends_with(e));
     letters && !id && !picture
 }
@@ -386,5 +402,14 @@ fn the_scan_finds_text_and_leaves_ids_alone() {
     assert!(!is_words("open_recent:"));
     assert!(!is_words("file/new.png"));
     assert!(!is_words("•"));
+    assert!(is_words("Name:"));
+    assert!(is_words("Loading..."));
+    assert!(!is_words("view.zoom"));
+    let branches = br#"(if ready { "Ready" } else { "Waiting" }, |ui| { ui.x("inner") })"#;
+    assert_eq!(shown_literals(branches, 0), ["Ready", "Waiting"]);
+    let tests_after = "fn a() {}\n#[cfg(test)]\nmod tests;\nfn b() { ui.label(\"Late\") }\n";
+    assert!(program(tests_after).contains("Late"));
+    let tests_inline = "fn a() {}\n#[cfg(test)]\nmod tests {\n fn b() { ui.label(\"Test\") }\n}\n";
+    assert!(!program(tests_inline).contains("Test"));
     assert!(!is_words("{}"));
 }

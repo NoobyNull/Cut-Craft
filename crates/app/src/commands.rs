@@ -391,7 +391,7 @@ mod tests {
             .keys()
             .iter()
             .filter_map(|key| {
-                let text = english.format(key, None)?;
+                let text = english.words(key, None)?;
                 let named = other_programs_named(&text);
                 (!named.is_empty()).then(|| format!("{key} = {text}"))
             })
