@@ -125,10 +125,19 @@ impl Material {
     /// Uncut material covering the job, with `cells_across` square cells along its longer side.
     pub fn new(job: &Job, cells_across: usize) -> Self {
         let cell = job.width.max(job.height) / cells_across as f64;
+        Self::over(job, job.area(), cell)
+    }
+
+    /// Uncut material over `area` of the job's block alone, in square cells `cell` wide: a
+    /// preview of a small part on a big sheet spends its cells where the toolpaths cut.
+    pub fn over(job: &Job, area: crate::geometry::Rect, cell: f64) -> Self {
         let count = |length: f64| ((length / cell).round() as usize).max(1);
-        let (columns, rows) = (count(job.width), count(job.height));
+        let (columns, rows) = (
+            count(area.max.x - area.min.x),
+            count(area.max.y - area.min.y),
+        );
         Self {
-            origin: job.area().min,
+            origin: area.min,
             columns,
             rows,
             cell,
@@ -151,6 +160,76 @@ impl Material {
             && (self.bottom + job.thickness).abs() < 1e-9
             && close(self.columns as f64 * self.cell, job.width)
             && close(self.rows as f64 * self.cell, job.height)
+    }
+
+    /// Whether this is part of `job`'s block as it is now: its thickness, inside its area,
+    /// and its cells in step with ones starting at the block's corner (a whole block, or
+    /// the part of it a preview works out). False once Job Setup has moved or thinned it.
+    pub fn lies_on(&self, job: &Job) -> bool {
+        let area = job.area();
+        let off = (self.origin - area.min) / self.cell;
+        let in_step = |v: f64| (v - v.round()).abs() < 1e-6;
+        let slack = self.cell * 0.5;
+        (self.bottom + job.thickness).abs() < 1e-9
+            && in_step(off.x)
+            && in_step(off.y)
+            && self.origin.x >= area.min.x - slack
+            && self.origin.y >= area.min.y - slack
+            && self.origin.x + self.columns as f64 * self.cell <= area.max.x + slack
+            && self.origin.y + self.rows as f64 * self.cell <= area.max.y + slack
+    }
+
+    /// The area its cells cover.
+    pub fn area(&self) -> crate::geometry::Rect {
+        let size = Point::new(self.columns as f64, self.rows as f64) * self.cell;
+        crate::geometry::Rect {
+            min: self.origin,
+            max: self.origin + size,
+        }
+    }
+
+    /// This material grown to cover `area` too (its cells kept, the new ones uncut), when
+    /// both are in step with the same corner; itself when it already covers it.
+    #[must_use]
+    pub fn including(self, area: crate::geometry::Rect) -> Self {
+        let own = self.area();
+        let slack = self.cell * 0.5;
+        if area.min.x >= own.min.x - slack
+            && area.min.y >= own.min.y - slack
+            && area.max.x <= own.max.x + slack
+            && area.max.y <= own.max.y + slack
+        {
+            return self;
+        }
+        let cell = self.cell;
+        // whole cells out from its corner each way
+        let before = |from: f64, to: f64| ((from - to) / cell).max(0.0).round() as usize;
+        let after = |from: f64, to: f64| ((to - from) / cell).max(0.0).round() as usize;
+        let (left, down) = (before(own.min.x, area.min.x), before(own.min.y, area.min.y));
+        let (right, up) = (after(own.max.x, area.max.x), after(own.max.y, area.max.y));
+        let (columns, rows) = (self.columns + left + right, self.rows + down + up);
+        let mut grown = Self {
+            origin: self.origin - Point::new(left as f64, down as f64) * cell,
+            columns,
+            rows,
+            cell,
+            bottom: self.bottom,
+            heights: vec![0.0; columns * rows],
+            cut_by: vec![0; columns * rows],
+            cutting: self.cutting,
+            paint: vec![],
+            other_side: self.other_side.clone(),
+            under: vec![],
+        };
+        for r in 0..self.rows {
+            let to = (r + down) * columns + left;
+            let from = r * self.columns;
+            grown.heights[to..to + self.columns]
+                .copy_from_slice(&self.heights[from..from + self.columns]);
+            grown.cut_by[to..to + self.columns]
+                .copy_from_slice(&self.cut_by[from..from + self.columns]);
+        }
+        grown
     }
 
     /// The material with its other side's cuts on its underside, the other side's point
@@ -189,6 +268,11 @@ impl Material {
 
     /// Height of the surface over `p`, or `None` off the material.
     pub fn at(&self, p: Point) -> Option<f64> {
+        self.index_at(p).map(|i| self.heights[i])
+    }
+
+    /// The index of the cell under `p`, if it is over the material.
+    pub fn index_at(&self, p: Point) -> Option<usize> {
         let (column, row) = (
             (p.x - self.origin.x) / self.cell,
             (p.y - self.origin.y) / self.cell,
@@ -197,8 +281,7 @@ impl Material {
             return None;
         }
         let (column, row) = (column as usize, row as usize);
-        (column < self.columns && row < self.rows)
-            .then(|| self.heights[row * self.columns + column])
+        (column < self.columns && row < self.rows).then_some(row * self.columns + column)
     }
 
     /// The columns covering x from `lo` to `hi`.

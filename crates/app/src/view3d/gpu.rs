@@ -379,6 +379,13 @@ pub fn fits(flags: wgpu::DownlevelFlags, limits: &wgpu::Limits) -> bool {
         && limits.max_compute_invocations_per_workgroup >= 1
 }
 
+/// [`Gpu::most_points`] for a card with `limits`.
+pub fn most_points(limits: &wgpu::Limits) -> usize {
+    let by_indices = limits.max_buffer_size / 24;
+    let by_heights = limits.max_storage_buffer_binding_size / 8;
+    usize::try_from(by_indices.min(by_heights) / 10 * 9).unwrap_or(usize::MAX)
+}
+
 /// Whether the device `adapter` gets ([`device`]) fits ([`fits`]).
 fn adapter_fits(adapter: &wgpu::Adapter) -> bool {
     fits(
@@ -613,6 +620,13 @@ impl Gpu {
         }
     }
 
+    /// The most points a surface may have on this card: each takes six indices (24 bytes)
+    /// in one buffer and its height and paint (8 bytes) in another, and neither buffer may
+    /// pass the card's limits; a tenth is kept spare for the sides and the rest.
+    pub fn most_points(&self) -> usize {
+        most_points(&self.state.device.limits())
+    }
+
     /// This frame's picture over `rect`: uploads what changed, sets the cameras, and gives
     /// the shape that draws it; the see-through `ghost` goes last, over the rest. A
     /// geometry not drawn leaves the card.
@@ -710,6 +724,16 @@ mod tests {
             ..wgpu::Limits::default()
         };
         assert!(!fits(gl.flags, &none));
+    }
+
+    #[test]
+    fn a_surface_s_points_fit_the_card_s_buffers() {
+        // wgpu's defaults: 256 MB a buffer, 128 MB a storage binding
+        let limits = wgpu::Limits::default();
+        let most = most_points(&limits);
+        assert!(most * 24 <= 256 << 20, "{most}");
+        assert!(most * 8 <= 128 << 20, "{most}");
+        assert!(most > 9_000_000, "{most}");
     }
 
     #[test]

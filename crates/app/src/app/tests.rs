@@ -17557,7 +17557,7 @@ fn a_job_setup_change_starts_the_preview_again_on_the_new_block() {
     h.app.doc.job.width += 20.0;
     let id = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.preview_toolpath(id);
-    let fresh = Material::new(&h.app.doc.job, h.app.display.preview_cells());
+    let fresh = h.app.fresh_material();
     let start = h.app.playback.as_ref().expect("it plays").material();
     assert_eq!((start.columns, start.origin), (fresh.columns, fresh.origin));
 }
@@ -19175,6 +19175,66 @@ fn a_narrow_ribbon_folds_the_groups_used_least_and_picks_are_counted() {
     let ctx = h.ctx.clone();
     h.app.pick(&ctx, Page::Design, "draw_circle");
     assert_eq!(h.app.options.tool_uses.get("draw_circle"), Some(&1));
+}
+
+#[test]
+fn a_small_part_on_a_big_sheet_is_previewed_finely_where_it_is_cut() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.frame(vec![]);
+    let job = h.app.doc.job;
+    let m = h.app.simulation.clone().expect("a preview");
+    let area = m.area();
+    assert!(
+        area.max.x - area.min.x < job.width / 2.0 && area.max.y - area.min.y < job.height / 2.0,
+        "round the part, not the whole sheet: {area:?}"
+    );
+    assert!(
+        (m.cell - crate::preview_detail::finest(50)).abs() < 1e-9,
+        "{}",
+        m.cell
+    );
+    assert!(m.lies_on(&job));
+    // the 3D view still shows the whole sheet round it
+    let shown = h.app.fine_surface();
+    assert!((shown.origin - job.area().min).length() < 1e-9);
+    let across = shown.area().max.x - shown.area().min.x;
+    assert!((across - job.width).abs() <= shown.cell);
+    // Toolpaths ▸ Preview Simulation Quality ▸ Extremely High: the slider to 80%, the
+    // preview worked out again finer, its tick on that pick
+    h.app.invoke(&h.ctx, "preview_quality_8");
+    let finer = h.app.simulation.clone().expect("worked out again");
+    assert_eq!(h.app.display.detail, 80);
+    assert!(finer.cell < m.cell, "{} then {}", m.cell, finer.cell);
+    assert_eq!(h.app.display.checked("preview_quality_8"), Some(true));
+    assert_eq!(h.app.display.checked("preview_quality_1"), Some(false));
+    // Reset Preview: the slider back to Options' default
+    h.app.invoke(&h.ctx, "reset_preview");
+    assert_eq!(h.app.display.detail, h.app.options.view_3d.preview_detail);
+}
+
+#[test]
+fn the_preview_tab_has_the_detail_slider_always_to_hand() {
+    let mut h = named_toolpaths();
+    // the Toolpaths page's Preview tab
+    let tab = h
+        .text_at("Preview")
+        .unwrap_or_else(|| panic!("{:?}", h.texts()));
+    h.click(tab, Modifiers::NONE);
+    h.frame(vec![]);
+    for word in ["Faster", "More detail", "50%"] {
+        assert!(
+            h.text_at(word).is_some(),
+            "{word} beside the slider: {:?}",
+            h.texts()
+        );
+    }
 }
 
 /// An add-ons folder holding the Depth add-on, as Gadgets ▸ Add-ons installs it.

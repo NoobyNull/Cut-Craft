@@ -3595,7 +3595,12 @@ impl CutCraftApp {
         ctx: &egui::Context,
         options: crate::options::Options,
     ) {
+        // the Preview tab's detail stays as it was moved, unless the default changed
+        let now = self.display.detail;
         options.apply_to(&mut self.display);
+        if options.view_3d.preview_detail == self.options.view_3d.preview_detail {
+            self.display.detail = now;
+        }
         ctx.set_theme(options.appearance.theme.preference());
         let frame = options.appearance.system_title_bar;
         if frame != self.options.appearance.system_title_bar {

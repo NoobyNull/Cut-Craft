@@ -132,6 +132,10 @@ fn preview_mark(id: EntityId) -> u32 {
     u32::try_from(id.0).unwrap_or(u32::MAX)
 }
 
+/// What a preview grid was worked out for: the job opened, the history's revision and the
+/// toolpaths' moves, the detail slider and the block.
+type GridKey = ((u64, u64, usize), u8, cut_craft_core::document::Job);
+
 /// What the 3D view's surface on the GPU was built from: the model as at this revision,
 /// wrapped and sided so (light is the shader's, so not these), at most this many cells (the
 /// detail when still).
@@ -162,6 +166,12 @@ struct SurfaceGpu {
     levels: Vec<SurfaceLevel>,
     /// The surface at the detail when still, painted, that the coarser ones are made from.
     fine: Option<std::sync::Arc<Material>>,
+    /// A preview drawn at its own detail: the sheet round it (with a hole where it goes)
+    /// and the preview itself, both painted.
+    preview: Option<(
+        std::sync::Arc<view3d::gpu::Geometry>,
+        std::sync::Arc<view3d::gpu::Geometry>,
+    )>,
     /// Coarser ones being made, by their cells.
     making: Vec<(usize, std::thread::JoinHandle<SurfaceLevel>)>,
 }
@@ -172,6 +182,7 @@ impl SurfaceGpu {
             key,
             levels: Vec::new(),
             fine: None,
+            preview: None,
             making: Vec::new(),
         }
     }
@@ -1414,6 +1425,11 @@ struct CutCraftApp {
     layers_on_sheet: bool,
     /// What the views draw.
     display: crate::display::Display,
+    /// The Preview tab's detail slider while it is dragged, before it is let go.
+    held_detail: Option<u8>,
+    /// The preview grid last worked out, and what it was for: the job opened, the
+    /// revision and the toolpaths' moves, the detail and the block.
+    preview_grid_kept: std::cell::Cell<Option<(GridKey, crate::preview_detail::Grid)>>,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
     simulation: Option<Material>,
     /// `simulation` at the 3D view's moving detail, and that detail (mesh cells).

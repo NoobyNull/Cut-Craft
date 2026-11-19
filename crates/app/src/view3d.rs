@@ -480,6 +480,133 @@ pub fn coarse(material: &Material, most: usize) -> Material {
     }
 }
 
+/// `material` (a whole block, or the part of it a preview works out) over all of `area`, at
+/// most `most` cells along the longer side: each the deepest of the material's cells whose
+/// centres it holds (so narrow cuts stay visible), marked and painted as that one is; uncut
+/// where the material has none. A whole block is [`coarse`].
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "cell counts and indices"
+)]
+pub fn on_sheet(
+    material: &Material,
+    area: cut_craft_core::geometry::Rect,
+    most: usize,
+) -> Material {
+    let m = material;
+    let own = m.area();
+    let near = |a: f64, b: f64| (a - b).abs() <= m.cell * 0.5;
+    if near(own.min.x, area.min.x)
+        && near(own.min.y, area.min.y)
+        && near(own.max.x, area.max.x)
+        && near(own.max.y, area.max.y)
+    {
+        return coarse(m, most);
+    }
+    let (width, height) = (area.max.x - area.min.x, area.max.y - area.min.y);
+    let cell = (width.max(height) / most.max(1) as f64).max(m.cell);
+    let count = |length: f64| ((length / cell).round() as usize).max(1);
+    let (columns, rows) = (count(width), count(height));
+    // the material's cells whose centres fall in [from, from + cell) along one side
+    let span = |from: f64, origin: f64, count: usize| {
+        let at = |x: f64| {
+            ((x - origin) / m.cell - 0.5)
+                .ceil()
+                .clamp(0.0, count as f64) as usize
+        };
+        at(from)..at(from + cell)
+    };
+    let chosen: Vec<Option<usize>> = (0..rows)
+        .flat_map(|r| (0..columns).map(move |c| (c, r)))
+        .map(|(c, r)| {
+            let (x, y) = (area.min.x + c as f64 * cell, area.min.y + r as f64 * cell);
+            let (xs, ys) = (span(x, m.origin.x, m.columns), span(y, m.origin.y, m.rows));
+            if xs.is_empty() || ys.is_empty() {
+                // finer than none of its cells: the one under its centre, if any
+                let at = m.index_at(DVec2::new(x + cell / 2.0, y + cell / 2.0))?;
+                return Some(at);
+            }
+            let cells = ys.flat_map(|r| xs.clone().map(move |c| r * m.columns + c));
+            let mut all_gone = None;
+            let deepest = cells
+                .inspect(|&i| {
+                    all_gone.get_or_insert(i);
+                })
+                .filter(|&i| !m.heights[i].is_nan())
+                .min_by(|&a, &b| m.heights[a].total_cmp(&m.heights[b]));
+            deepest.or(all_gone)
+        })
+        .collect();
+    let of = |values: &[u32]| -> Vec<u32> {
+        if values.is_empty() {
+            return vec![];
+        }
+        chosen.iter().map(|d| d.map_or(0, |i| values[i])).collect()
+    };
+    Material {
+        origin: area.min,
+        columns,
+        rows,
+        cell,
+        bottom: m.bottom,
+        heights: chosen
+            .iter()
+            .map(|d| d.map_or(0.0, |i| m.heights[i]))
+            .collect(),
+        cut_by: of(&m.cut_by),
+        cutting: m.cutting,
+        paint: of(&m.paint),
+        other_side: m.other_side.clone(),
+        under: if m.under.is_empty() {
+            vec![]
+        } else {
+            chosen
+                .iter()
+                .map(|d| d.map_or(m.bottom, |i| m.under[i]))
+                .collect()
+        },
+    }
+}
+
+/// How far under a finer preview the sheet round it is drawn where they overlap, mm: too
+/// little to see, enough that the preview is always the one drawn.
+const UNDER_PREVIEW: f64 = 0.01;
+
+/// `sheet` with a hole where a finer preview over `hole` is drawn: the cells two of its
+/// own inside the hole's edges left out, those between dropped [`UNDER_PREVIEW`] so the
+/// sheet reaches under the preview's edge with no gap, and its own outer edge kept so its
+/// sides stand.
+#[expect(clippy::cast_precision_loss, reason = "cell indices")]
+pub fn holed(mut sheet: Material, hole: cut_craft_core::geometry::Rect) -> Material {
+    let ring = 2.0 * sheet.cell;
+    let (inner_min, inner_max) = (hole.min + DVec2::splat(ring), hole.max - DVec2::splat(ring));
+    for r in 0..sheet.rows {
+        for c in 0..sheet.columns {
+            let lo = sheet.origin + DVec2::new(c as f64, r as f64) * sheet.cell;
+            let hi = lo + DVec2::splat(sheet.cell);
+            let overlaps =
+                lo.x < hole.max.x && hi.x > hole.min.x && lo.y < hole.max.y && hi.y > hole.min.y;
+            if !overlaps {
+                continue;
+            }
+            let i = r * sheet.columns + c;
+            let edge = c == 0 || r == 0 || c + 1 == sheet.columns || r + 1 == sheet.rows;
+            let inside = lo.x >= inner_min.x
+                && lo.y >= inner_min.y
+                && hi.x <= inner_max.x
+                && hi.y <= inner_max.y;
+            if inside && !edge {
+                sheet.heights[i] = f64::NAN;
+            } else if !sheet.heights[i].is_nan() {
+                sheet.heights[i] -= UNDER_PREVIEW;
+            }
+        }
+    }
+    sheet
+}
+
 /// `material` painted for the preview: each cell cut by a toolpath in the colour `fill`
 /// gives that toolpath's id, if it gives one.
 pub fn painted(mut material: Material, fill: impl Fn(u32) -> Option<Color32>) -> Material {
@@ -2412,6 +2539,67 @@ mod tests {
             "x 48 to 52 is in the slot"
         );
         assert_eq!(c.bottom, m.bottom);
+    }
+
+    /// A 20 x 10 mm part of a 600 x 400 sheet at 0.1 mm, from (100, 50), a hole 2 mm deep
+    /// (marked 4) in its middle.
+    fn part_of_sheet() -> (Job, Material) {
+        let job = Job::default();
+        let o = job.area().min;
+        let area = cut_craft_core::geometry::Rect {
+            min: o + Point::new(100.0, 50.0),
+            max: o + Point::new(120.0, 60.0),
+        };
+        let mut m = Material::over(&job, area, 0.1);
+        for r in 40..60 {
+            for c in 90..110 {
+                m.heights[r * m.columns + c] = -2.0;
+                m.cut_by[r * m.columns + c] = 4;
+            }
+        }
+        (job, m)
+    }
+
+    #[test]
+    fn a_part_of_the_sheet_is_drawn_on_the_whole_sheet_uncut_round_it() {
+        let (job, m) = part_of_sheet();
+        let o = job.area().min;
+        let s = on_sheet(&m, job.area(), 1200);
+        assert_eq!((s.columns, s.rows), (1200, 800), "half a millimetre each");
+        assert!((s.origin - o).length() < 1e-9);
+        // the hole is 2 mm across: four sheet cells, each the deepest under it
+        let at = |x: f64, y: f64| s.index_at(o + Point::new(x, y)).unwrap();
+        assert_eq!(s.heights[at(110.0, 55.0)], -2.0);
+        assert_eq!(s.cut_by[at(110.0, 55.0)], 4);
+        assert_eq!(s.heights[at(102.0, 52.0)], 0.0, "uncut in the part");
+        assert_eq!(s.heights[at(300.0, 300.0)], 0.0, "uncut round it");
+        assert_eq!(s.cut_by[at(300.0, 300.0)], 0);
+        // a whole sheet is coarsened as before
+        let whole = Material::new(&job, 2400);
+        assert_eq!(on_sheet(&whole, job.area(), 1200), coarse(&whole, 1200));
+    }
+
+    #[test]
+    fn the_sheet_has_a_hole_for_the_preview_with_a_lowered_rim_under_its_edge() {
+        let (job, m) = part_of_sheet();
+        let o = job.area().min;
+        let s = holed(on_sheet(&m, job.area(), 1200), m.area());
+        let at = |x: f64, y: f64| s.index_at(o + Point::new(x, y)).unwrap();
+        assert!(
+            s.heights[at(110.0, 55.0)].is_nan(),
+            "the preview is drawn there"
+        );
+        assert!(s.heights[at(101.7, 55.0)].is_nan(), "past the rim");
+        let rim = s.heights[at(100.2, 55.0)];
+        assert!(rim < 0.0 && rim > -0.05, "under the preview's edge: {rim}");
+        assert_eq!(s.heights[at(99.7, 55.0)], 0.0, "beyond it, as it was");
+        // the sheet's own edge stays, so its sides stand
+        let (_, edge) = part_of_sheet();
+        let mut at_edge = edge;
+        at_edge.origin = o;
+        let s = holed(on_sheet(&at_edge, job.area(), 1200), at_edge.area());
+        assert!(!s.heights[0].is_nan(), "the corner keeps its side");
+        assert!(s.heights[2 * s.columns + 5].is_nan(), "inside the rim");
     }
 
     #[test]

@@ -213,6 +213,8 @@ impl CutCraftApp {
             fit_import: None,
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
+            held_detail: None,
+            preview_grid_kept: std::cell::Cell::new(None),
             simulation: None,
             simulation_coarse: None,
             import_level: None,
@@ -648,6 +650,13 @@ impl CutCraftApp {
                 self.show_vectors_3d(!self.display.vectors_3d);
                 ctx.request_repaint();
             }
+            // Toolpaths ▸ Preview Simulation Quality: the detail slider to that pick, and
+            // a preview showing worked out again at it
+            id if crate::display::Display::is_quick_pick(id) => {
+                self.display.toggle(id);
+                self.rework_preview();
+                ctx.request_repaint();
+            }
             id if self.display.toggle(id) => ctx.request_repaint(),
             id if self.resolution_checked(id).is_some() => self.set_resolution(id),
             id if self.units_checked(id).is_some() => self.set_units(id),
@@ -784,6 +793,8 @@ impl CutCraftApp {
                 (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
                 self.kept_playback = None;
+                // the Preview tab's detail goes back to Options' default
+                self.display.detail = self.options.view_3d.preview_detail.min(100);
                 self.status
                     .set_message("Preview reset: Undo Last Preview brings it back");
             }
