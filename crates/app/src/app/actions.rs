@@ -2302,9 +2302,9 @@ impl CutCraftApp {
                 }
                 MachineOutcome::Cancel => self.machine_window = None,
                 MachineOutcome::ManagePosts => {
-                    self.post_window = Some(cut_craft_machines::PostManager::for_machine(
-                        self.machines.active(),
-                    ));
+                    // the machine as edited, not yet applied: the one Select changes
+                    self.post_window =
+                        Some(cut_craft_machines::PostManager::for_machine(draft.active()));
                 }
                 MachineOutcome::PickFolder(which) => {
                     if let Some(folder) = file_dialog().pick_folder()

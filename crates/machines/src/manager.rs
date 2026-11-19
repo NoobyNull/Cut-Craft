@@ -129,10 +129,10 @@ pub struct MachineManager {
     /// The associated post picked in the list.
     picked: Option<usize>,
     viewing: Option<(String, String)>,
-    /// Add a post-processor's filters, for the machine (by its place) they started from.
-    post_filter: Option<(usize, Filter)>,
-    /// The posts' capabilities, read when the window first draws.
-    capabilities: Option<CapabilityDb>,
+    /// Add a post-processor's filters: set afresh from the machine each time it opens.
+    post_filter: Filter,
+    /// Whether Add a post-processor's list was open last frame.
+    adding_post: bool,
 }
 
 impl MachineManager {
@@ -143,8 +143,8 @@ impl MachineManager {
             closing: false,
             picked: None,
             viewing: None,
-            post_filter: None,
-            capabilities: None,
+            post_filter: Filter::default(),
+            adding_post: false,
         }
     }
 
@@ -191,7 +191,6 @@ impl MachineManager {
             row = self.machine_row(ui, look);
             ui.separator();
             let names_clash = self.draft.names_clash();
-            let active = self.draft.active;
             let Some(machine) = self.draft.active_mut() else {
                 ui.weak("No machines yet: Add Machine makes one");
                 outcome = buttons(ui, false, dirty).or(outcome.take());
@@ -213,23 +212,15 @@ impl MachineManager {
                 );
             }
             let entries = library.entries();
-            if self
-                .post_filter
-                .as_ref()
-                .is_none_or(|(at, _)| *at != active)
-            {
-                self.post_filter = Some((active, Filter::starting(Some(machine))));
-            }
-            let db = self
-                .capabilities
-                .get_or_insert_with(|| CapabilityDb::load(library));
-            let filter = &mut self.post_filter.as_mut().expect("set above").1;
+            // read each frame (a small file), so corrections made in Post-Processor
+            // Management show here at once
+            let db = CapabilityDb::load(library);
             if let Some(asked) = posts_section(
                 ui,
                 look,
                 machine,
                 &entries,
-                (&*db, filter),
+                (&db, &mut self.post_filter, &mut self.adding_post),
                 &mut self.picked,
                 &mut self.viewing,
             ) {
@@ -971,7 +962,7 @@ fn posts_section(
     look: &Look,
     machine: &mut Machine,
     entries: &[Entry],
-    (db, filter): (&CapabilityDb, &mut Filter),
+    (db, filter, was_open): (&CapabilityDb, &mut Filter, &mut bool),
     picked: &mut Option<usize>,
     viewing: &mut Option<(String, String)>,
 ) -> Option<MachineOutcome> {
@@ -1014,36 +1005,45 @@ fn posts_section(
             machine.default_post = Some(name);
         }
         ui.horizontal(|ui| {
-            let unused: Vec<(&Entry, Capabilities)> = entries
+            let unused: Vec<(Entry, Capabilities)> = entries
                 .iter()
                 .filter(|e| e.broken.is_none() && !machine.posts.contains(&e.name))
-                .map(|e| (e, db.of(e)))
+                .map(|e| (e.clone(), db.of(e)))
                 .collect();
-            egui::ComboBox::from_id_salt("add_post")
+            let list = egui::ComboBox::from_id_salt("add_post")
                 .selected_text("Add a post-processor")
                 // stays open while the filters are changed; a post picked closes it
                 .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                 .height(480.0)
                 .show_ui(ui, |ui| {
-                    let shown: Vec<&(&Entry, Capabilities)> = unused
+                    // each opening starts afresh from the machine
+                    if !*was_open {
+                        *filter = Filter::starting(Some(machine));
+                    }
+                    let shown: Vec<(Entry, Capabilities)> = unused
                         .iter()
                         .filter(|(e, caps)| filter.shows(&e.name, caps))
+                        .cloned()
                         .collect();
                     filter.ui(ui, shown.len(), unused.len());
                     ui.separator();
                     if shown.is_empty() {
                         ui.weak(NONE_SHOWN);
                     }
-                    for (e, caps) in shown {
-                        let row = ui
-                            .selectable_label(false, format!("{}   {}", e.name, caps.tags()))
-                            .on_hover_hint(&caps.about);
-                        if row.clicked() {
-                            machine.posts.push(e.name.clone());
-                            ui.close();
+                    for (title, group) in groups(&shown) {
+                        ui.strong(title);
+                        for (e, caps) in group {
+                            let row = ui
+                                .selectable_label(false, format!("{}   {}", e.name, caps.tags()))
+                                .on_hover_hint(&caps.about);
+                            if row.clicked() {
+                                machine.posts.push(e.name.clone());
+                                ui.close();
+                            }
                         }
                     }
                 });
+            *was_open = list.inner.is_some();
             if icon_button(ui, look, "common/delete.png", "Remove", picked.is_some())
                 && let Some(i) = picked.take().filter(|&i| i < machine.posts.len())
             {

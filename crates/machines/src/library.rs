@@ -19,7 +19,8 @@ pub enum Source {
 pub struct Entry {
     /// Its `POST_NAME`, or its file name when it does not parse.
     pub name: String,
-    /// Its file's name (`grbl_arcs_mm.pp`): what its capabilities are kept by, as its name
+    /// Its file's name (`grbl_arcs_mm.pp`, or `custom/mine.pp` for a custom post, so it never
+    /// clashes with one of Cut Craft's own): what its capabilities are kept by, as its name
     /// may change.
     pub key: String,
     pub source: Source,
@@ -61,7 +62,7 @@ impl Library {
                     .file_stem()
                     .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
                 Entry {
-                    key: file_name(&path),
+                    key: custom_key(&path),
                     name: parsed.as_ref().map_or(file, |p| p.name.clone()),
                     broken: parsed.err(),
                     source: Source::Custom(path),
@@ -202,7 +203,7 @@ impl Library {
         std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(Entry {
             name,
-            key: file_name(&path),
+            key: custom_key(&path),
             source: Source::Custom(path),
             broken: None,
         })
@@ -235,7 +236,7 @@ impl Library {
         std::fs::write(&path, renamed).map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(Entry {
             name,
-            key: file_name(&path),
+            key: custom_key(&path),
             source: Source::Custom(path),
             broken: None,
         })
@@ -258,10 +259,12 @@ impl Library {
     }
 }
 
-/// The last part of `path`, as text.
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
+/// A custom post's key: `custom/` and its file's name.
+fn custom_key(path: &Path) -> String {
+    let name = path
+        .file_name()
+        .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+    format!("custom/{name}")
 }
 
 /// `text` with its `POST_NAME` line saying `name` (one added at the top if it has none).
@@ -331,6 +334,12 @@ mod tests {
         assert!(own.iter().all(|e| !e.is_custom() && e.broken.is_none()));
         let custom = lib.customize(&own[0]).unwrap();
         assert_eq!(custom.name, "Cut Craft FluidNC ATC (mm) Custom (*.nc)");
+        assert_eq!(own[0].key, "fluidnc_atc_mm.pp");
+        assert!(
+            custom.key.starts_with("custom/") && custom.key != own[0].key,
+            "a custom post's key never clashes with one of Cut Craft's own: {}",
+            custom.key
+        );
         let all = lib.entries();
         assert_eq!(all[0], custom, "custom posts first");
         assert!(
