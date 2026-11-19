@@ -150,6 +150,10 @@ pub struct Announcements {
     current: Version,
     /// This install's choice in each poll, to show which button it pressed.
     voted: Vec<(String, usize)>,
+    /// The messages already shown once, which the startup check keeps quiet about.
+    seen: Vec<String>,
+    /// The window was closed while the question was on its way: its answer is not shown.
+    dismissed: bool,
     rx: Option<Receiver<Msg>>,
 }
 
@@ -214,6 +218,8 @@ impl Announcements {
             service,
             current,
             voted: vec![],
+            seen: vec![],
+            dismissed: false,
             rx: None,
         }
     }
@@ -243,8 +249,9 @@ impl Announcements {
         voted: Vec<(String, usize)>,
     ) {
         self.voted = voted;
+        self.seen = seen.to_vec();
         if manual {
-            self.open = true;
+            (self.open, self.dismissed) = (true, false);
         }
         if !self.in_season() {
             if manual {
@@ -264,12 +271,9 @@ impl Announcements {
         let (tx, rx) = channel();
         self.rx = Some(rx);
         let ctx = ctx.clone();
-        let seen = seen.to_vec();
         std::thread::spawn(move || {
             let answer = get(&format!("{service}/v1/announcement"))
-                .and_then(|(status, body)| read_message(status, &body))
-                // the startup check is quiet about one already shown
-                .map(|m| m.filter(|m| manual || !seen.contains(&m.id)));
+                .and_then(|(status, body)| read_message(status, &body));
             let _ = tx.send(Msg::Asked(answer));
             ctx.request_repaint();
         });
@@ -277,6 +281,9 @@ impl Announcements {
 
     /// The service's answer to "is there a message?".
     pub fn answered(&mut self, answer: Result<Option<Message>, String>) -> Asked {
+        // the startup check is quiet about one already shown; the Help menu shows it, even
+        // when it was chosen while the startup check was still asking
+        let answer = answer.map(|m| m.filter(|m| self.manual || !self.seen.contains(&m.id)));
         let (phase, asked) = match answer {
             Ok(Some(m)) => {
                 let id = m.id.clone();
@@ -290,6 +297,11 @@ impl Announcements {
             }
             Ok(None) => (Phase::Idle, Asked::Nothing),
         };
+        if std::mem::take(&mut self.dismissed) {
+            // closed while asking: keep it closed, and the message not marked as seen
+            self.phase = Phase::Idle;
+            return Asked::Nothing;
+        }
         self.open |= !matches!(phase, Phase::Idle);
         self.phase = phase;
         asked
@@ -401,6 +413,7 @@ impl Announcements {
         };
         if close || !open {
             self.open = false;
+            self.dismissed = matches!(self.phase, Phase::Asking);
             if !self.busy() {
                 self.phase = Phase::Idle;
             }
@@ -681,6 +694,45 @@ mod tests {
         a.ask(&egui::Context::default(), true, &[], vec![]);
         a.answered(Err("no network".into()));
         assert!(matches!(a.phase, Phase::Failed(_)));
+    }
+
+    #[test]
+    fn at_startup_a_message_already_seen_stays_quiet() {
+        let mut a = at("0.6.19");
+        a.ask(
+            &egui::Context::default(),
+            false,
+            &["name-poll".into()],
+            vec![],
+        );
+        assert_eq!(a.answered(Ok(Some(poll()))), Asked::Nothing);
+        assert!(!a.open);
+    }
+
+    #[test]
+    fn help_chosen_while_the_startup_check_asks_shows_a_message_already_seen() {
+        let mut a = at("0.6.19");
+        let seen = ["name-poll".to_owned()];
+        a.ask(&egui::Context::default(), false, &seen, vec![]);
+        a.ask(&egui::Context::default(), true, &seen, vec![]);
+        a.answered(Ok(Some(poll())));
+        assert!(a.open);
+        assert_eq!(a.phase, Phase::Showing(poll()));
+    }
+
+    #[test]
+    fn a_window_closed_while_asking_stays_closed() {
+        let mut a = at("0.6.19");
+        a.ask(&egui::Context::default(), true, &[], vec![]);
+        a.open = false;
+        a.dismissed = true;
+        assert_eq!(a.answered(Ok(Some(poll()))), Asked::Nothing);
+        assert!(!a.open);
+        assert_eq!(a.phase, Phase::Idle);
+        // asking again from Help shows it
+        a.ask(&egui::Context::default(), true, &[], vec![]);
+        a.answered(Ok(Some(poll())));
+        assert!(a.open);
     }
 
     #[test]

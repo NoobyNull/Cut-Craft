@@ -196,9 +196,17 @@ export async function handle(request, env, now = new Date()) {
   if (path === '/v1/vote') {
     if (method !== 'POST') return problem(405, 'Vote with POST.', { allow: 'POST' });
     if (Number(request.headers.get('content-length') ?? 0) > 4096) return problem(413, 'Vote is too big.');
+    const raw = new Uint8Array(await request.arrayBuffer());
+    if (raw.length > 4096) return problem(413, 'Vote is too big.');
+    let body;
+    try {
+      body = JSON.parse(new TextDecoder().decode(raw));
+    } catch {
+      return problem(400, 'Vote is not valid JSON.');
+    }
     try {
       const ip = request.headers.get('cf-connecting-ip') ?? '';
-      return json(await castVote(env.DB, await readJson(request), ip, settings(env), now));
+      return json(await castVote(env.DB, body, ip, settings(env), now));
     } catch (e) {
       if (e instanceof PollError) return problem(e.status, e.message, e.extra);
       throw e;

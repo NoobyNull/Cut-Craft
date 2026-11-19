@@ -809,6 +809,7 @@ fn import(app: &mut CutCraftApp, _: &egui::Context) {
 /// Help ▸ 3D View ▸ Changing a model's height.
 fn height_start(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.updates.open = false;
+    app.announcements.open = false;
     ctx.set_embed_viewports(false);
     app.pages.set_pinned(super::Page::Toolpaths, false);
     app.pages.done_with(super::Page::Toolpaths);

@@ -136,7 +136,10 @@ function pollCard(p) {
 }
 function fill(p) {
   $('f-title').value = p.title; $('f-body').value = p.body; $('f-choices').value = p.choices.join('\n');
-  $('f-id').value = p.id; $('f-results').checked = p.show_results; $('f-ends').value = '';
+  $('f-id').value = p.id; $('f-results').checked = p.show_results;
+  // the form's local date and time, so a scheduled end is kept unless it is cleared
+  const end = p.live && p.ends_at ? new Date(p.ends_at) : null;
+  $('f-ends').value = end ? new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
   scrollTo({ top: 0, behavior: 'smooth' });
 }
 async function act(method, path) {

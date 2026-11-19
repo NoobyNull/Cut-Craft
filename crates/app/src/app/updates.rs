@@ -86,14 +86,20 @@ impl CutCraftApp {
     pub(super) fn team_messages_window(&mut self, ctx: &egui::Context) {
         use crate::announcements::Asked;
         let bug_reports = &mut self.options.bug_reports;
+        let mut made_id = false;
         let asked = self.announcements.window(ctx, &mut || {
             bug_reports
                 .install_id
-                .get_or_insert_with(cut_craft_bug_report::relay::new_install_id)
+                .get_or_insert_with(|| {
+                    made_id = true;
+                    cut_craft_bug_report::relay::new_install_id()
+                })
                 .clone()
         });
         let o = &mut self.options.updates;
         match asked {
+            // a new install number is kept straight away, so a later vote replaces this one
+            Asked::Nothing if made_id => {}
             Asked::Nothing => return,
             Asked::Seen(id) => {
                 if !o.seen_messages.contains(&id) {

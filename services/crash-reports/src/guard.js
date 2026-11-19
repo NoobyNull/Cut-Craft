@@ -72,7 +72,8 @@ export async function ipWait(db, ip, signature, { ipPerCrash, ipDaily }, now) {
   const day = dayOf(now.toISOString());
   const who = await ipHash(db, ip, day);
   const row = await db.prepare(
-    `SELECT COALESCE(SUM(count), 0) AS total,
+    // votes (vote:<poll>) have their own allowance and never use up a network's crash reports
+    `SELECT COALESCE(SUM(CASE WHEN signature NOT LIKE 'vote:%' THEN count ELSE 0 END), 0) AS total,
             COALESCE(SUM(CASE WHEN signature = ? THEN count ELSE 0 END), 0) AS same
      FROM ip_counts WHERE day = ? AND who = ?`,
   ).bind(signature, day, who).first();

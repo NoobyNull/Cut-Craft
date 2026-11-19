@@ -151,3 +151,33 @@ test('the votes page is served, holding no data', async () => {
   assert.ok(html.includes('/votes.js'));
   assert.equal((await req(env(), 'GET', '/votes.js')).status, 200);
 });
+
+test('votes never use up a network\'s crash-report allowance', async () => {
+  const e = env({ VOTES_PER_IP: '20', IP_DAILY: '10', POW_BITS: '0', STRICT_LOG: '0' });
+  await admin(e, 'POST', '/admin/api/polls', NAME_VOTE);
+  for (let i = 0; i < 12; i++) assert.equal((await vote(e, 0, `install-00${10 + i}`, { ip: '203.0.113.9' })).status, 200);
+  const crash = await handle(new Request('https://w.example/v1/crash', {
+    method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.9' },
+    body: JSON.stringify({ version: '0.6.19', os: 'Linux x86_64', title: 'Crashed', signature: 'sig-aaaaaaaa', log: 'x', install_id: 'install-crash-1' }),
+  }), e, NOW);
+  assert.equal(crash.status, 202);
+});
+
+test('a vote with votes keeps its choices; text can still change', async () => {
+  const e = env();
+  await admin(e, 'POST', '/admin/api/polls', NAME_VOTE);
+  await vote(e, 0);
+  const swapped = await admin(e, 'POST', '/admin/api/polls', { ...NAME_VOTE, choices: ['PowerWhittle', 'CutCraft'] });
+  assert.equal(swapped.status, 400);
+  assert.equal((await admin(e, 'POST', '/admin/api/polls', { ...NAME_VOTE, title: 'New title' })).status, 200);
+  const polls = (await (await admin(e, 'GET', '/admin/api/polls')).json()).polls;
+  assert.deepEqual([polls[0].title, polls[0].totals], ['New title', [1, 0]]);
+});
+
+test('a vote too big is refused even without a declared length', async () => {
+  const e = env();
+  await admin(e, 'POST', '/admin/api/polls', NAME_VOTE);
+  const big = JSON.stringify({ poll: 'name-vote', choice: 0, install_id: 'install-0001', version: '0.6.19' }) + ' '.repeat(5000);
+  const r = await handle(new Request('https://w.example/v1/vote', { method: 'POST', body: big }), e, NOW);
+  assert.equal(r.status, 413);
+});

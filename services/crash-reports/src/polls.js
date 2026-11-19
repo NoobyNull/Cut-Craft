@@ -59,6 +59,12 @@ const isLive = (row, now) => !row.ended_at && (!row.ends_at || row.ends_at > now
 export async function publish(db, body, now) {
   const p = checkPoll(body);
   const stamp = now.toISOString();
+  // votes are kept by choice number, so changing the choices would move them to other choices
+  const old = await db.prepare('SELECT choices FROM polls WHERE id = ?').bind(p.id).first();
+  const votes = old && (await db.prepare('SELECT COUNT(*) AS n FROM votes WHERE poll = ?').bind(p.id).first()).n;
+  if (votes && old.choices !== JSON.stringify(p.choices)) {
+    throw new PollError(400, 'This vote already has votes, so its choices can\'t change. Publish it under a new short name instead.');
+  }
   await db.batch([
     db.prepare('UPDATE polls SET ended_at = ? WHERE ended_at IS NULL AND id <> ?').bind(stamp, p.id),
     db.prepare(
