@@ -1309,6 +1309,51 @@ pub const TOURS: &[Tour] = &[
         ],
     },
     Tour {
+        tool: "rotary_machining_toolpath",
+        steps: &[
+            Step {
+                caption: "4-Axis Rotary Machining finishes a model all the way round a turning \
+                          cylinder. Start a **rotary** job and place a full 3D model in it: \
+                          here, a turned bead.",
+                setup: turned_bead,
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **4-Axis Rotary Machining** (under 3D \
+                          Toolpaths).",
+                setup: |app, _| {
+                    app.view = View::TwoD;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:rotary_machining_toolpath"),
+            },
+            Step {
+                caption: "Pick a ball nose bit: its finishing stepover spaces the rings round \
+                          the part.",
+                setup: |app, ctx| app.invoke(ctx, "rotary_machining_toolpath"),
+                mark: Mark::At("field:tool"),
+            },
+            Step {
+                caption: "Say where along the part the rings **Start** and **End**, clear of \
+                          the chuck and the tailstock.",
+                setup: |_, _| {},
+                mark: Mark::At("field:start"),
+            },
+            Step {
+                caption: "Tick **Registration mark** for a small notch at A=0, so the part can \
+                          go back exactly as it was if the job is started again.",
+                setup: |_, _| {},
+                mark: Mark::At("field:registration_mark"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath: a ring round the part at \
+                          each step along it.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
         tool: "rounding_toolpath",
         steps: &[
             Step {
@@ -4899,6 +4944,29 @@ fn dome(app: &mut CutCraftApp, ctx: &egui::Context) {
     }
     app.form = None;
     app.doc.selection.clear();
+    app.view = View::ThreeD;
+}
+
+/// A rotary job 60 mm across and 160 mm long along X, holding a turned bead: round, fatter
+/// in the middle, all the way round the axis.
+fn turned_bead(app: &mut CutCraftApp, ctx: &egui::Context) {
+    use cut_craft_core::component::{Combine, Component};
+    use cut_craft_core::document::{Along, Job};
+    fresh_job(app, ctx);
+    let job = Job {
+        clearance: 5.0,
+        ..Job::rotary(160.0, 60.0, Along::X)
+    };
+    let mut change = cut_craft_core::Change::builder(&app.doc);
+    change.set_job(job);
+    app.record(Ok(change.finish()), "Rotary job");
+    let bead = Component::from_fn("Bead", Combine::Add, app.doc.job.area(), 0.5, |p| {
+        let t = p.x / 160.0;
+        Some(18.0 + 12.0 * (std::f64::consts::PI * t).sin().powi(2))
+    });
+    let mut change = cut_craft_core::Change::builder(&app.doc);
+    change.add_new_component(bead);
+    app.record(Ok(change.finish()), "Bead added");
     app.view = View::ThreeD;
 }
 

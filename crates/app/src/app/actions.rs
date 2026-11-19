@@ -6036,9 +6036,16 @@ impl CutCraftApp {
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         // a form that only uses its tool's shape (Relief from Photo) has no passes to cut
         let cuts = open.id != "relief_from_photo";
-        // a surfacing toolpath flattens all it covers, and 3D Pencil has its own bits that
-        // finished before and follows the model: no rest machining or vector selector
-        let extras = cuts && !["surfacing_toolpath", "3d_pencil_toolpath"].contains(&open.id);
+        // a surfacing toolpath flattens all it covers, 3D Pencil has its own bits that
+        // finished before and follows the model, and 4-Axis Rotary Machining goes all the way
+        // round: no rest machining or vector selector
+        let extras = cuts
+            && ![
+                "surfacing_toolpath",
+                "3d_pencil_toolpath",
+                "rotary_machining_toolpath",
+            ]
+            .contains(&open.id);
         let suggested = open.suggested.clone();
         let form_id = open.id;
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {

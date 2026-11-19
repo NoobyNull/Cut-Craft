@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-19
-see-also: post_processor_management, job_setup, save_toolpaths, check_rotary_setup
+see-also: post_processor_management, job_setup, save_toolpaths, check_rotary_setup, rotary_machining_toolpath
 ---
 
 # The 4th Axis and Your Firmware
@@ -34,7 +34,8 @@ part-way through a job.
 Ticking **4th axis** adds Cut Craft's rotary posts for your machine, named **Rotary A, cylinder
 along X** and **along Y**. GRBL's are named **grblHAL**, since standard GRBL can't run them.
 Choose posts in [Post-Processor Management](help:post_processor_management), and set up a
-rotary job in [Job Setup](help:job_setup).
+rotary job in [Job Setup](help:job_setup), then finish a model all the way round with
+[4-Axis Rotary Machining](help:rotary_machining_toolpath).
 
 ## Finding the centre line
 

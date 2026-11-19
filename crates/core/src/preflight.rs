@@ -6,7 +6,7 @@
 
 pub use crate::check_list::{Check, Phase};
 use crate::checks::{LEFT, problems_by_check};
-use crate::document::Document;
+use crate::document::{Along, Document};
 use crate::progress;
 use crate::simulation::{Material, each};
 use crate::toolpath::{MoveKind, Tool, ToolShape, Toolpath};
@@ -160,7 +160,7 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
         machine(doc, toolpaths, limits, &mut found);
         keep_out(doc, toolpaths, &mut found);
         tool_numbers(toolpaths, &mut found);
-        rotary_setup(doc, limits, &mut found);
+        rotary_setup(doc, toolpaths, limits, &mut found);
     }
     if doc.job.rotary.is_none() && !progress::cancelled() {
         progress::stage(&Phase::Cutting.stage(""));
@@ -530,10 +530,60 @@ fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
 
 /// A rotary job on a machine whose rotary is not set up for it: its centre line not found
 /// yet, or lying the other way from the job's cylinder.
-fn rotary_setup(doc: &Document, limits: &Limits, found: &mut Vec<Finding>) {
+/// Past this many turns one way, a controller keeping A as a single-precision number places
+/// it no finer than about a hundredth of a degree, and it gets coarser from there.
+pub const MOST_FREE_TURNS: f64 = 500.0;
+
+fn rotary_setup(
+    doc: &Document,
+    toolpaths: &[&Toolpath],
+    limits: &Limits,
+    found: &mut Vec<Finding>,
+) {
     let (Some(job), Some(axis)) = (doc.job.rotary, limits.rotary) else {
         return;
     };
+    // turning freely, A carries on round from each pass to the next: about a turn for each
+    // turn's worth of cutting round the part
+    let round = |p: DVec3| if job.along == Along::X { p.y } else { p.x };
+    let circumference = std::f64::consts::PI * job.diameter;
+    let turns: f64 = toolpaths
+        .iter()
+        .flat_map(|t| t.moves.windows(2))
+        .filter(|m| m[1].kind != MoveKind::Rapid)
+        .map(|m| (round(m[1].to) - round(m[0].to)).abs())
+        .sum::<f64>()
+        / circumference;
+    if axis.turning == crate::rotary_axis::Turning::Free && turns > MOST_FREE_TURNS {
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            format!(
+                "A turns freely and these toolpaths wind it about {turns:.0} turns one way. Past \
+                 {MOST_FREE_TURNS:.0} turns many controllers place A less finely, and detail can \
+                 be lost: in Machine Configuration's Rotary, set A can turn to Up to a few \
+                 turns each way"
+            ),
+        ));
+    }
+    let marked = toolpaths.iter().any(|t| {
+        t.params
+            .get("registration_mark")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    });
+    if !marked
+        && toolpaths
+            .iter()
+            .any(|t| t.strategy == "rotary_machining_toolpath")
+    {
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            "No toolpath cuts a registration mark at A=0. Tick Registration mark in 4-Axis Rotary \
+             Machining, or pencil a line on the material at A=0, so the part can be put back \
+             exactly as it was if the job has to be started again"
+                .to_owned(),
+        ));
+    }
     if !axis.centre_set {
         found.push(Finding::warning(
             Check::RotarySetup,
@@ -1043,6 +1093,73 @@ mod tests {
                 .iter()
                 .any(|(c, why)| *c == Check::RotarySetup && why.contains("4th axis"))
         );
+    }
+
+    #[test]
+    fn a_free_rotary_wound_hundreds_of_turns_and_a_job_with_no_registration_mark_are_warned() {
+        use crate::document::Along;
+        use crate::rotary_axis::{RotaryAxis, Turning};
+        use crate::toolpath::Move;
+        let doc = Document {
+            job: Job::rotary(200.0, 50.0, Along::X),
+            ..Document::default()
+        };
+        let circumference = std::f64::consts::PI * 50.0;
+        // 600 rings, each one whole turn round
+        let mut rings = slot("Rings", 20.0, 10.0, 60.0, 2.0);
+        rings.strategy = "rotary_machining_toolpath".into();
+        rings.moves = (0..600)
+            .flat_map(|k| {
+                let x = f64::from(k) * 0.3;
+                [
+                    Move {
+                        kind: MoveKind::Rapid,
+                        to: DVec3::new(x, 0.0, 5.0),
+                    },
+                    Move {
+                        kind: MoveKind::Plunge,
+                        to: DVec3::new(x, 0.0, -1.0),
+                    },
+                    Move {
+                        kind: MoveKind::Cut,
+                        to: DVec3::new(x, circumference, -1.0),
+                    },
+                    Move {
+                        kind: MoveKind::Rapid,
+                        to: DVec3::new(x, circumference, 5.0),
+                    },
+                ]
+            })
+            .collect();
+        let said = |limits: &Limits, t: &Toolpath| -> Vec<String> {
+            check(&doc, &[t], limits)
+                .into_iter()
+                .filter(|f| f.check == Check::RotarySetup)
+                .map(|f| f.message)
+                .collect()
+        };
+        let free = Limits {
+            rotary: Some(RotaryAxis {
+                centre_set: true,
+                ..RotaryAxis::default()
+            }),
+            ..Limits::default()
+        };
+        let found = said(&free, &rings);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found[0].contains("about 600 turns"), "{found:?}");
+        assert!(found[1].contains("registration mark"), "{found:?}");
+        // limited turns, and a mark: nothing to say
+        let limited = Limits {
+            rotary: Some(RotaryAxis {
+                centre_set: true,
+                turning: Turning::Unwind,
+                ..RotaryAxis::default()
+            }),
+            ..Limits::default()
+        };
+        rings.params = serde_json::json!({"registration_mark": true});
+        assert_eq!(said(&limited, &rings), Vec::<String>::new());
     }
 
     #[test]

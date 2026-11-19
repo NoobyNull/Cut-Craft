@@ -370,6 +370,11 @@ say "not implemented yet".
   Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
   Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
   each leaves out is in its `re/SPEC.md` section.
+- 4-Axis Rotary Machining (Cut Craft's own, `rotary_machining_toolpath`): on a rotary job,
+  rings round the model from A=0, each point dropped round the true turning axis (ball or
+  flat bottom, allowance), Start/End along the axis, optional registration-mark notch at A=0.
+  Radial only for now; Off-centre and Indexed (both needing Y to move with A) and a spiral
+  pattern (needs a preview that wraps at the seam) are to come.
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits
