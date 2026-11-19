@@ -6,6 +6,8 @@ import {
   receive, summary, detail, markHandled, markIssue, reopen, deleteSample, forget, cleanup,
 } from './store.js';
 import { PAGE, SCRIPT } from './page.js';
+import { VOTES_PAGE, VOTES_SCRIPT } from './votes-page.js';
+import { PollError, publish, current, castVote, listPolls, endPoll, deletePoll } from './polls.js';
 import { checkShape, checkWork, ipWait, countIp, crashId, countRefusal } from './guard.js';
 import {
   AuthError, keyCount, listKeys, removeKey, registerOptions, register, loginOptions, login,
@@ -43,7 +45,7 @@ async function adminFrom(request, env, now) {
   return null;
 }
 
-const fail = (e) => (e instanceof AuthError ? problem(e.status, e.message) : problem(400, e.message));
+const fail = (e) => (e instanceof AuthError || e instanceof PollError ? problem(e.status, e.message, e.extra) : problem(400, e.message));
 const readJson = (request) => request.json().catch(() => ({}));
 
 const settings = (env) => ({
@@ -55,6 +57,7 @@ const settings = (env) => ({
   // '0' turns these off (tests of storage, local runs); anything else or unset keeps them on
   powBits: env.POW_BITS === '0' ? 0 : setting(env.POW_BITS, 22),
   strictLog: env.STRICT_LOG !== '0',
+  votesPerIp: setting(env.VOTES_PER_IP, 20),
 });
 
 const PAGE_HEADERS = {
@@ -110,8 +113,26 @@ async function takeReport(request, env, now) {
   return json({ ok: true }, 202);
 }
 
+async function pollsApi(request, env, path, now) {
+  const method = request.method;
+  if (path === '/admin/api/polls') {
+    if (method === 'GET') return json({ polls: await listPolls(env.DB, now) });
+    if (method === 'POST') return json(await publish(env.DB, await readJson(request), now));
+    return problem(405, 'Use GET or POST.');
+  }
+  const m = path.match(/^\/admin\/api\/polls\/([a-z0-9-]{1,40})(\/end)?$/);
+  if (!m) return problem(404, 'Unknown admin action.');
+  const [, id, end] = m;
+  let ok;
+  if (end && method === 'POST') ok = await endPoll(env.DB, id, now);
+  else if (!end && method === 'DELETE') ok = await deletePoll(env.DB, id);
+  else return problem(405, end ? 'Use POST.' : 'Use DELETE.');
+  return ok ? json({ ok: true }) : problem(404, 'No such message or vote.');
+}
+
 async function adminApi(request, env, path, url, now, who) {
   const method = request.method;
+  if (path.startsWith('/admin/api/polls')) return pollsApi(request, env, path, now);
   if (path === '/admin/api/keys') {
     if (method === 'GET') return json({ keys: await listKeys(env.DB) });
     if (method !== 'POST') return problem(405, 'Use GET or POST.');
@@ -166,6 +187,28 @@ export async function handle(request, env, now = new Date()) {
   if (path === '/v1/crash') {
     if (method !== 'POST') return problem(405, 'Send crash reports with POST.', { allow: 'POST' });
     return takeReport(request, env, now);
+  }
+  if (path === '/v1/announcement') {
+    if (method !== 'GET') return problem(405, 'Use GET.', { allow: 'GET' });
+    const a = await current(env.DB, now);
+    return a ? json(a) : new Response(null, { status: 204, headers: NO_STORE });
+  }
+  if (path === '/v1/vote') {
+    if (method !== 'POST') return problem(405, 'Vote with POST.', { allow: 'POST' });
+    if (Number(request.headers.get('content-length') ?? 0) > 4096) return problem(413, 'Vote is too big.');
+    try {
+      const ip = request.headers.get('cf-connecting-ip') ?? '';
+      return json(await castVote(env.DB, await readJson(request), ip, settings(env), now));
+    } catch (e) {
+      if (e instanceof PollError) return problem(e.status, e.message, e.extra);
+      throw e;
+    }
+  }
+  if (method === 'GET' && path === '/votes') {
+    return new Response(VOTES_PAGE, { headers: { 'content-type': 'text/html; charset=utf-8', ...PAGE_HEADERS } });
+  }
+  if (method === 'GET' && path === '/votes.js') {
+    return new Response(VOTES_SCRIPT, { headers: { 'content-type': 'text/javascript; charset=utf-8', ...PAGE_HEADERS } });
   }
   if (method === 'GET' && path === '/') {
     return new Response(PAGE, { headers: { 'content-type': 'text/html; charset=utf-8', ...PAGE_HEADERS } });

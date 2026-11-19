@@ -105,3 +105,28 @@ CREATE TABLE IF NOT EXISTS refusals (
   count       INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, reason, who)
 );
+
+-- Messages and votes shown inside CutCraft (Help ▸ Messages from the Cut Craft team). One is
+-- live at a time: publishing a new one ends the last. `choices` is a JSON array of button
+-- labels; empty for a plain message.
+CREATE TABLE IF NOT EXISTS polls (
+  id           TEXT PRIMARY KEY,             -- short name, e.g. name-vote-2026
+  title        TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  choices      TEXT NOT NULL DEFAULT '[]',
+  show_results INTEGER NOT NULL DEFAULT 1,   -- voters see the totals after voting
+  created_at   TEXT NOT NULL,
+  ends_at      TEXT,                         -- stops showing after this (UTC), or never
+  ended_at     TEXT                          -- ended by hand, or by publishing another
+);
+
+-- One vote per install per poll, changeable. `who` is a salted hash of the poll and the
+-- install id, so votes can't be linked across polls or to crash reports.
+CREATE TABLE IF NOT EXISTS votes (
+  poll        TEXT NOT NULL,
+  who         TEXT NOT NULL,
+  choice      INTEGER NOT NULL,
+  version     TEXT NOT NULL,
+  voted_at    TEXT NOT NULL,
+  PRIMARY KEY (poll, who)
+);

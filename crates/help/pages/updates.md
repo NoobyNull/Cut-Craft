@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-17
-see-also: web_api, contents, settings
+reviewed: 2026-11-19
+see-also: web_api, contents, settings, announcements
 ---
 
 # Updates
@@ -94,5 +94,9 @@ the new one.
 
 Turn off **Edit ▸ Options ▸ Updates ▸ Check for updates when Cut Craft starts** to stop the
 startup check. **Help ▸ Check for Updates** still works.
+
+The same page has **Show messages from the Cut Craft team**: news and opinion polls from
+the people who make Cut Craft, shown once when it starts. See
+[Messages from the Cut Craft Team](help:announcements).
 
 See also: [Help Contents](help:contents)

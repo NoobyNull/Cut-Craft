@@ -104,6 +104,31 @@ security key is registered):
 `GET /admin/api/keys`, `POST /admin/api/keys/options`, `POST /admin/api/keys`, `DELETE /admin/api/keys/<id>`.
 Sign-in: `GET /auth/status`, `POST /auth/options`, `POST /auth/verify`, `POST /auth/logout`.
 
+## Messages and votes
+
+The same Worker also carries the **messages and opinion polls** CutCraft shows at startup
+(Help ▸ Messages from the Cut Craft Team, in 0.6.19 to 0.6.21).
+
+- **Publish one** at `/votes` (signed in as for the dashboard; the dashboard's header links
+  to it): a title, a message, and choices one per line (none for a plain message, 2 to 6 for
+  a poll). One shows at a time: publishing ends the last. Publishing again with the same
+  short name edits it and keeps its votes. **Stop showing it** ends it; **Delete** removes it
+  and its votes.
+- `GET /v1/announcement` gives CutCraft the live one, `{id, title, body, choices,
+  show_results}`, or **204** when there is none.
+- `POST /v1/vote` `{poll, choice, install_id, version}` takes one vote per install per poll
+  (a later vote replaces it). It answers `{ok: true, totals: [..]}`, the totals only when the
+  poll shows results. **400** bad field, **404** no such poll, **410** ended, **429** with
+  `Retry-After` when one network has cast `VOTES_PER_IP` (20) votes in that poll today.
+- Votes keep only a salted hash of the poll and install id, so votes can't be linked to each
+  other across polls or to crash reports. No IPs are kept (the per-network count uses the
+  same daily-salted hash as crash reports).
+- Admin API: `GET /admin/api/polls`, `POST /admin/api/polls` (publish), `POST
+  /admin/api/polls/<id>/end`, `DELETE /admin/api/polls/<id>`.
+
+After pulling this, run the `schema.sql` line from *Deploying* again (it adds the `polls` and
+`votes` tables) and deploy.
+
 ## Running and testing locally
 
 ```sh

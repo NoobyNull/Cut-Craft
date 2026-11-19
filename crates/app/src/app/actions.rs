@@ -154,6 +154,7 @@ impl CutCraftApp {
                 reporter
             },
             updates: crate::update::Updates::default(),
+            announcements: crate::announcements::Announcements::default(),
             restart_after_close: None,
             clipboard: vec![],
             clipboard_from: super::Copied::default(),
@@ -675,6 +676,7 @@ impl CutCraftApp {
                 }
             }
             "addons" => self.addons.show(ctx),
+            "team_messages" => self.ask_for_team_messages(ctx, true),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);

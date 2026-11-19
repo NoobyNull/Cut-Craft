@@ -1280,6 +1280,13 @@ pub(super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Program,
+        "file/notes.png",
+        "**Help ▸ Messages from the Cut Craft Team** shows the team's latest news or opinion \
+         poll. Vote with one button, and change your vote whenever you like.",
+        "announcements",
+    ),
+    icon(
+        Area::Program,
         "view/interface_layout.png",
         "**Edit ▸ Options ▸ Web API** lets a script or program drive Cut Craft. It is off until \
          you turn it on, and every step it takes shows in the window and can be undone.",

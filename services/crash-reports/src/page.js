@@ -112,6 +112,7 @@ tbody tr.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accen
 <header>
   <h1><span>CutCraft</span> crash reports</h1>
   <div class="row" id="controls" hidden>
+    <a href="/votes">Messages and votes</a>
     <label class="small muted" for="range">Show</label>
     <select id="range">
       <option value="7">Last 7 days</option>

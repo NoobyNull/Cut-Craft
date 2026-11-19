@@ -60,3 +60,4 @@ favourites, favourite, favorites, favorite, starred, pinned tools, quick tools, 
 fold, folded, collapse, collapsed, hidden tools, missing buttons, narrow window
 construction line, construction lines, construction geometry, reference line, helper line, guide path, layout line
 high detail, large model, finer detail, more detail
+messages, message, announcement, announcements, news, poll, polls, vote, voting, survey, opinion

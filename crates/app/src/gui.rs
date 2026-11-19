@@ -2366,6 +2366,10 @@ impl MenuSystem {
                                 .collect(),
                         ),
                         sep(),
+                        MenuItem::with_action(
+                            "Messages from the Cut Craft Team...",
+                            "team_messages",
+                        ),
                         MenuItem::with_action("Check for Updates...", "check_for_updates"),
                         MenuItem::with_action("Run First-Time Setup Again...", "first_run_setup"),
                         i("About Cut Craft"),

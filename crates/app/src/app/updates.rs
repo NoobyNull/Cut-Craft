@@ -15,7 +15,8 @@ fn now() -> u64 {
 impl CutCraftApp {
     /// About once a day, unless Options ▸ Updates says not to or a package manager looks
     /// after this copy: asks GitHub in the background,
-    /// and says something only when there is a new version.
+    /// and says something only when there is a new version. Also asks for a new message from
+    /// the Cut Craft team ([`crate::announcements`]), unless Options ▸ Updates says not to.
     pub(super) fn check_for_updates_at_startup(&mut self, ctx: &egui::Context) {
         let o = &self.options.updates;
         if o.check_at_startup
@@ -23,6 +24,10 @@ impl CutCraftApp {
             && cut_craft_updater::due(o.last_check, now())
         {
             self.updates.check(ctx, false, o.skipped_version.clone());
+        }
+        // and, unless switched off, whether the team has a new message
+        if self.options.updates.team_messages {
+            self.ask_for_team_messages(ctx, false);
         }
     }
 
@@ -66,5 +71,41 @@ impl CutCraftApp {
             return None;
         }
         self.session.path.clone().filter(|p| p.is_file())
+    }
+}
+
+impl CutCraftApp {
+    /// Asks the Cut Craft team's service for a message: at startup (`manual` false) a new one
+    /// opens by itself; from the Help menu every answer is shown.
+    pub(super) fn ask_for_team_messages(&mut self, ctx: &egui::Context, manual: bool) {
+        let o = &self.options.updates;
+        self.announcements
+            .ask(ctx, manual, &o.seen_messages, o.votes.clone());
+    }
+
+    pub(super) fn team_messages_window(&mut self, ctx: &egui::Context) {
+        use crate::announcements::Asked;
+        let bug_reports = &mut self.options.bug_reports;
+        let asked = self.announcements.window(ctx, &mut || {
+            bug_reports
+                .install_id
+                .get_or_insert_with(cut_craft_bug_report::relay::new_install_id)
+                .clone()
+        });
+        let o = &mut self.options.updates;
+        match asked {
+            Asked::Nothing => return,
+            Asked::Seen(id) => {
+                if !o.seen_messages.contains(&id) {
+                    o.seen_messages.push(id);
+                }
+            }
+            Asked::Voted(id, choice) => {
+                o.votes.retain(|(p, _)| *p != id);
+                o.votes.push((id, choice));
+            }
+            Asked::TurnOff => o.team_messages = false,
+        }
+        self.save_options();
     }
 }

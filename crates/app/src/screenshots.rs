@@ -30,7 +30,7 @@ const DARK: &str = "-dark";
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 44] = [
+const SCENES: [Scene; 46] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("design-2d-dark", |_, _| {}),
@@ -76,6 +76,19 @@ const SCENES: [Scene; 44] = [
         let version = cut_craft_updater::Version::new(0, 6, 14);
         let steps = cut_craft_updater::Install::flatpak_steps(&version);
         update_window(app, update_offer(Err(steps)));
+    }),
+    // Help: Messages from the Cut Craft Team (an opinion poll, then after voting)
+    ("team-messages-poll", |app, _| {
+        app.updates.open = false;
+        app.announcements
+            .show(crate::announcements::Phase::Showing(sample_poll()));
+    }),
+    ("team-messages-voted", |app, _| {
+        app.announcements.show(crate::announcements::Phase::Voted(
+            sample_poll(),
+            0,
+            Some(vec![38, 25]),
+        ));
     }),
     // Help: 3D View ▸ Changing a model's height (each builds on the one before)
     ("height-start", height_start),
@@ -397,6 +410,17 @@ fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
 }
 
 /// The Updates window over the job, at `phase`.
+/// The poll the help's pictures show.
+fn sample_poll() -> crate::announcements::Message {
+    crate::announcements::Message {
+        id: "name-poll".into(),
+        title: "What should Cut Craft be called?".into(),
+        body: "We're thinking about a new name and would like to know which you like best.".into(),
+        choices: vec!["CutCraft".into(), "PowerWhittle".into()],
+        show_results: true,
+    }
+}
+
 fn update_window(app: &mut CutCraftApp, phase: crate::update::Phase) {
     app.gcode_view = None;
     app.updates.show(phase);

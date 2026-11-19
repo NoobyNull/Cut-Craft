@@ -590,6 +590,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Did You Know?: short tips for getting more out of Cut Craft, one at a time",
     ),
     (
+        "team_messages",
+        "Messages from the Cut Craft Team: news or an opinion poll from the people who make Cut Craft. A new one shows once when Cut Craft starts",
+    ),
+    (
         "check_for_updates",
         "Check for Updates: asks straight away whether there is a newer version of Cut Craft",
     ),

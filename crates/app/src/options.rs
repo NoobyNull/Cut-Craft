@@ -1289,6 +1289,20 @@ pub struct Updates {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub skipped_version: Option<String>,
+    /// When Cut Craft starts, ask whether the Cut Craft team has a message or an opinion poll
+    /// for you, and show a new one once. Nothing is shown when this computer is offline. Off:
+    /// Help ▸ Messages from the Cut Craft Team still shows them
+    #[serde(default = "on")]
+    #[schemars(title = "Show messages from the Cut Craft team")]
+    pub team_messages: bool,
+    /// The messages from the team already shown once, by their short names.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub seen_messages: Vec<String>,
+    /// This install's vote in each poll: its short name and the choice, counting from 0.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub votes: Vec<(String, usize)>,
 }
 
 impl Default for Updates {
@@ -1297,6 +1311,9 @@ impl Default for Updates {
             check_at_startup: on(),
             last_check: None,
             skipped_version: None,
+            team_messages: on(),
+            seen_messages: vec![],
+            votes: vec![],
         }
     }
 }
@@ -1374,8 +1391,8 @@ pub struct BugReports {
     #[serde(default = "yes")]
     #[schemars(title = "Send details of my computer")]
     pub computer_details: bool,
-    /// A random number for this install, made when a crash report is first sent, so the
-    /// crash-report service can tell one install from another. Nothing about the person.
+    /// A random number for this install, made when a crash report or a vote is first sent, so
+    /// the service can tell one install from another. Nothing about the person.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub install_id: Option<String>,
@@ -2277,7 +2294,7 @@ mod tests {
             panic!("Updates is a group of settings")
         };
         let shown: Vec<&str> = shown.iter().map(|f| f.key.as_str()).collect();
-        assert_eq!(shown, ["check_at_startup"]);
+        assert_eq!(shown, ["check_at_startup", "team_messages"]);
     }
 
     #[test]

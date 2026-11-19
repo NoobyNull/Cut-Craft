@@ -5,7 +5,7 @@ import { waitBeforeNext, dayOf, daysBefore, SAMPLES_PER_CRASH, FAMILIES, familyO
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
 /** A random salt made once and kept in the database, so install ids are never stored as sent. */
-async function salt(db) {
+export async function salt(db) {
   const row = await db.prepare("SELECT value FROM meta WHERE key = 'salt'").first();
   if (row) return row.value;
   const fresh = hex(crypto.getRandomValues(new Uint8Array(32)));

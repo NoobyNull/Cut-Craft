@@ -317,7 +317,7 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 104] = [
+const BUILT_INS: [&str; 105] = [
     "import_into_shape",
     "try_sample_project",
     "machine_files",
@@ -384,6 +384,7 @@ const BUILT_INS: [&str; 104] = [
     "third_party_licenses",
     "about_cut_craft",
     "check_for_updates",
+    "team_messages",
     "addons",
     "undo",
     "redo",
@@ -1287,6 +1288,8 @@ struct CutCraftApp {
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.
     updates: crate::update::Updates,
+    /// Help ▸ Messages from the Cut Craft Team, and the startup check for a new one.
+    announcements: crate::announcements::Announcements,
     /// Install Now or Relaunch Now: the new version, started once the window has closed.
     restart_after_close: Option<std::path::PathBuf>,
     /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
