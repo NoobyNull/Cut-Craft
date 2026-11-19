@@ -295,8 +295,8 @@ impl MachineManager {
 }
 
 /// Name, maker, model, controller, firmware, bed size, Z travel and 4th axis, in a framed
-/// block. `find_firmware`: the 4th axis warning's link was clicked, so the Firmware choice is
-/// scrolled to and focused.
+/// block; no 4th axis on standard GRBL, which has none. `find_firmware`: the warning's link
+/// was clicked, so the Firmware choice is scrolled to and focused.
 fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_firmware: &mut bool) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
@@ -343,49 +343,37 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_fir
                     ui.radio_value(&mut machine.inches, true, "inches");
                 });
                 ui.end_row();
-                ui.label("4th axis");
-                let can = machine.firmware().has_a_axis();
-                let mut ticked = machine.rotary && can;
-                let mut changed = false;
-                ui.horizontal(|ui| {
-                    changed = ui
-                        .add_enabled(
-                            can,
-                            egui::Checkbox::new(
-                                &mut ticked,
-                                "A, turning the material (rotary jobs)",
-                            ),
-                        )
+                // standard GRBL has no A axis: no 4th axis to offer at all
+                if machine.firmware().has_a_axis() {
+                    ui.label("4th axis");
+                    let mut ticked = machine.rotary;
+                    if ui
+                        .checkbox(&mut ticked, "A, turning the material (rotary jobs)")
                         .on_hover_hint(
                             "Rotary jobs are saved through the machine's post that turns their \
                              side into A; ticking this adds Cut Craft's for its posts",
                         )
-                        .on_disabled_hover_text(NO_A_AXIS)
-                        .changed();
-                    // greyed out: why, and the way to the Firmware choice
-                    if !can
-                        && ui
-                            .link("Why greyed out?")
-                            .on_hover_text(format!("{NO_A_AXIS} Click to pick the firmware."))
-                            .clicked()
+                        .changed()
                     {
-                        *find_firmware = true;
+                        machine.rotary = ticked;
+                        if ticked {
+                            let names: Vec<String> =
+                                library.entries().into_iter().map(|e| e.name).collect();
+                            machine.add_rotary_posts(&names);
+                        }
                     }
-                });
-                if changed {
-                    machine.rotary = ticked;
-                    if ticked {
-                        let names: Vec<String> =
-                            library.entries().into_iter().map(|e| e.name).collect();
-                        machine.add_rotary_posts(&names);
-                    }
+                    ui.end_row();
                 }
-                ui.end_row();
             });
         // a 4th axis ticked before, that its firmware cannot drive (below the grid, so it
         // wraps to the window)
         if machine.rotary && !machine.firmware().has_a_axis() {
-            ui.colored_label(ui.visuals().error_fg_color, format!("⚠ {NO_A_AXIS}"));
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(ui.visuals().error_fg_color, format!("⚠ {NO_A_AXIS}"));
+                if ui.link("Pick the firmware").clicked() {
+                    *find_firmware = true;
+                }
+            });
         }
     });
 }
