@@ -239,3 +239,9 @@ workspace = true
 # eframe's windowing library, to open on X11 (XWayland): only there does it deliver dropped files
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 winit = { version = "0.30", default-features = false, features = ["x11"] }
+
+# build.rs: the app icon and name built into cut-craft.exe, for Explorer, shortcuts and the
+# taskbar. Only a Windows build uses it; it is built everywhere so every computer checks
+# that code.
+[build-dependencies]
+winresource = { version = "0.1", default-features = false }

@@ -32,8 +32,16 @@ impl CutCraftApp {
         let addon_gadgets =
             crate::depth::addons_dir().map_or_default(|dir| crate::gadgets::from_addons(&dir));
         let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
+        let mine: Vec<(String, &'static str)> = gadgets
+            .installed()
+            .filter_map(|g| Some((g.label.clone(), registry.get(&g.id)?.id())))
+            .collect();
         let mut menus = gui::MenuSystem::new();
-        menus.add_gadgets(&gadgets, my_gadgets.as_deref());
+        let items: Vec<(String, String)> = mine
+            .iter()
+            .map(|(label, id)| (label.clone(), (*id).to_owned()))
+            .collect();
+        menus.add_gadgets(&gadgets.built_in, &items);
         let mut status = gui::StatusBar::new();
         if !gadgets.problems.is_empty() {
             status.set_message(&format!(
@@ -133,6 +141,9 @@ impl CutCraftApp {
             shots: None,
             help_shots: None,
             space_mouse: None,
+            my_gadgets: mine,
+            installed_addons: vec![],
+            rail_gadgets: false,
             unsigned_gadgets: gadgets
                 .mine
                 .iter()
@@ -603,7 +614,9 @@ impl CutCraftApp {
                 ctx.open_url(egui::OpenUrl::new_tab(super::MACHINES_ONLINE));
             }
             "post_processor_management" => {
-                self.post_window = Some(cut_craft_machines::PostManager::default());
+                self.post_window = Some(cut_craft_machines::PostManager::for_machine(
+                    self.machines.active(),
+                ));
             }
             "tool_database" => {
                 let manager = cut_craft_tool_database::Manager::new(&self.tools);
@@ -677,6 +690,7 @@ impl CutCraftApp {
             }
             "addons" => self.addons.show(ctx),
             "team_messages" => self.ask_for_team_messages(ctx, true),
+            gui::OPEN_GADGETS_FOLDER => self.open_gadgets_folder(),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);
@@ -2302,7 +2316,9 @@ impl CutCraftApp {
                 }
                 MachineOutcome::Cancel => self.machine_window = None,
                 MachineOutcome::ManagePosts => {
-                    self.post_window = Some(cut_craft_machines::PostManager::default());
+                    // the machine as edited, not yet applied: the one Select changes
+                    self.post_window =
+                        Some(cut_craft_machines::PostManager::for_machine(draft.active()));
                 }
                 MachineOutcome::PickFolder(which) => {
                     if let Some(folder) = file_dialog().pick_folder()
@@ -4978,6 +4994,7 @@ impl CutCraftApp {
                             self.tools_or_favourites(ui, &groups, Page::Design);
                         } else {
                             self.design_subtabs(ui);
+                            self.gadgets_section(ui);
                         }
                     }
                     "Sheets" => self.sheets_panel(ui),

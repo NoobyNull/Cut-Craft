@@ -533,6 +533,25 @@ fn installed_words(m: &Manifest) -> String {
     format!("{} {} is installed.{more}", m.name, m.version)
 }
 
+/// The tool the installed add-on `id` brings, when Cut Craft knows it: the Depth add-on's
+/// is Relief from Photo.
+pub fn tool_of(id: &str) -> Option<&'static str> {
+    (id == crate::depth::ADDON_ID).then_some("relief_from_photo")
+}
+
+/// The add-ons installed in `dir` that are not gadgets (a gadget lists itself), by name in
+/// the order of their ids, each with the tool it brings when Cut Craft knows it.
+pub fn installed_tools(dir: &Path) -> Vec<(String, Option<&'static str>)> {
+    installed_ids(dir)
+        .into_iter()
+        .filter_map(|id| {
+            let text = std::fs::read_to_string(dir.join(&id).join(addon::MANIFEST)).ok()?;
+            let manifest = Manifest::parse(&text).ok()?;
+            (manifest.kind != "gadget").then(|| (manifest.name, tool_of(&id)))
+        })
+        .collect()
+}
+
 /// The ids of the add-ons installed in `dir` (folders with an install record).
 fn installed_ids(dir: &Path) -> Vec<String> {
     let mut ids: Vec<String> = std::fs::read_dir(dir)
@@ -830,6 +849,42 @@ mod tests {
         let mut a = Addons::with(dir.clone(), signed_repo, installs, newer);
         a.show(&ctx);
         wait(&mut a, &ctx, |a| a.updates.contains_key("depth"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn installed_tool_add_ons_name_the_tool_they_bring() {
+        let dir =
+            std::env::temp_dir().join(format!("cut-craft-addon-tools-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let add = |id: &str, name: &str, kind: &str, record: bool| {
+            let folder = dir.join(id);
+            std::fs::create_dir_all(&folder).unwrap();
+            std::fs::write(
+                folder.join(addon::MANIFEST),
+                format!("id = \"{id}\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"1.0.0\""),
+            )
+            .unwrap();
+            if record {
+                std::fs::write(folder.join(addon::RECORD), "{}").unwrap();
+            }
+        };
+        add("depth", "Depth (Relief from Photo)", "tool", true);
+        // gadgets list themselves; a folder without a record is not installed
+        add("snowflake", "Snowflake", "gadget", true);
+        add("loose", "Loose", "tool", false);
+        add("pack", "Chess Pieces", "content", true);
+        assert_eq!(
+            installed_tools(&dir),
+            [
+                (
+                    "Depth (Relief from Photo)".to_owned(),
+                    Some("relief_from_photo")
+                ),
+                ("Chess Pieces".to_owned(), None),
+            ]
+        );
+        assert_eq!(installed_tools(&dir.join("none")), []);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

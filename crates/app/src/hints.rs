@@ -614,6 +614,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts",
     ),
     (
+        "open_gadgets_folder",
+        "Open My Gadgets Folder: opens the folder where your own .lua gadget files go. Each one shows up in Gadgets ▸ My Gadgets when Cut Craft starts",
+    ),
+    (
         "community:0",
         "GitHub: opens Cut Craft's page on GitHub, where you can report problems and see what is coming",
     ),
