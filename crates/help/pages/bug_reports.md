@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-19
 see-also: settings, updates, contents
 ---
 
@@ -59,6 +59,14 @@ off and press **Apply**, and:
   for one report), and
 - a crash log sent by itself carries only the crash and its log. It says whether the
   computer runs Windows, macOS or Linux, and nothing more about it.
+
+## Security problems
+
+Bug reports are public, so please don't use **Report a Bug Here…** for a security problem,
+such as an update or add-on that installs without its signature being checked, or a file
+that makes Cut Craft run something it shouldn't. Report it privately on GitHub instead:
+open Cut Craft's page, go to the **Security** tab and choose **Report a vulnerability**.
+Only the people fixing Cut Craft can read it, and it is published once a fix is out.
 
 ## Related
 

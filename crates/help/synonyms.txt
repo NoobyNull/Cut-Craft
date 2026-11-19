@@ -63,3 +63,4 @@ add-on, add-ons, addon, addons, plugin, plugins, extension, extensions, gadget, 
 high detail, large model, finer detail, more detail
 preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated
 filter, filters, narrow down
+security, vulnerability, exploit, security hole, report privately
