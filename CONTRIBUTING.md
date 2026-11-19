@@ -64,7 +64,11 @@ pack has no words for yet.
   longer than English. `cut_craft_i18n::pseudo()` is a test language that stretches every word
   by that much.
 
-The **hard-coded text** check (`cargo nextest run -p cut-craft hard_coded_text`) fails on
+Languages have their own test suite, run by the **Languages** workflow:
+
+    cargo nextest run -p cut-craft -p cut-craft-i18n --profile languages
+
+The **hard-coded text** check in it (also in the ordinary run) fails on
 words handed straight to a button, label, tooltip, menu or window in `crates/app/src`, and on
 a key with no English words. Text already in the code before the move is listed in
 `crates/app/i18n/hard-coded-baseline.txt`; when you move one into Fluent, delete its line

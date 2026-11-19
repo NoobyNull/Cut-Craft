@@ -70,7 +70,17 @@ fn sources() -> Vec<PathBuf> {
     files.sort();
     files
         .into_iter()
-        .filter(|f| !f.ends_with("app/tests.rs") && !f.ends_with("web_api_tests.rs"))
+        // test-only files (this one is all tests: its examples are not the app's words)
+        .filter(|f| {
+            ![
+                "app/tests.rs",
+                "web_api_tests.rs",
+                "hard_coded_text.rs",
+                "help_coverage.rs",
+            ]
+            .iter()
+            .any(|t| f.ends_with(t))
+        })
         .collect()
 }
 
@@ -86,14 +96,24 @@ fn short(path: &Path) -> String {
 /// A file's program code: up to its test module (not a single test-only function above it),
 /// with comments blanked out.
 fn program(source: &str) -> String {
-    // an inline `#[cfg(test)] mod tests {` runs to the end of the file; `mod tests;` (a test
-    // file of its own) does not, so the code after it is still scanned
-    let tests = source.match_indices("#[cfg(test)]").find(|(at, attr)| {
-        let next = source[at + attr.len()..].trim_start();
+    // an inline `#[cfg(test)] mod tests { … }` is left out up to its closing brace; `mod
+    // tests;` (a test file of its own) is only a line, so the code after either is still scanned
+    let mut code = String::new();
+    let mut rest = source;
+    while let Some(at) = rest.find("#[cfg(test)]") {
+        let after = &rest[at + "#[cfg(test)]".len()..];
+        let next = after.trim_start();
         let line = next.lines().next().unwrap_or_default().trim_end();
-        next.starts_with("mod ") && line.ends_with('{')
-    });
-    let code = &source[..tests.map_or(source.len(), |(at, _)| at)];
+        if next.starts_with("mod ") && line.ends_with('{') {
+            code.push_str(&rest[..at]);
+            let open = rest.len() - next.len() + line.len() - 1;
+            rest = &rest[block_end(rest.as_bytes(), open)..];
+        } else {
+            code.push_str(&rest[..at + "#[cfg(test)]".len()]);
+            rest = after;
+        }
+    }
+    code.push_str(rest);
     code.lines()
         .map(|line| {
             let t = line.trim_start();
@@ -105,6 +125,32 @@ fn program(source: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Where the block that opens at `open` (a `{`) ends: just past its closing brace, braces in
+/// strings and characters not counted; the end of `code` if it never closes.
+fn block_end(code: &[u8], open: usize) -> usize {
+    let mut depth = 0usize;
+    let mut i = open;
+    while i < code.len() {
+        match code[i] {
+            b'"' => {
+                i = literal_at(code, i).map_or(code.len(), |(_, end)| end);
+                continue;
+            }
+            b'\'' if code.get(i + 2) == Some(&b'\'') => i += 2,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return i + 1;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    code.len()
 }
 
 /// The string literals in `code`, each with where its closing quote ends.
@@ -411,5 +457,9 @@ fn the_scan_finds_text_and_leaves_ids_alone() {
     assert!(program(tests_after).contains("Late"));
     let tests_inline = "fn a() {}\n#[cfg(test)]\nmod tests {\n fn b() { ui.label(\"Test\") }\n}\n";
     assert!(!program(tests_inline).contains("Test"));
+    let after_inline =
+        "#[cfg(test)]\nmod tests {\n fn b() { x(\"}\") }\n}\nfn c() { ui.label(\"After\") }\n";
+    let kept = program(after_inline);
+    assert!(kept.contains("After") && !kept.contains("fn b"), "{kept}");
     assert!(!is_words("{}"));
 }
