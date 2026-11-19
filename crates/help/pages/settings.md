@@ -120,6 +120,12 @@ toolpaths has a **Checks** tab too. It runs the same
 [checks before cutting](help:checks_before_cutting) as the Classic Toolpaths page's
 **Analyse** tab, so you can see what would spoil the cut before you press Save.
 
+Once you install a gadget, or an add-on that brings a tool, each layout gains a **Gadgets**
+section holding it, always after everything else so no button moves: at the bottom of
+Classic's Design page (when it shows all tools, not only favourites),
+as the last button of the Rail (after ★), and as a **Gadgets** tab at the end of the Ribbon.
+See [Add-ons](help:addons).
+
 Each layout shows the tool you point at with what it does and the next step: under the
 icons in Classic, under the open list in Rail, and at the foot of the left-hand panel in
 Ribbon.

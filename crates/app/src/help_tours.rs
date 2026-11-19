@@ -4269,6 +4269,28 @@ pub const TOURS: &[Tour] = &[
         ],
     },
     Tour {
+        tool: "addons",
+        steps: &[
+            Step {
+                caption: "Open **Gadgets ▸ Add-ons...** and press **Install** beside the add-on you want. One that is not signed asks before it installs.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    depth_installed(app);
+                    app.invoke(ctx, "addons");
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Once it is installed it is listed in **Gadgets ▸ My Gadgets**, and a **Gadgets** section after the other tools holds it. Click it there to use it.",
+                setup: |app, _| {
+                    app.addons.open = false;
+                    on_design_tab(app, 4);
+                },
+                mark: Mark::At("tool:relief_from_photo"),
+            },
+        ],
+    },
+    Tour {
         tool: "relief_from_photo",
         steps: &[
             Step {
@@ -4982,6 +5004,24 @@ fn landscape(x: f64, y: f64) -> u8 {
 }
 
 /// The Design page pinned open on sub-tab `tab` (0 Create, 1 Edit, 2 Arrange, 4 Import).
+/// The Depth add-on, as Add-ons leaves it once installed, in an add-ons folder of the
+/// pictures' own (so not the user's).
+fn depth_installed(app: &mut CutCraftApp) {
+    let dir = std::env::temp_dir().join("cut-craft-help-pictures-addons");
+    let depth = dir.join("depth");
+    let _ = std::fs::create_dir_all(&depth);
+    let _ = std::fs::write(
+        depth.join("addon.toml"),
+        "id = \"depth\"\nname = \"Depth (Relief from Photo)\"\nkind = \"tool\"\nversion = \"0.1.0\"",
+    );
+    let _ = std::fs::write(
+        depth.join("installed.json"),
+        r#"{"repo":{"owner":"NoobyNull","name":"CutCraft-Depth"},"tag":"v0.1.0","version":"0.1.0","signed":false}"#,
+    );
+    app.addons = crate::addons::Addons::new(Some(dir));
+    app.refresh_installed();
+}
+
 fn on_design_tab(app: &mut CutCraftApp, tab: usize) {
     app.pages.set_pinned(Page::Design, true);
     app.design_subtab = tab;

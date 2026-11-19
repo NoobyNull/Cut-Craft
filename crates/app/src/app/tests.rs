@@ -11644,6 +11644,7 @@ fn the_unsigned_warning_says_who_is_responsible() {
     assert!(text.contains("Star Burst"));
     assert!(text.contains("not responsible"));
     assert!(text.contains("Undo"));
+    assert!(text.contains("not an official Cut Craft gadget"), "{text}");
 }
 
 /// The harness on a Mac, as egui sees the system.
@@ -17568,7 +17569,7 @@ fn a_job_setup_change_starts_the_preview_again_on_the_new_block() {
     h.app.doc.job.width += 20.0;
     let id = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.preview_toolpath(id);
-    let fresh = Material::new(&h.app.doc.job, h.app.display.preview_cells());
+    let fresh = h.app.fresh_material();
     let start = h.app.playback.as_ref().expect("it plays").material();
     assert_eq!((start.columns, start.origin), (fresh.columns, fresh.origin));
 }
@@ -19368,4 +19369,224 @@ fn a_drawing_named_on_the_command_line_comes_into_a_blank_job() {
     assert_eq!(h.app.screen, Screen::Job, "no Job Setup first");
     assert!(!h.app.doc.vectors.is_empty(), "the drawing came in");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_small_part_on_a_big_sheet_is_previewed_finely_where_it_is_cut() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.frame(vec![]);
+    let job = h.app.doc.job;
+    let m = h.app.simulation.clone().expect("a preview");
+    let area = m.area();
+    assert!(
+        area.max.x - area.min.x < job.width / 2.0 && area.max.y - area.min.y < job.height / 2.0,
+        "round the part, not the whole sheet: {area:?}"
+    );
+    assert!(
+        (m.cell - crate::preview_detail::finest(50)).abs() < 1e-9,
+        "{}",
+        m.cell
+    );
+    assert!(m.lies_on(&job));
+    // the 3D view still shows the whole sheet round it
+    let shown = h.app.fine_surface();
+    assert!((shown.origin - job.area().min).length() < 1e-9);
+    let across = shown.area().max.x - shown.area().min.x;
+    assert!((across - job.width).abs() <= shown.cell);
+    // Toolpaths ▸ Preview Simulation Quality ▸ Extremely High: the slider to 80%, the
+    // preview worked out again finer, its tick on that pick
+    h.app.invoke(&h.ctx, "preview_quality_8");
+    let finer = h.app.simulation.clone().expect("worked out again");
+    assert_eq!(h.app.display.detail, 80);
+    assert!(finer.cell < m.cell, "{} then {}", m.cell, finer.cell);
+    assert_eq!(h.app.display.checked("preview_quality_8"), Some(true));
+    assert_eq!(h.app.display.checked("preview_quality_1"), Some(false));
+    // Reset Preview: the slider back to Options' default
+    h.app.invoke(&h.ctx, "reset_preview");
+    assert_eq!(h.app.display.detail, h.app.options.view_3d.preview_detail);
+}
+
+#[test]
+fn the_preview_tab_has_the_detail_slider_always_to_hand() {
+    let mut h = named_toolpaths();
+    // the Toolpaths page's Preview tab
+    let tab = h
+        .text_at("Preview")
+        .unwrap_or_else(|| panic!("{:?}", h.texts()));
+    h.click(tab, Modifiers::NONE);
+    h.frame(vec![]);
+    for word in ["Faster", "More detail", "50%"] {
+        assert!(
+            h.text_at(word).is_some(),
+            "{word} beside the slider: {:?}",
+            h.texts()
+        );
+    }
+}
+
+/// An add-ons folder holding the Depth add-on, as Gadgets ▸ Add-ons installs it.
+fn depth_installed(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("cut-craft-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let depth = dir.join("depth");
+    std::fs::create_dir_all(&depth).unwrap();
+    std::fs::write(
+        depth.join("addon.toml"),
+        "id = \"depth\"\nname = \"Depth (Relief from Photo)\"\nkind = \"tool\"\nversion = \"0.1.0\"",
+    )
+    .unwrap();
+    std::fs::write(depth.join("installed.json"), "{}").unwrap();
+    dir
+}
+
+/// Gadgets ▸ My Gadgets in `menus`: each item's name, action and whether it can be picked.
+fn my_gadgets_in(menus: &gui::MenuSystem) -> Vec<(String, String, bool)> {
+    let gadgets = &menus
+        .menus
+        .iter()
+        .find(|m| m.name == "Gadgets")
+        .unwrap()
+        .items;
+    gadgets
+        .iter()
+        .find(|i| i.name == gui::MY_GADGETS)
+        .expect("a My Gadgets submenu")
+        .children
+        .iter()
+        .map(|i| (i.name.clone(), i.action.clone(), i.is_enabled))
+        .collect()
+}
+
+#[test]
+fn my_gadgets_lists_what_is_installed_and_how_to_add_more() {
+    let mut h = Harness::new();
+    let nothing = my_gadgets_in(&h.app.menus);
+    assert_eq!(
+        nothing[0],
+        ("Nothing installed yet".to_owned(), String::new(), false)
+    );
+    let named = |items: &[(String, String, bool)], name: &str| {
+        items.iter().any(|(n, _, enabled)| n == name && *enabled)
+    };
+    assert!(named(&nothing, "Open My Gadgets Folder"));
+    let (last, action, _) = nothing.last().unwrap();
+    assert_eq!((last.as_str(), action.as_str()), ("Add-ons...", "addons"));
+    assert!(h.app.available(gui::OPEN_GADGETS_FOLDER));
+    assert_eq!(h.app.gadget_tools(), [""; 0]);
+
+    let dir = depth_installed("my-gadgets");
+    h.app.addons = crate::addons::Addons::new(Some(dir.clone()));
+    h.app.refresh_installed();
+    for menus in [&h.app.menus, &h.app.start_menus] {
+        let installed = my_gadgets_in(menus);
+        assert_eq!(
+            installed[0],
+            (
+                "Depth (Relief from Photo) \u{26a0} (not official)".to_owned(),
+                "relief_from_photo".to_owned(),
+                true
+            ),
+            "clicking it opens the tool it brings; not signed, so marked"
+        );
+        assert!(!named(&installed, "Nothing installed yet"));
+        assert!(named(&installed, "Add-ons..."));
+    }
+    assert_eq!(h.app.gadget_tools(), ["relief_from_photo"]);
+
+    // removed: gone from the menu at once
+    std::fs::remove_dir_all(&dir).unwrap();
+    h.app.refresh_installed();
+    assert_eq!(my_gadgets_in(&h.app.menus)[0].0, "Nothing installed yet");
+}
+
+#[test]
+fn my_gadgets_marks_what_is_not_official() {
+    let mut h = Harness::new();
+    h.app.my_gadgets = vec![
+        ("Box Maker".to_owned(), "gadget_box_maker"),
+        ("Star Burst".to_owned(), "gadget_star_burst"),
+    ];
+    h.app.unsigned_gadgets = [("gadget_star_burst".to_owned(), "Star Burst".to_owned())].into();
+    h.app.installed_addons = vec![(
+        "Depth (Relief from Photo)".to_owned(),
+        Some("relief_from_photo"),
+        true,
+    )];
+    let names: Vec<String> = h
+        .app
+        .installed_items()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "Box Maker",
+            "Star Burst \u{26a0} (not official)",
+            "Depth (Relief from Photo)"
+        ]
+    );
+}
+
+#[test]
+fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
+    use crate::options::WindowLayout;
+    let dir = depth_installed("gadgets-section");
+    let harness = |layout: WindowLayout, installed: bool| {
+        let mut h = Harness::new();
+        h.app.options.general.layout = layout;
+        if installed {
+            h.app.addons = crate::addons::Addons::new(Some(dir.clone()));
+            h.app.refresh_installed();
+        }
+        h.frame(vec![]);
+        h.frame(vec![]);
+        h
+    };
+    // Classic: a section at the foot of the Design page, under the sub-tabs
+    let foot = |installed: bool| {
+        let mut h = harness(WindowLayout::Classic, installed);
+        let page = h.text_at("Create Vectors").expect("the Design page");
+        h.scroll_to(page, "No such text");
+        h.texts_at("Gadgets").len()
+    };
+    assert_eq!(foot(true), foot(false) + 1, "Classic: the section");
+    let tabs = |installed: bool| {
+        harness(WindowLayout::Ribbon, installed)
+            .texts_at("Gadgets")
+            .len()
+    };
+    assert_eq!(tabs(true), tabs(false) + 1, "Ribbon: the tab");
+    // the Ribbon's Gadgets tab holds the installed tools
+    let mut h = harness(WindowLayout::Ribbon, true);
+    h.app.ribbon_tab = RIBBON_TABS.iter().position(|&t| t == "Gadgets").unwrap();
+    h.frame(vec![]);
+    assert_eq!(
+        h.texts_at("Gadgets").len(),
+        tabs(false) + 2,
+        "the tab, and its section of tools"
+    );
+    // with nothing installed it is not there to be on
+    let mut h = harness(WindowLayout::Ribbon, false);
+    h.app.ribbon_tab = RIBBON_TABS.iter().position(|&t| t == "Gadgets").unwrap();
+    h.frame(vec![]);
+    assert_eq!(h.app.ribbon_tab, 0);
+    // the Rail: a last button, after Favourites, opening their list
+    let mut h = harness(WindowLayout::Rail, true);
+    assert!(h.text_at("Relief from Photo").is_none(), "no list open");
+    h.app.rail_gadgets = true;
+    h.frame(vec![]);
+    assert!(h.text_at("Relief from Photo").is_some());
+    let mut h = harness(WindowLayout::Rail, false);
+    h.app.rail_gadgets = true;
+    h.frame(vec![]);
+    assert!(!h.app.rail_gadgets, "nothing installed: no list");
+    std::fs::remove_dir_all(dir).unwrap();
 }

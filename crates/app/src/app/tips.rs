@@ -1245,6 +1245,14 @@ pub(super) const TIPS: &[Tip] = &[
          the list, up to date in one go.",
         "toolpaths",
     ),
+    icon(
+        Area::Cutting,
+        "toolpaths/save_toolpaths.png",
+        "Too many post-processors to find yours? **Machine ▸ Post-Processor Management** has \
+         filters: tick **mm** or **inch**, **Arcs**, **Straight** or **Rotary (A)**, pick your \
+         controller, or type part of a name. They start from your machine each time.",
+        "post_processor_management",
+    ),
     tool(
         Area::Cutting,
         "cut_list",

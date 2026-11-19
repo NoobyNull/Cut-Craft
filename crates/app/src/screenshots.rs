@@ -30,7 +30,7 @@ const DARK: &str = "-dark";
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 45] = [
+const SCENES: [Scene; 48] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("design-2d-dark", |_, _| {}),
@@ -142,6 +142,22 @@ const SCENES: [Scene; 45] = [
         }
     }),
     ("tool-number-taken", tool_number_taken),
+    // Help: Post-Processor Management (the filters, then Edit Capabilities)
+    ("post-filters", |app, ctx| post_window(app, ctx, false)),
+    ("post-filters-rotary", |app, ctx| {
+        post_window(app, ctx, true);
+        if let Some(w) = &mut app.post_window {
+            let f = w.filter_mut();
+            (f.arcs, f.straight) = (false, false);
+            f.family = Some(cut_craft_machines::Family::Grbl);
+        }
+    }),
+    ("post-capabilities", |app, _| {
+        if let Some(w) = &mut app.post_window {
+            *w.filter_mut() = cut_craft_machines::Filter::all();
+            w.edit_capabilities(&app.posts, "Cut Craft GRBL Arcs (mm) (*.nc)");
+        }
+    }),
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {
@@ -168,6 +184,22 @@ const SCENES: [Scene; 45] = [
     // Help: Long jobs and the time left
     ("progress-window", progress_window),
 ];
+
+/// Post-Processor Management on its own, opened for a machine in mm with a 4th axis
+/// (`rotary`) or without.
+fn post_window(app: &mut CutCraftApp, ctx: &egui::Context, rotary: bool) {
+    ctx.set_embed_viewports(true);
+    (app.info, app.form, app.tool_manager, app.machine_window) = (None, None, None, None);
+    app.gcode_view = None;
+    app.machines.add();
+    if let Some(m) = app.machines.active_mut() {
+        m.name = "Shop Router".into();
+        m.inches = false;
+        m.rotary = rotary;
+    }
+    app.post_window = None;
+    app.invoke(ctx, "post_processor_management");
+}
 
 /// The Help window over the job on page `topic`, with `search` typed in its search box.
 fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {

@@ -32,8 +32,16 @@ impl CutCraftApp {
         let addon_gadgets =
             crate::depth::addons_dir().map_or_default(|dir| crate::gadgets::from_addons(&dir));
         let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
+        let mine: Vec<(String, &'static str)> = gadgets
+            .installed()
+            .filter_map(|g| Some((g.label.clone(), registry.get(&g.id)?.id())))
+            .collect();
         let mut menus = gui::MenuSystem::new();
-        menus.add_gadgets(&gadgets, my_gadgets.as_deref());
+        let items: Vec<(String, String)> = mine
+            .iter()
+            .map(|(label, id)| (label.clone(), (*id).to_owned()))
+            .collect();
+        menus.add_gadgets(&gadgets.built_in, &items);
         let mut status = gui::StatusBar::new();
         if !gadgets.problems.is_empty() {
             status.set_message(&format!(
@@ -133,6 +141,9 @@ impl CutCraftApp {
             shots: None,
             help_shots: None,
             space_mouse: None,
+            my_gadgets: mine,
+            installed_addons: vec![],
+            rail_gadgets: false,
             unsigned_gadgets: gadgets
                 .mine
                 .iter()
@@ -202,6 +213,8 @@ impl CutCraftApp {
             fit_import: None,
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
+            held_detail: None,
+            preview_grid_kept: std::cell::Cell::new(None),
             simulation: None,
             simulation_coarse: None,
             import_level: None,
@@ -603,7 +616,9 @@ impl CutCraftApp {
                 ctx.open_url(egui::OpenUrl::new_tab(super::MACHINES_ONLINE));
             }
             "post_processor_management" => {
-                self.post_window = Some(cut_craft_machines::PostManager::default());
+                self.post_window = Some(cut_craft_machines::PostManager::for_machine(
+                    self.machines.active(),
+                ));
             }
             "tool_database" => {
                 let manager = cut_craft_tool_database::Manager::new(&self.tools);
@@ -634,6 +649,13 @@ impl CutCraftApp {
             }
             "draw_vectors_in_3d_view" => {
                 self.show_vectors_3d(!self.display.vectors_3d);
+                ctx.request_repaint();
+            }
+            // Toolpaths ▸ Preview Simulation Quality: the detail slider to that pick, and
+            // a preview showing worked out again at it
+            id if crate::display::Display::is_quick_pick(id) => {
+                self.display.toggle(id);
+                self.rework_preview();
                 ctx.request_repaint();
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
@@ -683,6 +705,7 @@ impl CutCraftApp {
                 }
             }
             "addons" => self.addons.show(ctx),
+            gui::OPEN_GADGETS_FOLDER => self.open_gadgets_folder(),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);
@@ -778,6 +801,8 @@ impl CutCraftApp {
                 (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
                 self.kept_playback = None;
+                // the Preview tab's detail goes back to Options' default
+                self.display.detail = self.options.view_3d.preview_detail.min(100);
                 self.status
                     .set_message("Preview reset: Undo Last Preview brings it back");
             }
@@ -2321,7 +2346,9 @@ impl CutCraftApp {
                 }
                 MachineOutcome::Cancel => self.machine_window = None,
                 MachineOutcome::ManagePosts => {
-                    self.post_window = Some(cut_craft_machines::PostManager::default());
+                    // the machine as edited, not yet applied: the one Select changes
+                    self.post_window =
+                        Some(cut_craft_machines::PostManager::for_machine(draft.active()));
                 }
                 MachineOutcome::PickFolder(which) => {
                     if let Some(folder) = file_dialog().pick_folder()
@@ -5029,6 +5056,7 @@ impl CutCraftApp {
                             self.tools_or_favourites(ui, &groups, Page::Design);
                         } else {
                             self.design_subtabs(ui);
+                            self.gadgets_section(ui);
                         }
                     }
                     "Sheets" => self.sheets_panel(ui),
@@ -7309,9 +7337,9 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
 /// What the user is told before an unsigned gadget first runs.
 pub(super) fn unsigned_warning(label: &str) -> String {
     format!(
-        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder \
-         or an unsigned add-on, not from a signed Cut Craft build, so nobody has checked what \
-         it does.\n\n\
+        "\u{201c}{label}\u{201d} is not an official Cut Craft gadget. It came from your My \
+         Gadgets folder or an unsigned add-on, not from a signed Cut Craft build, so nobody has \
+         checked what it does.\n\n\
          Cut Craft and its author are not responsible for what this gadget does or can do, \
          including anything harmful or malicious. It can only change the job that is open, \
          and Undo takes back everything it did in one step. Check its result before you \

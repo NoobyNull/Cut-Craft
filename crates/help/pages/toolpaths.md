@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-17
-see-also:
+reviewed: 2026-11-19
+see-also: preview_detail
 ---
 
 # Toolpaths
@@ -74,10 +74,12 @@ computer's cores, and the 3D view keeps its full detail while the preview plays 
 redrawn a few times a second; the tool moves smoothly in between). If a bit has no shank
 diameter set in the Tool Database, the preview draws a common one (1/4" for a V-bit, up
 to 1/2" for others) and says so under the controls. The preview cuts a grid of small
-squares; a bit narrower than two of them (a 1/16" bit on a full sheet at Standard, say)
+squares, as finely as the [Preview detail](help:preview_detail) slider on the Preview tab
+says, and only where the toolpaths cut; a bit narrower than two of them (a 1/64" bit with
+the slider toward Faster, say)
 still cuts every square its tip passes through, but its thin cuts can look broken or
 dotted, so a line under the controls says so for as long as the preview plays (or the
-status bar after how many were previewed, with Animate Preview off). The line gives the bit's size and the squares', says the toolpath and its G-code are right, and names the Toolpaths ▸ Preview Simulation Quality that draws the bit (Maximum for a 1/64" pencil bit on a big job): pick it and preview again. The Vectors button above the 3D view
+status bar after how many were previewed, with Animate Preview off). The line gives the bit's size and the squares', says the toolpath and its G-code are right, and names the slider setting that draws the bit: slide it there and the preview is worked out again when you let go. The Vectors button above the 3D view
 (or View ▸ Draw Vectors in 3D View) shows or hides the vectors over the model, and is
 remembered next time. Turn off Animate Preview (the
 Toolpaths menu, Toolpath Drawing) to cut the whole preview at once, with a progress window

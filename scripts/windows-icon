@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Makes assets/windows/cut-craft.ico, the icon built into cut-craft.exe (Explorer, the
+# desktop, the taskbar, Alt+Tab) and the window's own icon on every computer, from
+# assets/cut-craft.svg at each size Windows asks for. Run it after changing the logo.
+# Needs rsvg-convert (librsvg) and python3.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+pngs=()
+for size in 16 20 24 32 40 48 64 256; do
+    rsvg-convert -w "$size" -h "$size" assets/cut-craft.svg -o "$work/$size.png"
+    pngs+=("$work/$size.png")
+done
+python3 -I scripts/make_windows_icon.py assets/windows/cut-craft.ico "${pngs[@]}"

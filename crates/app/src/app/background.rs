@@ -304,7 +304,7 @@ impl CutCraftApp {
                 let hit = collision_note(&collided);
                 app.collisions = collided;
                 let fine_bit =
-                    crate::display::fine_bit_note(&tools, material.cell, app.display.quality);
+                    crate::display::fine_bit_note(&tools, material.cell, app.display.detail);
                 app.simulation = Some(material);
                 app.kept_playback = None;
                 (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
