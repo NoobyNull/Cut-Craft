@@ -11636,6 +11636,7 @@ fn the_unsigned_warning_says_who_is_responsible() {
     assert!(text.contains("Star Burst"));
     assert!(text.contains("not responsible"));
     assert!(text.contains("Undo"));
+    assert!(text.contains("not an official Cut Craft gadget"), "{text}");
 }
 
 /// The harness on a Mac, as egui sees the system.
@@ -19234,11 +19235,11 @@ fn my_gadgets_lists_what_is_installed_and_how_to_add_more() {
         assert_eq!(
             installed[0],
             (
-                "Depth (Relief from Photo)".to_owned(),
+                "Depth (Relief from Photo) \u{26a0} (not official)".to_owned(),
                 "relief_from_photo".to_owned(),
                 true
             ),
-            "clicking it opens the tool it brings"
+            "clicking it opens the tool it brings; not signed, so marked"
         );
         assert!(!named(&installed, "Nothing installed yet"));
         assert!(named(&installed, "Add-ons..."));
@@ -19249,6 +19250,35 @@ fn my_gadgets_lists_what_is_installed_and_how_to_add_more() {
     std::fs::remove_dir_all(&dir).unwrap();
     h.app.refresh_installed();
     assert_eq!(my_gadgets_in(&h.app.menus)[0].0, "Nothing installed yet");
+}
+
+#[test]
+fn my_gadgets_marks_what_is_not_official() {
+    let mut h = Harness::new();
+    h.app.my_gadgets = vec![
+        ("Box Maker".to_owned(), "gadget_box_maker"),
+        ("Star Burst".to_owned(), "gadget_star_burst"),
+    ];
+    h.app.unsigned_gadgets = [("gadget_star_burst".to_owned(), "Star Burst".to_owned())].into();
+    h.app.installed_addons = vec![(
+        "Depth (Relief from Photo)".to_owned(),
+        Some("relief_from_photo"),
+        true,
+    )];
+    let names: Vec<String> = h
+        .app
+        .installed_items()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "Box Maker",
+            "Star Burst \u{26a0} (not official)",
+            "Depth (Relief from Photo)"
+        ]
+    );
 }
 
 #[test]

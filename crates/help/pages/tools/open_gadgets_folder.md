@@ -11,8 +11,8 @@ file manager. Cut Craft makes the folder the first time if it is not there yet.
 3. Restart Cut Craft. The gadget is listed in **Gadgets ▸ My Gadgets** and in the
    **Gadgets** section of the tool buttons.
 
-A gadget you put here yourself is not signed, so Cut Craft asks before it first runs each
-session. A file that is not a working gadget is skipped, and the status bar says why.
+A gadget you put here yourself is not official (nobody has signed it), so My Gadgets shows
+**⚠ (not official)** after its name and Cut Craft asks before it first runs each session. A file that is not a working gadget is skipped, and the status bar says why.
 
 The folder is called `gadgets`, inside Cut Craft's settings folder:
 

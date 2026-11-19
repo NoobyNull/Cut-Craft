@@ -7272,9 +7272,9 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
 /// What the user is told before an unsigned gadget first runs.
 pub(super) fn unsigned_warning(label: &str) -> String {
     format!(
-        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder \
-         or an unsigned add-on, not from a signed Cut Craft build, so nobody has checked what \
-         it does.\n\n\
+        "\u{201c}{label}\u{201d} is not an official Cut Craft gadget. It came from your My \
+         Gadgets folder or an unsigned add-on, not from a signed Cut Craft build, so nobody has \
+         checked what it does.\n\n\
          Cut Craft and its author are not responsible for what this gadget does or can do, \
          including anything harmful or malicious. It can only change the job that is open, \
          and Undo takes back everything it did in one step. Check its result before you \
