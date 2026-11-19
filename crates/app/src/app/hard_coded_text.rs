@@ -139,6 +139,14 @@ fn block_end(code: &[u8], open: usize) -> usize {
                 continue;
             }
             b'\'' if code.get(i + 2) == Some(&b'\'') => i += 2,
+            // a comment's braces are words, not code
+            b'/' if code.get(i + 1) == Some(&b'/') => {
+                i = code[i..]
+                    .iter()
+                    .position(|&c| c == b'\n')
+                    .map_or(code.len(), |n| i + n);
+                continue;
+            }
             b'{' => depth += 1,
             b'}' => {
                 depth -= 1;
@@ -460,6 +468,9 @@ fn the_scan_finds_text_and_leaves_ids_alone() {
     let after_inline =
         "#[cfg(test)]\nmod tests {\n fn b() { x(\"}\") }\n}\nfn c() { ui.label(\"After\") }\n";
     let kept = program(after_inline);
+    assert!(kept.contains("After") && !kept.contains("fn b"), "{kept}");
+    let comment_brace = "#[cfg(test)]\nmod tests {\n    // {\n}\nfn c() { ui.label(\"After\") }\n";
+    let kept = program(comment_brace);
     assert!(kept.contains("After") && !kept.contains("fn b"), "{kept}");
     assert!(!is_words("{}"));
 }
