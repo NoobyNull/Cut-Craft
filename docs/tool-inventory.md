@@ -144,7 +144,7 @@ say "not implemented yet".
   Package machines list GRBL Arcs and Straight in mm and inches, Arcs in their units first.
   A machine's Firmware (GRBL 1.1, grblHAL, FluidNC, Mach3 / Mach4, Other; not picked, read
   from its Controller text, unknown = standard GRBL) decides whether it can have a 4th axis:
-  on standard GRBL the tick is greyed out with a warning linking to the choice. The 4th axis
+  standard GRBL has no 4th axis row at all (a tick kept from before shows a red warning linking to the choice). The 4th axis
   (A) tick adds the G93 Rotary A twins of its Cut Craft posts; a rotary job saves through
   the machine's post wrapping its side (Y for a cylinder along X), and is refused on a
   machine without the 4th axis, on standard GRBL, or without such a post. Flat jobs
