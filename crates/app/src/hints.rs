@@ -511,23 +511,23 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "preview_quality_1",
-        "Preview Quality Standard: toolpath previews in normal detail, quickest to draw; a finer quality draws a small bit's thin cuts truer on a big sheet",
+        "Preview Quality Standard: moves the Preview detail slider to 20%, quick to work out; the preview showing is worked out again",
     ),
     (
         "preview_quality_2",
-        "Preview Quality High: toolpath previews in finer detail, about twice as slow",
+        "Preview Quality High: moves the Preview detail slider to 40%; the preview showing is worked out again",
     ),
     (
         "preview_quality_4",
-        "Preview Quality Very High: toolpath previews in fine detail, about four times as slow",
+        "Preview Quality Very High: moves the Preview detail slider to 60%; the preview showing is worked out again",
     ),
     (
         "preview_quality_8",
-        "Preview Quality Super High: toolpath previews in very fine detail, about eight times as slow",
+        "Preview Quality Extremely High: moves the Preview detail slider to 80%; the preview showing is worked out again",
     ),
     (
         "preview_quality_25",
-        "Preview Quality Maximum: toolpath previews in the finest detail, for small carvings; about 25 times as slow",
+        "Preview Quality Maximum: moves the Preview detail slider to 100%, the finest detail, for small bits and fine carving; the preview showing is worked out again",
     ),
     (
         "create_component_from_toolpath_preview",

@@ -1120,8 +1120,130 @@ impl CutCraftApp {
             self.simulation.clone(),
             self.preview_side,
         ));
-        let fresh = Material::new(&self.doc.job, self.display.preview_cells());
+        let fresh = self.fresh_material();
         self.preview_in_background(ids, fresh, then);
+    }
+
+    /// The grid a preview is worked out on now: where the job's toolpaths cut (all of them,
+    /// so previewing one after another stays on the same grid), at the Preview tab's
+    /// detail. A double-sided or rotary job's covers the whole block, as turning it over or
+    /// wrapping it needs.
+    pub(super) fn preview_grid(&self) -> crate::preview_detail::Grid {
+        // asked for every frame (the slider's hover text): worked out again only once the
+        // toolpaths, the job or the detail change, as a big job has millions of moves
+        let moves = (self.doc.toolpaths.values()).fold(0, |n, t| n + t.moves.len() + 1);
+        let key = (
+            (self.job_epoch, self.history.revision(), moves),
+            self.display.detail,
+            self.doc.job,
+        );
+        if let Some((kept, grid)) = self.preview_grid_kept.get()
+            && kept == key
+        {
+            return grid;
+        }
+        let grid = self.work_out_preview_grid();
+        self.preview_grid_kept.set(Some((key, grid)));
+        grid
+    }
+
+    /// [`Self::preview_grid`], worked out.
+    fn work_out_preview_grid(&self) -> crate::preview_detail::Grid {
+        let job = self.doc.job;
+        let whole = job.double_sided.is_some() || job.rotary.is_some();
+        let source = self.preview_source();
+        let cut = (!whole)
+            .then(|| crate::preview_detail::cut_area(&job, source.toolpaths.values()))
+            .flatten();
+        let card = self.gpu_3d.as_ref().map(view3d::gpu::Gpu::most_points);
+        crate::preview_detail::grid(&job, cut, self.display.detail, card)
+    }
+
+    /// Uncut material on [`Self::preview_grid`].
+    pub(super) fn fresh_material(&self) -> Material {
+        let grid = self.preview_grid();
+        Material::over(&self.doc.job, grid.area, grid.cell)
+    }
+
+    /// The preview showing worked out again at the detail now asked for (the slider let
+    /// go, or a quick pick), in the background: the toolpaths that left their mark on it,
+    /// in the job's order, and the other side too when it was previewed.
+    pub(super) fn rework_preview(&mut self) {
+        self.finish_playback();
+        let Some(material) = &self.simulation else {
+            return;
+        };
+        let marks: std::collections::BTreeSet<u32> = material
+            .cut_by
+            .iter()
+            .copied()
+            .filter(|&m| m != 0)
+            .collect();
+        let other = material.other_side.is_some();
+        let ids: Vec<EntityId> = (self.preview_source().toolpaths.keys())
+            .copied()
+            .filter(|&id| marks.contains(&self.preview_mark(id)))
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        self.preview_fresh(&ids, move |app| {
+            if other {
+                app.preview_other_side(false);
+            }
+        });
+    }
+
+    /// The Preview tab's Performance ◀ ▶ Detail slider: the preview's detail now (Options
+    /// ▸ 3D View keeps the default). Moving it changes nothing until it is let go; then a
+    /// preview showing is worked out again at it. A red note under it says when the
+    /// preview is coarser than it asks, and why.
+    fn detail_slider(&mut self, ui: &mut egui::Ui) {
+        let grid = self.preview_grid();
+        let units = self.doc.job.units;
+        let mut percent = self.held_detail.unwrap_or(self.display.detail);
+        let measure = |ui: &egui::Ui, text: &str| {
+            egui::WidgetText::from(text)
+                .into_galley(
+                    ui,
+                    Some(egui::TextWrapMode::Extend),
+                    f32::INFINITY,
+                    egui::TextStyle::Body,
+                )
+                .size()
+                .x
+        };
+        let response = ui
+            .horizontal(|ui| {
+                let gap = ui.spacing().item_spacing.x;
+                // the labels' places stay put whatever the percent: the widest it shows
+                let right = measure(ui, "More detail") + measure(ui, "100%") + 2.0 * gap;
+                ui.label("Faster");
+                ui.spacing_mut().slider_width = (ui.available_width() - right - gap).max(40.0);
+                let slider = ui
+                    .add(egui::Slider::new(&mut percent, 0..=100).show_value(false))
+                    .on_hover_text(crate::preview_detail::about(&grid, units));
+                ui.label("More detail");
+                ui.add_sized(
+                    [measure(ui, "100%"), ui.spacing().interact_size.y],
+                    egui::Label::new(format!("{percent}%")),
+                );
+                slider
+            })
+            .inner;
+        crate::marks::note(ui, "preview_detail_slider", response.rect);
+        if response.dragged() {
+            self.held_detail = Some(percent);
+        } else if response.drag_stopped() || response.changed() {
+            self.held_detail = None;
+            if percent != self.display.detail {
+                self.display.detail = percent;
+                self.rework_preview();
+            }
+        }
+        if let Some(note) = crate::preview_detail::limit_note(&grid, units) {
+            ui.colored_label(ui.visuals().error_fg_color, note);
+        }
     }
 
     /// A double-sided job's other side previewed too (its shown toolpaths, or all), cut
@@ -1130,7 +1252,7 @@ impl CutCraftApp {
         if self.doc.job.double_sided.is_none() || self.doc.other_side.toolpaths.is_empty() {
             return;
         }
-        let (job, cells) = (self.doc.job, self.display.preview_cells());
+        let (job, grid) = (self.doc.job, self.preview_grid());
         let cuts: Vec<cut_craft_core::toolpath::Toolpath> =
             (self.doc.other_side.toolpaths.values())
                 .filter(|t| t.visible || !visible_only)
@@ -1142,7 +1264,7 @@ impl CutCraftApp {
             "Previewing the other side",
             "preview",
             move || {
-                let mut other = Material::new(&job, cells);
+                let mut other = Material::over(&job, grid.area, grid.cell);
                 for (i, t) in cuts.iter().enumerate() {
                     if cut_craft_core::progress::cancelled() {
                         break;
@@ -1164,7 +1286,7 @@ impl CutCraftApp {
                 } else {
                     let material = app
                         .simulation
-                        .get_or_insert_with(|| Material::new(&job, cells));
+                        .get_or_insert_with(|| Material::over(&job, grid.area, grid.cell));
                     material.other_side = other;
                 }
                 (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
@@ -1215,9 +1337,10 @@ impl CutCraftApp {
         let (job, holding) = (source.job, self.holding());
         let clamps: Vec<_> = source.named_keep_out().cloned().collect();
         drop(source);
+        let grid = self.preview_grid();
         let start = (self.simulation.clone())
-            .filter(|m| !fresh && m.covers(&self.doc.job))
-            .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
+            .filter(|m| !fresh && m.lies_on(&self.doc.job))
+            .map_or_else(|| self.fresh_material(), |m| m.including(grid.area));
         // each move as long as the Toolpath Summary times it
         let motion = self.motion();
         let revision = self.history.revision();
@@ -1336,7 +1459,7 @@ impl CutCraftApp {
     /// next Preview cuts into that.
     fn drop_preview_of_old_block(&mut self) {
         let job = self.doc.job;
-        let old = |m: &Material| !m.covers(&job);
+        let old = |m: &Material| !m.lies_on(&job);
         if self.simulation.as_ref().is_some_and(old)
             || (self.before_preview.as_ref()).is_some_and(|b| b.0.as_ref().is_some_and(old))
         {
@@ -1384,9 +1507,10 @@ impl CutCraftApp {
             self.preview_side,
         ));
         // cut into the preview so far (on a block Job Setup has not changed since)
+        let grid = self.preview_grid();
         let start = (self.simulation.clone())
-            .filter(|m| m.covers(&self.doc.job))
-            .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
+            .filter(|m| m.lies_on(&self.doc.job))
+            .map_or_else(|| self.fresh_material(), |m| m.including(grid.area));
         self.preview_in_background(&[id], start, |_| {});
     }
 
@@ -1406,7 +1530,7 @@ impl CutCraftApp {
         let fine_bit = crate::display::fine_bit_note(
             playback.tools(),
             playback.material().cell,
-            self.display.quality,
+            self.display.detail,
         );
         let guessed_shank = playback
             .tool()
@@ -1753,7 +1877,7 @@ impl CutCraftApp {
         {
             return Some(surface.clone());
         }
-        let coarse = view3d::coarse(playback.material(), key.1);
+        let coarse = view3d::on_sheet(playback.material(), self.doc.job.area(), key.1);
         let surface = self.painted(coarse);
         self.playback_view = Some((key, surface.clone()));
         self.playback_builds += 1;
@@ -1780,7 +1904,8 @@ impl CutCraftApp {
                 .as_ref()
                 .is_none_or(|(made, _)| *made != cells)
             {
-                self.simulation_coarse = Some((cells, view3d::coarse(material, cells)));
+                let sheet = view3d::on_sheet(material, self.doc.job.area(), cells);
+                self.simulation_coarse = Some((cells, sheet));
             }
             let (_, coarse) = self.simulation_coarse.as_ref().expect("made above");
             if self.doc.job.machined_area == MachinedArea::MaterialColor
@@ -2377,7 +2502,7 @@ impl CutCraftApp {
     pub(super) fn fine_surface(&mut self) -> Material {
         let most = self.options.view_3d.still_cells();
         if let Some(material) = &self.simulation {
-            return self.painted(view3d::coarse(material, most));
+            return self.painted(view3d::on_sheet(material, self.doc.job.area(), most));
         }
         let job = &self.doc.job;
         #[expect(
@@ -2427,14 +2552,12 @@ impl CutCraftApp {
             self.playback_gpu = Some((key, std::sync::Arc::clone(&geometry)));
             return geometry;
         }
-        let key = super::GeometryKey {
-            revision: self.history.revision(),
-            job: self.doc.job,
-            wrap,
-            sides,
-            importing: self.importing_whole(),
-            cells: still,
-        };
+        // a finished preview on the card: the sheet round it, the preview drawn over it
+        if let Some((sheet, _)) = self.preview_pair(wrap, sides) {
+            self.solid_gpu = None;
+            return sheet;
+        }
+        let key = self.geometry_key(wrap, sides);
         let solid = self.simulation.is_none();
         let kept = match &mut self.surface_gpu {
             Some(kept) if kept.key == key => kept,
@@ -2495,6 +2618,81 @@ impl CutCraftApp {
         kept.levels.push(level.clone());
         self.solid_gpu = level.solid;
         level.surface
+    }
+
+    /// A finished preview drawn at its own detail by `camera` over `area`, in its place on
+    /// the sheet whose corner is `sheet`; `None` when [`Self::preview_pair`] has none.
+    fn preview_draw(
+        &mut self,
+        camera: &view3d::Camera,
+        area: egui::Rect,
+        look: &view3d::Look,
+        mark: egui::Color32,
+        sheet: cut_craft_core::geometry::Point,
+    ) -> Option<view3d::gpu::Draw> {
+        let (_, geometry) = self.preview_pair(look.wrap, look.sides)?;
+        let at = (self.simulation.as_ref()?.origin - sheet).extend(0.0);
+        Some(view3d::gpu::Draw::new(
+            geometry, camera, area, at, look, mark,
+        ))
+    }
+
+    /// What the kept surfaces on the card were made for.
+    fn geometry_key(&self, wrap: Option<view3d::Wrap>, sides: bool) -> super::GeometryKey {
+        super::GeometryKey {
+            revision: self.history.revision(),
+            job: self.doc.job,
+            wrap,
+            sides,
+            importing: self.importing_whole(),
+            cells: self.options.view_3d.still_cells(),
+        }
+    }
+
+    /// A finished preview as the card draws it: the sheet at the 3D view's detail with a
+    /// hole where the preview goes, and the preview at its own detail, which can be far
+    /// finer than the sheet's (a small part on a big sheet). Made once and kept with the
+    /// other surfaces; `None` while one plays, without a card, or for a wrapped or
+    /// double-sided job (drawn as the whole sheet, as before).
+    fn preview_pair(
+        &mut self,
+        wrap: Option<view3d::Wrap>,
+        sides: bool,
+    ) -> Option<(
+        std::sync::Arc<view3d::gpu::Geometry>,
+        std::sync::Arc<view3d::gpu::Geometry>,
+    )> {
+        if self.playback.is_some()
+            || wrap.is_some()
+            || self.gpu_3d.is_none()
+            || self.doc.job.double_sided.is_some()
+        {
+            return None;
+        }
+        let key = self.geometry_key(wrap, sides);
+        if let Some(kept) = &self.surface_gpu
+            && kept.key == key
+            && let Some(pair) = &kept.preview
+        {
+            return Some(pair.clone());
+        }
+        let material = self.simulation.as_ref()?;
+        let (area, most) = (self.doc.job.area(), key.cells);
+        let sheet = view3d::on_sheet(material, area, most);
+        let hole = material.area();
+        let preview = material.clone();
+        let sheet = view3d::holed(self.painted(sheet), hole);
+        let preview = self.painted(preview);
+        let pair = (
+            std::sync::Arc::new(view3d::gpu::surface(&sheet, None, sides)),
+            std::sync::Arc::new(view3d::gpu::surface(&preview, None, false)),
+        );
+        let kept = match &mut self.surface_gpu {
+            Some(kept) if kept.key == key => kept,
+            other => other.insert(super::SurfaceGpu::new(key)),
+        };
+        kept.preview = Some(pair.clone());
+        Some(pair)
     }
 
     /// Mesh cells along the job's longer side while the model or the view moves: as the
@@ -3610,6 +3808,9 @@ impl CutCraftApp {
                 let at = cut_craft_core::glam::DVec3::ZERO;
                 view3d::gpu::Draw::new(geometry, &camera, area, at, &look, mark)
             });
+        // a finished preview at its own detail, in its place over the sheet (on the card)
+        let body_draw =
+            body_draw.or_else(|| self.preview_draw(&camera, area, &look, mark, surface.origin));
         if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
             let shape = gpu.paint(area, surface_draw, model_draw, body_draw, ghost_draw);
             painter.set(slot, shape);
@@ -4558,6 +4759,12 @@ impl CutCraftApp {
     /// their own under a heading, so nothing hides on the Preview sub-tab. `steps` numbers
     /// the heading 2.
     fn preview_buttons(&mut self, ui: &mut egui::Ui, steps: bool, spread: bool) {
+        fn button(app: &CutCraftApp, ui: &mut egui::Ui, id: &'static str) -> Option<&'static str> {
+            ui.add_enabled(app.available(id), egui::Button::new(app.tool_label(id)))
+                .on_hover_hint(gui::about(id).unwrap_or_default())
+                .clicked()
+                .then_some(id)
+        }
         let mut chosen = None;
         if steps {
             step_heading(ui, 2, "Preview: watch it cut");
@@ -4565,12 +4772,6 @@ impl CutCraftApp {
             ui.strong("Preview: watch it cut");
         }
         let stale = self.doc.toolpaths.values().any(|t| t.stale);
-        let button = |ui: &mut egui::Ui, id: &'static str| {
-            ui.add_enabled(self.available(id), egui::Button::new(self.tool_label(id)))
-                .on_hover_hint(gui::about(id).unwrap_or_default())
-                .clicked()
-                .then_some(id)
-        };
         // out of date ones are called out in the list; their fix is at hand
         let more = MORE_LIST_ACTIONS
             .into_iter()
@@ -4581,12 +4782,12 @@ impl CutCraftApp {
                 shown.insert(0, "recalculate_all_toolpaths");
             }
             for id in shown {
-                chosen = button(ui, id).or(chosen);
+                chosen = button(self, ui, id).or(chosen);
             }
             if !spread {
                 ui.menu_button("More…", |ui| {
                     for id in more.clone() {
-                        if let Some(id) = button(ui, id) {
+                        if let Some(id) = button(self, ui, id) {
                             chosen = Some(id);
                             ui.close();
                         }
@@ -4594,13 +4795,15 @@ impl CutCraftApp {
                 });
             }
         });
+        // always to hand: how finely the preview is worked out now
+        self.detail_slider(ui);
         if spread {
             ui.add_space(ui.spacing().item_spacing.y);
             ui.strong("More Previews");
             ui.horizontal_wrapped(|ui| {
                 // deleting is the list's job, beside its other row buttons
                 for id in more.filter(|&id| id != "delete_toolpath") {
-                    chosen = button(ui, id).or(chosen);
+                    chosen = button(self, ui, id).or(chosen);
                 }
             });
         }

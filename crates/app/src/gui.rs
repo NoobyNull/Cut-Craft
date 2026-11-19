@@ -2256,14 +2256,12 @@ impl MenuSystem {
                         sub(
                             "Preview Simulation Quality",
                             vec![
-                                MenuItem::with_action("Standard", "preview_quality_1"),
-                                MenuItem::with_action("High (2x Slower)", "preview_quality_2"),
-                                MenuItem::with_action("Very High (4x Slower)", "preview_quality_4"),
-                                MenuItem::with_action(
-                                    "Extremely High (8x Slower)",
-                                    "preview_quality_8",
-                                ),
-                                MenuItem::with_action("Maximum (25x Slower)", "preview_quality_25"),
+                                // quick picks on the Preview tab's detail slider
+                                MenuItem::with_action("Standard (20%)", "preview_quality_1"),
+                                MenuItem::with_action("High (40%)", "preview_quality_2"),
+                                MenuItem::with_action("Very High (60%)", "preview_quality_4"),
+                                MenuItem::with_action("Extremely High (80%)", "preview_quality_8"),
+                                MenuItem::with_action("Maximum (100%)", "preview_quality_25"),
                             ],
                         ),
                         sep(),

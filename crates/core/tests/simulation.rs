@@ -809,3 +809,98 @@ fn a_bit_narrower_than_a_cell_still_cuts_every_cell_its_tip_passes_through() {
     }
     assert_eq!(depth_at(&m, 30.0, 25.0), 0.0, "well away from the cut");
 }
+
+/// A part of a 600 x 400 sheet: from (`x0`, `y0`) to (`x1`, `y1`) from its corner.
+fn part_of(
+    job: &Job,
+    (x0, y0): (f64, f64),
+    (x1, y1): (f64, f64),
+) -> cut_craft_core::geometry::Rect {
+    let o = job.area().min;
+    cut_craft_core::geometry::Rect {
+        min: o + Point::new(x0, y0),
+        max: o + Point::new(x1, y1),
+    }
+}
+
+#[test]
+fn a_part_of_the_sheet_cuts_the_same_as_the_whole_sheet_where_they_overlap() {
+    let job = Job::default(); // 600 x 400
+    let o = job.area().min;
+    let path = toolpath(&[
+        (o.x + 40.0, o.y + 40.0, -3.0),
+        (o.x + 70.0, o.y + 55.0, -3.0),
+        (o.x + 45.0, o.y + 75.0, -4.0),
+    ]);
+    let mut whole = Material::new(&job, 1200); // half-millimetre cells
+    let mut part = Material::over(&job, part_of(&job, (20.0, 20.0), (100.0, 100.0)), 0.5);
+    assert_eq!((part.columns, part.rows), (160, 160));
+    whole.cut(&path);
+    part.cut(&path);
+    for (x, y) in [
+        (40.0, 40.0),
+        (55.0, 47.5),
+        (45.0, 75.0),
+        (90.0, 90.0),
+        (21.0, 99.0),
+    ] {
+        let p = o + Point::new(x, y);
+        assert_eq!(part.at(p), whole.at(p), "at {x}, {y}");
+    }
+    assert_eq!(
+        part.at(o + Point::new(10.0, 10.0)),
+        None,
+        "outside the part"
+    );
+}
+
+#[test]
+fn a_part_lies_on_its_block_until_the_block_moves_or_thins() {
+    let job = Job::default();
+    let part = Material::over(&job, part_of(&job, (20.0, 20.0), (100.0, 100.0)), 0.5);
+    assert!(part.lies_on(&job));
+    assert!(Material::new(&job, 1200).lies_on(&job));
+    let thinner = Job {
+        thickness: job.thickness / 2.0,
+        ..job
+    };
+    assert!(!part.lies_on(&thinner));
+    // a part shifted off the half-millimetre steps from the corner is not this block's
+    let mut shifted = part.clone();
+    shifted.origin.x += 0.2;
+    assert!(!shifted.lies_on(&job));
+    let smaller = Job { width: 50.0, ..job };
+    assert!(!part.lies_on(&smaller), "past the block's edge");
+}
+
+#[test]
+fn growing_a_part_keeps_what_was_cut_and_adds_uncut_cells() {
+    let job = Job::default();
+    let o = job.area().min;
+    let mut part = Material::over(&job, part_of(&job, (20.0, 20.0), (60.0, 60.0)), 0.5);
+    part.cutting = 7;
+    part.cut(&toolpath(&[
+        (o.x + 40.0, o.y + 40.0, -3.0),
+        (o.x + 50.0, o.y + 40.0, -3.0),
+    ]));
+    let before = part.clone();
+    let grown = part.including(part_of(&job, (10.0, 20.0), (60.0, 90.0)));
+    assert_eq!((grown.columns, grown.rows), (100, 140));
+    assert!((grown.origin - (o + Point::new(10.0, 20.0))).length() < 1e-9);
+    for (x, y) in [(40.0, 40.0), (45.0, 41.0), (21.0, 21.0), (59.0, 59.0)] {
+        let p = o + Point::new(x, y);
+        assert_eq!(grown.at(p), before.at(p), "at {x}, {y}");
+    }
+    assert_eq!(
+        grown.at(o + Point::new(12.0, 80.0)),
+        Some(0.0),
+        "new and uncut"
+    );
+    let i = |m: &Material, x: f64, y: f64| m.cut_by[m.index_at(o + Point::new(x, y)).unwrap()];
+    assert_eq!(i(&grown, 40.0, 40.0), 7, "still marked as cut by it");
+    assert!(grown.lies_on(&job));
+    let same = grown
+        .clone()
+        .including(part_of(&job, (30.0, 30.0), (40.0, 40.0)));
+    assert_eq!(same, grown, "already covered");
+}

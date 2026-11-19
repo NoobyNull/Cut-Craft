@@ -1,12 +1,13 @@
 ---
-reviewed: 2026-11-17
-see-also: 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape
+reviewed: 2026-11-19
+see-also: 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
 ---
 
 # 3D View
 
 The 3D view (**F3**) shows the job as a block of material, with your models and, once
-previewed, the cuts your [toolpaths](help:toolpaths) make in it.
+previewed, the cuts your [toolpaths](help:toolpaths) make in it. How finely a preview is drawn is
+up to the [Preview detail](help:preview_detail) slider on the Toolpaths page's Preview tab.
 
 ## Moving the view
 
