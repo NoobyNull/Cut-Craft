@@ -41,6 +41,14 @@ It fails only on gaps not listed in `crates/app/help/coverage-baseline.txt`. Whe
 gap, delete its line there. The Help coverage workflow keeps one GitHub issue (label
 `help-coverage`) listing every gap still open.
 
+## Rotary tests
+
+Rotary work (the turning axis, the rotary toolpaths, the posts that write A, and the
+`cut-craft-rotary` crate that knows where the material and the model are in space) has its own
+suite. Run it after any change that touches rotary:
+
+    cargo nextest run --workspace --profile rotary
+
 ## Pull request titles and versions
 
 Cut Craft's version is **0.MINOR.PATCH**, and it only changes when a release is cut, one step at

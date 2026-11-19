@@ -6,3 +6,9 @@ default-filter = "not test(=app::help_coverage::coverage::every_tool_has_help)"
 
 [profile.help]
 default-filter = "test(/^app::help_coverage::/)"
+
+# Rotary work's own suite: the rotary crate (the material and model as solids on the turning
+# axis, the bit's drop, the cutting simulator) and every test elsewhere about rotary jobs, A,
+# its posts and its checks. `cargo nextest run --profile rotary`.
+[profile.rotary]
+default-filter = "package(cut-craft-rotary) | test(/rotary|winding|turn|held_off|indexed|off_centre|across/)"

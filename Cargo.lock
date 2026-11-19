@@ -2599,6 +2599,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cut-craft-rotary"
+version = "0.6.18"
+dependencies = [
+ "cut-craft-core",
+]
+
+[[package]]
 name = "cut-craft-scripting"
 version = "0.6.18"
 dependencies = [
