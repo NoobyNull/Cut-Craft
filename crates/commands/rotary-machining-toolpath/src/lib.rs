@@ -5,12 +5,19 @@
 //! deep reaches further round the part than it does at the surface, and is kept clear of all
 //! of it. Rings each start at A=0, and the machine's rotary settings say how A gets from one
 //! to the next (carrying on round, cutting back the other way, or spinning back).
+//!
+//! The bit can also be held to one side of the axis (Off centre), so the side of the ball
+//! cuts rather than its tip; or A can stop at a few angles in turn (Indexed), each side cut
+//! like a flat 3D finish with A held still. Either way the moves are kept where the tip cuts
+//! on the unrolled material, with how far across the bit is held beside them, so the preview
+//! shows them true and the post works out A, the across axis and Z.
 
 use cut_craft_core::component::placed_model;
 use cut_craft_core::document::{Along, Document};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::progress;
+use cut_craft_core::rotary_axis;
 use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, Toolpath, follow, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -27,6 +34,14 @@ pub enum Strategy {
     /// unrolled 3D finishing, but kept true to the round part
     #[default]
     Radial,
+    /// The bit is held a set distance to one side of the turning axis while A turns: the side
+    /// of the ball cuts, not its slow-turning tip, for a cleaner finish, and walls that face
+    /// sideways are reached
+    OffCentre,
+    /// A turns to a few angles in turn and stays still at each, while the bit cuts that side
+    /// back and forth along the part like a flat 3D finish: for flats, faces and machines
+    /// whose A is better at holding still than moving smoothly
+    Indexed,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -39,6 +54,14 @@ pub struct Params {
     /// How the bit goes round the part
     #[schemars(extend("x-group" = "Strategy"))]
     pub strategy: Strategy,
+    /// How far to one side of the turning axis the bit is held. Positive is the way the part
+    /// comes up towards the bit as A turns back
+    #[schemars(extend("x-unit" = "mm", "x-group" = "Strategy", "x-show-when" = {"strategy": "off_centre"}))]
+    pub offset: f64,
+    /// How many sides the part is cut from, evenly round it, starting at A=0: A turns to
+    /// each and holds still while that side is cut
+    #[schemars(extend("x-group" = "Strategy", "x-show-when" = {"strategy": "indexed"}), range(min = 1, max = 36))]
+    pub faces: u32,
     /// Where along the axis the rings start, from the job's start (the chuck end)
     #[schemars(extend("x-unit" = "mm", "x-group" = "Along the part"), range(min = 0))]
     pub start: f64,
@@ -63,6 +86,8 @@ impl Default for Params {
                 .find(|t| t.shape == ToolShape::BallNose)
                 .expect("the starter tools include a ball nose"),
             strategy: Strategy::Radial,
+            offset: 3.0,
+            faces: 4,
             start: 0.0,
             end: 0.0,
             allowance: 0.0,
@@ -108,8 +133,9 @@ struct Turned {
     radius: f64,
     /// Radius of each cell, row by row round the axis.
     radii: Vec<f64>,
-    /// The smallest radius anywhere.
+    /// The smallest radius anywhere, and the largest.
     least: f64,
+    most: f64,
 }
 
 impl Turned {
@@ -151,6 +177,7 @@ impl Turned {
             }
         }
         let least = radii.iter().copied().fold(f64::INFINITY, f64::min);
+        let most = radii.iter().copied().fold(0.0, f64::max);
         Self {
             along,
             round,
@@ -159,12 +186,13 @@ impl Turned {
             radius,
             radii,
             least,
+            most,
         }
     }
 
-    /// The highest the tip of `tool` can sit straight over the axis at `a` along and `w`
-    /// round (at the surface) without touching the model grown by `allowance`: its distance
-    /// from the axis.
+    /// The highest the tip of `tool` can sit, held `across` mm to the side of the axis, with A
+    /// turned to `round` (mm round the surface) and `along` the part, without touching the
+    /// model grown by `allowance`: its height above the axis.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_possible_wrap,
@@ -172,26 +200,28 @@ impl Turned {
         clippy::cast_precision_loss,
         reason = "cell indices are small"
     )]
-    fn drop(&self, tool: &Tool, along: f64, round: f64, allowance: f64) -> f64 {
+    fn drop(&self, tool: &Tool, along: f64, round: f64, across: f64, allowance: f64) -> f64 {
         use std::f64::consts::FRAC_PI_2;
         let rb = tool.diameter / 2.0;
         let ball = tool.shape == ToolShape::BallNose;
         let theta = round / self.radius;
-        // how far round the bit can reach: furthest where the model comes nearest the axis
-        let least = self.least + allowance;
-        let reach = if least > rb {
-            (rb / least).asin()
-        } else {
-            FRAC_PI_2
-        };
-        let across = (rb / self.along_cell).ceil() as i64 + 1;
-        let spread =
-            ((reach * self.radius / self.round_cell).ceil() as i64 + 1).min(self.round as i64 / 2);
+        // how far round the part a point can be and still be under the bit: furthest round
+        // where the model comes nearest the axis, or furthest out for the far edge
+        let (nearest, furthest) = (
+            (self.least + allowance).max(1e-6),
+            (self.most + allowance).max(1e-6),
+        );
+        let angle = |s: f64| s.clamp(-1.0, 1.0).asin();
+        let low = if across - rb > 0.0 { furthest } else { nearest };
+        let high = if across + rb > 0.0 { nearest } else { furthest };
+        let (from, to) = (angle((across - rb) / low), angle((across + rb) / high));
+        let rows = |phi: f64| (theta + phi) * self.radius / self.round_cell;
+        let first = rows(from).floor() as i64 - 1;
+        let last = (rows(to).ceil() as i64 + 1).min(first + self.round as i64 - 1);
+        let cols = (rb / self.along_cell).ceil() as i64 + 1;
         let first_col = (along / self.along_cell).floor() as i64;
-        let first_row = (round / self.round_cell).floor() as i64;
         let mut tip: f64 = 0.0;
-        for di in -across..=across {
-            let col = first_col + di;
+        for col in first_col - cols..=first_col + cols {
             if col < 0 || col >= self.along as i64 {
                 continue;
             }
@@ -199,15 +229,14 @@ impl Turned {
             if dx.abs() > rb {
                 continue;
             }
-            for dj in -spread..=spread {
-                let row = (first_row + dj).rem_euclid(self.round as i64) as usize;
-                let phi = (first_row + dj) as f64 * self.round_cell + 0.5 * self.round_cell;
-                let phi = phi / self.radius - theta;
+            for row in first..=last {
+                let phi = (row as f64 + 0.5) * self.round_cell / self.radius - theta;
                 if phi.abs() >= FRAC_PI_2 {
                     continue;
                 }
-                let r = self.radii[row * self.along + col as usize] + allowance;
-                let side = r * phi.sin();
+                let at = row.rem_euclid(self.round as i64) as usize;
+                let r = self.radii[at * self.along + col as usize] + allowance;
+                let side = r * phi.sin() - across;
                 let gap = rb * rb - dx * dx - side * side;
                 if gap < 0.0 {
                     continue;
@@ -226,14 +255,131 @@ impl Turned {
     }
 }
 
-/// The toolpath: a ring round the part at each step along it, each from A=0 all the way
-/// round, the bit as low as it goes without touching the model.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss,
-    reason = "ring and point counts are small"
-)]
+/// One pass of the bit: points (along, A as mm round the surface, the bit's height from the
+/// material's top) each with how far across the axis the bit is held there.
+type Pass = Vec<(DVec3, f64)>;
+
+/// The part as the passes are worked out on it.
+struct Work<'a> {
+    turned: &'a Turned,
+    tool: &'a Tool,
+    allowance: f64,
+    along_x: bool,
+    circumference: f64,
+    /// Where along the part the passes start and end, and the step between them.
+    start: f64,
+    end: f64,
+    step: f64,
+}
+
+impl Work<'_> {
+    /// The point `along` the part and `round` it at height `z`, in the job's X and Y.
+    fn point(&self, along: f64, round: f64, z: f64) -> DVec3 {
+        if self.along_x {
+            DVec3::new(along, round, z)
+        } else {
+            DVec3::new(round, along, z)
+        }
+    }
+
+    /// The bit as low as it goes `along` the part with A at `round`, held `across`.
+    fn down(&self, along: f64, round: f64, across: f64) -> (DVec3, f64) {
+        let radius = self.turned.radius;
+        let tip = self.turned.drop(
+            self.tool,
+            along,
+            round.rem_euclid(self.circumference),
+            across,
+            self.allowance,
+        );
+        (self.point(along, round, (tip - radius).min(0.0)), across)
+    }
+
+    /// A ring round the part at each step along it, from A=0 all the way back round, the bit
+    /// held `across`.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "ring and point counts are small"
+    )]
+    fn rings(&self, across: f64) -> Result<Vec<Pass>, CommandError> {
+        progress::stage("Following the model round");
+        let rings = ((self.end - self.start) / self.step).ceil() as usize + 1;
+        let mut passes = Vec::with_capacity(rings);
+        for k in 0..rings {
+            progress::stop_if_cancelled()?;
+            let along = (self.start + k as f64 * self.step).min(self.end);
+            // the last point closes the ring
+            passes.push(
+                (0..=self.turned.round)
+                    .map(|j| self.down(along, j as f64 * self.turned.round_cell, across))
+                    .collect(),
+            );
+            progress::report_steps(k + 1, rings);
+        }
+        Ok(passes)
+    }
+
+    /// Each of `faces` sides in turn, from A=0, cut back and forth along the part with A held
+    /// still: as far across as its share of the way round, and a bit's width more, so the
+    /// sides overlap.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "line and point counts are small"
+    )]
+    fn sides(&self, faces: u32) -> Result<Vec<Pass>, CommandError> {
+        progress::stage("Cutting each side");
+        let radius = self.turned.radius;
+        let half = if faces == 1 {
+            radius
+        } else {
+            (radius * (std::f64::consts::PI / f64::from(faces)).sin() + self.tool.diameter / 2.0)
+                .min(radius)
+        };
+        let lines = ((2.0 * half / self.step).ceil() as usize).max(1) + 1;
+        let spacing = 2.0 * half / (lines - 1) as f64;
+        let cell = self.turned.along_cell;
+        let points = ((self.end - self.start) / cell).ceil() as usize + 1;
+        let mut passes = Vec::with_capacity(faces as usize);
+        for face in 0..faces {
+            progress::stop_if_cancelled()?;
+            let round = self.circumference * f64::from(face) / f64::from(faces);
+            let mut pass: Pass = vec![];
+            for line in 0..lines {
+                let across = -half + line as f64 * spacing;
+                if let Some(&(last, held)) = pass.last() {
+                    // over to the next line, staying down on the part
+                    let along = if self.along_x { last.x } else { last.y };
+                    let over = ((across - held) / cell).abs().ceil() as usize;
+                    for k in 1..over {
+                        let between = held + (across - held) * k as f64 / over as f64;
+                        pass.push(self.down(along, round, between));
+                    }
+                }
+                let along = |k: usize| (self.start + k as f64 * cell).min(self.end);
+                if line % 2 == 0 {
+                    pass.extend((0..points).map(|k| self.down(along(k), round, across)));
+                } else {
+                    pass.extend(
+                        (0..points)
+                            .rev()
+                            .map(|k| self.down(along(k), round, across)),
+                    );
+                }
+            }
+            passes.push(pass);
+            progress::report_steps(face as usize + 1, faces as usize);
+        }
+        Ok(passes)
+    }
+}
+
+/// The toolpath: rings round the part at each step along it, each from A=0 all the way round
+/// (over the axis, or held to one side of it), or each side in turn cut back and forth with A
+/// held still; the bit as low as it goes without touching the model.
 fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
     let Some(rotary) = doc.job.rotary else {
         return Err(CommandError::Failed(
@@ -258,7 +404,7 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
     progress::stage("Placing the model");
     let surface = placed_model(doc, tool)?;
     let cell = (tool.diameter / 16.0).max(surface.cell);
-    let round = Turned::of(&surface, radius, along_x, (length, circumference), cell);
+    let turned = Turned::of(&surface, radius, along_x, (length, circumference), cell);
     let start = p.start.clamp(0.0, length);
     let end = if p.end > 0.0 {
         p.end.min(length)
@@ -270,45 +416,53 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
             "the rings must end further along than they start".into(),
         ));
     }
-    let step = stepover * tool.diameter;
-    let rings = ((end - start) / step).ceil() as usize + 1;
-    let points = round.round;
-    let at = |a: f64, w: f64, z: f64| {
-        if along_x {
-            DVec3::new(a, w, z)
-        } else {
-            DVec3::new(w, a, z)
-        }
+    let work = Work {
+        turned: &turned,
+        tool,
+        allowance: p.allowance,
+        along_x,
+        circumference,
+        start,
+        end,
+        step: stepover * tool.diameter,
     };
-    progress::stage("Following the model round");
-    let mut moves: Vec<Move> = vec![];
-    for k in 0..rings {
-        progress::stop_if_cancelled()?;
-        let a = (start + k as f64 * step).min(end);
-        // round from A=0 back to A=0, the last point closing the ring
-        let ring: Vec<DVec3> = (0..=points)
-            .map(|j| {
-                let w = j as f64 * round.round_cell;
-                let tip = round.drop(tool, a, w % circumference, p.allowance);
-                at(a, w, (tip - radius).min(0.0))
-            })
-            .collect();
-        moves.extend(follow(&ring, doc.job.clearance));
-        progress::report_steps(k + 1, rings);
-    }
+    let mut passes = match p.strategy {
+        Strategy::Radial => work.rings(0.0)?,
+        Strategy::OffCentre => work.rings(p.offset)?,
+        Strategy::Indexed => work.sides(p.faces.clamp(1, 36))?,
+    };
     if p.registration_mark {
         // just past the last ring, clear of the part when there is room
-        let a = (end + tool.diameter).min(length);
-        let notch = at(a, 0.0, -MARK_DEPTH);
-        moves.extend(follow(&[notch], doc.job.clearance));
+        let along = (end + tool.diameter).min(length);
+        passes.push(vec![(work.point(along, 0.0, -MARK_DEPTH), 0.0)]);
     }
-    Ok(made_by::<RotaryMachiningToolpath>(
-        p,
-        p.name.clone(),
-        tool.clone(),
-        vec![],
-        moves,
-    ))
+    let held_off = p.strategy != Strategy::Radial;
+    let round = usize::from(along_x);
+    let mut moves: Vec<Move> = vec![];
+    let mut across = vec![];
+    for pass in &passes {
+        let points: Vec<DVec3> = pass.iter().map(|&(point, _)| point).collect();
+        let mut followed = follow(&points, doc.job.clearance);
+        if held_off {
+            // follow adds a rise to above the first point and from the last
+            let held: Vec<f64> = std::iter::once(pass[0].1)
+                .chain(pass.iter().map(|&(_, d)| d))
+                .chain(std::iter::once(pass[pass.len() - 1].1))
+                .collect();
+            for (m, &d) in followed.iter_mut().zip(&held) {
+                // kept where the tip of the bit held d across cuts, on the unrolled material
+                let (w, z) = rotary_axis::tip_of(radius, m.to[round], m.to.z, d);
+                m.to[round] = w;
+                m.to.z = z;
+            }
+            across.extend(held);
+        }
+        moves.extend(followed);
+    }
+    let mut toolpath =
+        made_by::<RotaryMachiningToolpath>(p, p.name.clone(), tool.clone(), vec![], moves);
+    toolpath.across = across;
+    Ok(toolpath)
 }
 
 #[cfg(test)]
@@ -449,7 +603,7 @@ mod tests {
             30.0,
             circumference - 2.0,
         ] {
-            let tip = round.drop(&tool, 30.0, w, 0.0);
+            let tip = round.drop(&tool, 30.0, w, 0.0, 0.0);
             let theta = w / 20.0;
             let centre = DVec3::new(30.0, (tip + rb) * theta.cos(), (tip + rb) * theta.sin());
             // the nearest the ball's centre comes to any cell of the part
@@ -508,6 +662,135 @@ mod tests {
         let mark = plunges[plunges.len() - 1];
         assert!((plunges[plunges.len() - 2].x - 40.0).abs() < 1e-9);
         assert_eq!((mark.x, mark.y, mark.z), (46.0, 0.0, -MARK_DEPTH));
+    }
+
+    /// Each cut of `toolpath` as the machine makes it: (along, A as mm round, the bit's
+    /// height from the top, how far across it is held).
+    fn held(toolpath: &Toolpath) -> Vec<(f64, f64, f64, f64)> {
+        toolpath
+            .moves
+            .iter()
+            .zip(&toolpath.across)
+            .filter(|(m, _)| m.kind == MoveKind::Cut)
+            .map(|(m, &d)| {
+                let (w, z) = rotary_axis::held_at(20.0, m.to.y, m.to.z, d);
+                (m.to.x, w, z, d)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn held_off_centre_the_ball_still_rests_on_the_part_all_the_way_round() {
+        let doc = lipped();
+        let p = Params {
+            tool: ball(6.0),
+            strategy: Strategy::OffCentre,
+            offset: 5.0,
+            ..Params::default()
+        };
+        let toolpath = machine(&doc, &p).unwrap();
+        assert_eq!(toolpath.across.len(), toolpath.moves.len());
+        let cuts = held(&toolpath);
+        assert!(cuts.iter().all(|c| c.3 == 5.0));
+        // the part is 12 from the axis: the ball's centre 15 from it, wherever A is
+        for (a, _, z, d) in cuts.into_iter().filter(|c| c.0 > 6.0) {
+            let centre = d.hypot(20.0 + z + 3.0);
+            assert!((centre - 15.0).abs() < 0.05, "{a}: {centre}");
+        }
+        // kept where the tip cuts: 5 across is a little round from A, and not as deep
+        let tip = toolpath
+            .moves
+            .iter()
+            .find(|m| m.kind == MoveKind::Cut)
+            .unwrap();
+        assert!(tip.to.y > 0.0 && tip.to.z > -8.0, "{tip:?}");
+    }
+
+    #[test]
+    #[expect(clippy::cast_precision_loss, reason = "small counts")]
+    fn held_off_centre_the_ball_never_cuts_into_a_narrow_ridge() {
+        let mut doc = beaded();
+        let circumference = doc.job.height;
+        doc.components.clear();
+        let model = Component::from_fn("Ridge", Combine::Add, doc.job.area(), 0.1, |p| {
+            Some(if p.y.min(circumference - p.y) < 0.5 {
+                20.0
+            } else {
+                10.0
+            })
+        });
+        let mut c = Change::builder(&doc);
+        c.add_new_component(model);
+        doc.apply(&c.finish()).unwrap();
+        let tool = ball(6.0);
+        let surface = placed_model(&doc, &tool).unwrap();
+        let turned = Turned::of(&surface, 20.0, true, (60.0, circumference), 0.1);
+        let rb = 3.0;
+        for across in [-6.0, -2.0, 4.0, 9.0] {
+            for w in [0.0, 1.0, 3.0, 6.0, 10.0, circumference - 2.0] {
+                let tip = turned.drop(&tool, 30.0, w, across, 0.0);
+                let theta = w / 20.0;
+                // the ball's centre, across and up, with A turned to theta
+                let centre = DVec3::new(30.0, across, tip + rb);
+                let mut nearest = f64::INFINITY;
+                for j in 0..turned.round {
+                    for i in 0..turned.along {
+                        let r = turned.radii[j * turned.along + i];
+                        let phi = (j as f64 + 0.5) * turned.round_cell / 20.0 - theta;
+                        let at = DVec3::new(
+                            (i as f64 + 0.5) * turned.along_cell,
+                            r * phi.sin(),
+                            r * phi.cos(),
+                        );
+                        nearest = nearest.min(centre.distance(at));
+                    }
+                }
+                assert!(nearest >= rb - 1e-6, "cuts in at {across}, {w}: {nearest}");
+                assert!(
+                    nearest <= rb + 0.05 || tip == 0.0,
+                    "hangs above the part at {across}, {w}: {nearest}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn indexed_cuts_each_side_with_a_held_still_and_the_bit_moving_across() {
+        let doc = lipped();
+        let p = Params {
+            tool: ball(6.0),
+            strategy: Strategy::Indexed,
+            faces: 4,
+            ..Params::default()
+        };
+        let toolpath = machine(&doc, &p).unwrap();
+        let circumference = doc.job.height;
+        // four sides, each plunged into once, at A = 0, 90, 180 and 270
+        let mut sides: Vec<f64> = vec![];
+        for (a, w, z, d) in held(&toolpath) {
+            if !sides.iter().any(|s| (s - w).abs() < 1e-6) {
+                sides.push(w);
+            }
+            // never into the part, 12 from the axis
+            if a > 6.0 {
+                let centre = d.hypot(20.0 + z + 3.0);
+                assert!(centre >= 15.0 - 0.05, "{a}, {d}: {centre}");
+            }
+        }
+        let quarter = circumference / 4.0;
+        assert_eq!(sides.len(), 4, "{sides:?}");
+        for (s, k) in sides.iter().zip([0.0, 1.0, 2.0, 3.0]) {
+            assert!((s - quarter * k).abs() < 1e-6, "{sides:?}");
+        }
+        let plunges = toolpath
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Plunge)
+            .count();
+        assert_eq!(plunges, 4);
+        // the bit goes back and forth across each side, a little past its share
+        let most = toolpath.across.iter().copied().fold(0.0, f64::max);
+        assert!(most > 20.0 * std::f64::consts::FRAC_PI_4.sin(), "{most}");
     }
 
     #[test]

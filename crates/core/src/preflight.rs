@@ -584,13 +584,27 @@ fn rotary_setup(
                 .to_owned(),
         ));
     }
+    let off_axis = toolpaths
+        .iter()
+        .find(|t| t.across.iter().any(|a| a.abs() > 1e-9));
     if !axis.centre_set {
+        let why = match off_axis {
+            Some(t) => format!(
+                "\"{}\" holds the bit to one side of the turning axis, measured from the \
+                 axis: until it is found, the bit is held in the wrong place and cuts into the \
+                 part",
+                t.name
+            ),
+            None => "If the bit is not exactly over the turning axis, a round carving comes out \
+                     lumpy"
+                .to_owned(),
+        };
         found.push(Finding::warning(
             Check::RotarySetup,
-            "The rotary's centre line is not set in Machine Configuration. If the bit is not \
-             exactly over the turning axis, a round carving comes out lumpy: find the centre \
-             line (see the help), then tick Centre line found"
-                .to_owned(),
+            format!(
+                "The rotary's centre line is not set in Machine Configuration. {why}: find the \
+                 centre line (see the help), then tick Centre line found"
+            ),
         ));
     }
     if job.along != axis.along {
@@ -1035,6 +1049,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         }
     }
 
@@ -1069,6 +1084,17 @@ mod tests {
             said[1].contains("lies along Y") && said[1].contains("along X"),
             "{said:?}"
         );
+        // a bit held to one side of the axis cuts in the wrong place until it is found
+        let held = Toolpath {
+            across: vec![4.0; cut.moves.len()],
+            ..cut.clone()
+        };
+        let said: Vec<String> = check(&doc, &[&held], &limits)
+            .into_iter()
+            .filter(|f| f.check == Check::RotarySetup)
+            .map(|f| f.message)
+            .collect();
+        assert!(said[0].contains("holds the bit to one side"), "{said:?}");
         limits.rotary = Some(RotaryAxis {
             centre_set: true,
             along: Along::Y,

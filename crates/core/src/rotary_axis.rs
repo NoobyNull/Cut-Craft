@@ -99,3 +99,64 @@ impl Along {
         }
     }
 }
+
+/// Where the tip of a bit held `across` mm off the turning axis cuts, on the unrolled
+/// material: from A (as flat `round`, mm round the surface) and the bit's height `z` (from
+/// the material's top, straight up from the axis) to the tip's own `(round, z)`, its depth
+/// measured towards the axis. A material of `radius`.
+#[must_use]
+pub fn tip_of(radius: f64, round: f64, z: f64, across: f64) -> (f64, f64) {
+    let height = radius + z;
+    let out = height.hypot(across);
+    (round + radius * across.atan2(height), out - radius)
+}
+
+/// What [`tip_of`] undoes: where A turns to (as flat `round`) and how high the bit is (from
+/// the material's top) for its tip, held `across` off the axis, to cut at `(round, z)` on the
+/// unrolled material.
+#[must_use]
+pub fn held_at(radius: f64, round: f64, z: f64, across: f64) -> (f64, f64) {
+    let out = (radius + z).max(across.abs());
+    let height = (out * out - across * across).sqrt();
+    (round - radius * across.atan2(height), height - radius)
+}
+
+impl RotaryAxis {
+    /// Which way along the machine's across axis (Y for a rotary along X, X for one along Y)
+    /// a positive `across` is: +1 or -1. +A turning clockwise from the chuck end carries the
+    /// top of the material towards -Y on a rotary along X, and towards +X on one along Y.
+    #[must_use]
+    pub fn across_sign(&self, along: Along) -> f64 {
+        let sign = if along == Along::X { 1.0 } else { -1.0 };
+        if self.clockwise { sign } else { -sign }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_bit_held_off_the_axis_cuts_where_its_tip_reaches_and_back() {
+        // straight over the axis nothing changes
+        assert_eq!(tip_of(30.0, 12.0, -4.0, 0.0), (12.0, -4.0));
+        // held 10 off a 30 radius, 26 up: its tip is 10 round and sqrt(26²+10²) out
+        let (round, z) = tip_of(30.0, 0.0, -4.0, 10.0);
+        assert!((z - (26f64.hypot(10.0) - 30.0)).abs() < 1e-9);
+        assert!((round - 30.0 * 10f64.atan2(26.0)).abs() < 1e-9);
+        for (r, a, z, d) in [(30.0, 5.0, -4.0, 10.0), (20.0, -3.0, 2.0, -7.0)] {
+            let (w, t) = tip_of(r, a, z, d);
+            let (back, height) = held_at(r, w, t, d);
+            assert!((back - a).abs() < 1e-9 && (height - z).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn positive_across_is_the_way_the_top_turns_from_minus_a() {
+        let mut axis = RotaryAxis::default();
+        assert_eq!(axis.across_sign(Along::X), 1.0);
+        assert_eq!(axis.across_sign(Along::Y), -1.0);
+        axis.clockwise = false;
+        assert_eq!(axis.across_sign(Along::X), -1.0);
+    }
+}

@@ -666,6 +666,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

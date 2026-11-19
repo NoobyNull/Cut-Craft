@@ -1658,6 +1658,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         };
         doc.toolpaths
             .insert(EntityId(901), path("Pocket", tool("6 mm End Mill")));
@@ -1717,6 +1718,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         };
         let small = Holder {
             nut_diameter: 25.0,

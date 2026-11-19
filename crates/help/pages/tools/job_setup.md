@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-19
 see-also: draw_rectangle, draw_circle, draw_text
 ---
 

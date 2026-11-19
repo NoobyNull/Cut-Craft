@@ -1227,6 +1227,14 @@ pub struct Toolpath {
     /// room there (added with entry modes).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fallbacks: Vec<crate::entry::Fallback>,
+    /// A rotary toolpath that holds the bit off the turning axis: how far across from it the
+    /// bit is for each move, mm (positive the way the material's surface turns away from A=0).
+    /// Its moves are still where the tip cuts on the unrolled material, so the preview shows
+    /// them true; the post works out A, the across axis and Z from both
+    /// ([`crate::rotary_axis::held_at`]). Empty when the bit stays over the axis (added with
+    /// off-centre and indexed rotary cutting).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub across: Vec<f64>,
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
@@ -1421,6 +1429,7 @@ fn machining_time_is_each_move_at_its_rate() {
         group: None,
         drill_bank: None,
         fallbacks: vec![],
+        across: vec![],
     };
     // 10 mm plunge at 100, 500 mm cut at 1000, 10 mm rapid at 5000
     assert!((tp.machining_minutes(5000.0) - (0.1 + 0.5 + 0.002)).abs() < 1e-12);
@@ -1519,6 +1528,7 @@ pub fn made_by<C: Command>(
         group: None,
         drill_bank: None,
         fallbacks: vec![],
+        across: vec![],
     }
 }
 

@@ -49,8 +49,15 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
 - **Tool**: a ball nose follows curves best. A flat-bottomed bit works too, resting on the
   highest point under it. Its **finishing stepover** (in the Tool Database) is the distance
   from one ring to the next.
-- **Strategy**: **Radial** keeps the bit straight over the turning axis. (Cutting from off the
-  axis, for undercuts, and indexed faces come later.)
+- **Strategy**: how the bit goes round the part (see Three ways round, below):
+  - **Radial** keeps the bit straight over the turning axis while A turns.
+  - **Off centre** holds the bit to one side of the axis while A turns.
+  - **Indexed** turns A to each side in turn and holds it still while the bit cuts across.
+- **Offset** (Off centre): how far to one side of the axis the bit is held. A third to a half
+  of the bit's width suits most parts. Positive is the way the part comes up towards the bit
+  as A turns back; a negative offset holds it the other side.
+- **Faces** (Indexed): how many sides the part is cut from, evenly round it from A=0. Four
+  suits most parts; more sides leave a smoother finish where they meet.
 - **Start** and **End**: where along the axis the rings go, from the job's start (the chuck
   end). End 0 runs to the job's end. Keep them clear of the chuck and tailstock you set in
   [Machine Configuration](help:rotary_firmware).
@@ -59,6 +66,25 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   job stops part way, turn A until the notch is under the bit and zero A there before starting
   again. Without one, pencil a line along the material at A=0 before you start.
   [Rotary set up](help:check_rotary_setup) reminds you when there is neither.
+
+## Three ways round
+
+![Radial, Off centre and Indexed, seen down the turning axis](pictures/rotary_machining_toolpath/strategies.png)
+
+- **Radial** is the one to start with: the bit points straight at the axis, so it reaches
+  everything a round part shows from outside.
+- **Off centre**: right on the axis, the very tip of a ball nose barely turns, so it rubs more
+  than it cuts. Held to one side, the faster side of the ball does the cutting for a cleaner
+  finish, and walls that face sideways are reached square on.
+- **Indexed**: A stops at each side and holds still while the bit goes back and forth across
+  it, along the part, like a flat 3D finish. Use it for flat faces, square parts, and machines
+  whose A holds still better than it turns smoothly.
+
+Off centre and Indexed hold the bit away from the axis, so the rotary's
+[centre line](help:rotary_firmware) must be found first: [Rotary set up](help:check_rotary_setup)
+warns until it is. The preview shows where the tip really cuts, and the file moves your
+machine's own axis across the rotary (Y beside a rotary along X) as well as A. Cut Craft's
+**Rotary A** posts write it; a post of your own needs `[ACROSS]` in its move lines.
 
 ## How the rings join up
 

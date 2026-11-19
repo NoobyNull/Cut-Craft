@@ -373,8 +373,14 @@ say "not implemented yet".
 - 4-Axis Rotary Machining (Cut Craft's own, `rotary_machining_toolpath`): on a rotary job,
   rings round the model from A=0, each point dropped round the true turning axis (ball or
   flat bottom, allowance), Start/End along the axis, optional registration-mark notch at A=0.
-  Radial only for now; Off-centre and Indexed (both needing Y to move with A) and a spiral
-  pattern (needs a preview that wraps at the seam) are to come.
+  Strategies: Radial (over the axis), Off centre (bit held Offset mm to one side while A
+  turns: the side of the ball cuts, sideways walls reached) and Indexed (A held still at
+  Faces evenly-spaced angles from A=0, each side cut back and forth along the part, a bit's
+  width past its share). Off-axis moves are kept where the tip cuts on the unrolled material
+  with `Toolpath.across` beside them (preview true); the post turns them back into A, the
+  across axis (`[ACROSS]`, centre line + side from "+A turns") and Z. Posts without
+  `[ACROSS]` refuse such toolpaths. A spiral pattern (needs a preview that wraps at the
+  seam) is still to come; the model is radii round the axis, so true undercuts are not.
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits

@@ -55,7 +55,8 @@ Once the 4th axis is ticked, Machine Configuration shows **Rotary (4th axis)**. 
    half its diameter) or on the top of the cylinder. Nothing to type here: the job knows which.
 6. Tick **Centre line found**.
 7. Jog A by +10° and watch which way the chuck turns, seen from the chuck end. Set **+A turns**
-   to match.
+   to match. [Off centre and Indexed](help:rotary_machining_toolpath) toolpaths hold the bit
+   to one side of the axis, and this says which side.
 8. Set **A top speed** from the controller's settings, and how far the **Chuck** and
    **Tailstock** reach along the axis.
 

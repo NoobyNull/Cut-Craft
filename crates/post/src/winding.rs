@@ -30,6 +30,8 @@ pub(crate) struct Winding {
     going: f64,
     /// A as last written, before backlash.
     last: Option<f64>,
+    /// How far off the axis the bit was last held, mm.
+    held: f64,
 }
 
 impl Winding {
@@ -44,6 +46,7 @@ impl Winding {
             turns: 0.0,
             going: 1.0,
             last: None,
+            held: 0.0,
         }
     }
 
@@ -64,10 +67,10 @@ impl Winding {
             // wrapped posts write no arcs; leave anything else as it is
             return steps;
         }
-        let lines: Vec<(MoveKind, DVec3, f64)> = steps
+        let lines: Vec<(MoveKind, DVec3, f64, f64)> = steps
             .into_iter()
             .map(|s| match s {
-                Step::Line(kind, to, power) => (kind, to, power),
+                Step::Line(kind, to, power, across) => (kind, to, power, across),
                 Step::Arc(..) => unreachable!(),
             })
             .collect();
@@ -89,8 +92,9 @@ impl Winding {
                 // a last lift, or cutting straight on from where the file starts: as it is
                 for l in &lines[i..pass_end] {
                     let to = self.moved(l.1, self.turns);
-                    out.push(Step::Line(l.0, to, l.2));
+                    out.push(Step::Line(l.0, to, l.2, l.3));
                     at = to;
+                    self.held = l.3;
                 }
                 i = pass_end;
                 continue;
@@ -100,45 +104,49 @@ impl Winding {
             if turns == self.turns && !backwards {
                 for l in rapids.iter().chain(pass) {
                     let to = self.moved(l.1, turns);
-                    out.push(Step::Line(l.0, to, l.2));
+                    out.push(Step::Line(l.0, to, l.2, l.3));
                     at = to;
+                    self.held = l.3;
                 }
             } else {
                 self.turns = turns;
-                let start = if backwards {
-                    pass[pass.len() - 1].1
+                let (start, across) = if backwards {
+                    (pass[pass.len() - 1].1, pass[pass.len() - 1].3)
                 } else {
-                    pass[0].1
+                    (pass[0].1, pass[0].3)
                 };
                 let above = self.moved(DVec3::new(start.x, start.y, approach.z), turns);
                 // lift straight up, turn at the clearance, then down as the file would
                 let high = self.clearance.max(approach.z);
                 if at.z < high - 1e-9 {
                     at.z = high;
-                    out.push(Step::Line(MoveKind::Rapid, at, 0.0));
+                    out.push(Step::Line(MoveKind::Rapid, at, 0.0, self.held));
                 }
                 let over = DVec3::new(above.x, above.y, at.z);
-                out.push(Step::Line(MoveKind::Rapid, over, 0.0));
+                out.push(Step::Line(MoveKind::Rapid, over, 0.0, across));
                 if (over.z - above.z).abs() > 1e-9 {
-                    out.push(Step::Line(MoveKind::Rapid, above, 0.0));
+                    out.push(Step::Line(MoveKind::Rapid, above, 0.0, across));
                 }
                 if backwards {
                     out.push(Step::Line(
                         MoveKind::Plunge,
                         self.moved(start, turns),
                         pass[pass.len() - 1].2,
+                        across,
                     ));
                     for k in (1..pass.len()).rev() {
-                        let (kind, _, power) = pass[k];
-                        out.push(Step::Line(kind, self.moved(pass[k - 1].1, turns), power));
+                        let (kind, _, power, _) = pass[k];
+                        let (_, to, _, held) = pass[k - 1];
+                        out.push(Step::Line(kind, self.moved(to, turns), power, held));
                     }
                 } else {
                     for l in pass {
-                        out.push(Step::Line(l.0, self.moved(l.1, turns), l.2));
+                        out.push(Step::Line(l.0, self.moved(l.1, turns), l.2, l.3));
                     }
                 }
-                if let Some(Step::Line(_, to, _)) = out.last() {
+                if let Some(Step::Line(_, to, _, held)) = out.last() {
                     at = *to;
+                    self.held = *held;
                 }
             }
             i = pass_end;
@@ -154,7 +162,12 @@ impl Winding {
 
     /// Which whole turn a `pass` reached from `approach` is cut on, from `at`, and whether it
     /// is cut backwards.
-    fn choose(&self, at: DVec3, approach: DVec3, pass: &[(MoveKind, DVec3, f64)]) -> (f64, bool) {
+    fn choose(
+        &self,
+        at: DVec3,
+        approach: DVec3,
+        pass: &[(MoveKind, DVec3, f64, f64)],
+    ) -> (f64, bool) {
         let round = self.round;
         // the whole turns that bring `start` nearest to where A is
         let nearest = |start: f64| ((at[round] - start) / self.turn()).round();
@@ -213,16 +226,17 @@ impl Winding {
         }
     }
 
-    /// Inverse-time feed (one over the minutes it takes) for a move `from`→`to` at `rate`:
-    /// its length measured where the bit is, nearer the axis than the surface when it cuts
-    /// deep, and no faster than A's top speed.
-    pub(crate) fn inverse_time(&self, from: DVec3, to: DVec3, rate: f64) -> f64 {
+    /// Inverse-time feed (one over the minutes it takes) for a move `from`→`to` at `rate`,
+    /// the bit moving `across` mm across the axis as well: its length measured where the bit
+    /// is, nearer the axis than the surface when it cuts deep, and no faster than A's top
+    /// speed.
+    pub(crate) fn inverse_time(&self, from: DVec3, to: DVec3, across: f64, rate: f64) -> f64 {
         let d = to - from;
         let depth = f64::midpoint(from.z, to.z);
         let r = (self.radius + depth).max(self.radius * 0.01);
         let round = d[self.round] * r / self.radius;
         let along = d[1 - self.round];
-        let length = (round * round + along * along + d.z * d.z).sqrt();
+        let length = (round * round + along * along + d.z * d.z + across * across).sqrt();
         let mut minutes = length / rate;
         let degrees = (d[self.round] / self.per_degree).abs();
         if self.axis.max_rate > 0.0 {
@@ -245,8 +259,8 @@ impl Winding {
 /// A pass can be cut backwards when it goes straight down into the material and never cuts
 /// upwards after: backwards it then goes straight down at its far end, and never cuts down
 /// sideways.
-fn reversible(approach: DVec3, pass: &[(MoveKind, DVec3, f64)]) -> bool {
-    let (kind, first, _) = pass[0];
+fn reversible(approach: DVec3, pass: &[(MoveKind, DVec3, f64, f64)]) -> bool {
+    let (kind, first, _, _) = pass[0];
     kind == MoveKind::Plunge
         && (first.x - approach.x).abs() < 1e-6
         && (first.y - approach.y).abs() < 1e-6

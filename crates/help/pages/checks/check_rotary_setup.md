@@ -12,7 +12,9 @@ see-also: checks_before_cutting, rotary_firmware, job_setup, rotary_machining_to
 For a **rotary job** (a cylinder turned by the 4th axis), whether the machine's rotary is set
 up in **Machine ▸ Machine Configuration ▸ Rotary (4th axis)**:
 
-- **Centre line found** is ticked, so the app knows where the turning axis is.
+- **Centre line found** is ticked, so the app knows where the turning axis is. It matters most
+  for [Off centre and Indexed](help:rotary_machining_toolpath) toolpaths, which hold the bit a
+  measured distance from the axis.
 - The rotary **lies along** the same direction (X or Y) as the job's cylinder in Job Setup.
 - When **A can turn** is **Freely**, the toolpaths don't wind A more than 500 turns one way.
 - A [4-Axis Rotary Machining](help:rotary_machining_toolpath) job cuts a **registration mark**
