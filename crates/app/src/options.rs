@@ -658,6 +658,21 @@ pub enum IntersectionCheck {
     DontCheck,
 }
 
+/// How Cut Craft starts. What new jobs start with is kept in `default_job`; the Job
+/// Defaults page shows its settings under these.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct JobDefaults {
+    /// Start with the start page (recent files, the sample project) and fill in every job
+    /// setting before a new job opens, as Cut Craft used to. Off opens a blank job straight
+    /// away, made with the settings below; Setup Material changes its size any time
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[schemars(title = "Classic Startup Flow")]
+    pub classic_startup: bool,
+}
+
+/// The Options page of what new jobs start with.
+pub const JOB_DEFAULTS: &str = "job_defaults";
+
 /// General settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct General {
@@ -1741,6 +1756,11 @@ pub struct Options {
     pub toolpaths: ToolpathSettings,
     #[schemars(title = "General Settings", extend("x-section" = true))]
     pub general: General,
+    /// How Cut Craft starts, and what every new job starts with: the material, where X0 Y0
+    /// and Z zero are, the rapid heights and home (the job settings under it).
+    #[serde(default)]
+    #[schemars(title = "Job Defaults", extend("x-section" = true))]
+    pub job_defaults: JobDefaults,
     #[serde(default)]
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
@@ -1910,6 +1930,7 @@ impl Default for Options {
                 fold_tool_groups: false,
                 show_tips_at_startup: true,
             },
+            job_defaults: JobDefaults::default(),
             confirmations: Confirmations::default(),
             snapping: cut_craft_core::snap::SnapOptions::default(),
             job_sheet: fmt_create_job_sheet::Style::default(),
@@ -2077,6 +2098,12 @@ impl Options {
         let defaults = serde_json::to_value(Self::default()).expect("options serialise");
         if let Some(default) = defaults.get(page) {
             values[page] = default.clone();
+        }
+        // the Job Defaults page shows the job new jobs start with: back to Cut Craft's own
+        if page == JOB_DEFAULTS
+            && let Some(values) = values.as_object_mut()
+        {
+            values.remove("default_job");
         }
         serde_json::from_value(values).unwrap_or_else(|_| self.clone())
     }
@@ -2260,6 +2287,7 @@ mod tests {
                 "3D View Settings",
                 "Toolpath Settings",
                 "General Settings",
+                "Job Defaults",
                 "Confirmation Choices",
                 "Importing and Exporting",
                 "Appearance",
@@ -2278,6 +2306,31 @@ mod tests {
         };
         let shown: Vec<&str> = shown.iter().map(|f| f.key.as_str()).collect();
         assert_eq!(shown, ["check_at_startup"]);
+    }
+
+    #[test]
+    fn job_defaults_start_blank_and_reset_puts_back_cut_crafts_own_job() {
+        // options saved before the page existed: the new start, a blank job
+        let mut file = serde_json::to_value(Options::default()).unwrap();
+        file.as_object_mut().unwrap().remove(JOB_DEFAULTS);
+        let old: Options = serde_json::from_value(file).unwrap();
+        assert!(
+            !old.job_defaults.classic_startup,
+            "a blank job, not the start page"
+        );
+        let mut o = Options::default();
+        o.job_defaults.classic_startup = true;
+        o.default_job = Some(cut_craft_core::document::Job {
+            width: 1220.0,
+            ..Default::default()
+        });
+        let back = o.reset(JOB_DEFAULTS);
+        assert!(!back.job_defaults.classic_startup);
+        assert_eq!(back.default_job, None, "Cut Craft's own new job again");
+        // another page's reset leaves them be
+        let kept = o.reset("general");
+        assert_eq!(kept.default_job, o.default_job);
+        assert!(kept.job_defaults.classic_startup);
     }
 
     #[test]

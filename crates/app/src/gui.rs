@@ -233,6 +233,12 @@ pub const SUBTAB_PLACE: &str = "subtab_place:";
 /// and say nothing about the files they take.
 pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
+        "setup_material",
+        "Setup Material",
+        "Set the material for this job: single sided, double sided or rotary, and its size. \
+         Z zero, X0 Y0 and the rest come from Options ▸ Job Defaults",
+    ),
+    (
         "machine_files",
         "Machine Files",
         "See the files on the machine's card or shared folder, and upload, rename, delete or \
@@ -473,7 +479,8 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "export_vectors",
                 "paste_in_place",
                 "open_folder",
-                "job_setup",
+                // what a blank job needs; the rest of Job Setup is a link on its form
+                "setup_material",
                 // the job's notes are kept with its files
                 "notes",
             ],

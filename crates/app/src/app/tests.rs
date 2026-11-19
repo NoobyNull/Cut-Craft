@@ -1670,6 +1670,13 @@ impl Harness {
         h
     }
 
+    /// The start page, with Classic Startup Flow ticked: New goes through Job Setup.
+    fn at_classic_start() -> Self {
+        let mut h = Self::at_start();
+        h.app.options.job_defaults.classic_startup = true;
+        h
+    }
+
     /// A new job made the way a user makes one: New, then OK in Job Setup.
     fn new() -> Self {
         let mut h = Self::at_start();
@@ -5068,7 +5075,7 @@ fn it_starts_on_the_start_page_with_the_no_job_menus() {
 
 #[test]
 fn create_a_new_file_goes_through_job_setup_to_the_job() {
-    let mut h = Harness::at_start();
+    let mut h = Harness::at_classic_start();
     h.app.invoke(&h.ctx, "new");
     h.frame(vec![]);
     assert_eq!(h.app.screen, Screen::NewJob);
@@ -5223,6 +5230,7 @@ fn start_page_and_form_pictures_are_in_the_icon_set() {
 #[test]
 fn closing_the_job_goes_back_to_the_start_page() {
     let mut h = Harness::new();
+    h.app.options.job_defaults.classic_startup = true;
     h.app.invoke(&h.ctx, "close");
     h.frame(vec![]);
     assert_eq!(h.app.screen, Screen::Start);
@@ -7569,7 +7577,7 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
 #[test]
 fn importing_a_model_while_setting_up_a_new_job_keeps_the_job_s_pages() {
     // issue #17: New, Import Component / 3D Model, then Close left the new-job screen bare
-    let mut h = Harness::at_start();
+    let mut h = Harness::at_classic_start();
     h.app.invoke(&h.ctx, "new");
     assert_eq!(h.app.screen, Screen::NewJob);
     let file = pyramid_stl("new-job-import");
@@ -7806,12 +7814,12 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     }
     // beside its icon: the words themselves, not the space the icon leaves on their line
     let at = *h
-        .words_at("Job Setup")
+        .words_at("Setup Material")
         .last()
         .expect("its tools are listed");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.info, Some(Info::Help("job_setup")));
+    assert_eq!(h.app.info, Some(Info::Help("setup_material")));
     let vars = h.app.help_markdown("document_variables");
     assert!(
         vars.contains("{depth}"),
@@ -8451,7 +8459,7 @@ fn rotary_jobs_need_a_4th_axis_and_save_through_the_post_wrapping_their_side() {
 
 #[test]
 fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
-    let mut h = Harness::at_start();
+    let mut h = Harness::at_classic_start();
     h.app.invoke(&h.ctx, "new");
     h.frame(vec![]);
     let form = h.app.form.as_mut().expect("the Job Setup form");
@@ -8475,7 +8483,7 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
 #[test]
 fn set_as_default_in_job_setup_keeps_the_clearing_default() {
     use cut_craft_core::entry::WayBack;
-    let mut h = Harness::at_start();
+    let mut h = Harness::at_classic_start();
     let mut mine = cut_craft_core::document::Job::default();
     mine.clearing.way_back = WayBack::Alternate;
     h.app.options.default_job = Some(mine);
@@ -13513,7 +13521,11 @@ fn the_sample_project_opens_with_toolpaths_that_pass_the_checks() {
     assert_eq!(names, [super::sample::CARVE, super::sample::CUT_OUT]);
     let toolpaths: Vec<_> = h.app.doc.toolpaths.values().collect();
     let found = cut_craft_core::preflight::check(&h.app.doc, &toolpaths, &h.app.limits());
-    let faults: Vec<_> = found.iter().collect();
+    // where to zero the bit is asked of every job whose Material Setup was never opened
+    let faults: Vec<_> = found
+        .iter()
+        .filter(|f| f.check != cut_craft_core::preflight::Check::Zeroing)
+        .collect();
     assert_eq!(faults, [] as [&cut_craft_core::preflight::Finding; 0]);
     assert!(
         !h.app.session.is_dirty(&h.app.history),
@@ -14271,7 +14283,7 @@ fn the_buttons_already_there_keep_their_places() {
             "export_vectors",
             "paste_in_place",
             "open_folder",
-            "job_setup",
+            "setup_material",
         ],
     );
     starts(
@@ -14928,7 +14940,7 @@ fn help_search_lists_matching_pages_and_opens_one() {
     h.app.help_search = "job setup".into();
     h.frame(vec![]);
     h.frame(vec![]);
-    // the first result, just under the count (the Design page has a Job Setup too)
+    // the first result, just under the count
     let count = h
         .text_at(&format!("{} pages found, best first", found.len()))
         .expect("the results counted");
@@ -16799,7 +16811,7 @@ fn a_drawing_named_on_the_command_line_goes_through_job_setup_into_a_new_job() {
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="20mm" viewBox="0 0 20 20"><rect x="0" y="0" width="20" height="20"/></svg>"#,
     )
     .unwrap();
-    let mut h = Harness::at_start();
+    let mut h = Harness::at_classic_start();
     h.app.open_given(Some(&svg));
     h.frame(vec![]);
     assert_eq!(
@@ -16819,7 +16831,7 @@ fn a_drawing_named_on_the_command_line_goes_through_job_setup_into_a_new_job() {
     assert_eq!(h.app.screen, Screen::Job);
     assert!(!h.app.doc.vectors.is_empty(), "the drawing came in");
     // Cancel in Job Setup: back to the start page, nothing imported later
-    let mut h = Harness::at_start();
+    let mut h = Harness::at_classic_start();
     h.app.open_given(Some(&svg));
     h.app.job_setup_cancel();
     assert_eq!(h.app.screen, Screen::Start);
@@ -19174,4 +19186,186 @@ fn a_narrow_ribbon_folds_the_groups_used_least_and_picks_are_counted() {
     let ctx = h.ctx.clone();
     h.app.pick(&ctx, Page::Design, "draw_circle");
     assert_eq!(h.app.options.tool_uses.get("draw_circle"), Some(&1));
+}
+
+#[test]
+fn cut_craft_opens_to_a_blank_job_unless_classic_startup_flow_is_ticked() {
+    let mut h = Harness::at_start();
+    h.app.options.default_job = Some(cut_craft_core::document::Job {
+        width: 1220.0,
+        height: 610.0,
+        ..Default::default()
+    });
+    h.app.open_at_start(None);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.app.screen, Screen::Job);
+    assert!(h.app.form.is_none(), "nothing to fill in first");
+    assert_eq!((h.app.doc.job.width, h.app.doc.job.height), (1220.0, 610.0));
+    assert!(
+        !h.app.session.is_dirty(&h.app.history),
+        "nothing to save yet"
+    );
+    assert!(
+        h.text_at(views::EMPTY_SHEET_SAMPLE).is_some(),
+        "ready to draw on, the sample a click away"
+    );
+    // the old start, as a setting
+    let mut h = Harness::at_start();
+    h.app.options.job_defaults.classic_startup = true;
+    h.app.open_at_start(None);
+    assert_eq!(h.app.screen, Screen::Start);
+}
+
+#[test]
+fn new_and_close_give_a_blank_job_and_classic_startup_flow_asks_first() {
+    let mut h = Harness::at_start();
+    h.app.options.default_job = Some(cut_craft_core::document::Job {
+        thickness: 12.0,
+        ..Default::default()
+    });
+    h.app.invoke(&h.ctx, "new");
+    assert_eq!(h.app.screen, Screen::Job);
+    assert!(h.app.form.is_none());
+    assert_eq!(h.app.doc.job.thickness, 12.0, "made with the Job Defaults");
+    h.app.invoke(&h.ctx, "close");
+    assert_eq!(h.app.screen, Screen::Job, "no start page to go back to");
+    // classic: Job Setup first, Close back to the start page
+    h.app.options.job_defaults.classic_startup = true;
+    h.app.invoke(&h.ctx, "new");
+    assert_eq!(h.app.screen, Screen::NewJob);
+    assert!(h.app.form.as_ref().is_some_and(|f| f.new_job));
+    h.app.job_setup_ok();
+    h.app.invoke(&h.ctx, "close");
+    assert_eq!(h.app.screen, Screen::Start);
+}
+
+#[test]
+fn setup_material_takes_job_setups_place_in_file_operations() {
+    let toolbar = gui::Toolbar::new();
+    let file = toolbar
+        .all_design_groups()
+        .into_iter()
+        .find(|g| g.name == "File Operations")
+        .expect("File Operations");
+    assert_eq!(
+        file.tools,
+        [
+            "new",
+            "open",
+            "save",
+            "export_vectors",
+            "paste_in_place",
+            "open_folder",
+            "setup_material",
+            "notes"
+        ],
+        "in Job Setup's place, so nothing moves"
+    );
+    assert_eq!(
+        gui::built_in_label("setup_material"),
+        Some("Setup Material")
+    );
+    assert!(icon_set().contains("file/setup_material.png"));
+}
+
+#[test]
+fn setup_material_shows_the_kind_and_size_with_the_rest_one_link_away() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "setup_material");
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().expect("Setup Material's form");
+    assert_eq!((form.id, form.label), ("job_setup", "Setup Material"));
+    let keys: Vec<&str> = form.fields.iter().map(|f| f.key.as_str()).collect();
+    assert!(
+        keys.iter().all(|k| setup_material::BRIEF.contains(k)),
+        "{keys:?}"
+    );
+    assert!(keys.contains(&"job_type") && keys.contains(&"size"));
+    assert!(
+        h.text_at("600 × 400 × 20 mm, single sided, Z zero on top, X0 Y0 bottom left")
+            .is_some()
+    );
+    let more = h
+        .text_at(setup_material::MORE)
+        .expect("the link to the rest");
+    h.click(more, Modifiers::NONE);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().expect("still open");
+    assert_eq!(form.label, "Job Setup");
+    let keys: Vec<&str> = form.fields.iter().map(|f| f.key.as_str()).collect();
+    assert!(keys.contains(&"z_zero") && keys.contains(&"datum") && keys.contains(&"home"));
+    // a new size, applied, is this job's
+    h.app.form.as_mut().unwrap().params["size"]["width"] = 900.0.into();
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.calculate_checked("job_setup", &params);
+    assert_eq!(h.app.doc.job.width, 900.0);
+    assert_eq!(h.app.options.default_job, None, "new jobs are not changed");
+}
+
+#[test]
+fn job_defaults_page_changes_new_jobs_once_applied() {
+    let mut h = Harness::new();
+    h.app.open_job_defaults();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Classic Startup Flow").is_some());
+    assert!(
+        h.text_at("XY Datum Position").is_some(),
+        "Job Setup's settings too"
+    );
+    let (_, mut params, _) = h.app.job_defaults_state();
+    params["size"]["width"] = 1220.0.into();
+    h.app.job_defaults_edited(params.clone());
+    assert!(h.app.options_dirty(), "waits for Apply");
+    assert_eq!(h.app.options.default_job, None);
+    assert_eq!(h.app.doc.job.width, 600.0, "the open job is left as it is");
+    // a refused change is kept as typed, with why
+    let mut wrong = params.clone();
+    wrong["gaps"]["plunge"] = 50.0.into();
+    h.app.job_defaults_edited(wrong);
+    assert!(h.app.job_defaults_state().2.is_some());
+    h.app.job_defaults_edited(params);
+    h.app
+        .options_button(&h.ctx.clone(), options_apply::Button::Apply);
+    assert_eq!(h.app.options.default_job.map(|j| j.width), Some(1220.0));
+    assert_eq!(h.app.doc.job.width, 600.0, "still the open job's");
+    h.app.invoke(&h.ctx, "new");
+    assert_eq!(h.app.doc.job.width, 1220.0, "the next job's");
+}
+
+#[test]
+fn the_blank_sheet_links_to_a_recent_file_and_the_sample() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    assert!(
+        h.text_at(views::EMPTY_SHEET_RECENT).is_none(),
+        "no recent files yet"
+    );
+    let at = h
+        .text_at(views::EMPTY_SHEET_SAMPLE)
+        .expect("the sample's link");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.toolpaths.len(), 2, "the sample opened");
+}
+
+#[test]
+fn a_drawing_named_on_the_command_line_comes_into_a_blank_job() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-argv-blank-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let svg = dir.join("square.svg");
+    std::fs::write(
+        &svg,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="50mm" viewBox="0 0 50 50"><rect x="5" y="5" width="40" height="40"/></svg>"#,
+    )
+    .unwrap();
+    let mut h = Harness::at_start();
+    h.app.open_given(Some(&svg));
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.app.screen, Screen::Job, "no Job Setup first");
+    assert!(!h.app.doc.vectors.is_empty(), "the drawing came in");
+    let _ = std::fs::remove_dir_all(&dir);
 }
