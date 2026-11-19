@@ -20,7 +20,7 @@ tool database, tool library, bit library
 job setup, material, stock, blank, workpiece, board
 material thickness, thickness, board thickness
 zero, origin, home, datum, xy zero, z zero
-save toolpaths, export, g-code, gcode, nc file, post processor, post
+save toolpaths, export, g-code, gcode, nc file, post processor, post, post-processor, postprocessor, posts
 send to machine, send, upload, transfer
 preview, simulate, simulation, preview toolpaths
 text, lettering, letters, font, sign
@@ -60,3 +60,4 @@ favourites, favourite, favorites, favorite, starred, pinned tools, quick tools, 
 fold, folded, collapse, collapsed, hidden tools, missing buttons, narrow window
 construction line, construction lines, construction geometry, reference line, helper line, guide path, layout line
 high detail, large model, finer detail, more detail
+filter, filters, narrow down

@@ -19,6 +19,9 @@ pub enum Source {
 pub struct Entry {
     /// Its `POST_NAME`, or its file name when it does not parse.
     pub name: String,
+    /// Its file's name (`grbl_arcs_mm.pp`): what its capabilities are kept by, as its name
+    /// may change.
+    pub key: String,
     pub source: Source,
     /// Why it does not parse, if it does not.
     pub broken: Option<String>,
@@ -58,6 +61,7 @@ impl Library {
                     .file_stem()
                     .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
                 Entry {
+                    key: file_name(&path),
                     name: parsed.as_ref().map_or(file, |p| p.name.clone()),
                     broken: parsed.err(),
                     source: Source::Custom(path),
@@ -65,7 +69,8 @@ impl Library {
             })
             .collect();
         custom.sort_by_key(|e| e.name.to_lowercase());
-        let own = BUILT_IN.iter().map(|(_, text)| Entry {
+        let own = BUILT_IN.iter().map(|(file, text)| Entry {
+            key: (*file).to_owned(),
             name: Post::parse(text).expect("Cut Craft's posts parse").name,
             source: Source::BuiltIn(text),
             broken: None,
@@ -197,6 +202,7 @@ impl Library {
         std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(Entry {
             name,
+            key: file_name(&path),
             source: Source::Custom(path),
             broken: None,
         })
@@ -229,6 +235,7 @@ impl Library {
         std::fs::write(&path, renamed).map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(Entry {
             name,
+            key: file_name(&path),
             source: Source::Custom(path),
             broken: None,
         })
@@ -249,6 +256,12 @@ impl Library {
             Source::BuiltIn(_) => Err("Cut Craft's own post-processors cannot be deleted".into()),
         }
     }
+}
+
+/// The last part of `path`, as text.
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
 }
 
 /// `text` with its `POST_NAME` line saying `name` (one added at the top if it has none).

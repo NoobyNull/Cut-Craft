@@ -602,7 +602,9 @@ impl CutCraftApp {
                 ctx.open_url(egui::OpenUrl::new_tab(super::MACHINES_ONLINE));
             }
             "post_processor_management" => {
-                self.post_window = Some(cut_craft_machines::PostManager::default());
+                self.post_window = Some(cut_craft_machines::PostManager::for_machine(
+                    self.machines.active(),
+                ));
             }
             "tool_database" => {
                 let manager = cut_craft_tool_database::Manager::new(&self.tools);
@@ -2300,7 +2302,9 @@ impl CutCraftApp {
                 }
                 MachineOutcome::Cancel => self.machine_window = None,
                 MachineOutcome::ManagePosts => {
-                    self.post_window = Some(cut_craft_machines::PostManager::default());
+                    self.post_window = Some(cut_craft_machines::PostManager::for_machine(
+                        self.machines.active(),
+                    ));
                 }
                 MachineOutcome::PickFolder(which) => {
                     if let Some(folder) = file_dialog().pick_folder()

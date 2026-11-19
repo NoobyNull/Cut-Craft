@@ -2,6 +2,7 @@
 //! machines, each one's details and associated posts; kept on Apply or OK) and Post-Processor
 //! Management (the post library: view, customise, edit, install, delete).
 
+use crate::capabilities::{Capabilities, CapabilityDb, Family, Filter, Moves};
 use crate::library::{Entry, Library, Source};
 use crate::machine::{Machine, Machines};
 use cut_craft_bug_report::hint::HoverHint;
@@ -128,6 +129,10 @@ pub struct MachineManager {
     /// The associated post picked in the list.
     picked: Option<usize>,
     viewing: Option<(String, String)>,
+    /// Add a post-processor's filters, for the machine (by its place) they started from.
+    post_filter: Option<(usize, Filter)>,
+    /// The posts' capabilities, read when the window first draws.
+    capabilities: Option<CapabilityDb>,
 }
 
 impl MachineManager {
@@ -138,6 +143,8 @@ impl MachineManager {
             closing: false,
             picked: None,
             viewing: None,
+            post_filter: None,
+            capabilities: None,
         }
     }
 
@@ -184,6 +191,7 @@ impl MachineManager {
             row = self.machine_row(ui, look);
             ui.separator();
             let names_clash = self.draft.names_clash();
+            let active = self.draft.active;
             let Some(machine) = self.draft.active_mut() else {
                 ui.weak("No machines yet: Add Machine makes one");
                 outcome = buttons(ui, false, dirty).or(outcome.take());
@@ -205,11 +213,23 @@ impl MachineManager {
                 );
             }
             let entries = library.entries();
+            if self
+                .post_filter
+                .as_ref()
+                .is_none_or(|(at, _)| *at != active)
+            {
+                self.post_filter = Some((active, Filter::starting(Some(machine))));
+            }
+            let db = self
+                .capabilities
+                .get_or_insert_with(|| CapabilityDb::load(library));
+            let filter = &mut self.post_filter.as_mut().expect("set above").1;
             if let Some(asked) = posts_section(
                 ui,
                 look,
                 machine,
                 &entries,
+                (&*db, filter),
                 &mut self.picked,
                 &mut self.viewing,
             ) {
@@ -951,6 +971,7 @@ fn posts_section(
     look: &Look,
     machine: &mut Machine,
     entries: &[Entry],
+    (db, filter): (&CapabilityDb, &mut Filter),
     picked: &mut Option<usize>,
     viewing: &mut Option<(String, String)>,
 ) -> Option<MachineOutcome> {
@@ -993,16 +1014,33 @@ fn posts_section(
             machine.default_post = Some(name);
         }
         ui.horizontal(|ui| {
-            let unused: Vec<&Entry> = entries
+            let unused: Vec<(&Entry, Capabilities)> = entries
                 .iter()
                 .filter(|e| e.broken.is_none() && !machine.posts.contains(&e.name))
+                .map(|e| (e, db.of(e)))
                 .collect();
             egui::ComboBox::from_id_salt("add_post")
                 .selected_text("Add a post-processor")
+                // stays open while the filters are changed; a post picked closes it
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                .height(480.0)
                 .show_ui(ui, |ui| {
-                    for e in unused {
-                        if ui.selectable_label(false, &e.name).clicked() {
+                    let shown: Vec<&(&Entry, Capabilities)> = unused
+                        .iter()
+                        .filter(|(e, caps)| filter.shows(&e.name, caps))
+                        .collect();
+                    filter.ui(ui, shown.len(), unused.len());
+                    ui.separator();
+                    if shown.is_empty() {
+                        ui.weak(NONE_SHOWN);
+                    }
+                    for (e, caps) in shown {
+                        let row = ui
+                            .selectable_label(false, format!("{}   {}", e.name, caps.tags()))
+                            .on_hover_hint(&caps.about);
+                        if row.clicked() {
                             machine.posts.push(e.name.clone());
+                            ui.close();
                         }
                     }
                 });
@@ -1074,7 +1112,127 @@ pub struct PostManager {
     viewing: Option<(String, String)>,
     /// A custom post open in Edit.
     editing: Option<Editing>,
+    /// The filters over the list: each opening starts from the machine ([`Self::for_machine`]).
+    filter: Filter,
+    /// The posts' capabilities, read when the window first draws.
+    capabilities: Option<CapabilityDb>,
+    /// A post whose capabilities are being corrected (Edit Capabilities), and the correction.
+    correcting: Option<(Entry, Capabilities)>,
+    /// The groups folded away, by their heading.
+    folded: std::collections::HashSet<&'static str>,
 }
+
+/// The posts shown, in their groups: the ones installed by you, then Cut Craft's own by
+/// controller. Groups with nothing shown are left out.
+fn groups(shown: &[(Entry, Capabilities)]) -> Vec<(&'static str, Vec<&(Entry, Capabilities)>)> {
+    let mut out = vec![(
+        "Installed by you",
+        shown.iter().filter(|(e, _)| e.is_custom()).collect(),
+    )];
+    for family in Family::ALL {
+        out.push((
+            family.label(),
+            shown
+                .iter()
+                .filter(|(e, caps)| !e.is_custom() && caps.family == family)
+                .collect(),
+        ));
+    }
+    out.retain(|(_, group): &(_, Vec<_>)| !group.is_empty());
+    out
+}
+
+/// Edit Capabilities: a post's controller, units and moves as the filters see them, kept in
+/// the capabilities file (the post itself is not changed).
+fn corrector(
+    ctx: &egui::Context,
+    correcting: &mut Option<(Entry, Capabilities)>,
+    db: &mut CapabilityDb,
+) -> Option<PostOutcome> {
+    let (entry, caps) = correcting.as_mut()?;
+    let mut open = true;
+    let mut outcome = None;
+    let mut done = false;
+    let id = egui::Id::unique("post_processor_capabilities");
+    let title = format!("Edit Capabilities: {}", entry.name);
+    cut_craft_bug_report::dialog(ctx, id, &title, egui::vec2(460.0, 420.0), &mut open, |ui| {
+        cut_craft_bug_report::mark(ui, "Edit Capabilities");
+        ui.weak("How the filters in the post lists see this post. The post itself is not changed.");
+        egui::Grid::new("post_capabilities")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Controller");
+                egui::ComboBox::from_id_salt("post_capability_family")
+                    .selected_text(caps.family.label())
+                    .show_ui(ui, |ui| {
+                        for f in Family::ALL {
+                            ui.selectable_value(&mut caps.family, f, f.label());
+                        }
+                    });
+                ui.end_row();
+                ui.label("Units");
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut caps.inches, false, "mm");
+                    ui.radio_value(&mut caps.inches, true, "inch");
+                });
+                ui.end_row();
+                ui.label("Moves");
+                ui.vertical(|ui| {
+                    for m in Moves::ALL {
+                        ui.radio_value(&mut caps.moves, m, m.label())
+                            .on_hover_hint(m.hint());
+                    }
+                });
+                ui.end_row();
+                ui.label("");
+                ui.add_enabled(
+                    caps.moves == Moves::Rotary,
+                    egui::Checkbox::new(&mut caps.inverse_time, "Inverse-time feeds (G93)"),
+                )
+                .on_hover_hint("Rotary feeds written as one over each move's time in minutes");
+                ui.end_row();
+            });
+        ui.label("What it is for (shown on hover)");
+        ui.add(
+            egui::TextEdit::multiline(&mut caps.about)
+                .desired_rows(3)
+                .desired_width(f32::INFINITY),
+        );
+        ui.horizontal(|ui| {
+            if ui.button("Save").clicked() {
+                let kept = caps.clone();
+                outcome = Some(PostOutcome::Message(match db.set(entry, Some(kept)) {
+                    Ok(()) => format!("Capabilities kept for {}", entry.name),
+                    Err(e) => e,
+                }));
+                done = true;
+            }
+            if ui
+                .add_enabled(db.corrected(entry), egui::Button::new("Read From the Post"))
+                .on_hover_hint("Forget the correction and go by what the post's lines say")
+                .on_disabled_hover_text("Nothing corrected yet: this is what its lines say")
+                .clicked()
+            {
+                outcome = Some(PostOutcome::Message(match db.set(entry, None) {
+                    Ok(()) => format!("{} goes by its own lines again", entry.name),
+                    Err(e) => e,
+                }));
+                done = true;
+            }
+            if ui.button("Cancel").clicked() {
+                done = true;
+            }
+        });
+    });
+    if done || !open {
+        *correcting = None;
+    }
+    outcome
+}
+
+/// What the post lists say when the filters leave nothing.
+const NONE_SHOWN: &str =
+    "No post-processor matches these filters: tick more of them, or press Show All";
 
 /// A custom post being edited: its file, the text as last saved, and as it is now.
 #[derive(Clone, Debug, Default)]
@@ -1163,6 +1321,31 @@ fn editor(ctx: &egui::Context, editing: &mut Option<Editing>) -> Option<PostOutc
 }
 
 impl PostManager {
+    /// Post-Processor Management as it opens: its filters set for `machine` (its units, and
+    /// rotary posts only when it has a 4th axis).
+    pub fn for_machine(machine: Option<&Machine>) -> Self {
+        Self {
+            filter: Filter::starting(machine),
+            ..Self::default()
+        }
+    }
+
+    /// The list's filters, to change from outside (the help's pictures).
+    pub fn filter_mut(&mut self) -> &mut Filter {
+        &mut self.filter
+    }
+
+    /// Opens Edit Capabilities on the post named `name`, as its Inspect menu does.
+    pub fn edit_capabilities(&mut self, library: &Library, name: &str) {
+        let db = self
+            .capabilities
+            .get_or_insert_with(|| CapabilityDb::load(library));
+        self.correcting = library.find(name).map(|e| {
+            let caps = db.of(&e);
+            (e, caps)
+        });
+    }
+
     pub fn show(
         &mut self,
         ctx: &egui::Context,
@@ -1188,6 +1371,12 @@ impl PostManager {
         );
         viewer(ctx, &mut self.viewing);
         if let Some(said) = editor(ctx, &mut self.editing) {
+            outcome = Some(said);
+        }
+        let db = self
+            .capabilities
+            .get_or_insert_with(|| CapabilityDb::load(library));
+        if let Some(said) = corrector(ctx, &mut self.correcting, db) {
             outcome = Some(said);
         }
         if !open {
@@ -1231,63 +1420,126 @@ impl PostManager {
                 });
             });
         });
+        let db = self
+            .capabilities
+            .get_or_insert_with(|| CapabilityDb::load(library));
+        let entries: Vec<(Entry, Capabilities)> = library
+            .entries()
+            .into_iter()
+            .map(|e| {
+                let caps = db.of(&e);
+                (e, caps)
+            })
+            .collect();
+        let total = entries.len();
+        let shown: Vec<(Entry, Capabilities)> = entries
+            .into_iter()
+            .filter(|(e, caps)| self.filter.shows(&e.name, caps))
+            .collect();
+        egui::Panel::top("post_processor_filters").show(ui, |ui| {
+            self.filter.ui(ui, shown.len(), total);
+        });
         let list = egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
-                for entry in library.entries() {
-                    if let Some(asked) = self.row(ui, look, library, &entry) {
-                        outcome = Some(asked);
-                    }
+                if shown.is_empty() {
+                    ui.weak(NONE_SHOWN);
                 }
+                // one grid for every group, so the columns line up down the whole list
+                egui::Grid::new("post_rows")
+                    .num_columns(4)
+                    .striped(true)
+                    .show(ui, |ui| {
+                        for (title, group) in groups(&shown) {
+                            let folded = self.folded.contains(title);
+                            let arrow = if folded { "▸" } else { "▾" };
+                            let heading =
+                                egui::RichText::new(format!("{arrow} {title} ({})", group.len()))
+                                    .strong();
+                            if ui
+                                .selectable_label(false, heading)
+                                .on_hover_hint("Fold or unfold this group")
+                                .clicked()
+                                && !self.folded.remove(title)
+                            {
+                                self.folded.insert(title);
+                            }
+                            ui.end_row();
+                            if folded {
+                                continue;
+                            }
+                            for (entry, caps) in group {
+                                if let Some(asked) = self.row(ui, look, library, entry, caps) {
+                                    outcome = Some(asked);
+                                }
+                            }
+                        }
+                    });
             })
             .inner_rect;
         (list, outcome)
     }
 
-    /// One post: a pencil for a custom one, its name, and its Inspect menu (also on a
-    /// right-click).
+    /// One post, a row of the group's grid: a pencil for a custom one with its name, its
+    /// version, what it writes, and its Inspect menu (also on a right-click).
     fn row(
         &mut self,
         ui: &mut egui::Ui,
         look: &Look,
         library: &Library,
         entry: &Entry,
+        caps: &Capabilities,
     ) -> Option<PostOutcome> {
         let mut asked = None;
-        ui.horizontal(|ui| {
-            let edge = ui.spacing().interact_size.y;
-            match (entry.is_custom(), (look.picture)("common/edit.png")) {
-                (true, Some(pencil)) => {
-                    ui.add(pencil.fit_to_exact_size(egui::vec2(edge, edge)));
+        let label = ui
+            .horizontal(|ui| {
+                let edge = ui.spacing().interact_size.y;
+                match (entry.is_custom(), (look.picture)("common/edit.png")) {
+                    (true, Some(pencil)) => {
+                        ui.add(pencil.fit_to_exact_size(egui::vec2(edge, edge)));
+                    }
+                    _ => {
+                        ui.add_space(edge + ui.spacing().item_spacing.x);
+                    }
                 }
-                _ => {
-                    ui.add_space(edge + ui.spacing().item_spacing.x);
+                let picked = self.picked.as_ref() == Some(&entry.name);
+                let label = ui.selectable_label(picked, &entry.name);
+                if let Some(why) = &entry.broken {
+                    ui.colored_label(ui.visuals().error_fg_color, "⚠")
+                        .on_hover_hint(why);
                 }
-            }
-            let picked = self.picked.as_ref() == Some(&entry.name);
-            let label = ui.selectable_label(picked, &entry.name);
-            if label.clicked() {
-                self.picked = Some(entry.name.clone());
-            }
-            if let Some(version) = Library::text(entry).ok().and_then(|t| Library::version(&t)) {
+                label
+            })
+            .inner;
+        let label = if caps.about.is_empty() {
+            label
+        } else {
+            label.on_hover_hint(&caps.about)
+        };
+        if label.clicked() {
+            self.picked = Some(entry.name.clone());
+        }
+        match Library::text(entry).ok().and_then(|t| Library::version(&t)) {
+            Some(version) => {
                 ui.weak(version)
                     .on_hover_hint("Version: the date of its last change");
             }
-            if let Some(why) = &entry.broken {
-                ui.colored_label(ui.visuals().error_fg_color, "⚠")
-                    .on_hover_hint(why);
+            None => {
+                ui.label("");
             }
-            // The Inspect icon at the row's end, and the same menu on a right-click
-            let button = ui.menu_button("Inspect ▾", |ui| self.inspect(ui, library, entry));
-            if let Some(Some(a)) = button.inner {
+        }
+        ui.weak(caps.tags())
+            .on_hover_hint("What it writes: units, moves, and G93 for inverse-time feeds");
+        let button = ui.menu_button("Inspect ▾", |ui| self.inspect(ui, library, entry, caps));
+        if let Some(Some(a)) = button.inner {
+            asked = Some(a);
+        }
+        cut_craft_bug_report::context_menu(&label, |ui| {
+            if let Some(a) = self.inspect(ui, library, entry, caps) {
                 asked = Some(a);
             }
-            cut_craft_bug_report::context_menu(&label, |ui| {
-                if let Some(a) = self.inspect(ui, library, entry) {
-                    asked = Some(a);
-                }
-            });
         });
+        ui.end_row();
         asked
     }
 
@@ -1298,6 +1550,7 @@ impl PostManager {
         ui: &mut egui::Ui,
         library: &Library,
         entry: &Entry,
+        caps: &Capabilities,
     ) -> Option<PostOutcome> {
         let mut asked = None;
         if ui.button("View").clicked() {
@@ -1306,6 +1559,14 @@ impl PostManager {
         }
         if ui.button("Changelog").clicked() {
             self.viewing = change_log(entry);
+            ui.close();
+        }
+        if ui
+            .button("Edit Capabilities…")
+            .on_hover_hint("Correct its controller, units or moves, for the filters")
+            .clicked()
+        {
+            self.correcting = Some((entry.clone(), caps.clone()));
             ui.close();
         }
         match &entry.source {
