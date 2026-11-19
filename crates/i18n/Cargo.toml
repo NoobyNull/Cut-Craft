@@ -1,0 +1,15 @@
+[package]
+name = "cut-craft-i18n"
+description = "Cut Craft's words in every language: English built in, language packs over it, and English wherever a pack has no word yet"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Fluent (.ftl): the words, with { $variables }, plurals and per-language grammar
+fluent-bundle = "0.16"
+fluent-syntax = "0.12"
+unic-langid = "0.9"
