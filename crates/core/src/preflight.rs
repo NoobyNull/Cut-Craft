@@ -127,6 +127,8 @@ pub struct Limits {
     pub library: Option<std::collections::BTreeMap<String, Tool>>,
     /// How the machine holds its bits, for the collet and holder checks.
     pub holding: crate::collision::Holding,
+    /// The machine's rotary (4th axis), when it has one its firmware can drive.
+    pub rotary: Option<crate::rotary_axis::RotaryAxis>,
 }
 
 /// Everything found checking `toolpaths`, cut in the order given, on `limits`' machine:
@@ -158,6 +160,7 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
         machine(doc, toolpaths, limits, &mut found);
         keep_out(doc, toolpaths, &mut found);
         tool_numbers(toolpaths, &mut found);
+        rotary_setup(doc, limits, &mut found);
     }
     if doc.job.rotary.is_none() && !progress::cancelled() {
         progress::stage(&Phase::Cutting.stage(""));
@@ -525,6 +528,34 @@ fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     }
 }
 
+/// A rotary job on a machine whose rotary is not set up for it: its centre line not found
+/// yet, or lying the other way from the job's cylinder.
+fn rotary_setup(doc: &Document, limits: &Limits, found: &mut Vec<Finding>) {
+    let (Some(job), Some(axis)) = (doc.job.rotary, limits.rotary) else {
+        return;
+    };
+    if !axis.centre_set {
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            "The rotary's centre line is not set in Machine Configuration. If the bit is not \
+             exactly over the turning axis, a round carving comes out lumpy: find the centre \
+             line (see the help), then tick Centre line found"
+                .to_owned(),
+        ));
+    }
+    if job.along != axis.along {
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            format!(
+                "This job's cylinder lies along {}, but the machine's rotary lies along {}: \
+                 change the job in Job Setup, or the rotary's direction in Machine Configuration",
+                job.along.letter(),
+                axis.along.letter()
+            ),
+        ));
+    }
+}
+
 /// The checks that cannot be made on `toolpaths` with `limits`, each with why: the
 /// machine not saying what it can do, no tool changer or keep-out zones, a rotary job.
 #[must_use]
@@ -577,6 +608,11 @@ pub fn not_checked(
                 "A rotary job is not cut through in order yet: watch its first moves".to_owned(),
             ));
         }
+    }
+    if !rotary {
+        skipped.push((Check::RotarySetup, "Not a rotary job".to_owned()));
+    } else if limits.rotary.is_none() {
+        skipped.push((Check::RotarySetup, config("4th axis")));
     }
     if limits.library.is_none() {
         for check in [Check::GenericTool, Check::MakersFigures] {
@@ -957,6 +993,59 @@ mod tests {
     }
 
     #[test]
+    fn a_rotary_job_asks_for_the_rotarys_centre_line_and_its_direction() {
+        use crate::document::Along;
+        use crate::rotary_axis::RotaryAxis;
+        let doc = Document {
+            job: Job::rotary(200.0, 50.0, Along::Y),
+            ..Document::default()
+        };
+        let cut = slot("Wrap", 20.0, 10.0, 60.0, 2.0);
+        let rotary_findings = |limits: &Limits, doc: &Document| -> Vec<String> {
+            check(doc, &[&cut], limits)
+                .into_iter()
+                .filter(|f| f.check == Check::RotarySetup)
+                .map(|f| f.message)
+                .collect()
+        };
+        let mut limits = Limits {
+            rotary: Some(RotaryAxis::default()),
+            ..Limits::default()
+        };
+        let said = rotary_findings(&limits, &doc);
+        assert_eq!(said.len(), 2, "{said:?}");
+        assert!(said[0].contains("centre line is not set"), "{said:?}");
+        assert!(
+            said[1].contains("lies along Y") && said[1].contains("along X"),
+            "{said:?}"
+        );
+        limits.rotary = Some(RotaryAxis {
+            centre_set: true,
+            along: Along::Y,
+            ..RotaryAxis::default()
+        });
+        assert_eq!(rotary_findings(&limits, &doc), Vec::<String>::new());
+        assert!(
+            !not_checked(&doc, &[&cut], &limits)
+                .iter()
+                .any(|(c, _)| *c == Check::RotarySetup)
+        );
+        let flat = job();
+        assert_eq!(rotary_findings(&limits, &flat), Vec::<String>::new());
+        assert!(
+            not_checked(&flat, &[&cut], &limits)
+                .iter()
+                .any(|(c, why)| *c == Check::RotarySetup && why == "Not a rotary job")
+        );
+        limits.rotary = None;
+        assert!(
+            not_checked(&doc, &[&cut], &limits)
+                .iter()
+                .any(|(c, why)| *c == Check::RotarySetup && why.contains("4th axis"))
+        );
+    }
+
+    #[test]
     fn each_finding_names_the_check_that_found_it() {
         let limits = Limits {
             name: "Shapeoko".into(),
@@ -1162,12 +1251,14 @@ mod tests {
             left: None,
             library: Some(std::collections::BTreeMap::new()),
             holding: crate::collision::Holding::default(),
+            rotary: None,
         };
         let skipped = not_checked(&job(), &[&slot], &limits);
         assert!(
-            skipped
-                .iter()
-                .all(|(c, _)| matches!(c, Check::KeepOut | Check::ToolNumbers)),
+            skipped.iter().all(|(c, _)| matches!(
+                c,
+                Check::KeepOut | Check::ToolNumbers | Check::RotarySetup
+            )),
             "{skipped:?}"
         );
     }
@@ -1450,6 +1541,7 @@ mod tests {
             left: None,
             library: None,
             holding: crate::collision::Holding::default(),
+            rotary: None,
         };
         let found = check(&job(), &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)], &limits);
         let errors = messages(&found, Severity::Error);

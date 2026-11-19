@@ -2106,6 +2106,7 @@ impl CutCraftApp {
                     left: None,
                     library: None,
                     holding: m.holding(),
+                    rotary: m.has_rotary().then_some(m.rotary_axis),
                 });
         limits.left = Some(self.options.confirmations.left());
         limits

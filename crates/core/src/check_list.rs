@@ -24,6 +24,8 @@ pub enum Check {
     ToolNumbers,
     /// No cutting into the keep-out zones (clamps).
     KeepOut,
+    /// A rotary job's rotary set up: its centre line found, lying the job's way.
+    RotarySetup,
     /// Rapid moves clear of the material.
     Rapids,
     /// Cutting that takes material off, not air.
@@ -101,7 +103,7 @@ impl Phase {
 
 impl Check {
     /// Every check, in the order they are listed.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::CanCut,
         Self::UpToDate,
         Self::Bed,
@@ -111,6 +113,7 @@ impl Check {
         Self::ToolChanger,
         Self::ToolNumbers,
         Self::KeepOut,
+        Self::RotarySetup,
         Self::Rapids,
         Self::AirCutting,
         Self::Collisions,
@@ -138,6 +141,7 @@ impl Check {
             Self::ToolChanger => "Bits loaded in the tool changer",
             Self::ToolNumbers => "Each bit its own tool number",
             Self::KeepOut => "Keeps out of keep-out zones",
+            Self::RotarySetup => "Rotary set up",
             Self::Rapids => "Rapid moves clear of the material",
             Self::AirCutting => "Not cutting air",
             Self::Collisions => "Collet and spindle clear of the material",
@@ -194,6 +198,11 @@ impl Check {
             Self::KeepOut => {
                 "No cut goes into a keep-out zone, so the bit does not hit a clamp or \
                  anything else you marked to stay clear of"
+            }
+            Self::RotarySetup => {
+                "For a rotary job, the rotary's centre line has been found and it lies the way \
+                 the job's cylinder does, so the bit cuts round the real turning axis and a \
+                 round carving does not come out lumpy or on the wrong side"
             }
             Self::Rapids => {
                 "Rapid moves (full speed, not cutting) stay clear of the material that is \
@@ -262,6 +271,7 @@ impl Check {
             Self::ToolChanger => "check_tool_changer",
             Self::ToolNumbers => "check_tool_numbers",
             Self::KeepOut => "check_keep_out",
+            Self::RotarySetup => "check_rotary_setup",
             Self::Rapids => "check_rapids",
             Self::AirCutting => "check_air_cutting",
             Self::Collisions => "check_collisions",
@@ -281,7 +291,9 @@ impl Check {
     #[must_use]
     pub fn phase(self) -> Phase {
         match self {
-            Self::Bed | Self::ZTravel | Self::KeepOut | Self::ToolNumbers => Phase::Machine,
+            Self::Bed | Self::ZTravel | Self::KeepOut | Self::ToolNumbers | Self::RotarySetup => {
+                Phase::Machine
+            }
             Self::Rapids | Self::AirCutting => Phase::Cutting,
             Self::Collisions => Phase::Collisions,
             _ => Phase::Settings,

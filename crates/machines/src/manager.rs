@@ -200,6 +200,7 @@ impl MachineManager {
                 return;
             };
             details(ui, machine, library, &mut self.find_firmware);
+            rotary(ui, machine);
             limits(ui, machine);
             holder(ui, machine);
             tool_changer(ui, machine, None);
@@ -563,6 +564,148 @@ fn holder(ui: &mut egui::Ui, machine: &mut Machine) {
                      Database. A bit without them uses the sizes above",
                 );
         });
+}
+
+/// Rotary (4th axis): where it lies, its centre line, which way and how fast A turns, and its
+/// chuck and tailstock. Folded to one line, and shown only on a machine with a 4th axis its
+/// firmware can drive.
+fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
+    use cut_craft_core::document::Along;
+    if !machine.has_rotary() {
+        return;
+    }
+    let (per, length) = if machine.inches {
+        (INCH, " in")
+    } else {
+        (1.0, " mm")
+    };
+    let axis = &mut machine.rotary_axis;
+    let summary = format!(
+        "Rotary (4th axis): along {}, {}",
+        axis.along.letter(),
+        if axis.centre_set {
+            "centre line found"
+        } else {
+            "centre line not found yet"
+        }
+    );
+    // open while there is something still to set
+    egui::CollapsingHeader::new(summary)
+        .id_salt("machine_rotary")
+        .default_open(!axis.centre_set)
+        .show(ui, |ui| {
+            ui.weak(
+                "Where the rotary sits and which way it turns. Rotary jobs cut round its \
+                 turning axis, so the bit must sit exactly over it: a centre line out by half a \
+                 millimetre makes a round carving lumpy",
+            );
+            egui::Grid::new("machine_rotary_axis")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    ui.label("Lies along").on_hover_hint(
+                        "The direction of the turning axis on the bed: along X (left to right, \
+                         most kits) or along Y (front to back)",
+                    );
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut axis.along, Along::X, "X");
+                        ui.radio_value(&mut axis.along, Along::Y, "Y");
+                    });
+                    ui.end_row();
+                    let across = if axis.along == Along::X { "Y" } else { "X" };
+                    let rows = [
+                        (
+                            format!("Centre line {across}"),
+                            &mut axis.centre_across,
+                            format!(
+                                "From work zero across to the turning axis, in {across}. 0 when \
+                                 you zero {across} on the axis, as is usual"
+                            ),
+                        ),
+                        (
+                            "Centre line Z".to_owned(),
+                            &mut axis.centre_z,
+                            "From work zero up to the turning axis. 0 when you zero Z on the \
+                             axis; minus the radius when you zero Z on top of the cylinder"
+                                .to_owned(),
+                        ),
+                    ];
+                    for (label, value, hint) in rows {
+                        ui.label(label).on_hover_hint(hint);
+                        let mut v = *value / per;
+                        if ui
+                            .add(
+                                Number::new(&mut v)
+                                    .speed(0.01)
+                                    .max_decimals(3)
+                                    .suffix(length),
+                            )
+                            .changed()
+                        {
+                            *value = v * per;
+                        }
+                        ui.end_row();
+                    }
+                    ui.label("");
+                    ui.checkbox(&mut axis.centre_set, "Centre line found")
+                        .on_hover_hint(
+                            "Tick once you have found the centre line on the machine and set \
+                             the two values above (Help: The 4th Axis and Your Firmware shows \
+                             how). Until then, the checks before cutting ask about it",
+                        );
+                    ui.end_row();
+                    turning(ui, axis, per, length);
+                });
+        });
+}
+
+/// The rotary's turning rows: which way +A turns, its top speed, and its chuck and
+/// tailstock (lengths shown `per` to the `length` unit).
+fn turning(
+    ui: &mut egui::Ui,
+    axis: &mut cut_craft_core::rotary_axis::RotaryAxis,
+    per: f64,
+    length: &str,
+) {
+    ui.label("+A turns").on_hover_hint(
+        "Seen from the chuck end, looking along the axis. Jog A by +10° and \
+         watch which way the chuck turns",
+    );
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut axis.clockwise, true, "Clockwise");
+        ui.radio_value(&mut axis.clockwise, false, "Anticlockwise");
+    });
+    ui.end_row();
+    ui.label("A top speed").on_hover_hint(
+        "The fastest A turns, from the controller's settings (grblHAL's $113, \
+         FluidNC's max_rate_mm_per_min for A). For cutting times and to keep \
+         feeds within it",
+    );
+    ui.add(
+        Number::new(&mut axis.max_rate)
+            .range(0.0..=f64::MAX)
+            .speed(10.0)
+            .max_decimals(0)
+            .suffix(" °/min"),
+    );
+    ui.end_row();
+    for (label, value, hint) in [
+        (
+            "Chuck",
+            &mut axis.chuck,
+            "How far the chuck and its jaws reach along the axis from where the \
+             material starts. Cuts are kept out of it",
+        ),
+        (
+            "Tailstock",
+            &mut axis.tailstock,
+            "How far the tailstock reaches back along the axis from where the \
+             material ends",
+        ),
+    ] {
+        ui.label(label).on_hover_hint(hint);
+        measure(ui, value, per, length);
+        ui.end_row();
+    }
 }
 
 /// A length for a summary line: no more decimals than it needs.

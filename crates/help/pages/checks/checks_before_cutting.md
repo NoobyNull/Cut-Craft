@@ -68,6 +68,7 @@ back, it stays ticked; a new or changed warning needs a new tick.
 - [Bits loaded in the tool changer](help:check_tool_changer)
 - [Each bit its own tool number](help:check_tool_numbers)
 - [Keeps out of keep-out zones](help:check_keep_out)
+- [Rotary set up](help:check_rotary_setup)
 
 **Cutting the job in order**
 
