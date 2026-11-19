@@ -7,6 +7,40 @@ mod built_in;
 
 pub use built_in::BUILT_IN;
 
+/// The name one of Cut Craft's own rotary posts has now, given the name it had before they
+/// were renamed (machines keep their posts by name): "… Wrap Y to A G93 (mm) …" is now
+/// "… Rotary A, cylinder along X, G93 (mm) …", and GRBL's rotary posts are grblHAL's
+/// (standard GRBL 1.1 has no A axis). `None` for any other name.
+pub fn renamed(old: &str) -> Option<String> {
+    if old == "Cut Craft FluidNC ATC Wrap A G93 (mm) (*.nc)" {
+        return Some("Cut Craft FluidNC ATC Rotary A, G93 (mm) (*.nc)".into());
+    }
+    let rest = old.strip_prefix("Cut Craft ")?;
+    let (controller, rest) = ["GRBL", "Mach3", "FluidNC ATC"]
+        .iter()
+        .find_map(|c| Some((*c, rest.strip_prefix(c)?.strip_prefix(" Wrap ")?)))?;
+    let (along, rest) = if let Some(r) = rest.strip_prefix("Y to A") {
+        ("X", r)
+    } else {
+        ("Y", rest.strip_prefix("X to A")?)
+    };
+    let (g93, rest) = rest
+        .strip_prefix(" G93")
+        .map_or((false, rest), |r| (true, r));
+    if !rest.starts_with(" (") {
+        return None;
+    }
+    let controller = if controller == "GRBL" {
+        "grblHAL"
+    } else {
+        controller
+    };
+    let g93 = if g93 { ", G93" } else { "" };
+    Some(format!(
+        "Cut Craft {controller} Rotary A, cylinder along {along}{g93}{rest}"
+    ))
+}
+
 use cut_craft_core::document::{Along, Datum, Document, Job, ZZero};
 use cut_craft_core::drill_bank::{BankHit, DrillBank, DrillId};
 use cut_craft_core::glam::DVec3;
@@ -1502,6 +1536,45 @@ fn labels(line: &str) -> impl Iterator<Item = &str> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn every_old_rotary_name_is_renamed_to_a_post_cut_craft_has() {
+        use super::*;
+        let names: Vec<String> = BUILT_IN
+            .iter()
+            .map(|(_, text)| Post::parse(text).unwrap().name)
+            .collect();
+        let mut renamed_count = 0;
+        for controller in ["GRBL", "Mach3", "FluidNC ATC"] {
+            for wrapped in ["Y", "X"] {
+                for g93 in ["", " G93"] {
+                    for units in ["mm", "inch"] {
+                        let ext = if controller == "Mach3" { "tap" } else { "nc" };
+                        let old = format!(
+                            "Cut Craft {controller} Wrap {wrapped} to A{g93} ({units}) (*.{ext})"
+                        );
+                        let new = renamed(&old).unwrap();
+                        assert!(names.contains(&new), "{old} -> {new}");
+                        renamed_count += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(renamed_count, 24);
+        let new = renamed("Cut Craft FluidNC ATC Wrap A G93 (mm) (*.nc)").unwrap();
+        assert!(names.contains(&new), "{new}");
+        assert_eq!(
+            renamed("Cut Craft GRBL Wrap Y to A G93 (mm) (*.nc)").as_deref(),
+            Some("Cut Craft grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)")
+        );
+        for kept in [
+            "Cut Craft GRBL Arcs (mm) (*.nc)",
+            "My Wrap Y to A (mm)",
+            "Cut Craft GRBL Wrap Y to Anything",
+        ] {
+            assert_eq!(renamed(kept), None, "{kept}");
+        }
+    }
+
     use super::*;
     use cut_craft_core::Change;
     use cut_craft_core::glam::DVec3;

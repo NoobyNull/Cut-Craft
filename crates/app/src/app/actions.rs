@@ -1438,9 +1438,9 @@ impl CutCraftApp {
                 .posts
                 .iter()
                 .filter(|name| {
-                    self.posts
-                        .load(name)
-                        .is_ok_and(|p| p.wraps() == wraps && (wraps.is_none() || machine.rotary))
+                    self.posts.load(name).is_ok_and(|p| {
+                        p.wraps() == wraps && (wraps.is_none() || machine.has_rotary())
+                    })
                 })
                 .cloned()
                 .collect()
@@ -2035,7 +2035,15 @@ impl CutCraftApp {
             Along::X => "Y",
             Along::Y => "X",
         });
-        if wraps.is_some() && !machine.rotary {
+        if wraps.is_some() && machine.rotary && !machine.firmware().has_a_axis() {
+            return Err(format!(
+                "{} cannot cut this rotary job. {} If its controller runs other firmware, pick \
+                 it under Firmware in Machine Configuration",
+                machine.name,
+                cut_craft_machines::NO_A_AXIS
+            ));
+        }
+        if wraps.is_some() && !machine.has_rotary() {
             return Err(format!(
                 "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
                  Configuration",
@@ -2057,9 +2065,10 @@ impl CutCraftApp {
             .find(|p| p.wraps() == wraps)
             .ok_or_else(|| match wraps {
                 Some(axis) => format!(
-                    "{} has no post wrapping {axis} onto A for this rotary job: add a Wrap \
-                     {axis} to A post in Machine Configuration",
-                    machine.name
+                    "{} has no post for this rotary job: add a Rotary A, cylinder along {} \
+                     post in Machine Configuration",
+                    machine.name,
+                    if axis == "Y" { "X" } else { "Y" }
                 ),
                 None => format!(
                     "{} has only rotary posts: add a flat one in Machine Configuration",

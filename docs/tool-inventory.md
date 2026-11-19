@@ -138,12 +138,16 @@ say "not implemented yet".
   change pauses with M0), skipping names already there; Search for Machine Online opens
   `machines/` in the repository. Cut Craft's own posts: FluidNC ATC (flat and wrapped A),
   and for FluidNC ATC, GRBL (tool changes pause with M0) and Mach3 (`.tap`; T M6, G91.1
-  arcs), in mm and inches: Arcs, Straight, and Wrap Y / X to A with or without G93; all
+  arcs), in mm and inches: Arcs, Straight, and Rotary A, cylinder along X / Y with or without
+  G93 (GRBL's named grblHAL; machines' old "Wrap Y / X to A" names are renamed on loading); all
   written for Cut Craft (`scripts/make_posts.py` makes the variants from three templates).
   Package machines list GRBL Arcs and Straight in mm and inches, Arcs in their units first.
-  A machine's 4th axis (A) tick adds the G93 Wrap Y / X to A twins of its Cut Craft posts;
-  a rotary job saves through the machine's post wrapping its side (Y for a cylinder along
-  X), and is refused on a machine without the 4th axis or without such a post. Flat jobs
+  A machine's Firmware (GRBL 1.1, grblHAL, FluidNC, Mach3 / Mach4, Other; not picked, read
+  from its Controller text, unknown = standard GRBL) decides whether it can have a 4th axis:
+  on standard GRBL the tick is greyed out with a warning linking to the choice. The 4th axis
+  (A) tick adds the G93 Rotary A twins of its Cut Craft posts; a rotary job saves through
+  the machine's post wrapping its side (Y for a cylinder along X), and is refused on a
+  machine without the 4th axis, on standard GRBL, or without such a post. Flat jobs
   skip rotary posts. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows

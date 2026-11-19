@@ -196,6 +196,7 @@ impl Setup {
                 Some(Machine {
                     name: MY_MACHINE.into(),
                     controller: self.controller.label().into(),
+                    firmware: self.controller.firmware(),
                     width: self.bed[0],
                     height: self.bed[1],
                     inches: self.inches,

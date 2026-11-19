@@ -11,6 +11,9 @@ pub struct Machine {
     pub manufacturer: String,
     pub model: String,
     pub controller: String,
+    /// The firmware its controller runs, as picked in Machine Configuration; `None` when
+    /// never picked, read from [`Self::controller`] instead (see [`Self::firmware`]).
+    pub firmware: Option<Firmware>,
     /// Bed size, mm (0 when not given).
     pub width: f64,
     pub height: f64,
@@ -55,7 +58,101 @@ pub struct Machine {
     pub holder_per_bit: bool,
 }
 
+/// The firmware a machine's controller runs: it decides whether the machine can have a 4th
+/// axis (A) at all.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Firmware {
+    /// Standard GRBL 1.1: X, Y and Z only. Also what an unknown firmware is taken for.
+    #[default]
+    Grbl,
+    /// grblHAL, which can be built with up to 8 axes.
+    GrblHal,
+    /// FluidNC, whose axes are set in its config file.
+    FluidNc,
+    /// Mach3 or Mach4, 6 axes.
+    Mach,
+    /// Another firmware, picked as such (it is trusted to have the axes it is used with).
+    Other,
+}
+
+/// What a 4th axis says on a machine whose firmware has none.
+pub const NO_A_AXIS: &str = "Standard GRBL supports only 3 axes (X, Y and Z). For an A axis, \
+                             use custom firmware or your controller's own firmware.";
+
+impl Firmware {
+    pub const ALL: [Self; 5] = [
+        Self::Grbl,
+        Self::GrblHal,
+        Self::FluidNc,
+        Self::Mach,
+        Self::Other,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Grbl => "GRBL 1.1 (standard)",
+            Self::GrblHal => "grblHAL",
+            Self::FluidNc => "FluidNC",
+            Self::Mach => "Mach3 / Mach4",
+            Self::Other => "Other",
+        }
+    }
+
+    /// What it is, for its hover.
+    pub fn hint(self) -> &'static str {
+        match self {
+            Self::Grbl => {
+                "The GRBL most hobby routers ship with (often on an Arduino board): X, Y and Z \
+                 only. Pick this if you are not sure"
+            }
+            Self::GrblHal => {
+                "GRBL rewritten for faster boards. For an A axis, its firmware must be built \
+                 with 4 or more axes and $376 set to make A rotary"
+            }
+            Self::FluidNc => "For ESP32 boards, often WiFi; an A axis is added in its config file",
+            Self::Mach => "Mach3 or Mach4 on a PC, with up to 6 axes",
+            Self::Other => "Another firmware; Cut Craft takes it to have the axes you use",
+        }
+    }
+
+    /// It can drive an A axis together with X, Y and Z.
+    pub fn has_a_axis(self) -> bool {
+        self != Self::Grbl
+    }
+
+    /// The firmware a machine's Controller text names; standard GRBL when it names none
+    /// (unknown firmware is taken for standard GRBL, which has no A axis).
+    pub fn guess(controller: &str) -> Self {
+        let text = controller.to_ascii_lowercase().replace(' ', "");
+        // first-time setup's "grbl or grblHAL" does not say which
+        if text.contains("grblorgrblhal") {
+            Self::Grbl
+        } else if text.contains("grblhal") {
+            Self::GrblHal
+        } else if text.contains("fluidnc") {
+            Self::FluidNc
+        } else if text.contains("mach3") || text.contains("mach4") {
+            Self::Mach
+        } else {
+            Self::Grbl
+        }
+    }
+}
+
 impl Machine {
+    /// The firmware its controller runs: the one picked, else the one its Controller text
+    /// names, else standard GRBL.
+    pub fn firmware(&self) -> Firmware {
+        self.firmware
+            .unwrap_or_else(|| Firmware::guess(&self.controller))
+    }
+
+    /// It has a 4th axis (A) its firmware can drive: ticked, on firmware other than standard
+    /// GRBL. A tick kept from before stays, and counts again if the firmware is changed.
+    pub fn has_rotary(&self) -> bool {
+        self.rotary && self.firmware().has_a_axis()
+    }
+
     /// How it holds its bits, for the collet and holder checks.
     pub fn holding(&self) -> cut_craft_core::collision::Holding {
         cut_craft_core::collision::Holding {
@@ -130,15 +227,20 @@ impl Machine {
     }
 
     /// Ticking the 4th axis: for each of Cut Craft's flat posts the machine has, its rotary
-    /// twins in `library` (`… Wrap Y to A G93 (units)` and `… Wrap X to A G93 (units)`), so
-    /// both directions of cylinder can be cut. Custom posts have no twins to find.
+    /// twins in `library` (`… Rotary A, cylinder along X, G93 (units)` and the same along
+    /// Y), so both directions of cylinder can be cut. GRBL's twins are grblHAL's: standard
+    /// GRBL has no A axis. Custom posts have no twins to find.
     pub fn add_rotary_posts(&mut self, library: &[String]) {
         let mut twins = vec![];
         for post in &self.posts {
             let base = post.replace(" Arcs (", " (").replace(" Straight (", " (");
             let Some(at) = base.find(" (") else { continue };
-            for wrapped in ["Y", "X"] {
-                let twin = format!("{} Wrap {wrapped} to A G93{}", &base[..at], &base[at..]);
+            let controller = base[..at].replace("Cut Craft GRBL", "Cut Craft grblHAL");
+            for along in ["X", "Y"] {
+                let twin = format!(
+                    "{controller} Rotary A, cylinder along {along}, G93{}",
+                    &base[at..]
+                );
                 if library.contains(&twin) && !self.posts.contains(&twin) && !twins.contains(&twin)
                 {
                     twins.push(twin);
@@ -146,6 +248,16 @@ impl Machine {
             }
         }
         self.posts.extend(twins);
+    }
+
+    /// Its posts named as Cut Craft's own rotary posts were before they were renamed
+    /// ("… Wrap Y to A …"), given their names now.
+    pub fn rename_old_posts(&mut self) {
+        for name in self.posts.iter_mut().chain(&mut self.default_post) {
+            if let Some(new) = cut_craft_post::renamed(name) {
+                *name = new;
+            }
+        }
     }
 
     /// The post toolpaths are saved through, by name.
@@ -175,7 +287,12 @@ impl Machines {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
             Err(e) => return Err(format!("{}: {e}", path.display())),
         };
-        serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))
+        let mut machines: Self =
+            serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        for machine in &mut machines.machines {
+            machine.rename_old_posts();
+        }
+        Ok(machines)
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
@@ -243,7 +360,8 @@ impl Machines {
     pub fn install(&mut self, package: Self) -> (usize, usize) {
         let offered = package.machines.len();
         let before = self.machines.len();
-        for machine in package.machines {
+        for mut machine in package.machines {
+            machine.rename_old_posts();
             if !self.machines.iter().any(|m| m.name == machine.name) {
                 self.machines.push(machine);
             }
@@ -387,10 +505,10 @@ mod packages {
         assert_eq!(
             added,
             [
-                "Cut Craft GRBL Wrap Y to A G93 (mm) (*.nc)",
-                "Cut Craft GRBL Wrap X to A G93 (mm) (*.nc)",
-                "Cut Craft GRBL Wrap Y to A G93 (inch) (*.nc)",
-                "Cut Craft GRBL Wrap X to A G93 (inch) (*.nc)",
+                "Cut Craft grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)",
+                "Cut Craft grblHAL Rotary A, cylinder along Y, G93 (mm) (*.nc)",
+                "Cut Craft grblHAL Rotary A, cylinder along X, G93 (inch) (*.nc)",
+                "Cut Craft grblHAL Rotary A, cylinder along Y, G93 (inch) (*.nc)",
             ],
             "both directions in both units, once; a custom post has none"
         );
@@ -404,6 +522,83 @@ mod packages {
             3,
             "the default post's twins: {:?}",
             atc.posts
+        );
+    }
+
+    #[test]
+    fn the_firmware_is_the_one_picked_else_read_from_the_controller_else_standard_grbl() {
+        let on = |controller: &str| Machine {
+            controller: controller.into(),
+            ..Machine::default()
+        };
+        for (controller, firmware) in [
+            ("", Firmware::Grbl),
+            ("GRBL", Firmware::Grbl),
+            ("Carbide Motion (GRBL)", Firmware::Grbl),
+            ("grbl or grblHAL", Firmware::Grbl),
+            ("grblHAL", Firmware::GrblHal),
+            ("FluidNC", Firmware::FluidNc),
+            ("Mach3", Firmware::Mach),
+            ("Mach 4", Firmware::Mach),
+            ("LinuxCNC", Firmware::Grbl),
+        ] {
+            assert_eq!(on(controller).firmware(), firmware, "{controller}");
+        }
+        let mut picked = on("GRBL");
+        picked.firmware = Some(Firmware::FluidNc);
+        assert_eq!(picked.firmware(), Firmware::FluidNc);
+    }
+
+    #[test]
+    fn a_4th_axis_counts_only_on_firmware_with_an_a_axis() {
+        let mut machine = Machine {
+            rotary: true,
+            ..Machine::default()
+        };
+        assert!(!machine.has_rotary(), "unknown firmware is standard GRBL");
+        machine.firmware = Some(Firmware::GrblHal);
+        assert!(machine.has_rotary());
+        machine.firmware = Some(Firmware::Grbl);
+        assert!(!machine.has_rotary());
+        assert!(
+            machine.rotary,
+            "the tick is kept for when the firmware changes"
+        );
+        assert!(
+            Firmware::ALL
+                .iter()
+                .filter(|f| !f.has_a_axis())
+                .eq([&Firmware::Grbl])
+        );
+    }
+
+    #[test]
+    fn old_rotary_post_names_are_renamed_on_loading() {
+        let path =
+            std::env::temp_dir().join(format!("cut-craft-renamed-{}.json", std::process::id()));
+        let old = "Cut Craft GRBL Wrap Y to A G93 (mm) (*.nc)";
+        let machines = Machines {
+            machines: vec![Machine {
+                posts: vec!["Cut Craft GRBL Arcs (mm) (*.nc)".into(), old.into()],
+                default_post: Some(old.into()),
+                ..Machine::default()
+            }],
+            active: 0,
+        };
+        machines.save(&path).unwrap();
+        let loaded = Machines::load(&path).unwrap();
+        std::fs::remove_file(&path).ok();
+        let new = "Cut Craft grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)";
+        assert_eq!(
+            loaded.machines[0].posts,
+            ["Cut Craft GRBL Arcs (mm) (*.nc)", new]
+        );
+        assert_eq!(loaded.machines[0].default_post.as_deref(), Some(new));
+        let mut mine = Machines::default();
+        mine.install(machines);
+        assert_eq!(
+            mine.machines[0].posts[1], new,
+            "a package's are renamed too"
         );
     }
 

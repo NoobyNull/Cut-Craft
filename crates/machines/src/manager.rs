@@ -4,7 +4,7 @@
 
 use crate::capabilities::{Capabilities, CapabilityDb, Family, Filter, Moves};
 use crate::library::{Entry, Library, Source};
-use crate::machine::{Machine, Machines};
+use crate::machine::{Firmware, Machine, Machines, NO_A_AXIS};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use eframe::egui;
@@ -133,6 +133,8 @@ pub struct MachineManager {
     post_filter: Filter,
     /// Whether Add a post-processor's list was open last frame.
     adding_post: bool,
+    /// The 4th axis warning's link was clicked: show and focus the Firmware choice.
+    find_firmware: bool,
 }
 
 impl MachineManager {
@@ -145,6 +147,7 @@ impl MachineManager {
             viewing: None,
             post_filter: Filter::default(),
             adding_post: false,
+            find_firmware: false,
         }
     }
 
@@ -196,7 +199,7 @@ impl MachineManager {
                 outcome = buttons(ui, false, dirty).or(outcome.take());
                 return;
             };
-            details(ui, machine, library);
+            details(ui, machine, library, &mut self.find_firmware);
             limits(ui, machine);
             holder(ui, machine);
             tool_changer(ui, machine, None);
@@ -290,8 +293,10 @@ impl MachineManager {
     }
 }
 
-/// Name, maker, model, controller, bed size, Z travel and 4th axis, in a framed block.
-fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
+/// Name, maker, model, controller, firmware, bed size, Z travel and 4th axis, in a framed
+/// block. `find_firmware`: the 4th axis warning's link was clicked, so the Firmware choice is
+/// scrolled to and focused.
+fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_firmware: &mut bool) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         egui::Grid::new("machine_details")
@@ -301,12 +306,22 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
                     ("Name", &mut machine.name),
                     ("Manufacturer", &mut machine.manufacturer),
                     ("Model", &mut machine.model),
-                    ("Controller", &mut machine.controller),
                 ] {
                     ui.label(label);
                     ui.add(egui::TextEdit::singleline(value).desired_width(f32::INFINITY));
                     ui.end_row();
                 }
+                // the controller (board) and the firmware it runs, side by side
+                ui.label("Controller");
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut machine.controller)
+                            .desired_width((ui.available_width() - 290.0).max(120.0)),
+                    );
+                    ui.label("Firmware");
+                    firmware(ui, machine, find_firmware);
+                });
+                ui.end_row();
                 let (per, unit) = if machine.inches {
                     (INCH, " in")
                 } else {
@@ -328,21 +343,80 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
                 });
                 ui.end_row();
                 ui.label("4th axis");
-                let ticked = ui
-                    .checkbox(&mut machine.rotary, "A, turning the material (rotary jobs)")
-                    .on_hover_hint(
-                        "Rotary jobs are saved through the machine's post that wraps their side \
-                         onto A; ticking this adds Cut Craft's for its posts",
-                    )
-                    .changed();
-                if ticked && machine.rotary {
-                    let names: Vec<String> =
-                        library.entries().into_iter().map(|e| e.name).collect();
-                    machine.add_rotary_posts(&names);
+                let can = machine.firmware().has_a_axis();
+                let mut ticked = machine.rotary && can;
+                let mut changed = false;
+                ui.horizontal(|ui| {
+                    changed = ui
+                        .add_enabled(
+                            can,
+                            egui::Checkbox::new(
+                                &mut ticked,
+                                "A, turning the material (rotary jobs)",
+                            ),
+                        )
+                        .on_hover_hint(
+                            "Rotary jobs are saved through the machine's post that turns their \
+                             side into A; ticking this adds Cut Craft's for its posts",
+                        )
+                        .on_disabled_hover_text(NO_A_AXIS)
+                        .changed();
+                    // greyed out: why, and the way to the Firmware choice
+                    if !can
+                        && ui
+                            .link("Why greyed out?")
+                            .on_hover_text(format!("{NO_A_AXIS} Click to pick the firmware."))
+                            .clicked()
+                    {
+                        *find_firmware = true;
+                    }
+                });
+                if changed {
+                    machine.rotary = ticked;
+                    if ticked {
+                        let names: Vec<String> =
+                            library.entries().into_iter().map(|e| e.name).collect();
+                        machine.add_rotary_posts(&names);
+                    }
                 }
                 ui.end_row();
             });
+        // a 4th axis ticked before, that its firmware cannot drive (below the grid, so it
+        // wraps to the window)
+        if machine.rotary && !machine.firmware().has_a_axis() {
+            ui.colored_label(ui.visuals().error_fg_color, format!("⚠ {NO_A_AXIS}"));
+        }
     });
+}
+
+/// The Firmware choice: the one picked, else the one the Controller text names, else
+/// standard GRBL; each says what it is on hover.
+fn firmware(ui: &mut egui::Ui, machine: &mut Machine, find: &mut bool) {
+    let now = machine.firmware();
+    let combo = egui::ComboBox::from_id_salt("machine_firmware")
+        .selected_text(now.label())
+        .width(180.0)
+        .show_ui(ui, |ui| {
+            for f in Firmware::ALL {
+                if ui
+                    .selectable_label(now == f && machine.firmware.is_some(), f.label())
+                    .on_hover_hint(f.hint())
+                    .clicked()
+                {
+                    machine.firmware = Some(f);
+                }
+            }
+        });
+    let response = combo.response.on_hover_hint(
+        "Which firmware the controller runs. It decides whether the machine can have a 4th axis: \
+         standard GRBL has none. Not picked, it is read from Controller, and taken for standard \
+         GRBL when Controller does not name one",
+    );
+    if std::mem::take(find) {
+        response.scroll_to_me(Some(egui::Align::Center));
+        response.request_focus();
+        response.highlight();
+    }
 }
 
 /// A length (or a rate of one) kept in mm and shown `per` to the unit: 0 reads as not given.
