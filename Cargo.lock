@@ -1679,6 +1679,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-rotary-machining-toolpath"
+version = "0.6.18"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-rotate"
 version = "0.6.18"
 dependencies = [
@@ -2413,6 +2422,7 @@ dependencies = [
  "cmd-reset-inside-selected-vectors",
  "cmd-reset-outside-selected-vectors",
  "cmd-reverse-direction",
+ "cmd-rotary-machining-toolpath",
  "cmd-rotate",
  "cmd-rounding-toolpath",
  "cmd-scale-model-z-height",

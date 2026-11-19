@@ -97,7 +97,7 @@ const MARK_DEPTH: f64 = 0.5;
 
 /// The model as radii round the axis, on a grid of (along, round) cells: what the drop
 /// works from.
-struct Round {
+struct Turned {
     /// Cells along the axis, and round it.
     along: usize,
     round: usize,
@@ -112,7 +112,7 @@ struct Round {
     least: f64,
 }
 
-impl Round {
+impl Turned {
     /// `surface` (heights below the material's top, unrolled) as radii, on cells no larger
     /// than `cell`, each the highest of the surface under it so nothing is missed.
     #[expect(
@@ -172,11 +172,11 @@ impl Round {
         clippy::cast_precision_loss,
         reason = "cell indices are small"
     )]
-    fn drop(&self, tool: &Tool, a: f64, w: f64, allowance: f64) -> f64 {
+    fn drop(&self, tool: &Tool, along: f64, round: f64, allowance: f64) -> f64 {
         use std::f64::consts::FRAC_PI_2;
         let rb = tool.diameter / 2.0;
         let ball = tool.shape == ToolShape::BallNose;
-        let theta = w / self.radius;
+        let theta = round / self.radius;
         // how far round the bit can reach: furthest where the model comes nearest the axis
         let least = self.least + allowance;
         let reach = if least > rb {
@@ -185,28 +185,28 @@ impl Round {
             FRAC_PI_2
         };
         let across = (rb / self.along_cell).ceil() as i64 + 1;
-        let round =
+        let spread =
             ((reach * self.radius / self.round_cell).ceil() as i64 + 1).min(self.round as i64 / 2);
-        let i0 = (a / self.along_cell).floor() as i64;
-        let j0 = (w / self.round_cell).floor() as i64;
+        let first_col = (along / self.along_cell).floor() as i64;
+        let first_row = (round / self.round_cell).floor() as i64;
         let mut tip: f64 = 0.0;
         for di in -across..=across {
-            let i = i0 + di;
-            if i < 0 || i >= self.along as i64 {
+            let col = first_col + di;
+            if col < 0 || col >= self.along as i64 {
                 continue;
             }
-            let dx = (i as f64 + 0.5) * self.along_cell - a;
+            let dx = (col as f64 + 0.5) * self.along_cell - along;
             if dx.abs() > rb {
                 continue;
             }
-            for dj in -round..=round {
-                let j = (j0 + dj).rem_euclid(self.round as i64) as usize;
-                let phi = (j0 + dj) as f64 * self.round_cell + 0.5 * self.round_cell;
+            for dj in -spread..=spread {
+                let row = (first_row + dj).rem_euclid(self.round as i64) as usize;
+                let phi = (first_row + dj) as f64 * self.round_cell + 0.5 * self.round_cell;
                 let phi = phi / self.radius - theta;
                 if phi.abs() >= FRAC_PI_2 {
                     continue;
                 }
-                let r = self.radii[j * self.along + i as usize] + allowance;
+                let r = self.radii[row * self.along + col as usize] + allowance;
                 let side = r * phi.sin();
                 let gap = rb * rb - dx * dx - side * side;
                 if gap < 0.0 {
@@ -258,7 +258,7 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
     progress::stage("Placing the model");
     let surface = placed_model(doc, tool)?;
     let cell = (tool.diameter / 16.0).max(surface.cell);
-    let round = Round::of(&surface, radius, along_x, (length, circumference), cell);
+    let round = Turned::of(&surface, radius, along_x, (length, circumference), cell);
     let start = p.start.clamp(0.0, length);
     let end = if p.end > 0.0 {
         p.end.min(length)
@@ -436,7 +436,7 @@ mod tests {
         doc.apply(&c.finish()).unwrap();
         let tool = ball(6.0);
         let surface = placed_model(&doc, &tool).unwrap();
-        let round = Round::of(&surface, 20.0, true, (60.0, circumference), 0.1);
+        let round = Turned::of(&surface, 20.0, true, (60.0, circumference), 0.1);
         let rb = 3.0;
         for w in [
             0.0,
