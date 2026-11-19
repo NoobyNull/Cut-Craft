@@ -2,6 +2,7 @@
 //! post-processors it saves toolpaths through, and the post library they come from: Cut
 //! Craft's own posts and the user's custom ones, kept in a folder of their own.
 
+pub mod capabilities;
 pub mod catalogue;
 pub mod library;
 pub mod machine;
@@ -9,6 +10,7 @@ pub mod manager;
 pub mod send;
 pub mod webdav;
 
+pub use capabilities::{Capabilities, CapabilityDb, Family, Filter, Moves};
 pub use catalogue::{Controller, catalogue, makers};
 pub use library::{Entry, Library};
 pub use machine::{Machine, Machines};
