@@ -50,9 +50,8 @@ Once the 4th axis is ticked, Machine Configuration shows **Rotary (4th axis)**. 
 4. Halfway between the two is the centre line. Jog there and set work zero across the bed
    (Y0) there. Then **Centre line Y** is 0. If you zero somewhere else, type the distance from
    your zero to the centre line instead.
-5. For Z: zero Z on the axis (touch the top of the pin, then go down by half its diameter) and
-   **Centre line Z** is 0. If you zero Z on top of the cylinder instead, type minus its
-   radius.
+5. For Z, zero where Job Setup says: on the axis (touch the top of the pin, then go down by
+   half its diameter) or on the top of the cylinder. Nothing to type here: the job knows which.
 6. Tick **Centre line found**.
 7. Jog A by +10° and watch which way the chuck turns, seen from the chuck end. Set **+A turns**
    to match.

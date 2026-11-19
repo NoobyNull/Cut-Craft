@@ -15,11 +15,9 @@ pub struct RotaryAxis {
     /// offsets below measured; until then the checks before cutting ask about it.
     pub centre_set: bool,
     /// Across the bed from work zero to the turning axis, mm: Y for a rotary along X, X for
-    /// one along Y. 0 when work zero is set on the axis, as is usual.
+    /// one along Y. 0 when work zero is set on the axis, as is usual. (Its height is the
+    /// job's: Job Setup's Z zero, on the axis or on the cylinder's top.)
     pub centre_across: f64,
-    /// Up from work zero to the turning axis, mm: 0 with Z zero on the axis; minus the
-    /// radius with Z zero on the top of the cylinder.
-    pub centre_z: f64,
     /// +A turns clockwise, seen from the chuck end.
     pub clockwise: bool,
     /// The fastest A turns, degrees a minute: for cutting times, and to keep inverse-time
@@ -37,7 +35,6 @@ impl Default for RotaryAxis {
             along: Along::X,
             centre_set: false,
             centre_across: 0.0,
-            centre_z: 0.0,
             clockwise: true,
             max_rate: 3600.0,
             chuck: 40.0,

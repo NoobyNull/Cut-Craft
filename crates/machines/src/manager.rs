@@ -612,44 +612,30 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                     });
                     ui.end_row();
                     let across = if axis.along == Along::X { "Y" } else { "X" };
-                    let rows = [
-                        (
-                            format!("Centre line {across}"),
-                            &mut axis.centre_across,
-                            format!(
-                                "From work zero across to the turning axis, in {across}. 0 when \
-                                 you zero {across} on the axis, as is usual"
-                            ),
-                        ),
-                        (
-                            "Centre line Z".to_owned(),
-                            &mut axis.centre_z,
-                            "From work zero up to the turning axis. 0 when you zero Z on the \
-                             axis; minus the radius when you zero Z on top of the cylinder"
-                                .to_owned(),
-                        ),
-                    ];
-                    for (label, value, hint) in rows {
-                        ui.label(label).on_hover_hint(hint);
-                        let mut v = *value / per;
-                        if ui
-                            .add(
-                                Number::new(&mut v)
-                                    .speed(0.01)
-                                    .max_decimals(3)
-                                    .suffix(length),
-                            )
-                            .changed()
-                        {
-                            *value = v * per;
-                        }
-                        ui.end_row();
+                    ui.label(format!("Centre line {across}"))
+                        .on_hover_hint(format!(
+                            "From work zero across to the turning axis, in {across}. 0 when you \
+                         zero {across} on the axis, as is usual. (Its height comes from Job \
+                         Setup: Z zero on the axis or on the cylinder's top)"
+                        ));
+                    let mut v = axis.centre_across / per;
+                    if ui
+                        .add(
+                            Number::new(&mut v)
+                                .speed(0.01)
+                                .max_decimals(3)
+                                .suffix(length),
+                        )
+                        .changed()
+                    {
+                        axis.centre_across = v * per;
                     }
+                    ui.end_row();
                     ui.label("");
                     ui.checkbox(&mut axis.centre_set, "Centre line found")
                         .on_hover_hint(
                             "Tick once you have found the centre line on the machine and set \
-                             the two values above (Help: The 4th Axis and Your Firmware shows \
+                             the value above (Help: The 4th Axis and Your Firmware shows \
                              how). Until then, the checks before cutting ask about it",
                         );
                     ui.end_row();
