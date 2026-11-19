@@ -20,15 +20,15 @@ part-way through a job.
 
 ## Setting it
 
-![Machine Configuration on standard GRBL: the 4th axis greyed out, with the warning](pictures/concepts/rotary_firmware.png)
+![Machine Configuration on standard GRBL: no 4th axis to tick](pictures/concepts/rotary_firmware.png)
 
 1. Open **Machine ▸ Machine Configuration** and pick your machine.
 2. Choose its **Firmware**. Until you choose, Cut Craft reads it from the **Controller** box
    (for example "grblHAL" or "FluidNC"). If that names none, it takes **standard GRBL**,
    which has no A axis.
-3. Tick **4th axis**. On standard GRBL the tick is greyed out, with this warning:
-   *"Standard GRBL supports only 3 axes (X, Y and Z). For an A axis, use custom firmware or
-   your controller's own firmware."* Its link takes you to the Firmware choice.
+3. Tick **4th axis**. On standard GRBL there is no **4th axis** to tick at all: standard GRBL
+   supports only 3 axes (X, Y and Z). For an A axis, use custom firmware or your controller's
+   own firmware, and choose it under **Firmware**.
 4. Press **Apply**.
 
 Ticking **4th axis** adds Cut Craft's rotary posts for your machine, named **Rotary A, cylinder
@@ -36,5 +36,6 @@ along X** and **along Y**. GRBL's are named **grblHAL**, since standard GRBL can
 Choose posts in [Post-Processor Management](help:post_processor_management), and set up a
 rotary job in [Job Setup](help:job_setup).
 
-If you change the firmware back to standard GRBL, the tick is kept but doesn't count, and
-[Save Toolpaths](help:save_toolpaths) won't save a rotary job for that machine.
+If you change the firmware back to standard GRBL, the 4th axis disappears and a red warning
+says why, with a link to the Firmware choice. [Save Toolpaths](help:save_toolpaths) won't save
+a rotary job for that machine.
