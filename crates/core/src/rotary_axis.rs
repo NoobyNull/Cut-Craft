@@ -37,6 +37,17 @@ pub struct RotaryAxis {
     /// How far A turns before it moves the material when it changes direction, degrees: the
     /// file turns that much further on each change of direction. 0 for none.
     pub backlash: f64,
+    /// How high the turning axis is above the spoilboard's top, mm: the most material can
+    /// swing out below it. 0 until measured.
+    pub axis_height: f64,
+    /// How thick the spoilboard under the rotary is, mm.
+    pub spoilboard: f64,
+    /// The spoilboard is taken out from under the rotary, so material can swing down past
+    /// where its top was, to the bed.
+    pub spoilboard_off: bool,
+    /// How high above the turning axis the bit's tip is with Z all the way up, mm: the most
+    /// material can swing out above it. 0 until measured.
+    pub room_above: f64,
 }
 
 /// How far A may turn one way.
@@ -77,11 +88,37 @@ impl Default for RotaryAxis {
             turns: 2.0,
             at_limit: AtLimit::CutBothWays,
             backlash: 0.0,
+            axis_height: 0.0,
+            spoilboard: 0.0,
+            spoilboard_off: false,
+            room_above: 0.0,
         }
     }
 }
 
 impl RotaryAxis {
+    /// How far out from the axis material can swing before it hits what is under the
+    /// rotary, mm: the axis height, and the spoilboard's thickness too with it taken out.
+    /// `None` until the axis height is measured.
+    #[must_use]
+    pub fn room_below(&self) -> Option<f64> {
+        (self.axis_height > 0.0).then(|| {
+            self.axis_height
+                + if self.spoilboard_off {
+                    self.spoilboard.max(0.0)
+                } else {
+                    0.0
+                }
+        })
+    }
+
+    /// How far out from the axis material can swing and still turn under the bit lifted
+    /// all the way up, mm. `None` until measured.
+    #[must_use]
+    pub fn room_above(&self) -> Option<f64> {
+        (self.room_above > 0.0).then_some(self.room_above)
+    }
+
     /// How far A may turn either way from where it started, degrees; `None` when it is free.
     #[must_use]
     pub fn limit(&self) -> Option<f64> {
@@ -158,5 +195,26 @@ mod tests {
         assert_eq!(axis.across_sign(Along::Y), -1.0);
         axis.clockwise = false;
         assert_eq!(axis.across_sign(Along::X), -1.0);
+    }
+
+    #[test]
+    fn taking_the_spoilboard_out_gives_material_more_room_below() {
+        let mut axis = RotaryAxis::default();
+        assert_eq!(axis.room_below(), None, "not measured yet");
+        assert_eq!(axis.room_above(), None);
+        axis.axis_height = 60.0;
+        axis.spoilboard = 18.0;
+        assert_eq!(axis.room_below(), Some(60.0));
+        axis.spoilboard_off = true;
+        assert_eq!(axis.room_below(), Some(78.0));
+        axis.room_above = 90.0;
+        assert_eq!(axis.room_above(), Some(90.0));
+    }
+
+    #[test]
+    fn old_machines_without_the_room_settings_still_load() {
+        let old = r#"{"along":"x","centre_set":true,"centre_across":2.0}"#;
+        let axis: RotaryAxis = serde_json::from_str(old).unwrap();
+        assert!(axis.centre_set && axis.room_below().is_none() && !axis.spoilboard_off);
     }
 }

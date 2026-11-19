@@ -629,6 +629,7 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                     ui.end_row();
                     turning(ui, axis, per, length);
                     winding(ui, axis);
+                    room(ui, axis, per, length);
                 });
         });
 }
@@ -681,6 +682,39 @@ fn turning(
         measure(ui, value, per, length);
         ui.end_row();
     }
+}
+
+/// How much room material has to swing round the axis: down to the spoilboard (or the bed
+/// with it out) and up to the bit lifted all the way (lengths shown `per` to the `length`
+/// unit). 0 is not measured yet.
+fn room(
+    ui: &mut egui::Ui,
+    axis: &mut cut_craft_core::rotary_axis::RotaryAxis,
+    per: f64,
+    length: &str,
+) {
+    ui.label("Axis height").on_hover_hint(
+        "From the top of the spoilboard up to the turning axis: the middle of the chuck. \
+         Material turning on the rotary can swing out no further than this below it. 0 until \
+         you measure it",
+    );
+    measure(ui, &mut axis.axis_height, per, length);
+    ui.end_row();
+    ui.label("Spoilboard").on_hover_hint(
+        "How thick the spoilboard under the rotary is. Take it out and material can swing \
+         down past where its top was, to the bed",
+    );
+    ui.horizontal(|ui| {
+        measure(ui, &mut axis.spoilboard, per, length);
+        ui.checkbox(&mut axis.spoilboard_off, "Taken out");
+    });
+    ui.end_row();
+    ui.label("Room above").on_hover_hint(
+        "With Z all the way up, from the turning axis up to the tip of the bit. Material can \
+         turn under the bit only if it swings out less than this. 0 until you measure it",
+    );
+    measure(ui, &mut axis.room_above, per, length);
+    ui.end_row();
 }
 
 /// How far A may wind one way, what happens at the limit, and its backlash.

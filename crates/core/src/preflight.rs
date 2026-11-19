@@ -607,6 +607,7 @@ fn rotary_setup(
             ),
         ));
     }
+    room(&job, &axis, toolpaths, found);
     if job.along != axis.along {
         found.push(Finding::warning(
             Check::RotarySetup,
@@ -618,6 +619,111 @@ fn rotary_setup(
             ),
         ));
     }
+}
+
+/// Whether the material has room to turn on the rotary: below it down to the spoilboard
+/// (or the bed with the spoilboard out), above it up to the bit lifted all the way, and
+/// whether the toolpaths lift the bit clear of its corners before A turns.
+fn room(
+    job: &crate::document::Rotary,
+    axis: &crate::rotary_axis::RotaryAxis,
+    toolpaths: &[&Toolpath],
+    found: &mut Vec<Finding>,
+) {
+    use crate::document::Blank;
+    let swing = job.swing();
+    let radius = job.diameter / 2.0;
+    let shape = match job.blank {
+        Blank::Round => "round material's sides",
+        Blank::Square => "square material's corners",
+        Blank::Board { .. } => "board's edges",
+    };
+    match axis.room_below() {
+        Some(below) if swing > below + 1e-9 => {
+            let fix = if !axis.spoilboard_off && swing <= below + axis.spoilboard.max(0.0) {
+                "take the spoilboard out from under the rotary (and tick Spoilboard taken \
+                 out in Machine Configuration's Rotary)"
+            } else {
+                "use smaller material, or raise the rotary"
+            };
+            found.push(Finding::warning(
+                Check::RotarySetup,
+                format!(
+                    "The {shape} swing {swing:.1} mm out from the turning axis, but the axis is \
+                     only {below:.1} mm above what is under it: the material hits it as it \
+                     turns. {}",
+                    capitalised(fix)
+                ),
+            ));
+        }
+        None if job.blank != Blank::Round => found.push(Finding::warning(
+            Check::RotarySetup,
+            format!(
+                "The {shape} swing {swing:.1} mm out from the turning axis as A turns. Measure \
+                 the axis height in Machine Configuration's Rotary so it can be checked that \
+                 they clear the spoilboard"
+            ),
+        )),
+        _ => {}
+    }
+    if let Some(above) = axis.room_above() {
+        if swing + 1e-9 >= above {
+            found.push(Finding::warning(
+                Check::RotarySetup,
+                format!(
+                    "The {shape} swing {swing:.1} mm out from the turning axis, but with Z all \
+                     the way up the bit is only {above:.1} mm above it: A can't turn the \
+                     material under the bit. Use smaller material, or a shorter bit"
+                ),
+            ));
+        }
+        let highest = toolpaths
+            .iter()
+            .flat_map(|t| t.moves.iter().map(move |m| (t, radius + m.to.z)))
+            .max_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((t, high)) = highest
+            && high > above + 1e-9
+        {
+            found.push(Finding::warning(
+                Check::RotarySetup,
+                format!(
+                    "\"{}\" lifts the bit {high:.1} mm above the turning axis, higher than Z \
+                     can go ({above:.1} mm): lower the clearance (Z1) in Job Setup",
+                    t.name
+                ),
+            ));
+        }
+    }
+    // A turning with the bit lower than the material swings: it knocks into a corner
+    let round = |p: DVec3| if job.along == Along::X { p.y } else { p.x };
+    for t in toolpaths {
+        let low = t.moves.windows(2).find(|m| {
+            m[1].kind == MoveKind::Rapid
+                && (round(m[1].to) - round(m[0].to)).abs() > 1e-6
+                && radius + m[0].to.z.min(m[1].to.z) < swing - 1e-6
+        });
+        if let Some(m) = low {
+            let high = radius + m[0].to.z.min(m[1].to.z);
+            found.push(Finding::warning(
+                Check::RotarySetup,
+                format!(
+                    "\"{}\" turns A with the bit {high:.1} mm above the turning axis, but the \
+                     {shape} swing out to {swing:.1} mm: the bit knocks into the material. \
+                     Raise Clearance (Z1) in Job Setup to {:.1} mm or more, and calculate it \
+                     again",
+                    t.name,
+                    (swing - radius + 1.0).ceil()
+                ),
+            ));
+        }
+    }
+}
+
+fn capitalised(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
 }
 
 /// The checks that cannot be made on `toolpaths` with `limits`, each with why: the
@@ -1119,6 +1225,136 @@ mod tests {
                 .iter()
                 .any(|(c, why)| *c == Check::RotarySetup && why.contains("4th axis"))
         );
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one board, checked against each measure of room in turn"
+    )]
+    fn a_board_on_the_rotary_must_clear_the_spoilboard_the_bit_and_the_rapids_as_it_turns() {
+        use crate::document::{Along, Blank, Rotary};
+        use crate::rotary_axis::RotaryAxis;
+        use crate::toolpath::Move;
+        let mut job = Job::rotary(200.0, 20.0, Along::X);
+        job.rotary = Some(Rotary {
+            blank: Blank::Board { width: 150.0 },
+            ..Rotary::round(20.0, Along::X)
+        });
+        let doc = Document {
+            job,
+            ..Document::default()
+        };
+        let swing = 75f64.hypot(10.0);
+        // one pass, then A turned half a turn at 5 above the board's face: into its edge
+        let mut flip = slot("Flip", 20.0, 10.0, 60.0, 2.0);
+        flip.params = serde_json::json!({"registration_mark": true});
+        let at = |kind, x: f64, round: f64, z: f64| Move {
+            kind,
+            to: DVec3::new(x, round, z),
+        };
+        flip.moves = vec![
+            at(MoveKind::Rapid, 10.0, 0.0, 5.0),
+            at(MoveKind::Plunge, 10.0, 0.0, -1.0),
+            at(MoveKind::Cut, 50.0, 0.0, -1.0),
+            at(MoveKind::Rapid, 50.0, 0.0, 5.0),
+            at(MoveKind::Rapid, 50.0, 31.4, 5.0),
+        ];
+        let said = |axis: RotaryAxis, t: &Toolpath| -> Vec<String> {
+            let limits = Limits {
+                rotary: Some(RotaryAxis {
+                    centre_set: true,
+                    ..axis
+                }),
+                ..Limits::default()
+            };
+            check(&doc, &[t], &limits)
+                .into_iter()
+                .filter(|f| f.check == Check::RotarySetup)
+                .map(|f| f.message)
+                .collect()
+        };
+        // not measured: asked to measure, and the low turn is warned
+        let found = said(RotaryAxis::default(), &flip);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found[0].contains("Measure the axis height"), "{found:?}");
+        assert!(
+            found[1].contains("turns A with the bit 15.0 mm")
+                && found[1].contains("Clearance (Z1)"),
+            "{found:?}"
+        );
+        // 60 above an 18 mm spoilboard: taking the spoilboard out makes room
+        let low = RotaryAxis {
+            axis_height: 60.0,
+            spoilboard: 18.0,
+            ..RotaryAxis::default()
+        };
+        let found = said(low, &flip);
+        assert!(
+            found[0].contains("hits it as it turns")
+                && found[0].contains("Take the spoilboard out"),
+            "{found:?}"
+        );
+        let out = RotaryAxis {
+            spoilboard_off: true,
+            ..low
+        };
+        assert!(!said(out, &flip).iter().any(|m| m.contains("hits it")));
+        // too little: smaller material
+        let lower = RotaryAxis {
+            axis_height: 40.0,
+            spoilboard: 18.0,
+            spoilboard_off: true,
+            ..RotaryAxis::default()
+        };
+        assert!(said(lower, &flip)[0].contains("Use smaller material"));
+        // the bit lifted all the way up is below the edges: A can't turn the board under it
+        let short = RotaryAxis {
+            room_above: 70.0,
+            ..out
+        };
+        assert!(
+            said(short, &flip)
+                .iter()
+                .any(|m| m.contains("can't turn the material"))
+        );
+        // lifted clear before turning: only what the machine's room says
+        let mut clear = flip.clone();
+        let lift = swing - 10.0 + 2.0;
+        clear.moves[3].to.z = lift;
+        clear.moves[4].to.z = lift;
+        let roomy = RotaryAxis {
+            room_above: 120.0,
+            ..out
+        };
+        assert_eq!(said(roomy, &clear), Vec::<String>::new());
+        // and lifted higher than Z can go
+        let cramped = RotaryAxis {
+            room_above: 77.0,
+            ..out
+        };
+        assert!(
+            said(cramped, &clear)
+                .iter()
+                .any(|m| m.contains("higher than Z"))
+        );
+        // a round blank swings no further than its top: nothing to measure or lift
+        let round = Document {
+            job: Job::rotary(200.0, 20.0, Along::X),
+            ..Document::default()
+        };
+        let limits = Limits {
+            rotary: Some(RotaryAxis {
+                centre_set: true,
+                ..RotaryAxis::default()
+            }),
+            ..Limits::default()
+        };
+        let found: Vec<_> = check(&round, &[&flip], &limits)
+            .into_iter()
+            .filter(|f| f.check == Check::RotarySetup)
+            .collect();
+        assert!(found.is_empty(), "{found:?}");
     }
 
     #[test]

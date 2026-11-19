@@ -442,7 +442,7 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
     let mut across = vec![];
     for pass in &passes {
         let points: Vec<DVec3> = pass.iter().map(|&(point, _)| point).collect();
-        let mut followed = follow(&points, doc.job.clearance);
+        let mut followed = follow(&points, doc.job.turning_gap());
         if held_off {
             // follow adds a rise to above the first point and from the last
             let held: Vec<f64> = std::iter::once(pass[0].1)

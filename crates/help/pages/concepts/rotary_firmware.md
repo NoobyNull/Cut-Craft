@@ -88,6 +88,28 @@ Turning whole turns further cuts the same place on the material, so none of thes
 is carved, only how A gets there. Rotary files are timed where the bit actually cuts (nearer
 the axis when it cuts deep), and A is never asked to turn faster than **A top speed**.
 
+## Room to turn
+
+Material on the rotary needs room all the way round as it turns: a board's edges swing out
+much further than its top. Three settings at the foot of **Rotary (4th axis)** say how much
+room there is. Measure them once, with the rotary on the machine:
+
+![A board on the rotary: the axis height above the spoilboard, the spoilboard, and the room above up to the bit lifted all the way](pictures/concepts/rotary_room.png)
+
+1. **Axis height**: from the top of the spoilboard up to the turning axis (the middle of the
+   chuck). Material can swing out no further than this below the axis. As a rule of thumb, it
+   is about half of what Z can travel.
+2. **Spoilboard**: how thick the spoilboard under the rotary is. Tick **Taken out** if you
+   take it out from under the rotary: the material can then swing down past where its top was,
+   to the bed.
+3. **Room above**: jog Z all the way up, then measure from the turning axis up to the tip of
+   the bit. Material can only turn under the bit if it swings out less than this.
+
+Leave a setting at 0 until you have measured it. The [Rotary set up](help:check_rotary_setup)
+check warns when the material won't clear the spoilboard or the bit, when a toolpath turns A
+with the bit too low to clear a board's edges, and when a toolpath lifts higher than Z can go.
+Set the material's shape in [Job Setup](help:job_setup).
+
 The [Rotary set up](help:check_rotary_setup) check before cutting asks until **Centre line
 found** is ticked.
 

@@ -19,6 +19,11 @@ up in **Machine ▸ Machine Configuration ▸ Rotary (4th axis)**:
 - When **A can turn** is **Freely**, the toolpaths don't wind A more than 500 turns one way.
 - A [4-Axis Rotary Machining](help:rotary_machining_toolpath) job cuts a **registration mark**
   at A=0, so the part can go back exactly as it was if the job is started again.
+- The material has **room to turn**: a square's corners or a board's edges swing out further
+  than its top, and must clear the spoilboard below (**Axis height**) and the bit lifted all the
+  way up (**Room above**). See [Room to turn](help:rotary_firmware).
+- No toolpath **turns A with the bit lower** than the material swings, and none lifts the bit
+  higher than Z can go.
 
 ## Why it matters
 
@@ -40,7 +45,12 @@ lost. A registration mark lets you line the part up again after a stop.
    [Job Setup](help:job_setup), or **Lies along** in Machine Configuration.
 4. If A winds too far, set **A can turn** to **Up to** a few turns each way (Machine
    Configuration ▸ Rotary).
-5. For a registration mark, tick **Registration mark** in 4-Axis Rotary Machining, or pencil a
+5. If the material hits the spoilboard, take the spoilboard out from under the rotary and tick
+   **Taken out**, or use smaller material. Measure **Axis height** and **Room above** first if
+   they are 0.
+6. If a toolpath turns A too low, raise **Clearance (Z1)** in Job Setup to the height the
+   warning gives, and calculate the toolpath again.
+7. For a registration mark, tick **Registration mark** in 4-Axis Rotary Machining, or pencil a
    line along the material at A=0 before you start.
 
 This is a **warning**: you can still save, once you have checked.

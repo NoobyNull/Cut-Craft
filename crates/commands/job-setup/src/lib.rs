@@ -2,7 +2,7 @@
 //! worked out and how the material looks.
 
 use cut_craft_core::document::{
-    Along, Datum, Document, DoubleSided, Home, Job, Resolution, Rotary, Units, ZZero,
+    Along, Blank, Datum, Document, DoubleSided, Home, Job, Resolution, Rotary, Units, ZZero,
 };
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DAffine2;
@@ -24,6 +24,20 @@ pub enum JobType {
     DoubleSided,
     /// A cylinder turned by a rotary axis
     Rotary,
+}
+
+/// The shape of the material on a rotary job, across its axis.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Shape {
+    /// A round blank: a dowel, a turned spindle or a log. Diameter (D) is across it
+    #[default]
+    Round,
+    /// A square blank, a face flat on top at A=0. Diameter (D) is its side
+    Square,
+    /// A flat board, lying flat at A=0, for carving both faces with A turning it over.
+    /// Diameter (D) is its thickness, and Board Width (W) how wide it is
+    Board,
 }
 
 /// Where Z = 0 is on a rotary job: Job Setup and Material Setup show this in place of
@@ -93,13 +107,31 @@ pub struct Size {
         range(min = 0)
     )]
     pub length: f64,
-    /// Rotary jobs: the cylinder's diameter
+    /// Rotary jobs: the material's shape across its axis. A square or a board swings out
+    /// further than its top as it turns, by half its diagonal: the bit lifts that much
+    /// higher before A turns, and the checks before cutting see that it clears the bed
+    #[schemars(
+        title = "Shape",
+        extend("x-show-when" = {"job_type": "rotary"}, "x-widget" = "row")
+    )]
+    #[serde(default)]
+    pub shape: Shape,
+    /// Rotary jobs: the material's size straight up through the axis at A=0: a round
+    /// blank's diameter, a square's side, a board's thickness
     #[schemars(
         title = "Diameter (D)",
         extend("x-unit" = "mm", "x-show-when" = {"job_type": "rotary"}),
         range(min = 0)
     )]
     pub diameter: f64,
+    /// Rotary jobs on a board: how wide the board is, across the axis, lying flat at A=0
+    #[schemars(
+        title = "Board Width (W)",
+        extend("x-unit" = "mm", "x-show-when" = {"job_type": "rotary", "size.shape": "board"}),
+        range(min = 0)
+    )]
+    #[serde(default)]
+    pub board_width: f64,
     /// Lengths are shown in these; the job is always stored in millimetres
     #[schemars(extend("x-widget" = "row"))]
     pub units: Units,
@@ -229,10 +261,7 @@ pub struct RapidGaps {
 impl From<&Job> for Params {
     fn from(job: &Job) -> Self {
         // ponytail: a new rotary job starts as a 50 mm cylinder along X
-        let rotary = job.rotary.unwrap_or(Rotary {
-            diameter: 50.0,
-            along: Along::X,
-        });
+        let rotary = job.rotary.unwrap_or(Rotary::round(50.0, Along::X));
         Self {
             job_type: match (job.rotary, job.double_sided) {
                 (Some(_), _) => JobType::Rotary,
@@ -249,7 +278,17 @@ impl From<&Job> for Params {
                     // ponytail: a new rotary job starts 300 mm long
                     (None, _) => 300.0,
                 },
+                shape: match rotary.blank {
+                    Blank::Round => Shape::Round,
+                    Blank::Square => Shape::Square,
+                    Blank::Board { .. } => Shape::Board,
+                },
                 diameter: rotary.diameter,
+                // ponytail: a new board starts three times as wide as it is thick
+                board_width: match rotary.blank {
+                    Blank::Board { width } => width,
+                    _ => rotary.diameter * 3.0,
+                },
                 units: job.units,
             },
             z_zero: job.z_zero,
@@ -311,7 +350,19 @@ impl Command for JobSetup {
             JobType::Rotary => {
                 ensure_positive("length", p.size.length)?;
                 ensure_positive("diameter", p.size.diameter)?;
-                Job::rotary(p.size.length, p.size.diameter, p.orientation)
+                let blank = match p.size.shape {
+                    Shape::Round => Blank::Round,
+                    Shape::Square => Blank::Square,
+                    Shape::Board => {
+                        ensure_positive("board width", p.size.board_width)?;
+                        Blank::Board {
+                            width: p.size.board_width,
+                        }
+                    }
+                };
+                let mut job = Job::rotary(p.size.length, p.size.diameter, p.orientation);
+                job.rotary = job.rotary.map(|r| Rotary { blank, ..r });
+                job
             }
             JobType::SingleSided | JobType::DoubleSided => {
                 ensure_positive("width", p.size.width)?;
@@ -715,6 +766,39 @@ mod tests {
     }
 
     #[test]
+    fn a_board_on_the_rotary_keeps_its_width_and_swings_by_half_its_diagonal() {
+        use cut_craft_core::document::Blank;
+        let doc = after::<JobSetup>(&with(|p| {
+            p.job_type = JobType::Rotary;
+            p.size.length = 300.0;
+            p.size.shape = Shape::Board;
+            p.size.diameter = 20.0;
+            p.size.board_width = 150.0;
+        }));
+        let rotary = doc.job.rotary.unwrap();
+        assert_eq!(rotary.blank, Blank::Board { width: 150.0 });
+        assert!((rotary.swing() - 75f64.hypot(10.0)).abs() < 1e-9);
+        // unrolled round its thickness, the bit lifts clear of its edges before A turns
+        assert!((doc.job.thickness - 10.0).abs() < 1e-12);
+        assert!((doc.job.turning_gap() - (doc.job.clearance + rotary.swing() - 10.0)).abs() < 1e-9);
+        let reopened = Params::from(&doc.job);
+        assert_eq!(
+            (reopened.size.shape, reopened.size.board_width),
+            (Shape::Board, 150.0)
+        );
+        // a board with no width is asked for one
+        let none = JobSetup::run(
+            &Document::default(),
+            &with(|p| {
+                p.job_type = JobType::Rotary;
+                p.size.shape = Shape::Board;
+                p.size.board_width = 0.0;
+            }),
+        );
+        assert!(none.is_err());
+    }
+
+    #[test]
     fn a_rotary_job_unrolls_the_cylinder_round_the_axis_chosen() {
         use cut_craft_core::document::{Along, Rotary};
         let doc = after::<JobSetup>(&with(|p| {
@@ -725,13 +809,7 @@ mod tests {
             p.rotary_z_zero = RotaryZZero::CylinderAxis;
         }));
         let job = doc.job;
-        assert_eq!(
-            job.rotary,
-            Some(Rotary {
-                diameter: 50.0,
-                along: Along::X
-            })
-        );
+        assert_eq!(job.rotary, Some(Rotary::round(50.0, Along::X)));
         assert!(
             (job.width - 300.0).abs() < 1e-12
                 && (job.height - 50.0 * std::f64::consts::PI).abs() < 1e-9

@@ -88,7 +88,10 @@ machine's own axis across the rotary (Y beside a rotary along X) as well as A. C
 
 ## How the rings join up
 
-Every ring starts at A=0 and goes once round. Between rings the bit lifts clear. How A gets to
+Every ring starts at A=0 and goes once round. Between rings the bit lifts clear: by
+**Clearance (Z1)** above the top on round material, and on a square or a board (its **Shape**
+in [Job Setup](help:job_setup)) higher still, clear of its corners or edges as they swing
+round. How A gets to
 the start of the next ring is set once for the machine, under **A can turn** in
 [Machine Configuration](help:rotary_firmware):
 
