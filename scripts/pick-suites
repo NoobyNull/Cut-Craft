@@ -1,0 +1,421 @@
+#!/usr/bin/env python3
+"""The test suites a change needs (.config/test-suites.toml says what each suite owns).
+
+  scripts/pick-suites BASE          the suites the changes from BASE (a commit) to HEAD wake
+  scripts/pick-suites --all         every suite
+  scripts/pick-suites --suite NAME  that suite (and no others; --suite again for more)
+  scripts/pick-suites --files       the suites the changed files read from stdin wake
+  scripts/pick-suites --list        every suite with the packages and app modules it owns
+  scripts/pick-suites --check       that every test belongs to exactly one suite (builds the
+                                    tests and lists them with nextest; CI runs it on main)
+
+Each prints why each suite runs and the nextest command for them. Add:
+  --run      to run that command (what CI does)
+  --github   to write it for a GitHub Actions step ($GITHUB_OUTPUT, $GITHUB_STEP_SUMMARY)
+
+Only the standard library: it runs before anything is built, on any system with Python 3.11.
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob as globlib
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CONFIG = ROOT / ".config" / "test-suites.toml"
+APP_PACKAGE = "cut-craft"
+APP_SRC = "crates/app/src/"
+
+
+def glob_regex(pattern: str) -> re.Pattern[str]:
+    """A path glob: `*` and `?` stay inside a folder, `**` crosses folders."""
+    out, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif pattern.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif pattern[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        elif pattern[i] == "?":
+            out, i = out + "[^/]", i + 1
+        else:
+            out, i = out + re.escape(pattern[i]), i + 1
+    return re.compile(out + r"\Z")
+
+
+def name_matches(pattern: str, name: str) -> bool:
+    """A package name pattern: `*` is any run of characters."""
+    return re.fullmatch(re.escape(pattern).replace(r"\*", ".*"), name) is not None
+
+
+@dataclass
+class Suite:
+    name: str
+    title: str
+    package_patterns: list[str]
+    modules: list[str]
+    paths: list[str]
+    affects: list[str]
+    rest: bool
+    packages: list[str] = field(default_factory=list)  # the packages it owns, worked out
+
+
+@dataclass
+class Plan:
+    suites: dict[str, Suite]
+    packages: dict[str, str]  # package name -> its folder, from the top
+    package_owner: dict[str, str]  # package name -> suite
+    module_owner: dict[str, str]  # app module -> suite
+    rest: str
+    everything: list[str]
+    nothing: list[str]
+
+
+def workspace_packages(root: Path) -> dict[str, str]:
+    """Every workspace member's name and folder, from the workspace's Cargo.toml files."""
+    manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+    packages = {}
+    for member in manifest["workspace"]["members"]:
+        for folder in sorted(globlib.glob(str(root / member))):
+            cargo = Path(folder) / "Cargo.toml"
+            if cargo.is_file():
+                name = tomllib.loads(cargo.read_text(encoding="utf-8"))["package"]["name"]
+                packages[name] = Path(folder).relative_to(root).as_posix()
+    return packages
+
+
+def load(root: Path = ROOT, config: Path = CONFIG) -> Plan:
+    raw = tomllib.loads(config.read_text(encoding="utf-8"))
+    suites = {}
+    for name, s in raw["suites"].items():
+        suites[name] = Suite(
+            name=name,
+            title=s.get("title", name),
+            package_patterns=s.get("packages", []),
+            modules=s.get("modules", []),
+            paths=s.get("paths", []),
+            affects=s.get("affects", []),
+            rest=s.get("rest", False),
+        )
+    rests = [s.name for s in suites.values() if s.rest]
+    if len(rests) != 1:
+        sys.exit(f"pick-suites: exactly one suite must say `rest = true`, found {rests}")
+    for s in suites.values():
+        for other in s.affects:
+            if other not in suites:
+                sys.exit(f"pick-suites: suite {s.name} affects {other}, which is no suite")
+
+    packages = workspace_packages(root)
+    package_owner = {}
+    for package in packages:
+        owner = next(
+            (
+                s.name
+                for s in suites.values()
+                if any(name_matches(p, package) for p in s.package_patterns)
+            ),
+            rests[0],
+        )
+        package_owner[package] = owner
+        suites[owner].packages.append(package)
+    for s in suites.values():
+        for pattern in s.package_patterns:
+            if not any(name_matches(pattern, p) for p in packages):
+                sys.exit(f"pick-suites: suite {s.name}'s package {pattern} matches no package")
+
+    module_owner = {}
+    for s in suites.values():
+        for module in s.modules:
+            if module in module_owner:
+                sys.exit(
+                    f"pick-suites: app module {module} is in both {module_owner[module]} and "
+                    f"{s.name}"
+                )
+            module_owner[module] = s.name
+    return Plan(
+        suites,
+        packages,
+        package_owner,
+        module_owner,
+        rests[0],
+        raw.get("everything", []),
+        raw.get("nothing", []),
+    )
+
+
+def owning_module(plan: Plan, module: str) -> str:
+    """The suite owning an app module: the longest module named in the file that holds it."""
+    parts = module.split("::")
+    for n in range(len(parts), 0, -1):
+        owner = plan.module_owner.get("::".join(parts[:n]))
+        if owner:
+            return owner
+    return plan.rest
+
+
+def plain_module_of(path: str) -> str:
+    """The app module a file in crates/app/src holds by its place: src/app/tabs.rs is
+    app::tabs."""
+    parts = path[len(APP_SRC) :].removesuffix(".rs").split("/")
+    if parts[-1] in ("mod", "lib", "main"):
+        parts.pop()
+    return "::".join(parts)
+
+
+PATH_ATTRIBUTE = re.compile(r'#\[path\s*=\s*"([^"]+)"\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;')
+
+
+def moved_modules(root: Path = ROOT) -> dict[str, str]:
+    """The app's files that `#[path = "..."]` puts in a module other than their place says:
+    src/help_pictures.rs is app::help_pictures."""
+    moved = {}
+    for file in sorted((root / APP_SRC).rglob("*.rs")):
+        holder = file.relative_to(root).as_posix()
+        for target, name in PATH_ATTRIBUTE.findall(file.read_text(encoding="utf-8")):
+            path = (Path(holder).parent / target).as_posix()
+            parent = plain_module_of(holder)
+            moved[path] = f"{parent}::{name}" if parent else name
+    return moved
+
+
+MOVED = moved_modules()
+
+
+def module_of(path: str) -> str:
+    """The app module a file in crates/app/src holds: src/app/tabs.rs is app::tabs."""
+    return MOVED.get(path) or plain_module_of(path)
+
+
+def any_glob(patterns: list[str], path: str) -> bool:
+    return any(glob_regex(p).match(path) for p in patterns)
+
+
+def woken_by(plan: Plan, path: str) -> list[str] | None:
+    """The suites a changed file wakes: None for every suite, [] for none."""
+    if any_glob(plan.everything, path):
+        return None
+    woken = []
+    if path.startswith(APP_SRC):
+        woken.append(owning_module(plan, module_of(path)))
+    else:
+        for package, folder in plan.packages.items():
+            if path.startswith(folder + "/"):
+                woken.append(plan.package_owner[package])
+    woken += [s.name for s in plan.suites.values() if any_glob(s.paths, path)]
+    if woken:
+        return list(dict.fromkeys(woken))
+    if any_glob(plan.nothing, path):
+        return []
+    return None  # nobody knows this file: everything, to be safe
+
+
+def pick(plan: Plan, files: list[str]) -> dict[str, str]:
+    """The suites to run, each with why: the file that woke it, or the suite that did."""
+    why: dict[str, str] = {}
+    for path in files:
+        woken = woken_by(plan, path)
+        for name in plan.suites if woken is None else woken:
+            why.setdefault(name, path)
+    queue = list(why)
+    while queue:
+        name = queue.pop(0)
+        for other in plan.suites[name].affects:
+            if other not in why:
+                why[other] = f"{name} affects it"
+                queue.append(other)
+    return {name: why[name] for name in plan.suites if name in why}
+
+
+def nearest_inside(plan: Plan, module: str | None) -> list[str]:
+    """The modules named in the suites file that sit inside `module` (None: the whole app) with
+    no named module between."""
+    inside = [
+        m for m in plan.module_owner if module is None or m.startswith(module + "::")
+    ]
+    return sorted(
+        m
+        for m in inside
+        if not any(o != m and m.startswith(o + "::") for o in inside)
+    )
+
+
+def module_tests(plan: Plan, module: str | None) -> str:
+    """The app's tests whose longest named module is `module` (None: no named module)."""
+    keep = "all()" if module is None else f"test(/^{module}::/)"
+    inner = nearest_inside(plan, module)
+    if inner:
+        keep += " - (" + " | ".join(f"test(/^{m}::/)" for m in inner) + ")"
+    return keep
+
+
+def test_filter(plan: Plan, names: list[str]) -> str:
+    """The nextest filter for the tests of these suites."""
+    if set(names) == set(plan.suites):
+        return "all()"
+    parts = []
+    for name in names:
+        s = plan.suites[name]
+        parts += [f"package(={p})" for p in s.packages if p != APP_PACKAGE]
+        regions = sorted(m for m, o in plan.module_owner.items() if o == name)
+        app = [module_tests(plan, m) for m in regions]
+        if s.rest:
+            app.insert(0, module_tests(plan, None))
+        if app:
+            parts.append(f"(package(={APP_PACKAGE}) & (" + " | ".join(f"({a})" for a in app) + "))")
+    return " | ".join(parts) if parts else "none()"
+
+
+def build_packages(plan: Plan, names: list[str]) -> list[str] | None:
+    """The packages to build for these suites; None for the whole workspace."""
+    if set(names) == set(plan.suites):
+        return None
+    packages = []
+    for name in names:
+        s = plan.suites[name]
+        packages += s.packages
+        if s.modules or s.rest:
+            packages.append(APP_PACKAGE)
+    return sorted(set(packages))
+
+
+def nextest_args(plan: Plan, names: list[str]) -> list[str]:
+    packages = build_packages(plan, names)
+    scope = ["--workspace"] if packages is None else [a for p in packages for a in ("-p", p)]
+    return ["cargo", "nextest", "run", *scope, "--all-features", "--no-tests=pass",
+            "--no-fail-fast", "-E", test_filter(plan, names)]
+
+
+def changed_files(base: str) -> list[str]:
+    out = subprocess.run(
+        ["git", "diff", "--name-only", f"{base}...HEAD"],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    ).stdout
+    return [line for line in out.splitlines() if line]
+
+
+def show_list(plan: Plan) -> None:
+    for s in plan.suites.values():
+        print(f"{s.name}: {s.title}")
+        if s.packages:
+            print(f"  packages ({len(s.packages)}): {', '.join(sorted(s.packages))}")
+        modules = sorted(m for m, o in plan.module_owner.items() if o == s.name)
+        if s.rest:
+            modules.append("(every other app module)")
+        if modules:
+            print(f"  app modules: {', '.join(modules)}")
+        if s.affects:
+            print(f"  affects: {', '.join(s.affects)}")
+
+
+def listed_tests(filterset: str | None) -> set[str]:
+    """The tests nextest lists, all of them or those of a filter, as `binary test`."""
+    command = ["cargo", "nextest", "list", "--workspace", "--all-features",
+               "--message-format", "json", "--ignore-default-filter"]
+    if filterset:
+        command += ["-E", filterset]
+    out = subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    listed = json.loads(out)
+    return {
+        f"{binary} {name}"
+        for binary, suite in listed["rust-suites"].items()
+        for name, case in suite["testcases"].items()
+        if case["filter-match"]["status"] == "matches"
+    }
+
+
+def check(plan: Plan) -> int:
+    """Every test in exactly one suite."""
+    every = listed_tests(None)
+    seen: dict[str, str] = {}
+    failed = False
+    for name in plan.suites:
+        mine = listed_tests(test_filter(plan, [name]))
+        print(f"{name}: {len(mine)} tests")
+        for test in sorted(mine):
+            if test in seen:
+                print(f"  {test} is in both {seen[test]} and {name}")
+                failed = True
+            seen[test] = name
+    for test in sorted(every - set(seen)):
+        print(f"  {test} is in no suite")
+        failed = True
+    print(f"{len(every)} tests, {len(seen)} in a suite")
+    return 1 if failed else 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    ap.add_argument("base", nargs="?")
+    ap.add_argument("--all", action="store_true")
+    ap.add_argument("--suite", action="append", default=[])
+    ap.add_argument("--files", action="store_true")
+    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--check", action="store_true")
+    ap.add_argument("--run", action="store_true")
+    ap.add_argument("--github", action="store_true")
+    args = ap.parse_args()
+    plan = load()
+
+    if args.list:
+        show_list(plan)
+        return 0
+    if args.check:
+        return check(plan)
+    if args.all:
+        why = {name: "every suite asked for" for name in plan.suites}
+    elif args.suite:
+        unknown = [n for n in args.suite if n not in plan.suites]
+        if unknown:
+            sys.exit(f"pick-suites: no suite {', '.join(unknown)}; --list shows them")
+        why = {name: "asked for" for name in plan.suites if name in args.suite}
+    elif args.files:
+        why = pick(plan, [line.strip() for line in sys.stdin if line.strip()])
+    elif args.base:
+        why = pick(plan, changed_files(args.base))
+    else:
+        ap.error("give a BASE commit, --all, --suite, --files or --list")
+
+    names = list(why)
+    command = nextest_args(plan, names) if names else []
+    if names:
+        print("Suites to run:")
+        for name in names:
+            print(f"  {name} ({plan.suites[name].title}): {why[name]}")
+        print(shlex.join(command))
+    else:
+        print("No test suites to run: nothing changed that tests cover.")
+
+    if args.github:
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+            out.write(f"run={'true' if names else 'false'}\n")
+            out.write(f"suites={' '.join(names)}\n")
+            # one line a step can split back into arguments, quoted for bash
+            out.write(f"command={shlex.join(command)}\n")
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as out:
+                out.write("## Test suites\n\n")
+                if not names:
+                    out.write("None: nothing changed that tests cover.\n")
+                skipped = [s for s in plan.suites if s not in why]
+                for name in names:
+                    out.write(f"- **{plan.suites[name].title}** ({name}): {why[name]}\n")
+                if skipped:
+                    out.write(f"\nNot run: {', '.join(skipped)}\n")
+    if args.run and names:
+        return subprocess.run(command, cwd=ROOT).returncode
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

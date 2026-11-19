@@ -1,0 +1,173 @@
+# The test suites, by area of the app. On a pull request CI runs only the suites its changes
+# reach (scripts/pick-suites); on main, nightly and by hand it runs every one. Format, Clippy and
+# the help rule always run on the whole workspace, whatever the change.
+#
+# Each suite owns:
+#   packages  workspace packages (globs) whose tests it runs. A package belongs to the first
+#             suite, in this file's order, with a pattern that matches it, so `cmd-*` in a later
+#             suite takes only the tools the earlier suites left.
+#   modules   modules of the app (crates/app, package cut-craft) whose tests it runs, and whose
+#             source files wake it: `view3d` is src/view3d.rs and src/view3d/, `app::tabs` is
+#             src/app/tabs.rs and src/app/tabs/. The longest module that matches a test wins.
+#             The suite with `rest = true` takes every package and app module nobody else owns,
+#             so every test belongs to exactly one suite and none is ever left out.
+#   paths     other files (globs from the repository's top: `*` stays inside a folder, `**`
+#             crosses folders) whose change wakes it. A changed file inside a package's folder
+#             wakes the suite owning that package (in crates/app/src, the one owning its module)
+#             before anything else here is looked at.
+#   affects   the suites a change to this one can break too, woken with it (and theirs in turn).
+#
+# Adding a suite (Rotary, Languages, ...): give it a table here and move the packages and modules
+# it owns into it; `scripts/test-pick-suites` and `scripts/pick-suites --list` show the result.
+
+# A change to any of these runs every suite: they change how everything builds or is tested.
+everything = [
+  "Cargo.toml",
+  "Cargo.lock",
+  "clippy.toml",
+  "rust-toolchain*",
+  ".cargo/**",
+  ".config/**",
+  ".github/workflows/ci.yml",
+  "scripts/pick-suites",
+  "crates/app/Cargo.toml",
+  "crates/app/build.rs",
+]
+
+# A change to only these runs no suite (Format, Clippy and the help rule still run). Anything
+# not listed anywhere in this file runs every suite, to be safe.
+nothing = [
+  "*.md",
+  "LICENSE",
+  "docs/**",
+  "re/**",
+  "packaging/**",
+  "services/**",
+  ".github/**",
+  ".githooks/**",
+  ".gitignore",
+  "scripts/**",
+]
+
+[suites.core]
+title = "Core geometry"
+packages = ["cut-craft-core"]
+# everything is built on it
+affects = ["toolpaths", "design", "model", "display", "files", "help", "how-to", "app", "workflows"]
+
+[suites.toolpaths]
+title = "Toolpath generation"
+packages = [
+  "cmd-*toolpath*",
+  "cmd-materials",
+  "cmd-material-setup",
+  "cmd-keep-out-zones",
+  "cut-craft-post",
+  "cut-craft-machines",
+  "cut-craft-tool-database",
+  "cut-craft-vtdb",
+]
+modules = [
+  "toolpath_order",
+  "app::calculate_again",
+  "app::check_list",
+  "app::cutting",
+  "app::entry",
+  "app::gcode_view",
+  "app::passes",
+  "app::reach",
+  "app::send",
+  "app::surfacing",
+  "app::tabs",
+]
+paths = ["machines/**"]
+# a toolpath is drawn and played in the preview, and its form is in the tours
+affects = ["display", "help", "how-to", "workflows"]
+
+[suites.model]
+title = "3D modelling"
+packages = [
+  "cmd-add-draft",
+  "cmd-add-zero-plane",
+  "cmd-bake-components",
+  "cmd-component-boundary",
+  "cmd-component-properties",
+  "cmd-create-component-from-*",
+  "cmd-create-shape",
+  "cmd-cross-section",
+  "cmd-decorative-relief",
+  "cmd-delete-component",
+  "cmd-delete-level",
+  "cmd-duplicate-component",
+  "cmd-emboss",
+  "cmd-extrude-and-weave",
+  "cmd-group-components",
+  "cmd-insert-level",
+  "cmd-level-*",
+  "cmd-move-to-level",
+  "cmd-offset-model",
+  "cmd-orientate-3d-model",
+  "cmd-relief-from-photo",
+  "cmd-reorder-component",
+  "cmd-reorder-level",
+  "cmd-replace-below",
+  "cmd-scale-model-z-height",
+  "cmd-sculpt",
+  "cmd-segment-3d-model",
+  "cmd-slice",
+  "cmd-smooth-selected-components",
+  "cmd-texture-area",
+  "cmd-turn-and-spin",
+  "cmd-two-rail-sweep",
+  "cmd-ungroup-components",
+  "cut-craft-depth",
+]
+modules = ["depth", "app::depth", "app::draw3d", "app::placement"]
+affects = ["display", "help", "how-to", "workflows"]
+
+[suites.design]
+title = "Drawing and editing"
+# every tool the suites above did not take
+packages = ["cmd-*"]
+affects = ["help", "how-to", "workflows"]
+
+[suites.display]
+title = "Display and preview"
+modules = ["view2d", "view3d", "display", "preview_detail", "frame_rate", "compute", "polyline"]
+affects = ["how-to", "workflows"]
+
+[suites.files]
+title = "Files, import and export"
+packages = ["fmt-*", "pack-*", "cut-craft-content-pack"]
+modules = ["files", "file_filters", "clipart", "app::fit_import", "app::units_ask", "app::sample"]
+affects = ["workflows"]
+
+[suites.help]
+title = "Help"
+packages = ["cut-craft-help"]
+modules = ["hints", "app::help", "app::guide", "app::tips", "app::help_coverage"]
+affects = ["how-to"]
+
+[suites.how-to]
+title = "How-to tours"
+# every tool's tour, played in the app headless: each step still finds what it rings
+modules = [
+  "app::help_pictures",
+  "app::help_tours",
+  "app::screenshots",
+  "marks",
+  "app::tests::how_to",
+]
+
+[suites.app]
+title = "App: windows, settings, updates, add-ons"
+# every package and module of the app nobody above owns
+rest = true
+modules = ["app::tests::web_api"]
+paths = ["assets/**"]
+affects = ["help", "how-to", "workflows"]
+
+[suites.workflows]
+title = "Whole-app workflows"
+# the app driven headless, a click at a time, through whole jobs (crates/app/src/app/tests.rs)
+modules = ["app::tests"]

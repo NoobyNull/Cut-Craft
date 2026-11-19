@@ -1,0 +1,54 @@
+#!/bin/bash
+# Tests for scripts/pick-suites: scripts/test-pick-suites (CI runs it on each pull request).
+set -uo pipefail
+cd "$(dirname "$0")"
+failed=0
+expect() { # expect "suites, space separated (or none or all)" "why" path...
+  local want=$1 why=$2 got
+  shift 2
+  got=$(printf '%s\n' "$@" | ./pick-suites --files | sed -n 's/^  \([a-z-]*\) (.*/\1/p' | tr '\n' ' ')
+  got=${got% }
+  [[ -z $got ]] && got=none
+  [[ $want == all ]] && want=$(./pick-suites --list | sed -n 's/^\([a-z-]*\): .*/\1/p' | tr '\n' ' ') && want=${want% }
+  if [[ $got != "$want" ]]; then
+    echo "FAIL: $why: got \"$got\", want \"$want\""
+    failed=1
+  fi
+}
+
+expect none "nothing changed" ""
+expect none "docs only" README.md docs/tool-inventory.md re/SPEC.md
+expect none "another workflow and a script" .github/workflows/aur.yml scripts/aur-update
+expect all "the core" crates/core/src/geometry.rs
+expect all "the lock file" Cargo.lock
+expect all "CI itself" .github/workflows/ci.yml
+expect all "the suites file" .config/test-suites.toml
+expect all "the app's build script" crates/app/build.rs
+expect all "a file nobody owns is run in full, to be safe" new-folder/thing.txt
+expect "toolpaths display help how-to workflows" "a toolpath tool" \
+  crates/commands/pocket-toolpath/src/lib.rs
+expect "toolpaths display help how-to workflows" "a post processor" crates/post/src/lib.rs
+expect "toolpaths display help how-to workflows" "a machine file" machines/sienci.json
+expect "toolpaths display help how-to workflows" "the app's toolpath code" \
+  crates/app/src/app/cutting.rs
+expect "model display help how-to workflows" "a modelling tool" crates/commands/sculpt/src/lib.rs
+expect "design help how-to workflows" "a drawing tool" crates/commands/draw-circle/src/lib.rs
+expect "display how-to workflows" "the 3D view" crates/app/src/view3d/gpu.rs
+expect "files workflows" "an importer" crates/formats/import-dxf/src/lib.rs
+expect "files workflows" "clipart" crates/app/src/clipart/preview.rs
+expect "help how-to" "a help page" crates/help/pages/tools/pocket_toolpath.md
+expect "help how-to" "the app's help window" crates/app/src/app/help.rs
+expect "how-to" "a tour (moved into the app module by #[path])" crates/app/src/help_tours.rs
+expect "how-to" "where to ring" crates/app/src/marks.rs
+expect "how-to" "the tours' test" crates/app/src/app/tests/how_to.rs
+expect "workflows" "the whole-app tests" crates/app/src/app/tests.rs
+expect "help how-to app workflows" "the web API's tests" crates/app/src/app/web_api_tests.rs
+expect "help how-to app workflows" "the updater" crates/updater/src/lib.rs
+expect "help how-to app workflows" "an app module nobody owns" crates/app/src/startup.rs
+expect "help how-to app workflows" "the app's own words" crates/app/whats-new.md
+expect "help how-to app workflows" "an icon" assets/splash-logo.jpg
+expect "toolpaths design display help how-to workflows" "two areas at once" \
+  crates/commands/draw-circle/src/lib.rs crates/commands/profile-toolpath/src/lib.rs
+
+if ((failed)); then exit 1; fi
+echo "pick-suites: all tests pass"
