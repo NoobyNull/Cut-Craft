@@ -6,6 +6,8 @@ use super::CutCraftApp;
 
 /// The tools section of what the user installed.
 pub(super) const GADGETS: &str = "Gadgets";
+/// After the name of a gadget or add-on that is not signed with Cut Craft's release key.
+const NOT_OFFICIAL: &str = "\u{26a0} (not official)";
 
 impl CutCraftApp {
     /// The add-ons folder, and what is installed there.
@@ -27,16 +29,23 @@ impl CutCraftApp {
     }
 
     /// Gadgets ▸ My Gadgets: the gadgets, then the add-ons, each with the action that runs
-    /// it; an add-on whose tool Cut Craft does not know opens Add-ons.
+    /// it; an add-on whose tool Cut Craft does not know opens Add-ons. One that is not
+    /// official (not signed with Cut Craft's release key) is marked so.
     pub(super) fn installed_items(&self) -> Vec<(String, String)> {
-        let gadgets = self
-            .my_gadgets
-            .iter()
-            .map(|(label, id)| (label.clone(), (*id).to_owned()));
-        let addons = self
-            .installed_addons
-            .iter()
-            .map(|(name, tool)| (name.clone(), tool.unwrap_or("addons").to_owned()));
+        let named = |name: &str, official: bool| {
+            if official {
+                name.to_owned()
+            } else {
+                format!("{name} {NOT_OFFICIAL}")
+            }
+        };
+        let gadgets = self.my_gadgets.iter().map(|(label, id)| {
+            let official = !self.unsigned_gadgets.contains_key(*id);
+            (named(label, official), (*id).to_owned())
+        });
+        let addons = self.installed_addons.iter().map(|(name, tool, signed)| {
+            (named(name, *signed), tool.unwrap_or("addons").to_owned())
+        });
         gadgets.chain(addons).collect()
     }
 
@@ -44,7 +53,11 @@ impl CutCraftApp {
     /// and so no section, until something is installed.
     pub(super) fn gadget_tools(&self) -> Vec<&'static str> {
         let mut tools: Vec<&'static str> = self.my_gadgets.iter().map(|&(_, id)| id).collect();
-        for tool in self.installed_addons.iter().filter_map(|&(_, tool)| tool) {
+        for tool in self
+            .installed_addons
+            .iter()
+            .filter_map(|&(_, tool, _)| tool)
+        {
             if !tools.contains(&tool) {
                 tools.push(tool);
             }

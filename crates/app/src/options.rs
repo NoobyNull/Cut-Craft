@@ -115,6 +115,21 @@ pub struct View3d {
         range(min = 2, max = 90)
     )]
     pub spin_speed: f64,
+    /// How finely a toolpath preview is worked out to start with: toward Performance is
+    /// quicker and uses less memory, toward Detail shows small corners, holes and thin
+    /// walls truer (about 0.5 mm between points at 0%, 0.1 mm at 50%, 0.025 mm at 100%).
+    /// The Preview tab has the same slider for now; Reset Preview goes back to this
+    #[serde(default = "preview_detail")]
+    #[schemars(
+        title = "Preview detail",
+        extend("x-unit" = "%", "x-widget" = "slider"),
+        range(min = 0, max = 100)
+    )]
+    pub preview_detail: u8,
+}
+
+fn preview_detail() -> u8 {
+    crate::preview_detail::DEFAULT_PERCENT
 }
 
 fn spin_speed() -> f64 {
@@ -1901,6 +1916,7 @@ impl Default for Options {
                 perspective_angle: perspective_angle(),
                 settle_seconds: settle_seconds(),
                 spin_speed: SPIN_SPEED,
+                preview_detail: preview_detail(),
             },
             toolpaths: ToolpathSettings {
                 auto_open_3d_view: d.auto_open_3d,
@@ -2126,6 +2142,7 @@ impl Options {
         d.solid_previews = t.solid_2d_previews;
         d.solid_colour = t.solid_2d_preview_color;
         d.keep_out_labels = t.keep_out_labels;
+        d.detail = v.preview_detail.min(100);
     }
 
     /// How many recent files are kept.

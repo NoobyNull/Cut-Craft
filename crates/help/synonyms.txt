@@ -62,4 +62,5 @@ construction line, construction lines, construction geometry, reference line, he
 add-on, add-ons, addon, addons, plugin, plugins, extension, extensions, gadget, gadgets, script, scripts, lua
 high detail, large model, finer detail, more detail
 messages, message, announcement, announcements, news, poll, polls, vote, voting, survey, opinion
+preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated
 filter, filters, narrow down

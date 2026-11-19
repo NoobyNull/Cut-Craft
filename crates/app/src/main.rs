@@ -28,6 +28,7 @@ mod messages;
 mod options;
 mod pages;
 mod polyline;
+mod preview_detail;
 mod shortcut;
 mod spacemouse;
 mod startup;
