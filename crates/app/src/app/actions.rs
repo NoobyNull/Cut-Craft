@@ -1754,6 +1754,9 @@ impl CutCraftApp {
     /// its tool changes made pauses when the form says to pause, or tools are changed by
     /// hand between files on a machine without a tool changer.
     pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
+        if let Some(why) = self.no_a_axis() {
+            return Err(why);
+        }
         let post = match form.post.as_deref() {
             Some(name) => self.posts.load(name),
             None => self.output_post(),
@@ -2021,6 +2024,21 @@ impl CutCraftApp {
         Ok(texts)
     }
 
+    /// Why a rotary job can't be saved for the active machine: its firmware has no A axis
+    /// (standard GRBL, also what unknown firmware is taken for), whatever its posts and 4th
+    /// axis tick. `None` for a flat job, no machine, or firmware with an A axis.
+    fn no_a_axis(&self) -> Option<String> {
+        let machine = self.machines.active()?;
+        (self.doc.job.rotary.is_some() && !machine.firmware().has_a_axis()).then(|| {
+            format!(
+                "{} cannot cut this rotary job. {} If its controller runs other firmware, pick \
+                 it under Firmware in Machine Configuration",
+                machine.name,
+                cut_craft_machines::NO_A_AXIS
+            )
+        })
+    }
+
     /// The post toolpaths are saved through: the active machine's default when it suits the
     /// job, else the machine's first post that does: a flat one for a flat job, and for a
     /// rotary job (on a machine with a 4th axis) one wrapping the side that goes round, Y
@@ -2028,6 +2046,9 @@ impl CutCraftApp {
     /// `FluidNC` post for this kind of job.
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
         use cut_craft_core::document::Along;
+        if let Some(why) = self.no_a_axis() {
+            return Err(why);
+        }
         let Some(machine) = self.machines.active().filter(|m| !m.posts.is_empty()) else {
             return Ok(cut_craft_post::Post::default_for(&self.doc.job));
         };
@@ -2035,14 +2056,6 @@ impl CutCraftApp {
             Along::X => "Y",
             Along::Y => "X",
         });
-        if wraps.is_some() && machine.rotary && !machine.firmware().has_a_axis() {
-            return Err(format!(
-                "{} cannot cut this rotary job. {} If its controller runs other firmware, pick \
-                 it under Firmware in Machine Configuration",
-                machine.name,
-                cut_craft_machines::NO_A_AXIS
-            ));
-        }
         if wraps.is_some() && !machine.has_rotary() {
             return Err(format!(
                 "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \

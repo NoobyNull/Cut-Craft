@@ -27,7 +27,12 @@ pub fn renamed(old: &str) -> Option<String> {
     let (g93, rest) = rest
         .strip_prefix(" G93")
         .map_or((false, rest), |r| (true, r));
-    if !rest.starts_with(" (") {
+    // exactly a former built-in name: a custom post named like one keeps its name
+    let ext = if controller == "Mach3" { "tap" } else { "nc" };
+    if ![" (mm) ", " (inch) "]
+        .iter()
+        .any(|units| rest == format!("{units}(*.{ext})"))
+    {
         return None;
     }
     let controller = if controller == "GRBL" {
@@ -1570,6 +1575,8 @@ mod tests {
             "Cut Craft GRBL Arcs (mm) (*.nc)",
             "My Wrap Y to A (mm)",
             "Cut Craft GRBL Wrap Y to Anything",
+            "Cut Craft GRBL Wrap Y to A (mm) (*.nc) - Custom",
+            "Cut Craft GRBL Wrap Y to A (mm) (*.tap)",
         ] {
             assert_eq!(renamed(kept), None, "{kept}");
         }
