@@ -1,4 +1,2 @@
-- Turn any view control round (orbit, pan, zoom), pinch to zoom, and a Trackpad mode in Options > Mouse and Shortcuts
-- Every Did You Know? tip's Tell Me More now opens a help page of its own, with steps and pictures
-- Two tips that had the number-box letters I and M backwards are fixed
-- More of the app's words (its other windows) moved into language files, ready for language packs
+- The 3D view's origin arrows now sit on the bed when Job Setup's Z Zero is Machine Bed (on the axis for rotary jobs)
+- The arrows stay in the right place while a 3D model is being imported
