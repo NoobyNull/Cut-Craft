@@ -33,6 +33,8 @@ a CNC machine cuts them with.
   the machine settings that make it match your machine.
 - [Long jobs and the time left](help:progress): the progress window, how its "about 2
   minutes left" is worked out, and Cancel.
+- [Using Cut Craft in another language](help:language): install a language pack and
+  switch to it in Options.
 
 ## Everyday basics
 

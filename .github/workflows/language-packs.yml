@@ -1,0 +1,68 @@
+# The language packs' release, published on their own repository (TRANSLATIONS_REPO) so
+# Gadgets > Add-ons > Languages finds them in its newest release (crates/updater/src/addon.rs,
+# TRANSLATIONS): one language-<code>.zip per folder of language-packs/, holding its
+# addon.toml and .ftl files, each signed with Cut Craft's release key (FILE.minisig beside
+# it) so it installs as official. Each language is downloaded on its own; none ever ships
+# with Cut Craft (Matthew, 2026-11-20).
+# Started when a pack changes on main, or by "Run workflow". Every release carries every pack;
+# its version is 1.0.<run number>, so it is always newer than the one before. Needs
+# ADDON_RELEASE_TOKEN (a token that may write releases on TRANSLATIONS_REPO) and the release
+# key: MINISIGN_SECRET_KEY and MINISIGN_PASSWORD.
+name: Language packs
+
+on:
+  push:
+    branches: [main]
+    paths: ['language-packs/**', '.github/workflows/language-packs.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TRANSLATIONS_REPO: NoobyNull/CutCraft-Translations
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip each pack
+        run: |
+          mkdir -p out
+          for folder in language-packs/*/; do
+            code=$(basename "$folder")
+            # its manifest and words, at the top of the zip
+            (cd "$folder" && zip -q "../../out/language-$code.zip" addon.toml ./*.ftl)
+            echo "language-$code.zip: $(unzip -Z1 "out/language-$code.zip" | tr '\n' ' ')"
+          done
+      - name: Sign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          REQUIRE_SIGNING: '1'
+        run: scripts/sign-release out
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.ADDON_RELEASE_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::ADDON_RELEASE_TOKEN is not set: add a token that may write releases on $TRANSLATIONS_REPO"
+            exit 1
+          fi
+          # a new repository has no commit to tag yet: start it with a README
+          if ! gh api "repos/$TRANSLATIONS_REPO/commits" --silent 2>/dev/null; then
+            printf '%s\n' "# Cut Craft language packs" "" \
+              "Each release holds one language-<code>.zip per language, signed with Cut Craft's release key." \
+              "Install one from Cut Craft: Gadgets > Add-ons > Languages. The packs are made from" \
+              "language-packs/ in NoobyNull/Cut-Craft; see docs/translating.md there to make one." > README.md
+            gh api -X PUT "repos/$TRANSLATIONS_REPO/contents/README.md" \
+              -f message="Start the language packs' repository" \
+              -f content="$(base64 -w0 README.md)"
+          fi
+          version="1.0.${{ github.run_number }}"
+          langs=$(cd out && ls language-*.zip | sed 's/language-\(.*\)\.zip/\1/' | paste -sd, -)
+          gh release create "v$version" out/* --repo "$TRANSLATIONS_REPO" \
+            --target main \
+            --title "Language packs $version" \
+            --notes "Language packs for Cut Craft 0.7.0 and later: $langs. Install one from Cut Craft: Gadgets > Add-ons > Languages, then pick it in Edit > Options > Language. Made from ${{ github.sha }} of NoobyNull/Cut-Craft."

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-18
+reviewed: 2026-11-20
 see-also: create_component_from_bitmap, emboss, photo_vcarve_toolpath, addons
 ---
 

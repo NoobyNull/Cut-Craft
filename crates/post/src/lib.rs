@@ -4,6 +4,7 @@
 
 mod arcs;
 mod built_in;
+mod winding;
 
 pub use built_in::BUILT_IN;
 
@@ -60,6 +61,7 @@ const CLOSE_ENOUGH: f64 = 0.0005;
 /// Numeric values a post can print; the ones in `LENGTHS` become inches for inch posts
 /// (feed rates are lengths per minute).
 const NUMBERS: &[&str] = &[
+    "ACROSS",
     "X",
     "Y",
     "Z",
@@ -105,6 +107,7 @@ const NUMBERS: &[&str] = &[
     "CD",
 ];
 const LENGTHS: &[&str] = &[
+    "ACROSS",
     "X",
     "Y",
     "Z",
@@ -290,6 +293,9 @@ pub struct Post {
     wrap: Option<(&'static str, String)>,
     /// Feed moves print `[FI]`, one over their time in minutes (G93).
     inverse_time: bool,
+    /// The machine's rotary, for a wrapping post: how far A may turn, its backlash and top
+    /// speed ([`Post::with_rotary`]). Without it A is written just as the job unrolls.
+    rotary: Option<cut_craft_core::rotary_axis::RotaryAxis>,
     /// Laser toolpaths may be written (`LASER_SUPPORT = "YES"`).
     laser: bool,
     /// Arcs smaller (`MIN_ARC_RADIUS`) or larger (`MAX_ARC_RADIUS`) than these stay lines, in
@@ -444,6 +450,9 @@ impl Post {
         // Y goes round a cylinder along X; X goes round one along Y
         if rotary.along == Along::Y {
             post.wrap = Some(("X", "A".into()));
+            if let Some(across) = post.formats.get_mut("ACROSS") {
+                "X".clone_into(&mut across.prefix);
+            }
         }
         post
     }
@@ -511,6 +520,15 @@ impl Post {
         post
     }
 
+    /// This post writing for a machine whose rotary is `axis`: A wound no further than it may
+    /// turn, its backlash taken up, and inverse-time feeds kept to the bit's real speed.
+    /// Only a wrapping post uses it.
+    #[must_use]
+    pub fn with_rotary(mut self, axis: cut_craft_core::rotary_axis::RotaryAxis) -> Self {
+        self.rotary = Some(axis);
+        self
+    }
+
     /// The axis it wraps onto the rotary one (`X` or `Y`); `None` for a flat post.
     pub fn wraps(&self) -> Option<&str> {
         self.wrap.as_ref().map(|(axis, _)| *axis)
@@ -530,6 +548,7 @@ impl Post {
             substitute: vec![],
             wrap: None,
             inverse_time: false,
+            rotary: None,
             laser: false,
             arc_radius: (None, None),
             formats: HashMap::new(),
@@ -664,7 +683,14 @@ impl Post {
             last: HashMap::new(),
             line_number: self.numbering.start,
         };
-        let wrapped = |label: &str, flat: f64| self.wrapped(&doc.job, label, flat);
+        let mut winding = self.winding(&doc.job);
+        let wrapped = |label: &str, flat: f64, winding: &mut Option<winding::Winding>| match (
+            winding.as_mut(),
+            &self.wrap,
+        ) {
+            (Some(w), Some((axis, _))) if *axis == label => w.degrees(flat),
+            _ => self.wrapped(&doc.job, label, flat),
+        };
         let mut v = self.job_values(doc, file);
         v.lists.insert(
             "TOOLS_USED",
@@ -691,6 +717,14 @@ impl Post {
         let mut feeding: Option<f64> = None;
         let home = doc.job.home();
         let mut at = DVec3::new(home.x, home.y, home.z);
+        // how far off the turning axis the bit is held, and where that is on the machine's
+        // across axis (Y for a rotary along X): from the axis's centre, the way A turns
+        let mut held = 0.0;
+        let across_at = doc.job.rotary.filter(|_| self.wrap.is_some()).map(|r| {
+            let axis = self.rotary.unwrap_or_default();
+            let sign = axis.across_sign(r.along);
+            move |across: f64| axis.centre_across + sign * across
+        });
         for toolpath in &toolpaths {
             v.texts.insert("TOOLPATH_NAME", toolpath.name.clone());
             v.texts.insert("TOOLNAME", toolpath.tool.name.clone());
@@ -706,9 +740,12 @@ impl Post {
                     // lift straight up to the height the last toolpath left at before any
                     // sideways move: only Z changes, so print X and Y only if the post
                     // always prints them
-                    v.numbers.insert("X", wrapped("X", at.x));
-                    v.numbers.insert("Y", wrapped("Y", at.y));
+                    v.numbers.insert("X", wrapped("X", at.x, &mut winding));
+                    v.numbers.insert("Y", wrapped("Y", at.y, &mut winding));
                     v.numbers.insert("Z", doc.job.machine_z(at.z));
+                    if let Some(across_at) = &across_at {
+                        v.numbers.insert("ACROSS", across_at(held));
+                    }
                     out.value("X", &v);
                     out.value("Y", &v);
                     out.block("RAPID_MOVE", &v);
@@ -746,21 +783,29 @@ impl Post {
                 if let (Some(b), Some(hit)) = (bank, hit) {
                     out.drop_drills(&mut v, &b.bank, &hit.drills, by_pattern, &mut down);
                 }
-                for step in self.steps(&part, &doc.job, at) {
-                    let (kind, to) = match step {
-                        Step::Line(kind, to, _) => (kind, to),
-                        Step::Arc(kind, arc) => (kind, arc.to),
+                let mut steps = self.steps(&part, &doc.job, at);
+                if let Some(w) = winding.as_mut() {
+                    steps = w.plan(steps, at);
+                }
+                for step in steps {
+                    let (kind, to, across) = match step {
+                        Step::Line(kind, to, _, across) => (kind, to, across),
+                        Step::Arc(kind, arc) => (kind, arc.to, 0.0),
                     };
                     let from = std::mem::replace(&mut at, to);
+                    let moved_across = across - std::mem::replace(&mut held, across);
                     let length = to.distance(from);
                     if self.inverse_time && kind != MoveKind::Rapid && length == 0.0 {
                         // a move that goes nowhere has no time to invert
                         continue;
                     }
-                    v.numbers.insert("X", wrapped("X", to.x));
-                    v.numbers.insert("Y", wrapped("Y", to.y));
+                    v.numbers.insert("X", wrapped("X", to.x, &mut winding));
+                    v.numbers.insert("Y", wrapped("Y", to.y, &mut winding));
                     v.numbers.insert("Z", doc.job.machine_z(to.z));
-                    if let (true, Step::Line(_, _, power)) = (laser, step) {
+                    if let Some(across_at) = &across_at {
+                        v.numbers.insert("ACROSS", across_at(across));
+                    }
+                    if let (true, Step::Line(_, _, power, _)) = (laser, step) {
                         v.numbers.insert("P", power);
                         out.jet(&v, kind, power, &mut burning);
                     }
@@ -779,7 +824,12 @@ impl Post {
                             toolpath.tool.feed_rate
                         };
                         v.numbers.insert("F", rate);
-                        v.numbers.insert("FI", rate / length);
+                        v.numbers.insert(
+                            "FI",
+                            winding.as_ref().map_or(rate / length, |w| {
+                                w.inverse_time(from, to, moved_across, rate)
+                            }),
+                        );
                         let start = feeding.replace(rate) != Some(rate);
                         if let Step::Arc(_, arc) = step {
                             let (printed_from, arc) = self.as_printed(from, arc);
@@ -806,6 +856,17 @@ impl Post {
                 out.block("JET_TOOL_OFF", &v);
             }
         }
+        if let (Some(w), Some((axis, _))) = (winding.as_mut(), &self.wrap) {
+            // home round the material: unwound only after a spin back
+            let (flat, now) = if *axis == "X" {
+                (home.x, at.x)
+            } else {
+                (home.y, at.y)
+            };
+            let label = if *axis == "X" { "XH" } else { "YH" };
+            let w_home = w.home(flat, now);
+            v.numbers.insert(label, w.degrees(w_home));
+        }
         out.block("FOOTER", &v);
         Ok(out.text)
     }
@@ -822,6 +883,17 @@ impl Post {
         {
             return Err(format!(
                 "this post wraps {axis} onto {letter}: set the job up as rotary in Job Setup"
+            ));
+        }
+        if let Some(t) = toolpaths
+            .iter()
+            .find(|t| t.across.iter().any(|a| a.abs() > 1e-9))
+            && (self.wrap.is_none() || !self.formats.contains_key("ACROSS"))
+        {
+            return Err(format!(
+                "\"{}\" holds the bit off the turning axis, and this post can't move the bit \
+                 across: pick one of Cut Craft's Rotary A posts",
+                t.name
             ));
         }
         if let Some(t) = toolpaths
@@ -1007,19 +1079,36 @@ impl Post {
     /// become arcs where the post can write them.
     fn steps(&self, toolpath: &Toolpath, job: &Job, mut at: DVec3) -> Vec<Step> {
         let gap = job.plunge_gap();
-        // (kind, to, laser power)
+        // a bit held off the turning axis: its moves are where its tip cuts, written as where A
+        // turns to and how high the bit is
+        let held = match (&self.wrap, job.rotary) {
+            (Some((axis, _)), Some(r)) if !toolpath.across.is_empty() => {
+                Some((usize::from(*axis == "Y"), r.diameter / 2.0))
+            }
+            _ => None,
+        };
+        // (kind, to, laser power, across)
         let mut lines = Vec::with_capacity(toolpath.moves.len());
         let mut from = at;
         for (i, m) in toolpath.moves.iter().enumerate() {
-            if m.kind != MoveKind::Rapid && from.z > gap + 1e-9 && m.to.z < gap {
-                let down = from.lerp(m.to, (from.z - gap) / (from.z - m.to.z));
-                lines.push((MoveKind::Rapid, down, 0.0));
+            let across = toolpath.across.get(i).copied().unwrap_or(0.0);
+            let mut to = m.to;
+            if let Some((round, radius)) = held {
+                let (w, z) = cut_craft_core::rotary_axis::held_at(radius, to[round], to.z, across);
+                to[round] = w;
+                to.z = z;
+            }
+            if m.kind != MoveKind::Rapid && from.z > gap + 1e-9 && to.z < gap {
+                let down = from.lerp(to, (from.z - gap) / (from.z - to.z));
+                lines.push((MoveKind::Rapid, down, 0.0, across));
             }
             let power = toolpath.power.get(i).copied().unwrap_or(0.0);
-            lines.push((m.kind, m.to, power));
-            from = m.to;
+            lines.push((m.kind, to, power, across));
+            from = to;
         }
-        let line = |&(kind, to, power): &(MoveKind, DVec3, f64)| Step::Line(kind, to, power);
+        let line = |&(kind, to, power, across): &(MoveKind, DVec3, f64, f64)| {
+            Step::Line(kind, to, power, across)
+        };
         let Some(limits) = self.arc_limits(!toolpath.power.is_empty()) else {
             return lines.iter().map(line).collect();
         };
@@ -1032,7 +1121,7 @@ impl Post {
             } else {
                 let cuts: Vec<DVec3> = run.iter().map(|l| l.1).collect();
                 steps.extend(arcs::fit(at, &cuts, &limits).into_iter().map(|p| match p {
-                    arcs::Piece::Line(to) => Step::Line(kind, to, 0.0),
+                    arcs::Piece::Line(to) => Step::Line(kind, to, 0.0, 0.0),
                     arcs::Piece::Arc(arc) => Step::Arc(kind, arc),
                 }));
             }
@@ -1055,6 +1144,20 @@ impl Post {
             text.push_str(&n.to_string());
         }
         text
+    }
+
+    /// How A winds through the file, for a wrapping post told the machine's rotary.
+    fn winding(&self, job: &Job) -> Option<winding::Winding> {
+        let (axis, _) = self.wrap.as_ref()?;
+        let rotary = job.rotary?;
+        let round = usize::from(*axis == "Y");
+        Some(winding::Winding::new(
+            self.rotary?,
+            round,
+            rotary.diameter,
+            // clear of a square's corners or a board's edges as they swing round
+            job.turning_gap(),
+        ))
     }
 
     /// A flat X or Y as it prints: a wrapped axis in degrees round the cylinder.
@@ -1200,7 +1303,9 @@ impl Values {
 /// an arc replacing a run of its cuts.
 #[derive(Clone, Copy)]
 enum Step {
-    Line(MoveKind, DVec3, f64),
+    /// A straight move, with a laser's power and, on a rotary, how far off the turning axis
+    /// the bit is held (mm).
+    Line(MoveKind, DVec3, f64, f64),
     /// An arc cut at the feed rate, or gone down at the plunge rate (a helix).
     Arc(MoveKind, arcs::Arc),
 }
@@ -1241,6 +1346,7 @@ fn parts(toolpath: &Toolpath) -> Vec<(Option<&BankHit>, std::borrow::Cow<'_, Too
                 power: vec![],
                 drill_bank: None,
                 fallbacks: vec![],
+                across: vec![],
                 params: serde_json::Value::Null,
                 vectors: vec![],
                 name: String::new(),
@@ -1677,6 +1783,7 @@ begin FOOTER
             visible: true,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         }
     }
 
@@ -2041,6 +2148,295 @@ begin FOOTER
             lines.contains(&"G1 X25.400 A0.000 Z12.915 F39.370".to_owned()),
             "{lines:#?}"
         );
+    }
+
+    /// A post wrapping Y onto A for `hundred_round`, told the machine's rotary.
+    fn winding_post(axis: cut_craft_core::rotary_axis::RotaryAxis) -> Post {
+        let post = BASIC
+            .replace(
+                "begin HEADER\n",
+                "ROTARY_WRAP_Y = \"A\"\nINVERSE_TIME_MODE = YES\nVAR INVERSE_TIME = [FI|A|F|1.3]\nVAR Y_HOME_POSITION = [YH|A|Y|1.3]\nbegin HEADER\n",
+            )
+            .replace("[Z] [F]\"", "[Z] [FI]\"")
+            .replace("\"M5\"\n\"M30\"", "\"G0 [YH]\"\n\"M5\"\n\"M30\"");
+        Post::parse(&post).unwrap().with_rotary(axis)
+    }
+
+    /// Two rings round `hundred_round`, each one whole turn (100 mm round), 1 mm deep,
+    /// at X0 then X10.
+    fn two_rings() -> Toolpath {
+        Toolpath {
+            moves: vec![
+                mv(MoveKind::Rapid, 0.0, 0.0, 5.0),
+                mv(MoveKind::Plunge, 0.0, 0.0, -1.0),
+                mv(MoveKind::Cut, 0.0, 50.0, -1.0),
+                mv(MoveKind::Cut, 0.0, 100.0, -1.0),
+                mv(MoveKind::Rapid, 0.0, 100.0, 5.0),
+                mv(MoveKind::Rapid, 10.0, 0.0, 5.0),
+                mv(MoveKind::Plunge, 10.0, 0.0, -1.0),
+                mv(MoveKind::Cut, 10.0, 50.0, -1.0),
+                mv(MoveKind::Cut, 10.0, 100.0, -1.0),
+                mv(MoveKind::Rapid, 10.0, 100.0, 5.0),
+            ],
+            ..toolpath("Rings", "T")
+        }
+    }
+
+    /// A line of `lines` starts with `start`.
+    fn has(lines: &[String], start: &str) -> bool {
+        lines.iter().any(|l| l.starts_with(start))
+    }
+
+    /// Every A a file writes.
+    fn a_words(lines: &[String]) -> Vec<f64> {
+        lines
+            .iter()
+            .flat_map(|l| l.split_whitespace())
+            .filter_map(|w| w.strip_prefix('A')?.parse().ok())
+            .collect()
+    }
+
+    #[test]
+    fn a_free_rotary_keeps_turning_the_same_way_ring_after_ring() {
+        let axis = cut_craft_core::rotary_axis::RotaryAxis::default();
+        let lines = render_with(&winding_post(axis), hundred_round(), vec![two_rings()]);
+        // the second ring starts where the first ended (360) and carries on to 720
+        assert!(has(&lines, "G1 X10.000 A720.000 Z14.915"), "{lines:#?}");
+        // its A never ran back between the rings
+        let a = a_words(&lines);
+        let cutting = &a[..a.len() - 1];
+        assert!(cutting.windows(2).all(|w| w[1] >= w[0] - 1e-9), "{a:?}");
+        // and at the end it goes home to the start's place nearest where it is: 720
+        assert_eq!(a.last(), Some(&720.0), "{lines:#?}");
+        // told nothing of the machine, the post writes A as the job unrolls, as before
+        let post = Post {
+            rotary: None,
+            ..winding_post(axis)
+        };
+        let lines = render_with(&post, hundred_round(), vec![two_rings()]);
+        assert!(
+            a_words(&lines).iter().all(|a| (0.0..=360.0).contains(a)),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn at_its_limit_a_rotary_cuts_the_next_pass_backwards_or_spins_back() {
+        use cut_craft_core::rotary_axis::{AtLimit, RotaryAxis, Turning};
+        let limited = |at_limit| RotaryAxis {
+            turning: Turning::Unwind,
+            turns: 1.0,
+            at_limit,
+            ..RotaryAxis::default()
+        };
+        let both = render_with(
+            &winding_post(limited(AtLimit::CutBothWays)),
+            hundred_round(),
+            vec![two_rings()],
+        );
+        let a = a_words(&both);
+        assert!(a.iter().all(|a| (-360.0..=360.0).contains(a)), "{both:#?}");
+        // the second ring goes straight down at 360 and cuts back round to 0
+        let at = both
+            .iter()
+            .position(|l| l.starts_with("G1 X10.000 A360.000 Z14.915"))
+            .unwrap();
+        assert!(
+            both[at + 1].starts_with("G1 X10.000 A180.000 Z14.915"),
+            "{both:#?}"
+        );
+        assert!(
+            both[at + 2].starts_with("G1 X10.000 A0.000 Z14.915"),
+            "{both:#?}"
+        );
+
+        let back = render_with(
+            &winding_post(limited(AtLimit::SpinBack)),
+            hundred_round(),
+            vec![two_rings()],
+        );
+        assert!(
+            a_words(&back).iter().all(|a| (-360.0..=360.0).contains(a)),
+            "{back:#?}"
+        );
+        // lifted clear before A spins back to 0, then the second ring cut forwards again
+        let spin = back
+            .iter()
+            .position(|l| l == "G0 X10.000 A0.000 Z20.915")
+            .unwrap();
+        assert!(back[spin - 1].ends_with("A360.000 Z20.915"), "{back:#?}");
+        assert!(has(&back, "G1 X10.000 A360.000 Z14.915"), "{back:#?}");
+        // and home at the very start, unwound
+        assert_eq!(a_words(&back).last(), Some(&0.0));
+    }
+
+    #[test]
+    fn a_turns_only_as_high_as_the_file_lifts_even_when_a_pass_is_reached_quickly() {
+        use cut_craft_core::rotary_axis::RotaryAxis;
+        // a ring, then lifted 30 above the top (clear of a board's edges as it swings), over to
+        // half way round, and down at the rapid rate to just above the next pass before plunging
+        let quick = Toolpath {
+            moves: vec![
+                mv(MoveKind::Rapid, 0.0, 0.0, 30.0),
+                mv(MoveKind::Plunge, 0.0, 0.0, -1.0),
+                mv(MoveKind::Cut, 0.0, 50.0, -1.0),
+                mv(MoveKind::Cut, 0.0, 100.0, -1.0),
+                mv(MoveKind::Rapid, 0.0, 100.0, 30.0),
+                mv(MoveKind::Rapid, 10.0, 50.0, 30.0),
+                mv(MoveKind::Rapid, 10.0, 50.0, 0.0),
+                mv(MoveKind::Plunge, 10.0, 50.0, -1.0),
+                mv(MoveKind::Cut, 10.0, 100.0, -1.0),
+                mv(MoveKind::Rapid, 10.0, 100.0, 30.0),
+            ],
+            ..toolpath("Rings", "T")
+        };
+        let lines = render_with(
+            &winding_post(RotaryAxis::default()),
+            hundred_round(),
+            vec![quick],
+        );
+        // A goes on round to 540 at the file's 30 above the top, not the job's 5 mm clearance
+        let turn = lines.iter().position(|l| l.contains("A540.000")).unwrap();
+        assert_eq!(lines[turn], "G0 X10.000 A540.000 Z45.915", "{lines:#?}");
+    }
+
+    #[test]
+    fn backlash_is_taken_up_each_time_a_turns_the_other_way() {
+        use cut_craft_core::rotary_axis::{RotaryAxis, Turning};
+        let axis = RotaryAxis {
+            turning: Turning::Unwind,
+            turns: 1.0,
+            backlash: 0.5,
+            ..RotaryAxis::default()
+        };
+        let lines = render_with(&winding_post(axis), hundred_round(), vec![two_rings()]);
+        // going back round, every A is half a degree further back
+        assert!(has(&lines, "G1 X10.000 A179.500 Z14.915"), "{lines:#?}");
+        assert!(has(&lines, "G1 X10.000 A-0.500 Z14.915"), "{lines:#?}");
+    }
+
+    /// One side of `hundred_round` cut with A held at 90° (25 mm round): back and forth along
+    /// X, 2 mm down, with the bit held 4 mm to one side of the axis and then 4 mm to the other.
+    /// Its moves are where the tip cuts, as a toolpath keeps them.
+    fn one_face() -> Toolpath {
+        use cut_craft_core::rotary_axis::tip_of;
+        let radius = 50.0 / std::f64::consts::PI;
+        let held = [
+            (MoveKind::Rapid, 0.0, 5.0, -4.0),
+            (MoveKind::Plunge, 0.0, -2.0, -4.0),
+            (MoveKind::Cut, 10.0, -2.0, -4.0),
+            (MoveKind::Cut, 10.0, -2.0, 4.0),
+            (MoveKind::Cut, 0.0, -2.0, 4.0),
+            (MoveKind::Rapid, 0.0, 5.0, 4.0),
+        ];
+        let moves = held
+            .iter()
+            .map(|&(kind, x, z, across)| {
+                let (round, z) = tip_of(radius, 25.0, z, across);
+                mv(kind, x, round, z)
+            })
+            .collect();
+        Toolpath {
+            moves,
+            across: held.iter().map(|h| h.3).collect(),
+            ..toolpath("Face", "T")
+        }
+    }
+
+    #[test]
+    fn a_bit_held_off_the_axis_is_written_as_a_held_still_and_the_across_axis_moving() {
+        use cut_craft_core::rotary_axis::RotaryAxis;
+        let job = hundred_round();
+        let axis = RotaryAxis {
+            centre_across: 5.0,
+            ..RotaryAxis::default()
+        };
+        let post = Post::default_for(&job).with_rotary(axis);
+        let lines = render_with(&post, job, vec![one_face()]);
+        let words = |letter: char| -> Vec<f64> {
+            lines
+                .iter()
+                .filter(|l| l.starts_with("G1"))
+                .flat_map(|l| l.split_whitespace())
+                .filter_map(|w| w.strip_prefix(letter)?.parse().ok())
+                .collect()
+        };
+        // A turns to the side and holds still while the bit cuts it
+        assert!(
+            words('A').iter().all(|a| (a - 90.0).abs() < 1e-9),
+            "{lines:#?}"
+        );
+        // the bit moves across, 4 mm each side of the axis (which is 5 mm across from zero)
+        assert!(has(&lines, "G0 X0.000 A90.000 Y1.000"), "{lines:#?}");
+        assert!(words('Y').contains(&9.0), "{lines:#?}");
+        // and 2 mm below the top straight over the axis (Z zero on the axis)
+        assert!(
+            words('Z').iter().all(|z| (z - 13.915).abs() < 1e-3),
+            "{lines:#?}"
+        );
+        // turning the other way, positive across is the other way along Y
+        let job = hundred_round();
+        let post = Post::default_for(&job).with_rotary(RotaryAxis {
+            clockwise: false,
+            ..axis
+        });
+        let lines = render_with(&post, job, vec![one_face()]);
+        assert!(has(&lines, "G0 X0.000 A90.000 Y9.000"), "{lines:#?}");
+        // a post that can't move across says so rather than cut in the wrong place
+        let job = hundred_round();
+        let flat = BASIC.replace("begin HEADER\n", "ROTARY_WRAP_Y = \"A\"\nbegin HEADER\n");
+        let mut doc = Document {
+            job,
+            ..Document::default()
+        };
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(one_face());
+        doc.apply(&c.finish()).unwrap();
+        let why = Post::parse(&flat)
+            .unwrap()
+            .render(
+                &doc,
+                &File {
+                    path: std::path::Path::new("/jobs/face.nc"),
+                    job: None,
+                    made: chrono::NaiveDateTime::default(),
+                    slots: &[],
+                    notes: &[],
+                },
+            )
+            .unwrap_err();
+        assert!(why.contains("off the turning axis"), "{why}");
+    }
+
+    #[test]
+    fn inverse_time_on_a_rotary_is_timed_where_the_bit_cuts_and_within_a_top_speed() {
+        use cut_craft_core::rotary_axis::RotaryAxis;
+        let radius = 50.0 / std::f64::consts::PI;
+        let half_way = Toolpath {
+            moves: vec![
+                mv(MoveKind::Rapid, 0.0, 0.0, 5.0),
+                mv(MoveKind::Plunge, 0.0, 0.0, -radius / 2.0),
+                mv(MoveKind::Cut, 0.0, 10.0, -radius / 2.0),
+            ],
+            ..toolpath("Half way in", "T")
+        };
+        let fi = |max_rate| {
+            let axis = RotaryAxis {
+                max_rate,
+                ..RotaryAxis::default()
+            };
+            let lines = render_with(&winding_post(axis), hundred_round(), vec![half_way.clone()]);
+            lines
+                .iter()
+                .find(|l| l.contains("A36.000"))
+                .and_then(|l| l.rsplit_once('F'))
+                .map(|(_, f)| f.to_owned())
+                .unwrap()
+        };
+        // 10 mm round the surface is 5 mm half way to the axis: 1/200 minute at 1000 mm/min
+        assert_eq!(fi(0.0), "200.000");
+        // but 36 degrees at no more than 360 a minute takes a tenth of a minute
+        assert_eq!(fi(360.0), "10.000");
     }
 
     #[test]
@@ -2781,6 +3177,7 @@ begin FOOTER
             moves,
             drill_bank: Some(BankToolpath { bank, hits }),
             fallbacks: vec![],
+            across: vec![],
             ..toolpath("Shelf Pins", "5 mm Drill")
         }
     }

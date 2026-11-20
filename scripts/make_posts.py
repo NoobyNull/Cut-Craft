@@ -83,6 +83,12 @@ def rotary(text, wrapped, inverse_time):
         "VAR TOOL_NUMBER = [T|A|T|1.0]\n",
         "VAR TOOL_NUMBER = [T|A|T|1.0]\nVAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]\n",
     )
+    # the machine's own axis across the rotary (the wrapped letter: Y beside a cylinder along
+    # X), for a bit held off the turning axis; written only when it changes
+    text = text.replace(
+        "VAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]\n",
+        f"VAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]\nVAR ACROSS_POSITION = [ACROSS|C|{wrapped}|1.3]\n",
+    )
     text = re.sub(
         r'"\(Material: X .*\)"',
         '"(Rotary: [WRAP_DIA] mm across, [XLENGTH] x [YLENGTH] unrolled, Z zero on the [Z_ORIGIN])"',
@@ -98,6 +104,7 @@ def rotary(text, wrapped, inverse_time):
         text = text.replace('"G0 [SAFEZ]"\n"M5"', '"G0 [SAFEZ]"\n"G94"\n"M5"')
         text = add_to_block(text, "TOOLCHANGE", '"G93"')
         text = add_to_block(text, "FOOTER", '"G94"', first=True)
+    text = re.sub(r'^"(G[01] \[X\] \[Y\])', r'"\1 [ACROSS]', text, flags=re.M)
     return text
 
 

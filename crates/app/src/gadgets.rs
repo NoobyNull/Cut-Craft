@@ -50,7 +50,8 @@ impl Loaded {
 }
 
 /// The folders of gadget add-ons installed in `addons` (Gadgets ▸ Add-ons), each with
-/// whether it was signed with Cut Craft's release key.
+/// whether it was signed with Cut Craft's release key. Add-ons that list web hosts
+/// (`network`) are left out: their gadgets are not job commands.
 pub fn from_addons(addons: &Path) -> Vec<(PathBuf, bool)> {
     use cut_craft_updater::addon::{MANIFEST, Manifest, installed};
     let mut found: Vec<(PathBuf, bool)> = std::fs::read_dir(addons)
@@ -61,7 +62,10 @@ pub fn from_addons(addons: &Path) -> Vec<(PathBuf, bool)> {
             let id = entry.file_name().into_string().ok()?;
             let record = installed(addons, &id)?;
             let manifest = std::fs::read_to_string(entry.path().join(MANIFEST)).ok()?;
-            (Manifest::parse(&manifest).ok()?.kind == "gadget")
+            let manifest = Manifest::parse(&manifest).ok()?;
+            // gadgets that reach the web are not job commands; they wait for their own
+            // runner (issue #587) rather than joining the Gadgets menu as one
+            (manifest.kind == "gadget" && manifest.network.is_empty())
                 .then(|| (entry.path(), record.signed))
         })
         .collect();
@@ -203,9 +207,16 @@ mod tests {
         let gadget = |id: &str, file: &str, signed: bool, kind: &str| {
             let dir = addons.join(id);
             std::fs::create_dir_all(&dir).unwrap();
+            let network = if id == "web" {
+                "\nnetwork = [\"relay.example.com\"]"
+            } else {
+                ""
+            };
             std::fs::write(
                 dir.join("addon.toml"),
-                format!("id = \"{id}\"\nname = \"{id}\"\nkind = \"{kind}\"\nversion = \"1.0.0\""),
+                format!(
+                    "id = \"{id}\"\nname = \"{id}\"\nkind = \"{kind}\"\nversion = \"1.0.0\"{network}"
+                ),
             )
             .unwrap();
             let record = format!(
@@ -218,6 +229,8 @@ mod tests {
         gadget("stranger", "star-burst.lua", false, "gadget");
         // a tool add-on's Lua is not a gadget
         gadget("depth", "helper.lua", true, "tool");
+        // one that reaches the web is not a job command
+        gadget("web", "fetch.lua", true, "gadget");
         let found = from_addons(&addons);
         assert_eq!(
             found,

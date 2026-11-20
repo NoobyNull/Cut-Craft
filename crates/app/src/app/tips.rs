@@ -1156,6 +1156,13 @@ pub(super) const TIPS: &[Tip] = &[
          diameter first, ready for the carving.",
     ),
     tool(
+        Area::Toolpaths,
+        "rotary_machining_toolpath",
+        "On a rotary job, **4-Axis Rotary Machining** finishes the model ring by ring all the \
+         way round, worked out round the turning axis itself so a bit cutting deep never \
+         catches the part beside it.",
+    ),
+    tool(
         Area::Cutting,
         "materials",
         "In the preview, each toolpath cuts in the colour of the swatch beside it in the toolpath \

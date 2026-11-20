@@ -119,6 +119,7 @@ impl CutCraftApp {
             busy: None,
             wait_before_showing: crate::busy::SHOW_AFTER,
             addons: crate::addons::Addons::new(None),
+            language_packs: None,
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             machines_unsaved: false,
@@ -273,6 +274,7 @@ impl CutCraftApp {
             playback_redraw: super::PLAYBACK_REDRAW,
             playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
+            turning: None,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
             rotating: false,
@@ -1785,7 +1787,7 @@ impl CutCraftApp {
             return Err(why);
         }
         let post = match form.post.as_deref() {
-            Some(name) => self.posts.load(name),
+            Some(name) => self.posts.load(name).map(|p| self.on_machine(p)),
             None => self.output_post(),
         }?;
         let changer = self.has_tool_changer();
@@ -2072,6 +2074,20 @@ impl CutCraftApp {
     /// for a cylinder along X and X for one along Y. Without a machine, Cut Craft's
     /// `FluidNC` post for this kind of job.
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
+        self.output_post_as_written().map(|p| self.on_machine(p))
+    }
+
+    /// `post` writing for the active machine: a rotary post winds A as its rotary allows
+    /// (Machine Configuration ▸ Rotary), with its backlash and top speed.
+    fn on_machine(&self, post: cut_craft_post::Post) -> cut_craft_post::Post {
+        match self.machines.active() {
+            Some(m) if m.has_rotary() && post.wraps().is_some() => post.with_rotary(m.rotary_axis),
+            _ => post,
+        }
+    }
+
+    /// [`Self::output_post`] as its file is written, not yet told the machine's rotary.
+    fn output_post_as_written(&self) -> Result<cut_craft_post::Post, String> {
         use cut_craft_core::document::Along;
         if let Some(why) = self.no_a_axis() {
             return Err(why);
@@ -6059,9 +6075,16 @@ impl CutCraftApp {
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         // a form that only uses its tool's shape (Relief from Photo) has no passes to cut
         let cuts = open.id != "relief_from_photo";
-        // a surfacing toolpath flattens all it covers, and 3D Pencil has its own bits that
-        // finished before and follows the model: no rest machining or vector selector
-        let extras = cuts && !["surfacing_toolpath", "3d_pencil_toolpath"].contains(&open.id);
+        // a surfacing toolpath flattens all it covers, 3D Pencil has its own bits that
+        // finished before and follows the model, and 4-Axis Rotary Machining goes all the way
+        // round: no rest machining or vector selector
+        let extras = cuts
+            && ![
+                "surfacing_toolpath",
+                "3d_pencil_toolpath",
+                "rotary_machining_toolpath",
+            ]
+            .contains(&open.id);
         let suggested = open.suggested.clone();
         let form_id = open.id;
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {

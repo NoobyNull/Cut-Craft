@@ -26,6 +26,7 @@ mod help_pictures;
 #[path = "help_tours.rs"]
 mod help_tours;
 mod installed;
+mod language_page;
 mod layouts;
 mod mac;
 mod notes_panel;
@@ -47,6 +48,7 @@ mod tests;
 mod tips;
 mod title_bar;
 mod trace_window;
+mod turning;
 mod units_ask;
 mod updates;
 mod views;
@@ -1265,6 +1267,9 @@ struct CutCraftApp {
     /// Gadgets ▸ Add-ons, and the installs it (or Relief from Photo) starts; where add-ons
     /// are installed (none in tests).
     addons: crate::addons::Addons,
+    /// The language packs installed, each with how much of Cut Craft it covers (a
+    /// percentage), for Options ▸ Language while it is open; read again when it next opens.
+    language_packs: Option<Vec<(crate::languages::Pack, u32)>>,
     /// The machines (Machine Configuration), the active one's default post saving
     /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,
@@ -1582,6 +1587,9 @@ struct CutCraftApp {
     playback_budget: std::time::Duration,
     /// How many times faster than the machine the preview plays (1: the machine's speed).
     playback_speed: f64,
+    /// A rotary job's preview as the machine runs it: the file's own moves played into the
+    /// material turning with A, kept in step with the playing (or kept) preview.
+    turning: Option<turning::Turning>,
     /// Component tree levels collapsed (Expand / Collapse).
     collapsed_levels: std::collections::HashSet<u64>,
     /// A guide being dragged: whether it is vertical, and which it is (`None` a new one).
