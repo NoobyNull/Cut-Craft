@@ -15,7 +15,7 @@ still partway done.
 2. Edit its `addon.toml`:
 
    ```toml
-   id = "language-de"        # always "language-" and the code
+   id = "language-de"        # "language-" and the code, in lower case (language-pt-br)
    name = "Deutsch"          # the language's name in itself
    kind = "language"
    language = "de"           # the code
@@ -73,9 +73,19 @@ still partway done.
 - `cargo nextest run -p cut-craft-i18n --profile languages` reads every pack in
   `language-packs/`. It fails on any line Fluent can't read, a key given twice, a key English
   doesn't have, or a missing `addon.toml` field.
-- To see it in Cut Craft: build Cut Craft, zip your pack's folder (its files at the top of
-  the zip), and put the files in `<add-ons folder>/language-de/` with an `installed.json`.
-  Then pick it in Edit ▸ Options ▸ Language. Words that are too long for their place show
+- To see it in Cut Craft without publishing it, copy your pack's files into the add-ons
+  folder, in a folder named as its `id` (such as `language-de`). The add-ons folder is
+  `~/.config/cut-craft/addons/` on Linux, `%APPDATA%\cut-craft\addons\` on Windows and
+  `~/Library/Application Support/cut-craft/addons/` on a Mac. Beside the `.ftl` files, add an
+  `installed.json` that says where it came from:
+
+  ```json
+  {"repo": {"owner": "NoobyNull", "name": "CutCraft-Translations"},
+   "tag": "v0.0.0", "version": "0.1.0", "signed": false}
+  ```
+
+  Start Cut Craft and pick it in Edit ▸ Options ▸ Language. It shows as not official, which
+  is right for a pack you made yourself. Words that are too long for their place show
   cut off. Shorten them, as nothing in Cut Craft moves to make room.
 - Edit ▸ Options ▸ Language ▸ **Test language** (with Show advanced settings ticked) shows
   English stretched by 40%. It's a quick way to see where long words won't fit.

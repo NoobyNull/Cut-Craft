@@ -19772,8 +19772,10 @@ fn a_language_pack_picked_in_options_is_used_once_applied() {
     h.app.use_language("");
     assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
     std::fs::remove_dir_all(&addons).unwrap();
+    h.app.options.language.pack = "language-ru".to_owned();
     h.app.use_language("language-ru");
     assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
+    assert_eq!(h.app.options.language.pack, "", "Options says English too");
     assert!(
         h.app.status.message.contains("not installed"),
         "{}",

@@ -450,7 +450,7 @@ start-whats-new = Neu in v{ $version }
             let manifest = std::fs::read_to_string(folder.join("addon.toml"))
                 .unwrap_or_else(|e| panic!("{code}: addon.toml: {e}"));
             for line in [
-                format!("id = \"language-{code}\""),
+                format!("id = \"language-{}\"", code.to_ascii_lowercase()),
                 "kind = \"language\"".to_owned(),
                 format!("language = \"{code}\""),
             ] {

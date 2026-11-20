@@ -473,6 +473,8 @@ fn install_with(
         })
         .collect::<Result<Vec<_>, _>>()?;
     total.set(offer.zip.size + downloads.iter().map(|a| a.size).sum::<u64>());
+    // official only when every file it brings is signed, not just its zip
+    let signed = offer.signed && downloads.iter().all(|a| release.signature_of(a).is_some());
 
     // unpacked beside the old one, which stays in use until everything has arrived
     fs::create_dir_all(addons).map_err(|e| cannot(addons, &e))?;
@@ -492,7 +494,7 @@ fn install_with(
             repo: offer.repo.clone(),
             tag: release.tag.clone(),
             version: release.version.to_string(),
-            signed: offer.signed,
+            signed,
             zip: offer.named.clone(),
         };
         let json = serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?;
@@ -1089,6 +1091,18 @@ mod tests {
     }
 
     #[test]
+    fn a_download_without_its_signature_is_not_official() {
+        let addons = scratch("unsigned-download");
+        let mut fake = depth_release(true);
+        fake.release
+            .assets
+            .retain(|a| a.name != "weights.safetensors.minisig");
+        fake.install(&addons, &platform()).unwrap();
+        assert!(!installed(&addons, "depth").unwrap().signed);
+        fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
     fn an_update_replaces_the_old_add_on_whole() {
         let addons = scratch("update");
         fs::create_dir_all(addons.join("depth")).unwrap();
@@ -1246,7 +1260,13 @@ mod tests {
             "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\nversion = \"0.1.0\"";
         let m = Manifest::parse(&format!("{base}\nlanguage = \"ru\"")).unwrap();
         assert_eq!(m.language.as_deref(), Some("ru"));
-        assert!(Manifest::parse(&format!("{base}\nlanguage = \"pt-BR\"")).is_ok());
+        // a regional code keeps its capitals; the id, a folder name, is in lower case
+        let pt = "id = \"language-pt-br\"\nname = \"Português (Brasil)\"\nkind = \"language\"\nversion \
+                  = \"0.1.0\"\nlanguage = \"pt-BR\"";
+        assert_eq!(
+            Manifest::parse(pt).unwrap().language.as_deref(),
+            Some("pt-BR")
+        );
         for wrong in [
             "",
             "\nlanguage = \"\"",

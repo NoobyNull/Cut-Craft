@@ -22,10 +22,16 @@ impl CutCraftApp {
 
     /// Shows every word in the language pack `pack` (its id; empty for English) from now
     /// on; one that is gone or will not read leaves English, and the status bar says why.
+    /// Options then says English too, so picking the pack again once it is back is a change
+    /// that Apply uses.
     pub(super) fn use_language(&mut self, pack: &str) {
         if let Err(e) = crate::languages::use_chosen(self.addons.dir(), pack) {
             log::warn!("{e}");
             self.status.set_message(&e);
+            if self.options.language.pack == pack {
+                self.options.language.pack.clear();
+                self.save_options();
+            }
         }
     }
 

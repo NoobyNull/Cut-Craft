@@ -21,5 +21,5 @@ job-setup-cancel = Отмена
 job-setup-set-as-default = Сделать по умолчанию
     .tooltip = Начинать каждое новое задание с этими настройками (ваш Clearing Settings по умолчанию сохраняется)
 setup-material-more-tip = Показать здесь все настройки задания: ноль Z, X0 Y0, высоты быстрых ходов, дом и материал — только для этого задания
-setup-material-defaults-tip = Edit ▸ Options ▸ Job Defaults: с чего начинается каждое новое задание
+setup-material-defaults-tip = Правка ▸ Options ▸ Job Defaults: с чего начинается каждое новое задание
 job-defaults-note = Каждое новое задание начинается с этих настроек. Их изменение не трогает открытое задание: его собственные — в Setup Material ▸ More settings for this job…
