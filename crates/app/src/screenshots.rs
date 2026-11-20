@@ -30,7 +30,7 @@ const DARK: &str = "-dark";
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 50] = [
+const SCENES: &[Scene] = &[
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("design-2d-dark", |_, _| {}),
