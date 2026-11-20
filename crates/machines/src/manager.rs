@@ -704,14 +704,14 @@ fn room(
          Material turning on the rotary can swing out no further than this below it. 0 until \
          you measure it",
     );
-    measure(ui, &mut axis.axis_height, per, length);
+    measure(ui, "Axis height", &mut axis.axis_height, per, length);
     ui.end_row();
     ui.label("Spoilboard").on_hover_hint(
         "How thick the spoilboard under the rotary is. Take it out and material can swing \
          down past where its top was, to the bed",
     );
     ui.horizontal(|ui| {
-        measure(ui, &mut axis.spoilboard, per, length);
+        measure(ui, "Spoilboard", &mut axis.spoilboard, per, length);
         ui.checkbox(&mut axis.spoilboard_off, "Taken out");
     });
     ui.end_row();
@@ -719,7 +719,7 @@ fn room(
         "With Z all the way up, from the turning axis up to the tip of the bit. Material can \
          turn under the bit only if it swings out less than this. 0 until you measure it",
     );
-    measure(ui, &mut axis.room_above, per, length);
+    measure(ui, "Room above", &mut axis.room_above, per, length);
     ui.end_row();
 }
 
