@@ -100,9 +100,9 @@ pub(super) const TIPS: &[Tip] = &[
     scene(
         Area::Start,
         "tips/sample_project.png",
-        "New to Cut Craft? On the start page, **Try a sample project** opens a finished sign \
-         with its toolpaths already made, so you can see the whole journey from drawing to \
-         cutting file before you start your own.",
+        "New to Cut Craft? On the blank sheet it opens with, **Try a sample project** opens a \
+         finished sign with its toolpaths already made, so you can see the whole journey from \
+         drawing to cutting file before you start your own.",
         "contents",
     ),
     scene(
@@ -1245,6 +1245,14 @@ pub(super) const TIPS: &[Tip] = &[
          the list, up to date in one go.",
         "toolpaths",
     ),
+    icon(
+        Area::Cutting,
+        "toolpaths/save_toolpaths.png",
+        "Too many post-processors to find yours? **Machine ▸ Post-Processor Management** has \
+         filters: tick **mm** or **inch**, **Arcs**, **Straight** or **Rotary (A)**, pick your \
+         controller, or type part of a name. They start from your machine each time.",
+        "post_processor_management",
+    ),
     tool(
         Area::Cutting,
         "cut_list",
@@ -1357,8 +1365,8 @@ pub(super) const TIPS: &[Tip] = &[
     icon(
         Area::Program,
         "open",
-        "Open a drawing or picture with Cut Craft from your file manager and it starts a new job: \
-         set up the material in **Job Setup**, and the file is brought in.",
+        "Open a drawing or picture with Cut Craft from your file manager and it is brought into \
+         a new, blank job: change the material's size with **Setup Material**.",
         "contents",
     ),
     icon(

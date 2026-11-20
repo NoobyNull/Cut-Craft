@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-18
-see-also: create_component_from_bitmap, emboss, photo_vcarve_toolpath
+see-also: create_component_from_bitmap, emboss, photo_vcarve_toolpath, addons
 ---
 
 ## Steps
@@ -24,6 +24,10 @@ see-also: create_component_from_bitmap, emboss, photo_vcarve_toolpath
 The first time, the form shows **Install Depth Add-on**. Press it once: it downloads the
 free add-on (about 100 MB) from GitHub and keeps it for next time. After that, choose the
 photo and press **Estimate Depth**.
+
+Once the add-on is installed, Relief from Photo is also in **Gadgets ▸ My Gadgets** (as
+**Depth (Relief from Photo)**) and in the **Gadgets** section of the tool buttons. To update
+or remove the add-on, use [Add-ons](help:addons).
 
 If it says the add-on **is not available to download yet**, nothing is wrong on your
 computer: it simply has not been published for your kind of computer yet. Try again after

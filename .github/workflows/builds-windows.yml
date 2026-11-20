@@ -26,6 +26,7 @@ on:
       - ".github/workflows/platform-tests.yml"
       - "scripts/sign-release"
       - "packaging/**"
+      - "assets/windows/**"
 
 permissions:
   contents: write
@@ -47,6 +48,28 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release -p cut-craft
+      # the icon and name build.rs puts in the .exe (Explorer, shortcuts, the taskbar)
+      - name: Check the program carries its icon and name
+        shell: pwsh
+        run: |
+          $info = (Get-Item target/release/cut-craft.exe).VersionInfo
+          if ($info.FileDescription -ne "Cut Craft" -or $info.ProductName -ne "Cut Craft") {
+            throw "cut-craft.exe has no Cut Craft resources: '$($info.FileDescription)'"
+          }
+          # the .exe's own icon, as Explorer draws it, must be Cut Craft's (not Windows' blank one)
+          Add-Type -AssemblyName System.Drawing
+          $exe = [System.Drawing.Icon]::ExtractAssociatedIcon("$PWD/target/release/cut-craft.exe").ToBitmap()
+          $ours = (New-Object System.Drawing.Icon("$PWD/assets/windows/cut-craft.ico", $exe.Width, $exe.Height)).ToBitmap()
+          $diff = 0
+          for ($y = 0; $y -lt $exe.Height; $y++) {
+            for ($x = 0; $x -lt $exe.Width; $x++) {
+              $a = $exe.GetPixel($x, $y); $b = $ours.GetPixel($x, $y)
+              $diff += [math]::Abs($a.R - $b.R) + [math]::Abs($a.G - $b.G) + [math]::Abs($a.B - $b.B) + [math]::Abs($a.A - $b.A)
+            }
+          }
+          $mean = $diff / ($exe.Width * $exe.Height * 4)
+          "Icon {0}x{1}, differs from the logo by {2:N2} per channel; version {3}" -f $exe.Width, $exe.Height, $mean, $info.FileVersion
+          if ($mean -gt 4) { throw "cut-craft.exe's icon is not Cut Craft's" }
       # needs no Visual C++ runtime, and keeps running with its window set up
       - name: Start the program
         shell: pwsh

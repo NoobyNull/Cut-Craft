@@ -649,6 +649,8 @@ fn a_script_gets_the_gcode_save_toolpaths_would_write_and_can_save_it() {
         .unwrap()
         .tool
         .flute_length = 50.0;
+    // and where to zero the bit looked at, in Material Setup
+    h.app.doc.material_checked = true;
     let (status, posts) = call(&mut h, at, "GET", "posts", None);
     assert_eq!(status, 200, "{posts}");
     assert!(posts["default"].is_string(), "{posts}");

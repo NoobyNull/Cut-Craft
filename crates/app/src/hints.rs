@@ -214,6 +214,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Exit: closes Cut Craft, offering to save your work first",
     ),
     (
+        "setup_material",
+        "Setup Material: sets this job's material: single sided, double sided or rotary, and its size",
+    ),
+    (
         "open_folder",
         "Open: opens a saved job, or a drawing or picture to bring in",
     ),
@@ -511,23 +515,23 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "preview_quality_1",
-        "Preview Quality Standard: toolpath previews in normal detail, quickest to draw; a finer quality draws a small bit's thin cuts truer on a big sheet",
+        "Preview Quality Standard: moves the Preview detail slider to 20%, quick to work out; the preview showing is worked out again",
     ),
     (
         "preview_quality_2",
-        "Preview Quality High: toolpath previews in finer detail, about twice as slow",
+        "Preview Quality High: moves the Preview detail slider to 40%; the preview showing is worked out again",
     ),
     (
         "preview_quality_4",
-        "Preview Quality Very High: toolpath previews in fine detail, about four times as slow",
+        "Preview Quality Very High: moves the Preview detail slider to 60%; the preview showing is worked out again",
     ),
     (
         "preview_quality_8",
-        "Preview Quality Super High: toolpath previews in very fine detail, about eight times as slow",
+        "Preview Quality Extremely High: moves the Preview detail slider to 80%; the preview showing is worked out again",
     ),
     (
         "preview_quality_25",
-        "Preview Quality Maximum: toolpath previews in the finest detail, for small carvings; about 25 times as slow",
+        "Preview Quality Maximum: moves the Preview detail slider to 100%, the finest detail, for small bits and fine carving; the preview showing is worked out again",
     ),
     (
         "create_component_from_toolpath_preview",
@@ -608,6 +612,10 @@ pub const HINTS: &[(&str, &str)] = &[
     (
         "addons",
         "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts",
+    ),
+    (
+        "open_gadgets_folder",
+        "Open My Gadgets Folder: opens the folder where your own .lua gadget files go. Each one shows up in Gadgets ▸ My Gadgets when Cut Craft starts",
     ),
     (
         "community:0",

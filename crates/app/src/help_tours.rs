@@ -11,29 +11,70 @@ use eframe::egui;
 /// Every tool's tour.
 pub const TOURS: &[Tour] = &[
     Tour {
-        tool: "job_setup",
+        tool: "setup_material",
         steps: &[
             Step {
-                caption: "Press **New** (or File ▸ New) to start a job. The first thing it asks \
-                          about is your material.",
+                caption: "Cut Craft opens with a blank job, made with your Job Defaults. To \
+                          change this job's material, press **Setup Material** (under File \
+                          Operations, at the top of the Design page).",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
-                    app.pages.set_pinned(Page::Design, true);
+                    on_design_tab(app, 0);
                 },
-                mark: Mark::At("tool:new"),
+                mark: Mark::At("tool:setup_material"),
+            },
+            Step {
+                caption: "Pick the kind of job: **Single Sided** (cut from the top), **Double \
+                          Sided** (turned over to cut the back) or **Rotary** (a cylinder on a \
+                          rotary axis).",
+                setup: |app, ctx| app.invoke(ctx, "setup_material"),
+                mark: Mark::At("field:job_type"),
             },
             Step {
                 caption: "Measure your board and type its **Width**, **Height** and \
                           **Thickness**. Get the thickness right: it decides how deep a cut \
                           must go to come through.",
-                setup: |app, ctx| app.invoke(ctx, "new"),
+                setup: |_, _| {},
                 mark: Mark::At("field:thickness"),
+            },
+            Step {
+                caption: "The line under them says where **Z zero** and **X0 Y0** are. **More \
+                          settings for this job…** changes them for this job only; **Change my \
+                          defaults…** changes them for every new job.",
+                setup: |_, _| {},
+                mark: Mark::At("button:More settings for this job…"),
+            },
+            Step {
+                caption: "Press **Apply**. The sheet on screen is now your board, ready to draw \
+                          on.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Apply"),
+            },
+        ],
+    },
+    Tour {
+        tool: "job_setup",
+        steps: &[
+            Step {
+                caption: "Job Setup holds every setting of this job's material. Press **Setup \
+                          Material** (under File Operations).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    on_design_tab(app, 0);
+                },
+                mark: Mark::At("tool:setup_material"),
+            },
+            Step {
+                caption: "Press **More settings for this job…** under the size: the rest of \
+                          Job Setup opens below it.",
+                setup: |app, ctx| app.invoke(ctx, "setup_material"),
+                mark: Mark::At("button:More settings for this job…"),
             },
             Step {
                 caption: "Choose where **Z zero** is: the top of the material (most common) or \
                           the machine bed. Zero the bit in the same place on your machine before \
                           cutting.",
-                setup: |_, _| {},
+                setup: |app, _| app.show_all_job_settings(),
                 mark: Mark::At("field:z_zero"),
             },
             Step {
@@ -43,9 +84,10 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:datum"),
             },
             Step {
-                caption: "Press **OK**. The sheet on screen is now your board, ready to draw on.",
+                caption: "Press **Apply**. Only this job changes: new jobs start with Edit ▸ \
+                          Options ▸ Job Defaults.",
                 setup: |_, _| {},
-                mark: Mark::At("button:OK"),
+                mark: Mark::At("button:Apply"),
             },
         ],
     },
@@ -1855,7 +1897,7 @@ pub const TOURS: &[Tour] = &[
         tool: "new",
         steps: &[
             Step {
-                caption: "Start a new job: the board's size and thickness, and where the machine's zero is.",
+                caption: "Start a new, blank job, made with your Job Defaults (Edit ▸ Options ▸ Job Defaults).",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
                     shapes_none(app);
@@ -1863,7 +1905,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::None,
             },
             Step {
-                caption: "Press **New** (under File Operations, at the top of the Design page). Job Setup opens: see [Job Setup](help:job_setup).",
+                caption: "Press **New** (under File Operations, at the top of the Design page). A blank sheet opens: change its size with [Setup Material](help:setup_material).",
                 setup: |app, _| on_design_tab(app, 0),
                 mark: Mark::At("tool:new"),
             },
@@ -4227,6 +4269,28 @@ pub const TOURS: &[Tour] = &[
         ],
     },
     Tour {
+        tool: "addons",
+        steps: &[
+            Step {
+                caption: "Open **Gadgets ▸ Add-ons...** and press **Install** beside the add-on you want. One that is not signed asks before it installs.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    depth_installed(app);
+                    app.invoke(ctx, "addons");
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Once it is installed it is listed in **Gadgets ▸ My Gadgets**, and a **Gadgets** section after the other tools holds it. Click it there to use it.",
+                setup: |app, _| {
+                    app.addons.open = false;
+                    on_design_tab(app, 4);
+                },
+                mark: Mark::At("tool:relief_from_photo"),
+            },
+        ],
+    },
+    Tour {
         tool: "relief_from_photo",
         steps: &[
             Step {
@@ -4940,6 +5004,24 @@ fn landscape(x: f64, y: f64) -> u8 {
 }
 
 /// The Design page pinned open on sub-tab `tab` (0 Create, 1 Edit, 2 Arrange, 4 Import).
+/// The Depth add-on, as Add-ons leaves it once installed, in an add-ons folder of the
+/// pictures' own (so not the user's).
+fn depth_installed(app: &mut CutCraftApp) {
+    let dir = std::env::temp_dir().join("cut-craft-help-pictures-addons");
+    let depth = dir.join("depth");
+    let _ = std::fs::create_dir_all(&depth);
+    let _ = std::fs::write(
+        depth.join("addon.toml"),
+        "id = \"depth\"\nname = \"Depth (Relief from Photo)\"\nkind = \"tool\"\nversion = \"0.1.0\"",
+    );
+    let _ = std::fs::write(
+        depth.join("installed.json"),
+        r#"{"repo":{"owner":"NoobyNull","name":"CutCraft-Depth"},"tag":"v0.1.0","version":"0.1.0","signed":false}"#,
+    );
+    app.addons = crate::addons::Addons::new(Some(dir));
+    app.refresh_installed();
+}
+
 fn on_design_tab(app: &mut CutCraftApp, tab: usize) {
     app.pages.set_pinned(Page::Design, true);
     app.design_subtab = tab;

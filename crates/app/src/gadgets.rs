@@ -31,10 +31,22 @@ pub struct Listed {
 #[derive(Debug, Default)]
 pub struct Loaded {
     pub built_in: Vec<Listed>,
-    /// From the My Gadgets folder.
+    /// From the My Gadgets folder, and unsigned gadget add-ons: warned about before they run.
     pub mine: Vec<Listed>,
+    /// From gadget add-ons signed with Cut Craft's release key.
+    pub signed_addons: Vec<Listed>,
     /// Gadgets that could not be loaded, each with why, worded for the user.
     pub problems: Vec<String>,
+}
+
+impl Loaded {
+    /// The gadgets the user installed (not Cut Craft's own), by name: Gadgets ▸ My Gadgets
+    /// and the Gadgets toolbar section list them.
+    pub fn installed(&self) -> impl Iterator<Item = &Listed> {
+        let mut all: Vec<&Listed> = self.mine.iter().chain(&self.signed_addons).collect();
+        all.sort_by_key(|g| g.label.to_lowercase());
+        all.into_iter()
+    }
 }
 
 /// The folders of gadget add-ons installed in `addons` (Gadgets ▸ Add-ons), each with
@@ -62,8 +74,8 @@ pub fn from_addons(addons: &Path) -> Vec<(PathBuf, bool)> {
 }
 
 /// Loads the built-in gadgets, every `.lua` file in `mine`, and those of the gadget add-ons
-/// `addons` (folder, signed) into `registry`: a signed add-on's beside the built-in ones, an
-/// unsigned one's with the user's own, warned about the same way. A gadget runs only Cut
+/// `addons` (folder, signed) into `registry`: an unsigned add-on's with the user's own,
+/// warned about the same way. A gadget runs only Cut
 /// Craft's own commands, never another gadget.
 pub fn load(registry: &mut Registry, mine: Option<&Path>, addons: &[(PathBuf, bool)]) -> Loaded {
     let commands = Arc::new(crate::commands::registry());
@@ -87,7 +99,7 @@ pub fn load(registry: &mut Registry, mine: Option<&Path>, addons: &[(PathBuf, bo
                 .map_err(|e| format!("{file}: could not be read ({e})"))
                 .and_then(|source| add(registry, &file, &source, &commands));
             match added {
-                Ok(listed) if signed => loaded.built_in.push(listed),
+                Ok(listed) if signed => loaded.signed_addons.push(listed),
                 Ok(listed) => loaded.mine.push(listed),
                 Err(why) => loaded.problems.push(why),
             }
@@ -190,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn gadget_add_ons_load_signed_ones_beside_the_built_in_ones() {
+    fn gadget_add_ons_load_into_my_gadgets_and_only_unsigned_ones_warn() {
         let addons = folder("addons", &[]);
         let gadget = |id: &str, file: &str, signed: bool, kind: &str| {
             let dir = addons.join(id);
@@ -230,9 +242,25 @@ mod tests {
         let mut registry = crate::commands::registry();
         let loaded = load(&mut registry, None, &found);
         let built_in: Vec<&str> = loaded.built_in.iter().map(|g| g.label.as_str()).collect();
-        assert_eq!(built_in, ["Drill Grid", "Hole Pattern", "Box Maker"]);
+        assert_eq!(
+            built_in,
+            ["Drill Grid", "Hole Pattern"],
+            "only Cut Craft's own"
+        );
         let mine: Vec<&str> = loaded.mine.iter().map(|g| g.label.as_str()).collect();
         assert_eq!(mine, ["Star Burst"], "unsigned: warned before it runs");
+        let signed: Vec<&str> = loaded
+            .signed_addons
+            .iter()
+            .map(|g| g.label.as_str())
+            .collect();
+        assert_eq!(signed, ["Box Maker"]);
+        let installed: Vec<&str> = loaded.installed().map(|g| g.label.as_str()).collect();
+        assert_eq!(
+            installed,
+            ["Box Maker", "Star Burst"],
+            "by name, for My Gadgets"
+        );
         let _ = std::fs::remove_dir_all(addons);
     }
 }

@@ -32,8 +32,16 @@ impl CutCraftApp {
         let addon_gadgets =
             crate::depth::addons_dir().map_or_default(|dir| crate::gadgets::from_addons(&dir));
         let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
+        let mine: Vec<(String, &'static str)> = gadgets
+            .installed()
+            .filter_map(|g| Some((g.label.clone(), registry.get(&g.id)?.id())))
+            .collect();
         let mut menus = gui::MenuSystem::new();
-        menus.add_gadgets(&gadgets, my_gadgets.as_deref());
+        let items: Vec<(String, String)> = mine
+            .iter()
+            .map(|(label, id)| (label.clone(), (*id).to_owned()))
+            .collect();
+        menus.add_gadgets(&gadgets.built_in, &items);
         let mut status = gui::StatusBar::new();
         if !gadgets.problems.is_empty() {
             status.set_message(&format!(
@@ -133,6 +141,9 @@ impl CutCraftApp {
             shots: None,
             help_shots: None,
             space_mouse: None,
+            my_gadgets: mine,
+            installed_addons: vec![],
+            rail_gadgets: false,
             unsigned_gadgets: gadgets
                 .mine
                 .iter()
@@ -202,6 +213,8 @@ impl CutCraftApp {
             fit_import: None,
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
+            held_detail: None,
+            preview_grid_kept: std::cell::Cell::new(None),
             simulation: None,
             simulation_coarse: None,
             import_level: None,
@@ -260,6 +273,7 @@ impl CutCraftApp {
             options: crate::options::Options::default(),
             options_window: false,
             options_draft: None,
+            job_defaults_form: None,
             options_closing: false,
             options_page: 0,
             show_advanced: false,
@@ -602,7 +616,9 @@ impl CutCraftApp {
                 ctx.open_url(egui::OpenUrl::new_tab(super::MACHINES_ONLINE));
             }
             "post_processor_management" => {
-                self.post_window = Some(cut_craft_machines::PostManager::default());
+                self.post_window = Some(cut_craft_machines::PostManager::for_machine(
+                    self.machines.active(),
+                ));
             }
             "tool_database" => {
                 let manager = cut_craft_tool_database::Manager::new(&self.tools);
@@ -635,6 +651,13 @@ impl CutCraftApp {
                 self.show_vectors_3d(!self.display.vectors_3d);
                 ctx.request_repaint();
             }
+            // Toolpaths ▸ Preview Simulation Quality: the detail slider to that pick, and
+            // a preview showing worked out again at it
+            id if crate::display::Display::is_quick_pick(id) => {
+                self.display.toggle(id);
+                self.rework_preview();
+                ctx.request_repaint();
+            }
             id if self.display.toggle(id) => ctx.request_repaint(),
             id if self.resolution_checked(id).is_some() => self.set_resolution(id),
             id if self.units_checked(id).is_some() => self.set_units(id),
@@ -660,7 +683,13 @@ impl CutCraftApp {
             "options" => self.options_window = true,
             // F1: the open form's help page, else the contents
             "tool_help" => {
-                let topic = self.form.as_ref().map_or("contents", |f| f.id);
+                let topic = self.form.as_ref().map_or("contents", |f| {
+                    if f.brief {
+                        super::setup_material::ID
+                    } else {
+                        f.id
+                    }
+                });
                 self.info = Some(Info::Help(topic));
             }
             "view_2d" => self.view = View::TwoD,
@@ -668,6 +697,7 @@ impl CutCraftApp {
             "first_run_setup" => self.open_first_run(),
             "did_you_know" => self.open_tips(self.options.next_tip),
             "try_sample_project" => self.open_sample(),
+            super::setup_material::ID => self.open_setup_material(),
             id if id.starts_with(gui::COMMUNITY) => {
                 let link = id[gui::COMMUNITY.len()..].parse::<usize>().ok();
                 if let Some((_, url, _)) = link.and_then(|n| super::LINKS.get(n)) {
@@ -675,6 +705,7 @@ impl CutCraftApp {
                 }
             }
             "addons" => self.addons.show(ctx),
+            gui::OPEN_GADGETS_FOLDER => self.open_gadgets_folder(),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);
@@ -770,6 +801,8 @@ impl CutCraftApp {
                 (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
                 self.kept_playback = None;
+                // the Preview tab's detail goes back to Options' default
+                self.display.detail = self.options.view_3d.preview_detail.min(100);
                 self.status
                     .set_message("Preview reset: Undo Last Preview brings it back");
             }
@@ -1091,7 +1124,15 @@ impl CutCraftApp {
 
     pub(super) fn file_action(&mut self, id: &str) {
         match id {
-            // a new job starts in Job Setup
+            // a new job opens blank, made with Options ▸ Job Defaults; the classic flow
+            // starts it in Job Setup
+            "new" if !self.options.job_defaults.classic_startup => {
+                if self.confirm_discard() {
+                    self.start_blank_job();
+                    self.status
+                        .set_message(&format!("New job: {}", self.material_summary()));
+                }
+            }
             "new" => {
                 if self.confirm_discard() {
                     self.reset_job();
@@ -1113,8 +1154,13 @@ impl CutCraftApp {
             }
             "close" => {
                 if self.confirm_discard() {
-                    self.reset_job();
-                    self.screen = Screen::Start;
+                    if self.options.job_defaults.classic_startup {
+                        self.reset_job();
+                        self.screen = Screen::Start;
+                    } else {
+                        // no start page: a blank job to carry on with
+                        self.start_blank_job();
+                    }
                 }
             }
             "save" => match self.session.path.clone() {
@@ -2300,7 +2346,9 @@ impl CutCraftApp {
                 }
                 MachineOutcome::Cancel => self.machine_window = None,
                 MachineOutcome::ManagePosts => {
-                    self.post_window = Some(cut_craft_machines::PostManager::default());
+                    // the machine as edited, not yet applied: the one Select changes
+                    self.post_window =
+                        Some(cut_craft_machines::PostManager::for_machine(draft.active()));
                 }
                 MachineOutcome::PickFolder(which) => {
                     if let Some(folder) = file_dialog().pick_folder()
@@ -2509,6 +2557,7 @@ impl CutCraftApp {
                 way: crate::flyout::DragWay::AsIs,
                 made: None,
                 note: None,
+                brief: false,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -2751,6 +2800,12 @@ impl CutCraftApp {
             self.drop_file(path);
             return;
         }
+        if !self.options.job_defaults.classic_startup {
+            // a blank job to bring it into, as if dropped on the window
+            self.start_blank_job();
+            self.drop_file(path);
+            return;
+        }
         self.file_action("new");
         if self.screen == Screen::NewJob {
             self.import_after_setup = Some(path.to_owned());
@@ -2850,6 +2905,31 @@ impl CutCraftApp {
         self.form_back = None;
         self.checks_accepted = false;
         self.clear_recovery();
+    }
+
+    /// A blank job made with Options ▸ Job Defaults, open to draw on, with nothing to undo
+    /// or save yet.
+    pub(super) fn start_blank_job(&mut self) {
+        self.reset_job();
+        self.view = View::TwoD;
+        self.screen = Screen::Job;
+        "Select".clone_into(&mut self.status.current_tool);
+    }
+
+    /// What Cut Craft shows once it has started: the file named on the command line, if
+    /// one was; else a blank job, unless Classic Startup Flow asks for the start page or a
+    /// job is already open (recovered work).
+    pub(super) fn open_at_start(&mut self, given: Option<&std::path::Path>) {
+        self.open_given(given);
+        if self.screen == Screen::Start && !self.options.job_defaults.classic_startup {
+            self.start_blank_job();
+        }
+    }
+
+    /// The material in one line, for the status bar and the foot of the sheet:
+    /// "600 × 400 × 20 mm, single sided, Z zero on top, X0 Y0 bottom left".
+    pub(super) fn material_summary(&self) -> String {
+        super::setup_material::summary(&self.doc.job)
     }
 
     /// Set as Default in Job Setup: new jobs start with the job its settings make.
@@ -4976,6 +5056,7 @@ impl CutCraftApp {
                             self.tools_or_favourites(ui, &groups, Page::Design);
                         } else {
                             self.design_subtabs(ui);
+                            self.gadgets_section(ui);
                         }
                     }
                     "Sheets" => self.sheets_panel(ui),
@@ -6273,6 +6354,7 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
+            "job_setup" => self.setup_material_extras(ui),
             "set_size" => self.link_set_size(),
             "relief_from_photo" => {
                 self.depth_section(ui);
@@ -7255,9 +7337,9 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
 /// What the user is told before an unsigned gadget first runs.
 pub(super) fn unsigned_warning(label: &str) -> String {
     format!(
-        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder \
-         or an unsigned add-on, not from a signed Cut Craft build, so nobody has checked what \
-         it does.\n\n\
+        "\u{201c}{label}\u{201d} is not an official Cut Craft gadget. It came from your My \
+         Gadgets folder or an unsigned add-on, not from a signed Cut Craft build, so nobody has \
+         checked what it does.\n\n\
          Cut Craft and its author are not responsible for what this gadget does or can do, \
          including anything harmful or malicious. It can only change the job that is open, \
          and Undo takes back everything it did in one step. Check its result before you \

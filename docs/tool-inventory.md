@@ -147,7 +147,13 @@ say "not implemented yet".
   skip rotary posts. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows
-  its version (the date of its last change). Aspire's Machine ▸ Update Post-Processor
+  its version (the date of its last change). Post-Processor Management and Machine
+  Configuration's Add a post-processor have filters (search, controller, mm / inch, Arcs /
+  Straight / Rotary (A)), starting each time from the machine (its units; rotary only with a
+  4th axis), and group the posts by controller after the user's own. What each post can do
+  is read from its lines; Inspect ▸ Edit Capabilities corrects it in `capabilities.json`
+  beside the custom posts, keyed by file name (a deliberate addition: the reference lists
+  posts by name only). Aspire's Machine ▸ Update Post-Processor
   Database is left out on purpose (#511): Cut Craft's own posts come with Cut Craft, so Help ▸
   Check for Updates brings the newest, and custom posts are read from their folder each time.
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
