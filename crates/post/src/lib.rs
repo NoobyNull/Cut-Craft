@@ -720,11 +720,20 @@ impl Post {
         // how far off the turning axis the bit is held, and where that is on the machine's
         // across axis (Y for a rotary along X): from the axis's centre, the way A turns
         let mut held = 0.0;
-        let across_at = doc.job.rotary.filter(|_| self.wrap.is_some()).map(|r| {
-            let axis = self.rotary.unwrap_or_default();
-            let sign = axis.across_sign(r.along);
-            move |across: f64| axis.centre_across + sign * across
-        });
+        // only when a toolpath holds the bit off the axis: otherwise the file leaves the
+        // across axis where the machine was set up, as it always has
+        let holds_off = toolpaths
+            .iter()
+            .any(|t| t.across.iter().any(|a| a.abs() > 1e-9));
+        let across_at = doc
+            .job
+            .rotary
+            .filter(|_| self.wrap.is_some() && holds_off)
+            .map(|r| {
+                let axis = self.rotary.unwrap_or_default();
+                let sign = axis.across_sign(r.along);
+                move |across: f64| axis.centre_across + sign * across
+            });
         for toolpath in &toolpaths {
             v.texts.insert("TOOLPATH_NAME", toolpath.name.clone());
             v.texts.insert("TOOLNAME", toolpath.tool.name.clone());
@@ -794,7 +803,8 @@ impl Post {
                     };
                     let from = std::mem::replace(&mut at, to);
                     let moved_across = across - std::mem::replace(&mut held, across);
-                    let length = to.distance(from);
+                    // the bit moving only across the axis still moves
+                    let length = (to.distance_squared(from) + moved_across * moved_across).sqrt();
                     if self.inverse_time && kind != MoveKind::Rapid && length == 0.0 {
                         // a move that goes nowhere has no time to invert
                         continue;
@@ -1579,6 +1589,10 @@ impl Output<'_> {
                 })
                 .collect();
         }
+        if label == "ACROSS" && !v.numbers.contains_key(label) {
+            // no toolpath holds the bit off the axis: leave the across axis where it was set up
+            return String::new();
+        }
         let raw = if label == "N" {
             self.line_number
         } else {
@@ -2271,6 +2285,17 @@ begin FOOTER
     }
 
     #[test]
+    fn a_machine_saved_before_a_can_turn_writes_a_within_one_turn_as_before() {
+        let axis = cut_craft_core::rotary_axis::RotaryAxis::saved_before();
+        let lines = render_with(&winding_post(axis), hundred_round(), vec![two_rings()]);
+        assert!(
+            a_words(&lines).iter().all(|a| (0.0..=360.0).contains(a)),
+            "{lines:#?}"
+        );
+        assert_eq!(a_words(&lines).last(), Some(&0.0), "{lines:#?}");
+    }
+
+    #[test]
     fn a_turns_only_as_high_as_the_file_lifts_even_when_a_pass_is_reached_quickly() {
         use cut_craft_core::rotary_axis::RotaryAxis;
         // a ring, then lifted 30 above the top (clear of a board's edges as it swings), over to
@@ -2369,6 +2394,17 @@ begin FOOTER
         // the bit moves across, 4 mm each side of the axis (which is 5 mm across from zero)
         assert!(has(&lines, "G0 X0.000 A90.000 Y1.000"), "{lines:#?}");
         assert!(words('Y').contains(&9.0), "{lines:#?}");
+        // the cut straight across at X10 (Y1 to Y9) is written on its own, before the cut
+        // back along X, not folded into one diagonal with it
+        let across = lines
+            .iter()
+            .position(|l| l.starts_with("G1") && l.contains("Y9.000") && !l.contains("X0.000"))
+            .unwrap_or_else(|| panic!("no cut across: {lines:#?}"));
+        let back = lines
+            .iter()
+            .position(|l| l.starts_with("G1") && l.contains("X0.000"))
+            .unwrap();
+        assert!(across < back, "{lines:#?}");
         // and 2 mm below the top straight over the axis (Z zero on the axis)
         assert!(
             words('Z').iter().all(|z| (z - 13.915).abs() < 1e-3),
@@ -2437,6 +2473,86 @@ begin FOOTER
         assert_eq!(fi(0.0), "200.000");
         // but 36 degrees at no more than 360 a minute takes a tenth of a minute
         assert_eq!(fi(360.0), "10.000");
+    }
+
+    #[test]
+    fn a_pass_at_several_depths_is_never_cut_backwards_deepest_first() {
+        use cut_craft_core::rotary_axis::{AtLimit, RotaryAxis, Turning};
+        // a ring at X0, then at X10 a pass 1 mm down one turn round and 2 mm down the next,
+        // with no lift between
+        let mut moves = two_rings().moves[..5].to_vec();
+        moves.extend([
+            mv(MoveKind::Rapid, 10.0, 0.0, 5.0),
+            mv(MoveKind::Plunge, 10.0, 0.0, -1.0),
+            mv(MoveKind::Cut, 10.0, 50.0, -1.0),
+            mv(MoveKind::Cut, 10.0, 100.0, -1.0),
+            mv(MoveKind::Plunge, 10.0, 100.0, -2.0),
+            mv(MoveKind::Cut, 10.0, 150.0, -2.0),
+            mv(MoveKind::Cut, 10.0, 200.0, -2.0),
+            mv(MoveKind::Rapid, 10.0, 200.0, 5.0),
+        ]);
+        let deeper = Toolpath {
+            moves,
+            ..toolpath("Two depths", "T")
+        };
+        let axis = RotaryAxis {
+            turning: Turning::Unwind,
+            turns: 1.0,
+            at_limit: AtLimit::CutBothWays,
+            ..RotaryAxis::default()
+        };
+        let lines = render_with(&winding_post(axis), hundred_round(), vec![deeper]);
+        assert!(
+            a_words(&lines).iter().all(|a| (-360.0..=360.0).contains(a)),
+            "{lines:#?}"
+        );
+        // it spins back clear of the material, then cuts 1 mm down before 2 mm down
+        assert!(has(&lines, "G0 X10.000 A-360.000 Z20.915"), "{lines:#?}");
+        let first_cut = lines.iter().find(|l| l.starts_with("G1 X10.000")).unwrap();
+        assert!(first_cut.contains("Z14.915"), "{lines:#?}");
+    }
+
+    #[test]
+    fn a_pass_longer_than_a_can_turn_is_still_written_as_near_the_middle_as_it_goes() {
+        use cut_craft_core::rotary_axis::{RotaryAxis, Turning};
+        // half a turn each way, but each ring is a whole turn: the checks before cutting warn
+        // and ask; the file cuts each ring as little past the limit as it can
+        let half = RotaryAxis {
+            turning: Turning::Unwind,
+            turns: 0.5,
+            ..RotaryAxis::default()
+        };
+        let lines = render_with(&winding_post(half), hundred_round(), vec![two_rings()]);
+        let a = a_words(&lines);
+        assert!(a.iter().all(|a| (-360.0..=360.0).contains(a)), "{lines:#?}");
+        assert!(has(&lines, "G1 X10.000"), "both rings are cut: {lines:#?}");
+    }
+
+    #[test]
+    fn a_rotary_file_cutting_only_over_the_axis_never_moves_the_across_axis() {
+        // zeroed on the axis by hand along Y, a plain wrapped file must leave Y where it is
+        let post = BASIC
+            .replace(
+                "begin HEADER\n",
+                "ROTARY_WRAP_Y = \"A\"\nVAR ACROSS_POSITION = [ACROSS|C|Y|1.3]\nbegin HEADER\n",
+            )
+            .replace("[Z] [F]\"", "[Z] [ACROSS] [F]\"");
+        let lines = render_for(&post, hundred_round(), vec![two_rings()]);
+        assert!(
+            lines
+                .iter()
+                .all(|l| !l.split_whitespace().any(|w| w.starts_with('Y'))),
+            "{lines:#?}"
+        );
+        // the default rotary post too
+        let job = hundred_round();
+        let lines = render_with(&Post::default_for(&job), job, vec![two_rings()]);
+        assert!(
+            lines
+                .iter()
+                .all(|l| !l.split_whitespace().any(|w| w.starts_with('Y'))),
+            "{lines:#?}"
+        );
     }
 
     #[test]

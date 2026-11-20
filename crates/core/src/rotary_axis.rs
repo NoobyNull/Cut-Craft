@@ -27,12 +27,17 @@ pub struct RotaryAxis {
     pub chuck: f64,
     /// How far the tailstock reaches back along the axis from the job's end, mm.
     pub tailstock: f64,
-    /// Whether A may keep turning one way for as long as the job likes.
+    /// Whether A may keep turning one way for as long as the job likes. A machine saved
+    /// before this setting loads as [`Turning::Unwind`], one turn and spin back, as its files
+    /// were written then; new machines turn freely.
+    #[serde(default = "Turning::saved_before")]
     pub turning: Turning,
     /// With [`Turning::Unwind`]: how many whole turns A may go either way from where it
     /// started (a cable or hose on the chuck, or a limit switch, decides it).
+    #[serde(default = "saved_before_turns")]
     pub turns: f64,
     /// With [`Turning::Unwind`]: what the file does at the limit.
+    #[serde(default = "AtLimit::saved_before")]
     pub at_limit: AtLimit,
     /// How far A turns before it moves the material when it changes direction, degrees: the
     /// file turns that much further on each change of direction. 0 for none.
@@ -96,7 +101,38 @@ impl Default for RotaryAxis {
     }
 }
 
+/// Turns either way for a machine saved before "A can turn": one, as its files spun back.
+fn saved_before_turns() -> f64 {
+    1.0
+}
+
+impl Turning {
+    /// For a machine saved before "A can turn": its files spun A back every turn.
+    fn saved_before() -> Self {
+        Self::Unwind
+    }
+}
+
+impl AtLimit {
+    /// For a machine saved before "A can turn".
+    fn saved_before() -> Self {
+        Self::SpinBack
+    }
+}
+
 impl RotaryAxis {
+    /// A machine's rotary saved before "A can turn" existed: everything as new, but A unwinds
+    /// after one turn by spinning back, so its files go on turning A as they always did.
+    #[must_use]
+    pub fn saved_before() -> Self {
+        Self {
+            turning: Turning::saved_before(),
+            turns: saved_before_turns(),
+            at_limit: AtLimit::saved_before(),
+            ..Self::default()
+        }
+    }
+
     /// How far out from the axis material can swing before it hits what is under the
     /// rotary, mm: the axis height, and the spoilboard's thickness too with it taken out.
     /// `None` until the axis height is measured.
@@ -266,5 +302,20 @@ mod tests {
         let old = r#"{"along":"x","centre_set":true,"centre_across":2.0}"#;
         let axis: RotaryAxis = serde_json::from_str(old).unwrap();
         assert!(axis.centre_set && axis.room_below().is_none() && !axis.spoilboard_off);
+    }
+
+    #[test]
+    fn old_machines_without_a_can_turn_keep_unwinding_as_their_files_did() {
+        let old = r#"{"along":"x","centre_set":true,"centre_across":2.0}"#;
+        let axis: RotaryAxis = serde_json::from_str(old).unwrap();
+        assert_eq!(axis.turning, Turning::Unwind);
+        assert_eq!(axis.at_limit, AtLimit::SpinBack);
+        assert_eq!(axis.limit(), Some(360.0));
+        assert_eq!(RotaryAxis::saved_before().limit(), Some(360.0));
+        // a machine saved since keeps what it was set to, free turning included
+        let new = serde_json::to_string(&RotaryAxis::default()).unwrap();
+        let axis: RotaryAxis = serde_json::from_str(&new).unwrap();
+        assert_eq!(axis, RotaryAxis::default());
+        assert_eq!(axis.limit(), None);
     }
 }

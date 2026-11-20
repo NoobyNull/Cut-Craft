@@ -63,7 +63,9 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   how far apart the turns are along the part.
 - **Operation**: Face, Turn or Part off (above).
 - **Start** and **End**: where along the axis it cuts, from the job's start (the chuck end).
-  End 0 runs to the job's end. For Part off, Start is where the groove goes.
+  End 0 runs to the job's end. For Part off, Start is where the groove goes. They count from
+  the material's start whatever XY zero [Job Setup](help:job_setup) uses: zeroed on the middle,
+  the toolpath is written where the material is, just as with a corner.
 - **Holding stub**: how thick a stub is left on the turning axis, joining the part to the
   rest of the material until it is cut free. 0 cuts right through. Turn comes down to it too,
   wherever there is no model.

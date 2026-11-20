@@ -164,6 +164,11 @@ const APPROACH: f64 = 1.0;
 /// How deep the registration mark goes, mm.
 const MARK_DEPTH: f64 = 0.5;
 
+/// Why a registration mark asked for is not cut.
+const NO_ROOM_FOR_MARK: &str = "No room for the registration mark past End without cutting \
+    into the part, so it is left out: pencil a line along the material at A=0 before you \
+    start, or bring End in from the end of the material.";
+
 /// The model as radii round the axis, on a grid of (along, round) cells: what the drop
 /// works from.
 struct Turned {
@@ -184,7 +189,8 @@ struct Turned {
 
 impl Turned {
     /// `surface` (heights below the material's top, unrolled) as radii, on cells no larger
-    /// than `cell`, each the highest of the surface under it so nothing is missed.
+    /// than `cell`, each the highest of the surface under it so nothing is missed. Along and
+    /// round count from the material's corner, `origin` in the job's X and Y.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -197,6 +203,7 @@ impl Turned {
         along_x: bool,
         size: (f64, f64),
         cell: f64,
+        origin: Point,
     ) -> Self {
         let (length, circumference) = size;
         let along = ((length / cell).ceil() as usize).max(1);
@@ -213,9 +220,9 @@ impl Turned {
                         let a = (i as f64 + (si as f64 + 0.5) / samples as f64) * along_cell;
                         let w = (j as f64 + (sj as f64 + 0.5) / samples as f64) * round_cell;
                         let at = if along_x {
-                            Point::new(a, w)
+                            Point::new(origin.x + a, origin.y + w)
                         } else {
-                            Point::new(w, a)
+                            Point::new(origin.x + w, origin.y + a)
                         };
                         if let Some(h) = surface.and_then(|m| m.at(at)).filter(|h| h.is_finite()) {
                             highest = highest.max(h);
@@ -313,13 +320,16 @@ struct Solid {
     allowance: f64,
     /// How far out the model was moved to sit in the material where Material Setup puts it.
     out: f64,
+    /// Where the material starts along the axis in the job's X or Y: the models are kept
+    /// along the job as it is, the toolpath works from the material's start.
+    along_from: f64,
 }
 
 impl Solid {
     /// Every shown full 3D model of `doc` kept round the axis, raised or merged onto the
     /// rest (one sunk into the rest, or multiplying it, is left to its heights), moved `out`
     /// from the axis.
-    fn of(doc: &Document, tool: &Tool, allowance: f64, out: f64) -> Option<Self> {
+    fn of(doc: &Document, tool: &Tool, allowance: f64, out: f64, along_from: f64) -> Option<Self> {
         let triangles: Vec<_> = doc
             .components
             .values()
@@ -338,13 +348,14 @@ impl Solid {
             cutter: Cutter::new(&grown),
             allowance: allowance.max(0.0),
             out,
+            along_from,
         })
     }
 
     /// [`Turned::drop`] on the models themselves, A turned `turn` radians.
     fn drop(&self, along: f64, turn: f64, across: f64) -> f64 {
         self.mesh
-            .drop(&self.cutter, along, across, turn)
+            .drop(&self.cutter, along + self.along_from, across, turn)
             .map_or(0.0, |tip| tip + self.allowance + self.out)
     }
 }
@@ -389,6 +400,13 @@ impl Work<'_> {
         } else {
             DVec3::new(round, along, z)
         }
+    }
+
+    /// The registration mark `along` the part at A=0, 0.5 mm deep: none where the part is
+    /// less than that below the top there, as the notch would cut into it.
+    fn mark(&self, along: f64) -> Option<Pass> {
+        let floor = self.tip(along, 0.0, 0.0) - self.turned.radius;
+        (floor <= -MARK_DEPTH).then(|| vec![(self.point(along, 0.0, -MARK_DEPTH), 0.0)])
     }
 
     /// The bit as low as it goes `along` the part with A at `round`, held `across`.
@@ -947,7 +965,12 @@ fn parts(
         let top = |m: &Material| m.heights.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         top(&surface) - top(&raw)
     };
-    let solid = Solid::of(doc, tool, allowance, radius + shift);
+    let corner = doc.job.area().min;
+    let along_from = match doc.job.rotary.map(|r| r.along) {
+        Some(Along::Y) => corner.y,
+        _ => corner.x,
+    };
+    let solid = Solid::of(doc, tool, allowance, radius + shift, along_from);
     let rest = if solid.is_some() {
         let rest = Document {
             components: doc
@@ -1275,6 +1298,7 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         along_x,
         (length, circumference),
         cell,
+        doc.job.area().min,
     );
     let start = p.start.clamp(0.0, length);
     let end = if p.end > 0.0 {
@@ -1331,7 +1355,8 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         },
     };
     if p.registration_mark {
-        // just past the last ring, clear of the part when there is room
+        // just past the last ring, clear of the chuck and tailstock, and only where the part
+        // is at least the mark's depth below the top
         let along = (end + tool.diameter).min(length);
         let reach = tool.diameter / 2.0;
         match &kept_clear {
@@ -1343,7 +1368,10 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
                         .into(),
                 );
             }
-            _ => passes.push((vec![(work.point(along, 0.0, -MARK_DEPTH), 0.0)], false)),
+            _ => match work.mark(along) {
+                Some(mark) => passes.push((mark, false)),
+                None => notes.push(NO_ROOM_FOR_MARK.to_owned()),
+            },
         }
     }
     if let Some(stock) = Stock::of(&doc.job).filter(|_| p.strategy != Strategy::SidesThenDetails) {
@@ -1357,7 +1385,14 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         ));
     }
     let held_off = p.strategy != Strategy::Radial;
-    let (moves, across) = joined(&passes, doc.job.turning_gap(), held_off, radius, along_x);
+    let (mut moves, across) = joined(&passes, doc.job.turning_gap(), held_off, radius, along_x);
+    // worked out from the material's corner; written where the material is in the job, as
+    // the job's datum puts it
+    let corner = doc.job.area().min;
+    for m in &mut moves {
+        m.to.x += corner.x;
+        m.to.y += corner.y;
+    }
     let mut toolpath =
         made_by::<RotaryMachiningToolpath>(p, p.name.clone(), tool.clone(), vec![], moves);
     toolpath.across = across;
@@ -1529,7 +1564,14 @@ mod tests {
         doc.apply(&c.finish()).unwrap();
         let tool = ball(6.0);
         let surface = placed_model(&doc, &tool).unwrap();
-        let round = Turned::of(Some(&surface), 20.0, true, (60.0, circumference), 0.1);
+        let round = Turned::of(
+            Some(&surface),
+            20.0,
+            true,
+            (60.0, circumference),
+            0.1,
+            Point::ZERO,
+        );
         let rb = 3.0;
         for w in [
             0.0,
@@ -1603,6 +1645,81 @@ mod tests {
         assert_eq!((mark.x, mark.y, mark.z), (46.0, 0.0, -MARK_DEPTH));
     }
 
+    #[test]
+    fn a_job_zeroed_on_its_centre_cuts_the_same_part_where_the_material_is() {
+        use cut_craft_core::document::Datum;
+        // a part with a lip at its start and a flat on one side, on a job zeroed at `datum`
+        let on = |datum| {
+            let job = Job {
+                datum,
+                ..Job::rotary(60.0, 40.0, Along::X)
+            };
+            let area = job.area();
+            let mut doc = Document {
+                job,
+                ..Document::default()
+            };
+            let model = Component::from_fn("Lip and flat", Combine::Add, area, 0.25, |p| {
+                let (along, round) = (p.x - area.min.x, p.y - area.min.y);
+                Some(if along < 2.0 {
+                    20.0
+                } else if round < 30.0 {
+                    16.0
+                } else {
+                    12.0
+                })
+            });
+            let mut c = Change::builder(&doc);
+            c.add_new_component(model);
+            doc.apply(&c.finish()).unwrap();
+            doc
+        };
+        let corner = on(Datum::BottomLeft);
+        let centre = on(Datum::Centre);
+        let shift = centre.job.area().min;
+        assert!(shift.x < 0.0 && shift.y < 0.0, "zeroed on the middle");
+        for strategy in [Strategy::Radial, Strategy::Indexed] {
+            let p = Params {
+                tool: ball(6.0),
+                strategy,
+                ..Params::default()
+            };
+            let at_corner = machine(&corner, &p).unwrap();
+            let at_centre = machine(&centre, &p).unwrap();
+            assert_eq!(at_corner.moves.len(), at_centre.moves.len(), "{strategy:?}");
+            for (a, b) in at_corner.moves.iter().zip(&at_centre.moves) {
+                assert_eq!(a.kind, b.kind);
+                let moved = a.to + DVec3::new(shift.x, shift.y, 0.0);
+                assert!(
+                    (moved - b.to).length() < 1e-6,
+                    "{strategy:?}: {a:?} vs {b:?}"
+                );
+            }
+            assert_eq!(at_corner.across, at_centre.across);
+        }
+    }
+
+    #[test]
+    fn the_registration_mark_never_cuts_into_the_part_and_says_why_it_is_left_out() {
+        // the part fills the material right to its end, and End is the end
+        let doc = turned(|_| 20.0);
+        let p = Params {
+            tool: ball(6.0),
+            registration_mark: true,
+            ..Params::default()
+        };
+        let (toolpath, notes) = made(&doc, &p).unwrap();
+        assert!(
+            toolpath.moves.iter().all(|m| m.to.z > -MARK_DEPTH + GRAZE),
+            "nothing goes into the finished surface"
+        );
+        assert_eq!(notes.len(), 1, "{notes:?}");
+        assert!(notes[0].contains("registration mark"), "{notes:?}");
+        // with waste past End there is room, and no note
+        let (_, notes) = made(&lipped(), &Params { end: 40.0, ..p }).unwrap();
+        assert!(notes.is_empty(), "{notes:?}");
+    }
+
     /// Each cut of `toolpath` as the machine makes it: (along, A as mm round, the bit's
     /// height from the top, how far across it is held).
     fn held(toolpath: &Toolpath) -> Vec<(f64, f64, f64, f64)> {
@@ -1663,7 +1780,14 @@ mod tests {
         doc.apply(&c.finish()).unwrap();
         let tool = ball(6.0);
         let surface = placed_model(&doc, &tool).unwrap();
-        let turned = Turned::of(Some(&surface), 20.0, true, (60.0, circumference), 0.1);
+        let turned = Turned::of(
+            Some(&surface),
+            20.0,
+            true,
+            (60.0, circumference),
+            0.1,
+            Point::ZERO,
+        );
         let rb = 3.0;
         for across in [-6.0, -2.0, 4.0, 9.0] {
             for w in [0.0, 1.0, 3.0, 6.0, 10.0, circumference - 2.0] {

@@ -263,6 +263,7 @@ fn turned(
             along_x,
             (length, circumference),
             cell,
+            doc.job.area().min,
         );
         for (t, r) in target.radii.iter_mut().zip(outline) {
             if r.is_finite() {
@@ -360,7 +361,18 @@ fn turned(
         notes.push(short_note(&around, units, (a, b), most));
     }
     let safe = doc.job.turning_gap();
-    let moves: Vec<Move> = passes.iter().flat_map(|pass| follow(pass, safe)).collect();
+    // worked out from the material's corner; written where the material is in the job, as
+    // the job's datum puts it
+    let corner = doc.job.area().min;
+    let moves: Vec<Move> = passes
+        .iter()
+        .flat_map(|pass| follow(pass, safe))
+        .map(|mut m| {
+            m.to.x += corner.x;
+            m.to.y += corner.y;
+            m
+        })
+        .collect();
     Ok((made(p, tool, moves), notes))
 }
 
@@ -435,7 +447,8 @@ fn stretches(ring: &[(DVec3, bool)], reach: f64) -> Vec<Vec<DVec3>> {
 
 /// As far out from the axis as any of the `model` reaches at each point along the part
 /// (`cell` apart), minus infinity where there is none (where the model's `shape` has
-/// nothing): its heights are below the material's top, `radius` out, unrolled round the part.
+/// nothing): its heights are below the material's top, `radius` out, unrolled round the part,
+/// along and round counted from the material's corner, `origin` in the job's X and Y.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -449,6 +462,7 @@ fn outline(
     along_x: bool,
     (length, circumference): (f64, f64),
     cell: f64,
+    origin: Point,
 ) -> Vec<f64> {
     let count = ((length / cell).ceil() as usize).max(1) + 1;
     let round = ((circumference / model.cell.max(1e-3)).ceil() as usize).max(8);
@@ -459,9 +473,9 @@ fn outline(
                 .filter_map(|j| {
                     let w = (j as f64 + 0.5) * circumference / round as f64;
                     let at = if along_x {
-                        Point::new(along, w)
+                        Point::new(origin.x + along, origin.y + w)
                     } else {
-                        Point::new(w, along)
+                        Point::new(origin.x + w, origin.y + along)
                     };
                     // only where some of the model is, not its zero plane round it
                     shape.at(at).filter(|h| h.is_finite())?;
@@ -661,6 +675,49 @@ mod tests {
         let (cuts, notes) = cuts_of(&doc, &p);
         assert!(cuts.iter().all(|c| c.x >= 23.0 - 1e-6), "into the chuck");
         assert!(notes.iter().any(|n| n.contains("chuck")), "{notes:?}");
+    }
+
+    #[test]
+    fn a_job_zeroed_on_its_centre_turns_the_same_part_where_the_material_is() {
+        use cut_craft_core::document::Datum;
+        // a bead between 20 and 80 along a 100 bar, on a job zeroed at `datum`
+        let on = |datum| {
+            let mut doc = Document {
+                job: Job {
+                    datum,
+                    ..Job::rotary(100.0, 40.0, Along::X)
+                },
+                ..Document::default()
+            };
+            let area = doc.job.area();
+            let model = Component::from_fn("Bead", Combine::Add, area, 0.5, |p| {
+                Some(if (20.0..80.0).contains(&(p.x - area.min.x)) {
+                    12.0
+                } else {
+                    6.0
+                })
+            });
+            let mut c = Change::builder(&doc);
+            c.add_new_component(model);
+            doc.apply(&c.finish()).unwrap();
+            doc
+        };
+        let p = Params {
+            operation: Operation::Turn,
+            ..Params::default()
+        };
+        let corner = on(Datum::BottomLeft);
+        let centre = on(Datum::Centre);
+        let shift = centre.job.area().min;
+        assert!(shift.x < 0.0, "zeroed on the middle");
+        let (at_corner, _) = cuts_of(&corner, &p);
+        let (at_centre, _) = cuts_of(&centre, &p);
+        assert!(!at_corner.is_empty());
+        assert_eq!(at_corner.len(), at_centre.len());
+        for (a, b) in at_corner.iter().zip(&at_centre) {
+            let moved = *a + DVec3::new(shift.x, shift.y, 0.0);
+            assert!((moved - *b).length() < 1e-6, "{a:?} vs {b:?}");
+        }
     }
 
     #[test]
