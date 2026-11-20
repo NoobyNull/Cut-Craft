@@ -43,6 +43,7 @@ pub mod progress;
 pub mod random;
 pub mod reach;
 pub mod rest;
+pub mod rotary_axis;
 pub mod selection;
 pub mod selector;
 pub mod simplify;
