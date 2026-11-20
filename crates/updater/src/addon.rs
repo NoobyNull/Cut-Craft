@@ -198,8 +198,14 @@ impl Manifest {
 /// A file name with no folders in it.
 /// A bare host name such as `relay.example.com`: no scheme, port, path or user name.
 fn host_name(host: &str) -> bool {
+    // a name, never a number like 10.0.0.1 or 256.0.0.1: no top-level name is all digits
+    let numeric = host
+        .rsplit('.')
+        .next()
+        .is_some_and(|last| last.chars().all(|c| c.is_ascii_digit()));
     host.len() <= 253
         && host.contains('.')
+        && !numeric
         && host.split('.').all(|label| {
             !label.is_empty()
                 && label.len() <= 63
@@ -722,6 +728,8 @@ mod tests {
             "localhost",
             "Relay.Example.com",
             "-bad.example.com",
+            "256.0.0.1",
+            "10.0.0.1",
             "",
         ] {
             let e = Manifest::parse(&format!("{base}network = [\"{bad}\"]")).unwrap_err();

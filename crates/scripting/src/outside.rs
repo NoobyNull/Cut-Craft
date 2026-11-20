@@ -113,9 +113,17 @@ impl Outside {
 
 /// Whether `name` is a plain file name: no folders, no `..`, nothing hidden or odd.
 pub fn plain_file_name(name: &str) -> bool {
+    // names Windows keeps for devices, even with an extension (`NUL.stl`)
+    const DEVICES: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    let stem = name.split('.').next().unwrap_or("").trim_end();
     !name.is_empty()
         && name.len() <= 200
         && !name.starts_with('.')
+        && !name.ends_with(['.', ' '])
+        && !DEVICES.iter().any(|d| stem.eq_ignore_ascii_case(d))
         && !name.chars().any(|c| {
             c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
         })
@@ -127,6 +135,8 @@ fn agent(body: Duration) -> ureq::Agent {
         .timeout_connect(Some(Duration::from_secs(15)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
         .timeout_recv_body(Some(body))
+        .timeout_send_request(Some(Duration::from_secs(60)))
+        .timeout_send_body(Some(Duration::from_secs(300)))
         .user_agent(concat!("Cut-Craft/", env!("CARGO_PKG_VERSION")))
         .http_status_as_error(false)
         .max_redirects(0)
@@ -158,9 +168,20 @@ fn send(
             .method(method.as_str())
             .uri(uri);
         for (k, v) in headers {
-            let secret =
-                k.eq_ignore_ascii_case("authorization") || k.eq_ignore_ascii_case("cookie");
-            if same_origin || !secret {
+            let named = |n: &str| k.eq_ignore_ascii_case(n);
+            let secret = named("authorization") || named("cookie");
+            // the client writes Host for each address itself, and a 303 drops the body
+            let framing = named("host")
+                || (body.is_none()
+                    && [
+                        "content-length",
+                        "content-type",
+                        "content-encoding",
+                        "transfer-encoding",
+                    ]
+                    .into_iter()
+                    .any(named));
+            if (same_origin || !secret) && !framing {
                 request = request.header(k.as_str(), v.as_str());
             }
         }
@@ -202,12 +223,17 @@ fn resolve(from: &str, next: &str) -> Result<String, String> {
         .map_err(|e| format!("{from} redirected to an address that is not valid ({e})"))
 }
 
-/// The add-on's saved settings.
-fn load_store(path: &Path) -> BTreeMap<String, String> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+/// The add-on's saved settings: none yet when there is no file, an error when the file is
+/// there but cannot be read, so a run never saves over settings it could not see.
+fn load_store(path: &Path) -> Result<BTreeMap<String, String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => serde_json::from_str(&text)
+            .map_err(|e| format!("the add-on's saved settings are damaged ({e})")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
+        Err(e) => Err(format!(
+            "the add-on's saved settings could not be read ({e})"
+        )),
+    }
 }
 
 /// Runs an outside gadget's `run(settings)` with what `outside` allows, and returns the
@@ -227,7 +253,7 @@ pub fn run_outside_gadget(
     let notes = RefCell::new(Vec::<String>::new());
     let note_bytes = Cell::new(0_usize);
     let store_path = outside.folder.join("store.json");
-    let store = RefCell::new(load_store(&store_path));
+    let store = RefCell::new(load_store(&store_path).map_err(ScriptError::Failed)?);
 
     let result = lua.scope(|scope| {
         let cutcraft = lua.create_table()?;
@@ -263,10 +289,20 @@ pub fn run_outside_gadget(
         cutcraft.set(
             "download",
             scope.create_function(|lua, (url, file_name): (String, String)| {
+                // the answer is made before the file is saved, so running out of memory
+                // after the download cannot leave a saved file the gadget was told failed
+                let answer = lua.create_table_with_capacity(0, 2)?;
+                answer.set(
+                    "path",
+                    outside
+                        .files()
+                        .join(&file_name)
+                        .to_string_lossy()
+                        .into_owned(),
+                )?;
+                answer.set("size", 0)?;
                 let saved = download(outside, &download_agent, &url, &file_name)
                     .map_err(mlua::Error::runtime)?;
-                let answer = lua.create_table()?;
-                answer.set("path", saved.0.to_string_lossy().into_owned())?;
                 answer.set("size", saved.1)?;
                 Ok(answer)
             })?,
@@ -328,14 +364,21 @@ fn http_call(
     )
     .map_err(mlua::Error::runtime)?;
     let status = response.status().as_u16();
-    let text = response
+    // counted after any decompression, so a small packed answer cannot unpack past the limit
+    let mut bytes = Vec::new();
+    response
         .body_mut()
-        .with_config()
-        .limit(outside.max_body)
-        .read_to_string()
-        .map_err(|e| {
-            mlua::Error::runtime(format!("the answer from {url} was too long or broken: {e}"))
-        })?;
+        .as_reader()
+        .take(outside.max_body.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|e| mlua::Error::runtime(format!("the answer from {url} was broken: {e}")))?;
+    if bytes.len() as u64 > outside.max_body {
+        return Err(mlua::Error::runtime(format!(
+            "the answer from {url} was too long"
+        )));
+    }
+    let text = String::from_utf8(bytes)
+        .map_err(|_| mlua::Error::runtime(format!("the answer from {url} was not text")))?;
     let answer = lua.create_table()?;
     answer.set("status", status)?;
     answer.set("body", text)?;
@@ -429,7 +472,7 @@ fn download(
         let mut reader = response
             .body_mut()
             .as_reader()
-            .take(outside.max_download + 1);
+            .take(outside.max_download.saturating_add(1));
         let mut buf = vec![0_u8; 64 * 1024];
         let mut total = 0_u64;
         loop {
@@ -477,6 +520,7 @@ mod tests {
                 let mut first = String::new();
                 reader.read_line(&mut first).unwrap();
                 let (mut length, mut line, mut auth) = (0_usize, String::new(), false);
+                let mut host = String::new();
                 loop {
                     match reader.read_line(&mut line) {
                         Ok(0) | Err(_) => continue 'conn,
@@ -488,6 +532,9 @@ mod tests {
                         length = v.trim().parse().unwrap_or(0);
                     }
                     auth |= lower.starts_with("authorization:");
+                    if let Some(v) = lower.strip_prefix("host:") {
+                        v.trim().clone_into(&mut host);
+                    }
                     line.clear();
                 }
                 let mut body = vec![0; length];
@@ -520,6 +567,17 @@ mod tests {
                         vec![],
                     ),
                     "/same" => ("304 Not Modified", String::new(), vec![]),
+                    "/host" => ("200 OK", String::new(), host.into_bytes()),
+                    // 5000 letters packed into 41 bytes
+                    "/packed" => (
+                        "200 OK",
+                        "Content-Encoding: gzip\r\n".into(),
+                        vec![
+                            31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 237, 193, 49, 1, 0, 0, 0, 194, 160,
+                            172, 235, 95, 194, 20, 126, 64, 1, 0, 0, 0, 0, 111, 3, 118, 89, 244,
+                            76, 136, 19, 0, 0,
+                        ],
+                    ),
                     "/away" => (
                         "302 Found",
                         "Location: http://elsewhere.example/x\r\n".into(),
@@ -649,7 +707,17 @@ mod tests {
     fn odd_file_names_and_oversized_files_are_refused_and_leave_nothing() {
         let base = server();
         let o = outside("odd");
-        for name in ["../escape.stl", "a/b.stl", "C:evil", ".hidden", ""] {
+        for name in [
+            "../escape.stl",
+            "a/b.stl",
+            "C:evil",
+            ".hidden",
+            "",
+            "NUL.stl",
+            "com1",
+            "trailing.",
+            "trailing ",
+        ] {
             let src = format!("function run(s) cutcraft.download(s.base .. '/file', {name:?}) end");
             let err = run(&o, &src, &base).unwrap_err().to_string();
             assert!(err.contains("plain file name"), "{name}: {err}");
@@ -763,6 +831,48 @@ mod tests {
         .unwrap();
         let notes = run(&o, "function run() print(cutcraft.store.get('LastReleasedAt'), cutcraft.store.get('none')) end", "").unwrap();
         assert_eq!(notes, vec!["2000\tnil"]);
+    }
+
+    #[test]
+    fn plain_names_with_spaces_are_fine() {
+        assert!(plain_file_name("oak leaf.stl"));
+        assert!(plain_file_name("console.stl"));
+    }
+
+    #[test]
+    fn damaged_settings_stop_the_run_instead_of_being_replaced() {
+        let o = outside("damaged");
+        std::fs::write(o.folder.join("store.json"), "{ not json").unwrap();
+        let err = run(&o, "function run() cutcraft.store.set('a', 'b') end", "")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("damaged"), "{err}");
+        let kept = std::fs::read_to_string(o.folder.join("store.json")).unwrap();
+        assert_eq!(kept, "{ not json");
+    }
+
+    #[test]
+    fn the_host_header_follows_the_address_and_packed_answers_count_unpacked() {
+        let base = server();
+        let mut o = outside("host");
+        o.max_body = 4000;
+        let notes = run(
+            &o,
+            r#"function run(s)
+                 print(cutcraft.http{ url = s.base .. "/host", headers = { Host = "evil.example" } }.body)
+               end"#,
+            &base,
+        )
+        .unwrap();
+        assert_eq!(notes, vec![base.trim_start_matches("http://").to_owned()]);
+        let err = run(
+            &o,
+            "function run(s) cutcraft.http{ url = s.base .. '/packed' } end",
+            &base,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("too long"), "{err}");
     }
 
     #[test]
