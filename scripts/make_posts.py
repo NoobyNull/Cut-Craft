@@ -7,10 +7,11 @@ The templates are crates/post/posts/grbl_arcs_mm.pp, mach3_arcs_mm.pp and fluidn
 edit those, then run this. For each it writes, in millimetres and inches:
   Arcs              the template (G2 / G3, centres from the arc's start)
   Straight          lines only, for controllers without arcs
-  Wrap Y to A       rotary, a cylinder along X; feeds in units a minute
-  Wrap Y to A G93   the same, feeds in inverse time
-  Wrap X to A       rotary, a cylinder along Y
-  Wrap X to A G93
+  Rotary A, cylinder along X        Y wrapped onto A; feeds in units a minute
+  Rotary A, cylinder along X, G93   the same, feeds in inverse time
+  Rotary A, cylinder along Y        X wrapped onto A
+  Rotary A, cylinder along Y, G93
+The GRBL template's rotary posts are named grblHAL: standard GRBL 1.1 has no A axis.
 and crates/post/src/built_in.rs, the list of Cut Craft's own posts.
 """
 
@@ -23,8 +24,9 @@ POSTS = ROOT / "crates/post/posts"
 # Machines know posts by name, so theirs stay as they were; the FluidNC variants come after.
 FIXED = ["fluidnc_atc_mm.pp", "fluidnc_atc_wrap_a_mm.pp"]
 # stem: (controller, template file). Every family has every variant, so a machine's 4th axis
-# finds its rotary posts by name (FluidNC's Wrap Y to A G93 (mm) is the default rotary post's
-# twin under that name).
+# finds its rotary posts by name (FluidNC's Rotary A, cylinder along X, G93 (mm) is the default
+# rotary post's twin under that name). Rotary posts used to be named "Wrap Y to A" and so on:
+# cut_craft_post::renamed turns those old names into these.
 TEMPLATES = {
     "grbl": ("GRBL", "grbl_arcs_mm.pp"),
     "mach3": ("Mach3", "mach3_arcs_mm.pp"),
@@ -81,6 +83,12 @@ def rotary(text, wrapped, inverse_time):
         "VAR TOOL_NUMBER = [T|A|T|1.0]\n",
         "VAR TOOL_NUMBER = [T|A|T|1.0]\nVAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]\n",
     )
+    # the machine's own axis across the rotary (the wrapped letter: Y beside a cylinder along
+    # X), for a bit held off the turning axis; written only when it changes
+    text = text.replace(
+        "VAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]\n",
+        f"VAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]\nVAR ACROSS_POSITION = [ACROSS|C|{wrapped}|1.3]\n",
+    )
     text = re.sub(
         r'"\(Material: X .*\)"',
         '"(Rotary: [WRAP_DIA] mm across, [XLENGTH] x [YLENGTH] unrolled, Z zero on the [Z_ORIGIN])"',
@@ -96,6 +104,7 @@ def rotary(text, wrapped, inverse_time):
         text = text.replace('"G0 [SAFEZ]"\n"M5"', '"G0 [SAFEZ]"\n"G94"\n"M5"')
         text = add_to_block(text, "TOOLCHANGE", '"G93"')
         text = add_to_block(text, "FOOTER", '"G94"', first=True)
+    text = re.sub(r'^"(G[01] \[X\] \[Y\])', r'"\1 [ACROSS]', text, flags=re.M)
     return text
 
 
@@ -113,16 +122,20 @@ def variants(stem, controller, template):
                 feeds = "feeds in inverse time (G93)" if g93 else "feeds in units a minute"
                 made.append((
                     f"wrap_{wrapped.lower()}_a" + ("_g93" if g93 else ""),
-                    f"Wrap {wrapped} to A" + (" G93" if g93 else ""),
+                    f"Rotary A, cylinder along {along[wrapped]}" + (", G93" if g93 else ""),
                     rotary(base, wrapped, g93),
                     f"Rotary: {wrapped} wrapped onto A, for a cylinder along "
-                    f"{along[wrapped]}; {feeds}. Needs an A axis.",
+                    f"{along[wrapped]}; {feeds}. Needs an A axis"
+                    + (" (grblHAL built with 4 or more axes; standard GRBL 1.1 has none)."
+                       if stem == "grbl" else "."),
                 ))
         for key, label, text, what in made:
             # inches last, so what the variants add is converted too
             text = text if units == "mm" else inches(text)
             ext = re.search(r'FILE_EXTENSION = "([^"]*)"', text).group(1)
-            name = f"Cut Craft {controller} {label} ({units}) (*.{ext})"
+            # standard GRBL has no A axis: its rotary posts are for grblHAL
+            who = "grblHAL" if stem == "grbl" and key.startswith("wrap") else controller
+            name = f"Cut Craft {who} {label} ({units}) (*.{ext})"
             yield f"{stem}_{key}_{units}.pp", described(named(text, name), intro + [what])
 
 

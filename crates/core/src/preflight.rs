@@ -6,7 +6,7 @@
 
 pub use crate::check_list::{Check, Phase};
 use crate::checks::{LEFT, problems_by_check};
-use crate::document::Document;
+use crate::document::{Along, Document};
 use crate::progress;
 use crate::simulation::{Material, each};
 use crate::toolpath::{MoveKind, Tool, ToolShape, Toolpath};
@@ -127,6 +127,8 @@ pub struct Limits {
     pub library: Option<std::collections::BTreeMap<String, Tool>>,
     /// How the machine holds its bits, for the collet and holder checks.
     pub holding: crate::collision::Holding,
+    /// The machine's rotary (4th axis), when it has one its firmware can drive.
+    pub rotary: Option<crate::rotary_axis::RotaryAxis>,
 }
 
 /// Everything found checking `toolpaths`, cut in the order given, on `limits`' machine:
@@ -155,9 +157,11 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
     });
     if !progress::cancelled() {
         progress::stage(&Phase::Machine.stage(""));
+        zeroing(doc, &mut found);
         machine(doc, toolpaths, limits, &mut found);
         keep_out(doc, toolpaths, &mut found);
         tool_numbers(toolpaths, &mut found);
+        rotary_setup(doc, toolpaths, limits, &mut found);
     }
     if doc.job.rotary.is_none() && !progress::cancelled() {
         progress::stage(&Phase::Cutting.stage(""));
@@ -525,6 +529,250 @@ fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     }
 }
 
+/// A rotary job on a machine whose rotary is not set up for it: its centre line not found
+/// yet, or lying the other way from the job's cylinder.
+/// Past this many turns one way, a controller keeping A as a single-precision number places
+/// it no finer than about a hundredth of a degree, and it gets coarser from there.
+pub const MOST_FREE_TURNS: f64 = 500.0;
+
+fn rotary_setup(
+    doc: &Document,
+    toolpaths: &[&Toolpath],
+    limits: &Limits,
+    found: &mut Vec<Finding>,
+) {
+    let (Some(job), Some(axis)) = (doc.job.rotary, limits.rotary) else {
+        return;
+    };
+    // turning freely, A carries on round from each pass to the next: about a turn for each
+    // turn's worth of cutting round the part
+    let round = |p: DVec3| if job.along == Along::X { p.y } else { p.x };
+    let circumference = std::f64::consts::PI * job.diameter;
+    let turns: f64 = toolpaths
+        .iter()
+        .flat_map(|t| t.moves.windows(2))
+        .filter(|m| m[1].kind != MoveKind::Rapid)
+        .map(|m| (round(m[1].to) - round(m[0].to)).abs())
+        .sum::<f64>()
+        / circumference;
+    if axis.turning == crate::rotary_axis::Turning::Free && turns > MOST_FREE_TURNS {
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            format!(
+                "A turns freely and these toolpaths wind it about {turns:.0} turns one way. Past \
+                 {MOST_FREE_TURNS:.0} turns many controllers place A less finely, and detail can \
+                 be lost: in Machine Configuration's Rotary, set A can turn to Up to a few \
+                 turns each way"
+            ),
+        ));
+    }
+    let marked = toolpaths.iter().any(|t| {
+        t.params
+            .get("registration_mark")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    });
+    if !marked
+        && toolpaths
+            .iter()
+            .any(|t| t.strategy == "rotary_machining_toolpath")
+    {
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            "No toolpath cuts a registration mark at A=0. Tick Registration mark in 4-Axis Rotary \
+             Machining, or pencil a line on the material at A=0, so the part can be put back \
+             exactly as it was if the job has to be started again"
+                .to_owned(),
+        ));
+    }
+    let off_axis = toolpaths
+        .iter()
+        .find(|t| t.across.iter().any(|a| a.abs() > 1e-9));
+    if !axis.centre_set {
+        let why = match off_axis {
+            Some(t) => format!(
+                "\"{}\" holds the bit to one side of the turning axis, measured from the \
+                 axis: until it is found, the bit is held in the wrong place and cuts into the \
+                 part",
+                t.name
+            ),
+            None => "If the bit is not exactly over the turning axis, a round carving comes out \
+                     lumpy"
+                .to_owned(),
+        };
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            format!(
+                "The rotary's centre line is not set in Machine Configuration. {why}: find the \
+                 centre line (see the help), then tick Centre line found"
+            ),
+        ));
+    }
+    room(&job, &axis, toolpaths, found);
+    if job.along != axis.along {
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            format!(
+                "This job's cylinder lies along {}, but the machine's rotary lies along {}: \
+                 change the job in Job Setup, or the rotary's direction in Machine Configuration",
+                job.along.letter(),
+                axis.along.letter()
+            ),
+        ));
+    }
+}
+
+/// Whether the material has room to turn on the rotary: below it down to the spoilboard
+/// (or the bed with the spoilboard out), above it up to the bit lifted all the way, and
+/// whether the toolpaths lift the bit clear of its corners before A turns.
+fn room(
+    job: &crate::document::Rotary,
+    axis: &crate::rotary_axis::RotaryAxis,
+    toolpaths: &[&Toolpath],
+    found: &mut Vec<Finding>,
+) {
+    use crate::document::Blank;
+    let swing = job.swing();
+    let radius = job.diameter / 2.0;
+    let shape = match job.blank {
+        Blank::Round => "round material's sides",
+        Blank::Square => "square material's corners",
+        Blank::Board { .. } => "board's edges",
+    };
+    match axis.room_below() {
+        Some(below) if swing > below + 1e-9 => {
+            let fix = if !axis.spoilboard_off && swing <= below + axis.spoilboard.max(0.0) {
+                "take the spoilboard out from under the rotary (and tick Spoilboard taken \
+                 out in Machine Configuration's Rotary)"
+            } else {
+                "use smaller material, or raise the rotary"
+            };
+            found.push(Finding::warning(
+                Check::RotarySetup,
+                format!(
+                    "The {shape} swing {swing:.1} mm out from the turning axis, but the axis is \
+                     only {below:.1} mm above what is under it: the material hits it as it \
+                     turns. {}",
+                    capitalised(fix)
+                ),
+            ));
+        }
+        None if job.blank != Blank::Round => found.push(Finding::warning(
+            Check::RotarySetup,
+            format!(
+                "The {shape} swing {swing:.1} mm out from the turning axis as A turns. Measure \
+                 the axis height in Machine Configuration's Rotary so it can be checked that \
+                 they clear the spoilboard"
+            ),
+        )),
+        _ => {}
+    }
+    if let Some(above) = axis.room_above() {
+        if swing + 1e-9 >= above {
+            found.push(Finding::warning(
+                Check::RotarySetup,
+                format!(
+                    "The {shape} swing {swing:.1} mm out from the turning axis, but with Z all \
+                     the way up the bit is only {above:.1} mm above it: A can't turn the \
+                     material under the bit. Use smaller material, or a shorter bit"
+                ),
+            ));
+        }
+        let highest = toolpaths
+            .iter()
+            .flat_map(|t| t.moves.iter().map(move |m| (t, radius + m.to.z)))
+            .max_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((t, high)) = highest
+            && high > above + 1e-9
+        {
+            found.push(Finding::warning(
+                Check::RotarySetup,
+                format!(
+                    "\"{}\" lifts the bit {high:.1} mm above the turning axis, higher than Z \
+                     can go ({above:.1} mm): lower the clearance (Z1) in Job Setup",
+                    t.name
+                ),
+            ));
+        }
+    }
+    // A turning with the bit lower than the material swings: it knocks into a corner
+    let round = |p: DVec3| if job.along == Along::X { p.y } else { p.x };
+    for t in toolpaths {
+        let low = t.moves.windows(2).find(|m| {
+            m[1].kind == MoveKind::Rapid
+                && (round(m[1].to) - round(m[0].to)).abs() > 1e-6
+                && radius + m[0].to.z.min(m[1].to.z) < swing - 1e-6
+        });
+        if let Some(m) = low {
+            let high = radius + m[0].to.z.min(m[1].to.z);
+            found.push(Finding::warning(
+                Check::RotarySetup,
+                format!(
+                    "\"{}\" turns A with the bit {high:.1} mm above the turning axis, but the \
+                     {shape} swing out to {swing:.1} mm: the bit knocks into the material. \
+                     Raise Clearance (Z1) in Job Setup to {:.1} mm or more, and calculate it \
+                     again",
+                    t.name,
+                    (swing - radius + 1.0).ceil()
+                ),
+            ));
+        }
+    }
+}
+
+fn capitalised(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
+/// A job whose material was never set up (Material Setup not shown, as when the
+/// toolpaths came from a template): where to zero the bit, from Job Defaults, to read.
+fn zeroing(doc: &Document, found: &mut Vec<Finding>) {
+    if doc.material_checked {
+        return;
+    }
+    let job = &doc.job;
+    let z = match (job.z_zero, job.rotary.is_some()) {
+        (crate::document::ZZero::MaterialSurface, false) => "on top of the material",
+        (crate::document::ZZero::MachineBed, false) => "on the machine bed",
+        (crate::document::ZZero::MaterialSurface, true) => "on top of the cylinder",
+        (crate::document::ZZero::MachineBed, true) => "on the cylinder's axis",
+    };
+    let xy = match job.datum {
+        crate::document::Datum::BottomLeft => "at the material's bottom left corner",
+        crate::document::Datum::TopLeft => "at the material's top left corner",
+        crate::document::Datum::TopRight => "at the material's top right corner",
+        crate::document::Datum::BottomRight => "at the material's bottom right corner",
+        crate::document::Datum::Centre => "in the middle of the material",
+    };
+    let offset = if job.offset == crate::geometry::Point::ZERO {
+        String::new()
+    } else {
+        format!(
+            ", moved {} {u} across and {} {u} up",
+            trim(job.offset.x / job.units.per()),
+            trim(job.offset.y / job.units.per()),
+            u = job.units.suffix()
+        )
+    };
+    found.push(Finding::warning(
+        Check::Zeroing,
+        format!(
+            "This job's zero comes from your Job Defaults and was not looked at: zero the \
+             bit's Z {z}, and X0 Y0 {xy}{offset}. To change them for this job, open Material \
+             Setup on the Toolpaths page"
+        ),
+    ));
+}
+
+/// `value` to three places at most, without trailing zeros.
+fn trim(value: f64) -> String {
+    let text = format!("{value:.3}");
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
 /// The checks that cannot be made on `toolpaths` with `limits`, each with why: the
 /// machine not saying what it can do, no tool changer or keep-out zones, a rotary job.
 #[must_use]
@@ -577,6 +825,11 @@ pub fn not_checked(
                 "A rotary job is not cut through in order yet: watch its first moves".to_owned(),
             ));
         }
+    }
+    if !rotary {
+        skipped.push((Check::RotarySetup, "Not a rotary job".to_owned()));
+    } else if limits.rotary.is_none() {
+        skipped.push((Check::RotarySetup, config("4th axis")));
     }
     if limits.library.is_none() {
         for check in [Check::GenericTool, Check::MakersFigures] {
@@ -906,8 +1159,41 @@ mod tests {
                 thickness: 18.0,
                 ..Job::default()
             },
+            // its zero looked at in Material Setup: no Zeroing warning in every test
+            material_checked: true,
             ..Document::default()
         }
+    }
+
+    #[test]
+    fn a_zero_never_looked_at_is_said_where_to_set() {
+        let mut doc = job();
+        let path = slot("Profile", 150.0, 20.0, 180.0, 3.0);
+        let zeroing = |doc: &Document| {
+            check(doc, &[&path], &Limits::default())
+                .into_iter()
+                .filter(|f| f.check == Check::Zeroing)
+                .collect::<Vec<_>>()
+        };
+        assert!(zeroing(&doc).is_empty(), "looked at in Material Setup");
+        doc.material_checked = false;
+        let found = zeroing(&doc);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Warning, "to read and tick");
+        assert!(
+            found[0]
+                .message
+                .contains("zero the bit's Z on top of the material, and X0 Y0 at the material's bottom left corner. "),
+            "{}",
+            found[0].message
+        );
+        doc.job.datum = crate::document::Datum::Centre;
+        doc.job.offset = crate::geometry::Point::new(10.0, 5.0);
+        assert!(
+            zeroing(&doc)[0]
+                .message
+                .contains("in the middle of the material, moved 10 mm across and 5 mm up."),
+        );
     }
 
     fn tool() -> Tool {
@@ -949,11 +1235,273 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         }
     }
 
     fn checks_of(found: &[Finding]) -> Vec<Check> {
         found.iter().map(|f| f.check).collect()
+    }
+
+    #[test]
+    fn a_rotary_job_asks_for_the_rotarys_centre_line_and_its_direction() {
+        use crate::document::Along;
+        use crate::rotary_axis::RotaryAxis;
+        let doc = Document {
+            job: Job::rotary(200.0, 50.0, Along::Y),
+            ..Document::default()
+        };
+        let cut = slot("Wrap", 20.0, 10.0, 60.0, 2.0);
+        let rotary_findings = |limits: &Limits, doc: &Document| -> Vec<String> {
+            check(doc, &[&cut], limits)
+                .into_iter()
+                .filter(|f| f.check == Check::RotarySetup)
+                .map(|f| f.message)
+                .collect()
+        };
+        let mut limits = Limits {
+            rotary: Some(RotaryAxis::default()),
+            ..Limits::default()
+        };
+        let said = rotary_findings(&limits, &doc);
+        assert_eq!(said.len(), 2, "{said:?}");
+        assert!(said[0].contains("centre line is not set"), "{said:?}");
+        assert!(
+            said[1].contains("lies along Y") && said[1].contains("along X"),
+            "{said:?}"
+        );
+        // a bit held to one side of the axis cuts in the wrong place until it is found
+        let held = Toolpath {
+            across: vec![4.0; cut.moves.len()],
+            ..cut.clone()
+        };
+        let said: Vec<String> = check(&doc, &[&held], &limits)
+            .into_iter()
+            .filter(|f| f.check == Check::RotarySetup)
+            .map(|f| f.message)
+            .collect();
+        assert!(said[0].contains("holds the bit to one side"), "{said:?}");
+        limits.rotary = Some(RotaryAxis {
+            centre_set: true,
+            along: Along::Y,
+            ..RotaryAxis::default()
+        });
+        assert_eq!(rotary_findings(&limits, &doc), Vec::<String>::new());
+        assert!(
+            !not_checked(&doc, &[&cut], &limits)
+                .iter()
+                .any(|(c, _)| *c == Check::RotarySetup)
+        );
+        let flat = job();
+        assert_eq!(rotary_findings(&limits, &flat), Vec::<String>::new());
+        assert!(
+            not_checked(&flat, &[&cut], &limits)
+                .iter()
+                .any(|(c, why)| *c == Check::RotarySetup && why == "Not a rotary job")
+        );
+        limits.rotary = None;
+        assert!(
+            not_checked(&doc, &[&cut], &limits)
+                .iter()
+                .any(|(c, why)| *c == Check::RotarySetup && why.contains("4th axis"))
+        );
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one board, checked against each measure of room in turn"
+    )]
+    fn a_board_on_the_rotary_must_clear_the_spoilboard_the_bit_and_the_rapids_as_it_turns() {
+        use crate::document::{Along, Blank, Rotary};
+        use crate::rotary_axis::RotaryAxis;
+        use crate::toolpath::Move;
+        let mut job = Job::rotary(200.0, 20.0, Along::X);
+        job.rotary = Some(Rotary {
+            blank: Blank::Board { width: 150.0 },
+            ..Rotary::round(20.0, Along::X)
+        });
+        let doc = Document {
+            job,
+            ..Document::default()
+        };
+        let swing = 75f64.hypot(10.0);
+        // one pass, then A turned half a turn at 5 above the board's face: into its edge
+        let mut flip = slot("Flip", 20.0, 10.0, 60.0, 2.0);
+        flip.params = serde_json::json!({"registration_mark": true});
+        let at = |kind, x: f64, round: f64, z: f64| Move {
+            kind,
+            to: DVec3::new(x, round, z),
+        };
+        flip.moves = vec![
+            at(MoveKind::Rapid, 10.0, 0.0, 5.0),
+            at(MoveKind::Plunge, 10.0, 0.0, -1.0),
+            at(MoveKind::Cut, 50.0, 0.0, -1.0),
+            at(MoveKind::Rapid, 50.0, 0.0, 5.0),
+            at(MoveKind::Rapid, 50.0, 31.4, 5.0),
+        ];
+        let said = |axis: RotaryAxis, t: &Toolpath| -> Vec<String> {
+            let limits = Limits {
+                rotary: Some(RotaryAxis {
+                    centre_set: true,
+                    ..axis
+                }),
+                ..Limits::default()
+            };
+            check(&doc, &[t], &limits)
+                .into_iter()
+                .filter(|f| f.check == Check::RotarySetup)
+                .map(|f| f.message)
+                .collect()
+        };
+        // not measured: asked to measure, and the low turn is warned
+        let found = said(RotaryAxis::default(), &flip);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found[0].contains("Measure the axis height"), "{found:?}");
+        assert!(
+            found[1].contains("turns A with the bit 15.0 mm")
+                && found[1].contains("Clearance (Z1)"),
+            "{found:?}"
+        );
+        // 60 above an 18 mm spoilboard: taking the spoilboard out makes room
+        let low = RotaryAxis {
+            axis_height: 60.0,
+            spoilboard: 18.0,
+            ..RotaryAxis::default()
+        };
+        let found = said(low, &flip);
+        assert!(
+            found[0].contains("hits it as it turns")
+                && found[0].contains("Take the spoilboard out"),
+            "{found:?}"
+        );
+        let out = RotaryAxis {
+            spoilboard_off: true,
+            ..low
+        };
+        assert!(!said(out, &flip).iter().any(|m| m.contains("hits it")));
+        // too little: smaller material
+        let lower = RotaryAxis {
+            axis_height: 40.0,
+            spoilboard: 18.0,
+            spoilboard_off: true,
+            ..RotaryAxis::default()
+        };
+        assert!(said(lower, &flip)[0].contains("Use smaller material"));
+        // the bit lifted all the way up is below the edges: A can't turn the board under it
+        let short = RotaryAxis {
+            room_above: 70.0,
+            ..out
+        };
+        assert!(
+            said(short, &flip)
+                .iter()
+                .any(|m| m.contains("can't turn the material"))
+        );
+        // lifted clear before turning: only what the machine's room says
+        let mut clear = flip.clone();
+        let lift = swing - 10.0 + 2.0;
+        clear.moves[3].to.z = lift;
+        clear.moves[4].to.z = lift;
+        let roomy = RotaryAxis {
+            room_above: 120.0,
+            ..out
+        };
+        assert_eq!(said(roomy, &clear), Vec::<String>::new());
+        // and lifted higher than Z can go
+        let cramped = RotaryAxis {
+            room_above: 77.0,
+            ..out
+        };
+        assert!(
+            said(cramped, &clear)
+                .iter()
+                .any(|m| m.contains("higher than Z"))
+        );
+        // a round blank swings no further than its top: nothing to measure or lift
+        let round = Document {
+            job: Job::rotary(200.0, 20.0, Along::X),
+            ..Document::default()
+        };
+        let limits = Limits {
+            rotary: Some(RotaryAxis {
+                centre_set: true,
+                ..RotaryAxis::default()
+            }),
+            ..Limits::default()
+        };
+        let found: Vec<_> = check(&round, &[&flip], &limits)
+            .into_iter()
+            .filter(|f| f.check == Check::RotarySetup)
+            .collect();
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn a_free_rotary_wound_hundreds_of_turns_and_a_job_with_no_registration_mark_are_warned() {
+        use crate::document::Along;
+        use crate::rotary_axis::{RotaryAxis, Turning};
+        use crate::toolpath::Move;
+        let doc = Document {
+            job: Job::rotary(200.0, 50.0, Along::X),
+            ..Document::default()
+        };
+        let circumference = std::f64::consts::PI * 50.0;
+        // 600 rings, each one whole turn round
+        let mut rings = slot("Rings", 20.0, 10.0, 60.0, 2.0);
+        rings.strategy = "rotary_machining_toolpath".into();
+        rings.moves = (0..600)
+            .flat_map(|k| {
+                let x = f64::from(k) * 0.3;
+                [
+                    Move {
+                        kind: MoveKind::Rapid,
+                        to: DVec3::new(x, 0.0, 5.0),
+                    },
+                    Move {
+                        kind: MoveKind::Plunge,
+                        to: DVec3::new(x, 0.0, -1.0),
+                    },
+                    Move {
+                        kind: MoveKind::Cut,
+                        to: DVec3::new(x, circumference, -1.0),
+                    },
+                    Move {
+                        kind: MoveKind::Rapid,
+                        to: DVec3::new(x, circumference, 5.0),
+                    },
+                ]
+            })
+            .collect();
+        let said = |limits: &Limits, t: &Toolpath| -> Vec<String> {
+            check(&doc, &[t], limits)
+                .into_iter()
+                .filter(|f| f.check == Check::RotarySetup)
+                .map(|f| f.message)
+                .collect()
+        };
+        let free = Limits {
+            rotary: Some(RotaryAxis {
+                centre_set: true,
+                ..RotaryAxis::default()
+            }),
+            ..Limits::default()
+        };
+        let found = said(&free, &rings);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found[0].contains("about 600 turns"), "{found:?}");
+        assert!(found[1].contains("registration mark"), "{found:?}");
+        // limited turns, and a mark: nothing to say
+        let limited = Limits {
+            rotary: Some(RotaryAxis {
+                centre_set: true,
+                turning: Turning::Unwind,
+                ..RotaryAxis::default()
+            }),
+            ..Limits::default()
+        };
+        rings.params = serde_json::json!({"registration_mark": true});
+        assert_eq!(said(&limited, &rings), Vec::<String>::new());
     }
 
     #[test]
@@ -1162,12 +1710,14 @@ mod tests {
             left: None,
             library: Some(std::collections::BTreeMap::new()),
             holding: crate::collision::Holding::default(),
+            rotary: None,
         };
         let skipped = not_checked(&job(), &[&slot], &limits);
         assert!(
-            skipped
-                .iter()
-                .all(|(c, _)| matches!(c, Check::KeepOut | Check::ToolNumbers)),
+            skipped.iter().all(|(c, _)| matches!(
+                c,
+                Check::KeepOut | Check::ToolNumbers | Check::RotarySetup
+            )),
             "{skipped:?}"
         );
     }
@@ -1450,6 +2000,7 @@ mod tests {
             left: None,
             library: None,
             holding: crate::collision::Holding::default(),
+            rotary: None,
         };
         let found = check(&job(), &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)], &limits);
         let errors = messages(&found, Severity::Error);

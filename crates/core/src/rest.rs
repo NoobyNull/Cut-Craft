@@ -472,6 +472,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         };
         let own = serde_json::json!({ "rest": { "after": [end_mill(10.0)], "minimum_detail": 0.0, "overlap": 0.0 } });
         t.params["rest"] = own["rest"].clone();
@@ -669,6 +670,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         };
         let params = serde_json::json!({ "rest": { "after": [end_mill(10.0)], "minimum_detail": 0.0, "overlap": 0.0 } });
         apply(&job, &mut t, &params).unwrap();

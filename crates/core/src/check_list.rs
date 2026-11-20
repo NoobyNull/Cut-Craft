@@ -10,6 +10,8 @@ pub enum Check {
     CanCut,
     /// Toolpaths made from the design as it is now.
     UpToDate,
+    /// The job's Z zero and X0 Y0 were looked at, not only taken from Job Defaults.
+    Zeroing,
     /// The toolpaths fit on the machine's bed.
     Bed,
     /// The toolpaths go no higher and deeper than the Z axis travels.
@@ -24,6 +26,8 @@ pub enum Check {
     ToolNumbers,
     /// No cutting into the keep-out zones (clamps).
     KeepOut,
+    /// A rotary job's rotary set up: its centre line found, lying the job's way.
+    RotarySetup,
     /// Rapid moves clear of the material.
     Rapids,
     /// Cutting that takes material off, not air.
@@ -101,9 +105,10 @@ impl Phase {
 
 impl Check {
     /// Every check, in the order they are listed.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 23] = [
         Self::CanCut,
         Self::UpToDate,
+        Self::Zeroing,
         Self::Bed,
         Self::ZTravel,
         Self::MachineSpeeds,
@@ -111,6 +116,7 @@ impl Check {
         Self::ToolChanger,
         Self::ToolNumbers,
         Self::KeepOut,
+        Self::RotarySetup,
         Self::Rapids,
         Self::AirCutting,
         Self::Collisions,
@@ -131,6 +137,7 @@ impl Check {
         match self {
             Self::CanCut => "Settings that can cut",
             Self::UpToDate => "Toolpaths up to date",
+            Self::Zeroing => "Zero set where the job says",
             Self::Bed => "Fits on the machine's bed",
             Self::ZTravel => "Fits the Z axis travel",
             Self::MachineSpeeds => "Feeds the machine can reach",
@@ -138,6 +145,7 @@ impl Check {
             Self::ToolChanger => "Bits loaded in the tool changer",
             Self::ToolNumbers => "Each bit its own tool number",
             Self::KeepOut => "Keeps out of keep-out zones",
+            Self::RotarySetup => "Rotary set up",
             Self::Rapids => "Rapid moves clear of the material",
             Self::AirCutting => "Not cutting air",
             Self::Collisions => "Collet and spindle clear of the material",
@@ -156,6 +164,7 @@ impl Check {
     /// What it looks for and what that protects against, for a beginner: shown when the
     /// check is pointed at, and at the top of its help.
     #[must_use]
+    #[expect(clippy::too_many_lines, reason = "one sentence per check")]
     pub fn guards(self) -> &'static str {
         match self {
             Self::CanCut => {
@@ -165,6 +174,12 @@ impl Check {
             Self::UpToDate => {
                 "Each toolpath was made from the design as it is now, so it cuts what you see \
                  and not an older shape"
+            }
+            Self::Zeroing => {
+                "The job says where you zero the bit (Z zero on top of the material or on \
+                 the bed, X0 Y0 at a corner or the middle). When those came from Job Defaults \
+                 and were never looked at for this job, you are asked to check them, so the \
+                 machine does not cut in the air or deep into the bed"
             }
             Self::Bed => {
                 "The toolpaths fit inside the machine's bed, so it does not run into its \
@@ -194,6 +209,11 @@ impl Check {
             Self::KeepOut => {
                 "No cut goes into a keep-out zone, so the bit does not hit a clamp or \
                  anything else you marked to stay clear of"
+            }
+            Self::RotarySetup => {
+                "For a rotary job, the rotary's centre line has been found and it lies the way \
+                 the job's cylinder does, so the bit cuts round the real turning axis and a \
+                 round carving does not come out lumpy or on the wrong side"
             }
             Self::Rapids => {
                 "Rapid moves (full speed, not cutting) stay clear of the material that is \
@@ -255,6 +275,7 @@ impl Check {
         match self {
             Self::CanCut => "check_can_cut",
             Self::UpToDate => "check_up_to_date",
+            Self::Zeroing => "check_zeroing",
             Self::Bed => "check_bed",
             Self::ZTravel => "check_z_travel",
             Self::MachineSpeeds => "check_machine_speeds",
@@ -262,6 +283,7 @@ impl Check {
             Self::ToolChanger => "check_tool_changer",
             Self::ToolNumbers => "check_tool_numbers",
             Self::KeepOut => "check_keep_out",
+            Self::RotarySetup => "check_rotary_setup",
             Self::Rapids => "check_rapids",
             Self::AirCutting => "check_air_cutting",
             Self::Collisions => "check_collisions",
@@ -281,7 +303,12 @@ impl Check {
     #[must_use]
     pub fn phase(self) -> Phase {
         match self {
-            Self::Bed | Self::ZTravel | Self::KeepOut | Self::ToolNumbers => Phase::Machine,
+            Self::Zeroing
+            | Self::Bed
+            | Self::ZTravel
+            | Self::KeepOut
+            | Self::ToolNumbers
+            | Self::RotarySetup => Phase::Machine,
             Self::Rapids | Self::AirCutting => Phase::Cutting,
             Self::Collisions => Phase::Collisions,
             _ => Phase::Settings,

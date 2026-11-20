@@ -4,7 +4,7 @@
 
 use crate::capabilities::{Capabilities, CapabilityDb, Family, Filter, Moves};
 use crate::library::{Entry, Library, Source};
-use crate::machine::{Machine, Machines};
+use crate::machine::{Firmware, Machine, Machines, NO_A_AXIS};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use eframe::egui;
@@ -133,6 +133,8 @@ pub struct MachineManager {
     post_filter: Filter,
     /// Whether Add a post-processor's list was open last frame.
     adding_post: bool,
+    /// The 4th axis warning's link was clicked: show and focus the Firmware choice.
+    find_firmware: bool,
 }
 
 impl MachineManager {
@@ -145,6 +147,7 @@ impl MachineManager {
             viewing: None,
             post_filter: Filter::default(),
             adding_post: false,
+            find_firmware: false,
         }
     }
 
@@ -196,7 +199,8 @@ impl MachineManager {
                 outcome = buttons(ui, false, dirty).or(outcome.take());
                 return;
             };
-            details(ui, machine, library);
+            details(ui, machine, library, &mut self.find_firmware);
+            rotary(ui, machine);
             limits(ui, machine);
             holder(ui, machine);
             tool_changer(ui, machine, None);
@@ -290,8 +294,10 @@ impl MachineManager {
     }
 }
 
-/// Name, maker, model, controller, bed size, Z travel and 4th axis, in a framed block.
-fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
+/// Name, maker, model, controller, firmware, bed size, Z travel and 4th axis, in a framed
+/// block; no 4th axis on standard GRBL, which has none. `find_firmware`: the warning's link
+/// was clicked, so the Firmware choice is scrolled to and focused.
+fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_firmware: &mut bool) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         egui::Grid::new("machine_details")
@@ -301,12 +307,22 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
                     ("Name", &mut machine.name),
                     ("Manufacturer", &mut machine.manufacturer),
                     ("Model", &mut machine.model),
-                    ("Controller", &mut machine.controller),
                 ] {
                     ui.label(label);
                     ui.add(egui::TextEdit::singleline(value).desired_width(f32::INFINITY));
                     ui.end_row();
                 }
+                // the controller (board) and the firmware it runs, side by side
+                ui.label("Controller");
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut machine.controller)
+                            .desired_width((ui.available_width() - 290.0).max(120.0)),
+                    );
+                    ui.label("Firmware");
+                    firmware(ui, machine, find_firmware);
+                });
+                ui.end_row();
                 let (per, unit) = if machine.inches {
                     (INCH, " in")
                 } else {
@@ -327,22 +343,69 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
                     ui.radio_value(&mut machine.inches, true, "inches");
                 });
                 ui.end_row();
-                ui.label("4th axis");
-                let ticked = ui
-                    .checkbox(&mut machine.rotary, "A, turning the material (rotary jobs)")
-                    .on_hover_hint(
-                        "Rotary jobs are saved through the machine's post that wraps their side \
-                         onto A; ticking this adds Cut Craft's for its posts",
-                    )
-                    .changed();
-                if ticked && machine.rotary {
-                    let names: Vec<String> =
-                        library.entries().into_iter().map(|e| e.name).collect();
-                    machine.add_rotary_posts(&names);
+                // standard GRBL has no A axis: no 4th axis to offer at all
+                if machine.firmware().has_a_axis() {
+                    ui.label("4th axis");
+                    let mut ticked = machine.rotary;
+                    if ui
+                        .checkbox(&mut ticked, "A, turning the material (rotary jobs)")
+                        .on_hover_hint(
+                            "Rotary jobs are saved through the machine's post that turns their \
+                             side into A; ticking this adds Cut Craft's for its posts",
+                        )
+                        .changed()
+                    {
+                        machine.rotary = ticked;
+                        if ticked {
+                            let names: Vec<String> =
+                                library.entries().into_iter().map(|e| e.name).collect();
+                            machine.add_rotary_posts(&names);
+                        }
+                    }
+                    ui.end_row();
                 }
-                ui.end_row();
             });
+        // a 4th axis ticked before, that its firmware cannot drive (below the grid, so it
+        // wraps to the window)
+        if machine.rotary && !machine.firmware().has_a_axis() {
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(ui.visuals().error_fg_color, format!("⚠ {NO_A_AXIS}"));
+                if ui.link("Pick the firmware").clicked() {
+                    *find_firmware = true;
+                }
+            });
+        }
     });
+}
+
+/// The Firmware choice: the one picked, else the one the Controller text names, else
+/// standard GRBL; each says what it is on hover.
+fn firmware(ui: &mut egui::Ui, machine: &mut Machine, find: &mut bool) {
+    let now = machine.firmware();
+    let combo = egui::ComboBox::from_id_salt("machine_firmware")
+        .selected_text(now.label())
+        .width(180.0)
+        .show_ui(ui, |ui| {
+            for f in Firmware::ALL {
+                if ui
+                    .selectable_label(now == f && machine.firmware.is_some(), f.label())
+                    .on_hover_hint(f.hint())
+                    .clicked()
+                {
+                    machine.firmware = Some(f);
+                }
+            }
+        });
+    let response = combo.response.on_hover_hint(
+        "Which firmware the controller runs. It decides whether the machine can have a 4th axis: \
+         standard GRBL has none. Not picked, it is read from Controller, and taken for standard \
+         GRBL when Controller does not name one",
+    );
+    if std::mem::take(find) {
+        response.scroll_to_me(Some(egui::Align::Center));
+        response.request_focus();
+        response.highlight();
+    }
 }
 
 /// A length (or a rate of one) kept in mm and shown `per` to the unit: 0 reads as not given.
@@ -489,6 +552,218 @@ fn holder(ui: &mut egui::Ui, machine: &mut Machine) {
                      Database. A bit without them uses the sizes above",
                 );
         });
+}
+
+/// Rotary (4th axis): where it lies, its centre line, which way and how fast A turns, and its
+/// chuck and tailstock. Folded to one line, and shown only on a machine with a 4th axis its
+/// firmware can drive.
+fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
+    use cut_craft_core::document::Along;
+    if !machine.has_rotary() {
+        return;
+    }
+    let (per, length) = if machine.inches {
+        (INCH, " in")
+    } else {
+        (1.0, " mm")
+    };
+    let axis = &mut machine.rotary_axis;
+    let summary = format!(
+        "Rotary (4th axis): along {}, {}",
+        axis.along.letter(),
+        if axis.centre_set {
+            "centre line found"
+        } else {
+            "centre line not found yet"
+        }
+    );
+    // open while there is something still to set
+    egui::CollapsingHeader::new(summary)
+        .id_salt("machine_rotary")
+        .default_open(!axis.centre_set)
+        .show(ui, |ui| {
+            ui.weak(
+                "Where the rotary sits and which way it turns. Rotary jobs cut round its \
+                 turning axis, so the bit must sit exactly over it: a centre line out by half a \
+                 millimetre makes a round carving lumpy",
+            );
+            egui::Grid::new("machine_rotary_axis")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    ui.label("Lies along").on_hover_hint(
+                        "The direction of the turning axis on the bed: along X (left to right, \
+                         most kits) or along Y (front to back)",
+                    );
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut axis.along, Along::X, "X");
+                        ui.radio_value(&mut axis.along, Along::Y, "Y");
+                    });
+                    ui.end_row();
+                    let across = if axis.along == Along::X { "Y" } else { "X" };
+                    ui.label(format!("Centre line {across}"))
+                        .on_hover_hint(format!(
+                            "From work zero across to the turning axis, in {across}. 0 when you \
+                         zero {across} on the axis, as is usual. (Its height comes from Job \
+                         Setup: Z zero on the axis or on the cylinder's top)"
+                        ));
+                    let mut v = axis.centre_across / per;
+                    if ui
+                        .add(
+                            Number::new(&mut v)
+                                .speed(0.01)
+                                .max_decimals(3)
+                                .suffix(length),
+                        )
+                        .changed()
+                    {
+                        axis.centre_across = v * per;
+                    }
+                    ui.end_row();
+                    ui.label("");
+                    ui.checkbox(&mut axis.centre_set, "Centre line found")
+                        .on_hover_hint(
+                            "Tick once you have found the centre line on the machine and set \
+                             the value above (Help: The 4th Axis and Your Firmware shows \
+                             how). Until then, the checks before cutting ask about it",
+                        );
+                    ui.end_row();
+                    turning(ui, axis, per, length);
+                    winding(ui, axis);
+                    room(ui, axis, per, length);
+                });
+        });
+}
+
+/// The rotary's turning rows: which way +A turns, its top speed, and its chuck and
+/// tailstock (lengths shown `per` to the `length` unit).
+fn turning(
+    ui: &mut egui::Ui,
+    axis: &mut cut_craft_core::rotary_axis::RotaryAxis,
+    per: f64,
+    length: &str,
+) {
+    ui.label("+A turns").on_hover_hint(
+        "Seen from the chuck end, looking along the axis. Jog A by +10° and \
+         watch which way the chuck turns",
+    );
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut axis.clockwise, true, "Clockwise");
+        ui.radio_value(&mut axis.clockwise, false, "Anticlockwise");
+    });
+    ui.end_row();
+    ui.label("A top speed").on_hover_hint(
+        "The fastest A turns, from the controller's settings (grblHAL's $113, \
+         FluidNC's max_rate_mm_per_min for A). For cutting times and to keep \
+         feeds within it",
+    );
+    ui.add(
+        Number::new(&mut axis.max_rate)
+            .range(0.0..=f64::MAX)
+            .speed(10.0)
+            .max_decimals(0)
+            .suffix(" °/min"),
+    );
+    ui.end_row();
+    for (label, value, hint) in [
+        (
+            "Chuck",
+            &mut axis.chuck,
+            "How far the chuck and its jaws reach along the axis from where the \
+             material starts. Cuts are kept out of it",
+        ),
+        (
+            "Tailstock",
+            &mut axis.tailstock,
+            "How far the tailstock reaches back along the axis from where the \
+             material ends",
+        ),
+    ] {
+        ui.label(label).on_hover_hint(hint);
+        measure(ui, value, per, length);
+        ui.end_row();
+    }
+}
+
+/// How much room material has to swing round the axis: down to the spoilboard (or the bed
+/// with it out) and up to the bit lifted all the way (lengths shown `per` to the `length`
+/// unit). 0 is not measured yet.
+fn room(
+    ui: &mut egui::Ui,
+    axis: &mut cut_craft_core::rotary_axis::RotaryAxis,
+    per: f64,
+    length: &str,
+) {
+    ui.label("Axis height").on_hover_hint(
+        "From the top of the spoilboard up to the turning axis: the middle of the chuck. \
+         Material turning on the rotary can swing out no further than this below it. 0 until \
+         you measure it",
+    );
+    measure(ui, &mut axis.axis_height, per, length);
+    ui.end_row();
+    ui.label("Spoilboard").on_hover_hint(
+        "How thick the spoilboard under the rotary is. Take it out and material can swing \
+         down past where its top was, to the bed",
+    );
+    ui.horizontal(|ui| {
+        measure(ui, &mut axis.spoilboard, per, length);
+        ui.checkbox(&mut axis.spoilboard_off, "Taken out");
+    });
+    ui.end_row();
+    ui.label("Room above").on_hover_hint(
+        "With Z all the way up, from the turning axis up to the tip of the bit. Material can \
+         turn under the bit only if it swings out less than this. 0 until you measure it",
+    );
+    measure(ui, &mut axis.room_above, per, length);
+    ui.end_row();
+}
+
+/// How far A may wind one way, what happens at the limit, and its backlash.
+fn winding(ui: &mut egui::Ui, axis: &mut cut_craft_core::rotary_axis::RotaryAxis) {
+    use cut_craft_core::rotary_axis::{AtLimit, Turning};
+    ui.label("A can turn").on_hover_hint(
+        "Freely: A keeps turning one way as long as the job needs, like a lathe. Choose a \
+         number of turns when a cable, a hose or a limit switch on the rotary stops it \
+         winding on and on",
+    );
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut axis.turning, Turning::Free, "Freely");
+        ui.radio_value(&mut axis.turning, Turning::Unwind, "Up to");
+        ui.add_enabled(
+            axis.turning == Turning::Unwind,
+            Number::new(&mut axis.turns)
+                .range(0.5..=1000.0)
+                .speed(0.5)
+                .max_decimals(1)
+                .suffix(" turns each way"),
+        );
+    });
+    ui.end_row();
+    ui.label("At the limit").on_hover_hint(
+        "When the next pass would turn A past its turns. Cut both ways: the next pass is \
+         cut the other way round, so A comes back as it cuts. Lift and spin back: the bit \
+         lifts clear and A spins back whole turns before the next pass; spinning back to \
+         the start also shows up any steps A has lost",
+    );
+    ui.add_enabled_ui(axis.turning == Turning::Unwind, |ui| {
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut axis.at_limit, AtLimit::CutBothWays, "Cut both ways");
+            ui.radio_value(&mut axis.at_limit, AtLimit::SpinBack, "Lift and spin back");
+        });
+    });
+    ui.end_row();
+    ui.label("Backlash").on_hover_hint(
+        "How far A turns before the material moves when it changes direction (a little \
+         play in its gears or belt). The file turns that much further each time A changes \
+         direction. 0 for none",
+    );
+    ui.add(
+        Number::new(&mut axis.backlash)
+            .range(0.0..=10.0)
+            .speed(0.01)
+            .max_decimals(3)
+            .suffix(" °"),
+    );
+    ui.end_row();
 }
 
 /// A length for a summary line: no more decimals than it needs.

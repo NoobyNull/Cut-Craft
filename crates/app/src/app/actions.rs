@@ -16,6 +16,12 @@ use super::{
 };
 use crate::options::IntersectionCheck;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_i18n::tr;
+
+/// A startup task's words' key (`locales/en/start.ftl`): `start-task-` and its id.
+pub(super) fn start_task_key(id: &str) -> String {
+    format!("start-task-{}", id.replace('_', "-"))
+}
 
 /// The buttons of "Save changes?": what each does, rather than Yes and No.
 pub(super) const SAVE: &str = "Save";
@@ -113,6 +119,7 @@ impl CutCraftApp {
             busy: None,
             wait_before_showing: crate::busy::SHOW_AFTER,
             addons: crate::addons::Addons::new(None),
+            language_packs: None,
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             machines_unsaved: false,
@@ -267,12 +274,14 @@ impl CutCraftApp {
             playback_redraw: super::PLAYBACK_REDRAW,
             playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
+            turning: None,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
             rotating: false,
             options: crate::options::Options::default(),
             options_window: false,
             options_draft: None,
+            job_defaults_form: None,
             options_closing: false,
             options_page: 0,
             show_advanced: false,
@@ -682,7 +691,13 @@ impl CutCraftApp {
             "options" => self.options_window = true,
             // F1: the open form's help page, else the contents
             "tool_help" => {
-                let topic = self.form.as_ref().map_or("contents", |f| f.id);
+                let topic = self.form.as_ref().map_or("contents", |f| {
+                    if f.brief {
+                        super::setup_material::ID
+                    } else {
+                        f.id
+                    }
+                });
                 self.info = Some(Info::Help(topic));
             }
             "view_2d" => self.view = View::TwoD,
@@ -690,6 +705,7 @@ impl CutCraftApp {
             "first_run_setup" => self.open_first_run(),
             "did_you_know" => self.open_tips(self.options.next_tip),
             "try_sample_project" => self.open_sample(),
+            super::setup_material::ID => self.open_setup_material(),
             id if id.starts_with(gui::COMMUNITY) => {
                 let link = id[gui::COMMUNITY.len()..].parse::<usize>().ok();
                 if let Some((_, url, _)) = link.and_then(|n| super::LINKS.get(n)) {
@@ -900,16 +916,16 @@ impl CutCraftApp {
             .unwrap_or_default()
             .to_owned();
         let Some(speller) = self.speller() else {
-            ui.weak("Spelling: no dictionary found (put a Hunspell .dic and .aff in Cut Craft's dictionaries folder)");
+            ui.weak(tr!("spelling-no-dictionary"));
             return;
         };
         let wrong = speller.misspelled(&text);
         let (mut fix, mut add, mut remove) = (None, None, None);
         ui.group(|ui| {
             ui.set_width(ui.available_width());
-            ui.strong("Spelling");
+            ui.strong(tr!("spelling-title"));
             if wrong.is_empty() {
-                ui.weak("No spelling mistakes");
+                ui.weak(tr!("spelling-none-wrong"));
             }
             // ponytail: listed under the text, not underlined in it (the form's text box is
             // the generic one)
@@ -921,14 +937,14 @@ impl CutCraftApp {
                             fix = Some((word.clone(), s));
                         }
                     }
-                    if ui.small_button("Add Word").clicked() {
+                    if ui.small_button(tr!("spelling-add-word")).clicked() {
                         add = Some(word.clone());
                     }
                 });
             }
             if !speller.user_words().is_empty() {
-                egui::ComboBox::from_label("Remove Word")
-                    .selected_text("a word added…")
+                egui::ComboBox::new("remove_word", tr!("spelling-remove-word"))
+                    .selected_text(tr!("spelling-a-word-added"))
                     .show_ui(ui, |ui| {
                         for w in speller.user_words() {
                             if ui.selectable_label(false, w).clicked() {
@@ -1116,7 +1132,15 @@ impl CutCraftApp {
 
     pub(super) fn file_action(&mut self, id: &str) {
         match id {
-            // a new job starts in Job Setup
+            // a new job opens blank, made with Options ▸ Job Defaults; the classic flow
+            // starts it in Job Setup
+            "new" if !self.options.job_defaults.classic_startup => {
+                if self.confirm_discard() {
+                    self.start_blank_job();
+                    self.status
+                        .set_message(&format!("New job: {}", self.material_summary()));
+                }
+            }
             "new" => {
                 if self.confirm_discard() {
                     self.reset_job();
@@ -1138,8 +1162,13 @@ impl CutCraftApp {
             }
             "close" => {
                 if self.confirm_discard() {
-                    self.reset_job();
-                    self.screen = Screen::Start;
+                    if self.options.job_defaults.classic_startup {
+                        self.reset_job();
+                        self.screen = Screen::Start;
+                    } else {
+                        // no start page: a blank job to carry on with
+                        self.start_blank_job();
+                    }
                 }
             }
             "save" => match self.session.path.clone() {
@@ -1438,9 +1467,9 @@ impl CutCraftApp {
                 .posts
                 .iter()
                 .filter(|name| {
-                    self.posts
-                        .load(name)
-                        .is_ok_and(|p| p.wraps() == wraps && (wraps.is_none() || machine.rotary))
+                    self.posts.load(name).is_ok_and(|p| {
+                        p.wraps() == wraps && (wraps.is_none() || machine.has_rotary())
+                    })
                 })
                 .cloned()
                 .collect()
@@ -1754,8 +1783,11 @@ impl CutCraftApp {
     /// its tool changes made pauses when the form says to pause, or tools are changed by
     /// hand between files on a machine without a tool changer.
     pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
+        if let Some(why) = self.no_a_axis() {
+            return Err(why);
+        }
         let post = match form.post.as_deref() {
-            Some(name) => self.posts.load(name),
+            Some(name) => self.posts.load(name).map(|p| self.on_machine(p)),
             None => self.output_post(),
         }?;
         let changer = self.has_tool_changer();
@@ -2021,13 +2053,45 @@ impl CutCraftApp {
         Ok(texts)
     }
 
+    /// Why a rotary job can't be saved for the active machine: its firmware has no A axis
+    /// (standard GRBL, also what unknown firmware is taken for), whatever its posts and 4th
+    /// axis tick. `None` for a flat job, no machine, or firmware with an A axis.
+    fn no_a_axis(&self) -> Option<String> {
+        let machine = self.machines.active()?;
+        (self.doc.job.rotary.is_some() && !machine.firmware().has_a_axis()).then(|| {
+            format!(
+                "{} cannot cut this rotary job. {} If its controller runs other firmware, pick \
+                 it under Firmware in Machine Configuration",
+                machine.name,
+                cut_craft_machines::NO_A_AXIS
+            )
+        })
+    }
+
     /// The post toolpaths are saved through: the active machine's default when it suits the
     /// job, else the machine's first post that does: a flat one for a flat job, and for a
     /// rotary job (on a machine with a 4th axis) one wrapping the side that goes round, Y
     /// for a cylinder along X and X for one along Y. Without a machine, Cut Craft's
     /// `FluidNC` post for this kind of job.
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
+        self.output_post_as_written().map(|p| self.on_machine(p))
+    }
+
+    /// `post` writing for the active machine: a rotary post winds A as its rotary allows
+    /// (Machine Configuration ▸ Rotary), with its backlash and top speed.
+    fn on_machine(&self, post: cut_craft_post::Post) -> cut_craft_post::Post {
+        match self.machines.active() {
+            Some(m) if m.has_rotary() && post.wraps().is_some() => post.with_rotary(m.rotary_axis),
+            _ => post,
+        }
+    }
+
+    /// [`Self::output_post`] as its file is written, not yet told the machine's rotary.
+    fn output_post_as_written(&self) -> Result<cut_craft_post::Post, String> {
         use cut_craft_core::document::Along;
+        if let Some(why) = self.no_a_axis() {
+            return Err(why);
+        }
         let Some(machine) = self.machines.active().filter(|m| !m.posts.is_empty()) else {
             return Ok(cut_craft_post::Post::default_for(&self.doc.job));
         };
@@ -2035,7 +2099,7 @@ impl CutCraftApp {
             Along::X => "Y",
             Along::Y => "X",
         });
-        if wraps.is_some() && !machine.rotary {
+        if wraps.is_some() && !machine.has_rotary() {
             return Err(format!(
                 "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
                  Configuration",
@@ -2057,9 +2121,10 @@ impl CutCraftApp {
             .find(|p| p.wraps() == wraps)
             .ok_or_else(|| match wraps {
                 Some(axis) => format!(
-                    "{} has no post wrapping {axis} onto A for this rotary job: add a Wrap \
-                     {axis} to A post in Machine Configuration",
-                    machine.name
+                    "{} has no post for this rotary job: add a Rotary A, cylinder along {} \
+                     post in Machine Configuration",
+                    machine.name,
+                    if axis == "Y" { "X" } else { "Y" }
                 ),
                 None => format!(
                     "{} has only rotary posts: add a flat one in Machine Configuration",
@@ -2084,6 +2149,7 @@ impl CutCraftApp {
                     left: None,
                     library: None,
                     holding: m.holding(),
+                    rotary: m.has_rotary().then_some(m.rotary_axis),
                 });
         limits.left = Some(self.options.confirmations.left());
         limits
@@ -2524,6 +2590,7 @@ impl CutCraftApp {
                 suggested: None,
                 shown_size: None,
                 typed_size: [None; 3],
+                shown_place: [None; 3],
                 dragged: None,
                 model: None,
                 model_whole: true,
@@ -2536,6 +2603,7 @@ impl CutCraftApp {
                 way: crate::flyout::DragWay::AsIs,
                 made: None,
                 note: None,
+                brief: false,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -2778,6 +2846,12 @@ impl CutCraftApp {
             self.drop_file(path);
             return;
         }
+        if !self.options.job_defaults.classic_startup {
+            // a blank job to bring it into, as if dropped on the window
+            self.start_blank_job();
+            self.drop_file(path);
+            return;
+        }
         self.file_action("new");
         if self.screen == Screen::NewJob {
             self.import_after_setup = Some(path.to_owned());
@@ -2877,6 +2951,31 @@ impl CutCraftApp {
         self.form_back = None;
         self.checks_accepted = false;
         self.clear_recovery();
+    }
+
+    /// A blank job made with Options ▸ Job Defaults, open to draw on, with nothing to undo
+    /// or save yet.
+    pub(super) fn start_blank_job(&mut self) {
+        self.reset_job();
+        self.view = View::TwoD;
+        self.screen = Screen::Job;
+        "Select".clone_into(&mut self.status.current_tool);
+    }
+
+    /// What Cut Craft shows once it has started: the file named on the command line, if
+    /// one was; else a blank job, unless Classic Startup Flow asks for the start page or a
+    /// job is already open (recovered work).
+    pub(super) fn open_at_start(&mut self, given: Option<&std::path::Path>) {
+        self.open_given(given);
+        if self.screen == Screen::Start && !self.options.job_defaults.classic_startup {
+            self.start_blank_job();
+        }
+    }
+
+    /// The material in one line, for the status bar and the foot of the sheet:
+    /// "600 × 400 × 20 mm, single sided, Z zero on top, X0 Y0 bottom left".
+    pub(super) fn material_summary(&self) -> String {
+        super::setup_material::summary(&self.doc.job)
     }
 
     /// Set as Default in Job Setup: new jobs start with the job its settings make.
@@ -3098,15 +3197,11 @@ impl CutCraftApp {
         }
         // asked about once the edit is done (a form's, once it closes)
         self.stale_while_form = true;
-        let (count, it, its) = if more == 1 {
-            ("1 toolpath is".to_owned(), "it", "its")
-        } else {
-            (format!("{more} toolpaths are"), "them", "their")
-        };
         let message = self.status.message.trim_end_matches('.').to_owned();
-        self.status.set_message(&format!(
-            "{message}. {count} now out of date (⚠ in the Toolpaths list): recalculate \
-             {it}, and save {its} G-code again if you already have"
+        self.status.set_message(&tr!(
+            "recalculate-out-of-date",
+            message = message,
+            count = more
         ));
     }
 
@@ -3131,24 +3226,19 @@ impl CutCraftApp {
         let (mut yes, mut no) = (false, false);
         egui::Modal::new(egui::Id::unique("recalculate_ask")).show(ctx, |ui| {
             ui.set_max_width(ui.spacing().interact_size.x * 6.0);
-            ui.heading("Toolpaths out of date");
+            ui.heading(tr!("recalculate-ask-title"));
             ui.label(recalculate_question(stale));
-            ui.checkbox(&mut silence, "Don't ask again").on_hover_hint(
-                "Stop this question (Options ▸ Confirmation Choices turns it back on). Out-of-date \
-                 toolpaths are still marked ⚠, and saving them still asks first",
-            );
+            ui.checkbox(&mut silence, tr!("recalculate-dont-ask"))
+                .on_hover_hint(tr!("recalculate-dont-ask.tooltip"));
             ui.separator();
             ui.horizontal(|ui| {
                 yes = ui
-                    .button("Recalculate All")
-                    .on_hover_hint("Make every out-of-date toolpath again from its vectors now")
+                    .button(tr!("recalculate-all"))
+                    .on_hover_hint(tr!("recalculate-all.tooltip"))
                     .clicked();
                 no = ui
-                    .button("Not Now")
-                    .on_hover_hint(
-                        "Leave them marked ⚠ in the Toolpaths list; Recalculate All is there \
-                         when you want it",
-                    )
+                    .button(tr!("recalculate-not-now"))
+                    .on_hover_hint(tr!("recalculate-not-now.tooltip"))
                     .clicked();
             });
         });
@@ -3601,6 +3691,10 @@ impl CutCraftApp {
                 params["size"][key] = Value::from(typed.unwrap_or(0.0));
             }
         }
+        if id == "orientate_3d_model" {
+            forget_typed_alignment(form);
+            params["placing"]["align"] = form.params["placing"]["align"].clone();
+        }
         let wrapped = self.doc.job.rotary.is_some() && params["model_type"] != "flat";
         let result = self.apply_form(id, &params);
         // the component the settings just made judges what a cutter cannot reach, so the
@@ -3675,13 +3769,8 @@ impl CutCraftApp {
                 } else if at > tall.max(thickness) {
                     *depth = Value::from(tall.max(thickness));
                 }
-                // centred, the corner it gives is shown instead, for the numbers to move it
-                let placing = &mut form.params["placing"];
-                if placing["center"] == true && !wrapped {
-                    let middle = area.center();
-                    placing["position"]["x"] = Value::from(round(middle.x - shown[0] / 2.0));
-                    placing["position"]["y"] = Value::from(round(middle.y - shown[1] / 2.0));
-                    placing["center"] = Value::Bool(false);
+                if !wrapped {
+                    show_alignment(form, area, thickness, shown);
                 }
                 form.shown_size = Some(shown);
             }
@@ -4843,7 +4932,7 @@ impl CutCraftApp {
                 ));
             }
             for menu in &self.current_menus().menus {
-                ui.menu_button(&menu.name, |ui| {
+                ui.menu_button(tr!(&super::menu_key(&menu.name)), |ui| {
                     menu_items(
                         ui,
                         &menu.items,
@@ -4899,8 +4988,9 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Start page");
         let edge = ui.spacing().interact_size.y;
         let mut clicked = None;
-        ui.strong("Startup Tasks");
-        for (id, label, icon) in STARTUP_TASKS {
+        ui.strong(tr!("start-tasks"));
+        for (id, icon) in STARTUP_TASKS {
+            let label = tr!(&start_task_key(id));
             let button = match self.icons.find(icon, id) {
                 Some(path) => egui::Button::image_and_text(
                     self.icons
@@ -4919,9 +5009,9 @@ impl CutCraftApp {
             }
         }
         ui.separator();
-        ui.strong("Recently opened files");
+        ui.strong(tr!("start-recent"));
         if self.recent.is_empty() {
-            ui.weak("None yet");
+            ui.weak(tr!("start-recent-none"));
         }
         let glyph = self.icons.find(RECENT_FILE_ICON, "");
         for (i, path) in self.recent_shown().iter().enumerate() {
@@ -4945,7 +5035,7 @@ impl CutCraftApp {
             }
         }
         ui.separator();
-        ui.strong(format!("What's new in v{}", env!("CARGO_PKG_VERSION")));
+        ui.strong(tr!("start-whats-new", version = env!("CARGO_PKG_VERSION")));
         for change in WHATS_NEW.lines().filter(|l| !l.trim().is_empty()) {
             // a bullet, with the change wrapping beside it
             ui.horizontal_top(|ui| {
@@ -4957,8 +5047,8 @@ impl CutCraftApp {
         // the rest of the community links are in Help ▸ Community, out of the way
         let (label, url, _) = LINKS[0];
         ui.horizontal_wrapped(|ui| {
-            ui.weak("Questions or ideas?");
-            ui.hyperlink_to(format!("Cut Craft on {label}"), url);
+            ui.weak(tr!("start-questions"));
+            ui.hyperlink_to(tr!("start-community-link", site = label), url);
         });
         if let Some(id) = clicked {
             self.invoke(ui.ctx(), &id);
@@ -5011,7 +5101,7 @@ impl CutCraftApp {
                     "Layers" => self.layers_panel(ui),
                     "Components" => self.component_list(ui),
                     tab => {
-                        ui.weak(format!("{tab} tools not implemented yet"));
+                        ui.weak(tr!("tab-not-implemented", tab = tab));
                     }
                 }
             });
@@ -5099,10 +5189,7 @@ impl CutCraftApp {
                     let tab = &set.tabs[i];
                     let response = ui
                         .selectable_label(Some(i) == open, tab.name)
-                        .on_hover_hint(format!(
-                            "{}. Right-click to show it as its own section",
-                            tab.hint
-                        ));
+                        .on_hover_hint(tr!("subtab-in-row", hint = tab.hint));
                     if response.clicked() {
                         picked = Some(i);
                     }
@@ -5147,10 +5234,9 @@ impl CutCraftApp {
                 .default_open(true)
                 .open(unfold)
                 .show(ui, |ui| self.subtab_contents(ui, page, i));
-            let response = header.header_response.on_hover_hint(format!(
-                "{}. Right-click to put it back in the tab row",
-                tab.hint
-            ));
+            let response = header
+                .header_response
+                .on_hover_hint(tr!("subtab-as-section", hint = tab.hint));
             if let Some(action) = self.popup(&response, || set.menu(tab.name, &sections)) {
                 chosen = Some(action);
             }
@@ -5227,17 +5313,13 @@ impl CutCraftApp {
                 let pinned = self.pages.pinned(page);
                 pin = ui
                     .add(self.pin_button(pinned, row))
-                    .on_hover_hint(if pinned {
-                        "Unpin: hide this page to its side tab"
-                    } else {
-                        "Pin this page open"
-                    })
+                    .on_hover_hint(tr!(if pinned { "page-unpin" } else { "page-pin" }))
                     .clicked();
                 switch = ui
                     .add(self.icon_button("view/interface_layout.png", "", "Switch Layout", row))
-                    .on_hover_hint("Switch Layout (F11 designing, F12 machining)")
+                    .on_hover_hint(tr!("page-switch-layout"))
                     .clicked();
-                help = ui.button("?").on_hover_hint("Help (F1)").clicked();
+                help = ui.button("?").on_hover_hint(tr!("page-help")).clicked();
             });
         });
         ui.separator();
@@ -5476,10 +5558,10 @@ impl CutCraftApp {
 
     /// The open form's commit button, its label and hint, if pressing it would do something:
     /// OK for a new job's setup, else named for what it does ([`commit`]).
-    fn commit_button(&self) -> Option<(&'static str, &'static str)> {
+    fn commit_button(&self) -> Option<(String, String)> {
         let open = self.form.as_ref()?;
         if open.new_job {
-            return Some(("OK", "Accept these settings and start the job"));
+            return Some((tr!("job-setup-ok"), tr!("job-setup-ok.tooltip")));
         }
         let drawing = self.drawing_tool().is_some();
         let made = self.drawn_shape().is_some() || self.remade_last().is_some();
@@ -5510,7 +5592,11 @@ impl CutCraftApp {
         let committing = self.commit_button();
         let drawing = self.drawing_tool().is_some();
         let made = self.drawn_shape().is_some() || self.remade_last().is_some();
-        let close_label = if new_job { "Cancel" } else { "Close" };
+        let close_key = if new_job {
+            "job-setup-cancel"
+        } else {
+            "form-close"
+        };
         let job_setup = open.id == "job_setup";
         // what the form has done that Cancel would take back
         let done = self.history.undo_depth() > open.undo_from + open.list_steps.len();
@@ -5528,36 +5614,26 @@ impl CutCraftApp {
         let as_new = as_new_offered && calculate_as_new_row(ui);
         let mut reset = false;
         ui.horizontal(|ui| {
-            if let Some((label, hint)) = committing {
+            if let Some((label, hint)) = &committing {
                 apply = marked_commit_button(ui, label, hint);
             }
             reset = reset_button(ui, open.id);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 close = ui
-                    .button(close_label)
-                    .on_hover_hint(if new_job {
-                        "Leave the job as it was"
-                    } else {
-                        "Close, keeping what is there"
-                    })
+                    .button(tr!(close_key))
+                    .on_hover_hint(tr!(&format!("{close_key}.tooltip")))
                     .clicked();
                 if !new_job {
                     cancel = ui
-                        .add_enabled(done, egui::Button::new("Cancel"))
-                        .on_hover_hint(
-                            "Undo what this tool did since it opened, and close it. A change \
-                             made in the toolpath list meanwhile is kept",
-                        )
-                        .on_disabled_hover_text("Nothing done yet to take back")
+                        .add_enabled(done, egui::Button::new(tr!("form-cancel")))
+                        .on_hover_hint(tr!("form-cancel.tooltip"))
+                        .on_disabled_hover_text(tr!("form-cancel.disabled"))
                         .clicked();
                 }
                 if job_setup {
                     default = ui
-                        .button("Set as Default")
-                        .on_hover_hint(
-                            "Start every new job with these settings (your Clearing \
-                             Settings default is kept)",
-                        )
+                        .button(tr!("job-setup-set-as-default"))
+                        .on_hover_hint(tr!("job-setup-set-as-default.tooltip"))
                         .clicked();
                 }
             });
@@ -5660,12 +5736,12 @@ impl CutCraftApp {
         ui.horizontal(|ui| {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 cancel = ui
-                    .button("Cancel")
-                    .on_hover_hint("Close without importing the model (Esc does the same)")
+                    .button(tr!("import-model-cancel"))
+                    .on_hover_hint(tr!("import-model-cancel.tooltip"))
                     .clicked();
                 import = ui
-                    .button("Import")
-                    .on_hover_hint("Keep the model as placed")
+                    .button(tr!("import-model-import"))
+                    .on_hover_hint(tr!("import-model-import.tooltip"))
                     .clicked();
             });
         });
@@ -5738,14 +5814,14 @@ impl CutCraftApp {
             crate::form::fixed_area(ui, egui::vec2(ui.available_width(), rows), |ui| {
                 if let Some(step) = step {
                     ui.horizontal_wrapped(|ui| {
-                        ui.strong("Next:");
+                        ui.strong(tr!("form-next-step"));
                         ui.label(step);
                     });
                 }
             });
         } else if let Some(step) = step {
             ui.horizontal_wrapped(|ui| {
-                ui.strong("Next:");
+                ui.strong(tr!("form-next-step"));
                 ui.label(step);
             });
         }
@@ -5912,7 +5988,7 @@ impl CutCraftApp {
                             ui.label(help);
                         }
                         None => {
-                            ui.weak("Point at a setting to see what it does.");
+                            ui.weak(tr!("form-point-at-setting"));
                         }
                     },
                 );
@@ -5999,9 +6075,16 @@ impl CutCraftApp {
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         // a form that only uses its tool's shape (Relief from Photo) has no passes to cut
         let cuts = open.id != "relief_from_photo";
-        // a surfacing toolpath flattens all it covers, and 3D Pencil has its own bits that
-        // finished before and follows the model: no rest machining or vector selector
-        let extras = cuts && !["surfacing_toolpath", "3d_pencil_toolpath"].contains(&open.id);
+        // a surfacing toolpath flattens all it covers, 3D Pencil has its own bits that
+        // finished before and follows the model, and 4-Axis Rotary Machining goes all the way
+        // round: no rest machining or vector selector
+        let extras = cuts
+            && ![
+                "surfacing_toolpath",
+                "3d_pencil_toolpath",
+                "rotary_machining_toolpath",
+            ]
+            .contains(&open.id);
         let suggested = open.suggested.clone();
         let form_id = open.id;
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
@@ -6301,6 +6384,7 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
+            "job_setup" => self.setup_material_extras(ui),
             "set_size" => self.link_set_size(),
             "relief_from_photo" => {
                 self.depth_section(ui);
@@ -6315,12 +6399,10 @@ impl CutCraftApp {
                 let (load, round) = ui
                     .horizontal(|ui| {
                         let load = ui
-                            .button("Load Brush…")
-                            .on_hover_hint(
-                                "A component saved as a sculpting brush, for Deposit and Remove",
-                            )
+                            .button(tr!("sculpt-load-brush"))
+                            .on_hover_hint(tr!("sculpt-load-brush.tooltip"))
                             .clicked();
-                        let round = ui.button("Round Brush").clicked();
+                        let round = ui.button(tr!("sculpt-round-brush")).clicked();
                         (load, round)
                     })
                     .inner;
@@ -6394,39 +6476,32 @@ impl CutCraftApp {
         let mut start = false;
         ui.group(|ui| {
             ui.set_width(ui.available_width());
-            ui.strong("Depth");
+            ui.strong(tr!("depth-title"));
             if from_picture {
-                ui.label(
-                    "The picture is used as the depth map itself (white nearest), so no \
-                     estimate is needed. Tick Invert if its black is nearest.",
-                );
+                ui.label(tr!("depth-from-picture"));
                 return;
             }
             let Some(_) = &installed else {
-                ui.label(
-                    "Turning a photo into a relief needs the free Depth add-on \
-                     (about 100 MB, downloaded once). If the picture is already a depth \
-                     map, set Depth from to Picture instead.",
-                );
+                ui.label(tr!("depth-needs-addon"));
                 self.depth_install(ui);
                 return;
             };
             if self.depth_estimate.is_some() {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.label("Estimating depth… (up to a minute on a large photo)");
+                    ui.label(tr!("depth-estimating"));
                 });
                 return;
             }
-            ui.label(if has_depth {
-                "This photo has its depth. Estimate again after editing the photo."
+            ui.label(tr!(if has_depth {
+                "depth-has-depth"
             } else {
-                "First estimate how far each part of the photo is from the camera."
-            });
+                "depth-estimate-first"
+            }));
             start = ui
-                .add_enabled(chosen.is_some(), egui::Button::new("Estimate Depth"))
-                .on_hover_hint("Works out the photo's depth on this computer; nothing is uploaded")
-                .on_disabled_hover_text("Import a photo first")
+                .add_enabled(chosen.is_some(), egui::Button::new(tr!("depth-estimate")))
+                .on_hover_hint(tr!("depth-estimate.tooltip"))
+                .on_disabled_hover_text(tr!("depth-estimate.disabled"))
                 .clicked();
             self.depth_detail(
                 ui,
@@ -6470,33 +6545,30 @@ impl CutCraftApp {
             }
         }
         if let Some(fetch) = &self.depth_detail_fetch {
-            ui.label("Downloading the High detail model (about 670 MB)...");
+            ui.label(tr!("depth-downloading-high-detail"));
             ui.add(egui::ProgressBar::new(fetch.fraction()).show_percentage());
             return;
         }
         if have {
             let mut on = self.depth_high_detail.unwrap_or(true);
             if ui
-                .checkbox(&mut on, "High detail")
+                .checkbox(&mut on, tr!("depth-high-detail"))
                 .on_hover_hint(crate::depth::DETAILED_NOTE)
                 .changed()
             {
                 self.depth_high_detail = Some(on);
             }
             if on {
-                ui.label("Slower, and for personal, non-commercial use only.");
+                ui.label(tr!("depth-high-detail-note"));
             }
             return;
         }
-        ui.label(
-            "Want finer detail? The free High detail model (about 670 MB, downloaded once) \
-             sees more, but is slower and for personal, non-commercial use only.",
-        );
+        ui.label(tr!("depth-want-finer"));
         if let Some(e) = &self.depth_detail_failed {
             ui.colored_label(ui.visuals().error_fg_color, e);
         }
         if ui
-            .button("Get High Detail Model")
+            .button(tr!("depth-get-high-detail"))
             .on_hover_hint(crate::depth::DETAILED_NOTE)
             .clicked()
             && let Some(addons) = self.addons.dir().map(std::path::Path::to_path_buf)
@@ -6518,11 +6590,11 @@ impl CutCraftApp {
             Phase::Finding(_) => {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.label("Looking for the newest Depth add-on...");
+                    ui.label(tr!("depth-addon-finding"));
                 });
             }
             Phase::Installing { done, total, .. } => {
-                ui.label("Downloading the Depth add-on...");
+                ui.label(tr!("depth-addon-downloading"));
                 #[expect(clippy::cast_precision_loss, reason = "a fraction for the bar")]
                 let fraction = if *total > 0 {
                     *done as f32 / *total as f32
@@ -6532,7 +6604,7 @@ impl CutCraftApp {
                 ui.add(egui::ProgressBar::new(fraction.min(1.0)).show_percentage());
             }
             Phase::Asking(_) => {
-                ui.label("The Add-ons window is asking whether to install it.");
+                ui.label(tr!("depth-addon-asking"));
             }
             phase => {
                 if let Phase::Failed(e) = phase {
@@ -6540,9 +6612,9 @@ impl CutCraftApp {
                 }
                 let can = self.addons.dir().is_some();
                 if ui
-                    .add_enabled(can, egui::Button::new("Install Depth Add-on"))
-                    .on_hover_hint("Downloads it from GitHub once; Gadgets ▸ Add-ons updates it")
-                    .on_disabled_hover_text("Cut Craft has no settings folder to put it in")
+                    .add_enabled(can, egui::Button::new(tr!("depth-addon-install")))
+                    .on_hover_hint(tr!("depth-addon-install.tooltip"))
+                    .on_disabled_hover_text(tr!("depth-addon-install.disabled"))
                     .clicked()
                 {
                     self.install_depth(ui.ctx());
@@ -7026,11 +7098,8 @@ impl CutCraftApp {
             Info::About => about(ui),
             Info::Shortcuts => {
                 if ui
-                    .button("Change Shortcuts…")
-                    .on_hover_text(
-                        "Set your own keys, or the mouse's thumb buttons and wheel click, in \
-                         Options ▸ Mouse and Shortcuts",
-                    )
+                    .button(tr!("shortcuts-change"))
+                    .on_hover_text(tr!("shortcuts-change.tooltip"))
                     .clicked()
                 {
                     change_shortcuts = true;
@@ -7083,25 +7152,29 @@ impl CutCraftApp {
 
 /// The About window: what Cut Craft is, its license, thanks and contributors.
 fn about(ui: &mut egui::Ui) {
-    ui.heading("Cut Craft");
-    ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-    ui.label("2D and 3D design and CNC toolpaths.");
+    ui.heading(tr!("about-name"));
+    ui.label(tr!("about-version", version = env!("CARGO_PKG_VERSION")));
+    ui.label(tr!("about-what"));
     ui.separator();
-    ui.strong("License");
+    ui.strong(tr!("about-license"));
     ui.label(LICENCE_SUMMARY);
     ui.hyperlink_to(
-        "Read the full license",
+        tr!("about-read-license"),
         "https://github.com/NoobyNull/Cut-Craft/blob/main/LICENSE",
     );
     ui.separator();
-    ui.strong("Acknowledgements");
+    ui.strong(tr!("about-acknowledgements"));
     ui.label(ACKNOWLEDGEMENT);
     ui.separator();
-    ui.strong("Contributors on GitHub");
+    ui.strong(tr!("about-contributors"));
     for (login, commits, url) in contributors() {
         ui.horizontal(|ui| {
             ui.hyperlink_to(login, url);
-            ui.weak(format!("{commits} commits"));
+            // a number, so "1 commit" takes its one-form
+            match commits.parse::<u64>() {
+                Ok(count) => ui.weak(tr!("about-commits", count = count)),
+                Err(_) => ui.weak(tr!("about-commits", count = commits)),
+            };
         });
     }
 }
@@ -7135,12 +7208,12 @@ fn texture_buttons(ui: &mut egui::Ui) -> (bool, bool) {
     let mut clicked = (false, false);
     ui.horizontal(|ui| {
         clicked.0 = ui
-            .button("Load Texture...")
-            .on_hover_hint("A texture saved before, from the textures folder or anywhere")
+            .button(tr!("texture-load"))
+            .on_hover_hint(tr!("texture-load.tooltip"))
             .clicked();
         clicked.1 = ui
-            .button("Save Texture...")
-            .on_hover_hint("Keep these texture settings to use again")
+            .button(tr!("texture-save"))
+            .on_hover_hint(tr!("texture-save.tooltip"))
             .clicked();
     });
     clicked
@@ -7225,7 +7298,7 @@ fn align_in_material(
     let mut clicked = false;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Align in Material");
+        ui.strong(tr!("align-in-material"));
         let edge = ui.spacing().interact_size.y;
         ui.horizontal_wrapped(|ui| {
             for (name, hint, ax, ay) in ACROSS {
@@ -7239,26 +7312,34 @@ fn align_in_material(
                 if !ui.add(button).on_hover_hint(hint).clicked() {
                     continue;
                 }
+                // kept as a share of the room beside it, from the material's corner, so
+                // it stays aligned when the model is scaled after
                 let placing = &mut open.params["placing"];
                 placing["center"] = Value::Bool(false);
                 if let Some(ax) = ax {
                     let x = area.min.x + (area.size().x - sx) * ax;
                     placing["position"]["x"] = Value::from(round(x));
+                    placing["align"]["across"] = Value::from(ax);
+                    open.shown_place[0] = Some(round(x));
                 }
                 if let Some(ay) = ay {
                     let y = area.min.y + (area.size().y - sy) * ay;
                     placing["position"]["y"] = Value::from(round(y));
+                    placing["align"]["up"] = Value::from(ay);
+                    open.shown_place[1] = Some(round(y));
                 }
                 clicked = true;
             }
         });
         ui.horizontal(|ui| {
-            ui.label("Height");
+            ui.label(tr!("align-height"));
             for (label, hint, up) in HEIGHT {
                 if ui.button(label).on_hover_hint(hint).clicked() {
                     // Depth Below Top is the model's top above the zero plane
-                    let depth = tall + (job.thickness - tall) * up;
-                    open.params["placing"]["depth_below_top"] = Value::from(round(depth));
+                    let depth = round(tall + (job.thickness - tall) * up);
+                    open.params["placing"]["depth_below_top"] = Value::from(depth);
+                    open.params["placing"]["align"]["height"] = Value::from(up);
+                    open.shown_place[2] = Some(depth);
                     clicked = true;
                 }
             }
@@ -7274,9 +7355,9 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
         return false;
     }
     let on = open.params["show_undercuts"].as_bool().unwrap_or(false);
-    ui.add_enabled(on, egui::Button::new("Update Undercuts"))
-        .on_hover_hint("Judge again what a cutter from above cannot reach")
-        .on_disabled_hover_text("Tick Highlight undercuts first")
+    ui.add_enabled(on, egui::Button::new(tr!("undercuts-update")))
+        .on_hover_hint(tr!("undercuts-update.tooltip"))
+        .on_disabled_hover_text(tr!("undercuts-update.disabled"))
         .clicked()
 }
 
@@ -7305,6 +7386,74 @@ fn ask_to_run_unsigned(label: &str) -> bool {
         ))
         .show();
     matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
+}
+
+/// Import 3D Model's alignment in the material as kept by its settings.
+fn kept_alignment(params: &Value) -> cmd_orientate_3d_model::Align {
+    serde_json::from_value(params["placing"]["align"].clone()).unwrap_or_default()
+}
+
+/// Import 3D Model's alignment dropped where its number was typed since it was shown: a
+/// position X or Y, or Depth Below Top, typed leaves the model there.
+fn forget_typed_alignment(form: &mut OpenForm) {
+    const KEYS: [(&str, &str); 3] = [("across", "x"), ("up", "y"), ("height", "")];
+    for ((align, at), shown) in KEYS.into_iter().zip(form.shown_place) {
+        let placing = &form.params["placing"];
+        let now = if at.is_empty() {
+            placing["depth_below_top"].as_f64()
+        } else {
+            placing["position"][at].as_f64()
+        };
+        if shown.is_some() && now != shown {
+            form.params["placing"]["align"][align] = Value::Null;
+        }
+    }
+}
+
+/// Import 3D Model's position and Depth Below Top shown where the kept alignment puts a
+/// model `shown` big, measured from the material's corner, so the numbers say where it is
+/// (a centred model kept centred from now on).
+fn show_alignment(
+    form: &mut OpenForm,
+    area: cut_craft_core::geometry::Rect,
+    thickness: f64,
+    shown: [f64; 3],
+) {
+    let round = |v: f64| (v * 100.0).round() / 100.0;
+    // centred, it is kept centred as Align in Material's centre would, its bottom on the
+    // zero plane however it is sized after, and the corner it gives is shown, for the
+    // numbers to move it from there
+    let placing = &mut form.params["placing"];
+    if placing["center"] == true {
+        placing["align"]["across"] = Value::from(0.5);
+        placing["align"]["up"] = Value::from(0.5);
+        if placing["align"]["height"].is_null() {
+            placing["align"]["height"] = Value::from(0.0);
+        }
+        placing["center"] = Value::Bool(false);
+    }
+    let align = kept_alignment(&form.params);
+    let placing = &mut form.params["placing"];
+    let typed = cut_craft_core::geometry::Point::new(
+        placing["position"]["x"].as_f64().unwrap_or(0.0),
+        placing["position"]["y"].as_f64().unwrap_or(0.0),
+    );
+    let footprint = cut_craft_core::geometry::Point::new(shown[0], shown[1]);
+    let corner = align.corner(area, footprint, typed);
+    if align.across.is_some() {
+        placing["position"]["x"] = Value::from(round(corner.x));
+    }
+    if align.up.is_some() {
+        placing["position"]["y"] = Value::from(round(corner.y));
+    }
+    if let Some(depth) = align.depth(shown[2], thickness) {
+        placing["depth_below_top"] = Value::from(round(depth));
+    }
+    form.shown_place = [
+        placing["position"]["x"].as_f64(),
+        placing["position"]["y"].as_f64(),
+        placing["depth_below_top"].as_f64(),
+    ];
 }
 
 /// The size of the box round a model's `faces`.
@@ -7431,15 +7580,7 @@ const CLOSED_ONLY_TOOLPATHS: [&str; 9] = [
 
 /// What the "recalculate all?" question says for `stale` toolpaths out of date.
 pub(super) fn recalculate_question(stale: usize) -> String {
-    let (count, them) = if stale == 1 {
-        ("1 toolpath is".to_owned(), "it")
-    } else {
-        (format!("{stale} toolpaths are"), "them")
-    };
-    format!(
-        "{count} now out of date: the vectors {them} cut have changed. Recalculate all \
-         toolpaths now, so the G-code you save matches the drawing?"
-    )
+    tr!("recalculate-ask", count = stale)
 }
 
 /// The sub-tabs of `page`.
@@ -7481,8 +7622,8 @@ const WARNING_ROWS: f32 = 3.0;
 fn reset_button(ui: &mut egui::Ui, id: &str) -> bool {
     RESET_FORMS.contains(&id)
         && ui
-            .button("Reset")
-            .on_hover_hint("Put every setting back to its default and make it again, as if new")
+            .button(tr!("form-reset"))
+            .on_hover_hint(tr!("form-reset.tooltip"))
             .clicked()
 }
 
@@ -7492,8 +7633,8 @@ fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
         drawing
             && made
             && ui
-                .button("New Shape")
-                .on_hover_hint("Leave this shape as it is, to type the numbers for another")
+                .button(tr!("form-new-shape"))
+                .on_hover_hint(tr!("form-new-shape.tooltip"))
                 .clicked()
     })
     .inner
@@ -7503,12 +7644,12 @@ fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
 fn settings_file_row(ui: &mut egui::Ui) -> (bool, bool) {
     ui.horizontal(|ui| {
         let save = ui
-            .button("Save Settings…")
-            .on_hover_hint("Save this form's settings to a file, to use again later")
+            .button(tr!("form-save-settings"))
+            .on_hover_hint(tr!("form-save-settings.tooltip"))
             .clicked();
         let load = ui
-            .button("Load Settings…")
-            .on_hover_hint("Fill this form from settings you saved before")
+            .button(tr!("form-load-settings"))
+            .on_hover_hint(tr!("form-load-settings.tooltip"))
             .clicked();
         (save, load)
     })
@@ -7519,8 +7660,8 @@ fn settings_file_row(ui: &mut egui::Ui) -> (bool, bool) {
 /// of its own over the buttons, so Calculate, Cancel and Close stay where they were;
 /// whether it was pressed.
 fn calculate_as_new_row(ui: &mut egui::Ui) -> bool {
-    ui.button("Calculate as New")
-        .on_hover_hint("Add another toolpath with these settings, keeping the one already made")
+    ui.button(tr!("form-calculate-as-new"))
+        .on_hover_hint(tr!("form-calculate-as-new.tooltip"))
         .clicked()
 }
 

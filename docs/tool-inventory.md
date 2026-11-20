@@ -138,13 +138,22 @@ say "not implemented yet".
   change pauses with M0), skipping names already there; Search for Machine Online opens
   `machines/` in the repository. Cut Craft's own posts: FluidNC ATC (flat and wrapped A),
   and for FluidNC ATC, GRBL (tool changes pause with M0) and Mach3 (`.tap`; T M6, G91.1
-  arcs), in mm and inches: Arcs, Straight, and Wrap Y / X to A with or without G93; all
+  arcs), in mm and inches: Arcs, Straight, and Rotary A, cylinder along X / Y with or without
+  G93 (GRBL's named grblHAL; machines' old "Wrap Y / X to A" names are renamed on loading); all
   written for Cut Craft (`scripts/make_posts.py` makes the variants from three templates).
   Package machines list GRBL Arcs and Straight in mm and inches, Arcs in their units first.
-  A machine's 4th axis (A) tick adds the G93 Wrap Y / X to A twins of its Cut Craft posts;
-  a rotary job saves through the machine's post wrapping its side (Y for a cylinder along
-  X), and is refused on a machine without the 4th axis or without such a post. Flat jobs
-  skip rotary posts. Post-Processor Management's Inspect has Edit for custom
+  A machine's Firmware (GRBL 1.1, grblHAL, FluidNC, Mach3 / Mach4, Other; not picked, read
+  from its Controller text, unknown = standard GRBL) decides whether it can have a 4th axis:
+  standard GRBL has no 4th axis row at all (a tick kept from before shows a red warning linking to the choice). The 4th axis
+  (A) tick adds the G93 Rotary A twins of its Cut Craft posts; a rotary job saves through
+  the machine's post wrapping its side (Y for a cylinder along X), and is refused on a
+  machine without the 4th axis, on standard GRBL, or without such a post. Flat jobs
+  skip rotary posts. Its Rotary (4th axis) section sets where the axis lies, its centre
+  line, which way +A turns, A's top speed, chuck and tailstock, and how A winds: Freely
+  (each pass on the whole turn nearest where A is) or Up to N turns each way, then Cut both
+  ways (the next pass cut backwards when it goes straight down) or Lift and spin back
+  (ends unwound); Backlash is added on each change of direction. G93 feeds are timed at
+  the bit's depth and kept within A's top speed. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows
   its version (the date of its last change). Post-Processor Management and Machine
@@ -361,6 +370,17 @@ say "not implemented yet".
   Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
   Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
   each leaves out is in its `re/SPEC.md` section.
+- 4-Axis Rotary Machining (Cut Craft's own, `rotary_machining_toolpath`): on a rotary job,
+  rings round the model from A=0, each point dropped round the true turning axis (ball or
+  flat bottom, allowance), Start/End along the axis, optional registration-mark notch at A=0.
+  Strategies: Radial (over the axis), Off centre (bit held Offset mm to one side while A
+  turns: the side of the ball cuts, sideways walls reached) and Indexed (A held still at
+  Faces evenly-spaced angles from A=0, each side cut back and forth along the part, a bit's
+  width past its share). Off-axis moves are kept where the tip cuts on the unrolled material
+  with `Toolpath.across` beside them (preview true); the post turns them back into A, the
+  across axis (`[ACROSS]`, centre line + side from "+A turns") and Z. Posts without
+  `[ACROSS]` refuse such toolpaths. A spiral pattern (needs a preview that wraps at the
+  seam) is still to come; the model is radii round the axis, so true undercuts are not.
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits

@@ -53,7 +53,13 @@ nothing = [
 title = "Core geometry"
 packages = ["cut-craft-core"]
 # everything is built on it
-affects = ["toolpaths", "design", "model", "display", "files", "help", "how-to", "app", "workflows"]
+affects = ["rotary", "toolpaths", "design", "model", "display", "files", "help", "how-to", "languages", "app", "workflows"]
+
+[suites.rotary]
+title = "Rotary machining"
+# before Toolpaths, so its toolpaths are its own; rotary needs its own robust suite
+packages = ["cut-craft-rotary", "cmd-rotary-*"]
+affects = ["toolpaths", "display", "help", "how-to", "workflows"]
 
 [suites.toolpaths]
 title = "Toolpath generation"
@@ -160,6 +166,14 @@ modules = [
 ]
 # its tests drive the app with the whole-app tests' Harness
 paths = ["crates/app/src/app/tests.rs"]
+
+[suites.languages]
+title = "Languages"
+# the words the app shows: Fluent files, language packs, and the check for text written into the code
+packages = ["cut-craft-i18n"]
+modules = ["app::hard_coded_text", "app::language_page"]
+paths = ["crates/app/i18n/**"]
+affects = ["help", "how-to", "app", "workflows"]
 
 [suites.app]
 title = "App: windows, settings, updates, add-ons"

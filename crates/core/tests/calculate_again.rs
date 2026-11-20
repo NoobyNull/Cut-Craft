@@ -19,6 +19,7 @@ fn toolpath(name: &str, group: Option<&str>) -> Toolpath {
         group: group.map(str::to_owned),
         drill_bank: None,
         fallbacks: vec![],
+        across: vec![],
     }
 }
 

@@ -16,6 +16,8 @@ mod fit_import;
 mod follow;
 mod gcode_view;
 mod guide;
+#[cfg(test)]
+mod hard_coded_text;
 mod help;
 #[cfg(test)]
 mod help_coverage;
@@ -24,6 +26,7 @@ mod help_pictures;
 #[path = "help_tours.rs"]
 mod help_tours;
 mod installed;
+mod language_page;
 mod layouts;
 mod mac;
 mod notes_panel;
@@ -36,6 +39,7 @@ mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod send;
+mod setup_material;
 mod shortcuts_page;
 mod surfacing;
 mod tabs;
@@ -44,6 +48,7 @@ mod tests;
 mod tips;
 mod title_bar;
 mod trace_window;
+mod turning;
 mod units_ask;
 mod updates;
 mod views;
@@ -66,6 +71,7 @@ use cut_craft_core::handles::{self, Handle};
 use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{Tool, ToolDatabase};
 use cut_craft_core::{Change, Drag, History, Registry};
+use cut_craft_i18n::tr;
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -331,7 +337,8 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 105] = [
+const BUILT_INS: [&str; 106] = [
+    "setup_material",
     "import_into_shape",
     "try_sample_project",
     "machine_files",
@@ -691,21 +698,30 @@ const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
 /// Scrolling a view's height divided by this doubles the zoom.
 // ponytail: fixed rate until a preferences dialog exists
 const VIEW_ZOOM_QUARTERS: f32 = 4.0;
-/// The startup tasks: action, label and icon.
-const STARTUP_TASKS: [(&str, &str, &str); 4] = [
-    ("new", "Create a new file", "file/new.png"),
-    (
-        "try_sample_project",
-        "Try a sample project",
-        "drawing/create_vectors/draw_text.png",
-    ),
-    (
-        "new_from_template",
-        "New file from template",
-        "toolpaths/load_toolpath_template.png",
-    ),
-    ("open", "Open an existing file", "file/open.png"),
+/// The start page's tasks: action id and icon. Each one's words are `start-task-` and its id
+/// (`locales/en/start.ftl`).
+const STARTUP_TASKS: [(&str, &str); 4] = [
+    ("new", "file/new.png"),
+    ("try_sample_project", "drawing/create_vectors/draw_text.png"),
+    ("new_from_template", "toolpaths/load_toolpath_template.png"),
+    ("open", "file/open.png"),
 ];
+
+/// A menu's words' key (`locales/en/menus.ftl`): `menu-` and its English name, lower case and
+/// hyphenated, so a menu is still found by its English name.
+pub(crate) fn menu_key(name: &str) -> String {
+    let mut key = String::from("menu-");
+    for word in name
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+    {
+        if !key.ends_with('-') {
+            key.push('-');
+        }
+        key.push_str(&word.to_lowercase());
+    }
+    key
+}
 /// The top bar's split and snapping toggles.
 const TOP_BAR_TOGGLES: [&str; 5] = [
     "split_stacked",
@@ -1076,6 +1092,9 @@ struct OpenForm {
     /// Size's width and height as last shown, to tell which one was typed in.
     shown_size: Option<[f64; 3]>,
     typed_size: [Option<f64>; 3],
+    /// Orientate 3D Model's position X and Y and Depth Below Top as Align in Material last
+    /// showed them: one changed since was typed, and drops that alignment.
+    shown_place: [Option<f64>; 3],
     /// Orientate 3D Model's model as placed, each triangle with whether a cutter from above
     /// cannot reach it: the 3D view shows it whole while the form is open.
     model: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
@@ -1114,6 +1133,8 @@ struct OpenForm {
     /// What its last press said that is not a warning ("Already up to date"), with the
     /// settings it was said for: shown while they are unchanged.
     note: Option<(Value, String)>,
+    /// Setup Material: Job Setup showing only the job type and the material's size.
+    brief: bool,
 }
 
 /// See [`CutCraftApp::sketch_areas`].
@@ -1246,6 +1267,9 @@ struct CutCraftApp {
     /// Gadgets ▸ Add-ons, and the installs it (or Relief from Photo) starts; where add-ons
     /// are installed (none in tests).
     addons: crate::addons::Addons,
+    /// The language packs installed, each with how much of Cut Craft it covers (a
+    /// percentage), for Options ▸ Language while it is open; read again when it next opens.
+    language_packs: Option<Vec<(crate::languages::Pack, u32)>>,
     /// The machines (Machine Configuration), the active one's default post saving
     /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,
@@ -1563,6 +1587,9 @@ struct CutCraftApp {
     playback_budget: std::time::Duration,
     /// How many times faster than the machine the preview plays (1: the machine's speed).
     playback_speed: f64,
+    /// A rotary job's preview as the machine runs it: the file's own moves played into the
+    /// material turning with A, kept in step with the playing (or kept) preview.
+    turning: Option<turning::Turning>,
     /// Component tree levels collapsed (Expand / Collapse).
     collapsed_levels: std::collections::HashSet<u64>,
     /// A guide being dragged: whether it is vertical, and which it is (`None` a new one).
@@ -1575,6 +1602,9 @@ struct CutCraftApp {
     /// Changes made in the Options window and not applied yet; `None` when it shows the
     /// options as they are. They take effect only on Apply.
     options_draft: Option<crate::options::Options>,
+    /// Options ▸ Job Defaults' job settings as being edited, and why the job they make was
+    /// refused, if it was (kept as typed until it is put right).
+    job_defaults_form: Option<(Value, Option<String>)>,
     /// Close was pressed with changes not applied: the window asks Apply or Discard.
     options_closing: bool,
     /// The Options category shown, by its place in the list.
@@ -1773,7 +1803,7 @@ fn acceleration_tick(
     };
     ui.add_enabled(
         acceleration.is_some(),
-        egui::Checkbox::new(&mut summary.acceleration, "Machine acceleration"),
+        egui::Checkbox::new(&mut summary.acceleration, tr!("summary-acceleration")),
     )
     .on_hover_hint(&tip)
     .on_disabled_hover_text(&tip);
@@ -1843,18 +1873,15 @@ fn summary_table(
     units: cut_craft_core::document::Units,
     machine: Option<(String, [f64; 3])>,
 ) -> Option<(EntityId, String)> {
-    ui.strong(format!("Total machining time: {}", hms(total)))
-        .on_hover_hint(
-            "Every move: cutting, rapids, getting to each toolpath, tool changes and the trip \
-             back home",
-        );
+    ui.strong(tr!("summary-total", time = hms(total)))
+        .on_hover_hint(tr!("summary-total.tooltip"));
     ui.separator();
     egui::Grid::new("summary").striped(true).show(ui, |ui| {
         for row in rows {
             let picked = summary.picked == Some(row.id);
             let name = ui
                 .add_enabled(row.visible, egui::Button::selectable(picked, &row.name))
-                .on_hover_hint("Click to write its notes");
+                .on_hover_hint(tr!("summary-write-notes"));
             if name.clicked() {
                 summary.picked = Some(row.id);
                 summary.notes.clone_from(&row.notes);
@@ -1865,10 +1892,7 @@ fn summary_table(
         }
     });
     ui.separator();
-    ui.weak(
-        "Each time counts every move at the tools' feed rates and the machine's speeds, \
-         getting to it from the toolpath before and its tool change included",
-    );
+    ui.weak(tr!("summary-each-time"));
     let per = summary.units.mm_per_min();
     let fields = summary_fields();
     let mut values = serde_json::json!({
@@ -1901,10 +1925,10 @@ fn summary_table(
     acceleration_tick(ui, summary, machine);
     let picked = rows.iter().find(|r| Some(r.id) == summary.picked)?;
     ui.separator();
-    ui.label(format!("Notes for {}", picked.name));
+    ui.label(tr!("summary-notes-for", toolpath = picked.name.as_str()));
     ui.add(egui::TextEdit::multiline(&mut summary.notes).desired_rows(3));
-    ui.button("Save Notes")
-        .on_hover_hint("Keep these notes with the toolpath")
+    ui.button(tr!("summary-save-notes"))
+        .on_hover_hint(tr!("summary-save-notes.tooltip"))
         .clicked()
         .then(|| (picked.id, summary.notes.clone()))
 }
@@ -2256,20 +2280,18 @@ fn tool_picker(
         }
     }
     ui.horizontal(|ui| {
-        let select = ui.button("Select…");
+        let select = ui.button(tr!("tool-select"));
         crate::marks::note(ui, "button:Select…", select.rect);
         let select = select
-            .on_hover_hint(if is_laser_form(id) {
-                "Pick the laser this toolpath burns with in the Tool Database (its Lasers): it \
-                 brings its own kerf and speed"
+            .on_hover_hint(tr!(if is_laser_form(id) {
+                "tool-select.tooltip-laser"
             } else {
-                "Pick the bit this toolpath cuts with in the Tool Database: it brings its own \
-                 feeds, speeds and pass depth"
-            })
+                "tool-select.tooltip"
+            }))
             .clicked();
         let edit = ui
-            .button("Edit…")
-            .on_hover_hint("Change this tool in the Tool Database")
+            .button(tr!("tool-edit"))
+            .on_hover_hint(tr!("tool-edit.tooltip"))
             .clicked();
         if select {
             Some(ToolAsk::Select)
@@ -2394,12 +2416,8 @@ fn clearing_section(
         if finishing_smallest
             && finishing.is_some()
             && ui
-                .button("Suggest clearing bits")
-                .on_hover_hint(
-                    "Try your own bigger end mills, one or two at a time, and pick the quickest \
-                     way to finish this pocket (bits in the tool changer first; Options sets \
-                     how long a bit change takes)",
-                )
+                .button(tr!("clearing-suggest"))
+                .on_hover_hint(tr!("clearing-suggest.tooltip"))
                 .clicked()
         {
             ask = Some(ListAsk::Suggest);
@@ -2430,11 +2448,8 @@ fn clearing_section(
             changed = true;
         }
         if ui
-            .button("Add a smaller clearing bit…")
-            .on_hover_hint(
-                "Another bit, between the ones above and the finishing bit, for corners too \
-                 tight for them",
-            )
+            .button(tr!("clearing-add-smaller"))
+            .on_hover_hint(tr!("clearing-add-smaller.tooltip"))
             .clicked()
         {
             ask = Some(ListAsk::Select(ListSlot::New));
@@ -2476,21 +2491,21 @@ fn clearing_bit(
     }
     ui.horizontal(|ui| {
         if ui
-            .button("Select…")
-            .on_hover_hint("Pick another bit for this in the Tool Database")
+            .button(tr!("tool-select"))
+            .on_hover_hint(tr!("tool-select.tooltip-another-bit"))
             .clicked()
         {
             return Some(BitAsk::List(ListAsk::Select(ListSlot::At(i))));
         }
         if ui
-            .button("Edit…")
-            .on_hover_hint("Change this bit in the Tool Database")
+            .button(tr!("tool-edit"))
+            .on_hover_hint(tr!("tool-edit.tooltip-bit"))
             .clicked()
         {
             return Some(BitAsk::List(ListAsk::Edit(tool.name.clone())));
         }
         ui.small_button("×")
-            .on_hover_hint("Remove this bit")
+            .on_hover_hint(tr!("clearing-remove-bit"))
             .clicked()
             .then_some(BitAsk::Remove)
     })
@@ -2605,23 +2620,24 @@ fn tool_list(
             }
             ui.horizontal(|ui| {
                 if ui
-                    .button("Select…")
-                    .on_hover_hint(
-                        "Pick another bit for this in the Tool Database: it brings its own \
-                         feeds, speeds and pass depth",
-                    )
+                    .button(tr!("tool-select"))
+                    .on_hover_hint(tr!("tool-select.tooltip-another"))
                     .clicked()
                 {
                     ask = Some(ListAsk::Select(ListSlot::At(i)));
                 }
                 if ui
-                    .button("Edit…")
-                    .on_hover_hint("Change this tool in the Tool Database")
+                    .button(tr!("tool-edit"))
+                    .on_hover_hint(tr!("tool-edit.tooltip"))
                     .clicked()
                 {
                     ask = Some(ListAsk::Edit(tool.name.clone()));
                 }
-                if ui.small_button("×").on_hover_hint("Remove").clicked() {
+                if ui
+                    .small_button("×")
+                    .on_hover_hint(tr!("tool-list-remove"))
+                    .clicked()
+                {
                     remove = Some(i);
                 }
             });
@@ -2629,8 +2645,8 @@ fn tool_list(
     }
     if ui
         .push_id((key, "add"), |ui| {
-            ui.button("Add a tool…")
-                .on_hover_hint("Pick one more in the Tool Database")
+            ui.button(tr!("tool-list-add"))
+                .on_hover_hint(tr!("tool-list-add.tooltip"))
         })
         .inner
         .clicked()
@@ -2689,27 +2705,27 @@ fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String
     let mut selector = before.clone().unwrap_or_default();
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.checkbox(&mut on, "Associate a Vector Selector with this toolpath")
-            .on_hover_hint("Take the vectors that pass it each time the toolpath is calculated");
+        ui.checkbox(&mut on, tr!("selector-associate"))
+            .on_hover_hint(tr!("selector-associate.tooltip"));
         if !on {
             return;
         }
-        ui.checkbox(&mut selector.open_vectors, "Open vectors");
-        ui.checkbox(&mut selector.closed_vectors, "Closed vectors");
+        ui.checkbox(&mut selector.open_vectors, tr!("selector-open-vectors"));
+        ui.checkbox(&mut selector.closed_vectors, tr!("selector-closed-vectors"));
         // which closed vectors: all, only circles, or only circles of a size
         ui.add_enabled_ui(selector.closed_vectors, |ui| {
             ui.indent("closed_kind", |ui| {
                 ui.radio_value(
                     &mut selector.closed_kind,
                     ClosedKind::AllClosedVectors,
-                    "All closed vectors",
+                    tr!("selector-all-closed"),
                 );
                 ui.radio_value(
                     &mut selector.closed_kind,
                     ClosedKind::OnlyCircles,
-                    "Only circles",
+                    tr!("selector-only-circles"),
                 )
-                .on_hover_hint("For drilling: only the closed vectors that are circles");
+                .on_hover_hint(tr!("selector-only-circles.tooltip"));
                 if selector.closed_kind != ClosedKind::OnlyCircles {
                     return;
                 }
@@ -2717,23 +2733,22 @@ fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String
                     ui.radio_value(
                         &mut selector.circles,
                         Circles::SelectAllCircles,
-                        "All circles",
+                        tr!("selector-all-circles"),
                     );
                     ui.radio_value(
                         &mut selector.circles,
                         Circles::SelectCirclesMatching,
-                        "Circles of this diameter",
+                        tr!("selector-circles-of-diameter"),
                     );
                     if selector.circles == Circles::SelectCirclesMatching {
                         egui::Grid::new("circle_size")
                             .num_columns(2)
                             .show(ui, |ui| {
-                                ui.label("Diameter");
+                                ui.label(tr!("selector-diameter"));
                                 tabs::length(ui, &mut selector.diameter, units);
                                 ui.end_row();
-                                ui.label("Tolerance").on_hover_hint(
-                                    "How far a circle's diameter may be from it and still pass",
-                                );
+                                ui.label(tr!("selector-tolerance"))
+                                    .on_hover_hint(tr!("selector-tolerance.tooltip"));
                                 tabs::length(ui, &mut selector.tolerance, units);
                                 ui.end_row();
                             });
@@ -2793,8 +2808,8 @@ fn rest_section(
     let mut ask = None;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Rest Machining")
-            .on_hover_hint("Cut only what the tools that ran before this one could not reach");
+        ui.strong(tr!("rest-title"))
+            .on_hover_hint(tr!("rest-title.tooltip"));
         let mut after = serde_json::to_value(&rest.after).expect("tools serialize");
         let (changed, asked) = tool_list(
             ui,
@@ -2802,7 +2817,7 @@ fn rest_section(
             &mut after,
             tools,
             slots,
-            "Off: add the bigger tools that cut before this one to cut only what they left",
+            &tr!("rest-off"),
             units,
         );
         ask = asked;
@@ -2813,12 +2828,12 @@ fn rest_section(
             egui::Grid::new("rest_settings")
                 .num_columns(2)
                 .show(ui, |ui| {
-                    ui.label("Minimum detail")
-                        .on_hover_hint("Leave alone unmachined areas narrower than this");
+                    ui.label(tr!("rest-minimum-detail"))
+                        .on_hover_hint(tr!("rest-minimum-detail.tooltip"));
                     form::length_edit(ui, &mut rest.minimum_detail, units, 0.0);
                     ui.end_row();
-                    ui.label("Overlap")
-                        .on_hover_hint("Grow each unmachined area by this");
+                    ui.label(tr!("rest-overlap"))
+                        .on_hover_hint(tr!("rest-overlap.tooltip"));
                     form::length_edit(ui, &mut rest.overlap, units, 0.0);
                     ui.end_row();
                 });
@@ -3096,7 +3111,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
             app.start_recovery();
-            app.open_given(open);
+            app.open_at_start(open);
             // a crash last time: offer its crash log as a report
             if let Some(crash) =
                 files::config_dir().and_then(|d| cut_craft_bug_report::logs::take_crash(&d))

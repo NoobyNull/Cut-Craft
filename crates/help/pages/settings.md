@@ -1,12 +1,13 @@
 ---
-reviewed: 2026-11-18
-see-also: web_api, bug_reports, contents
+reviewed: 2026-11-20
+see-also: setup_material, job_setup, web_api, bug_reports, contents
 ---
 
 # Changing settings
 
 **Edit ▸ Options** holds Cut Craft's settings, page by page down the left: how it looks,
-the mouse and shortcuts, toolpath previews, the Web API and more.
+the mouse and shortcuts, toolpath previews, the [language](help:language), the Web API
+and more.
 
 A change you make there does **not** take effect straight away. It waits until you press
 **Apply**, so you can try a few changes, look them over, and still back out.
@@ -37,6 +38,26 @@ Closing the window, with **Close** or its own close box, while changes are waiti
 1. **Apply and Close** uses the changes and closes.
 2. **Discard Changes** throws them away and closes.
 3. **Keep Editing** takes you back to the settings. Pressing Esc does the same.
+
+## Job Defaults: what every new job starts with
+
+The **Job Defaults** page holds the settings every new job starts with: the material's kind
+and size, the units, where Z zero and X0 Y0 are, the modelling resolution, the material and
+its colour, the rapid heights and home. These are [Job Setup](help:job_setup)'s settings,
+kept for every new job. Set them once for your machine.
+
+![Options at Job Defaults: Classic Startup Flow, then the settings every new job starts with](pictures/options-job-defaults.png)
+
+Changing them, and pressing **Apply**, changes the **next** job you start, never the one open.
+To change the open job, use [Setup Material](help:setup_material) and its **More settings
+for this job…**.
+
+At the top, **Classic Startup Flow** brings back the old start: Cut Craft opens on its start
+page (recent files, the sample project), and **New** asks for every setting before the job
+opens. Left off, Cut Craft opens straight to a blank job and New makes another.
+
+**Reset to defaults** on this page puts back Cut Craft's own starting job: 600 × 400 × 20 mm,
+single sided, Z zero on top, X0 Y0 at the bottom left.
 
 ## Snapping Options, Machine Configuration and the Tool Database
 

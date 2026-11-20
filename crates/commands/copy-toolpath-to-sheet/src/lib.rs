@@ -102,6 +102,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         });
         c.add(cut_craft_core::geometry::Path::polyline(
             &[Point::new(0.0, 0.0), Point::new(10.0, 0.0)],

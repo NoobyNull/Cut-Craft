@@ -196,6 +196,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_engrave_part_names::EngravePartNames>();
     r.add::<cmd_import_toolpaths::ImportToolpaths>();
     r.add::<cmd_quick_trace::QuickTrace>();
+    r.add::<cmd_rotary_machining_toolpath::RotaryMachiningToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();
@@ -384,6 +385,21 @@ mod tests {
 
     /// Hover hints, menus and messages written straight into the app's text: everything but
     /// comments, the thanks in Help ▸ About, and the tests.
+    #[test]
+    fn english_words_do_not_name_other_programs() {
+        let english = cut_craft_i18n::english();
+        let named: Vec<String> = english
+            .keys()
+            .iter()
+            .filter_map(|key| {
+                let text = english.words(key, None)?;
+                let named = other_programs_named(&text);
+                (!named.is_empty()).then(|| format!("{key} = {text}"))
+            })
+            .collect();
+        assert!(named.is_empty(), "{}", named.join("\n"));
+    }
+
     #[test]
     fn hints_and_menus_do_not_name_other_programs() {
         fn walk(dir: &Path, files: &mut Vec<std::path::PathBuf>) {

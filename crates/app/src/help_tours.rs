@@ -11,29 +11,70 @@ use eframe::egui;
 /// Every tool's tour.
 pub const TOURS: &[Tour] = &[
     Tour {
-        tool: "job_setup",
+        tool: "setup_material",
         steps: &[
             Step {
-                caption: "Press **New** (or File ▸ New) to start a job. The first thing it asks \
-                          about is your material.",
+                caption: "Cut Craft opens with a blank job, made with your Job Defaults. To \
+                          change this job's material, press **Setup Material** (under File \
+                          Operations, at the top of the Design page).",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
-                    app.pages.set_pinned(Page::Design, true);
+                    on_design_tab(app, 0);
                 },
-                mark: Mark::At("tool:new"),
+                mark: Mark::At("tool:setup_material"),
+            },
+            Step {
+                caption: "Pick the kind of job: **Single Sided** (cut from the top), **Double \
+                          Sided** (turned over to cut the back) or **Rotary** (a cylinder on a \
+                          rotary axis).",
+                setup: |app, ctx| app.invoke(ctx, "setup_material"),
+                mark: Mark::At("field:job_type"),
             },
             Step {
                 caption: "Measure your board and type its **Width**, **Height** and \
                           **Thickness**. Get the thickness right: it decides how deep a cut \
                           must go to come through.",
-                setup: |app, ctx| app.invoke(ctx, "new"),
+                setup: |_, _| {},
                 mark: Mark::At("field:thickness"),
+            },
+            Step {
+                caption: "The line under them says where **Z zero** and **X0 Y0** are. **More \
+                          settings for this job…** changes them for this job only; **Change my \
+                          defaults…** changes them for every new job.",
+                setup: |_, _| {},
+                mark: Mark::At("button:More settings for this job…"),
+            },
+            Step {
+                caption: "Press **Apply**. The sheet on screen is now your board, ready to draw \
+                          on.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Apply"),
+            },
+        ],
+    },
+    Tour {
+        tool: "job_setup",
+        steps: &[
+            Step {
+                caption: "Job Setup holds every setting of this job's material. Press **Setup \
+                          Material** (under File Operations).",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    on_design_tab(app, 0);
+                },
+                mark: Mark::At("tool:setup_material"),
+            },
+            Step {
+                caption: "Press **More settings for this job…** under the size: the rest of \
+                          Job Setup opens below it.",
+                setup: |app, ctx| app.invoke(ctx, "setup_material"),
+                mark: Mark::At("button:More settings for this job…"),
             },
             Step {
                 caption: "Choose where **Z zero** is: the top of the material (most common) or \
                           the machine bed. Zero the bit in the same place on your machine before \
                           cutting.",
-                setup: |_, _| {},
+                setup: |app, _| app.show_all_job_settings(),
                 mark: Mark::At("field:z_zero"),
             },
             Step {
@@ -43,9 +84,10 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:datum"),
             },
             Step {
-                caption: "Press **OK**. The sheet on screen is now your board, ready to draw on.",
+                caption: "Press **Apply**. Only this job changes: new jobs start with Edit ▸ \
+                          Options ▸ Job Defaults.",
                 setup: |_, _| {},
-                mark: Mark::At("button:OK"),
+                mark: Mark::At("button:Apply"),
             },
         ],
     },
@@ -1309,16 +1351,60 @@ pub const TOURS: &[Tour] = &[
         ],
     },
     Tour {
+        tool: "rotary_machining_toolpath",
+        steps: &[
+            Step {
+                caption: "4-Axis Rotary Machining finishes a model all the way round a turning \
+                          cylinder. Start a **rotary** job and place a full 3D model in it: \
+                          here, a turned bead.",
+                setup: turned_bead,
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **4-Axis Rotary Machining** (under 3D \
+                          Toolpaths).",
+                setup: |app, _| {
+                    app.view = View::TwoD;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:rotary_machining_toolpath"),
+            },
+            Step {
+                caption: "Pick a ball nose bit: its finishing stepover spaces the rings round \
+                          the part.",
+                setup: |app, ctx| app.invoke(ctx, "rotary_machining_toolpath"),
+                mark: Mark::At("field:tool"),
+            },
+            Step {
+                caption: "Say where along the part the rings **Start** and **End**, clear of \
+                          the chuck and the tailstock.",
+                setup: |_, _| {},
+                mark: Mark::At("field:start"),
+            },
+            Step {
+                caption: "Tick **Registration mark** for a small notch at A=0, so the part can \
+                          go back exactly as it was if the job is started again.",
+                setup: |_, _| {},
+                mark: Mark::At("field:registration_mark"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath: a ring round the part at \
+                          each step along it.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
         tool: "rounding_toolpath",
         steps: &[
             Step {
                 caption: "Rounding turns a square or round blank into a smooth cylinder on a \
-                          rotary axis. Start a **rotary** job in Job Setup, with the finished \
-                          diameter.",
+                          rotary axis. Press **Setup Material** and pick **Rotary**, with the \
+                          finished diameter.",
                 setup: |app, ctx| {
-                    app.form = None;
-                    app.reset_job();
-                    app.invoke(ctx, "new");
+                    fresh_job(app, ctx);
+                    app.invoke(ctx, "setup_material");
                     set(app, "job_type", "rotary".into());
                 },
                 mark: Mark::At("field:job_type"),
@@ -1855,7 +1941,7 @@ pub const TOURS: &[Tour] = &[
         tool: "new",
         steps: &[
             Step {
-                caption: "Start a new job: the board's size and thickness, and where the machine's zero is.",
+                caption: "Start a new, blank job, made with your Job Defaults (Edit ▸ Options ▸ Job Defaults).",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
                     shapes_none(app);
@@ -1863,7 +1949,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::None,
             },
             Step {
-                caption: "Press **New** (under File Operations, at the top of the Design page). Job Setup opens: see [Job Setup](help:job_setup).",
+                caption: "Press **New** (under File Operations, at the top of the Design page). A blank sheet opens: change its size with [Setup Material](help:setup_material).",
                 setup: |app, _| on_design_tab(app, 0),
                 mark: Mark::At("tool:new"),
             },
@@ -2000,6 +2086,25 @@ pub const TOURS: &[Tour] = &[
                 caption: "Under **Import**, press **Import Vectors** and pick the file. A DXF asks which units it was drawn in.",
                 setup: |app, _| on_design_tab(app, 4),
                 mark: Mark::At("tool:import_vectors"),
+            },
+            Step {
+                caption: "Each layer of a DXF comes in as a layer of your job, with its name and colour. Open the **Layers** tab to see them, show or hide them, or change their colour.",
+                setup: |app, ctx| {
+                    use cut_craft_core::Importer as _;
+                    const SHEET: &[u8] = include_bytes!(
+                        "../../formats/import-dxf/tests/fixtures/nesting-sheet-layers.dxf"
+                    );
+                    let sheet = fmt_import_dxf::ImportDxf::import(&app.doc, SHEET);
+                    app.record(sheet, "Imported");
+                    app.design_tab = super::DESIGN_TABS
+                        .iter()
+                        .position(|&t| t == "Layers")
+                        .unwrap_or(0);
+                    // the whole drawing in view, then nothing selected, so its colours show
+                    app.invoke(ctx, "zoom_selected");
+                    app.doc.selection.clear();
+                },
+                mark: Mark::None,
             },
         ],
     },
@@ -4899,6 +5004,29 @@ fn dome(app: &mut CutCraftApp, ctx: &egui::Context) {
     }
     app.form = None;
     app.doc.selection.clear();
+    app.view = View::ThreeD;
+}
+
+/// A rotary job 60 mm across and 160 mm long along X, holding a turned bead: round, fatter
+/// in the middle, all the way round the axis.
+fn turned_bead(app: &mut CutCraftApp, ctx: &egui::Context) {
+    use cut_craft_core::component::{Combine, Component};
+    use cut_craft_core::document::{Along, Job};
+    fresh_job(app, ctx);
+    let job = Job {
+        clearance: 5.0,
+        ..Job::rotary(160.0, 60.0, Along::X)
+    };
+    let mut change = cut_craft_core::Change::builder(&app.doc);
+    change.set_job(job);
+    app.record(Ok(change.finish()), "Rotary job");
+    let bead = Component::from_fn("Bead", Combine::Add, app.doc.job.area(), 0.5, |p| {
+        let t = p.x / 160.0;
+        Some(18.0 + 12.0 * (std::f64::consts::PI * t).sin().powi(2))
+    });
+    let mut change = cut_craft_core::Change::builder(&app.doc);
+    change.add_new_component(bead);
+    app.record(Ok(change.finish()), "Bead added");
     app.view = View::ThreeD;
 }
 

@@ -3,6 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, Segment};
+use cut_craft_core::import_layers::ImportLayers;
 use cut_craft_core::vfont::{arc, compound_streams};
 use cut_craft_core::{Change, CommandError, FileFormat, Importer};
 
@@ -32,7 +33,8 @@ impl Importer for ImportCrv3d {
         let scale = if inches { 25.4 } else { 1.0 };
         let layers = layer_names(data);
         let mut c = Change::builder(doc);
-        let mut made = Vec::new();
+        // the job file's layer colours and hiding are not known yet (re/SPEC.md, Job files)
+        let mut made = ImportLayers::make(&mut c, &[]);
         let mut ids = Vec::new();
         for (at, path) in contours(data, scale) {
             let name = layers
@@ -42,14 +44,8 @@ impl Importer for ImportCrv3d {
                 .map(|(_, n)| n.as_str());
             let id = c.add(path);
             if let Some(name) = name {
-                let layer = if let Some((_, l)) = made.iter().find(|(n, _)| n == name) {
-                    *l
-                } else {
-                    let existing = doc.layers.iter().find(|l| l.name == name).map(|l| l.id);
-                    let l = existing.unwrap_or_else(|| c.add_layer(name));
-                    made.push((name.to_owned(), l));
-                    l
-                };
+                // a layer the job has (whatever its case) is used, else one is made
+                let (layer, _) = made.of(&mut c, name);
                 c.move_to_layer(id, layer);
             }
             ids.push(id);

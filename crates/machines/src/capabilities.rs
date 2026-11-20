@@ -269,7 +269,7 @@ impl Filter {
             inch: inches,
             arcs: true,
             straight: true,
-            rotary: machine.is_some_and(|m| m.rotary),
+            rotary: machine.is_some_and(Machine::has_rotary),
         }
     }
 
@@ -401,6 +401,7 @@ mod tests {
         Machine {
             inches,
             rotary,
+            firmware: Some(crate::Firmware::GrblHal),
             ..Machine::default()
         }
     }
@@ -412,6 +413,14 @@ mod tests {
         let rotary = Filter::starting(Some(&machine(true, true)));
         assert!(!rotary.mm && rotary.inch && rotary.rotary);
         assert_eq!(Filter::starting(None), flat, "no machine: mm, flat");
+        let standard = Machine {
+            firmware: Some(crate::Firmware::Grbl),
+            ..machine(true, true)
+        };
+        assert!(
+            !Filter::starting(Some(&standard)).rotary,
+            "standard GRBL has no A axis"
+        );
     }
 
     #[test]

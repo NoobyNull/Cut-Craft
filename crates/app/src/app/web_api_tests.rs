@@ -649,6 +649,8 @@ fn a_script_gets_the_gcode_save_toolpaths_would_write_and_can_save_it() {
         .unwrap()
         .tool
         .flute_length = 50.0;
+    // and where to zero the bit looked at, in Material Setup
+    h.app.doc.material_checked = true;
     let (status, posts) = call(&mut h, at, "GET", "posts", None);
     assert_eq!(status, 200, "{posts}");
     assert!(posts["default"].is_string(), "{posts}");
@@ -804,6 +806,7 @@ fn the_help_page_explains_the_new_calls() {
         "POST job/export",
         "POST job/new",
         "POST job/open",
+        "\"by\": \"component\"",
     ] {
         assert!(page.contains(call), "{call} is explained");
     }
@@ -1121,4 +1124,93 @@ fn shows(h: &Harness, part: &str) -> bool {
         egui::Shape::Text(t) => t.galley.text().contains(part),
         _ => false,
     })
+}
+
+/// The app with the Web API on and a job of two components: "dome" (Add) and "Prop"
+/// (Subtract). Their ids.
+fn two_components() -> (
+    Harness,
+    SocketAddr,
+    cut_craft_core::document::EntityId,
+    cut_craft_core::document::EntityId,
+) {
+    use cut_craft_core::component::Combine;
+    let (mut h, at) = switched_on();
+    let mut doc = cut_craft_core::testing::domed();
+    let dome = *doc.components.keys().next().unwrap();
+    let mut prop = doc.components[&dome].clone();
+    prop.name = "Prop".into();
+    prop.combine = Combine::Subtract;
+    let mut c = cut_craft_core::Change::builder(&doc);
+    let prop = c.add_component(prop);
+    let change = c.finish();
+    doc.apply(&change).unwrap();
+    h.app.doc = doc;
+    (h, at, dome, prop)
+}
+
+#[test]
+fn a_script_picks_one_component_by_id_or_name_as_a_click_in_the_components_panel_does() {
+    let (mut h, at, dome, prop) = two_components();
+    let (status, picked) = call(
+        &mut h,
+        at,
+        "POST",
+        "select",
+        Some(json!({ "by": "component", "component": "prop" })),
+    );
+    assert_eq!(status, 200, "{picked}");
+    assert_eq!(h.app.doc.selected_components, [prop].into());
+    assert_eq!(picked["components"], json!([prop.0]));
+    // by id, keeping the one picked
+    let (status, both) = call(
+        &mut h,
+        at,
+        "POST",
+        "select",
+        Some(json!({ "by": "component", "component": dome.0, "add": true })),
+    );
+    assert_eq!(status, 200, "{both}");
+    assert_eq!(h.app.doc.selected_components, [prop, dome].into());
+    // a name that is no component's says which there are
+    let (status, wrong) = call(
+        &mut h,
+        at,
+        "POST",
+        "select",
+        Some(json!({ "by": "component", "component": "Lid" })),
+    );
+    assert_eq!(status, 404, "{wrong}");
+    assert!(wrong["error"].as_str().unwrap().contains("Prop"), "{wrong}");
+    assert_eq!(h.app.doc.selected_components, [prop, dome].into());
+}
+
+/// #591: sending only `visible` for one component took the other settings from the
+/// component picked in the window, and so rewrote its combine mode.
+#[test]
+fn component_properties_leaves_the_settings_a_script_leaves_out_as_they_are() {
+    use cut_craft_core::component::Combine;
+    let (mut h, at, dome, prop) = two_components();
+    h.app.doc.selected_components = [prop].into();
+    let (status, ran) = call(
+        &mut h,
+        at,
+        "POST",
+        "run",
+        Some(json!({
+            "command": "component_properties",
+            "params": { "component": dome.0, "visible": false },
+        })),
+    );
+    assert_eq!(status, 200, "{ran}");
+    let (d, p) = (&h.app.doc.components[&dome], &h.app.doc.components[&prop]);
+    assert!(!d.visible);
+    assert_eq!(
+        d.combine,
+        Combine::Add,
+        "the dome keeps its own combine mode"
+    );
+    assert_eq!(d.name, "dome");
+    assert_eq!(p.combine, Combine::Subtract);
+    assert!(p.visible);
 }

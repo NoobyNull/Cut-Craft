@@ -16,6 +16,7 @@ use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::snap::Snap;
+use cut_craft_i18n::tr;
 
 /// Where a crash log is kept when the person chose not to send crash logs.
 const LAST_CRASH: &str = "last-crash.log";
@@ -53,6 +54,9 @@ pub(super) struct Modes {
 
 /// What an empty sheet says in its middle, and the status bar's step for it.
 pub(super) const EMPTY_SHEET_TITLE: &str = "Nothing drawn yet";
+/// The empty sheet's links, under its hint.
+pub(super) const EMPTY_SHEET_RECENT: &str = "Open a recent file";
+pub(super) const EMPTY_SHEET_SAMPLE: &str = "Try a sample project";
 pub(super) const EMPTY_SHEET_HINT: &str =
     "Draw a shape with the tools on the Design page, or drop a picture, SVG or DXF here.";
 const EMPTY_SHEET_STEP: &str = "Nothing drawn yet: pick a drawing tool on the Design page, or drop a picture, SVG or DXF \
@@ -1367,7 +1371,9 @@ impl CutCraftApp {
             _ => Overlay::None,
         };
         self.paint_2d(ui, &canvas, &overlay);
-        self.empty_sheet_hint(ui, &canvas);
+        if let Some(id) = self.empty_sheet_hint(ui, &canvas) {
+            self.invoke(ui.ctx(), &id);
+        }
         self.datum_mark(ui, &canvas, area, job.offset);
         self.handles_and_hints(ui, &canvas, reach, modes);
         self.paint_kept_snaps(ui, &canvas, reach);
@@ -1397,13 +1403,15 @@ impl CutCraftApp {
 
     /// The hint in the middle of an empty sheet, until the first thing is drawn or dropped,
     /// with no tool in hand.
-    fn empty_sheet_hint(&self, ui: &egui::Ui, canvas: &Canvas) {
+    /// With links to what the start page offered: a recent file, the sample project; the
+    /// one clicked, as an action to invoke.
+    fn empty_sheet_hint(&self, ui: &egui::Ui, canvas: &Canvas) -> Option<String> {
         if !self.nothing_drawn()
             || self.form.is_some()
             || self.view_tool.is_some()
             || self.drawing_tool().is_some()
         {
-            return;
+            return None;
         }
         let job = self.shown_job().area();
         let (a, b) = (
@@ -1412,7 +1420,7 @@ impl CutCraftApp {
         );
         let sheet = egui::Rect::from_two_pos(a, b).intersect(canvas.area);
         if sheet.width() < ui.spacing().interact_size.x * 2.0 {
-            return;
+            return None;
         }
         let colour = ui.visuals().weak_text_color();
         let size = ui.text_style_height(&egui::TextStyle::Body);
@@ -1431,9 +1439,45 @@ impl CutCraftApp {
         text.halign = Align::Center;
         let galley = ui.fonts_mut(|f| f.layout_job(text));
         let at = sheet.center() - egui::vec2(0.0, galley.size().y / 2.0);
+        let below = egui::pos2(sheet.center().x, at.y + galley.size().y + size);
         ui.painter()
             .with_clip_rect(sheet)
             .galley(at, galley, colour);
+        // what the start page offered, where the start page no longer is
+        if !sheet.contains(below + egui::vec2(0.0, size * 2.0)) {
+            return None;
+        }
+        let recent = self.recent_shown();
+        let mut clicked = None;
+        egui::Area::new(egui::Id::unique("empty_sheet_links"))
+            .fixed_pos(below)
+            .pivot(egui::Align2::CENTER_TOP)
+            .show(ui.ctx(), |ui| {
+                ui.horizontal(|ui| {
+                    if !recent.is_empty() {
+                        ui.menu_button(EMPTY_SHEET_RECENT, |ui| {
+                            for (i, path) in recent.iter().enumerate() {
+                                if ui
+                                    .button(super::file_name(path))
+                                    .on_hover_hint(path.display().to_string())
+                                    .clicked()
+                                {
+                                    clicked = Some(format!("open_recent:{i}"));
+                                }
+                            }
+                        });
+                        ui.weak("·");
+                    }
+                    if ui
+                        .link(EMPTY_SHEET_SAMPLE)
+                        .on_hover_hint(tr!("start-empty-sheet-sample-tip"))
+                        .clicked()
+                    {
+                        clicked = Some("try_sample_project".to_owned());
+                    }
+                });
+            });
+        clicked
     }
 
     /// What a gesture in the 2D view does, once the view is drawn.
@@ -3395,12 +3439,42 @@ impl CutCraftApp {
                 .find(|(a, _)| a == id)
                 .map_or_else(|| id.to_owned(), |(_, label)| label.clone())
         };
+        let on_job_defaults = fields
+            .get(self.options_page)
+            .is_some_and(|f| f.key == crate::options::JOB_DEFAULTS);
+        let (job_fields, mut job_params, job_error) = if on_job_defaults {
+            self.job_defaults_state()
+        } else {
+            (vec![], Value::Null, None)
+        };
+        let on_language = fields
+            .get(self.options_page)
+            .is_some_and(|f| f.key == crate::options::LANGUAGE);
+        if on_language && self.language_packs.is_none() {
+            let dir = self.addons.dir().map(std::path::Path::to_path_buf);
+            self.language_packs = Some(dir.map_or_default(|dir| {
+                crate::languages::installed(&dir)
+                    .into_iter()
+                    .map(|p| {
+                        let percent = crate::languages::coverage(&dir, &p);
+                        (p, percent)
+                    })
+                    .collect()
+            }));
+        } else if !on_language {
+            self.language_packs = None;
+        }
+        let language_packs = self.language_packs.clone().unwrap_or_default();
+        let chosen_language = self.edited_options().language.pack.clone();
+        let mut language_picked = None;
         let capture = self.capture.clone();
         let edited_web_api = self.edited_options().web_api.clone();
         let web_api_state = self.web_api_state().clone();
         let search = &mut self.shortcut_search;
         let mut shortcut_edit = None;
         let mut web_api_pressed = None;
+        let mut job_edited = false;
+        let (icons, materials) = (&self.icons, &self.materials);
         let show_advanced = &mut self.show_advanced;
         let page = &mut self.options_page;
         *page = (*page).min(fields.len().saturating_sub(1));
@@ -3457,6 +3531,24 @@ impl CutCraftApp {
                     if crate::form::show(ui, one, &mut values, &look) {
                         changed = serde_json::from_value::<crate::options::Options>(values).ok();
                     }
+                    if category.key == crate::options::JOB_DEFAULTS {
+                        job_edited = super::setup_material::job_defaults_section(
+                            ui,
+                            &job_fields,
+                            &mut job_params,
+                            job_error.as_deref(),
+                            icons,
+                            materials,
+                        );
+                    }
+                    if category.key == crate::options::LANGUAGE {
+                        language_picked = super::language_page::show(
+                            ui,
+                            &language_packs,
+                            &chosen_language,
+                            *show_advanced,
+                        );
+                    }
                     if category.key == "web_api" {
                         web_api_pressed =
                             super::web_api::options_section(ui, &web_api_state, &edited_web_api);
@@ -3474,15 +3566,28 @@ impl CutCraftApp {
             });
         });
         if let Some(page) = reset {
+            if page == crate::options::JOB_DEFAULTS {
+                self.job_defaults_form = None;
+            }
             changed = Some(self.edited_options().reset(&page));
         }
         // leaving the page stops waiting for a shortcut
         if !on_shortcuts {
             self.capture = None;
         }
+        if let Some(pack) = language_picked {
+            let mut options = changed
+                .take()
+                .unwrap_or_else(|| self.edited_options().clone());
+            options.language.pack = pack;
+            changed = Some(options);
+        }
         // kept until Apply
         if let Some(options) = changed {
             self.options_edited(options);
+        }
+        if job_edited {
+            self.job_defaults_edited(job_params);
         }
         // the close box is Close: it asks first while changes wait
         if !open {
@@ -3615,9 +3720,14 @@ impl CutCraftApp {
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
             self.playback_speed = options.toolpaths.preview_speed();
         }
+        let language =
+            (options.language != self.options.language).then(|| options.language.pack.clone());
         options.apply();
         self.options = options;
         self.save_options();
+        if let Some(pack) = language {
+            self.use_language(&pack);
+        }
         // clipping turned on or off: the toolpaths made again with or without it
         if self.sync_machine_keep_out() {
             self.keep_out_changed();

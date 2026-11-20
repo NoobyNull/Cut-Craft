@@ -760,6 +760,26 @@ impl CutCraftApp {
                 {
                     clicked = Some((layer.id, "toggle_locked"));
                 }
+                // the colour its vectors are drawn in; a click opens Layer Properties to change it
+                let usual = self.options.appearance.lines(ui.visuals().dark_mode).vector;
+                let (swatch, chip) =
+                    ui.allocate_exact_size(egui::vec2(edge, edge), egui::Sense::click());
+                let inner = swatch.shrink(edge * 0.2);
+                ui.painter().rect(
+                    inner,
+                    2.0,
+                    crate::view2d::colour32(layer.colour.unwrap_or(usual)),
+                    ui.visuals().widgets.noninteractive.fg_stroke,
+                    egui::StrokeKind::Inside,
+                );
+                let tip = if layer.colour.is_some() {
+                    "The layer's own colour: click to change it"
+                } else {
+                    "The usual vector colour: click to give the layer its own"
+                };
+                if chip.on_hover_hint(tip).clicked() {
+                    clicked = Some((layer.id, "layer_properties"));
+                }
                 let count = self.doc.vectors_on(layer.id).count();
                 let row = ui
                     .selectable_label(self.doc.current_layer == layer.id, &layer.name)
@@ -1341,6 +1361,17 @@ impl CutCraftApp {
         let start = (self.simulation.clone())
             .filter(|m| !fresh && m.lies_on(&self.doc.job))
             .map_or_else(|| self.fresh_material(), |m| m.including(grid.area));
+        // on a rotary job, the file's own moves turning the material as well, carrying on
+        // from what the toolpaths before these cut when the preview does
+        let carries_on = (self.simulation.as_ref()).is_some_and(|m| !fresh && m.lies_on(&job));
+        let making = self.turning_making(
+            if carries_on {
+                earlier.iter().map(|(_, t)| t.clone()).collect()
+            } else {
+                vec![]
+            },
+            list.clone(),
+        );
         // each move as long as the Toolpath Summary times it
         let motion = self.motion();
         let revision = self.history.revision();
@@ -1368,14 +1399,16 @@ impl CutCraftApp {
                 };
                 let playback = cut_craft_core::playback::Playback::planned(start, &list, &motion)
                     .marked(&marks);
-                (playback, collided)
+                let turning = making.map(super::turning::Making::make);
+                (playback, collided, turning)
             },
-            move |app, (playback, collided)| {
+            move |app, (playback, collided, turning)| {
                 if let Some(hit) = super::background::collision_note(&collided) {
                     app.status.set_message(&hit);
                 }
                 app.collisions = collided;
                 app.playback = Some(playback);
+                app.turning = turning;
                 app.kept_playback = None;
                 app.playback_revision = revision;
                 app.simulation = None;
@@ -1403,6 +1436,7 @@ impl CutCraftApp {
         self.drop_preview_of_old_block();
         let Some(playback) = self.playback.as_mut() else {
             self.playback_goal = None;
+            self.follow_turning(ctx);
             return;
         };
         // a slow frame does not send the tool further on the next
@@ -1436,6 +1470,7 @@ impl CutCraftApp {
         if playback.finished() {
             self.finish_playback();
         }
+        self.follow_turning(ctx);
     }
 
     /// Once the job has changed (an edit, a recalculation, Undo), a preview's moves are old:
@@ -3701,6 +3736,10 @@ impl CutCraftApp {
         mesh
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one frame of the 3D view, in drawing order"
+    )]
     pub(super) fn paint_3d(&mut self, ui: &egui::Ui, area: egui::Rect) {
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         let shown = self.display;
@@ -3754,7 +3793,14 @@ impl CutCraftApp {
                     && f.model_whole
                     && f.params["model_type"] == "full"
             });
-        let wrap = wrap_for(&job, shown.auto_wrapping || turned, previewing, &surface);
+        // a rotary job's preview as the machine runs it is always shown round its axis
+        let spinning = self.turning.is_some() && job.rotary.is_some();
+        let wrap = wrap_for(
+            &job,
+            shown.auto_wrapping || turned || spinning,
+            previewing,
+            &surface,
+        );
         let look = view3d::Look { wrap, ..look };
         // the modeling plane a model being imported sits on, under the material so it shows
         // round it and through what the material leaves open
@@ -3780,7 +3826,9 @@ impl CutCraftApp {
             .is_some()
             .then(|| painter.add(egui::Shape::Noop));
         let (mut surface_draw, mut model_draw, mut ghost_draw) = (None, None, None);
-        if slot.is_some() {
+        if spinning {
+            surface_draw = self.paint_turning(ui, area, &camera, &look, slot.is_some());
+        } else if slot.is_some() {
             let geometry = self.surface_geometry(ui.ctx(), look.wrap, look.sides);
             let at = cut_craft_core::glam::DVec3::ZERO;
             surface_draw = Some(view3d::gpu::Draw::new(
@@ -4024,19 +4072,24 @@ impl CutCraftApp {
         fit: egui::Rect,
     ) {
         let shown = self.display;
-        let vectors: Vec<Vec<cut_craft_core::geometry::Point>> = if shown.vectors_3d {
-            self.doc
-                .vectors
-                .iter()
-                // construction lines only place things in the 2D view: nothing to see in 3D
-                .filter(|(id, _)| self.doc.shown(**id) && !self.doc.is_construction(**id))
-                .map(|(_, path)| path.flatten(cut_craft_core::polygon::TOLERANCE))
-                .collect()
-        } else {
-            vec![]
-        };
+        let vectors: Vec<(Vec<cut_craft_core::geometry::Point>, Option<[u8; 3]>)> =
+            if shown.vectors_3d {
+                self.doc
+                    .vectors
+                    .iter()
+                    // construction lines only place things in the 2D view: nothing to see in 3D
+                    .filter(|(id, _)| self.doc.shown(**id) && !self.doc.is_construction(**id))
+                    .map(|(id, path)| {
+                        let points = path.flatten(cut_craft_core::polygon::TOLERANCE);
+                        (points, self.doc.colour_of(*id))
+                    })
+                    .collect()
+            } else {
+                vec![]
+            };
         let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
-        // the vectors in the colour the 2D view draws them in (Options ▸ Appearance)
+        // the vectors in the colour the 2D view draws them in (Options ▸ Appearance, or
+        // their layer's own)
         let vector = egui::Stroke::new(
             stroke.width,
             crate::view2d::colour32(self.options.appearance.lines(ui.visuals().dark_mode).vector),
@@ -4052,12 +4105,15 @@ impl CutCraftApp {
                 .map(|run| run.into_iter().map(&screen).collect::<Vec<_>>())
                 .collect::<Vec<_>>()
         };
-        // each vector flat, in one plane, on top of what it outlines
-        for points in &vectors {
+        // each vector flat, in one plane, on top of what it outlines, in its layer's colour
+        for (points, own) in &vectors {
             let z = view3d::vector_plane(surface, points);
             let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
+            let stroke = own.map_or(vector, |c| {
+                egui::Stroke::new(stroke.width, crate::view2d::colour32(c))
+            });
             for run in in_sight(&line) {
-                painter.add(egui::Shape::line(run, vector));
+                painter.add(egui::Shape::line(run, stroke));
             }
         }
         // the keep-out zones in red, closed, over whatever they cover

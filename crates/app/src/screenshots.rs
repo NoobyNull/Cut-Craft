@@ -30,7 +30,7 @@ const DARK: &str = "-dark";
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 47] = [
+const SCENES: [Scene; 51] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("design-2d-dark", |_, _| {}),
@@ -45,6 +45,8 @@ const SCENES: [Scene; 47] = [
     ("ribbon-layout", ribbon),
     ("ribbon-layout-dark", |_, _| {}),
     ("rotary-import", rotary_import),
+    // Help: Toolpaths ▸ Previewing a rotary job
+    ("rotary-turning-preview", rotary_turning),
     // Help: Toolpaths ▸ Looking at the G-code
     ("view-gcode", view_gcode),
     // Help: Updates (one-click install and relaunch)
@@ -158,12 +160,34 @@ const SCENES: [Scene; 47] = [
             w.edit_capabilities(&app.posts, "Cut Craft GRBL Arcs (mm) (*.nc)");
         }
     }),
+    // Help: The 4th axis and your firmware (standard GRBL: the 4th axis greyed out)
+    ("machine-firmware", machine_firmware),
+    ("machine-rotary", |app, _| {
+        if let Some(m) = app
+            .machine_window
+            .as_mut()
+            .and_then(|w| w.draft.active_mut())
+        {
+            m.firmware = Some(cut_craft_machines::Firmware::FluidNc);
+            // the help's winding picture shows a limited rotary
+            m.rotary_axis.turning = cut_craft_core::rotary_axis::Turning::Unwind;
+            m.rotary_axis.backlash = 0.2;
+        }
+    }),
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {
         app.options_closing = true;
     }),
     ("snapping-not-applied", snapping_not_applied),
+    // Help: Changing settings ▸ Job Defaults
+    ("options-job-defaults", |app, ctx| {
+        (app.form, app.tool_manager, app.materials_window) = (None, None, None);
+        app.options_closing = false;
+        app.options_draft = None;
+        app.open_job_defaults();
+        ctx.set_embed_viewports(true);
+    }),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
     // Help: Reporting a bug (the details of the computer)
@@ -188,6 +212,7 @@ fn post_window(app: &mut CutCraftApp, ctx: &egui::Context, rotary: bool) {
         m.name = "Shop Router".into();
         m.inches = false;
         m.rotary = rotary;
+        m.firmware = Some(cut_craft_machines::Firmware::FluidNc);
     }
     app.post_window = None;
     app.invoke(ctx, "post_processor_management");
@@ -679,6 +704,23 @@ fn tool_database(app: &mut CutCraftApp, ctx: &egui::Context) {
     }
 }
 
+/// Machine Configuration for a machine on standard GRBL with a rotary added: the 4th axis
+/// greyed out, and the warning that says why.
+fn machine_firmware(app: &mut CutCraftApp, ctx: &egui::Context) {
+    ctx.set_embed_viewports(true);
+    (app.info, app.form, app.tool_manager, app.machine_window) = (None, None, None, None);
+    app.post_window = None;
+    app.machines.add();
+    if let Some(m) = app.machines.active_mut() {
+        m.name = "Garage Router".into();
+        m.manufacturer = "Home built".into();
+        m.controller = "Arduino Uno + CNC shield".into();
+        (m.width, m.height, m.depth) = (600.0, 400.0, 80.0);
+        m.rotary = true;
+    }
+    app.invoke(ctx, "machine_configuration");
+}
+
 /// A machine with a five-slot tool changer, in Machine Configuration.
 fn machine(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.tool_manager = None;
@@ -728,6 +770,56 @@ fn rotary_import(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.doc.job =
         cut_craft_core::document::Job::rotary(200.0, 90.0, cut_craft_core::document::Along::X);
     import(app, ctx);
+    app.framing = crate::view3d::Framing::default();
+}
+
+/// A rotary job's preview paused part way: a star and a circle cut round a 60 mm dowel, the
+/// dowel turned with A under the bit as the file has it.
+fn rotary_turning(app: &mut CutCraftApp, _: &egui::Context) {
+    use cut_craft_core::document::{Along, Document, Job};
+    app.form = None;
+    app.doc = Document::default();
+    app.doc.job = Job::rotary(200.0, 60.0, Along::X);
+    let o = app.doc.job.area().min;
+    let shapes = [
+        (
+            "draw_star",
+            serde_json::json!({ "center": { "x": o.x + 70.0, "y": o.y + 94.0 }, "outer_radius": 40.0, "inner_radius": 18.0, "points": 5, "rotation": 90.0 }),
+            "profile_toolpath",
+        ),
+        (
+            "draw_circle",
+            serde_json::json!({ "center": { "x": o.x + 145.0, "y": o.y + 94.0 }, "radius": 30.0 }),
+            "pocket_toolpath",
+        ),
+    ];
+    let mut cuts = vec![];
+    for (id, params, command) in shapes {
+        let _ = app.apply(id, &params);
+        cuts.push((app.doc.selection.clone(), command));
+    }
+    for (selection, command) in cuts {
+        app.doc.selection = selection;
+        if let Some(mut params) = app
+            .registry
+            .get(command)
+            .map(cut_craft_core::DynCommand::default_params)
+        {
+            params["depth"] = 4.0.into();
+            let _ = app.apply(command, &params);
+        }
+    }
+    app.doc.selection.clear();
+    app.form = None;
+    app.display.animate_preview = true;
+    let ids: Vec<_> = app.doc.toolpaths.keys().copied().collect();
+    app.play(&ids, true, |app| {
+        app.playing = false;
+        let length =
+            (app.playback.as_ref()).map_or(0.0, cut_craft_core::playback::Playback::length);
+        app.playback_goal = Some(0.75 * length);
+    });
+    app.view = View::ThreeD;
     app.framing = crate::view3d::Framing::default();
 }
 

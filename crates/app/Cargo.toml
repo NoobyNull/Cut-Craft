@@ -13,9 +13,12 @@ cut-craft-tool-database = { path = "../tool-database" }
 cut-craft-bug-report = { path = "../bug-report" }
 # Help ▸ Check for Updates
 cut-craft-help.workspace = true
+# every word the app shows, in the language picked, English where a pack has none
+cut-craft-i18n.workspace = true
 cut-craft-updater = { path = "../updater" }
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
+cut-craft-rotary.workspace = true
 cut-craft-scripting = { path = "../scripting" }
 # Options ▸ Web API: the local HTTP server scripts drive Cut Craft through
 cut-craft-web-api = { path = "../web-api" }
@@ -58,6 +61,7 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-rotary-machining-toolpath = { path = "../commands/rotary-machining-toolpath" }
 cmd-3d-pencil-toolpath = { path = "../commands/3d-pencil-toolpath" }
 cmd-quick-trace = { path = "../commands/quick-trace" }
 cmd-import-toolpaths = { path = "../commands/import-toolpaths" }

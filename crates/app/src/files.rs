@@ -810,6 +810,7 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
                 power: vec![],
                 drill_bank: None,
                 fallbacks: vec![],
+                across: vec![],
                 ..t.clone()
             };
             // like its vectors, the picture it carved is this job's: another job's own
@@ -1393,6 +1394,7 @@ mod tests {
                 group: None,
                 drill_bank: None,
                 fallbacks: vec![],
+                across: vec![],
             })
         });
         doc.apply(&c.finish()).unwrap();

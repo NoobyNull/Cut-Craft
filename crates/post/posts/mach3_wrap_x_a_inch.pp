@@ -8,7 +8,7 @@
 + Cut Craft  2026-10-27 First version: arcs, tool change with T M6
 + Cut Craft  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft Mach3 Wrap X to A (inch) (*.tap)"
+POST_NAME = "Cut Craft Mach3 Rotary A, cylinder along Y (inch) (*.tap)"
 FILE_EXTENSION = "tap"
 UNITS = "INCHES"
 LINE_ENDING = "[10]"
@@ -27,6 +27,7 @@ VAR Z_HOME_POSITION = [ZH|A|Z|1.4]
 VAR SAFE_Z_HEIGHT = [SAFEZ|A|Z|1.4]
 VAR TOOL_NUMBER = [T|A|T|1.0]
 VAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]
+VAR ACROSS_POSITION = [ACROSS|C|X|1.4]
 VAR DWELL_TIME = [DWELL|A|P|1.2]
 
 begin HEADER
@@ -45,17 +46,17 @@ begin HEADER
 "[S] M3"
 
 begin INITIAL_RAPID_MOVE
-"G0 [X] [Y]"
+"G0 [X] [Y] [ACROSS]"
 "G0 [Z]"
 
 begin RAPID_MOVE
-"G0 [X] [Y] [Z]"
+"G0 [X] [Y] [ACROSS] [Z]"
 
 begin FIRST_FEED_MOVE
-"G1 [X] [Y] [Z] [F]"
+"G1 [X] [Y] [ACROSS] [Z] [F]"
 
 begin FEED_MOVE
-"G1 [X] [Y] [Z]"
+"G1 [X] [Y] [ACROSS] [Z]"
 
 begin TOOLCHANGE
 "G0 [SAFEZ]"

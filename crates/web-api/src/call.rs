@@ -24,7 +24,8 @@ pub enum Call {
     /// `POST run {"command", "params"}`: run a tool with these settings straight away, with
     /// no form; settings left out are what its form would start with.
     Run { command: String, params: Value },
-    /// `POST select {"by", .., "add"}`: pick vectors; `add` keeps what was picked already.
+    /// `POST select {"by", .., "add"}`: pick vectors, or one component (`"by": "component"`);
+    /// `add` keeps what was picked already.
     Select { pick: Pick, add: bool },
     /// `GET view.png?view&preview&width`: a picture of the 2D view or the 3D view from one
     /// side, as the window draws it.
@@ -192,6 +193,18 @@ pub enum Pick {
     Closed,
     /// Nothing: clears the selection.
     None,
+    /// One component, by the id or the name `GET job` lists, as clicking it in the
+    /// Components panel does: the component tools (Smooth, Emboss, Scale Z...) then change
+    /// only it. Picks no vectors and leaves the vectors picked as they are.
+    Component { component: ComponentRef },
+}
+
+/// A component named in a call: its id (a number) or its name (any case).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(untagged)]
+pub enum ComponentRef {
+    Id(u64),
+    Name(String),
 }
 
 #[derive(Deserialize)]

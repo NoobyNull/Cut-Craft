@@ -67,6 +67,7 @@ impl Outcome for cut_craft_core::playback::Playback {}
 impl<T> Outcome for Vec<T> {}
 impl<K, V> Outcome for std::collections::BTreeMap<K, V> {}
 impl<A, B> Outcome for (A, B) {}
+impl<A, B, C> Outcome for (A, B, C) {}
 
 impl<A: 'static> Busy<A> {
     /// Starts `work` on its own thread, `then` to be given its answer (or why there is none)

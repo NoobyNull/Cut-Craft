@@ -150,6 +150,12 @@ pub struct Placing {
     pub center: bool,
     /// Where the model's lower-left corner goes when not centred
     pub position: Xy,
+    /// Where Align in Material put the model; kept while it is resized (Scale model to fit
+    /// material, or a new size), so it stays where the alignment put it. Not in the form:
+    /// the buttons set it, and a position or depth typed clears it
+    #[schemars(skip)]
+    #[serde(default)]
+    pub align: Align,
     /// How far below the model's top the zero plane (the material's surface) cuts it: what
     /// is above the plane becomes the component; 0 keeps the whole model, sitting on the
     /// plane. More than the model's height lifts it off the plane, up to the material's top
@@ -163,6 +169,52 @@ pub struct Placing {
     /// Throw away the part of the model below the zero plane, keeping only what is above
     #[schemars(title = "Discard data below zero plane")]
     pub discard_below_zero: bool,
+}
+
+/// Where Align in Material put the model, each as a share of the room the material leaves
+/// beside it, measured from the material's corner: across 0 is its left side on the
+/// material's left and 1 its right side on the material's right; up likewise from the
+/// material's bottom edge; height 0 is its bottom on the zero plane and 1 its top at the
+/// material's top. `None` leaves that one to the position or depth given.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Align {
+    /// Left to right
+    #[serde(default)]
+    pub across: Option<f64>,
+    /// Front to back (the material's bottom edge to its top edge)
+    #[serde(default)]
+    pub up: Option<f64>,
+    /// In the material's thickness
+    #[serde(default)]
+    pub height: Option<f64>,
+}
+
+impl Align {
+    /// Where the lower-left corner of a model `footprint` big goes in `area`: aligned where
+    /// an alignment is kept, else at `position`.
+    #[must_use]
+    pub fn corner(&self, area: Rect, footprint: Point, position: Point) -> Point {
+        let at = |share: Option<f64>, from: f64, room: f64, need: f64, typed: f64| {
+            share.map_or(typed, |a| from + (room - need) * a)
+        };
+        Point::new(
+            at(
+                self.across,
+                area.min.x,
+                area.size().x,
+                footprint.x,
+                position.x,
+            ),
+            at(self.up, area.min.y, area.size().y, footprint.y, position.y),
+        )
+    }
+
+    /// The Depth Below Top that puts a model `tall` high at the kept height in material
+    /// `thickness` thick, if a height is kept.
+    #[must_use]
+    pub fn depth(&self, tall: f64, thickness: f64) -> Option<f64> {
+        self.height.map(|up| tall + (thickness - tall) * up)
+    }
 }
 
 /// Fine turns about the job's axes after the initial
@@ -257,7 +309,7 @@ pub struct Params {
     pub model_type: ModelType,
     /// Scaled to fit the material, keeping its proportions: as big as its length, width and
     /// thickness allow (a rotary job's length and diameter); else Model Size (0 keeps the
-    /// file's size)
+    /// file's size). Either way it stays where Align in Material put it
     #[schemars(title = "Scale model to fit material")]
     #[serde(default)]
     pub fit_material: bool,
@@ -342,6 +394,7 @@ impl Default for Params {
             placing: Placing {
                 center: true,
                 position: Xy::new(0.0, 0.0),
+                align: Align::default(),
                 depth_below_top: 0.0,
                 both_sides: false,
                 discard_below_zero: true,
@@ -554,16 +607,23 @@ fn placed(
     // far below it, less the model's height. Past the model's height, the model is lifted
     // off the plane, up to the material's top
     let tall = size.z * scale.z;
-    let depth = p.placing.depth_below_top;
+    let depth = p
+        .placing
+        .align
+        .depth(tall, doc.job.thickness)
+        .unwrap_or(p.placing.depth_below_top);
     let bottom = if depth > 0.0 {
         depth.min(tall.max(doc.job.thickness)) - tall
     } else {
         0.0
     };
+    // measured from the material's corner: an alignment chosen is kept whatever the size
     let corner = if p.placing.center {
         area.center() - footprint / 2.0
     } else {
-        p.placing.position.into()
+        p.placing
+            .align
+            .corner(area, footprint, p.placing.position.into())
     };
     let place = |v: DVec3| {
         DVec3::new(
@@ -799,6 +859,14 @@ impl Turning {
         )
     }
 
+    /// A vertex in the part's own frame, which turns with A: along the job's axis, then
+    /// across it and up from it at A=0.
+    fn part(&self, v: DVec3) -> DVec3 {
+        let off = (self.across(v) - self.middle) * self.scale + self.shift;
+        let along = self.first + (self.along(v) - self.start) * self.scale;
+        DVec3::new(along, off.x, off.y)
+    }
+
     /// A vertex where the turned model has it: along the job, across and up from the axis.
     fn placed(&self, v: DVec3) -> DVec3 {
         let off = (self.across(v) - self.middle) * self.scale + self.shift;
@@ -842,6 +910,9 @@ fn wrapped(
             .map(|(a, angle, out)| (a, unrolled.round_from + angle / TAU * unrolled.round, out));
         unrolled.draw(&mut made, corners);
     }
+    // kept as it really is round the axis too, for rotary toolpaths to cut round
+    let solid: Vec<[DVec3; 3]> = tris.iter().map(|t| t.map(|v| turning.part(v))).collect();
+    made.set_solid(&solid);
     Ok(made)
 }
 
@@ -1074,6 +1145,67 @@ mod tests {
         assert_eq!(
             Orientate3dModel::initial_params(&job).in_material,
             job.job.model_position
+        );
+    }
+
+    #[test]
+    fn scaled_to_fit_the_material_it_stays_where_the_alignment_put_it() {
+        // the 20 by 10 by 5 box aligned at the file's size against the material's right,
+        // top edge and top, then scaled to fit: still there, measured from the material's
+        // corner, not grown out from the model's own corner
+        let doc = Document::default();
+        let (area, thickness) = (doc.job.area(), doc.job.thickness);
+        let aligned = |align: Align, fit_material| Params {
+            fit_material,
+            placing: Placing {
+                center: false,
+                position: Xy::new(area.max.x - 20.0, area.max.y - 10.0),
+                depth_below_top: thickness,
+                align,
+                ..Params::default().placing
+            },
+            ..Params::default()
+        };
+        let far = Align {
+            across: Some(1.0),
+            up: Some(1.0),
+            height: Some(1.0),
+        };
+        let (_, k) = imported("aligned-fit", &aligned(far, true));
+        let e = k.extent();
+        assert!(e.size().x > 40.0, "scaled up: {e:?}");
+        assert!(
+            (e.max.x - area.max.x).abs() < 2.0 * k.cell,
+            "{e:?} in {area:?}"
+        );
+        assert!(
+            (e.max.y - area.max.y).abs() < 2.0 * k.cell,
+            "{e:?} in {area:?}"
+        );
+        let (_, hi) = k.height_range().unwrap();
+        assert!(
+            (hi - thickness).abs() < 1e-6,
+            "top at the material's top: {hi}"
+        );
+        // centred across, on the front edge, half way up
+        let middle = Align {
+            across: Some(0.5),
+            up: Some(0.0),
+            height: Some(0.5),
+        };
+        let (_, k) = imported("centred-fit", &aligned(middle, true));
+        let e = k.extent();
+        assert!(
+            (e.center().x - area.center().x).abs() < 2.0 * k.cell,
+            "{e:?}"
+        );
+        assert!((e.min.y - area.min.y).abs() < 2.0 * k.cell, "{e:?}");
+        // a position typed, with no alignment kept, stays where it was typed
+        let (_, k) = imported("typed-fit", &aligned(Align::default(), true));
+        let e = k.extent();
+        assert!(
+            (e.min.x - (area.max.x - 20.0)).abs() < 2.0 * k.cell,
+            "{e:?}"
         );
     }
 
@@ -1376,6 +1508,52 @@ mod rotary {
             ((first - job.min.x) - (job.max.x - last)).abs() < 1e-6,
             "centred"
         );
+    }
+
+    #[test]
+    fn a_full_model_on_a_rotary_job_is_kept_as_it_really_is_round_the_axis() {
+        let p = Params {
+            model_type: ModelType::Full,
+            fit_material: true,
+            ..Params::default()
+        };
+        let faces = cylinder(10.0, 50.0);
+        let (doc, k) = import("kept", &faces, &p);
+        let solid = k.solid_triangles();
+        assert_eq!(solid.len(), faces.len(), "every triangle kept");
+        // what the 3D view shows turned round the axis, to the micrometre
+        let shown = preview(
+            &rotary_job(),
+            &Params {
+                file: stl("kept", &faces),
+                ..p
+            },
+        )
+        .unwrap()
+        .unwrap();
+        for (kept, (seen, _)) in solid.iter().zip(&shown) {
+            for (a, b) in kept.iter().zip(seen) {
+                assert!(a.distance(*b) < 1e-3, "{a} vs {b}");
+            }
+        }
+        // and saved and opened again with the job
+        let json = serde_json::to_string(&doc).unwrap();
+        let opened: Document = serde_json::from_str(&json).unwrap();
+        let again = opened.components.values().next().unwrap();
+        assert_eq!(again.solid, k.solid);
+        // a flat job's model keeps none
+        let (_, flat) = {
+            let mut doc = Document::default();
+            let p = Params {
+                file: stl("flat", &faces),
+                ..Params::default()
+            };
+            doc.apply(&Orientate3dModel::run(&doc, &p).unwrap())
+                .unwrap();
+            let k = doc.components.values().next().unwrap().clone();
+            (doc, k)
+        };
+        assert_eq!(flat.solid, Vec::<f32>::new());
     }
 
     #[test]

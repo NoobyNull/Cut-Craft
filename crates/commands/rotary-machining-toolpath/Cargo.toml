@@ -1,0 +1,17 @@
+[package]
+name = "cmd-rotary-machining-toolpath"
+description = "4-Axis Rotary Machining"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+cut-craft-rotary.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true
