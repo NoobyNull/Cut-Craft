@@ -13,8 +13,11 @@
 //! shows them true and the post works out A, the across axis and Z.
 //!
 //! Or it can work bulk to fine detail (Sides, then details): the bulk cleared from each side
-//! with A held still, each side finished, then A turned only where detail is left. It keeps
-//! what is left of the blank as it goes and never cuts air.
+//! with A held still, each side finished, then A locked at a few more angles, picked where
+//! they reach the most of what is left, for the details. It keeps what is left of the blank as
+//! it goes and never cuts air, and keeps the collet nut and spindle above the bit clear of the
+//! material and of the chuck and tailstock: where they would not fit it leaves the material,
+//! and says so in red.
 
 use cut_craft_core::component::{Combine, model, placed_model};
 use cut_craft_core::document::{Along, Document};
@@ -22,12 +25,13 @@ use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::progress;
 use cut_craft_core::rotary_axis;
+use cut_craft_core::rotary_axis::Surroundings;
 use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{
     Move, MoveKind, Tool, ToolDatabase, ToolShape, Toolpath, follow, made_by,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
-use cut_craft_rotary::{Cutter, Mesh, Pose, Stock, Voxels};
+use cut_craft_rotary::{Clearance, Cutter, Head, Mesh, Pose, Stock, Voxels};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -51,8 +55,9 @@ pub enum Strategy {
     Indexed,
     /// Bulk to fine detail: A turns to each side in turn and holds still while the bulk is
     /// cleared from it, a level at a time, then each side is finished, like a two-sided job
-    /// the machine turns over itself; last, A turns only where detail is left that no side
-    /// could reach. The bit never cuts air: every move is checked against what is left
+    /// the machine turns over itself; last, A locks at a few more angles, picked where they
+    /// reach the most of what is left, for the details. The bit never cuts air, and the holder
+    /// above it never touches the material, the chuck or the tailstock
     SidesThenDetails,
 }
 
@@ -77,6 +82,14 @@ pub struct Params {
     /// Material the bulk clearing leaves on the model for each side's finish to take off
     #[schemars(extend("x-unit" = "mm", "x-group" = "Strategy", "x-show-when" = {"strategy": "sides_then_details"}), range(min = 0))]
     pub roughing_allowance: f64,
+    /// The most angles A locks at after the sides, for the details: each picked where it
+    /// reaches the most of what the sides and the angles before it left. 0 for none
+    #[schemars(extend("x-group" = "Strategy", "x-show-when" = {"strategy": "sides_then_details"}), range(min = 0, max = 12))]
+    pub tilts: u32,
+    /// The angles A locks at for the details, in degrees, in order (such as 15, 165, 45).
+    /// Left empty, they are picked by themselves
+    #[schemars(extend("x-group" = "Strategy", "x-show-when" = {"strategy": "sides_then_details"}))]
+    pub tilt_angles: String,
     /// Where along the axis the rings start, from the job's start (the chuck end)
     #[schemars(extend("x-unit" = "mm", "x-group" = "Along the part"), range(min = 0))]
     pub start: f64,
@@ -89,6 +102,11 @@ pub struct Params {
     /// A small notch at A=0, just past the last ring, so the part can be put back exactly as
     /// it was if a job has to be started again
     pub registration_mark: bool,
+    /// The holder above the bit, and the chuck and tailstock: filled in from Machine
+    /// Configuration as the toolpath is made (the usual ones without)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub surroundings: Option<Surroundings>,
 }
 
 impl Default for Params {
@@ -104,10 +122,13 @@ impl Default for Params {
             offset: 3.0,
             faces: 4,
             roughing_allowance: 0.5,
+            tilts: 6,
+            tilt_angles: String::new(),
             start: 0.0,
             end: 0.0,
             allowance: 0.0,
             registration_mark: false,
+            surroundings: None,
         }
     }
 }
@@ -367,6 +388,8 @@ struct Work<'a> {
     /// The highest the tip ever needs to be above the axis: how far out the blank swings
     /// (a board or a square reaches past its own radius as it turns).
     top: f64,
+    /// What lengths are said in.
+    units: cut_craft_core::document::Units,
 }
 
 impl Work<'_> {
@@ -526,17 +549,29 @@ impl Work<'_> {
         .concat()
     }
 
-    /// Bulk to fine detail ([`Strategy::SidesThenDetails`]): each of `faces` sides cleared
-    /// a level at a time down to `roughing_allowance` above the model, A held still; then
-    /// each side finished; then rings round the part where material is still left. What is
-    /// left of the `stock` is kept as the passes are worked out, and any stretch where the
-    /// bit would cut nothing is left out.
+    /// Bulk to fine detail ([`Strategy::SidesThenDetails`]): each side cleared a level at a
+    /// time down to the roughing allowance above the model, A held still; then each side
+    /// finished; then A locked at more angles for the details, as `details` says. What is
+    /// left of the `stock` is kept as the passes are worked out, and any stretch where the bit
+    /// would cut nothing is left out, or where the holder above it would touch the material,
+    /// the chuck or the tailstock. Also says where the holder kept the bit from material it
+    /// should have cut, and the angles locked at for the details.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "bulk, finish and details worked out in turn"
+    )]
     fn sides_then_details(
         &self,
-        faces: u32,
         stock: &Stock,
-        roughing_allowance: f64,
-    ) -> Result<Vec<(Pass, bool)>, CommandError> {
+        details: &Details,
+    ) -> Result<(Vec<(Pass, bool)>, Outcome), CommandError> {
+        let Details {
+            faces,
+            roughing_allowance,
+            head,
+            ..
+        } = details;
+        let faces = *faces;
         let tool = self.tool;
         let d = tool.diameter;
         let radius = self.turned.radius;
@@ -549,14 +584,19 @@ impl Work<'_> {
         let mut material = Voxels::of(stock, Voxels::cell_for(stock, CELLS).max(d / 12.0));
         // only the bottom of the bit matters for what a pass cuts: the material above it
         // went with the levels before. The bulk is cleared wherever the bit finds material;
-        // a side is finished wherever there is any within a cell of it, however thin; a
-        // ring goes round only where the sides left a few cells' worth
+        // a side is finished wherever there is any within a cell of it, however thin; an
+        // angle for the details is picked where it finds a few cells' worth
         let cell = material.cell();
         let rough = Check::new(tool, depth + cell, 0.0, 1, cell);
         let fine = Check::new(tool, d, cell, 1, cell);
         let detail = Check::new(tool, d, 0.0, DETAIL, cell);
+        // the holder's room, worked out a cell or a millimetre at a time, whichever is coarser
+        let room = cell.max(1.0);
         let swing = stock.swing();
         let mut passes = vec![];
+        let mut refused = vec![];
+        let turn = |round: f64| round / radius;
+        let steps = 2 * faces as usize + details.tilts as usize;
 
         progress::stage("Clearing the bulk from each side");
         let rough_step = tool.stepover.clamp(0.05, 1.0) * d;
@@ -602,46 +642,168 @@ impl Work<'_> {
                         (p, across)
                     })
                     .collect();
-                passes.extend(self.cutting(&pass, &mut material, &rough));
+                // the holder's room as the levels before left it
+                let clear = Clearance::of(&material, turn(round), head, room);
+                // what the holder keeps the bulk from is left for the finishes after
+                passes.extend(self.cutting(
+                    &pass,
+                    &mut material,
+                    &rough,
+                    Some(&clear),
+                    &mut vec![],
+                ));
             }
-            progress::report_steps(face as usize + 1, 3 * faces as usize);
+            progress::report_steps(face as usize + 1, steps);
         }
 
         progress::stage("Finishing each side");
-        // right across the blank: a board is wider than it is thick, and what is air is
-        // left out anyway
-        let half = swing;
         for face in 0..faces {
             progress::stop_if_cancelled()?;
             let round = self.circumference * f64::from(face) / f64::from(faces);
-            let pass = self.side(half, self.step, self.turned.along_cell, |along, across| {
-                (
-                    self.point(along, round, self.tip(along, round, across) - radius),
-                    across,
-                )
-            });
-            passes.extend(self.cutting(&pass, &mut material, &fine));
-            progress::report_steps((faces + face) as usize + 1, 3 * faces as usize);
+            passes.extend(self.locked(round, &mut material, &fine, head, room, &mut refused));
+            progress::report_steps((faces + face) as usize + 1, steps);
         }
 
-        progress::stage("Turning for the details");
-        // a few cells, not one: the sides leave slivers finer than a cell that are not
-        // worth a ring
-        for ring in self.rings(0.0)? {
+        progress::stage("Locking A for the details");
+        let sides: Vec<f64> = (0..faces)
+            .map(|face| 360.0 * f64::from(face) / f64::from(faces))
+            .collect();
+        let mut tilts: Vec<f64> = vec![];
+        for k in 0..details.tilts as usize {
             progress::stop_if_cancelled()?;
-            passes.extend(self.cutting(&ring, &mut material, &detail));
+            let next = if let Some(angles) = &details.angles {
+                angles.get(k).copied()
+            } else {
+                let tried: Vec<f64> = sides.iter().chain(&tilts).copied().collect();
+                self.best_tilt(&material, &detail, head, &tried)
+            };
+            let Some(angle) = next else { break };
+            let round = angle.to_radians() * radius;
+            passes.extend(self.locked(round, &mut material, &fine, head, room, &mut refused));
+            tilts.push(angle);
+            progress::report_steps(2 * faces as usize + k + 1, steps);
         }
-        progress::report_steps(3 * faces as usize, 3 * faces as usize);
-        Ok(passes)
+        progress::report_steps(steps, steps);
+        // where the holder kept the bit off, and something is still left for it there now
+        // (not in the chuck or tailstock: that is meant to be left)
+        let left: Vec<Pose> = refused
+            .into_iter()
+            .filter(|p: &Pose| !head.held(p.along))
+            .filter(|&p| {
+                let looking = Pose {
+                    height: p.height - fine.margin,
+                    ..p
+                };
+                material.held(&fine.looks, looking, DETAIL) >= DETAIL
+            })
+            .collect();
+        Ok((passes, Outcome { left, tilts }))
+    }
+
+    /// A finish of the part with A locked at `round` (mm round the surface): lines back and
+    /// forth along it right across the blank (a board is wider than it is thick, and what is
+    /// air is left out anyway), cut where `check` finds material and the holder has room.
+    fn locked(
+        &self,
+        round: f64,
+        material: &mut Voxels,
+        check: &Check,
+        head: &Head,
+        room: f64,
+        refused: &mut Vec<Pose>,
+    ) -> Vec<(Pass, bool)> {
+        let radius = self.turned.radius;
+        let half = material.swing();
+        let pass = self.side(half, self.step, self.turned.along_cell, |along, across| {
+            (
+                self.point(along, round, self.tip(along, round, across) - radius),
+                across,
+            )
+        });
+        let clear = Clearance::of(material, round / radius, head, room);
+        self.cutting(&pass, material, check, Some(&clear), refused)
+    }
+
+    /// The angle (degrees) A locked at reaches the most of what is left of the `material`
+    /// for a finish, the holder kept clear, of every 15° but those `tried`: none when no
+    /// angle reaches enough to be worth it. Looked at a bit's width apart.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "line and point counts are small"
+    )]
+    fn best_tilt(
+        &self,
+        material: &Voxels,
+        check: &Check,
+        head: &Head,
+        tried: &[f64],
+    ) -> Option<f64> {
+        let radius = self.turned.radius;
+        let step = self.tool.diameter;
+        let half = material.swing();
+        let lines = ((2.0 * half / step).ceil() as usize).max(1) + 1;
+        let points = ((self.end - self.start) / step).ceil() as usize + 1;
+        let near =
+            |a: f64, b: f64| ((a - b).rem_euclid(360.0)).min((b - a).rem_euclid(360.0)) < 1.0;
+        // every angle at once, each worked through on its own thread
+        let scores = parallel(24, |k| {
+            let angle = 15.0 * f64::from(u32::try_from(k).unwrap_or(0));
+            if tried.iter().any(|&t| near(t, angle)) {
+                return (angle, 0);
+            }
+            let round = angle.to_radians() * radius;
+            // coarser than the finish's own: only to choose by
+            let clear = Clearance::of(
+                material,
+                round / radius,
+                head,
+                (2.0 * material.cell()).max(2.0),
+            );
+            let found: usize = (0..lines)
+                .map(|line| {
+                    let across = -half + line as f64 * 2.0 * half / (lines - 1) as f64;
+                    (0..points)
+                        .map(|i| {
+                            let along = (self.start + i as f64 * step).min(self.end);
+                            if head.held(along) {
+                                return 0;
+                            }
+                            let tip = self.tip(along, round, across);
+                            let pose = Pose::new(along, across, tip, round / radius);
+                            if !clear.allows(pose) {
+                                return 0;
+                            }
+                            let n = material.held(&check.looks, pose, 64);
+                            if n >= check.enough { n } else { 0 }
+                        })
+                        .sum::<usize>()
+                })
+                .sum();
+            (angle, found)
+        });
+        let mut best: Option<(f64, usize)> = None;
+        for (angle, found) in scores {
+            if found > best.map_or(0, |b| b.1) {
+                best = Some((angle, found));
+            }
+        }
+        // a few points' worth at least: less is slivers, not detail
+        best.filter(|b| b.1 >= 3 * DETAIL * 8).map(|b| b.0)
     }
 
     /// `pass` broken where the bit would cut too little of what is left of the `material`
-    /// to be worth it (as `check` says), which loses what the rest cuts.
+    /// to be worth it (as `check` says), which loses what the rest cuts; and, with a
+    /// `clear`ance, where the holder would touch the material, the chuck or the tailstock
+    /// (those points, where the bit would have cut, go in `refused`).
     fn cutting(
         &self,
         pass: &[(DVec3, f64)],
         material: &mut Voxels,
         check: &Check,
+        clear: Option<&Clearance>,
+        refused: &mut Vec<Pose>,
     ) -> Vec<(Pass, bool)> {
         let Check {
             cutter,
@@ -651,21 +813,28 @@ impl Work<'_> {
             enough,
         } = check;
         let mut cuts = Vec::with_capacity(pass.len());
+        let mut blocked = Vec::with_capacity(pass.len());
         // where a stretch may start, whether the bit can come straight down to it quickly:
         // nothing of the material anywhere above it, just before it goes there
-        let mut clear = vec![false; pass.len()];
+        let mut quick = vec![false; pass.len()];
         let mut last: Option<Pose> = None;
         for (i, point) in pass.iter().enumerate() {
             let pose = self.pose(point);
+            let fits = clear.is_none_or(|c| c.allows(pose));
+            blocked.push(!fits);
             let looking = Pose {
                 height: pose.height - margin,
                 ..pose
             };
-            let cutting = material.held(looks, looking, *enough) >= *enough;
+            let mut cutting = material.held(looks, looking, *enough) >= *enough;
+            if cutting && !fits {
+                refused.push(pose);
+                cutting = false;
+            }
             if cutting {
                 if last.is_none() {
-                    let start = if i > 0 { i - 1 } else { i };
-                    clear[start] = material.held(above, self.pose(&pass[start]), 1) == 0;
+                    let start = if i > 0 && !blocked[i - 1] { i - 1 } else { i };
+                    quick[start] = material.held(above, self.pose(&pass[start]), 1) == 0;
                 }
                 match last {
                     Some(from) => material.cut(cutter, from, pose),
@@ -677,13 +846,31 @@ impl Work<'_> {
             }
             cuts.push(cutting);
         }
-        let found = runs(pass, &cuts, 2.0 * self.tool.diameter);
+        let found = runs(pass, &cuts, &blocked, 2.0 * self.tool.diameter);
         found
             .into_iter()
-            .map(|run| (clear[run.start], pass[run].to_vec()))
-            .map(|(clear, run)| (run, clear))
+            .map(|run| (pass[run.clone()].to_vec(), quick[run.start]))
             .collect()
     }
+}
+
+/// How bulk to fine detail is to go: how many sides, what the bulk leaves, how many angles
+/// A locks at for the details (and which, when they are given), and the holder, chuck and
+/// tailstock to keep clear of.
+struct Details {
+    faces: u32,
+    roughing_allowance: f64,
+    tilts: u32,
+    angles: Option<Vec<f64>>,
+    head: Head,
+}
+
+/// What bulk to fine detail found as it went: where the holder kept the bit from material
+/// still left for it, and the angles A locked at for the details (degrees).
+#[derive(Debug, Default)]
+struct Outcome {
+    left: Vec<Pose>,
+    tilts: Vec<f64>,
 }
 
 /// How many threads to work out drops on.
@@ -837,7 +1024,7 @@ fn in_material(
         .into_iter()
         .flat_map(|pass| {
             let cutting: Vec<bool> = pass.iter().map(cuts).collect();
-            runs(&pass, &cutting, short)
+            runs(&pass, &cutting, &[], short)
                 .into_iter()
                 .map(|run| pass[run].to_vec())
                 .collect::<Vec<_>>()
@@ -847,15 +1034,22 @@ fn in_material(
 
 /// The stretches of `pass` where `cutting` says the bit cuts something, each with one
 /// point of air kept at either end, so the bit comes onto the material and leaves it at its
-/// cutting height; gaps shorter than `short` are cut through rather than lifted over.
-fn runs(pass: &[(DVec3, f64)], cutting: &[bool], short: f64) -> Vec<std::ops::Range<usize>> {
+/// cutting height; gaps shorter than `short` are cut through rather than lifted over. A point
+/// `blocked` (the holder would touch something there; none when it is empty) is never kept.
+fn runs(
+    pass: &[(DVec3, f64)],
+    cutting: &[bool],
+    blocked: &[bool],
+    short: f64,
+) -> Vec<std::ops::Range<usize>> {
+    let free = |i: usize| !blocked.get(i).copied().unwrap_or(false);
     let mut keep = cutting.to_vec();
     for (i, &c) in cutting.iter().enumerate() {
         if c {
-            if i > 0 {
+            if i > 0 && free(i - 1) {
                 keep[i - 1] = true;
             }
-            if i + 1 < keep.len() {
+            if i + 1 < keep.len() && free(i + 1) {
                 keep[i + 1] = true;
             }
         }
@@ -870,7 +1064,7 @@ fn runs(pass: &[(DVec3, f64)], cutting: &[bool], short: f64) -> Vec<std::ops::Ra
         while i < keep.len() && !keep[i] {
             i += 1;
         }
-        if from > 0 && i < keep.len() {
+        if from > 0 && i < keep.len() && (from..i).all(free) {
             let length: f64 = pass[from - 1..=i]
                 .windows(2)
                 .map(|w| w[0].0.distance(w[1].0))
@@ -941,6 +1135,124 @@ fn joined(
     (moves, across)
 }
 
+/// The angles typed in Tilt angles, in degrees: none when nothing is typed (they are picked),
+/// and, in red, any word that is not an angle (left out; none left, they are picked).
+fn angles(typed: &str) -> (Option<Vec<f64>>, Option<String>) {
+    let mut good = vec![];
+    let mut bad = vec![];
+    for w in typed
+        .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+        .map(|w| w.trim_end_matches(['°', 'º']))
+        .filter(|w| !w.is_empty())
+    {
+        match w.parse::<f64>().ok().filter(|a| a.is_finite()) {
+            Some(a) => good.push(a.rem_euclid(360.0)),
+            None => bad.push(format!("\"{w}\"")),
+        }
+    }
+    let note = (!bad.is_empty()).then(|| {
+        format!(
+            "Tilt angles: {} {} not an angle in degrees, so {} left out{}. Type angles such as \
+             15, 165, 45, or leave it empty to have them picked.",
+            bad.join(", "),
+            if bad.len() == 1 { "is" } else { "are" },
+            if bad.len() == 1 { "it is" } else { "they are" },
+            if good.is_empty() {
+                " and the angles are picked"
+            } else {
+                ""
+            },
+        )
+    });
+    ((!good.is_empty()).then_some(good), note)
+}
+
+/// Where along the part the model is: from its first point to its last.
+fn model_along(work: &Work) -> Option<(f64, f64)> {
+    if let Some((lo, hi)) = work.solid.and_then(|s| s.mesh.bounds()) {
+        return Some((lo.x, hi.x));
+    }
+    let t = work.turned;
+    let mut found: Option<(f64, f64)> = None;
+    for i in 0..t.along {
+        if (0..t.round)
+            .any(|j| t.radii[j * t.along + i] > 1e-9 && t.radii[j * t.along + i] < t.radius - 1e-9)
+        {
+            #[expect(clippy::cast_precision_loss, reason = "cell counts are small")]
+            let (a, b) = (i as f64 * t.along_cell, (i + 1) as f64 * t.along_cell);
+            found = Some(found.map_or((a, b), |(lo, hi)| (lo.min(a), hi.max(b))));
+        }
+    }
+    found
+}
+
+/// In red, when the model is in the chuck or tailstock, or so near them that the collet nut
+/// and spindle can't get down beside it: how much room to leave.
+fn too_near(work: &Work, head: &Head, around: &Surroundings, length: f64) -> Vec<String> {
+    let Some((first, last)) = model_along(work) else {
+        return vec![];
+    };
+    let units = work.units;
+    let room = head.widest() + 2.0;
+    let (free_from, free_to) = head.free();
+    let mut notes = vec![];
+    if around.chuck > 0.0 && first < free_from + room {
+        notes.push(format!(
+            "The model starts {} from the job's start, but the chuck holds the first {} \
+             (Machine Configuration's rotary settings), and the collet nut and spindle, {} \
+             across, can't get down beside it. Leave at least {} between the chuck and the \
+             model: move the model along, or make the material longer.",
+            units.length(first, 1),
+            units.length(around.chuck, 1),
+            units.length(2.0 * head.widest(), 0),
+            units.length(room, 0),
+        ));
+    }
+    if around.tailstock > 0.0 && last > free_to - room {
+        notes.push(format!(
+            "The model ends {} from the job's end, but the tailstock takes the last {}, and \
+             the collet nut and spindle can't get down beside it. Leave at least {} between \
+             the model and the tailstock.",
+            units.length((length - last).max(0.0), 1),
+            units.length(around.tailstock, 1),
+            units.length(room, 0),
+        ));
+    }
+    notes
+}
+
+/// In red, when the holder kept the bit from some of the model at every angle tried: where
+/// along the part, and what would reach it.
+fn left_note(
+    outcome: &Outcome,
+    around: &Surroundings,
+    units: cut_craft_core::document::Units,
+) -> Option<String> {
+    if outcome.left.is_empty() {
+        return None;
+    }
+    let (from, to) = outcome
+        .left
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| {
+            (lo.min(p.along), hi.max(p.along))
+        });
+    let tilts = if outcome.tilts.is_empty() {
+        String::new()
+    } else {
+        let list: Vec<String> = outcome.tilts.iter().map(|a| format!("{a:.0}°")).collect();
+        format!(" (A locked at {} for the details)", list.join(", "))
+    };
+    Some(format!(
+        "The collet nut ({} across) and spindle can't get down to some of the model at any \
+         angle tried{tilts}: it is left rough between {} and {} along the part. A bit that \
+         sticks out further, a slimmer holder, or the model sliced into parts would reach it.",
+        units.length(around.holder.nut_diameter, 0),
+        units.length(from, 1),
+        units.length(to, 1),
+    ))
+}
+
 /// The toolpath: rings round the part at each step along it, each from A=0 all the way round
 /// (over the axis, or held to one side of it), or each side in turn cut back and forth with A
 /// held still; the bit as low as it goes without touching the model.
@@ -949,7 +1261,12 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
     made(doc, p).map(|(toolpath, _)| toolpath)
 }
 
-/// [`machine`]'s toolpath, and notes for the person about what it left out.
+/// [`machine`], and what it has to say in red: where the holder kept the bit from the model,
+/// and a model too near the chuck or tailstock.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the strategies set up and joined in one place"
+)]
 fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandError> {
     let Some(rotary) = doc.job.rotary else {
         return Err(CommandError::Failed(
@@ -1005,8 +1322,12 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         end,
         step: stepover * tool.diameter,
         top: Stock::of(&doc.job).map_or(radius, |stock| stock.swing().max(radius)),
+        units: doc.job.units,
     };
     let plain = |passes: Vec<Pass>| passes.into_iter().map(|p| (p, false)).collect();
+    let mut notes = vec![];
+    // the holder, chuck and tailstock, where the toolpath keeps clear of them
+    let mut kept_clear: Option<Head> = None;
     // each pass, and whether the bit can come down to it at the rapid rate
     let mut passes: Vec<(Pass, bool)> = match p.strategy {
         Strategy::Radial => plain(work.rings(0.0)?),
@@ -1014,16 +1335,43 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         Strategy::Indexed => plain(work.sides(p.faces.clamp(1, 36))?),
         Strategy::SidesThenDetails => match Stock::of(&doc.job) {
             Some(stock) => {
-                work.sides_then_details(p.faces.clamp(1, 36), &stock, p.roughing_allowance)?
+                let around = p.surroundings.unwrap_or_default();
+                let (typed, wrong) = angles(&p.tilt_angles);
+                notes.extend(wrong);
+                let details = Details {
+                    faces: p.faces.clamp(1, 36),
+                    roughing_allowance: p.roughing_allowance,
+                    tilts: p.tilts.min(12),
+                    angles: typed,
+                    head: Head::new(tool, &around, length, stock.swing()),
+                };
+                notes.extend(too_near(&work, &details.head, &around, length));
+                let (passes, outcome) = work.sides_then_details(&stock, &details)?;
+                notes.extend(left_note(&outcome, &around, doc.job.units));
+                kept_clear = Some(details.head);
+                passes
             }
             None => plain(work.sides(p.faces.clamp(1, 36))?),
         },
     };
-    let mut notes = vec![];
     if p.registration_mark {
-        match work.mark((end + tool.diameter).min(length)) {
-            Some(mark) => passes.push((mark, false)),
-            None => notes.push(NO_ROOM_FOR_MARK.to_owned()),
+        // just past the last ring, clear of the chuck and tailstock, and only where the part
+        // is at least the mark's depth below the top
+        let along = (end + tool.diameter).min(length);
+        let reach = tool.diameter / 2.0;
+        match &kept_clear {
+            Some(head) if head.held(along - reach) || head.held(along + reach) => {
+                notes.push(
+                    "No room for the registration mark clear of the chuck and tailstock, so it \
+                     is left out: pencil a line along the material at A=0 before you start, or \
+                     bring End in from the tailstock."
+                        .into(),
+                );
+            }
+            _ => match work.mark(along) {
+                Some(mark) => passes.push((mark, false)),
+                None => notes.push(NO_ROOM_FOR_MARK.to_owned()),
+            },
         }
     }
     if let Some(stock) = Stock::of(&doc.job).filter(|_| p.strategy != Strategy::SidesThenDetails) {
@@ -1616,5 +1964,213 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn typed_tilt_angles_are_read_in_degrees_and_anything_else_is_left_out_and_said() {
+        assert_eq!(angles(""), (None, None));
+        assert_eq!(angles("  "), (None, None));
+        assert_eq!(
+            angles("15, 165;45° -15"),
+            (Some(vec![15.0, 165.0, 45.0, 345.0]), None)
+        );
+        // a word that is not an angle is left out, and said in red; never refused
+        let (kept, why) = angles("15, up");
+        assert_eq!(kept, Some(vec![15.0]));
+        let why = why.expect("a note");
+        assert!(why.contains("\"up\" is not an angle"), "{why}");
+        let (kept, why) = angles("up down");
+        assert_eq!(kept, None);
+        assert!(why.expect("a note").contains("the angles are picked"));
+    }
+
+    /// The box cut bulk to fine detail with `tool`, the holder, chuck and tailstock as
+    /// `around` says: the toolpath and what it said in red.
+    fn detailed(
+        tool: Tool,
+        around: Surroundings,
+        tilts: u32,
+        typed: &str,
+    ) -> (Toolpath, Vec<String>) {
+        let doc = boxed();
+        let p = Params {
+            tool,
+            strategy: Strategy::SidesThenDetails,
+            faces: 2,
+            tilts,
+            tilt_angles: typed.into(),
+            surroundings: Some(around),
+            ..Params::default()
+        };
+        made(&doc, &p).unwrap()
+    }
+
+    /// The angles (degrees) A is at as the toolpath cuts.
+    fn cutting_angles(toolpath: &Toolpath) -> Vec<f64> {
+        let mut seen: Vec<f64> = vec![];
+        for (_, turn, _, _) in poses(toolpath) {
+            let a = turn.to_degrees().rem_euclid(360.0);
+            if !seen
+                .iter()
+                .any(|s| (s - a).abs() < 0.5 || (s - a).abs() > 359.5)
+            {
+                seen.push(a);
+            }
+        }
+        seen.sort_by(f64::total_cmp);
+        seen
+    }
+
+    #[test]
+    fn after_the_sides_a_locks_only_at_the_angles_given_or_none() {
+        let long = || Tool {
+            stickout: 40.0,
+            flute_length: 25.0,
+            ..ball(6.0)
+        };
+        let (none, _) = detailed(long(), Surroundings::default(), 0, "");
+        assert_eq!(cutting_angles(&none), vec![0.0, 180.0]);
+        let (given, _) = detailed(long(), Surroundings::default(), 6, "90");
+        let seen = cutting_angles(&given);
+        assert!(seen.contains(&90.0), "{seen:?}");
+        assert!(
+            seen.iter().all(|a| [0.0, 90.0, 180.0].contains(a)),
+            "{seen:?}"
+        );
+    }
+
+    #[test]
+    fn the_collet_nut_never_comes_down_onto_the_box_and_what_it_keeps_from_is_said() {
+        // a bit sticking out only 8 mm under a 35 mm nut: beside the box's walls the nut sits
+        // on the box's top before the bit gets down to the axis
+        let stubby = Tool {
+            stickout: 8.0,
+            flute_length: 6.0,
+            ..ball(6.0)
+        };
+        let around = Surroundings::default();
+        let (toolpath, notes) = detailed(stubby, around, 0, "");
+        let nut = around.holder.nut_diameter / 2.0;
+        let mut checked = 0;
+        for (along, turn, height, across) in poses(&toolpath) {
+            // the box seen from above with A at 0 or 180: across and up as y and z are, or
+            // turned over
+            let flip = if turn.cos() > 0.999 {
+                1.0
+            } else if turn.cos() < -0.999 {
+                -1.0
+            } else {
+                continue;
+            };
+            let (lo, hi) = if flip > 0.0 {
+                (-6.0, 12.0)
+            } else {
+                (-12.0, 6.0)
+            };
+            let top = if flip > 0.0 { 10.0 } else { 8.0 };
+            // the nut's disc over the box's top, seen from above
+            let dx = (10.0 - along).max(along - 50.0).max(0.0);
+            let dy = (lo - across).max(across - hi).max(0.0);
+            if dx.hypot(dy) < nut {
+                assert!(
+                    height + 8.0 >= top - 0.01,
+                    "the nut is down on the box at {along}, {across} (A {turn}): tip {height}"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 100, "{checked}");
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.contains("collet nut (35 mm across)")),
+            "{notes:?}"
+        );
+    }
+
+    #[test]
+    fn nothing_is_cut_where_the_chuck_holds_the_material_and_a_model_too_near_it_is_said() {
+        let long = Tool {
+            stickout: 40.0,
+            flute_length: 25.0,
+            ..ball(6.0)
+        };
+        let around = Surroundings {
+            chuck: 15.0,
+            ..Surroundings::default()
+        };
+        let (toolpath, notes) = detailed(long, around, 0, "");
+        for (along, _, _, _) in poses(&toolpath) {
+            assert!(along - 3.0 >= 15.0 - 1e-6, "cut in the chuck at {along}");
+        }
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.contains("the chuck holds the first 15.0 mm")),
+            "{notes:?}"
+        );
+        // well clear of it: nothing said about it
+        let (_, notes) = detailed(
+            Tool {
+                stickout: 40.0,
+                flute_length: 25.0,
+                ..ball(6.0)
+            },
+            Surroundings::default(),
+            0,
+            "",
+        );
+        assert!(!notes.iter().any(|n| n.contains("chuck")), "{notes:?}");
+    }
+
+    #[test]
+    fn nothing_is_cut_where_the_tailstock_holds_the_material_however_far_out() {
+        let long = Tool {
+            stickout: 40.0,
+            flute_length: 25.0,
+            ..ball(6.0)
+        };
+        let around = Surroundings {
+            tailstock: 8.0,
+            ..Surroundings::default()
+        };
+        // the job is 60 long: the tailstock holds from 52 on, all the way out to the swing
+        let (toolpath, _) = detailed(long, around, 2, "");
+        let mut cut = 0;
+        for (along, _, _, _) in poses(&toolpath) {
+            assert!(
+                along + 3.0 <= 52.0 + 1e-6,
+                "cut in the tailstock at {along}"
+            );
+            cut += 1;
+        }
+        assert!(cut > 0);
+        // the registration mark would go at the job's end, in the tailstock: left out, and said
+        let p = Params {
+            tool: Tool {
+                stickout: 40.0,
+                flute_length: 25.0,
+                ..ball(6.0)
+            },
+            strategy: Strategy::SidesThenDetails,
+            faces: 2,
+            tilts: 0,
+            registration_mark: true,
+            surroundings: Some(around),
+            ..Params::default()
+        };
+        let (toolpath, notes) = made(&boxed(), &p).unwrap();
+        for (along, _, _, _) in poses(&toolpath) {
+            assert!(
+                along + 3.0 <= 52.0 + 1e-6,
+                "cut in the tailstock at {along}"
+            );
+        }
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.contains("No room for the registration mark")),
+            "{notes:?}"
+        );
     }
 }
