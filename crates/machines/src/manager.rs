@@ -740,7 +740,8 @@ fn winding(ui: &mut egui::Ui, axis: &mut cut_craft_core::rotary_axis::RotaryAxis
                 .range(0.5..=1000.0)
                 .speed(0.5)
                 .max_decimals(1)
-                .suffix(" turns each way"),
+                .suffix(" turns each way")
+                .name("Up to"),
         );
     });
     ui.end_row();
@@ -767,7 +768,8 @@ fn winding(ui: &mut egui::Ui, axis: &mut cut_craft_core::rotary_axis::RotaryAxis
             .range(0.0..=10.0)
             .speed(0.01)
             .max_decimals(3)
-            .suffix(" °"),
+            .suffix(" °")
+            .name("Backlash"),
     );
     ui.end_row();
 }
