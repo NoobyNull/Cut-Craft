@@ -12,6 +12,7 @@ use super::{
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{MachinedArea, Units};
+use cut_craft_i18n::tr;
 
 /// The push-pin's two drawings (`scripts/make_icons.py`).
 pub(super) const PIN_ICON: &str = "view/pin.png";
@@ -289,8 +290,8 @@ impl CutCraftApp {
             })
             .collect();
         if tools.is_empty() {
-            ui.weak("No favourites yet: right-click a tool ▸ Add to Favourites");
-            if ui.button("Show All Tools").clicked() {
+            ui.weak(tr!("panels-no-favourites-yet-right-click"));
+            if ui.button(tr!("panels-show-all-tools")).clicked() {
                 let action = format!("{}{}:false", gui::FAVOURITES_ONLY, gui::page_key(page));
                 self.invoke(ui.ctx(), &action);
             }
@@ -690,12 +691,12 @@ impl CutCraftApp {
             for (direction, arrow, tip) in [
                 (
                     Direction::Up,
-                    "Move Up",
+                    tr!("panels-move-up"),
                     "Move the active layer up the list",
                 ),
                 (
                     Direction::Down,
-                    "Move Down",
+                    tr!("panels-move-down"),
                     "Move the active layer down the list",
                 ),
             ] {
@@ -711,9 +712,9 @@ impl CutCraftApp {
         });
         ui.checkbox(
             &mut self.layers_on_sheet,
-            "Show only layers used on this sheet",
+            tr!("panels-show-only-layers-used-on"),
         )
-        .on_hover_hint("Leave out the layers with nothing on the active sheet");
+        .on_hover_hint(tr!("panels-leave-out-the-layers-with"));
         if let Some(direction) = moved {
             let params = serde_json::json!({ "layer": layer, "direction": direction });
             if let Err(e) = self.apply("reorder_layer", &params) {
@@ -783,7 +784,7 @@ impl CutCraftApp {
                 let count = self.doc.vectors_on(layer.id).count();
                 let row = ui
                     .selectable_label(self.doc.current_layer == layer.id, &layer.name)
-                    .on_hover_hint(format!("{count} vectors"));
+                    .on_hover_hint(tr!("panels-layer-vectors", count = count));
                 if row.clicked() {
                     clicked = Some((layer.id, "set_current_layer"));
                 }
@@ -993,7 +994,7 @@ impl CutCraftApp {
     /// menu.
     pub(super) fn sheets_panel(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Sheets tab");
-        ui.strong("Sheets List");
+        ui.strong(tr!("panels-sheets-list"));
         let units = self.doc.job.units;
         let (mut activate, mut chosen) = (None, None);
         egui::Grid::new("sheets_list").striped(true).show(ui, |ui| {
@@ -1017,7 +1018,7 @@ impl CutCraftApp {
                 ui.end_row();
             }
         });
-        let add = ui.button("Add New Sheet...").clicked();
+        let add = ui.button(tr!("panels-add-new-sheet")).clicked();
         if let Some(sheet) = activate
             && let Err(e) = self.apply("activate_sheet", &serde_json::json!({ "sheet": sheet }))
         {
@@ -1237,13 +1238,14 @@ impl CutCraftApp {
             .horizontal(|ui| {
                 let gap = ui.spacing().item_spacing.x;
                 // the labels' places stay put whatever the percent: the widest it shows
-                let right = measure(ui, "More detail") + measure(ui, "100%") + 2.0 * gap;
-                ui.label("Faster");
+                let right =
+                    measure(ui, &tr!("panels-more-detail")) + measure(ui, "100%") + 2.0 * gap;
+                ui.label(tr!("panels-faster"));
                 ui.spacing_mut().slider_width = (ui.available_width() - right - gap).max(40.0);
                 let slider = ui
                     .add(egui::Slider::new(&mut percent, 0..=100).show_value(false))
                     .on_hover_text(crate::preview_detail::about(&grid, units));
-                ui.label("More detail");
+                ui.label(tr!("panels-more-detail"));
                 ui.add_sized(
                     [measure(ui, "100%"), ui.spacing().interact_size.y],
                     egui::Label::new(format!("{percent}%")),
@@ -1575,19 +1577,19 @@ impl CutCraftApp {
         ui.horizontal(|ui| {
             let label = if self.playing { "Pause" } else { "Run" };
             run = ui.button(label).clicked();
-            if ui.button("Single Step").clicked() {
+            if ui.button(tr!("panels-single-step")).clicked() {
                 goal = Some(playback.next_step());
             }
-            if ui.button("Run to Retract").clicked() {
+            if ui.button(tr!("panels-run-to-retract")).clicked() {
                 goal = Some(playback.next_retract());
             }
             stop = if kept {
-                ui.button("Close")
-                    .on_hover_hint("Hide these controls: the preview stays as it is")
+                ui.button(tr!("panels-close"))
+                    .on_hover_hint(tr!("panels-hide-these-controls-the-preview"))
                     .clicked()
             } else {
-                ui.button("Stop")
-                    .on_hover_hint("Stop the preview here, keeping what is cut so far (Esc)")
+                ui.button(tr!("panels-stop"))
+                    .on_hover_hint(tr!("panels-stop-the-preview-here-keeping"))
                     .clicked()
             };
             ui.add(
@@ -1597,10 +1599,7 @@ impl CutCraftApp {
                     .custom_formatter(|x, _| times(x))
                     .text("Speed"),
             )
-            .on_hover_hint(
-                "×1 plays at the machine's own speed, as the Toolpath Summary times it: feeds, \
-                 rapids, speeding up, slowing down and corners. ×10 plays ten times faster",
-            );
+            .on_hover_hint(tr!("panels-1-plays-at-the-machine"));
         });
         if let Some(to) = self.scrub_sliders(ui, self.playback_goal.unwrap_or(at), length) {
             goal = Some(to);
@@ -1614,10 +1613,7 @@ impl CutCraftApp {
             self.playback_speed,
         ));
         if let Some(name) = guessed_shank {
-            ui.weak(format!(
-                "⚠ {name} has no shank diameter set, so its shank is drawn from a guess: set it \
-                 in the Tool Database"
-            ));
+            ui.weak(tr!("panels-shank-guessed", name = name.as_str()));
         }
         if let Some(note) = fine_bit {
             ui.weak(note);
@@ -1727,7 +1723,10 @@ impl CutCraftApp {
         let mut moved = None;
         let last = self.doc.selected_components.last();
         ui.horizontal(|ui| {
-            for (label, direction) in [("Move Up", Direction::Up), ("Move Down", Direction::Down)] {
+            for (label, direction) in [
+                (tr!("panels-move-up"), Direction::Up),
+                (tr!("panels-move-down"), Direction::Down),
+            ] {
                 let to = last.and_then(|id| neighbour(&self.doc, id, direction));
                 if ui
                     .add_enabled(to.is_some(), egui::Button::new(label))
@@ -1791,13 +1790,17 @@ impl CutCraftApp {
         .inner
     }
 
+    #[expect(clippy::too_many_lines, reason = "the tree, its rows and their menus")]
     pub(super) fn component_list(&mut self, ui: &mut egui::Ui) {
         // the tree is the active sheet's
         if let Some(sheet) = self.doc.sheets.get(self.doc.active_sheet) {
-            ui.strong(format!("Components ({})", sheet.name));
+            ui.strong(tr!(
+                "panels-components-of-sheet",
+                sheet = sheet.name.as_str()
+            ));
         }
         if self.doc.components.is_empty() {
-            ui.weak("No components yet");
+            ui.weak(tr!("panels-no-components-yet"));
         }
         let components = &self.doc.components;
         self.doc
@@ -2168,20 +2171,21 @@ impl CutCraftApp {
                 self.spinning_3d = None;
             }
         }
-        if ui.small_button("Fit").clicked() {
+        if ui.small_button(tr!("panels-fit")).clicked() {
             self.framing = self.framing.fitted();
         }
         // The orthographic / perspective toggle
         let perspective = self.framing.perspective;
-        if ui.selectable_label(perspective, "Perspective").clicked() {
+        if ui
+            .selectable_label(perspective, tr!("panels-perspective"))
+            .clicked()
+        {
             self.framing.perspective = !perspective;
         }
         let vectors = self.display.vectors_3d;
         if ui
-            .selectable_label(vectors, "Vectors")
-            .on_hover_text(
-                "Show or hide the vectors drawn over the model (View ▸ Draw Vectors in 3D View)",
-            )
+            .selectable_label(vectors, tr!("panels-vectors"))
+            .on_hover_text(tr!("panels-show-or-hide-the-vectors"))
             .clicked()
         {
             self.show_vectors_3d(!vectors);
@@ -2195,11 +2199,8 @@ impl CutCraftApp {
     fn auto_rotate_buttons(&mut self, ui: &mut egui::Ui) {
         let spinning = self.spinning_3d.is_some();
         if ui
-            .selectable_label(spinning, "Auto-rotate")
-            .on_hover_text(
-                "Turn the job round and round to see it from every side. \
-                 Drag in the view, or click here again, to stop",
-            )
+            .selectable_label(spinning, tr!("panels-auto-rotate"))
+            .on_hover_text(tr!("panels-turn-the-job-round-and"))
             .clicked()
         {
             self.spinning_3d = (!spinning).then(|| ui.input(|i| i.time));
@@ -2214,7 +2215,7 @@ impl CutCraftApp {
             .fixed_decimals(0);
         let changed = ui
             .add(slider)
-            .on_hover_text("How quickly the job turns, degrees a second")
+            .on_hover_text(tr!("panels-how-quickly-the-job-turns"))
             .changed();
         if changed {
             self.options.view_3d.spin_speed = speed;
@@ -3181,14 +3182,15 @@ impl CutCraftApp {
             .resizable(false)
             .fixed_pos(s.at)
             .show(ctx, |ui| {
-                ui.strong("Combine with other components ...");
+                ui.strong(tr!("panels-combine-with-other-components"));
                 combine_radios_3d(ui, &self.icons, s);
                 egui::Grid::new("component_settings_3d").show(ui, |ui| {
                     let p = &mut s.params;
-                    s.dirty |= ui.checkbox(&mut p.fade.on, "Fade").changed();
+                    s.dirty |= ui.checkbox(&mut p.fade.on, tr!("panels-fade")).changed();
                     // Set: then two clicks in the 3D view
                     let setting = s.anchors.map(|(which, _)| which);
-                    let set_fade = egui::Button::new("Set").selected(setting == Some(Anchor::Fade));
+                    let set_fade = egui::Button::new(tr!("panels-set"))
+                        .selected(setting == Some(Anchor::Fade));
                     if ui
                         .add_enabled(p.fade.on, set_fade)
                         .on_hover_hint(Anchor::Fade.prompt(false))
@@ -3202,8 +3204,9 @@ impl CutCraftApp {
                         .name("Fade");
                     s.dirty |= ui.add_enabled(p.fade.on, percent).changed();
                     ui.end_row();
-                    s.dirty |= ui.checkbox(&mut p.tilt.on, "Tilt").changed();
-                    let set_tilt = egui::Button::new("Set").selected(setting == Some(Anchor::Tilt));
+                    s.dirty |= ui.checkbox(&mut p.tilt.on, tr!("panels-tilt")).changed();
+                    let set_tilt = egui::Button::new(tr!("panels-set"))
+                        .selected(setting == Some(Anchor::Tilt));
                     if ui
                         .add_enabled(p.tilt.on, set_tilt)
                         .on_hover_hint(Anchor::Tilt.prompt(false))
@@ -3217,7 +3220,7 @@ impl CutCraftApp {
                         .name("Tilt");
                     s.dirty |= ui.add_enabled(p.tilt.on, angle).changed();
                     ui.end_row();
-                    ui.label("Appearance");
+                    ui.label(tr!("panels-appearance"));
                     egui::ComboBox::from_id_salt("appearance_3d")
                         .selected_text(p.appearance.label())
                         .show_ui(ui, |ui| {
@@ -3235,11 +3238,11 @@ impl CutCraftApp {
                             .add_enabled_ui(solid, |ui| ui.color_edit_button_srgb(&mut p.colour))
                             .inner
                             .changed();
-                        ui.label("Color...");
+                        ui.label(tr!("panels-color"));
                     });
                     ui.end_row();
                 });
-                close = ui.button("Close").clicked();
+                close = ui.button(tr!("panels-close")).clicked();
             });
         let pressed = ctx.input(|i| i.pointer.any_down());
         if !pressed {
@@ -4249,7 +4252,7 @@ impl CutCraftApp {
             .map(|(&id, _)| id)
             .collect();
         if shown.is_empty() {
-            ui.weak("Make a toolpath (or tick one in the list) to check it here");
+            ui.weak(tr!("panels-make-a-toolpath-or-tick"));
             return;
         }
         let plan = [shown];
@@ -4261,9 +4264,9 @@ impl CutCraftApp {
         }
         let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
         ui.add_space(ui.spacing().item_spacing.y);
-        ui.strong("Out of date");
+        ui.strong(tr!("panels-out-of-date"));
         if stale == 0 {
-            ui.label("✔ Every toolpath matches what it was made from");
+            ui.label(tr!("panels-every-toolpath-matches-what-it"));
         } else {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
@@ -4289,13 +4292,13 @@ impl CutCraftApp {
         if self.checking() {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label("Checking the toolpaths: a big 3D toolpath takes a little while");
+                ui.label(tr!("panels-checking-the-toolpaths-a-big"));
             });
             return false;
         }
-        ui.label("The checks were cancelled, so nothing has been checked yet");
-        ui.button("Check Again")
-            .on_hover_hint("Run the checks before cutting on these toolpaths again")
+        ui.label(tr!("panels-the-checks-were-cancelled-so"));
+        ui.button(tr!("panels-check-again"))
+            .on_hover_hint(tr!("panels-run-the-checks-before-cutting"))
             .clicked()
     }
 
@@ -4346,10 +4349,7 @@ impl CutCraftApp {
                             egui::Button::new(self.tool_label("machine_files")),
                         )
                         .on_hover_hint(gui::about("machine_files").unwrap_or_default())
-                        .on_disabled_hover_text(
-                            "Give the machine a folder or web address to send to in Machine \
-                             Configuration first",
-                        )
+                        .on_disabled_hover_text(tr!("panels-give-the-machine-a-folder"))
                         .clicked();
                     // beside Machine Files, so nothing under it moves
                     view = ui
@@ -4378,10 +4378,6 @@ impl CutCraftApp {
     /// group up or down the cut order (a group with all its toolpaths), delete, put the
     /// picked toolpaths in a new group, take them (or the picked group) out of it, or make an
     /// empty group for the next toolpaths made.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "two rows of labelled buttons and what each does"
-    )]
     fn toolpath_arrange_buttons(&mut self, ui: &mut egui::Ui) {
         use crate::toolpath_order as order;
         let listed = order::listed(&self.doc);
@@ -4401,79 +4397,55 @@ impl CutCraftApp {
         });
         let mut clicked = None;
         ui.horizontal_wrapped(|ui| {
-            let mut button = |ui: &mut egui::Ui, can: bool, label: &'static str, tip: &str| {
+            // each button is known by its id, the same in any language; its words' key
+            // is the id with hyphens
+            let mut button = |ui: &mut egui::Ui, can: bool, id: &'static str| {
+                let key = id.replace('_', "-");
                 if ui
-                    .add_enabled(can, egui::Button::new(label))
-                    .on_hover_hint(tip)
+                    .add_enabled(can, egui::Button::new(tr!(&key)))
+                    .on_hover_hint(tr!(&format!("{key}.tooltip")))
                     .clicked()
                 {
-                    clicked = Some(label);
+                    clicked = Some(id);
                 }
             };
-            button(
-                ui,
-                up.is_some(),
-                "Move Up",
-                "Cut the picked toolpath, or the picked group with all its toolpaths, sooner",
-            );
-            button(
-                ui,
-                down.is_some(),
-                "Move Down",
-                "Cut the picked toolpath, or the picked group with all its toolpaths, later",
-            );
+            button(ui, up.is_some(), "toolpaths_move_up");
+            button(ui, down.is_some(), "toolpaths_move_down");
             button(
                 ui,
                 picked.len() == 1 && self.available("delete_toolpath"),
-                "Delete",
-                "Delete Toolpath: take the picked toolpath out of the job. Del does the same \
-                 just after you click it in the list",
+                "toolpaths_delete",
             );
         });
         ui.horizontal_wrapped(|ui| {
-            let mut button = |ui: &mut egui::Ui, can: bool, label: &'static str, tip: &str| {
+            // each button is known by its id, the same in any language; its words' key
+            // is the id with hyphens
+            let mut button = |ui: &mut egui::Ui, can: bool, id: &'static str| {
+                let key = id.replace('_', "-");
                 if ui
-                    .add_enabled(can, egui::Button::new(label))
-                    .on_hover_hint(tip)
+                    .add_enabled(can, egui::Button::new(tr!(&key)))
+                    .on_hover_hint(tr!(&format!("{key}.tooltip")))
                     .clicked()
                 {
-                    clicked = Some(label);
+                    clicked = Some(id);
                 }
             };
-            button(
-                ui,
-                !picked.is_empty(),
-                "Group",
-                "Put the picked toolpaths (Ctrl-click to pick several) in a new group, which \
-                 cuts them one after another and moves them together",
-            );
-            button(
-                ui,
-                in_group || group.is_some(),
-                "Ungroup",
-                "Take the picked toolpaths out of their group, or take the picked group \
-                 apart, keeping its toolpaths",
-            );
-            button(
-                ui,
-                true,
-                "New Group",
-                "Create Empty Group: toolpaths made while it is picked join it; drag \
-                 toolpaths onto its name to put them in it",
-            );
+            button(ui, !picked.is_empty(), "toolpaths_group");
+            button(ui, in_group || group.is_some(), "toolpaths_ungroup");
+            button(ui, true, "toolpaths_new_group");
         });
         match clicked {
-            Some("Move Up") => self.arrange(up, &[]),
-            Some("Move Down") => self.arrange(down, &[]),
-            Some("Delete") => self.invoke(ui.ctx(), "delete_toolpath"),
-            Some("Group") => {
+            Some("toolpaths_move_up") => self.arrange(up, &[]),
+            Some("toolpaths_move_down") => self.arrange(down, &[]),
+            Some("toolpaths_delete") => self.invoke(ui.ctx(), "delete_toolpath"),
+            Some("toolpaths_group") => {
                 let name = self.doc.next_toolpath_group_name();
                 let to = order::grouped(&listed, &picked, &name);
                 let groups: Vec<_> = picked.iter().map(|&id| (id, name.clone())).collect();
                 self.arrange(Some(to), &groups);
                 self.selected_group = None;
             }
-            Some("Ungroup") => {
+            Some("toolpaths_ungroup") => {
                 if let Some(name) = group {
                     let params = serde_json::json!({ "group": name, "delete_toolpaths": false });
                     if let Err(e) = self.apply("ungroup_toolpaths", &params) {
@@ -4486,7 +4458,7 @@ impl CutCraftApp {
                     self.arrange(Some(to), &groups);
                 }
             }
-            Some("New Group") => {
+            Some("toolpaths_new_group") => {
                 let params = serde_json::json!({
                     "toolpaths": [],
                     "group": self.doc.next_toolpath_group_name(),
@@ -4578,10 +4550,9 @@ impl CutCraftApp {
     ) -> (Option<bool>, Option<String>, egui::Response) {
         let picked = self.selected_group.as_deref() == Some(group);
         let name = egui::RichText::new(group).strong();
-        let label = ui.selectable_label(picked, name).on_hover_hint(
-            "A toolpath group: its toolpaths cut one after another. Toolpaths made while it \
-                 is picked join it, and so do toolpaths dragged onto its name",
-        );
+        let label = ui
+            .selectable_label(picked, name)
+            .on_hover_hint(tr!("panels-a-toolpath-group-its-toolpaths"));
         let pick = if label.clicked() {
             Some(!picked)
         } else if label.secondary_clicked() {
@@ -4631,11 +4602,11 @@ impl CutCraftApp {
     fn toolpath_list_rows(&mut self, ui: &mut egui::Ui, templates: bool) {
         use crate::toolpath_order::{self as order, Row, Target};
         cut_craft_bug_report::mark(ui, "Toolpath list");
-        ui.strong("Toolpath List");
+        ui.strong(tr!("panels-toolpath-list"));
         self.toolpath_list_buttons(ui, templates);
         self.toolpath_arrange_buttons(ui);
         if self.doc.toolpaths.is_empty() {
-            ui.weak("No toolpaths yet: each one you make is listed here");
+            ui.weak(tr!("panels-no-toolpaths-yet-each-one"));
         }
         let mut chosen = None;
         let mut shown = None;
@@ -4747,7 +4718,7 @@ impl CutCraftApp {
                     // room under the rows: dropped there, a toolpath goes last, in no group
                     let end = ui.add(
                         egui::Label::new(
-                            egui::RichText::new("Drop here to cut it last, in no group").weak(),
+                            egui::RichText::new(tr!("panels-drop-here-to-cut-it")).weak(),
                         )
                         .selectable(false),
                     );
@@ -4825,9 +4796,9 @@ impl CutCraftApp {
         }
         let mut chosen = None;
         if steps {
-            step_heading(ui, 2, "Preview: watch it cut");
+            step_heading(ui, 2, &tr!("panels-preview-watch-it-cut"));
         } else {
-            ui.strong("Preview: watch it cut");
+            ui.strong(tr!("panels-preview-watch-it-cut"));
         }
         let stale = self.doc.toolpaths.values().any(|t| t.stale);
         // out of date ones are called out in the list; their fix is at hand
@@ -4843,7 +4814,7 @@ impl CutCraftApp {
                 chosen = button(self, ui, id).or(chosen);
             }
             if !spread {
-                ui.menu_button("More…", |ui| {
+                ui.menu_button(tr!("panels-more"), |ui| {
                     for id in more.clone() {
                         if let Some(id) = button(self, ui, id) {
                             chosen = Some(id);
@@ -4857,7 +4828,7 @@ impl CutCraftApp {
         self.detail_slider(ui);
         if spread {
             ui.add_space(ui.spacing().item_spacing.y);
-            ui.strong("More Previews");
+            ui.strong(tr!("panels-more-previews"));
             ui.horizontal_wrapped(|ui| {
                 // deleting is the list's job, beside its other row buttons
                 for id in more.filter(|&id| id != "delete_toolpath") {
@@ -4876,7 +4847,7 @@ impl CutCraftApp {
         if steps {
             step_heading(ui, 4, "Output: the file your machine runs");
         } else {
-            ui.strong("Save: the file your machine runs");
+            ui.strong(tr!("panels-save-the-file-your-machine"));
         }
         let ready = self.available("save_toolpaths");
         let row = ui.spacing().interact_size.y;
@@ -4888,10 +4859,7 @@ impl CutCraftApp {
                     .fill(ui.visuals().selection.bg_fill)
                     .min_size(egui::vec2(ui.available_width(), row * 1.5)),
             )
-            .on_hover_hint(
-                "Check the toolpaths and write the G-code file your machine runs, using its \
-                 post processor",
-            );
+            .on_hover_hint(tr!("panels-check-the-toolpaths-and-write"));
         crate::marks::note(ui, "tool:save_toolpaths", save.rect);
         if !ready {
             ui.weak(SAVE_NEEDS);
@@ -4925,8 +4893,8 @@ impl CutCraftApp {
             |ui| {
                 ui.set_height(row);
                 // the version, at the far right, as Help ▸ About gives it
-                ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
-                    .on_hover_hint("Cut Craft's version (Help ▸ About)");
+                ui.weak(tr!("panels-version", version = env!("CARGO_PKG_VERSION")))
+                    .on_hover_hint(tr!("panels-cut-craft-s-version-help"));
                 ui.separator();
                 // the Web API's state, once it is switched on, in a slot of its own width
                 if self.web_api_indicator(ui) {
@@ -4940,14 +4908,17 @@ impl CutCraftApp {
                     };
                     swap = ui
                         .small_button(unit)
-                        .on_hover_hint(format!("Switch to {other} (Edit ▸ Units)"))
+                        .on_hover_hint(tr!("panels-switch-units", other = other))
                         .clicked();
                     if let Some((figures, _)) = self.coordinates() {
                         ui.monospace(figures);
                     }
                     ui.separator();
                 }
-                ui.label(format!("Tool: {}", self.status.current_tool));
+                ui.label(tr!(
+                    "panels-current-tool",
+                    tool = self.status.current_tool.as_str()
+                ));
                 ui.separator();
                 if self.screen == Screen::Job
                     && let Some(count) = self.doc.selected_vector_count().text()
@@ -4956,10 +4927,8 @@ impl CutCraftApp {
                     ui.separator();
                 }
                 if self.screen == Screen::Job && self.options.view_3d.show_frame_rate {
-                    ui.weak(self.frame_rate_note()).on_hover_hint(
-                        "How finely the 3D view draws the model, and how many pictures a \
-                         second it draws while it moves (Options ▸ 3D View)",
-                    );
+                    ui.weak(self.frame_rate_note())
+                        .on_hover_hint(tr!("panels-how-finely-the-3d-view"));
                     ui.separator();
                 }
                 // the rest of the row, never more than one line
@@ -4988,7 +4957,7 @@ impl CutCraftApp {
     }
 }
 
-/// What "by rule" beside a toolpath in the list means.
+/// What tr!("panels-by-rule") beside a toolpath in the list means.
 pub(super) const FOLLOWS_RULE_HINT: &str = "This toolpath follows a Vector Selector: each time it is calculated it takes the vectors \
      that pass its filters (open or closed, circles, layers), so vectors added later are cut \
      too once it is recalculated";
@@ -5023,7 +4992,7 @@ fn toolpath_row(
             let mut visible = toolpath.visible;
             if ui
                 .checkbox(&mut visible, "")
-                .on_hover_hint("Show or hide this toolpath; Undo takes it back in one step")
+                .on_hover_hint(tr!("panels-show-or-hide-this-toolpath"))
                 .changed()
             {
                 ticked = Some(visible);
@@ -5044,9 +5013,9 @@ fn toolpath_row(
             } else if toolpath.stale {
                 let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
                     .color(ui.visuals().warn_fg_color);
-                ui.selectable_label(selected, name).on_hover_hint(format!(
-                    "{}\nOut of date: what it was made from has changed since. Recalculate it.",
-                    toolpath.tool.name
+                ui.selectable_label(selected, name).on_hover_hint(tr!(
+                    "panels-toolpath-out-of-date",
+                    tool = toolpath.tool.name.as_str()
                 ))
             } else {
                 ui.selectable_label(selected, &toolpath.name)
@@ -5054,7 +5023,8 @@ fn toolpath_row(
             };
             // made from whatever passes its Vector Selector, not a fixed set of vectors
             if cut_craft_core::selector::Selector::of(&toolpath.params).is_some() {
-                ui.weak("by rule").on_hover_hint(FOLLOWS_RULE_HINT);
+                ui.weak(tr!("panels-by-rule"))
+                    .on_hover_hint(FOLLOWS_RULE_HINT);
             }
             row
         })
