@@ -229,7 +229,7 @@ fn stretch(text: &str) -> Cow<'_, str> {
         }
     }
     // German and French run about 40% longer than English: pad to that
-    let long = text.chars().count() * 14 / 10;
+    let long = (text.chars().count() * 14).div_ceil(10);
     while out.chars().count() < long {
         out.push('~');
     }
@@ -433,6 +433,58 @@ start-whats-new = Neu in v{ $version }
         assert_eq!(count(3), "3 toolpaths");
     }
 
+    /// Every language pack in the source (`language-packs/<code>/`) reads with no problems,
+    /// has only keys English has, and its `addon.toml` names it as a language pack for that
+    /// code.
+    #[test]
+    fn every_pack_in_the_source_reads_and_matches_english() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../language-packs");
+        let mut packs = 0;
+        for entry in std::fs::read_dir(&root).unwrap().flatten() {
+            let folder = entry.path();
+            if !folder.is_dir() {
+                continue;
+            }
+            packs += 1;
+            let code = entry.file_name().to_string_lossy().into_owned();
+            let manifest = std::fs::read_to_string(folder.join("addon.toml"))
+                .unwrap_or_else(|e| panic!("{code}: addon.toml: {e}"));
+            for line in [
+                format!("id = \"language-{}\"", code.to_ascii_lowercase()),
+                "kind = \"language\"".to_owned(),
+                format!("language = \"{code}\""),
+            ] {
+                assert!(
+                    manifest.lines().any(|l| l.trim() == line),
+                    "{code}/addon.toml needs: {line}"
+                );
+            }
+            let mut files: Vec<(String, String)> = std::fs::read_dir(&folder)
+                .unwrap()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|x| x == "ftl"))
+                .map(|p| {
+                    let name = p.file_name().unwrap().to_string_lossy().into_owned();
+                    (name, std::fs::read_to_string(&p).unwrap())
+                })
+                .collect();
+            files.sort();
+            let borrowed: Vec<(&str, &str)> = files
+                .iter()
+                .map(|(n, t)| (n.as_str(), t.as_str()))
+                .collect();
+            let (pack, problems) = Catalogue::parse(&code, &borrowed);
+            assert!(problems.is_empty(), "{code}: {}", problems.join("\n"));
+            let unknown: Vec<&String> = pack.keys().iter().filter(|k| !english().has(k)).collect();
+            assert!(
+                unknown.is_empty(),
+                "{code}: keys English doesn't have: {unknown:?}"
+            );
+        }
+        assert_ne!(packs, 0, "no packs found in {}", root.display());
+    }
+
     #[test]
     fn coverage_counts_english_keys_a_pack_has() {
         let (done, total) = german().coverage();
@@ -448,14 +500,32 @@ start-whats-new = Neu in v{ $version }
             let plain = english().words(key, None).unwrap();
             let long = p.words(key, None).unwrap();
             assert!(long.starts_with('[') && long.ends_with(']'), "{long}");
+            // a value put in (shown here as `{$name}`) is the same in every language, so only
+            // the words around it are measured
+            // the words, and the values put in, in order
+            let split = |s: &str| {
+                let (mut kept, mut values) = (String::new(), Vec::new());
+                let mut rest = s;
+                while let Some(start) = rest.find("{$") {
+                    kept.push_str(&rest[..start]);
+                    let end = rest[start..]
+                        .find('}')
+                        .map_or(rest.len(), |e| start + e + 1);
+                    values.push(rest[start..end].to_owned());
+                    rest = &rest[end..];
+                }
+                kept.push_str(rest);
+                (kept.chars().count(), values)
+            };
+            // measured inside the brackets the test language wraps its words in
+            let inner = &long['['.len_utf8()..long.len() - ']'.len_utf8()];
+            let ((short, plain_values), (stretched, long_values)) = (split(&plain), split(inner));
+            assert_eq!(plain_values, long_values, "{plain} -> {long}: its values");
             if plain.chars().filter(|c| c.is_alphabetic()).count() > 4 {
-                assert!(
-                    long.chars().count() * 10 >= plain.chars().count() * 13,
-                    "{plain} -> {long}"
-                );
+                assert!(stretched * 10 >= short * 13, "{plain} -> {long}");
             }
         }
-        assert_eq!(stretch("Cut 12 mm"), "Çüüt 12 mm~~");
+        assert_eq!(stretch("Cut 12 mm"), "Çüüt 12 mm~~~");
     }
 
     // One test switches languages, so the others never see another language mid-test.

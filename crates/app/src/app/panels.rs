@@ -760,6 +760,26 @@ impl CutCraftApp {
                 {
                     clicked = Some((layer.id, "toggle_locked"));
                 }
+                // the colour its vectors are drawn in; a click opens Layer Properties to change it
+                let usual = self.options.appearance.lines(ui.visuals().dark_mode).vector;
+                let (swatch, chip) =
+                    ui.allocate_exact_size(egui::vec2(edge, edge), egui::Sense::click());
+                let inner = swatch.shrink(edge * 0.2);
+                ui.painter().rect(
+                    inner,
+                    2.0,
+                    crate::view2d::colour32(layer.colour.unwrap_or(usual)),
+                    ui.visuals().widgets.noninteractive.fg_stroke,
+                    egui::StrokeKind::Inside,
+                );
+                let tip = if layer.colour.is_some() {
+                    "The layer's own colour: click to change it"
+                } else {
+                    "The usual vector colour: click to give the layer its own"
+                };
+                if chip.on_hover_hint(tip).clicked() {
+                    clicked = Some((layer.id, "layer_properties"));
+                }
                 let count = self.doc.vectors_on(layer.id).count();
                 let row = ui
                     .selectable_label(self.doc.current_layer == layer.id, &layer.name)
@@ -4024,19 +4044,24 @@ impl CutCraftApp {
         fit: egui::Rect,
     ) {
         let shown = self.display;
-        let vectors: Vec<Vec<cut_craft_core::geometry::Point>> = if shown.vectors_3d {
-            self.doc
-                .vectors
-                .iter()
-                // construction lines only place things in the 2D view: nothing to see in 3D
-                .filter(|(id, _)| self.doc.shown(**id) && !self.doc.is_construction(**id))
-                .map(|(_, path)| path.flatten(cut_craft_core::polygon::TOLERANCE))
-                .collect()
-        } else {
-            vec![]
-        };
+        let vectors: Vec<(Vec<cut_craft_core::geometry::Point>, Option<[u8; 3]>)> =
+            if shown.vectors_3d {
+                self.doc
+                    .vectors
+                    .iter()
+                    // construction lines only place things in the 2D view: nothing to see in 3D
+                    .filter(|(id, _)| self.doc.shown(**id) && !self.doc.is_construction(**id))
+                    .map(|(id, path)| {
+                        let points = path.flatten(cut_craft_core::polygon::TOLERANCE);
+                        (points, self.doc.colour_of(*id))
+                    })
+                    .collect()
+            } else {
+                vec![]
+            };
         let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
-        // the vectors in the colour the 2D view draws them in (Options ▸ Appearance)
+        // the vectors in the colour the 2D view draws them in (Options ▸ Appearance, or
+        // their layer's own)
         let vector = egui::Stroke::new(
             stroke.width,
             crate::view2d::colour32(self.options.appearance.lines(ui.visuals().dark_mode).vector),
@@ -4052,12 +4077,15 @@ impl CutCraftApp {
                 .map(|run| run.into_iter().map(&screen).collect::<Vec<_>>())
                 .collect::<Vec<_>>()
         };
-        // each vector flat, in one plane, on top of what it outlines
-        for points in &vectors {
+        // each vector flat, in one plane, on top of what it outlines, in its layer's colour
+        for (points, own) in &vectors {
             let z = view3d::vector_plane(surface, points);
             let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
+            let stroke = own.map_or(vector, |c| {
+                egui::Stroke::new(stroke.width, crate::view2d::colour32(c))
+            });
             for run in in_sight(&line) {
-                painter.add(egui::Shape::line(run, vector));
+                painter.add(egui::Shape::line(run, stroke));
             }
         }
         // the keep-out zones in red, closed, over whatever they cover

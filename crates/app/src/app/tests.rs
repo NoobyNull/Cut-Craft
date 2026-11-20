@@ -170,6 +170,15 @@ fn about_lists_the_github_contributors() {
     h.frame(vec![]);
     assert!(h.text_at("Contributors on GitHub").is_some());
     assert!(h.text_at("NoobyNull").is_some());
+    // a count takes its plural form only as a number
+    assert_eq!(
+        cut_craft_i18n::tr!("about-commits", count = 1_u64),
+        "1 commit"
+    );
+    assert_eq!(
+        cut_craft_i18n::tr!("about-commits", count = 2_u64),
+        "2 commits"
+    );
 }
 
 #[test]
@@ -7855,7 +7864,8 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     h.app.pages.set_pinned(Page::Design, true);
     h.app.invoke(&h.ctx, "help_contents");
     assert_eq!(h.app.info, Some(Info::Help("contents")));
-    // a new window measures itself on its first frame
+    // a new window measures itself on its first frame, and its scroll bar on the next
+    h.frame(vec![]);
     h.frame(vec![]);
     h.frame(vec![]);
     // the window's link, drawn over the Design page's own title and side tab
@@ -13189,7 +13199,7 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
         "no tick: a cut past the material is warned of on Calculate"
     );
     assert!(
-        h.text_at(super::tabs::LOOSE).is_none(),
+        h.text_at(&super::tabs::loose()).is_none(),
         "6 mm deep holds the part"
     );
     h.app.form.as_mut().unwrap().params["depth"] = thickness.into();
@@ -13199,7 +13209,7 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
     let over = h.form_heading("Profile Toolpath") + egui::vec2(0.0, 200.0);
     let add = scroll_above_foot(&mut h, over, "Add Tabs");
     assert!(
-        h.text_at(super::tabs::LOOSE).is_some(),
+        h.text_at(&super::tabs::loose()).is_some(),
         "right through, no tabs"
     );
     // made like that, the status bar warns too
@@ -13213,7 +13223,7 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
     h.click(add, Modifiers::NONE);
     h.frame(vec![]);
     assert_eq!(h.app.form.as_ref().unwrap().params["tabs"], "flat");
-    assert!(h.text_at(super::tabs::LOOSE).is_none());
+    assert!(h.text_at(&super::tabs::loose()).is_none());
 }
 
 #[test]
@@ -13646,6 +13656,22 @@ fn the_community_links_are_in_help_not_on_the_start_page() {
     );
 }
 
+/// Every web link (Help > Community, the update window's links and download button, links
+/// in help pages) asks the window to open it; the window only does so when eframe is built
+/// with its "links" part. Without it each click was silently dropped (#609).
+#[test]
+fn the_window_is_built_to_open_web_links() {
+    let manifest = include_str!("../../../../Cargo.toml");
+    let eframe = manifest
+        .lines()
+        .find(|l| l.trim_start().starts_with("eframe ="))
+        .expect("the workspace names eframe");
+    assert!(
+        eframe.contains("\"links\""),
+        "eframe needs the \"links\" feature, or no link opens a browser: {eframe}"
+    );
+}
+
 #[test]
 fn plate_production_recalculates_toolpaths_on_placeholder_text_for_each_plates_text() {
     let mut h = Harness::new();
@@ -13780,6 +13806,45 @@ fn every_label_character_has_a_glyph() {
         "no glyph in egui's fonts, so these draw as empty boxes; draw an icon \
          (scripts/make_icons.py) or pick a character they have:\n{}",
         missing.join("\n")
+    );
+}
+
+/// Every character the language packs in the source use has a glyph in Cut Craft's fonts,
+/// so a pack never shows empty boxes (a language whose letters the fonts lack needs a font
+/// added first).
+#[test]
+fn every_language_pack_character_has_a_glyph() {
+    let ctx = egui::Context::default();
+    ctx.set_fonts(super::ui_fonts(None));
+    let _ = headless(ctx.run_ui(RawInput::default(), |_| {}));
+    let font = egui::FontId::proportional(14.0);
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../language-packs");
+    let mut missing = std::collections::BTreeSet::new();
+    for pack in std::fs::read_dir(&root).unwrap().flatten() {
+        for file in std::fs::read_dir(pack.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if file.path().extension().is_none_or(|x| x != "ftl") {
+                continue;
+            }
+            let text = std::fs::read_to_string(file.path()).unwrap();
+            for c in text.chars().filter(|c| !c.is_control()) {
+                if !ctx.fonts_mut(|f| f.has_glyph(&font, c)) {
+                    missing.insert(format!(
+                        "{c} (U+{:04X}) in {}",
+                        u32::from(c),
+                        file.path().display()
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "no glyph for:\n{}",
+        missing.into_iter().collect::<Vec<_>>().join("\n")
     );
 }
 
@@ -19677,4 +19742,59 @@ fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
     h.frame(vec![]);
     assert!(!h.app.rail_gadgets, "nothing installed: no list");
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_language_pack_picked_in_options_is_used_once_applied() {
+    let addons = std::env::temp_dir().join(format!("cut-craft-language-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&addons);
+    let ru = addons.join("language-ru");
+    std::fs::create_dir_all(&ru).unwrap();
+    std::fs::write(
+        ru.join(cut_craft_updater::addon::MANIFEST),
+        "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\nversion = \"0.1.0\"\n\
+         language = \"ru\"",
+    )
+    .unwrap();
+    std::fs::write(
+        ru.join(cut_craft_updater::addon::RECORD),
+        "{\"repo\":{\"owner\":\"NoobyNull\",\"name\":\"CutCraft-Translations\"},\"tag\":\
+         \"v1.0.0\",\"version\":\"1.0.0\",\"signed\":false}",
+    )
+    .unwrap();
+    std::fs::write(ru.join("menus.ftl"), "menu-file = Файл\n").unwrap();
+    let mut h = Harness::new();
+    h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
+    h.app.options_window = true;
+    h.app.options_goto = Some(crate::options::LANGUAGE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // listed with how much it covers, and marked as not official (unsigned)
+    assert!(h.text_at("Русский").is_some(), "{:?}", h.texts());
+    assert!(h.text_at("⚠ not official").is_some());
+    click_button(&mut h, "Русский");
+    assert_eq!(h.app.edited_options().language.pack, "language-ru");
+    assert_eq!(
+        cut_craft_i18n::tr("menu-file"),
+        "File",
+        "not used before Apply"
+    );
+    h.apply_options();
+    assert_eq!(h.app.options.language.pack, "language-ru");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "Файл");
+    // what the pack lacks stays English
+    assert_eq!(cut_craft_i18n::tr("menu-edit"), "Edit");
+    // back to English, and a pack that has gone leaves English and says so
+    h.app.use_language("");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
+    std::fs::remove_dir_all(&addons).unwrap();
+    h.app.options.language.pack = "language-ru".to_owned();
+    h.app.use_language("language-ru");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
+    assert_eq!(h.app.options.language.pack, "", "Options says English too");
+    assert!(
+        h.app.status.message.contains("not installed"),
+        "{}",
+        h.app.status.message
+    );
 }

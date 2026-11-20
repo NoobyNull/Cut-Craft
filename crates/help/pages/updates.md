@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 see-also: web_api, contents, settings
 ---
 
@@ -66,6 +66,10 @@ as it was and the window says what happened. Most of the time the fix is one of 
   and install the new version the same way you installed this one.
 - **The signature or checksum does not match**: the download was damaged on the way.
   Nothing was installed. Try again later, or download it from the release page.
+- **A link or Open the Download Page does nothing**: links open in this computer's default
+  web browser. Versions before 0.7.1 never opened links (on every system, not only the Mac).
+  In those, type the release page's address into your browser yourself:
+  `github.com/NoobyNull/Cut-Craft/releases`.
 
 ## Copies that update another way
 

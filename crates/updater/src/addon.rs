@@ -47,6 +47,41 @@ pub const OFFICIAL: &[Official] = &[Official {
     repo: "NoobyNull/CutCraft-Depth",
 }];
 
+/// The repository every language pack is published on: each release carries one
+/// `language-<code>.zip` per language (and its signature), each installed on its own.
+pub const TRANSLATIONS: &str = "NoobyNull/CutCraft-Translations";
+
+/// The zip a language's pack is in, on [`TRANSLATIONS`]' releases.
+pub fn language_zip(code: &str) -> String {
+    format!("language-{code}.zip")
+}
+
+/// The languages `release` (of [`TRANSLATIONS`]) has a pack for, by code, sorted.
+pub fn languages_in(release: &Release) -> Vec<String> {
+    let mut codes: Vec<String> = release
+        .assets
+        .iter()
+        .filter_map(|a| a.name.strip_prefix("language-")?.strip_suffix(".zip"))
+        .filter(|code| !code.is_empty())
+        .map(str::to_owned)
+        .collect();
+    codes.sort();
+    codes
+}
+
+/// Asks GitHub which languages [`TRANSLATIONS`]' newest release has packs for.
+pub fn languages_offered() -> Result<Vec<String>, String> {
+    let repo = Repo::parse(TRANSLATIONS)?;
+    let json = crate::get_text(&repo.latest_url()).map_err(|e| {
+        if e.contains("no releases") {
+            "No language packs are published yet.".to_owned()
+        } else {
+            e
+        }
+    })?;
+    Ok(languages_in(&Release::parse(&json)?))
+}
+
 /// A GitHub repository, `owner/name`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Repo {
@@ -142,6 +177,10 @@ pub struct Manifest {
     /// planned, issue #587.)
     #[serde(default)]
     pub network: Vec<String>,
+    /// For a language pack (kind `language`): the language its `.ftl` files are in, such as
+    /// `ru` or `pt-BR`.
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 impl Manifest {
@@ -172,6 +211,20 @@ impl Manifest {
         }
         if !m.network.is_empty() && m.kind != "gadget" {
             return Err("only gadget add-ons may list web hosts".to_owned());
+        }
+        if m.kind == "language" {
+            let code = m.language.as_deref().unwrap_or_default();
+            let fine = !code.is_empty()
+                && code.split('-').all(|part| {
+                    !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric())
+                });
+            if !fine {
+                return Err(format!(
+                    "the language pack \"{}\" does not say which language it is (language = \
+                     \"ru\", say)",
+                    m.id
+                ));
+            }
         }
         Ok(m)
     }
@@ -228,6 +281,10 @@ pub struct Record {
     pub tag: String,
     pub version: String,
     pub signed: bool,
+    /// The zip it came in, when its release holds several add-ons to pick from (a
+    /// language pack on [`TRANSLATIONS`]): updates take the same one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zip: Option<String>,
 }
 
 /// The installed add-on `id` in `addons`, if any: where it came from.
@@ -250,12 +307,47 @@ pub struct Offer {
     pub zip: Asset,
     /// Every file in the release has a signature beside it. Each is checked as it arrives.
     pub signed: bool,
+    /// The zip asked for by name, of a release holding several add-ons; `None` for a
+    /// release of one add-on, whose zip is the one for this computer.
+    pub named: Option<String>,
 }
 
 impl Offer {
     /// What of `release` installs on `platform` (see [`platform`]).
     pub fn from_release(repo: Repo, release: Release, platform: &str) -> Result<Self, String> {
+        Self::pick(repo, release, platform, None)
+    }
+
+    /// What of `release` installs on `platform`: the zip called `named` when given (one of
+    /// the add-ons a release holds several of), else the one for this computer.
+    pub fn pick(
+        repo: Repo,
+        release: Release,
+        platform: &str,
+        named: Option<&str>,
+    ) -> Result<Self, String> {
         const OTHERS: [&str; 3] = ["-linux-", "-windows-", "-macos-"];
+        if let Some(name) = named {
+            let zip = release
+                .assets
+                .iter()
+                .find(|a| a.name == name)
+                .cloned()
+                .ok_or_else(|| {
+                    format!(
+                        "{repo}'s newest release ({}) has no {name}. Look at {}.",
+                        release.tag, release.page
+                    )
+                })?;
+            let signed = release.signature_of(&zip).is_some();
+            return Ok(Self {
+                repo,
+                release,
+                zip,
+                signed,
+                named: Some(name.to_owned()),
+            });
+        }
         let zips = || {
             release
                 .assets
@@ -283,6 +375,7 @@ impl Offer {
             release,
             zip,
             signed,
+            named: None,
         })
     }
 
@@ -310,8 +403,9 @@ pub fn no_release(repo: &Repo) -> String {
     }
 }
 
-/// Asks GitHub for `repo`'s newest release, as an add-on for this computer.
-pub fn find(repo: &Repo) -> Result<Offer, String> {
+/// Asks GitHub for `repo`'s newest release, as an add-on for this computer, or as the zip
+/// called `named` in it.
+pub fn find(repo: &Repo, named: Option<&str>) -> Result<Offer, String> {
     let json = crate::get_text(&repo.latest_url()).map_err(|e| {
         if e.contains("no releases") {
             no_release(repo)
@@ -319,13 +413,13 @@ pub fn find(repo: &Repo) -> Result<Offer, String> {
             e
         }
     })?;
-    Offer::from_release(repo.clone(), Release::parse(&json)?, &platform())
+    Offer::pick(repo.clone(), Release::parse(&json)?, &platform(), named)
 }
 
 /// The newest release of the installed add-on `id`, if it is newer.
 pub fn update_for(addons: &Path, id: &str) -> Result<Option<Offer>, String> {
     let record = installed(addons, id).ok_or("that add-on is not installed")?;
-    let offer = find(&record.repo)?;
+    let offer = find(&record.repo, record.zip.as_deref())?;
     Ok(offer.is_newer_than(&record).then_some(offer))
 }
 
@@ -414,6 +508,8 @@ fn install_with(
         })
         .collect::<Result<Vec<_>, _>>()?;
     total.set(offer.zip.size + downloads.iter().map(|a| a.size).sum::<u64>());
+    // official only when every file it brings is signed, not just its zip
+    let signed = offer.signed && downloads.iter().all(|a| release.signature_of(a).is_some());
 
     // unpacked beside the old one, which stays in use until everything has arrived
     fs::create_dir_all(addons).map_err(|e| cannot(addons, &e))?;
@@ -433,7 +529,8 @@ fn install_with(
             repo: offer.repo.clone(),
             tag: release.tag.clone(),
             version: release.version.to_string(),
-            signed: offer.signed,
+            signed,
+            zip: offer.named.clone(),
         };
         let json = serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?;
         fs::write(staging.join(RECORD), json).map_err(|e| cannot(&staging, &e))
@@ -1047,7 +1144,8 @@ mod tests {
                 repo: repo(),
                 tag: "v0.2.0".into(),
                 version: "0.2.0".into(),
-                signed: true
+                signed: true,
+                zip: None,
             }
         );
         // nothing left over beside it
@@ -1056,6 +1154,18 @@ mod tests {
             .map(|e| e.unwrap().file_name())
             .collect();
         assert_eq!(names, ["depth"]);
+        fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn a_download_without_its_signature_is_not_official() {
+        let addons = scratch("unsigned-download");
+        let mut fake = depth_release(true);
+        fake.release
+            .assets
+            .retain(|a| a.name != "weights.safetensors.minisig");
+        fake.install(&addons, &platform()).unwrap();
+        assert!(!installed(&addons, "depth").unwrap().signed);
         fs::remove_dir_all(addons).unwrap();
     }
 
@@ -1174,6 +1284,68 @@ mod tests {
     }
 
     #[test]
+    fn a_zip_asked_for_by_name_is_the_one_offered_and_kept_for_updates() {
+        let manifest = |code: &str| {
+            format!(
+                "id = \"language-{code}\"\nname = \"{code}\"\nkind = \"language\"\nversion = \
+                 \"1.0.0\"\nlanguage = \"{code}\""
+            )
+        };
+        let (ru, de) = (manifest("ru"), manifest("de"));
+        let fake = fake(
+            &[
+                ("language-ru.zip", zip(&[("addon.toml", ru.as_bytes())])),
+                ("language-de.zip", zip(&[("addon.toml", de.as_bytes())])),
+            ],
+            true,
+        );
+        assert_eq!(languages_in(&fake.release), ["de", "ru"]);
+        let offer = Offer::pick(
+            repo(),
+            fake.release.clone(),
+            "linux-x86_64",
+            Some("language-ru.zip"),
+        )
+        .unwrap();
+        assert_eq!(offer.zip.name, "language-ru.zip");
+        assert_eq!(offer.named.as_deref(), Some("language-ru.zip"));
+        assert!(offer.signed);
+        let e = Offer::pick(
+            repo(),
+            fake.release,
+            "linux-x86_64",
+            Some("language-fr.zip"),
+        )
+        .unwrap_err();
+        assert!(e.contains("has no language-fr.zip"), "{e}");
+        assert_eq!(language_zip("pt-BR"), "language-pt-BR.zip");
+    }
+
+    #[test]
+    fn a_language_pack_says_which_language_it_is() {
+        let base =
+            "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\nversion = \"0.1.0\"";
+        let m = Manifest::parse(&format!("{base}\nlanguage = \"ru\"")).unwrap();
+        assert_eq!(m.language.as_deref(), Some("ru"));
+        // a regional code keeps its capitals; the id, a folder name, is in lower case
+        let pt = "id = \"language-pt-br\"\nname = \"Português (Brasil)\"\nkind = \"language\"\nversion \
+                  = \"0.1.0\"\nlanguage = \"pt-BR\"";
+        assert_eq!(
+            Manifest::parse(pt).unwrap().language.as_deref(),
+            Some("pt-BR")
+        );
+        for wrong in [
+            "",
+            "\nlanguage = \"\"",
+            "\nlanguage = \"../ru\"",
+            "\nlanguage = \"ru-\"",
+        ] {
+            let e = Manifest::parse(&format!("{base}{wrong}")).unwrap_err();
+            assert!(e.contains("which language"), "{e}");
+        }
+    }
+
+    #[test]
     fn a_content_pack_keeps_its_folders() {
         let addons = scratch("pack");
         fake_one_zip().install(&addons, &platform()).unwrap();
@@ -1254,6 +1426,7 @@ mod tests {
             tag: format!("v{version}"),
             version: version.into(),
             signed: true,
+            zip: None,
         };
         assert!(offer.is_newer_than(&had("0.1.0")));
         assert!(!offer.is_newer_than(&had("0.2.0")));

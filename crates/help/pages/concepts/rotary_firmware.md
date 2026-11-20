@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-19
-see-also: post_processor_management, job_setup, save_toolpaths
+see-also: post_processor_management, job_setup, save_toolpaths, check_rotary_setup
 ---
 
 # The 4th Axis and Your Firmware
@@ -35,6 +35,31 @@ Ticking **4th axis** adds Cut Craft's rotary posts for your machine, named **Rot
 along X** and **along Y**. GRBL's are named **grblHAL**, since standard GRBL can't run them.
 Choose posts in [Post-Processor Management](help:post_processor_management), and set up a
 rotary job in [Job Setup](help:job_setup).
+
+## Finding the centre line
+
+Once the 4th axis is ticked, Machine Configuration shows **Rotary (4th axis)**. Set it once:
+
+![Rotary (4th axis) in Machine Configuration, before the centre line is found](pictures/concepts/rotary_axis_settings.png)
+
+1. **Lies along**: X if the rotary runs left to right on your bed (most kits), Y if front to
+   back.
+2. Put a straight, round pin (a drill rod or a dowel) in the chuck.
+3. Jog the bit (or a probe) to touch one side of the pin, and note the reading across the bed
+   (Y for a rotary along X). Touch the other side and note that reading too.
+4. Halfway between the two is the centre line. Jog there and set work zero across the bed
+   (Y0) there. Then **Centre line Y** is 0. If you zero somewhere else, type the distance from
+   your zero to the centre line instead.
+5. For Z, zero where Job Setup says: on the axis (touch the top of the pin, then go down by
+   half its diameter) or on the top of the cylinder. Nothing to type here: the job knows which.
+6. Tick **Centre line found**.
+7. Jog A by +10° and watch which way the chuck turns, seen from the chuck end. Set **+A turns**
+   to match.
+8. Set **A top speed** from the controller's settings, and how far the **Chuck** and
+   **Tailstock** reach along the axis.
+
+The [Rotary set up](help:check_rotary_setup) check before cutting asks until **Centre line
+found** is ticked.
 
 If you change the firmware back to standard GRBL, the 4th axis disappears and a red warning
 says why, with a link to the Firmware choice. [Save Toolpaths](help:save_toolpaths) won't save

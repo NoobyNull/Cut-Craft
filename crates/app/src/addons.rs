@@ -4,6 +4,7 @@
 //! with Cut Craft's release key is installed only after a warning. The work is
 //! [`cut_craft_updater::addon`]'s.
 
+use cut_craft_i18n::tr;
 use cut_craft_updater::addon::{self, Manifest, OFFICIAL, Offer, Record, Repo};
 use eframe::egui;
 use std::collections::HashMap;
@@ -42,9 +43,12 @@ enum Msg {
     Installed(Result<Manifest, String>),
     /// An installed add-on's newest release, if newer.
     Newer(String, Result<Option<Offer>, String>),
+    /// The languages with a pack to download, by code.
+    Languages(Result<Vec<String>, String>),
 }
 
-type Find = fn(&Repo) -> Result<Offer, String>;
+type Find = fn(&Repo, Option<&str>) -> Result<Offer, String>;
+type Languages = fn() -> Result<Vec<String>, String>;
 type Install = fn(&Path, &Offer, &dyn Fn(u64, u64)) -> Result<Manifest, String>;
 type Newer = fn(&Path, &str) -> Result<Option<Offer>, String>;
 
@@ -66,6 +70,10 @@ pub struct Addons {
     allowed: std::collections::HashSet<String>,
     /// Asks whether to run the unsigned add-on with this name (a dialog; tests answer).
     pub ask_to_run: fn(&str) -> bool,
+    /// Asks which languages have a pack to download.
+    languages: Languages,
+    /// The languages with a pack to download, once asked: each its own install.
+    offered: Option<Result<Vec<String>, String>>,
 }
 
 impl Addons {
@@ -80,6 +88,8 @@ impl Addons {
             tx,
             rx,
             find: addon::find,
+            languages: addon::languages_offered,
+            offered: None,
             install: |dir, offer, progress| addon::install(dir, offer, &usable, progress),
             newer: addon::update_for,
             allowed: std::collections::HashSet::new(),
@@ -94,6 +104,7 @@ impl Addons {
             find,
             install,
             newer,
+            languages: || Ok(vec![]),
             ..Self::new(Some(dir))
         }
     }
@@ -160,6 +171,13 @@ impl Addons {
     /// Opens the window, and looks for newer releases of what is installed.
     pub fn show(&mut self, ctx: &egui::Context) {
         self.open = true;
+        if !matches!(self.offered, Some(Ok(_))) {
+            let (tx, ctx, languages) = (self.tx.clone(), ctx.clone(), self.languages);
+            std::thread::spawn(move || {
+                let _ = tx.send(Msg::Languages(languages()));
+                ctx.request_repaint();
+            });
+        }
         let Some(dir) = self.dir.clone() else { return };
         for record_id in installed_ids(&dir) {
             let (tx, ctx, newer, dir) = (self.tx.clone(), ctx.clone(), self.newer, dir.clone());
@@ -173,6 +191,12 @@ impl Addons {
 
     /// Install (or update) from `repo`: asks GitHub for its newest release first.
     pub fn install_from(&mut self, ctx: &egui::Context, repo: &str) {
+        self.install_named(ctx, repo, None);
+    }
+
+    /// Install the zip called `named` from `repo`'s newest release (one of several add-ons it
+    /// holds, as language packs are), or the one for this computer with `None`.
+    pub fn install_named(&mut self, ctx: &egui::Context, repo: &str, named: Option<&str>) {
         if self.busy() {
             return;
         }
@@ -185,8 +209,9 @@ impl Addons {
         };
         self.phase = Phase::Finding(repo.to_string());
         let (tx, ctx, find) = (self.tx.clone(), ctx.clone(), self.find);
+        let named = named.map(str::to_owned);
         std::thread::spawn(move || {
-            let _ = tx.send(Msg::Found(find(&repo)));
+            let _ = tx.send(Msg::Found(find(&repo, named.as_deref())));
             ctx.request_repaint();
         });
     }
@@ -246,6 +271,7 @@ impl Addons {
                 }
                 Msg::Newer(_, Ok(None)) => {}
                 Msg::Newer(id, Err(e)) => log::info!("no update check for add-on {id}: {e}"),
+                Msg::Languages(offered) => self.offered = Some(offered),
             }
         }
         installed
@@ -284,6 +310,9 @@ impl Addons {
         match pressed {
             Press::Nothing => {}
             Press::Install(repo) => self.install_from(ctx, &repo),
+            Press::InstallLanguage(code) => {
+                self.install_named(ctx, addon::TRANSLATIONS, Some(&addon::language_zip(&code)));
+            }
             Press::Update(id) => {
                 if let Some(offer) = self.updates.get(&id).cloned() {
                     if offer.signed {
@@ -336,8 +365,11 @@ impl Addons {
             });
         }
 
+        self.languages_section(ui, dir.as_deref(), busy, &mut press);
+
         // add-ons installed from elsewhere
-        let official = |id: &str| OFFICIAL.iter().any(|a| a.id == id);
+        let official =
+            |id: &str| OFFICIAL.iter().any(|a| a.id == id) || id.starts_with(LANGUAGE_PREFIX);
         let others: Vec<(String, Record)> = dir
             .as_deref()
             .map_or_default(installed_ids)
@@ -442,6 +474,65 @@ impl Addons {
         (pressed != Press::Nothing).then_some(pressed)
     }
 
+    /// Languages: one row for each language with a pack to download, installed or not,
+    /// each installed on its own; any installed pack no longer offered is listed too, so it
+    /// can still be removed.
+    fn languages_section(
+        &self,
+        ui: &mut egui::Ui,
+        dir: Option<&Path>,
+        busy: bool,
+        press: &mut Press,
+    ) {
+        let installed = dir.map_or_default(crate::languages::installed);
+        let mut codes: Vec<String> = match &self.offered {
+            Some(Ok(codes)) => codes.clone(),
+            _ => vec![],
+        };
+        for pack in &installed {
+            if !codes.contains(&pack.code) {
+                codes.push(pack.code.clone());
+            }
+        }
+        codes.sort();
+        ui.add_space(8.0);
+        ui.strong(tr!("addons-languages"));
+        ui.label(tr!("addons-languages-about"));
+        match &self.offered {
+            None => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(tr!("addons-languages-asking"));
+                });
+            }
+            Some(Err(e)) if codes.is_empty() => {
+                ui.weak(e);
+            }
+            _ => {}
+        }
+        for code in codes {
+            let pack = installed.iter().find(|p| p.code == code);
+            ui.group(|ui| {
+                ui.set_width(ui.available_width());
+                ui.strong(pack.map_or_else(|| language_name(&code), |p| p.name.clone()));
+                match pack {
+                    Some(pack) => {
+                        let had = dir.and_then(|d| addon::installed(d, &pack.id));
+                        self.row(ui, &pack.id, addon::TRANSLATIONS, had.as_ref(), busy, press);
+                    }
+                    None => {
+                        if ui
+                            .add_enabled(!busy, egui::Button::new(tr!("addons-install")))
+                            .clicked()
+                        {
+                            *press = Press::InstallLanguage(code.clone());
+                        }
+                    }
+                }
+            });
+        }
+    }
+
     /// An add-on's state and its buttons.
     fn row(
         &self,
@@ -481,12 +572,39 @@ impl Addons {
 enum Press {
     Nothing,
     Install(String),
+    /// A language's pack, by code, from the translations' repository.
+    InstallLanguage(String),
     Update(String),
     InstallAnyway,
     Cancel,
     Remove(String),
     /// Remove, said again.
     RemoveAnyway,
+}
+
+/// The start of every language pack's add-on id: `language-ru`.
+const LANGUAGE_PREFIX: &str = "language-";
+
+/// A language's name in its own words, by code, for a pack not installed yet (an installed
+/// pack's own name shows instead); the code itself for a language not listed here.
+fn language_name(code: &str) -> String {
+    let name = match code {
+        "ru" => "Русский",
+        "de" => "Deutsch",
+        "fr" => "Français",
+        "es" => "Español",
+        "it" => "Italiano",
+        "pt" => "Português",
+        "pt-BR" => "Português (Brasil)",
+        "nl" => "Nederlands",
+        "pl" => "Polski",
+        "uk" => "Українська",
+        "cs" => "Čeština",
+        "sv" => "Svenska",
+        "tr" => "Türkçe",
+        _ => return code.to_owned(),
+    };
+    format!("{name} ({code})")
 }
 
 /// What Remove asks before add-on `name` goes.
@@ -503,6 +621,12 @@ pub const TOOLS: &[&str] = &[crate::depth::ADDON_ID];
 pub fn usable(m: &Manifest) -> Result<(), String> {
     match m.kind.as_str() {
         "gadget" => Ok(()),
+        "language" if m.id.starts_with(LANGUAGE_PREFIX) => Ok(()),
+        "language" => Err(format!(
+            "{} is a language pack whose id does not start with \"{LANGUAGE_PREFIX}\", so \
+             Cut Craft would not list it with the languages.",
+            m.name
+        )),
         "tool" if TOOLS.contains(&m.id.as_str()) => Ok(()),
         "tool" => Err(format!(
             "{} is a tool this version of Cut Craft has no place for. Tool add-ons work \
@@ -524,10 +648,10 @@ pub fn usable(m: &Manifest) -> Result<(), String> {
 
 /// What to say once `m` is installed.
 fn installed_words(m: &Manifest) -> String {
-    let more = if m.kind == "gadget" {
-        " It is in the Gadgets menu the next time Cut Craft starts."
-    } else {
-        ""
+    let more = match m.kind.as_str() {
+        "gadget" => " It is in the Gadgets menu the next time Cut Craft starts.",
+        "language" => " Pick it in Edit ▸ Options ▸ Language.",
+        _ => "",
     };
     format!("{} {} is installed.{more}", m.name, m.version)
 }
@@ -548,7 +672,8 @@ pub fn installed_tools(dir: &Path) -> Vec<(String, Option<&'static str>, bool)> 
             let text = std::fs::read_to_string(dir.join(&id).join(addon::MANIFEST)).ok()?;
             let manifest = Manifest::parse(&text).ok()?;
             let signed = addon::installed(dir, &id).is_some_and(|r| r.signed);
-            (manifest.kind != "gadget").then(|| (manifest.name, tool_of(&id), signed))
+            (!matches!(manifest.kind.as_str(), "gadget" | "language"))
+                .then(|| (manifest.name, tool_of(&id), signed))
         })
         .collect()
 }
@@ -638,6 +763,7 @@ mod tests {
                 digest: None,
             },
             signed,
+            named: None,
         }
     }
 
@@ -661,7 +787,7 @@ mod tests {
     }
 
     #[expect(clippy::unnecessary_wraps, reason = "stands in for asking GitHub")]
-    fn signed_repo(repo: &Repo) -> Result<Offer, String> {
+    fn signed_repo(repo: &Repo, _: Option<&str>) -> Result<Offer, String> {
         Ok(offer(repo, !repo.name.contains("unsigned")))
     }
 
@@ -702,6 +828,13 @@ mod tests {
                 .contains("does not know")
         );
         assert!(installed_words(&m("g", "gadget")).contains("Gadgets menu"));
+        let ru = Manifest::parse(
+            "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\nversion = \
+             \"0.1.0\"\nlanguage = \"ru\"",
+        )
+        .unwrap();
+        assert_eq!(usable(&ru), Ok(()));
+        assert!(installed_words(&ru).contains("Options ▸ Language"));
     }
 
     #[test]
@@ -794,6 +927,7 @@ mod tests {
                 tag: "v1.0.0".into(),
                 version: "1.0.0".into(),
                 signed,
+                zip: None,
             };
             std::fs::write(
                 dir.join(id).join(addon::RECORD),
@@ -851,12 +985,36 @@ mod tests {
         let mut a = Addons::with(PathBuf::from("."), signed_repo, refused, nothing_newer);
         a.install_from(&ctx, "someone/thing");
         wait(&mut a, &ctx, |a| matches!(a.phase, Phase::Failed(_)));
-        let offline = |_: &Repo| -> Result<Offer, String> { Err("Could not reach GitHub".into()) };
+        let offline = |_: &Repo, _: Option<&str>| -> Result<Offer, String> {
+            Err("Could not reach GitHub".into())
+        };
         let mut a = Addons::with(PathBuf::from("."), offline, installs, nothing_newer);
         a.install_from(&ctx, "someone/thing");
         wait(&mut a, &ctx, |a| {
             a.phase == Phase::Failed("Could not reach GitHub".into())
         });
+    }
+
+    #[test]
+    fn each_language_installs_on_its_own_from_the_translations() {
+        let ctx = egui::Context::default();
+        // the zip asked for comes back in the error, to see which was asked for
+        let asked = |repo: &Repo, named: Option<&str>| -> Result<Offer, String> {
+            Err(format!("{repo} {}", named.unwrap_or("none")))
+        };
+        let mut a = Addons::with(PathBuf::from("."), asked, installs, nothing_newer);
+        a.languages = || Ok(vec!["de".into(), "ru".into()]);
+        a.show(&ctx);
+        wait(&mut a, &ctx, |a| a.offered.is_some());
+        assert_eq!(a.offered, Some(Ok(vec!["de".into(), "ru".into()])));
+        a.press(&ctx, Press::InstallLanguage("ru".into()));
+        wait(&mut a, &ctx, |a| matches!(a.phase, Phase::Failed(_)));
+        assert_eq!(
+            a.phase,
+            Phase::Failed(format!("{} language-ru.zip", addon::TRANSLATIONS))
+        );
+        assert_eq!(language_name("ru"), "Русский (ru)");
+        assert_eq!(language_name("xx"), "xx");
     }
 
     #[test]

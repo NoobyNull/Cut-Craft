@@ -97,11 +97,8 @@ fn set_visible(
             cmd_layer_properties::LayerProperties::run(
                 doc,
                 &cmd_layer_properties::Params {
-                    layer,
-                    name: l.name.clone(),
                     visible,
-                    locked: l.locked,
-                    material: l.material.clone(),
+                    ..l.clone().into()
                 },
             )
         }

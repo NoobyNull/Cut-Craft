@@ -1,0 +1,10 @@
+start-tasks = Задачи при запуске
+start-task-new = Создать новый файл
+start-task-try-sample-project = Попробовать пример проекта
+start-task-new-from-template = Новый файл из шаблона
+start-task-open = Открыть существующий файл
+start-recent = Недавно открытые файлы
+start-recent-none = Пока нет
+start-whats-new = Что нового в v{ $version }
+start-questions = Вопросы или идеи?
+start-empty-sheet-sample-tip = Открыть готовую вывеску с траекториями, чтобы осмотреться
