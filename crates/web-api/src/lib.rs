@@ -23,7 +23,7 @@ mod docs;
 pub mod job;
 pub mod openapi;
 
-pub use call::{Call, Gcode, Look, NotesBody, Pick, Picture, Shown, Which};
+pub use call::{Call, ComponentRef, Gcode, Look, NotesBody, Pick, Picture, Shown, Which};
 
 /// The port the Web API listens on unless Options says another.
 pub const DEFAULT_PORT: u16 = 7340;
