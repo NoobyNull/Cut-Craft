@@ -5,10 +5,9 @@ use super::{
     APP_NAME, Align, BRUSH_FINE_STEP, BRUSH_STEP, Canvas, Change, CutCraftApp, DAffine2,
     DESIGN_TABS, DROP_SHADE, Drag, EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout,
     OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
-    Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
-    ViewTransform, bordered, dialog_size, egui, file_name, files, gui, handles, inspected,
-    inspected_rows, measured, measured_rows, page_width, paint_focus_ring, saving_path, show_page,
-    view2d,
+    Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, Value, View, ViewTool, ViewTransform, bordered,
+    dialog_size, egui, file_name, files, gui, handles, inspected, inspected_rows, measured,
+    measured_rows, page_width, paint_focus_ring, saving_path, show_page, view2d,
 };
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
@@ -499,7 +498,7 @@ impl CutCraftApp {
                 }
             });
             bordered(ui, |ui| {
-                if ui.button("Add New Sheet...").clicked() {
+                if ui.button(tr!("views-add-new-sheet")).clicked() {
                     *clicked = Some("add_sheet");
                     ui.close();
                 }
@@ -517,7 +516,7 @@ impl CutCraftApp {
                 }
             });
             bordered(ui, |ui| {
-                if ui.button("Add New Layer...").clicked() {
+                if ui.button(tr!("views-add-new-layer")).clicked() {
                     *clicked = Some("add_layer");
                     ui.close();
                 }
@@ -617,8 +616,8 @@ impl CutCraftApp {
         // left: the views and their split
         ui.scope_builder(egui::UiBuilder::new().max_rect(bar), |ui| {
             ui.horizontal_centered(|ui| {
-                ui.selectable_value(&mut self.view, View::TwoD, "2D View (F2)");
-                ui.selectable_value(&mut self.view, View::ThreeD, "3D View (F3)");
+                ui.selectable_value(&mut self.view, View::TwoD, tr!("views-2d-view-f2"));
+                ui.selectable_value(&mut self.view, View::ThreeD, tr!("views-3d-view-f3"));
                 for (id, icon, tip, split) in [
                     (
                         "split_stacked",
@@ -661,7 +660,11 @@ impl CutCraftApp {
                         } else {
                             "Top Side"
                         };
-                        if ui.button(side).on_hover_hint("Swap Sides").clicked() {
+                        if ui
+                            .button(side)
+                            .on_hover_hint(tr!("views-swap-sides"))
+                            .clicked()
+                        {
                             clicked = Some("swap_sides");
                         }
                     }
@@ -1749,14 +1752,14 @@ impl CutCraftApp {
             .collect();
         let mut open = true;
         let (mut changed, mut select) = (false, None);
-        egui::Window::new("Tool Changer")
+        egui::Window::new(tr!("views-tool-changer"))
             .id(egui::Id::unique("tool_changer"))
             .collapsible(false)
             .open(&mut open)
             .show(ctx, |ui| {
                 cut_craft_bug_report::mark(ui, "Tool Changer");
                 let Some(machine) = self.machines.active_mut() else {
-                    ui.weak("No machine yet: add one in Machine ▸ Machine Configuration");
+                    ui.weak(tr!("views-no-machine-yet-add-one"));
                     return;
                 };
                 ui.strong(&machine.name);
@@ -1781,6 +1784,7 @@ impl CutCraftApp {
     /// Guide Properties, on a right-clicked guide: its position (where it crosses its axis)
     /// and angle, typed; Lock Guide; new guides parallel to it, at an absolute position or an
     /// offset from it, one or several a step apart; Delete Guide.
+    #[expect(clippy::too_many_lines, reason = "one window, its rows in order")]
     pub(super) fn guide_window(&mut self, ctx: &egui::Context) {
         let Some(mut props) = self.guide_props.clone() else {
             return;
@@ -1792,7 +1796,7 @@ impl CutCraftApp {
         let mut open = true;
         let (mut apply, mut create, mut delete) = (false, false, false);
         let units = self.doc.job.units;
-        egui::Window::new("Guide Properties")
+        egui::Window::new(tr!("views-guide-properties"))
             .id(egui::Id::unique("guide_properties"))
             .collapsible(false)
             .resizable(false)
@@ -1800,25 +1804,25 @@ impl CutCraftApp {
             .show(ctx, |ui| {
                 cut_craft_bug_report::mark(ui, "Guide Properties");
                 ui.label(if g.vertical {
-                    "A vertical guide: its position is where it crosses the X axis"
+                    tr!("views-a-vertical-guide-its-position")
                 } else {
-                    "A horizontal guide: its position is where it crosses the Y axis"
+                    tr!("views-a-horizontal-guide-its-position")
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Position");
+                    ui.label(tr!("views-position"));
                     crate::form::length_edit(
                         ui,
-                        "Position",
+                        &tr!("views-position"),
                         &mut props.position,
                         units,
                         f64::NEG_INFINITY,
                     );
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Angle");
+                    ui.label(tr!("views-angle"));
                     let hint = "Degrees anticlockwise from the X axis";
                     ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).show_value(false))
-                        .accessible_name("Angle")
+                        .accessible_name(tr!("views-angle"))
                         .on_hover_hint(hint);
                     ui.add(
                         Number::new(&mut props.angle)
@@ -1828,36 +1832,48 @@ impl CutCraftApp {
                     )
                     .on_hover_hint(hint);
                 });
-                ui.checkbox(&mut props.locked, "Lock Guide")
-                    .on_hover_hint("A locked guide cannot be dragged");
-                apply = ui.button("Apply").clicked();
+                ui.checkbox(&mut props.locked, tr!("views-lock-guide"))
+                    .on_hover_hint(tr!("views-a-locked-guide-cannot-be"));
+                apply = ui.button(tr!("views-apply")).clicked();
                 ui.separator();
-                ui.strong("New guide");
+                ui.strong(tr!("views-new-guide"));
                 ui.horizontal(|ui| {
                     // an angled guide gives only relative parallels
                     ui.add_enabled_ui(!g.tilted(), |ui| {
-                        ui.radio_value(&mut props.relative, false, "Absolute");
+                        ui.radio_value(&mut props.relative, false, tr!("views-absolute"));
                     });
-                    ui.radio_value(&mut props.relative, true, "Relative");
+                    ui.radio_value(&mut props.relative, true, tr!("views-relative"));
                 });
                 ui.horizontal(|ui| {
-                    ui.label(if props.relative { "Offset" } else { "Position" });
-                    let what = if props.relative { "offset" } else { "position" };
+                    ui.label(if props.relative {
+                        tr!("views-offset")
+                    } else {
+                        tr!("views-position")
+                    });
+                    let name = tr!(if props.relative {
+                        "views-new-guide-offset"
+                    } else {
+                        "views-new-guide-position"
+                    });
                     crate::form::length_edit(
                         ui,
-                        &format!("New guide {what}"),
+                        &name,
                         &mut props.new_at,
                         units,
                         f64::NEG_INFINITY,
                     );
-                    ui.label("Count");
-                    ui.add(Number::new(&mut props.count).range(1..=100).name("Count"));
+                    ui.label(tr!("views-count"));
+                    ui.add(
+                        Number::new(&mut props.count)
+                            .range(1..=100)
+                            .name(tr!("views-count")),
+                    );
                 });
                 create = ui
-                    .button("Create New Guide")
-                    .on_hover_hint("Parallel to this guide; several are the same step apart")
+                    .button(tr!("views-create-new-guide"))
+                    .on_hover_hint(tr!("views-parallel-to-this-guide-several"))
                     .clicked();
-                delete = ui.button("Delete Guide").clicked();
+                delete = ui.button(tr!("views-delete-guide")).clicked();
             });
         if g.tilted() {
             props.relative = true;
@@ -2511,7 +2527,7 @@ impl CutCraftApp {
                     let response = ui
                         .add_enabled(self.available(id), button)
                         .on_hover_hint(label)
-                        .on_disabled_hover_text(format!("{label}: select something first"));
+                        .on_disabled_hover_text(tr!("views-select-first", tool = label));
                     if response.clicked() {
                         clicked = Some(id);
                     }
@@ -2855,7 +2871,7 @@ impl CutCraftApp {
         let rows = &self.measure_rows;
         cut_craft_bug_report::dialog(ctx, id, "Measure / Inspect", size, &mut open, |ui| {
             if rows.is_empty() {
-                ui.label("Drag between two points to measure, or click a vector to inspect it.");
+                ui.label(tr!("views-drag-between-two-points-to"));
             }
             egui::Grid::new("measure_rows")
                 .striped(true)
@@ -2934,10 +2950,10 @@ impl CutCraftApp {
             } else {
                 "edited in Toolpaths ▸ Keep-Out Zones…"
             };
-            response.clone().on_hover_text(format!(
-                "{}: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. \
-                 It is {edit}; right-click for a shortcut",
-                zone.label()
+            response.clone().on_hover_text(tr!(
+                "views-keep-out-clipping-off",
+                zone = zone.label(),
+                edit = edit
             ));
         }
     }
@@ -3513,11 +3529,8 @@ impl CutCraftApp {
                         }
                     }
                     ui.separator();
-                    ui.checkbox(show_advanced, "Show advanced settings")
-                        .on_hover_text(
-                            "List settings for how hard Cut Craft works your computer and how \
-                             exactly it cuts. Most people never need them.",
-                        );
+                    ui.checkbox(show_advanced, tr!("views-show-advanced-settings"))
+                        .on_hover_text(tr!("views-list-settings-for-how-hard"));
                 });
             egui::CentralPanel::default().show(ui, |ui| {
                 let Some(category) = fields.get(*page) else {
@@ -3532,10 +3545,8 @@ impl CutCraftApp {
                 let look = crate::form::Look::plain(units, crate::form::material(&self.doc, units));
                 egui::Panel::bottom("options_reset").show(ui, |ui| {
                     if ui
-                        .button("Reset to defaults")
-                        .on_hover_text(
-                            "Put every setting on this page back as Cut Craft first had it",
-                        )
+                        .button(tr!("views-reset-to-defaults"))
+                        .on_hover_text(tr!("views-put-every-setting-on-this"))
                         .clicked()
                     {
                         reset = Some(category.key.clone());
@@ -3655,49 +3666,40 @@ impl CutCraftApp {
         let mut answer: Option<Option<EarlierGcode>> = None;
         egui::Modal::new(egui::Id::unique("earlier_gcode")).show(ctx, |ui| {
             ui.set_width(ui.spacing().interact_size.x * 11.0);
-            ui.heading("Replace the earlier G-code?");
+            ui.heading(tr!("views-replace-the-earlier-g-code"));
             ui.label(if ask.sending {
-                "These files from an earlier send are on the machine, where the new ones go:"
+                tr!("views-these-files-from-an-earlier-2")
             } else {
-                "These files from an earlier save are where the new ones go:"
+                tr!("views-these-files-from-an-earlier")
             });
             for file in ask.earlier.iter().take(SHOWN) {
                 ui.label(format!("• {}", super::file_name(file)));
             }
             if ask.earlier.len() > SHOWN {
-                ui.label(format!("and {} more", ask.earlier.len() - SHOWN));
+                ui.label(tr!("views-and-more", count = ask.earlier.len() - SHOWN));
             }
             ui.add_space(ui.spacing().item_spacing.y);
-            ui.checkbox(&mut ask.remember, "Do this every time")
-                .on_hover_hint(
-                    "Keep this answer and stop asking. Edit ▸ Options ▸ Confirmation Choices ▸ G-code \
-                     from an earlier save changes it",
-                );
+            ui.checkbox(&mut ask.remember, tr!("views-do-this-every-time"))
+                .on_hover_hint(tr!("views-keep-this-answer-and-stop"));
             ui.separator();
             ui.horizontal(|ui| {
                 if ui
-                    .button("Replace")
-                    .on_hover_hint(
-                        "Delete the earlier files, older numbered ones too, and save the new \
-                         ones: nothing old is left to run by mistake",
-                    )
+                    .button(tr!("views-replace"))
+                    .on_hover_hint(tr!("views-delete-the-earlier-files-older"))
                     .clicked()
                 {
                     answer = Some(Some(EarlierGcode::Replace));
                 }
                 if ui
-                    .button("Archive")
-                    .on_hover_hint(
-                        "Move the earlier files into a dated folder under Archive beside \
-                         them, then save the new ones",
-                    )
+                    .button(tr!("views-archive"))
+                    .on_hover_hint(tr!("views-move-the-earlier-files-into"))
                     .clicked()
                 {
                     answer = Some(Some(EarlierGcode::Archive));
                 }
                 if ui
-                    .button("Cancel")
-                    .on_hover_hint("Save nothing and leave the earlier files as they are")
+                    .button(tr!("views-cancel"))
+                    .on_hover_hint(tr!("views-save-nothing-and-leave-the"))
                     .clicked()
                 {
                     answer = Some(None);
@@ -3750,10 +3752,6 @@ impl CutCraftApp {
     }
 
     /// Save Toolpaths: the machine and post, which toolpaths go in which file, and Save.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the window's sections in the order they show, each a line or two"
-    )]
     pub(super) fn save_toolpaths_window(&mut self, ctx: &egui::Context) {
         use crate::files::SaveMode;
         let Some(mut form) = self.save_form.clone() else {
@@ -3792,7 +3790,7 @@ impl CutCraftApp {
         let errors = found.as_deref().is_some_and(|f| Self::refused(f).is_some());
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
-            ui.strong("Machine and post-processor");
+            ui.strong(tr!("views-machine-and-post-processor"));
             if !self.machines.machines.is_empty() {
                 let active = self.machines.active;
                 let shown = self.machines.active().map_or("", |m| m.name.as_str());
@@ -3808,7 +3806,7 @@ impl CutCraftApp {
             }
             post_combo(ui, "save_post", &mut form.post, &default, &choices);
             ui.separator();
-            ui.strong("Toolpaths to save");
+            ui.strong(tr!("views-toolpaths-to-save"));
             for (mode, label) in [
                 (SaveMode::Selected, "Selected toolpath"),
                 (SaveMode::VisibleToOneFile, "Visible toolpaths to one file"),
@@ -3821,24 +3819,15 @@ impl CutCraftApp {
             }
             ui.add_enabled(
                 form.mode == SaveMode::VisibleToMultipleFiles,
-                egui::Checkbox::new(
-                    &mut form.group,
-                    "Merge toolpaths in a row that use the same tool",
-                ),
+                egui::Checkbox::new(&mut form.group, tr!("views-merge-toolpaths-in-a-row")),
             )
-            .on_hover_hint(
-                "Toolpaths next to each other in the list that use the same tool go in one \
-                 file. The cutting order never changes",
-            );
+            .on_hover_hint(tr!("views-toolpaths-next-to-each-other"));
             tool_changes_section(ui, &mut form.changes, changer);
             if self.doc.job.double_sided.is_some() {
-                ui.checkbox(&mut form.add_side, "Add side to toolpath name");
+                ui.checkbox(&mut form.add_side, tr!("views-add-side-to-toolpath-name"));
             }
-            ui.checkbox(&mut form.job_sheet, "Save a job sheet with the files")
-                .on_hover_hint(
-                    "The project's sheet to print or keep by the machine: material, origin, \
-                     tools, toolpaths in order and the files to run, saved beside them",
-                );
+            ui.checkbox(&mut form.job_sheet, tr!("views-save-a-job-sheet-with"))
+                .on_hover_hint(tr!("views-the-project-s-sheet-to"));
             ui.separator();
             files_section(ui, &self.doc, &plan, split);
             ui.separator();
@@ -3904,10 +3893,10 @@ impl CutCraftApp {
     ) {
         let (mut save, mut send, mut manage, mut view) = (false, false, None, false);
         ui.horizontal(|ui| {
-            let response = ui.add_enabled(ready, egui::Button::new("Save Toolpaths..."));
+            let response = ui.add_enabled(ready, egui::Button::new(tr!("views-save-toolpaths")));
             save = if errors {
                 response
-                    .on_disabled_hover_text("Fix the problems marked Must fix to save")
+                    .on_disabled_hover_text(tr!("views-fix-the-problems-marked-must"))
                     .clicked()
             } else if unticked {
                 response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
@@ -3917,23 +3906,23 @@ impl CutCraftApp {
             let machine = self.machines.active();
             let reachable = machine.is_some_and(|m| m.send_to.is_set());
             let response = ui
-                .add_enabled(ready && reachable, egui::Button::new("Send to Machine"))
-                .on_hover_hint(
-                    "Save the files straight onto the machine, in this project's own folder \
-                     there",
-                );
+                .add_enabled(
+                    ready && reachable,
+                    egui::Button::new(tr!("views-send-to-machine")),
+                )
+                .on_hover_hint(tr!("views-save-the-files-straight-onto"));
             send = if reachable && unticked && !errors {
                 response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
             } else if reachable {
                 response
-                    .on_disabled_hover_text("Fix the problems marked Must fix to send")
+                    .on_disabled_hover_text(tr!("views-fix-the-problems-marked-must-2"))
                     .clicked()
             } else {
                 response
                     .on_disabled_hover_text(super::send::NO_MACHINE_FOLDER)
                     .clicked()
             };
-            if reachable && ui.button("Machine Files…").clicked() {
+            if reachable && ui.button(tr!("views-machine-files")).clicked() {
                 manage = machine.map(|m| (m.name.clone(), m.send_to.clone()));
             }
             view = ui
@@ -3976,21 +3965,21 @@ impl CutCraftApp {
                 changed = Some(style);
             }
             ui.horizontal(|ui| {
-                pick_logo = ui.button("Change Logo...").clicked();
+                pick_logo = ui.button(tr!("views-change-logo")).clicked();
                 let has_logo = !self.options.job_sheet.logo.is_empty();
                 if ui
-                    .add_enabled(has_logo, egui::Button::new("Remove Logo"))
+                    .add_enabled(has_logo, egui::Button::new(tr!("views-remove-logo")))
                     .clicked()
                 {
                     let mut style = self.options.job_sheet.clone();
                     style.logo.clear();
                     changed = Some(style);
                 }
-                if ui.button("Restore Default Sheet").clicked() {
+                if ui.button(tr!("views-restore-default-sheet")).clicked() {
                     changed = Some(fmt_create_job_sheet::Style::default());
                 }
             });
-            ui.weak("A logo is scaled to 165 × 52 pixels at most; landscape pictures suit it.");
+            ui.weak(tr!("views-a-logo-is-scaled-to"));
         });
         if pick_logo
             && let Some(path) =
@@ -4035,10 +4024,7 @@ impl CutCraftApp {
         let (id, size) = (egui::Id::unique("part_labels"), dialog_size(ctx));
         let (mut changed, mut print) = (None, false);
         cut_craft_bug_report::dialog(ctx, id, "Print Part Labels", size, &mut open, |ui| {
-            ui.label(
-                "A label for each part, to stick on it once it is cut, so you can tell the \
-                 parts apart when you put the job together.",
-            );
+            ui.label(tr!("views-a-label-for-each-part"));
             let picture = |_: &str| None;
             let look = crate::form::Look {
                 units,
@@ -4056,21 +4042,18 @@ impl CutCraftApp {
             }
             ui.separator();
             if count == 0 {
-                ui.label("The job has no parts yet. Draw or import closed shapes first.");
+                ui.label(tr!("views-the-job-has-no-parts"));
             } else {
-                ui.label(format!(
-                    "{count} part{} will get a label. Name parts with Edit ▸ Name Part.",
-                    if count == 1 { "" } else { "s" }
-                ));
+                ui.label(tr!("views-labels-count", count = count));
             }
             print = ui
-                .add_enabled(count > 0, egui::Button::new("Open Labels to Print"))
-                .on_hover_text("Opens the labels in your web browser; print them from there")
+                .add_enabled(
+                    count > 0,
+                    egui::Button::new(tr!("views-open-labels-to-print")),
+                )
+                .on_hover_text(tr!("views-opens-the-labels-in-your"))
                 .clicked();
-            ui.weak(
-                "On a label printer, turn off the browser's headers and footers and set the \
-                 margins to None when printing.",
-            );
+            ui.weak(tr!("views-on-a-label-printer-turn"));
         });
         if let Some(style) = changed {
             self.options.part_labels = style;
@@ -4117,19 +4100,22 @@ impl CutCraftApp {
             dialog_size(ctx),
             &mut open,
             |ui| {
-                ui.label(
-                "How the light-cut clearing styles cut, for this whole job: saved with it, so it \
-                 cuts the same on any computer.",
-            );
+                ui.label(tr!("views-how-the-light-cut-clearing"));
                 // where they are seen without scrolling
                 ui.horizontal(|ui| {
                     keep = ui
-                        .add_enabled(clearing != mine, egui::Button::new("Use as My Default"))
-                        .on_hover_hint("New jobs start with these settings")
+                        .add_enabled(
+                            clearing != mine,
+                            egui::Button::new(tr!("views-use-as-my-default")),
+                        )
+                        .on_hover_hint(tr!("views-new-jobs-start-with-these"))
                         .clicked();
                     reset = ui
-                        .add_enabled(clearing != mine, egui::Button::new("Reset to My Defaults"))
-                        .on_hover_hint("Back to the settings new jobs start with")
+                        .add_enabled(
+                            clearing != mine,
+                            egui::Button::new(tr!("views-reset-to-my-defaults")),
+                        )
+                        .on_hover_hint(tr!("views-back-to-the-settings-new"))
                         .clicked();
                 });
                 ui.separator();
@@ -4210,12 +4196,15 @@ impl CutCraftApp {
                 changed = Some(settings);
             }
             ui.horizontal(|ui| {
-                triangulate = ui.button("Triangulate").clicked();
-                save = ui.button("Save STL…").clicked();
+                triangulate = ui.button(tr!("views-triangulate")).clicked();
+                save = ui.button(tr!("views-save-stl")).clicked();
             });
             if let Some((count, error)) = result {
-                ui.label(format!("Num Tri Created: {count}"));
-                ui.label(format!("Maximum Error: {}", super::length(error, units)));
+                ui.label(tr!("views-triangles-made", count = count));
+                ui.label(tr!(
+                    "views-maximum-error",
+                    error = super::length(error, units)
+                ));
             }
         });
         if let Some(settings) = changed {
@@ -4334,21 +4323,24 @@ impl CutCraftApp {
         }
     }
 
-    /// The wheel zooms about the cursor, and tilting it pans sideways (as Options ▸ Mouse and
+    /// The wheel zooms about the cursor, and tilting it pans sideways; a pinch zooms about
+    /// the cursor too; in Trackpad mode two fingers pan (each as Options ▸ Mouse and
     /// Shortcuts says); the pan buttons (the wheel, to start with) or the Pan tool pan.
     pub(super) fn zoom_and_pan(&mut self, ui: &egui::Ui, canvas: &mut Canvas) {
         let area = canvas.area;
-        // the wheel zooms about the cursor: a quarter of the view's height doubles the zoom
         if let Some(at) = canvas.hover() {
             let scroll = ui.input(|i| i.smooth_scroll_delta);
-            if scroll.y != 0.0 {
-                let factor = 2f32.powf(scroll.y / (area.height() / VIEW_ZOOM_QUARTERS));
-                canvas.transform = canvas.transform.zoomed_about(at, factor);
+            let pinch = self.pinch(ui.ctx());
+            let moved = self
+                .options
+                .controls
+                .view_move(scroll, pinch, area.height());
+            if moved.zoom != 1.0 {
+                canvas.transform = canvas.transform.zoomed_about(at, moved.zoom);
                 self.camera = Some(canvas.transform);
             }
-            let sideways = self.options.controls.tilt.pan(scroll.x);
-            if sideways != 0.0 {
-                canvas.transform = canvas.transform.panned(egui::vec2(sideways, 0.0));
+            if moved.pan != egui::Vec2::ZERO {
+                canvas.transform = canvas.transform.panned(moved.pan);
                 self.camera = Some(canvas.transform);
             }
         }
@@ -4361,6 +4353,25 @@ impl CutCraftApp {
             canvas.transform = canvas.transform.panned(by);
             self.camera = Some(canvas.transform);
         }
+    }
+
+    /// This frame's pinch on a trackpad or touch screen, as a zoom factor (1 for none). Ctrl
+    /// and the wheel count too (some trackpads send a pinch so), except while Sculpting,
+    /// whose brush they size.
+    pub(super) fn pinch(&self, ctx: &egui::Context) -> f32 {
+        let sculpting = self.form.as_ref().is_some_and(|f| f.id == "sculpt");
+        ctx.input(|i| {
+            if sculpting {
+                (i.raw.events.iter())
+                    .filter_map(|e| match e {
+                        egui::Event::Zoom(factor) => Some(*factor),
+                        _ => None,
+                    })
+                    .product()
+            } else {
+                i.zoom_delta()
+            }
+        })
     }
 
     /// Remembers where the pointer goes while dragging, for stroke tools.
@@ -4632,7 +4643,10 @@ pub(super) fn post_combo(
             .show_ui(ui, |ui| {
                 if let Ok(name) = default
                     && ui
-                        .selectable_label(post.is_none(), format!("{name} (default)"))
+                        .selectable_label(
+                            post.is_none(),
+                            tr!("views-post-default", name = name.as_str()),
+                        )
                         .clicked()
                 {
                     *post = None;
@@ -4644,7 +4658,7 @@ pub(super) fn post_combo(
                     }
                 }
             });
-        ui.label("Post-processor");
+        ui.label(tr!("views-post-processor"));
     });
 }
 
@@ -4661,18 +4675,16 @@ pub(super) fn immediate_output(
     let mut save = false;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Immediate Output");
+        ui.strong(tr!("views-immediate-output"));
         post_combo(ui, "immediate_post", &mut output.post, default, choices);
         if double_sided {
-            ui.checkbox(&mut output.add_side, "Add side to toolpath name");
+            ui.checkbox(&mut output.add_side, tr!("views-add-side-to-toolpath-name"));
         }
         // ponytail: the Output Direct to Machine needs a transfer driver; none here
         save = ui
-            .add_enabled(ready, egui::Button::new("Save Toolpath Now..."))
-            .on_hover_hint(
-                "Save the toolpath calculated last through the post, keeping the form open",
-            )
-            .on_disabled_hover_text("Calculate first: there is no quick engrave toolpath yet")
+            .add_enabled(ready, egui::Button::new(tr!("views-save-toolpath-now")))
+            .on_hover_hint(tr!("views-save-the-toolpath-calculated-last"))
+            .on_disabled_hover_text(tr!("views-calculate-first-there-is-no"))
             .clicked();
     });
     save
@@ -4686,43 +4698,33 @@ const TICK_TO_SAVE: &str =
 /// has one), or a pause to change the tool by hand.
 fn tool_changes_section(ui: &mut egui::Ui, changes: &mut files::ToolChanges, has_changer: bool) {
     use files::ToolChanges;
-    ui.strong("Tool changes");
+    ui.strong(tr!("views-tool-changes"));
     ui.radio_value(
         changes,
         ToolChanges::SeparateFiles,
-        "Separate file for each tool",
+        tr!("views-separate-file-for-each-tool"),
     )
-    .on_hover_hint(
-        "The safest without a tool changer: change the tool and set Z zero between files",
-    );
+    .on_hover_hint(tr!("views-the-safest-without-a-tool"));
     ui.add_enabled_ui(has_changer, |ui| {
-        ui.radio_value(changes, ToolChanges::ToolChanger, "Tool changer (ATC)")
-            .on_hover_hint("One file; the machine's tool changer changes the tools")
-            .on_disabled_hover_text(
-                "No tool changer is set up: pick or add your machine, and give it the tool \
-                 changer's slots in Machine Configuration",
-            );
+        ui.radio_value(
+            changes,
+            ToolChanges::ToolChanger,
+            tr!("views-tool-changer-atc"),
+        )
+        .on_hover_hint(tr!("views-one-file-the-machine-s"))
+        .on_disabled_hover_text(tr!("views-no-tool-changer-is-set"));
     });
     ui.radio_value(
         changes,
         ToolChanges::Pause,
-        "One file, pause to change the tool",
+        tr!("views-one-file-pause-to-change"),
     )
-    .on_hover_hint(
-        "The machine stops (M0) at each tool change; change the tool, set Z zero, then \
-         resume. Some controllers (GRBL among them) cannot jog while stopped, which makes \
-         setting Z zero hard: use separate files there",
-    );
+    .on_hover_hint(tr!("views-the-machine-stops-m0-at"));
 }
 
 /// What Save Toolpaths says while tiling is on, with `tiles` tiles.
 pub(super) fn tiling_on(tiles: usize) -> String {
-    let s = if tiles == 1 { "" } else { "s" };
-    format!(
-        "Tiling on: {tiles} tile{s}. Each tile is saved as a file of its own, the name you \
-         give with _tile1 to _tile{tiles} added (a tile with nothing to cut gets none). \
-         Toolpaths ▸ Toolpath Tiling turns it off"
-    )
+    tr!("views-tiling-on", tiles = tiles)
 }
 
 /// Save Toolpaths' files: what goes in each, why there is a file for each tool, and that
@@ -4751,7 +4753,11 @@ fn files_section(
                     .filter_map(|id| doc.toolpaths.get(id))
                     .map(|t| format!("{} ({})", t.name, t.tool.name))
                     .collect();
-                ui.label(format!("File {}: {}", n + 1, names.join(", ")));
+                ui.label(tr!(
+                    "views-file-toolpaths",
+                    number = n + 1,
+                    toolpaths = names.join(", ")
+                ));
             }
         }
         Err(e) => {

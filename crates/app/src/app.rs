@@ -697,7 +697,7 @@ const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
 ];
 /// Scrolling a view's height divided by this doubles the zoom.
 // ponytail: fixed rate until a preferences dialog exists
-const VIEW_ZOOM_QUARTERS: f32 = 4.0;
+pub(crate) const VIEW_ZOOM_QUARTERS: f32 = 4.0;
 /// The start page's tasks: action id and icon. Each one's words are `start-task-` and its id
 /// (`locales/en/start.ftl`).
 const STARTUP_TASKS: [(&str, &str); 4] = [

@@ -30,7 +30,7 @@ const DARK: &str = "-dark";
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 57] = [
+const SCENES: &[Scene] = &[
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("design-2d-dark", |_, _| {}),
@@ -180,6 +180,15 @@ const SCENES: [Scene; 57] = [
         app.options_closing = true;
     }),
     ("snapping-not-applied", snapping_not_applied),
+    // Help: Moving the views (Options ▸ Mouse and Shortcuts, Trackpad mode and Invert)
+    ("options-mouse-controls", |app, ctx| {
+        (app.snap_window, app.snap_draft, app.post_window) = (false, None, None);
+        options_not_applied(app, ctx);
+        app.options_goto = Some(super::shortcuts_page::CATEGORY);
+        let mut edited = app.options.clone();
+        (edited.controls.trackpad, edited.controls.invert_drag_y) = (true, true);
+        app.options_edited(edited);
+    }),
     // Help: Changing settings ▸ Job Defaults
     ("options-job-defaults", |app, ctx| {
         (app.form, app.tool_manager, app.materials_window) = (None, None, None);
