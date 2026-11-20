@@ -1,4 +1,4 @@
-- Rail and Ribbon now have the Checks tab, Favourites and the tip box, like Classic
-- Right-click a tool in Rail to add it to Favourites; the ★ at the foot lists them
-- Ribbon has a Favourites tab
-- When the window is narrow, the Ribbon folds the groups you use least into ▾ buttons
+- Rotary machining: wrap a real 3D model round the A axis, watch it turn in the preview, and cut with a Rotary Lathe toolpath
+- Opens straight to a blank job; Setup Material and Job Defaults replace the old Job Setup steps
+- The app's words now come from language files, so language packs can be installed as add-ons
+- Gadgets can reach the web hosts they list, and imports keep the file's layers, names and colours

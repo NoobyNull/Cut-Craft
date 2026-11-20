@@ -2350,7 +2350,8 @@ impl CutCraftApp {
             if !self.import_drag(mode, delta, area.size()) {
                 match mode {
                     Some(view3d::DragMode::Rotate) => {
-                        self.orbit = self.orbit.dragged_by(delta, area.size(), rotation);
+                        let turn = self.options.controls.turn(delta);
+                        self.orbit = self.orbit.dragged_by(turn, area.size(), rotation);
                     }
                     Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
                     None => {}
@@ -2368,7 +2369,8 @@ impl CutCraftApp {
         }
         self.spin_3d(ui.ctx());
         if on_cube.dragged() {
-            self.orbit = (self.orbit).dragged_by(on_cube.drag_delta(), area.size(), rotation);
+            let turn = self.options.controls.turn(on_cube.drag_delta());
+            self.orbit = (self.orbit).dragged_by(turn, area.size(), rotation);
         } else if on_cube.double_clicked() {
             self.orbit = view3d::Orbit::facing(-self.orbit.towards_viewer());
         } else if let Some(from) =
@@ -2377,15 +2379,20 @@ impl CutCraftApp {
             // ponytail: turns at once; the turns smoothly
             self.orbit = view3d::Orbit::facing(from);
         }
-        if let Some(at) = response.hover_pos().filter(|_| scroll.y != 0.0) {
-            // as in the 2D view: a quarter of the view's height doubles the zoom
-            let factor = 2f32.powf(scroll.y / (area.height() / VIEW_ZOOM_QUARTERS));
-            self.framing = self.framing.zoomed_about(at - area.center(), factor);
-        }
-        // and tilting the wheel pans sideways
-        let sideways = self.options.controls.tilt.pan(scroll.x);
-        if response.hovered() && sideways != 0.0 {
-            self.framing = self.framing.panned(egui::vec2(sideways, 0.0));
+        // as in the 2D view: the wheel or a pinch zooms about the pointer, tilting the wheel
+        // (or two fingers, in Trackpad mode) pans
+        if let Some(at) = response.hover_pos() {
+            let pinch = self.pinch(ui.ctx());
+            let moved = self
+                .options
+                .controls
+                .view_move(scroll, pinch, area.height());
+            if moved.zoom != 1.0 {
+                self.framing = self.framing.zoomed_about(at - area.center(), moved.zoom);
+            }
+            if moved.pan != egui::Vec2::ZERO {
+                self.framing = self.framing.panned(moved.pan);
+            }
         }
         // a click picks the component under it (its handles shown); a double-click off it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);

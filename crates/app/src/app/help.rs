@@ -200,9 +200,16 @@ impl CutCraftApp {
 
     /// The icon of tool `id`, as its button shows it: for the side bar and its page's title.
     pub(super) fn help_icon(&self, id: &str) -> Option<egui::Image<'static>> {
-        self.icons
-            .find(self.explicit_icon(id), id)
-            .map(|path| self.icons.image(path))
+        self.help_icon_key(id).map(|path| self.icons.image(path))
+    }
+
+    /// The icon page `id` shows, by its path: the one its header names (`icon:`, for a page
+    /// that is no tool's), else the button icon of the tool it is.
+    pub(super) fn help_icon_key(&self, id: &str) -> Option<&str> {
+        match cut_craft_help::page(id).and_then(|p| p.icon) {
+            Some(named) => self.tip_icon(named),
+            None => self.icons.find(self.explicit_icon(id), id),
+        }
     }
 
     /// The tools in the same group as tool `id` on its panel, itself among them; empty for a
@@ -320,7 +327,16 @@ impl CutCraftApp {
             "toolpaths" => tools_page(Page::Toolpaths, written("toolpaths")),
             "tips" => super::tips::markdown(),
             id if self.is_concept(id) => {
-                format!("[Contents](help:contents)\n\n{}\n", written(id).trim_end())
+                let words = written(id).trim_end();
+                // the icon its header names, beside its title as a tool's page shows its own
+                let words = match self.help_icon_uri(id, PAGE_ICON) {
+                    Some(uri) if words.starts_with("# ") => {
+                        let title = concept_title(id);
+                        format!("# ![{title} icon]({uri}) {}", &words["# ".len()..])
+                    }
+                    _ => words.to_owned(),
+                };
+                format!("[Contents](help:contents)\n\n{words}\n")
             }
             id => {
                 let (page, name) = match self.page_of(id) {
@@ -355,7 +371,7 @@ impl CutCraftApp {
     /// Where the help shows tool `id`'s button icon, `edge` points across: the same picture
     /// as its button, made small. `None` for a tool with no icon.
     pub(super) fn help_icon_uri(&self, id: &str, edge: u16) -> Option<String> {
-        let key = self.icons.find(self.explicit_icon(id), id)?;
+        let key = self.help_icon_key(id)?;
         Some(format!("{ICON_URI}{edge}/{key}"))
     }
 

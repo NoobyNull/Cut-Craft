@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-20
-see-also: setup_material, job_setup, web_api, bug_reports, contents, screen_readers
+see-also: setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
 # Changing settings
@@ -83,6 +83,9 @@ their **Apply** button uses what you typed, as before.
 A shortcut you set or remove in **Mouse and Shortcuts** also waits for **Apply**. Until
 then the old shortcut still runs.
 
+**Mouse and Shortcuts** also holds **Trackpad mode** and an **Invert** box for each way of
+moving the views: see [Moving the views](help:view_controls).
+
 ## How the window looks: three layouts, light or dark
 
 Cut Craft can arrange its tools three ways. Pick one in **Options ▸ General ▸ Window
@@ -133,17 +136,9 @@ Ribbon.
 
 ## Favourites: the tools you keep at hand
 
-1. Right-click any tool button and pick **Add to Favourites**.
-2. Find your favourites:
-   - **Classic**: right-click the **Design** or **Toolpaths** side tab and pick
-     **Show Favourites**. **Show All Tools** brings every tool back.
-   - **Rail**: click the **★** button at the foot of the column of group icons.
-   - **Ribbon**: open the **Favourites** tab.
-3. To take a tool off, right-click it and pick **Remove from Favourites**. In Classic and
-   Ribbon, right-click a favourite and pick **Move Earlier** or **Move Later** to change
-   their order.
-
-Favourites are kept between runs and are the same in every layout.
+Right-click any tool button and pick **Add to Favourites**, then show just your favourites:
+in Classic from the Design or Toolpaths side tab's right-click menu, in Rail with **★**,
+and in Ribbon on the **Favourites** tab. See [Favourites](help:favourites) for every step.
 
 To move panels about within a layout, or save an arrangement of your own, use
 [Interface Layout](help:interface_layout).
