@@ -41,7 +41,7 @@ trace, trace bitmap, quick trace, vectorize, vectorise
 model, 3d model, relief, component
 3d roughing, roughing, rough
 3d finishing, finishing, finish pass
-layers, layer
+layers, layer, dxf layers, drawing layers
 undo, go back, mistake
 laser, burn, engrave with laser
 rotary, 4th axis, fourth axis, wrap, a axis, chuck, tailstock
@@ -67,3 +67,4 @@ classic startup flow, start page, splash screen, startup screen, welcome screen
 preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated
 filter, filters, narrow down
 firmware, grbl, grblhal, fluidnc, mach3, mach4, controller
+colour, color, colours, colors, line colour, line color, layer colour, layer color

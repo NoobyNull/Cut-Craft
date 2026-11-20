@@ -27,6 +27,7 @@ pub mod font;
 mod formats;
 pub mod geometry;
 pub mod handles;
+pub mod import_layers;
 pub mod import_settings;
 pub mod keep_out;
 pub mod material_class;

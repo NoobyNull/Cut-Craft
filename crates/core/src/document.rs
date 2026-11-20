@@ -42,6 +42,10 @@ pub struct Layer {
     /// embellishments): `{"command": .., "params": .., "paths": ..}`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub made: Option<serde_json::Value>,
+    /// The colour its vectors are drawn in, red, green, blue; none draws them in the
+    /// usual vector colour (added with keeping an imported drawing's layers)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<[u8; 3]>,
 }
 
 impl Layer {
@@ -53,6 +57,7 @@ impl Layer {
             locked: false,
             material: String::new(),
             made: None,
+            colour: None,
         }
     }
 }
@@ -1240,6 +1245,11 @@ impl Document {
             .get(&id)
             .copied()
             .unwrap_or_else(|| self.layers[0].id)
+    }
+
+    /// The colour vector `id` is drawn in: its layer's own, or none for the usual one.
+    pub fn colour_of(&self, id: EntityId) -> Option<[u8; 3]> {
+        self.layer(self.layer_of(id)).and_then(|l| l.colour)
     }
 
     /// Every item of a kind, by id, with whether it is shown.
