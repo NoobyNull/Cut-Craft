@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-19
 see-also: orientate_3d_model, clipart_library, component_properties
 ---
 
@@ -14,3 +14,6 @@ see-also: orientate_3d_model, clipart_library, component_properties
 2. Under **Import**, press **Import 3D Model** and pick the file, then size and place it.
 
    ![Step 2](pictures/import_component_3d_model/step-2.png)
+
+   Line it up with **Align in Material** and then scale it: it stays lined up at its new
+   size. See [Orientate 3D Model](help:orientate_3d_model) for how.
