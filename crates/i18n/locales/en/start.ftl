@@ -9,3 +9,4 @@ start-recent = Recently opened files
 start-recent-none = None yet
 start-whats-new = What's new in v{ $version }
 start-questions = Questions or ideas?
+start-empty-sheet-sample-tip = Open a finished sign, with its toolpaths, to look round
