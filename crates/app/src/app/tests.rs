@@ -5935,7 +5935,13 @@ fn a_rotary_preview_plays_the_file_turning_the_material_with_a_in_step_with_its_
         }
         h.frame(vec![]);
     }
-    h.frame(vec![]);
+    // the material catches up a frame's budget at a time (a slow computer takes a few)
+    for _ in 0..200 {
+        h.frame(vec![]);
+        if h.app.turning.as_ref().is_some_and(|t| t.replay.finished()) {
+            break;
+        }
+    }
     let turning = h.app.turning.as_ref().expect("kept with the controls");
     assert!(turning.replay.finished(), "played through");
     assert!(turning.replay.material().count() < uncut, "it cut");
