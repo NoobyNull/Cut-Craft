@@ -1,7 +1,7 @@
 //! What `GET job`, `GET commands` and `POST select` read from the job and the tools, kept
 //! here (not in the app) so they are tested without a window.
 
-use crate::{ApiError, Pick};
+use crate::{ApiError, ComponentRef, Pick};
 use cut_craft_core::Registry;
 use cut_craft_core::document::{Document, EntityId, Units};
 use cut_craft_core::geometry::{Point, Rect};
@@ -170,9 +170,67 @@ pub fn pick(doc: &Document, pick: &Pick) -> Result<Vec<EntityId>, ApiError> {
         Pick::All => pickable().collect(),
         Pick::Open => pickable().filter(|id| !doc.vectors[id].closed).collect(),
         Pick::Closed => pickable().filter(|id| doc.vectors[id].closed).collect(),
-        Pick::None => vec![],
+        // a component is no vector: the caller picks it with pick_component
+        Pick::None | Pick::Component { .. } => vec![],
     };
     Ok(picked)
+}
+
+/// The component `which` names: by id, or by name (any case, spaces round it ignored).
+pub fn pick_component(doc: &Document, which: &ComponentRef) -> Result<EntityId, ApiError> {
+    let names = || {
+        doc.components
+            .iter()
+            .map(|(id, c)| format!("{} (id {})", c.name, id.0))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let there_are = || {
+        if doc.components.is_empty() {
+            "The job has no components.".to_string()
+        } else {
+            format!("The components are: {}.", names())
+        }
+    };
+    match which {
+        ComponentRef::Id(id) => {
+            let id = EntityId(*id);
+            if doc.components.contains_key(&id) {
+                Ok(id)
+            } else {
+                Err(ApiError::not_found(format!(
+                    "There is no component {}. {}",
+                    id.0,
+                    there_are()
+                )))
+            }
+        }
+        ComponentRef::Name(name) => {
+            let called: Vec<EntityId> = doc
+                .components
+                .iter()
+                .filter(|(_, c)| c.name.trim().eq_ignore_ascii_case(name.trim()))
+                .map(|(&id, _)| id)
+                .collect();
+            match called.as_slice() {
+                [id] => Ok(*id),
+                [] => Err(ApiError::not_found(format!(
+                    "No component is called \"{}\". {}",
+                    name.trim(),
+                    there_are()
+                ))),
+                many => Err(ApiError::refused(format!(
+                    "{} components are called \"{}\" (ids {}). Pick one by its id instead.",
+                    many.len(),
+                    name.trim(),
+                    many.iter()
+                        .map(|id| id.0.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))),
+            }
+        }
+    }
 }
 
 /// `GET commands`: every tool, by id, with its name and where it is in the app.

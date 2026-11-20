@@ -1,5 +1,6 @@
-//! Reset Inside Selected Vectors: clears the visible components' shape inside the selected closed vectors, so the
-//! model there is back to the flat base.
+//! Reset Inside Selected Vectors: clears the shape inside the selected closed vectors, so the model
+//! there is back to the flat base: only on the components picked, or on every shown one when
+//! none is picked.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::inside;
@@ -32,7 +33,7 @@ impl Command for ResetInsideSelectedVectors {
             .map(|p| p.flatten(cut_craft_core::polygon::TOLERANCE))
             .collect();
         let mut c = Change::builder(doc);
-        for (&id, component) in doc.components.iter().filter(|(_, k)| k.visible) {
+        for (&id, component) in doc.components_to_change() {
             let mut reset = component.clone();
             for (i, h) in reset.heights.iter_mut().enumerate() {
                 if inside(&rings, component.centre_of(i)) {
@@ -75,5 +76,41 @@ mod tests {
         let (middle, rim) = (Point::new(20.0, 20.0), Point::new(13.5, 20.0));
         assert!(dome.height_at(middle).is_none(), "cleared inside");
         assert!(dome.height_at(rim).is_some(), "kept outside");
+    }
+
+    /// #591: with one component picked, only it changes; the others are left as they are.
+    #[test]
+    fn changes_only_the_picked_component() {
+        let mut doc = with_square();
+        let dome = *doc.components.keys().next().unwrap();
+        let mut c = Change::builder(&doc);
+        let other = c.add_component(doc.components[&dome].clone());
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        doc.selected_components = [other].into();
+        let before = doc.components[&dome].clone();
+        let change = ResetInsideSelectedVectors::run(&doc, &NoParams {}).unwrap();
+        doc.apply(&change).unwrap();
+        assert_eq!(
+            doc.components[&dome], before,
+            "the one not picked is untouched"
+        );
+        assert_ne!(doc.components[&other], before, "the picked one is reset");
+    }
+
+    #[test]
+    fn with_none_picked_every_shown_component_changes() {
+        let mut doc = with_square();
+        let dome = *doc.components.keys().next().unwrap();
+        let mut c = Change::builder(&doc);
+        let other = c.add_component(doc.components[&dome].clone());
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        doc.selected_components.clear();
+        let before = doc.components[&dome].clone();
+        let change = ResetInsideSelectedVectors::run(&doc, &NoParams {}).unwrap();
+        doc.apply(&change).unwrap();
+        assert_ne!(doc.components[&dome], before);
+        assert_ne!(doc.components[&other], before);
     }
 }

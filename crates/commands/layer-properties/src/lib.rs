@@ -1,5 +1,5 @@
 //! Layer Properties: changes a layer's name, whether it is shown or locked against changes,
-//! and the material its vectors are cut from.
+//! the material its vectors are cut from, and the colour they are drawn in.
 
 use cut_craft_core::document::{Document, Layer, LayerId};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing_layer};
@@ -26,6 +26,22 @@ pub struct Params {
     #[serde(default)]
     #[schemars(extend("x-kind" = "material"))]
     pub material: String,
+    /// Draw this layer's vectors in a colour of its own, to tell them apart; unticked they
+    /// are drawn in the usual vector colour. A drawing brought in from a DXF keeps the
+    /// colours its layers had
+    #[serde(default)]
+    #[schemars(title = "Own Colour")]
+    pub own_colour: bool,
+    /// The colour this layer's vectors are drawn in (greyed unless Own Colour is ticked);
+    /// it changes only how they look, never how they are cut
+    #[serde(default = "grey")]
+    #[schemars(extend("x-kind" = "colour", "x-enable-when" = {"own_colour": "true"}))]
+    pub colour: [u8; 3],
+}
+
+/// The colour Own Colour starts on, before one is picked: a mid grey.
+fn grey() -> [u8; 3] {
+    [128, 128, 128]
 }
 
 impl Default for Params {
@@ -42,6 +58,8 @@ impl From<Layer> for Params {
             visible: l.visible,
             locked: l.locked,
             material: l.material,
+            own_colour: l.colour.is_some(),
+            colour: l.colour.unwrap_or_else(grey),
         }
     }
 }
@@ -75,6 +93,7 @@ impl Command for LayerProperties {
             material: p.material.trim().to_owned(),
             // what made the layer's contents stays with it
             made: doc.layer(p.layer).and_then(|l| l.made.clone()),
+            colour: p.own_colour.then_some(p.colour),
         };
         let mut c = Change::builder(doc);
         // only editable vectors may stay selected
@@ -105,6 +124,8 @@ mod tests {
             visible: false,
             locked: true,
             material: "Oak".into(),
+            own_colour: true,
+            colour: [10, 200, 30],
         }
     }
 
@@ -120,6 +141,7 @@ mod tests {
                 locked: true,
                 material: "Oak".into(),
                 made: None,
+                colour: Some([10, 200, 30]),
             }
         );
     }
@@ -142,6 +164,18 @@ mod tests {
         doc.apply(&change).unwrap();
         let p = LayerProperties::initial_params(&doc);
         assert_eq!((p.layer, p.name.as_str()), (LayerId(2), "Layer 2"));
+    }
+
+    #[test]
+    fn unticking_own_colour_draws_in_the_usual_colour_and_keeps_the_pick_for_later() {
+        let mut doc = after::<LayerProperties>(&hidden_and_locked());
+        let mut p = Params::from(doc.layers[0].clone());
+        assert!(p.own_colour);
+        assert_eq!(p.colour, [10, 200, 30]);
+        p.own_colour = false;
+        doc.apply(&LayerProperties::run(&doc, &p).unwrap()).unwrap();
+        assert_eq!(doc.layers[0].colour, None);
+        assert_eq!(Params::from(doc.layers[0].clone()).colour, grey());
     }
 
     #[test]

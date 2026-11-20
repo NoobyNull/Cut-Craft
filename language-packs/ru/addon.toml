@@ -1,0 +1,9 @@
+# The Russian language pack. Published as language-ru.zip on NoobyNull/CutCraft-Translations
+# by .github/workflows/language-packs.yml; installed only when someone picks it in Gadgets ▸
+# Add-ons ▸ Languages, never with Cut Craft. See docs/translating.md.
+id = "language-ru"
+name = "Русский"
+kind = "language"
+language = "ru"
+version = "0.1.0"
+needs_cutcraft = ">=0.7.0"
