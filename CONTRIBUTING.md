@@ -49,6 +49,39 @@ suite. Run it after any change that touches rotary:
 
     cargo nextest run --workspace --profile rotary
 
+## Words the app shows
+
+Every word the app shows lives in a Fluent file under `crates/i18n/locales/en/`, one file per
+area (`menus.ftl`, `forms.ftl`, `start.ftl`, ...), under a key. The code asks for the key,
+never the words, so a language pack can swap them; English is built in and fills in any key a
+pack has no words for yet.
+
+    commit-calculate = Calculate
+        .tooltip = Work out the toolpath with these settings
+    start-whats-new = What's new in v{ $version }
+
+    ui.button(tr!("commit-calculate")).on_hover_hint(tr!("commit-calculate.tooltip"));
+    ui.strong(tr!("start-whats-new", version = env!("CARGO_PKG_VERSION")));
+
+- Keys are lower-case words joined by hyphens, starting with their area (`menu-`, `form-`).
+  A button's tooltip is an attribute of the same message (`.tooltip`), so they move together.
+- A length or other measured number goes in already written in the job's units, by the code
+  that writes the number box beside it. A count that picks a plural goes in as a number:
+  `{ $count -> [one] { $count } toolpath *[other] { $count } toolpaths }`.
+- Leave room: labels sit in fixed areas and never reflow, and other languages run up to 40%
+  longer than English. `cut_craft_i18n::pseudo()` is a test language that stretches every word
+  by that much.
+
+Languages have their own test suite, run by the **Languages** workflow:
+
+    cargo nextest run -p cut-craft -p cut-craft-i18n --profile languages
+
+The **hard-coded text** check in it (also in the ordinary run) fails on
+words handed straight to a button, label, tooltip, menu or window in `crates/app/src`, and on
+a key with no English words. Text already in the code before the move is listed in
+`crates/app/i18n/hard-coded-baseline.txt`; when you move one into Fluent, delete its line
+(the check fails on a stale line too, so the list only shrinks).
+
 ## Pull request titles and versions
 
 Cut Craft's version is **0.MINOR.PATCH**, and it only changes when a release is cut, one step at
