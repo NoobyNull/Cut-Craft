@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-19
-see-also: setup_material, job_setup, web_api, bug_reports, contents
+see-also: setup_material, job_setup, web_api, bug_reports, contents, screen_readers
 ---
 
 # Changing settings

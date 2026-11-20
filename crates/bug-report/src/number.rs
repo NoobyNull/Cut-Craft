@@ -70,6 +70,7 @@ pub struct Number<'a, N: Numeric> {
     step: Option<f64>,
     parser: Option<Parser<'a>>,
     trim_zeros: bool,
+    name: String,
 }
 
 impl<'a, N: Numeric> Number<'a, N> {
@@ -90,6 +91,7 @@ impl<'a, N: Numeric> Number<'a, N> {
             step: None,
             parser: None,
             trim_zeros: false,
+            name: String::new(),
         }
     }
 
@@ -107,6 +109,13 @@ impl<'a, N: Numeric> Number<'a, N> {
 
     pub fn prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = prefix.into();
+        self
+    }
+
+    /// What a screen reader calls the box: its label's words ("Cut Depth"), read with its
+    /// unit ("Cut Depth, mm"). Without it the box would be heard as only its unit.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
         self
     }
 
@@ -170,6 +179,7 @@ impl<N: Numeric> egui::Widget for Number<'_, N> {
             fixed_decimals,
             parser,
             trim_zeros,
+            name,
             ..
         } = self;
         ui.horizontal(|ui| {
@@ -198,6 +208,7 @@ impl<N: Numeric> egui::Widget for Number<'_, N> {
                     egui::emath::format_with_decimals_in_range(n, 0..=*places.end())
                 });
             }
+            let unit = suffix.trim();
             let field = ui.add(drag);
             if field.hovered() {
                 crate::hint::hint(ui.ctx(), VALUE_HINT);
@@ -209,8 +220,8 @@ impl<N: Numeric> egui::Widget for Number<'_, N> {
                 field.rect.height(),
                 (now < *range.end(), now > *range.start()),
             );
+            announce(&name, unit, &field, [&up, &down]);
             let big = ui.input(|i| i.modifiers.shift);
-            let unit = suffix.trim();
             let by = if big { step * 10.0 } else { step };
             let words = |which: &str| {
                 format!(
@@ -248,6 +259,26 @@ impl<N: Numeric> egui::Widget for Number<'_, N> {
     }
 }
 
+/// Names the box and its arrows for a screen reader: "Cut Depth, mm", "Increase Cut Depth".
+/// A box given no name keeps egui's (its unit).
+fn announce(name: &str, unit: &str, field: &egui::Response, [up, down]: [&Pressed; 2]) {
+    if name.is_empty() {
+        return;
+    }
+    let heard = if unit.is_empty() {
+        name.to_owned()
+    } else {
+        cut_craft_i18n::tr!("number-box-name", name = name, unit = unit)
+    };
+    field.clone().accessible_name(heard);
+    for (arrow, key) in [(up, "number-box-increase"), (down, "number-box-decrease")] {
+        let words = cut_craft_i18n::tr!(key, name = name);
+        arrow
+            .response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, arrow.on, &words));
+    }
+}
+
 /// A step as the status bar writes it: 0.1, 5, 1000.
 fn trimmed(n: f64) -> String {
     let s = format!("{n:.4}");
@@ -258,6 +289,8 @@ fn trimmed(n: f64) -> String {
 struct Pressed {
     response: egui::Response,
     times: u32,
+    /// Whether it can be pressed (not at its limit, not greyed out).
+    on: bool,
 }
 
 /// The up and down buttons, stacked as high as the value beside them; each may be off (at
@@ -286,8 +319,9 @@ struct Held {
 }
 
 fn arrow(ui: &mut egui::Ui, rect: egui::Rect, id: egui::Id, up: bool, on: bool) -> Pressed {
+    // clicked, but never a Tab stop: the box beside it takes the arrow keys
     let sense = if on && ui.is_enabled() {
-        egui::Sense::click()
+        egui::Sense::CLICK
     } else {
         egui::Sense::hover()
     };
@@ -371,7 +405,11 @@ fn arrow(ui: &mut egui::Ui, rect: egui::Rect, id: egui::Id, up: bool, on: bool) 
             egui::Stroke::NONE,
         ));
     }
-    Pressed { response, times }
+    Pressed {
+        response,
+        times,
+        on: on && ui.is_enabled(),
+    }
 }
 
 #[cfg(test)]
@@ -584,6 +622,131 @@ mod tests {
             0.15,
         );
         assert_eq!(value, 100.0);
+    }
+
+    /// The accessibility tree of one frame showing `add` in a panel.
+    fn tree(add: impl FnOnce(&mut egui::Ui)) -> egui::accesskit::TreeUpdate {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut add = Some(add);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                if let Some(add) = add.take() {
+                    add(ui);
+                }
+            });
+        });
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.expect("a tree")
+    }
+
+    fn named(tree: &egui::accesskit::TreeUpdate, role: egui::accesskit::Role) -> Vec<String> {
+        tree.nodes
+            .iter()
+            .filter(|(_, n)| n.role() == role)
+            .map(|(_, n)| n.label().unwrap_or_default().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_screen_reader_hears_a_number_box_by_its_name_and_unit() {
+        let mut depth = 6.0;
+        let tree = tree(|ui| {
+            ui.add(Number::new(&mut depth).suffix(" mm").name("Cut Depth"));
+        });
+        assert_eq!(
+            named(&tree, egui::accesskit::Role::SpinButton),
+            ["Cut Depth, mm"]
+        );
+    }
+
+    #[test]
+    fn a_number_box_with_no_unit_is_heard_by_its_name_alone() {
+        let mut flutes = 2_u32;
+        let tree = tree(|ui| {
+            ui.add(Number::new(&mut flutes).name("Flutes"));
+        });
+        assert_eq!(named(&tree, egui::accesskit::Role::SpinButton), ["Flutes"]);
+    }
+
+    #[test]
+    fn the_arrows_are_named_buttons_left_out_of_the_tab_order() {
+        let mut depth = 6.0;
+        let tree = tree(|ui| {
+            ui.add(Number::new(&mut depth).suffix(" mm").name("Cut Depth"));
+        });
+        let mut buttons = named(&tree, egui::accesskit::Role::Button);
+        buttons.sort();
+        assert_eq!(buttons, ["Decrease Cut Depth", "Increase Cut Depth"]);
+        let focusable = tree
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.role() == egui::accesskit::Role::Button)
+            .filter(|(_, n)| n.supports_action(egui::accesskit::Action::Focus))
+            .count();
+        // the box itself takes the arrow keys; Tab goes straight on to the next setting
+        assert_eq!(focusable, 0);
+    }
+
+    /// Every number box is named for a screen reader: `.name(` follows each `Number::new(`
+    /// before the end of its statement.
+    #[test]
+    fn every_number_box_has_a_name() {
+        let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut nameless = Vec::new();
+        let mut stack = vec![crates];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("crates folder").flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if path.file_name().is_some_and(|n| n != "target") {
+                        stack.push(path);
+                    }
+                } else if path.extension().is_some_and(|e| e == "rs")
+                    && !path.ends_with("bug-report/src/number.rs")
+                {
+                    let text = std::fs::read_to_string(&path).unwrap_or_default();
+                    for (at, _) in text.match_indices("Number::new(") {
+                        let line = text[..at].lines().count();
+                        if !names_itself(&text[at..]) {
+                            nameless.push(format!("{}:{line}", path.display()));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            nameless.is_empty(),
+            "give each number box .name(\"…\") (its label's words), so a screen reader says \
+             what it is and not only its unit:\n{}",
+            nameless.join("\n")
+        );
+    }
+
+    /// Whether the builder chain starting `code` calls `.name(` before it closes: before the
+    /// bracket that holds it closes, or the statement ends.
+    fn names_itself(code: &str) -> bool {
+        let mut depth = 0_i32;
+        let mut i = 0;
+        let bytes = code.as_bytes();
+        while i < bytes.len() {
+            if bytes[i..].starts_with(b".name(") {
+                return true;
+            }
+            match bytes[i] {
+                b'(' | b'[' | b'{' => depth += 1,
+                b')' | b']' | b'}' => {
+                    depth -= 1;
+                    if depth < 0 {
+                        return false;
+                    }
+                }
+                b';' | b',' if depth == 0 => return false,
+                _ => {}
+            }
+            i += 1;
+        }
+        false
     }
 
     /// Every number box is this one, so they all have the arrows: none is a bare `DragValue`.

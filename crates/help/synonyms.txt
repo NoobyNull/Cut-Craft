@@ -67,3 +67,4 @@ classic startup flow, start page, splash screen, startup screen, welcome screen
 preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated
 filter, filters, narrow down
 firmware, grbl, grblhal, fluidnc, mach3, mach4, controller
+screen reader, screen readers, narrator, nvda, jaws, orca, voiceover, accessibility, accessible, blind, low vision, keyboard only

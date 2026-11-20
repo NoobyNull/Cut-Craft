@@ -1370,22 +1370,23 @@ fn load_slot(ui: &mut egui::Ui, changer: &Changer, tool: &str) -> Option<usize> 
 }
 
 /// A length (mm) shown in the tool's units; whether it changed.
-pub(crate) fn length(ui: &mut egui::Ui, value: &mut f64, units: Units) -> bool {
+/// `name` is what a screen reader calls the box: its label's words.
+pub(crate) fn length(ui: &mut egui::Ui, name: &str, value: &mut f64, units: Units) -> bool {
     let (per, unit) = if units == Units::Inch {
         (INCH, "in")
     } else {
         (1.0, "mm")
     };
-    number(ui, value, per, unit)
+    number(ui, name, value, per, unit)
 }
 
 /// A rate (mm/min) shown in the tool's rate units; whether it changed.
-pub(crate) fn rate(ui: &mut egui::Ui, value: &mut f64, units: RateUnits) -> bool {
-    number(ui, value, units.mm_per_min(), units.label())
+pub(crate) fn rate(ui: &mut egui::Ui, name: &str, value: &mut f64, units: RateUnits) -> bool {
+    number(ui, name, value, units.mm_per_min(), units.label())
 }
 
 /// `value` shown as so many of `per`, with its unit; whether it changed.
-fn number(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) -> bool {
+fn number(ui: &mut egui::Ui, name: &str, value: &mut f64, per: f64, unit: &str) -> bool {
     let mut shown = *value / per;
     // ponytail: drag speed is a hundredth of the value, so small and large tools both drag well
     let speed = (shown.abs() / 100.0).max(f64::EPSILON);
@@ -1395,7 +1396,8 @@ fn number(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) -> bool {
                 .speed(speed)
                 .range(0.0..=f64::MAX)
                 .max_decimals(4)
-                .suffix(format!(" {unit}")),
+                .suffix(format!(" {unit}"))
+                .name(name),
         )
         .changed();
     if changed {
@@ -1666,12 +1668,12 @@ fn tool_info(
         match loaded {
             Some((machine, slot)) => {
                 ui.horizontal(|ui| {
-                    ui.add_enabled(false, Number::new(&mut tool.number));
+                    ui.add_enabled(false, Number::new(&mut tool.number).name("Tool Number"));
                     ui.weak(format!("from slot T{slot} of {machine}'s tool changer"));
                 });
             }
             None => {
-                ui.add(Number::new(&mut tool.number).range(0..=999));
+                ui.add(Number::new(&mut tool.number).range(0..=999).name("Tool Number"));
             }
         }
         ui.end_row();
@@ -1754,7 +1756,7 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
                     "The width the laser burns (its diameter): Cut Outside and Cut Inside \
                      keep half of it off the line",
                 );
-                length(ui, &mut tool.diameter, tool.units);
+                length(ui, "Diameter", &mut tool.diameter, tool.units);
                 ui.end_row();
             });
         return;
@@ -1768,7 +1770,11 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
             }
             ui.label("Number of Flutes")
                 .on_hover_hint("How many cutting edges the bit has, for the chip load");
-            ui.add(Number::new(&mut tool.flutes).range(1..=12));
+            ui.add(
+                Number::new(&mut tool.flutes)
+                    .range(1..=12)
+                    .name("Number of Flutes"),
+            );
             ui.end_row();
             stickout_row(ui, tool);
         });
@@ -1785,7 +1791,7 @@ fn stickout_row(ui: &mut egui::Ui, tool: &mut Tool) {
          not set",
     );
     ui.horizontal(|ui| {
-        length(ui, &mut tool.stickout, tool.units);
+        length(ui, "Stickout", &mut tool.stickout, tool.units);
         let (taken, guessed) = cut_craft_core::collision::stickout(tool);
         if guessed {
             let shown = if tool.units == Units::Inch {
@@ -1832,7 +1838,7 @@ fn own_holder(ui: &mut egui::Ui, tool: &mut Tool) {
                             ("Spindle across", &mut holder.spindle_diameter),
                         ] {
                             ui.label(label);
-                            length(ui, value, tool.units);
+                            length(ui, label, value, tool.units);
                             ui.end_row();
                         }
                     });
@@ -1844,17 +1850,17 @@ fn own_holder(ui: &mut egui::Ui, tool: &mut Tool) {
 /// staying) and offset.
 fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
     ui.label("Tooth Size");
-    length(ui, &mut tool.tooth_size, tool.units);
+    length(ui, "Tooth Size", &mut tool.tooth_size, tool.units);
     ui.end_row();
     ui.label("Tooth Height");
     let mut height = tool.tooth_height();
-    if length(ui, &mut height, tool.units) {
+    if length(ui, "Tooth Height", &mut height, tool.units) {
         tool.set_tooth_height(height);
     }
     ui.end_row();
     ui.label("Tooth Offset")
         .on_hover_hint("From the bottom of the tool up to the tip of the tooth");
-    length(ui, &mut tool.tooth_offset, tool.units);
+    length(ui, "Tooth Offset", &mut tool.tooth_offset, tool.units);
     ui.end_row();
 }
 
@@ -1867,14 +1873,14 @@ fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
         .num_columns(2)
         .show(ui, |ui| {
             ui.label("Pass Depth");
-            length(ui, &mut tool.pass_depth, tool.units);
+            length(ui, "Pass Depth", &mut tool.pass_depth, tool.units);
             ui.end_row();
             ui.label("Clearing Stepover").on_hover_hint(
                 "Stepover is how far the tool moves sideways between passes, as a share of \
                  its width. Clearing (roughing) removes the bulk of the wood, in pockets, \
                  flat bottoms and 3D roughing: a big step is faster. 40% suits most end mills",
             );
-            percent(ui, &mut tool.stepover);
+            percent(ui, "Clearing Stepover", &mut tool.stepover);
             ui.end_row();
             ui.label("Finishing Stepover").on_hover_hint(
                 "How far the tool moves sideways between finishing passes, which leave the \
@@ -1883,7 +1889,7 @@ fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
             );
             ui.horizontal(|ui| {
                 let mut finish = tool.finishing_stepover();
-                if percent(ui, &mut finish) {
+                if percent(ui, "Finishing Stepover", &mut finish) {
                     tool.finish_stepover = finish;
                 }
                 if tool.finish_stepover <= 0.0 {
@@ -1895,14 +1901,15 @@ fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
 }
 
 /// A stepover (a fraction of the diameter) shown as a percentage; whether it changed.
-pub(crate) fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
+pub(crate) fn percent(ui: &mut egui::Ui, name: &str, fraction: &mut f64) -> bool {
     let mut percent = *fraction * 100.0;
     let changed = ui
         .add(
             Number::new(&mut percent)
                 .range(0.0..=100.0)
                 .max_decimals(2)
-                .suffix(" %"),
+                .suffix(" %")
+                .name(name),
         )
         .changed();
     if changed {
@@ -1924,14 +1931,20 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
             ui.add(
                 Number::new(&mut tool.spindle_speed)
                     .range(0.0..=f64::MAX)
-                    .suffix(" r.p.m."),
+                    .suffix(" r.p.m.")
+                    .name("Spindle Speed"),
             );
             ui.end_row();
         }
         // the rate units beside the feed rate
         ui.label(if laser { "Speed" } else { "Feed Rate" });
         ui.horizontal(|ui| {
-            rate(ui, &mut tool.feed_rate, tool.rate_units);
+            rate(
+                ui,
+                if laser { "Speed" } else { "Feed Rate" },
+                &mut tool.feed_rate,
+                tool.rate_units,
+            );
             egui::ComboBox::from_id_salt("tool_rate_units")
                 .selected_text(tool.rate_units.label())
                 .show_ui(ui, |ui| {
@@ -1945,7 +1958,7 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
         ui.end_row();
         if !laser {
             ui.label("Plunge Rate");
-            rate(ui, &mut tool.plunge_rate, tool.rate_units);
+            rate(ui, "Plunge Rate", &mut tool.plunge_rate, tool.rate_units);
             ui.end_row();
         }
     });

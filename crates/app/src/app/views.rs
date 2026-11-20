@@ -1806,17 +1806,25 @@ impl CutCraftApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label("Position");
-                    crate::form::length_edit(ui, &mut props.position, units, f64::NEG_INFINITY);
+                    crate::form::length_edit(
+                        ui,
+                        "Position",
+                        &mut props.position,
+                        units,
+                        f64::NEG_INFINITY,
+                    );
                 });
                 ui.horizontal(|ui| {
                     ui.label("Angle");
                     let hint = "Degrees anticlockwise from the X axis";
                     ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).show_value(false))
+                        .accessible_name("Angle")
                         .on_hover_hint(hint);
                     ui.add(
                         Number::new(&mut props.angle)
                             .range(-180.0..=180.0)
-                            .suffix("°"),
+                            .suffix("°")
+                            .name("Angle"),
                     )
                     .on_hover_hint(hint);
                 });
@@ -1833,10 +1841,17 @@ impl CutCraftApp {
                     ui.radio_value(&mut props.relative, true, "Relative");
                 });
                 ui.horizontal(|ui| {
-                    ui.label(if props.relative { "Offset" } else { "Position" });
-                    crate::form::length_edit(ui, &mut props.new_at, units, f64::NEG_INFINITY);
+                    let new_at = if props.relative { "Offset" } else { "Position" };
+                    ui.label(new_at);
+                    crate::form::length_edit(
+                        ui,
+                        &format!("New guide {}", new_at.to_lowercase()),
+                        &mut props.new_at,
+                        units,
+                        f64::NEG_INFINITY,
+                    );
                     ui.label("Count");
-                    ui.add(Number::new(&mut props.count).range(1..=100));
+                    ui.add(Number::new(&mut props.count).range(1..=100).name("Count"));
                 });
                 create = ui
                     .button("Create New Guide")

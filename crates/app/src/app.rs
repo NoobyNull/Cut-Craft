@@ -2737,11 +2737,21 @@ fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String
                             .num_columns(2)
                             .show(ui, |ui| {
                                 ui.label(tr!("selector-diameter"));
-                                tabs::length(ui, &mut selector.diameter, units);
+                                tabs::length(
+                                    ui,
+                                    &tr!("selector-diameter"),
+                                    &mut selector.diameter,
+                                    units,
+                                );
                                 ui.end_row();
                                 ui.label(tr!("selector-tolerance"))
                                     .on_hover_hint(tr!("selector-tolerance.tooltip"));
-                                tabs::length(ui, &mut selector.tolerance, units);
+                                tabs::length(
+                                    ui,
+                                    &tr!("selector-tolerance"),
+                                    &mut selector.tolerance,
+                                    units,
+                                );
                                 ui.end_row();
                             });
                     }
@@ -2822,11 +2832,17 @@ fn rest_section(
                 .show(ui, |ui| {
                     ui.label(tr!("rest-minimum-detail"))
                         .on_hover_hint(tr!("rest-minimum-detail.tooltip"));
-                    form::length_edit(ui, &mut rest.minimum_detail, units, 0.0);
+                    form::length_edit(
+                        ui,
+                        &tr!("rest-minimum-detail"),
+                        &mut rest.minimum_detail,
+                        units,
+                        0.0,
+                    );
                     ui.end_row();
                     ui.label(tr!("rest-overlap"))
                         .on_hover_hint(tr!("rest-overlap.tooltip"));
-                    form::length_edit(ui, &mut rest.overlap, units, 0.0);
+                    form::length_edit(ui, &tr!("rest-overlap"), &mut rest.overlap, units, 0.0);
                     ui.end_row();
                 });
         }
