@@ -400,7 +400,11 @@ impl MaterialsWindow {
                      between its softest and hardest materials by this",
                 );
                 ui.horizontal(|ui| {
-                    ui.add(Number::new(&mut m.hardness).range(0.0..=f64::MAX));
+                    ui.add(
+                        Number::new(&mut m.hardness)
+                            .range(0.0..=f64::MAX)
+                            .name("Hardness"),
+                    );
                     ui.weak(m.class.scale());
                 });
                 ui.end_row();
@@ -530,23 +534,24 @@ fn data_row(ui: &mut egui::Ui, d: &mut CuttingData, units: Units, rates: RateUni
     let mut changed = false;
     ui.horizontal_wrapped(|ui| {
         ui.label("Feed");
-        changed |= rate(ui, &mut d.feed_rate, rates);
+        changed |= rate(ui, "Feed", &mut d.feed_rate, rates);
         ui.label("Plunge");
-        changed |= rate(ui, &mut d.plunge_rate, rates);
+        changed |= rate(ui, "Plunge", &mut d.plunge_rate, rates);
         ui.label("Spindle");
         changed |= ui
             .add(
                 Number::new(&mut d.spindle_speed)
                     .range(0.0..=f64::MAX)
-                    .suffix(" r.p.m."),
+                    .suffix(" r.p.m.")
+                    .name("Spindle"),
             )
             .changed();
         ui.label("Pass Depth");
-        changed |= length(ui, &mut d.pass_depth, units);
+        changed |= length(ui, "Pass Depth", &mut d.pass_depth, units);
         ui.label("Clearing");
-        changed |= percent(ui, &mut d.stepover);
+        changed |= percent(ui, "Clearing Stepover", &mut d.stepover);
         ui.label("Finishing");
-        changed |= percent(ui, &mut d.finish_stepover);
+        changed |= percent(ui, "Finishing Stepover", &mut d.finish_stepover);
     });
     changed
 }
