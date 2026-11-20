@@ -448,11 +448,22 @@ start-whats-new = Neu in v{ $version }
             let plain = english().words(key, None).unwrap();
             let long = p.words(key, None).unwrap();
             assert!(long.starts_with('[') && long.ends_with(']'), "{long}");
+            // a value put in (shown here as `{$name}`) is the same in every language, so only
+            // the words around it are measured
+            let words = |s: &str| {
+                let mut kept = String::new();
+                let mut rest = s;
+                while let Some(start) = rest.find("{$") {
+                    kept.push_str(&rest[..start]);
+                    rest = rest[start..]
+                        .find('}')
+                        .map_or("", |end| &rest[start + end + 1..]);
+                }
+                kept.push_str(rest);
+                kept.chars().count()
+            };
             if plain.chars().filter(|c| c.is_alphabetic()).count() > 4 {
-                assert!(
-                    long.chars().count() * 10 >= plain.chars().count() * 13,
-                    "{plain} -> {long}"
-                );
+                assert!(words(&long) * 10 >= words(&plain) * 13, "{plain} -> {long}");
             }
         }
         assert_eq!(stretch("Cut 12 mm"), "Çüüt 12 mm~~");
