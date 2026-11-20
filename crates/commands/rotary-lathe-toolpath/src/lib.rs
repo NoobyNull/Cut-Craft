@@ -712,7 +712,7 @@ mod tests {
         assert!(shift.x < 0.0, "zeroed on the middle");
         let (at_corner, _) = cuts_of(&corner, &p);
         let (at_centre, _) = cuts_of(&centre, &p);
-        assert!(!at_corner.is_empty());
+        assert!(!at_corner.is_empty(), "nothing cut");
         assert_eq!(at_corner.len(), at_centre.len());
         for (a, b) in at_corner.iter().zip(&at_centre) {
             let moved = *a + DVec3::new(shift.x, shift.y, 0.0);
