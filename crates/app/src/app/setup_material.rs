@@ -6,6 +6,7 @@ use cut_craft_core::document::{Datum, Job, ZZero};
 
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Document;
+use cut_craft_i18n::tr;
 use serde_json::Value;
 
 use super::CutCraftApp;
@@ -39,10 +40,7 @@ pub(super) fn job_defaults_section(
         ..crate::form::Look::plain(units, crate::form::material(&empty, units))
     };
     ui.separator();
-    ui.label(
-        "Every new job starts with these. Changing them leaves the job that is open as it is: \
-         its own are in Setup Material ▸ More settings for this job…",
-    );
+    ui.label(tr!("job-defaults-note"));
     let changed = crate::form::show(ui, fields, params, &look);
     if let Some(error) = error {
         ui.colored_label(ui.visuals().error_fg_color, error);
@@ -133,14 +131,11 @@ impl CutCraftApp {
         ui.label(summary(&self.doc.job));
         let (more, defaults) = ui
             .horizontal_wrapped(|ui| {
-                let more = ui.link(MORE).on_hover_hint(
-                    "Show every Job Setup setting here: Z zero, X0 Y0, the rapid heights, \
-                     home and the material, for this job only",
-                );
+                let more = ui.link(MORE).on_hover_hint(tr!("setup-material-more-tip"));
                 crate::marks::note(ui, &format!("button:{MORE}"), more.rect);
                 let defaults = ui
                     .link(DEFAULTS)
-                    .on_hover_hint("Edit ▸ Options ▸ Job Defaults: what every new job starts with");
+                    .on_hover_hint(tr!("setup-material-defaults-tip"));
                 crate::marks::note(ui, &format!("button:{DEFAULTS}"), defaults.rect);
                 (more.clicked(), defaults.clicked())
             })

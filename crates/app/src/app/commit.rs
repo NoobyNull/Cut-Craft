@@ -12,6 +12,7 @@
 
 use super::{LIVE_FORMS, REMAKE_FORMS};
 use crate::pages::Page;
+use cut_craft_i18n::tr;
 
 /// What a form's commit button does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,12 +26,18 @@ pub(super) enum Commit {
 }
 
 impl Commit {
-    pub(super) fn label(self) -> &'static str {
+    /// Its words' key (`locales/en/forms.ftl`).
+    fn key(self) -> &'static str {
         match self {
-            Self::Create => "Create",
-            Self::Calculate => "Calculate",
-            Self::Apply => "Apply",
+            Self::Create => "commit-create",
+            Self::Calculate => "commit-calculate",
+            Self::Apply => "commit-apply",
         }
+    }
+
+    /// Its words, in the language in use.
+    pub(super) fn label(self) -> String {
+        tr!(self.key())
     }
 }
 
@@ -90,27 +97,24 @@ pub(super) fn commit(id: &str, page: Page, drawing: bool, made: bool) -> Option<
 }
 
 /// What the commit button's hint says it will do.
-pub(super) fn hint(commit: Commit, drawing: bool, editing: bool) -> &'static str {
+pub(super) fn hint(commit: Commit, drawing: bool, editing: bool) -> String {
+    let key = commit.key();
     match commit {
-        Commit::Create if drawing => {
-            "Make the shape from these numbers. You can also drag on the canvas to draw it"
-        }
-        Commit::Create => "Make a new one with these settings",
-        Commit::Calculate if editing => "Work out this toolpath again with these settings",
-        Commit::Calculate => "Work out the toolpath with these settings",
-        Commit::Apply => "Make these changes",
+        Commit::Create if drawing => tr!(&format!("{key}.tooltip-drawing")),
+        Commit::Calculate if editing => tr!(&format!("{key}.tooltip-again")),
+        _ => tr!(&format!("{key}.tooltip")),
     }
 }
 
 /// The line a form with no commit button shows where the button would be, saying why there
 /// is none.
-pub(super) fn live_note(id: &str, drawing: bool) -> &'static str {
+pub(super) fn live_note(id: &str, drawing: bool) -> String {
     if GESTURE_TOOLS.contains(&id) {
-        "Use it on the canvas: each change shows as you make it"
+        tr!("commit-none-canvas")
     } else if drawing {
-        "Changes show on the selected shape as you make them"
+        tr!("commit-none-drawing")
     } else {
-        "Changes show as you make them"
+        tr!("commit-none")
     }
 }
 
