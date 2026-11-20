@@ -9,7 +9,7 @@
 + Cut Craft  2026-10-27 Arcs; inch and straight-line variants
 + Cut Craft  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft FluidNC ATC Wrap X to A (mm) (*.nc)"
+POST_NAME = "Cut Craft FluidNC ATC Rotary A, cylinder along Y (mm) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "MM"
 LINE_ENDING = "[10]"

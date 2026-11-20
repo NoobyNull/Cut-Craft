@@ -16,6 +16,12 @@ use super::{
 };
 use crate::options::IntersectionCheck;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_i18n::tr;
+
+/// A startup task's words' key (`locales/en/start.ftl`): `start-task-` and its id.
+pub(super) fn start_task_key(id: &str) -> String {
+    format!("start-task-{}", id.replace('_', "-"))
+}
 
 /// The buttons of "Save changes?": what each does, rather than Yes and No.
 pub(super) const SAVE: &str = "Save";
@@ -1459,9 +1465,9 @@ impl CutCraftApp {
                 .posts
                 .iter()
                 .filter(|name| {
-                    self.posts
-                        .load(name)
-                        .is_ok_and(|p| p.wraps() == wraps && (wraps.is_none() || machine.rotary))
+                    self.posts.load(name).is_ok_and(|p| {
+                        p.wraps() == wraps && (wraps.is_none() || machine.has_rotary())
+                    })
                 })
                 .cloned()
                 .collect()
@@ -1775,6 +1781,9 @@ impl CutCraftApp {
     /// its tool changes made pauses when the form says to pause, or tools are changed by
     /// hand between files on a machine without a tool changer.
     pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
+        if let Some(why) = self.no_a_axis() {
+            return Err(why);
+        }
         let post = match form.post.as_deref() {
             Some(name) => self.posts.load(name),
             None => self.output_post(),
@@ -2042,6 +2051,21 @@ impl CutCraftApp {
         Ok(texts)
     }
 
+    /// Why a rotary job can't be saved for the active machine: its firmware has no A axis
+    /// (standard GRBL, also what unknown firmware is taken for), whatever its posts and 4th
+    /// axis tick. `None` for a flat job, no machine, or firmware with an A axis.
+    fn no_a_axis(&self) -> Option<String> {
+        let machine = self.machines.active()?;
+        (self.doc.job.rotary.is_some() && !machine.firmware().has_a_axis()).then(|| {
+            format!(
+                "{} cannot cut this rotary job. {} If its controller runs other firmware, pick \
+                 it under Firmware in Machine Configuration",
+                machine.name,
+                cut_craft_machines::NO_A_AXIS
+            )
+        })
+    }
+
     /// The post toolpaths are saved through: the active machine's default when it suits the
     /// job, else the machine's first post that does: a flat one for a flat job, and for a
     /// rotary job (on a machine with a 4th axis) one wrapping the side that goes round, Y
@@ -2049,6 +2073,9 @@ impl CutCraftApp {
     /// `FluidNC` post for this kind of job.
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
         use cut_craft_core::document::Along;
+        if let Some(why) = self.no_a_axis() {
+            return Err(why);
+        }
         let Some(machine) = self.machines.active().filter(|m| !m.posts.is_empty()) else {
             return Ok(cut_craft_post::Post::default_for(&self.doc.job));
         };
@@ -2056,7 +2083,7 @@ impl CutCraftApp {
             Along::X => "Y",
             Along::Y => "X",
         });
-        if wraps.is_some() && !machine.rotary {
+        if wraps.is_some() && !machine.has_rotary() {
             return Err(format!(
                 "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
                  Configuration",
@@ -2078,9 +2105,10 @@ impl CutCraftApp {
             .find(|p| p.wraps() == wraps)
             .ok_or_else(|| match wraps {
                 Some(axis) => format!(
-                    "{} has no post wrapping {axis} onto A for this rotary job: add a Wrap \
-                     {axis} to A post in Machine Configuration",
-                    machine.name
+                    "{} has no post for this rotary job: add a Rotary A, cylinder along {} \
+                     post in Machine Configuration",
+                    machine.name,
+                    if axis == "Y" { "X" } else { "Y" }
                 ),
                 None => format!(
                     "{} has only rotary posts: add a flat one in Machine Configuration",
@@ -2545,6 +2573,7 @@ impl CutCraftApp {
                 suggested: None,
                 shown_size: None,
                 typed_size: [None; 3],
+                shown_place: [None; 3],
                 dragged: None,
                 model: None,
                 model_whole: true,
@@ -3654,6 +3683,10 @@ impl CutCraftApp {
                 params["size"][key] = Value::from(typed.unwrap_or(0.0));
             }
         }
+        if id == "orientate_3d_model" {
+            forget_typed_alignment(form);
+            params["placing"]["align"] = form.params["placing"]["align"].clone();
+        }
         let wrapped = self.doc.job.rotary.is_some() && params["model_type"] != "flat";
         let result = self.apply_form(id, &params);
         // the component the settings just made judges what a cutter cannot reach, so the
@@ -3728,13 +3761,8 @@ impl CutCraftApp {
                 } else if at > tall.max(thickness) {
                     *depth = Value::from(tall.max(thickness));
                 }
-                // centred, the corner it gives is shown instead, for the numbers to move it
-                let placing = &mut form.params["placing"];
-                if placing["center"] == true && !wrapped {
-                    let middle = area.center();
-                    placing["position"]["x"] = Value::from(round(middle.x - shown[0] / 2.0));
-                    placing["position"]["y"] = Value::from(round(middle.y - shown[1] / 2.0));
-                    placing["center"] = Value::Bool(false);
+                if !wrapped {
+                    show_alignment(form, area, thickness, shown);
                 }
                 form.shown_size = Some(shown);
             }
@@ -4896,7 +4924,7 @@ impl CutCraftApp {
                 ));
             }
             for menu in &self.current_menus().menus {
-                ui.menu_button(&menu.name, |ui| {
+                ui.menu_button(tr!(&super::menu_key(&menu.name)), |ui| {
                     menu_items(
                         ui,
                         &menu.items,
@@ -4952,8 +4980,9 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Start page");
         let edge = ui.spacing().interact_size.y;
         let mut clicked = None;
-        ui.strong("Startup Tasks");
-        for (id, label, icon) in STARTUP_TASKS {
+        ui.strong(tr!("start-tasks"));
+        for (id, icon) in STARTUP_TASKS {
+            let label = tr!(&start_task_key(id));
             let button = match self.icons.find(icon, id) {
                 Some(path) => egui::Button::image_and_text(
                     self.icons
@@ -4972,9 +5001,9 @@ impl CutCraftApp {
             }
         }
         ui.separator();
-        ui.strong("Recently opened files");
+        ui.strong(tr!("start-recent"));
         if self.recent.is_empty() {
-            ui.weak("None yet");
+            ui.weak(tr!("start-recent-none"));
         }
         let glyph = self.icons.find(RECENT_FILE_ICON, "");
         for (i, path) in self.recent_shown().iter().enumerate() {
@@ -4998,7 +5027,7 @@ impl CutCraftApp {
             }
         }
         ui.separator();
-        ui.strong(format!("What's new in v{}", env!("CARGO_PKG_VERSION")));
+        ui.strong(tr!("start-whats-new", version = env!("CARGO_PKG_VERSION")));
         for change in WHATS_NEW.lines().filter(|l| !l.trim().is_empty()) {
             // a bullet, with the change wrapping beside it
             ui.horizontal_top(|ui| {
@@ -5010,7 +5039,7 @@ impl CutCraftApp {
         // the rest of the community links are in Help ▸ Community, out of the way
         let (label, url, _) = LINKS[0];
         ui.horizontal_wrapped(|ui| {
-            ui.weak("Questions or ideas?");
+            ui.weak(tr!("start-questions"));
             ui.hyperlink_to(format!("Cut Craft on {label}"), url);
         });
         if let Some(id) = clicked {
@@ -5529,10 +5558,10 @@ impl CutCraftApp {
 
     /// The open form's commit button, its label and hint, if pressing it would do something:
     /// OK for a new job's setup, else named for what it does ([`commit`]).
-    fn commit_button(&self) -> Option<(&'static str, &'static str)> {
+    fn commit_button(&self) -> Option<(String, String)> {
         let open = self.form.as_ref()?;
         if open.new_job {
-            return Some(("OK", "Accept these settings and start the job"));
+            return Some((tr!("job-setup-ok"), tr!("job-setup-ok.tooltip")));
         }
         let drawing = self.drawing_tool().is_some();
         let made = self.drawn_shape().is_some() || self.remade_last().is_some();
@@ -5563,7 +5592,11 @@ impl CutCraftApp {
         let committing = self.commit_button();
         let drawing = self.drawing_tool().is_some();
         let made = self.drawn_shape().is_some() || self.remade_last().is_some();
-        let close_label = if new_job { "Cancel" } else { "Close" };
+        let close_key = if new_job {
+            "job-setup-cancel"
+        } else {
+            "form-close"
+        };
         let job_setup = open.id == "job_setup";
         // what the form has done that Cancel would take back
         let done = self.history.undo_depth() > open.undo_from + open.list_steps.len();
@@ -5581,36 +5614,26 @@ impl CutCraftApp {
         let as_new = as_new_offered && calculate_as_new_row(ui);
         let mut reset = false;
         ui.horizontal(|ui| {
-            if let Some((label, hint)) = committing {
+            if let Some((label, hint)) = &committing {
                 apply = marked_commit_button(ui, label, hint);
             }
             reset = reset_button(ui, open.id);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 close = ui
-                    .button(close_label)
-                    .on_hover_hint(if new_job {
-                        "Leave the job as it was"
-                    } else {
-                        "Close, keeping what is there"
-                    })
+                    .button(tr!(close_key))
+                    .on_hover_hint(tr!(&format!("{close_key}.tooltip")))
                     .clicked();
                 if !new_job {
                     cancel = ui
-                        .add_enabled(done, egui::Button::new("Cancel"))
-                        .on_hover_hint(
-                            "Undo what this tool did since it opened, and close it. A change \
-                             made in the toolpath list meanwhile is kept",
-                        )
-                        .on_disabled_hover_text("Nothing done yet to take back")
+                        .add_enabled(done, egui::Button::new(tr!("form-cancel")))
+                        .on_hover_hint(tr!("form-cancel.tooltip"))
+                        .on_disabled_hover_text(tr!("form-cancel.disabled"))
                         .clicked();
                 }
                 if job_setup {
                     default = ui
-                        .button("Set as Default")
-                        .on_hover_hint(
-                            "Start every new job with these settings (your Clearing \
-                             Settings default is kept)",
-                        )
+                        .button(tr!("job-setup-set-as-default"))
+                        .on_hover_hint(tr!("job-setup-set-as-default.tooltip"))
                         .clicked();
                 }
             });
@@ -7293,15 +7316,21 @@ fn align_in_material(
                 if !ui.add(button).on_hover_hint(hint).clicked() {
                     continue;
                 }
+                // kept as a share of the room beside it, from the material's corner, so
+                // it stays aligned when the model is scaled after
                 let placing = &mut open.params["placing"];
                 placing["center"] = Value::Bool(false);
                 if let Some(ax) = ax {
                     let x = area.min.x + (area.size().x - sx) * ax;
                     placing["position"]["x"] = Value::from(round(x));
+                    placing["align"]["across"] = Value::from(ax);
+                    open.shown_place[0] = Some(round(x));
                 }
                 if let Some(ay) = ay {
                     let y = area.min.y + (area.size().y - sy) * ay;
                     placing["position"]["y"] = Value::from(round(y));
+                    placing["align"]["up"] = Value::from(ay);
+                    open.shown_place[1] = Some(round(y));
                 }
                 clicked = true;
             }
@@ -7311,8 +7340,10 @@ fn align_in_material(
             for (label, hint, up) in HEIGHT {
                 if ui.button(label).on_hover_hint(hint).clicked() {
                     // Depth Below Top is the model's top above the zero plane
-                    let depth = tall + (job.thickness - tall) * up;
-                    open.params["placing"]["depth_below_top"] = Value::from(round(depth));
+                    let depth = round(tall + (job.thickness - tall) * up);
+                    open.params["placing"]["depth_below_top"] = Value::from(depth);
+                    open.params["placing"]["align"]["height"] = Value::from(up);
+                    open.shown_place[2] = Some(depth);
                     clicked = true;
                 }
             }
@@ -7359,6 +7390,74 @@ fn ask_to_run_unsigned(label: &str) -> bool {
         ))
         .show();
     matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
+}
+
+/// Import 3D Model's alignment in the material as kept by its settings.
+fn kept_alignment(params: &Value) -> cmd_orientate_3d_model::Align {
+    serde_json::from_value(params["placing"]["align"].clone()).unwrap_or_default()
+}
+
+/// Import 3D Model's alignment dropped where its number was typed since it was shown: a
+/// position X or Y, or Depth Below Top, typed leaves the model there.
+fn forget_typed_alignment(form: &mut OpenForm) {
+    const KEYS: [(&str, &str); 3] = [("across", "x"), ("up", "y"), ("height", "")];
+    for ((align, at), shown) in KEYS.into_iter().zip(form.shown_place) {
+        let placing = &form.params["placing"];
+        let now = if at.is_empty() {
+            placing["depth_below_top"].as_f64()
+        } else {
+            placing["position"][at].as_f64()
+        };
+        if shown.is_some() && now != shown {
+            form.params["placing"]["align"][align] = Value::Null;
+        }
+    }
+}
+
+/// Import 3D Model's position and Depth Below Top shown where the kept alignment puts a
+/// model `shown` big, measured from the material's corner, so the numbers say where it is
+/// (a centred model kept centred from now on).
+fn show_alignment(
+    form: &mut OpenForm,
+    area: cut_craft_core::geometry::Rect,
+    thickness: f64,
+    shown: [f64; 3],
+) {
+    let round = |v: f64| (v * 100.0).round() / 100.0;
+    // centred, it is kept centred as Align in Material's centre would, its bottom on the
+    // zero plane however it is sized after, and the corner it gives is shown, for the
+    // numbers to move it from there
+    let placing = &mut form.params["placing"];
+    if placing["center"] == true {
+        placing["align"]["across"] = Value::from(0.5);
+        placing["align"]["up"] = Value::from(0.5);
+        if placing["align"]["height"].is_null() {
+            placing["align"]["height"] = Value::from(0.0);
+        }
+        placing["center"] = Value::Bool(false);
+    }
+    let align = kept_alignment(&form.params);
+    let placing = &mut form.params["placing"];
+    let typed = cut_craft_core::geometry::Point::new(
+        placing["position"]["x"].as_f64().unwrap_or(0.0),
+        placing["position"]["y"].as_f64().unwrap_or(0.0),
+    );
+    let footprint = cut_craft_core::geometry::Point::new(shown[0], shown[1]);
+    let corner = align.corner(area, footprint, typed);
+    if align.across.is_some() {
+        placing["position"]["x"] = Value::from(round(corner.x));
+    }
+    if align.up.is_some() {
+        placing["position"]["y"] = Value::from(round(corner.y));
+    }
+    if let Some(depth) = align.depth(shown[2], thickness) {
+        placing["depth_below_top"] = Value::from(round(depth));
+    }
+    form.shown_place = [
+        placing["position"]["x"].as_f64(),
+        placing["position"]["y"].as_f64(),
+        placing["depth_below_top"].as_f64(),
+    ];
 }
 
 /// The size of the box round a model's `faces`.
