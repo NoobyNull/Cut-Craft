@@ -170,6 +170,15 @@ fn about_lists_the_github_contributors() {
     h.frame(vec![]);
     assert!(h.text_at("Contributors on GitHub").is_some());
     assert!(h.text_at("NoobyNull").is_some());
+    // a count takes its plural form only as a number
+    assert_eq!(
+        cut_craft_i18n::tr!("about-commits", count = 1_u64),
+        "1 commit"
+    );
+    assert_eq!(
+        cut_craft_i18n::tr!("about-commits", count = 2_u64),
+        "2 commits"
+    );
 }
 
 #[test]
