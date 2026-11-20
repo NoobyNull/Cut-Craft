@@ -17,16 +17,20 @@
 //!   drawing.
 //! - [`gcode::read`]: a rotary file read back as the bit's poses, for the simulator to cut
 //!   exactly what the machine will.
+//! - [`Replay`]: a file played back into the material over the machine's own time, to be
+//!   shown turning as it is cut, and moved back and forth.
 
 mod cutter;
 mod frame;
 pub mod gcode;
 mod mesh;
+mod replay;
 mod stock;
 mod voxels;
 
 pub use cutter::Cutter;
 pub use frame::{Pose, angle, to_machine, to_part};
 pub use mesh::Mesh;
+pub use replay::{Replay, Speeds};
 pub use stock::{Section, Stock};
 pub use voxels::Voxels;

@@ -2475,6 +2475,7 @@ dependencies = [
  "cut-craft-help",
  "cut-craft-machines",
  "cut-craft-post",
+ "cut-craft-rotary",
  "cut-craft-scripting",
  "cut-craft-tool-database",
  "cut-craft-updater",

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 /// The material, cell by cell: each cell a cube `cell` across, solid or cut away. A cell
 /// is solid while its middle is in the material and no bit has reached its middle.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Voxels {
     /// The corner of the first cell, in the part's frame.
     origin: DVec3,
@@ -129,23 +129,56 @@ impl Voxels {
 
     /// Cuts away what `cutter` reaches moving in a straight move `from` → `to`: every axis
     /// moved in step, A included, as a controller moves them. Checked at steps no further
-    /// apart than half a cell anywhere on the material. How many cells it cut.
+    /// apart than half a cell anywhere on the material ([`Self::samples`]). How many cells
+    /// it cut.
+    pub fn cut(&mut self, cutter: &Cutter, from: Pose, to: Pose) -> usize {
+        let steps = self.samples(from, to);
+        self.cut_samples(cutter, from, to, 0..=steps)
+    }
+
+    /// How many steps [`Self::cut`] checks a move `from` → `to` in: no further apart than
+    /// half a cell anywhere on the material, A's turn measured at the material's swing.
+    #[must_use]
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        clippy::cast_precision_loss,
         reason = "step counts are small and positive"
     )]
-    pub fn cut(&mut self, cutter: &Cutter, from: Pose, to: Pose) -> usize {
+    pub fn samples(&self, from: Pose, to: Pose) -> usize {
         let far = (to.along - from.along)
             .abs()
             .max((to.across - from.across).abs())
             .max((to.height - from.height).abs())
             .max((to.turn - from.turn).abs() * self.swing);
-        let steps = ((far / (self.cell / 2.0)).ceil() as usize).max(1);
-        (0..=steps)
+        ((far / (self.cell / 2.0)).ceil() as usize).max(1)
+    }
+
+    /// Cuts the move `from` → `to` at those of its [`Self::samples`] steps in `which` (0 is
+    /// `from`): a move cut a stretch at a time cuts just what it cuts all at once.
+    #[expect(clippy::cast_precision_loss, reason = "step counts are small")]
+    pub fn cut_samples(
+        &mut self,
+        cutter: &Cutter,
+        from: Pose,
+        to: Pose,
+        which: std::ops::RangeInclusive<usize>,
+    ) -> usize {
+        let steps = self.samples(from, to);
+        let (first, last) = (*which.start(), (*which.end()).min(steps));
+        (first..=last)
             .map(|s| self.cut_at(cutter, from.lerp(to, s as f64 / steps as f64)))
             .sum()
+    }
+
+    /// The cell size that keeps `stock`'s grid to about `most` cells.
+    #[must_use]
+    #[expect(clippy::cast_precision_loss, reason = "a rough cell count")]
+    pub fn cell_for(stock: &Stock, most: usize) -> f64 {
+        let (lo, hi) = stock.bounds();
+        let size = hi - lo;
+        (size.x * size.y * size.z / most.max(1) as f64)
+            .cbrt()
+            .max(0.01)
     }
 
     /// Cuts away what `cutter` holds standing at `pose`. How many cells it cut.

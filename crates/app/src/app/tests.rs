@@ -5877,6 +5877,78 @@ fn the_preview_controls_stay_once_it_has_played_to_the_end() {
 }
 
 #[test]
+fn a_rotary_preview_plays_the_file_turning_the_material_with_a_in_step_with_its_controls() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 40.0, Along::X);
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.display.animate_preview = true;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let uncut = {
+        let turning = h.app.turning.as_ref().expect("the file played turning");
+        turning.replay.material().count()
+    };
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // in step with the Preview Control: as far through the file as it is through the job
+    let fraction = |h: &Harness| {
+        let p = h.app.playback.as_ref().unwrap();
+        let r = &h.app.turning.as_ref().unwrap().replay;
+        (p.at() / p.length(), r.at() / r.length())
+    };
+    // playing, it cuts toward the same point each frame, never past it (a busy computer
+    // may leave it a frame behind)
+    let (job, file) = fraction(&h);
+    assert!(
+        job > 0.0 && file > 0.0 && file <= job + 1e-9,
+        "{job} {file}"
+    );
+    h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
+    let caught_up = |h: &mut Harness| {
+        for _ in 0..50 {
+            h.frame(vec![]);
+            let (job, file) = fraction(h);
+            if (job - file).abs() < 1e-9 {
+                return true;
+            }
+        }
+        false
+    };
+    assert!(
+        caught_up(&mut h),
+        "paused, it gets there: {:?}",
+        fraction(&h)
+    );
+    let progress = h.text_at("Progress").expect("a Progress slider");
+    let from = progress + egui::vec2(80.0, 0.0);
+    h.drag(from, from + egui::vec2(200.0, 0.0));
+    assert!(caught_up(&mut h), "dragged, it follows: {:?}", fraction(&h));
+    h.app.playback_speed = 1000.0;
+    h.click(h.text_at("Run").unwrap(), Modifiers::NONE);
+    for _ in 0..600 {
+        if h.app.playback.is_none() {
+            break;
+        }
+        h.frame(vec![]);
+    }
+    h.frame(vec![]);
+    let turning = h.app.turning.as_ref().expect("kept with the controls");
+    assert!(turning.replay.finished(), "played through");
+    assert!(turning.replay.material().count() < uncut, "it cut");
+    h.click(h.text_at("Close").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.turning.is_none(), "gone with the controls");
+    // a flat job plays as before
+    h.app.doc.job = Job::default();
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    assert!(h.app.playback.is_some() && h.app.turning.is_none());
+}
+
+#[test]
 fn a_paused_preview_is_not_rebuilt_for_the_3d_view_every_frame() {
     let mut h = playing_preview();
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);

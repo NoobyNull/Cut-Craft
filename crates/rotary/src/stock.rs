@@ -1,5 +1,6 @@
 //! The material as it is held on the turning axis.
 
+use cut_craft_core::document::{Along, Blank, Job};
 use cut_craft_core::glam::{DVec2, DVec3};
 
 /// The material's shape across the axis.
@@ -32,6 +33,27 @@ impl Stock {
             length,
             offset: DVec2::ZERO,
         }
+    }
+
+    /// The material a rotary `job` is set up with (Job Setup's diameter, shape and length),
+    /// held on its centre. `None` for a flat job.
+    #[must_use]
+    pub fn of(job: &Job) -> Option<Self> {
+        let rotary = job.rotary?;
+        let d = rotary.diameter;
+        let section = match rotary.blank {
+            Blank::Round => Section::Round { diameter: d },
+            Blank::Square => Section::Square { side: d },
+            Blank::Board { width } => Section::Board {
+                width,
+                thickness: d,
+            },
+        };
+        let length = match rotary.along {
+            Along::X => job.width,
+            Along::Y => job.height,
+        };
+        Some(Self::new(section, length))
     }
 
     /// Whether `p` (in the part's frame) is in the material.
@@ -106,6 +128,30 @@ impl Stock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_rotary_job_is_set_up_with_the_material_job_setup_says() {
+        use cut_craft_core::document::Rotary;
+        let mut job = Job::rotary(300.0, 40.0, Along::X);
+        assert_eq!(
+            Stock::of(&job),
+            Some(Stock::new(Section::Round { diameter: 40.0 }, 300.0))
+        );
+        job.rotary = Some(Rotary {
+            blank: Blank::Board { width: 150.0 },
+            ..job.rotary.unwrap()
+        });
+        assert_eq!(
+            Stock::of(&job).map(|s| s.section),
+            Some(Section::Board {
+                width: 150.0,
+                thickness: 40.0
+            })
+        );
+        let along_y = Job::rotary(250.0, 30.0, Along::Y);
+        assert_eq!(Stock::of(&along_y).map(|s| s.length), Some(250.0));
+        assert_eq!(Stock::of(&Job::default()), None);
+    }
 
     #[test]
     fn a_board_swings_by_half_its_diagonal_not_half_its_thickness() {

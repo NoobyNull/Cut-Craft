@@ -267,6 +267,7 @@ impl CutCraftApp {
             playback_redraw: super::PLAYBACK_REDRAW,
             playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
+            turning: None,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
             rotating: false,

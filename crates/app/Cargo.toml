@@ -16,6 +16,7 @@ cut-craft-help.workspace = true
 cut-craft-updater = { path = "../updater" }
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
+cut-craft-rotary.workspace = true
 cut-craft-scripting = { path = "../scripting" }
 # Options ▸ Web API: the local HTTP server scripts drive Cut Craft through
 cut-craft-web-api = { path = "../web-api" }

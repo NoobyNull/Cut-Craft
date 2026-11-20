@@ -99,17 +99,7 @@ fn finished(strategy: Strategy, clockwise: bool) {
         ..RotaryAxis::default()
     };
     let text = file(&doc, axis);
-    let moves = read(
-        &text,
-        &Reading {
-            along: 'X',
-            across: 'Y',
-            turn: 'A',
-            centre_across: 3.0,
-            across_sign: axis.across_sign(Along::X),
-            zero_height: RADIUS - doc.job.machine_z(0.0) + 0.0,
-        },
-    );
+    let moves = read(&text, &Reading::of(&doc.job, &axis).expect("a rotary job"));
     assert!(moves.len() > 100, "{text}");
     let cutter = Cutter::new(&tool);
     let stock = Stock::new(
