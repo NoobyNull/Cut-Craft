@@ -3424,6 +3424,75 @@ fn importing_a_model_shows_orientation_and_position_on_one_page() {
 }
 
 #[test]
+fn scaling_an_import_to_fit_keeps_it_where_it_was_aligned_in_the_material() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("scale-aligned");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let area = h.app.doc.job.area();
+    let cell = h.app.doc.job.model_cell();
+    let model = |app: &CutCraftApp| {
+        let k = app.doc.components.values().next().unwrap();
+        (k.extent(), k.height_range().unwrap())
+    };
+    let fit = |h: &mut Harness| {
+        let form = h.app.form.as_mut().unwrap();
+        form.params["fit_material"] = Value::Bool(!form.params["fit_material"].as_bool().unwrap());
+        form.dirty = true;
+        // right first time: no stale frame with the model sunk or out of place
+        h.frame(vec![]);
+    };
+    // imported centred at 1:1, then scaled to fit: still centred, from the material's corner,
+    // its bottom still on the zero plane
+    fit(&mut h);
+    let (e, (_, hi)) = model(&h.app);
+    assert!(e.size().x > 30.0, "scaled up: {e:?}");
+    assert!(
+        (e.center() - area.center()).length() < 2.0 * cell,
+        "{e:?} in {area:?}"
+    );
+    // the 20 long, 5 tall pyramid grown as much in height: all of it above the zero plane
+    let tall = e.size().x / 20.0 * 5.0;
+    assert!(
+        (hi - tall).abs() < 0.5,
+        "not sunk under the zero plane: {hi} of {tall}"
+    );
+    // back to 1:1, aligned to the right, then scaled to fit: still against the right side
+    fit(&mut h);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["align"]["across"] = Value::from(1.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    let (e, _) = model(&h.app);
+    assert!(
+        e.size().x < 21.0 && (e.max.x - area.max.x).abs() < 2.0 * cell,
+        "{e:?}"
+    );
+    fit(&mut h);
+    let (e, _) = model(&h.app);
+    assert!(
+        e.size().x > 30.0 && (e.max.x - area.max.x).abs() < 2.0 * cell,
+        "{e:?}"
+    );
+    let shown = h.app.form.as_ref().unwrap().params["placing"]["position"]["x"].as_f64();
+    assert!(
+        (shown.unwrap() - e.min.x).abs() < 2.0 * cell,
+        "the number says where it is"
+    );
+    // a position typed leaves it there when it is resized
+    fit(&mut h);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["position"]["x"] = Value::from(area.min.x + 3.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    fit(&mut h);
+    let (e, _) = model(&h.app);
+    assert!((e.min.x - (area.min.x + 3.0)).abs() < 2.0 * cell, "{e:?}");
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
 fn the_import_form_lifts_aligns_and_follows_a_drag_as_it_goes() {
     let mut h = Harness::new();
     let file = pyramid_stl("align");

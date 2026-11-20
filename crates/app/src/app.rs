@@ -1078,6 +1078,9 @@ struct OpenForm {
     /// Size's width and height as last shown, to tell which one was typed in.
     shown_size: Option<[f64; 3]>,
     typed_size: [Option<f64>; 3],
+    /// Orientate 3D Model's position X and Y and Depth Below Top as Align in Material last
+    /// showed them: one changed since was typed, and drops that alignment.
+    shown_place: [Option<f64>; 3],
     /// Orientate 3D Model's model as placed, each triangle with whether a cutter from above
     /// cannot reach it: the 3D view shows it whole while the form is open.
     model: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,

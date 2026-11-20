@@ -2545,6 +2545,7 @@ impl CutCraftApp {
                 suggested: None,
                 shown_size: None,
                 typed_size: [None; 3],
+                shown_place: [None; 3],
                 dragged: None,
                 model: None,
                 model_whole: true,
@@ -3654,6 +3655,10 @@ impl CutCraftApp {
                 params["size"][key] = Value::from(typed.unwrap_or(0.0));
             }
         }
+        if id == "orientate_3d_model" {
+            forget_typed_alignment(form);
+            params["placing"]["align"] = form.params["placing"]["align"].clone();
+        }
         let wrapped = self.doc.job.rotary.is_some() && params["model_type"] != "flat";
         let result = self.apply_form(id, &params);
         // the component the settings just made judges what a cutter cannot reach, so the
@@ -3728,13 +3733,8 @@ impl CutCraftApp {
                 } else if at > tall.max(thickness) {
                     *depth = Value::from(tall.max(thickness));
                 }
-                // centred, the corner it gives is shown instead, for the numbers to move it
-                let placing = &mut form.params["placing"];
-                if placing["center"] == true && !wrapped {
-                    let middle = area.center();
-                    placing["position"]["x"] = Value::from(round(middle.x - shown[0] / 2.0));
-                    placing["position"]["y"] = Value::from(round(middle.y - shown[1] / 2.0));
-                    placing["center"] = Value::Bool(false);
+                if !wrapped {
+                    show_alignment(form, area, thickness, shown);
                 }
                 form.shown_size = Some(shown);
             }
@@ -7293,15 +7293,21 @@ fn align_in_material(
                 if !ui.add(button).on_hover_hint(hint).clicked() {
                     continue;
                 }
+                // kept as a share of the room beside it, from the material's corner, so
+                // it stays aligned when the model is scaled after
                 let placing = &mut open.params["placing"];
                 placing["center"] = Value::Bool(false);
                 if let Some(ax) = ax {
                     let x = area.min.x + (area.size().x - sx) * ax;
                     placing["position"]["x"] = Value::from(round(x));
+                    placing["align"]["across"] = Value::from(ax);
+                    open.shown_place[0] = Some(round(x));
                 }
                 if let Some(ay) = ay {
                     let y = area.min.y + (area.size().y - sy) * ay;
                     placing["position"]["y"] = Value::from(round(y));
+                    placing["align"]["up"] = Value::from(ay);
+                    open.shown_place[1] = Some(round(y));
                 }
                 clicked = true;
             }
@@ -7311,8 +7317,10 @@ fn align_in_material(
             for (label, hint, up) in HEIGHT {
                 if ui.button(label).on_hover_hint(hint).clicked() {
                     // Depth Below Top is the model's top above the zero plane
-                    let depth = tall + (job.thickness - tall) * up;
-                    open.params["placing"]["depth_below_top"] = Value::from(round(depth));
+                    let depth = round(tall + (job.thickness - tall) * up);
+                    open.params["placing"]["depth_below_top"] = Value::from(depth);
+                    open.params["placing"]["align"]["height"] = Value::from(up);
+                    open.shown_place[2] = Some(depth);
                     clicked = true;
                 }
             }
@@ -7359,6 +7367,74 @@ fn ask_to_run_unsigned(label: &str) -> bool {
         ))
         .show();
     matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
+}
+
+/// Import 3D Model's alignment in the material as kept by its settings.
+fn kept_alignment(params: &Value) -> cmd_orientate_3d_model::Align {
+    serde_json::from_value(params["placing"]["align"].clone()).unwrap_or_default()
+}
+
+/// Import 3D Model's alignment dropped where its number was typed since it was shown: a
+/// position X or Y, or Depth Below Top, typed leaves the model there.
+fn forget_typed_alignment(form: &mut OpenForm) {
+    const KEYS: [(&str, &str); 3] = [("across", "x"), ("up", "y"), ("height", "")];
+    for ((align, at), shown) in KEYS.into_iter().zip(form.shown_place) {
+        let placing = &form.params["placing"];
+        let now = if at.is_empty() {
+            placing["depth_below_top"].as_f64()
+        } else {
+            placing["position"][at].as_f64()
+        };
+        if shown.is_some() && now != shown {
+            form.params["placing"]["align"][align] = Value::Null;
+        }
+    }
+}
+
+/// Import 3D Model's position and Depth Below Top shown where the kept alignment puts a
+/// model `shown` big, measured from the material's corner, so the numbers say where it is
+/// (a centred model kept centred from now on).
+fn show_alignment(
+    form: &mut OpenForm,
+    area: cut_craft_core::geometry::Rect,
+    thickness: f64,
+    shown: [f64; 3],
+) {
+    let round = |v: f64| (v * 100.0).round() / 100.0;
+    // centred, it is kept centred as Align in Material's centre would, its bottom on the
+    // zero plane however it is sized after, and the corner it gives is shown, for the
+    // numbers to move it from there
+    let placing = &mut form.params["placing"];
+    if placing["center"] == true {
+        placing["align"]["across"] = Value::from(0.5);
+        placing["align"]["up"] = Value::from(0.5);
+        if placing["align"]["height"].is_null() {
+            placing["align"]["height"] = Value::from(0.0);
+        }
+        placing["center"] = Value::Bool(false);
+    }
+    let align = kept_alignment(&form.params);
+    let placing = &mut form.params["placing"];
+    let typed = cut_craft_core::geometry::Point::new(
+        placing["position"]["x"].as_f64().unwrap_or(0.0),
+        placing["position"]["y"].as_f64().unwrap_or(0.0),
+    );
+    let footprint = cut_craft_core::geometry::Point::new(shown[0], shown[1]);
+    let corner = align.corner(area, footprint, typed);
+    if align.across.is_some() {
+        placing["position"]["x"] = Value::from(round(corner.x));
+    }
+    if align.up.is_some() {
+        placing["position"]["y"] = Value::from(round(corner.y));
+    }
+    if let Some(depth) = align.depth(shown[2], thickness) {
+        placing["depth_below_top"] = Value::from(round(depth));
+    }
+    form.shown_place = [
+        placing["position"]["x"].as_f64(),
+        placing["position"]["y"].as_f64(),
+        placing["depth_below_top"].as_f64(),
+    ];
 }
 
 /// The size of the box round a model's `faces`.
