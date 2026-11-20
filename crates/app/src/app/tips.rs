@@ -103,21 +103,21 @@ pub(super) const TIPS: &[Tip] = &[
         "New to Cut Craft? On the blank sheet it opens with, **Try a sample project** opens a \
          finished sign with its toolpaths already made, so you can see the whole journey from \
          drawing to cutting file before you start your own.",
-        "contents",
+        "getting_started",
     ),
     scene(
         Area::Start,
         "tips/f1_help.png",
         "Press **F1** with a tool's settings open to read the help for that tool. With nothing \
          open, F1 opens Help Contents, where you can search every tool.",
-        "contents",
+        "finding_help",
     ),
     scene(
         Area::Start,
         "tips/hover_note.png",
         "Not sure what a setting means? Hover the pointer over its name for a short note about \
          it.",
-        "contents",
+        "finding_help",
     ),
     scene(
         Area::Start,
@@ -131,7 +131,7 @@ pub(super) const TIPS: &[Tip] = &[
         "tips/design_then_toolpaths.png",
         "Cut Craft works in two steps. **Design** (down the left) is where you draw what you \
          want. **Toolpaths** (down the right) is where you tell the machine how to cut it.",
-        "contents",
+        "getting_started",
     ),
     scene(
         Area::Start,
@@ -176,48 +176,48 @@ pub(super) const TIPS: &[Tip] = &[
         "tips/number_sums.png",
         "Number fields take sums. Type **W/2** for half the material's width, or **T** for its \
          thickness, and the answer is worked out when you press Enter.",
-        "contents",
+        "number_fields",
     ),
     scene(
         Area::Program,
         "tips/number_arrows.png",
         "Every number field has small up and down arrows. Hold **Shift** while clicking them \
          for steps ten times as big.",
-        "contents",
+        "number_fields",
     ),
     scene(
         Area::Start,
         "tips/units.png",
         "Switching between millimetres and inches converts every measurement in the job, so \
          nothing changes size. Work in whichever your rulers and bits use.",
-        "contents",
+        "getting_started",
     ),
     scene(
         Area::Start,
         "tips/mouse_zoom.png",
         "Roll the mouse wheel to zoom in and out about the pointer. Drag with the middle mouse \
          button to move around the drawing.",
-        "contents",
+        "view_2d",
     ),
     scene(
         Area::Start,
         "tips/views_2d_3d.png",
         "**F2** shows the 2D view and **F3** the 3D view. **F11** and **F12** switch between \
          the layout for designing and the layout for machining.",
-        "contents",
+        "view_2d",
     ),
     scene(
         Area::Program,
         "tips/esc_close.png",
         "Press **Esc** to close the open tool's settings without making anything.",
-        "contents",
+        "keyboard_shortcuts",
     ),
     scene(
         Area::Drawing,
         "tips/edit_again.png",
         "Select a shape and press **E** to change it in the tool that made it, with the same \
          settings you used.",
-        "contents",
+        "keyboard_shortcuts",
     ),
     scene(
         Area::Drawing,
@@ -225,21 +225,21 @@ pub(super) const TIPS: &[Tip] = &[
         "Drawing snaps to the grid, guides and the ends and middles of lines. **F4** chooses \
          what it snaps to, and holding **Shift** while you draw turns snapping off. A shape \
          stays on what it snapped to until you move it on its own.",
-        "contents",
+        "snapping",
     ),
     scene(
         Area::Start,
         "tips/undo.png",
         "Made a mistake? **Ctrl+Z** undoes it, as many times as you need. **Ctrl+Y** puts it \
          back.",
-        "contents",
+        "getting_started",
     ),
     scene(
         Area::Program,
         "tips/favourites.png",
         "Use a tool all the time? Right-click its button ▸ **Add to Favourites**, then \
          right-click the page's tab to show just your favourites.",
-        "contents",
+        "favourites",
     ),
     scene(
         Area::Toolpaths,
@@ -259,9 +259,9 @@ pub(super) const TIPS: &[Tip] = &[
     scene(
         Area::Program,
         "tips/increment_save.png",
-        "**File ▸ Increment and Save** saves a new copy with the next number on its name (Sign \
-         2, Sign 3), so you can always go back to an earlier version.",
-        "contents",
+        "**File ▸ Increment and Save** saves a new copy with the next number on its name (sign_1, \
+         then sign_2), so you can always go back to an earlier version.",
+        "saving_jobs",
     ),
     scene(
         Area::Program,
@@ -269,7 +269,7 @@ pub(super) const TIPS: &[Tip] = &[
         "Cut Craft keeps a recovery copy of unsaved work every 30 seconds. If the power goes \
          off, your work opens again next time, and the copy is kept until you save or close \
          it. **Edit ▸ Options ▸ General** sets how often.",
-        "contents",
+        "saving_jobs",
     ),
     scene(
         Area::Drawing,
@@ -296,7 +296,7 @@ pub(super) const TIPS: &[Tip] = &[
         "tips/report_bug.png",
         "Something not working as it should? Right-click ▸ **Report a Bug Here…** sends a \
          report about the part of the window you clicked on.",
-        "contents",
+        "bug_reports",
     ),
     scene(
         Area::Program,
@@ -305,7 +305,7 @@ pub(super) const TIPS: &[Tip] = &[
          Again** asks the starting questions again, starting from your answers, and corrects \
          a machine you set up as not listed, keeping the posts you added to it and the rest \
          of your default job.",
-        "contents",
+        "first_time_setup",
     ),
     scene(
         Area::Program,
@@ -313,7 +313,7 @@ pub(super) const TIPS: &[Tip] = &[
         "**Help ▸ Keyboard Shortcuts** lists the key for every tool, so you can work without \
          the menus. **Edit ▸ Options ▸ Mouse and Shortcuts** changes them, and can put a tool \
          or panning on your mouse's thumb buttons.",
-        "contents",
+        "keyboard_shortcuts",
     ),
     tool(
         Area::Drawing,
@@ -1312,7 +1312,7 @@ pub(super) const TIPS: &[Tip] = &[
         "zoom_box",
         "Can't remember where a tool lives? Press **Ctrl+K** for **Find Tool**, type part of its \
          name, and press Enter to open the first match.",
-        "contents",
+        "find_tool",
     ),
     tool(
         Area::Program,
@@ -1325,7 +1325,7 @@ pub(super) const TIPS: &[Tip] = &[
         "common/materials_appearance.png",
         "Find vectors and toolpaths hard to tell apart? **Edit ▸ Options ▸ Appearance** has \
          color-blind friendly colours, or pick your own.",
-        "contents",
+        "colors_on_screen",
     ),
     icon(
         Area::Program,
@@ -1339,70 +1339,70 @@ pub(super) const TIPS: &[Tip] = &[
         "common/edit.png",
         "Hover over a greyed-out menu item or tool to see what it is waiting for, such as a \
          selection or a toolpath picked in the list.",
-        "contents",
+        "finding_help",
     ),
     icon(
         Area::Program,
         "zoom_selected",
         "**Search help**, along the top of the Help window, finds every page with your words: a \
          tool's name, a setting such as stepover, or what you want to do.",
-        "contents",
+        "finding_help",
     ),
     icon(
         Area::Program,
         "common/add_tool.png",
         "Every tool's help page shows the picture on its button, and the **?** lists show every \
          tool by its icon, so you can find a tool by how it looks.",
-        "contents",
+        "finding_help",
     ),
     icon(
         Area::Program,
         "pan",
         "Drag a guide line out of a ruler to line things up against. **View ▸ Guide Lines** \
          shows, locks or deletes them all at once.",
-        "contents",
+        "guide_lines",
     ),
     icon(
         Area::Program,
         "open",
         "Open a drawing or picture with Cut Craft from your file manager and it is brought into \
          a new, blank job: change the material's size with **Setup Material**.",
-        "contents",
+        "saving_jobs",
     ),
     icon(
         Area::Program,
         "file/open.png",
         "A job that won't open says why, and stays in **Recent Files** to try again. \"Damaged\" \
          usually means a copy or sync didn't finish: open a backup.",
-        "contents",
+        "saving_jobs",
     ),
     icon(
         Area::Program,
         "common/reset_undo.png",
         "Started dragging the wrong thing? Press **Esc** while still dragging, in the 2D or 3D \
          view, and the drag is cancelled with nothing changed.",
-        "contents",
+        "view_2d",
     ),
     icon(
         Area::Program,
         "toolpaths/motion_straight.png",
         "Drag sideways on a number to change it finely: each point you move changes it by a tenth \
          of a step, 0.01 mm or 0.001 in for a length.",
-        "contents",
+        "number_fields",
     ),
     icon(
         Area::Program,
         "diagrams/size_wh.png",
-        "Number fields know units: type 3' for three feet, or 2*I for two inches in a millimetre \
-         job.",
-        "contents",
+        "Number fields know units: in a millimetre job type 2*M for two inches, and in an inch \
+         job 3' for three feet or 6*I for 6 mm.",
+        "number_fields",
     ),
     icon(
         Area::Program,
         "diagrams/arc_radius.png",
         "Need a circle's distance round? Number fields know **P** is π: type 2*P*50 for a 50 mm \
          radius.",
-        "contents",
+        "number_fields",
     ),
     icon(
         Area::Safety,
@@ -1455,7 +1455,7 @@ pub(super) const TIPS: &[Tip] = &[
         "diagrams/drag_knife_pressure.png",
         "**Edit ▸ Options ▸ Confirmation Choices ▸ Warn when material left is over** sets \
          when the checks warn that a bit's taper or shape will leave material on the model.",
-        "contents",
+        "confirmation_choices",
     ),
 ];
 

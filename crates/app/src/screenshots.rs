@@ -30,7 +30,7 @@ const DARK: &str = "-dark";
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 49] = [
+const SCENES: [Scene; 55] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("design-2d-dark", |_, _| {}),
@@ -176,6 +176,31 @@ const SCENES: [Scene; 49] = [
     }),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
+    // Help: Your first job (the blank sheet, then the sample sign)
+    ("empty-sheet", |app, _| everyday(app)),
+    ("sample-project", |app, _| app.open_sample()),
+    // Help: Find Tool
+    ("find-tool", |app, _| {
+        everyday(app);
+        draw_shapes(app);
+        app.doc.selection = cut_craft_core::selection::Selection::new();
+        app.search = Some("poc".into());
+    }),
+    // Help: Guide lines
+    ("guide-lines", guide_lines),
+    // Help: Confirmation Choices
+    ("options-confirmations", |app, ctx| {
+        everyday(app);
+        app.options_window = true;
+        app.options_goto = Some("confirmations");
+        ctx.set_embed_viewports(true);
+    }),
+    // Help: First-Time Setup
+    ("first-time-setup", |app, ctx| {
+        everyday(app);
+        app.open_first_run();
+        ctx.set_embed_viewports(true);
+    }),
     // Help: Reporting a bug (the details of the computer)
     ("bug-report-form", |app, ctx| {
         ctx.set_embed_viewports(true);
@@ -327,6 +352,38 @@ fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.options_edited(edited);
     // its window drawn inside Cut Craft's, where the picture is taken
     ctx.set_embed_viewports(true);
+}
+
+/// The everyday help pages' start: a new blank job in the 2D view, every window and form
+/// put away and nothing pinned over the view.
+fn everyday(app: &mut CutCraftApp) {
+    (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
+    (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
+    (app.form, app.info, app.gcode_view, app.save_form) = (None, None, None, None);
+    (app.search, app.guide_props, app.first_run) = (None, None, None);
+    (app.machine_window, app.post_window) = (None, None);
+    (app.tool_manager, app.materials_window) = (None, None);
+    app.updates = crate::update::Updates::default();
+    (app.simulation, app.playback) = (None, None);
+    app.pages.set_pinned(super::Page::Toolpaths, false);
+    // a new, unchanged job: nothing to ask about saving, the view fitted to it
+    app.reset_job();
+    app.view = View::TwoD;
+}
+
+/// Two guide lines pulled out of the rulers through the shapes, and Guide Properties open on
+/// the upright one.
+fn guide_lines(app: &mut CutCraftApp, _: &egui::Context) {
+    use cut_craft_core::document::Guide;
+    everyday(app);
+    draw_shapes(app);
+    app.doc.selection = cut_craft_core::selection::Selection::new();
+    let o = app.doc.job.area().min;
+    app.set_guides(vec![
+        Guide::vertical(o.x + 400.0),
+        Guide::horizontal(o.y + 110.0),
+    ]);
+    app.guide_action(&format!("{}props:0", crate::gui::GUIDE));
 }
 
 /// The checks part-way: the settings checked, the machine's being checked.

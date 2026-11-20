@@ -15142,6 +15142,44 @@ fn every_tip_says_something_and_its_more_is_a_help_page() {
 }
 
 #[test]
+fn every_tip_tells_more_on_a_page_of_its_own_not_help_contents() {
+    // Tell Me More… on Help Contents leaves a beginner to hunt for what the tip meant
+    let vague: Vec<&str> = super::tips::TIPS
+        .iter()
+        .filter(|t| t.topic == "contents")
+        .map(|t| t.text)
+        .collect();
+    assert!(
+        vague.is_empty(),
+        "point these at their own page:\n{vague:#?}"
+    );
+}
+
+#[test]
+fn a_page_that_names_its_icon_shows_it_beside_its_title_and_in_lists() {
+    let h = Harness::new();
+    let named: Vec<&str> = cut_craft_help::pages()
+        .filter(|p| p.icon.is_some())
+        .map(|p| p.id)
+        .collect();
+    assert!(named.contains(&"number_fields"), "{named:?}");
+    for id in named {
+        assert!(h.app.help_icon(id).is_some(), "{id}: its icon is not found");
+        let uri = h
+            .app
+            .help_icon_uri(id, super::help::PAGE_ICON)
+            .unwrap_or_default();
+        let page = h.app.help_markdown(id);
+        let title = page
+            .lines()
+            .find(|l| l.starts_with("# "))
+            .unwrap_or_default();
+        assert!(title.contains(&uri), "{id}: no icon by its title: {title}");
+        assert!(title.ends_with(&h.app.help_title(id)), "{id}: {title}");
+    }
+}
+
+#[test]
 fn there_are_well_over_a_hundred_tips_on_every_subject() {
     use super::tips::{Area, TIPS};
     assert!(TIPS.len() >= 129, "only {} tips", TIPS.len());

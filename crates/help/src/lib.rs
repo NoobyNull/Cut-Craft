@@ -16,6 +16,9 @@
 //! - `see-also` names related pages by id. With every `help:` link in the page's words they
 //!   make the help's link graph: [`links`] goes out from a page, [`linked_from`] comes back
 //!   in, so each page can list the pages around it without anyone keeping two lists.
+//! - `icon` (optional, for a page that is no tool's) names the icon shown beside its title
+//!   and in lists of pages: a tool's id, for that tool's button icon, or an icon's path
+//!   under `assets/icons` (`common/edit.png`). A tool's page shows its own button's icon.
 
 use std::fmt::Write as _;
 
@@ -33,6 +36,9 @@ pub struct Page<'a> {
     pub reviewed: &'a str,
     /// Related pages, by id, in the header's order.
     pub see_also: Vec<&'a str>,
+    /// The icon shown beside its title, if the header names one: a tool's id or an icon's
+    /// path.
+    pub icon: Option<&'a str>,
     /// The Markdown after the header.
     pub body: &'a str,
 }
@@ -56,7 +62,7 @@ pub fn parse<'a>(id: &'a str, text: &'a str) -> Result<Page<'a>, String> {
     else {
         return Err(format!("{id}: the header has no closing ---"));
     };
-    let (mut reviewed, mut see_also) = (None, vec![]);
+    let (mut reviewed, mut see_also, mut icon) = (None, vec![], None);
     for line in header.lines().map(str::trim).filter(|l| !l.is_empty()) {
         match line.split_once(':').map(|(k, v)| (k.trim(), v.trim())) {
             Some(("reviewed", day)) => reviewed = Some(day),
@@ -67,6 +73,8 @@ pub fn parse<'a>(id: &'a str, text: &'a str) -> Result<Page<'a>, String> {
                     .filter(|s| !s.is_empty())
                     .collect();
             }
+            Some(("icon", name)) if !name.is_empty() => icon = Some(name),
+            Some(("icon", _)) => return Err(format!("{id}: icon: names no icon")),
             _ => return Err(format!("{id}: the header line \"{line}\" is not known")),
         }
     }
@@ -80,6 +88,7 @@ pub fn parse<'a>(id: &'a str, text: &'a str) -> Result<Page<'a>, String> {
         id,
         reviewed,
         see_also,
+        icon,
         body: body.trim_start_matches(['\r', '\n']),
     })
 }
@@ -241,6 +250,17 @@ mod tests {
         assert_eq!(page.reviewed, "2026-11-14");
         assert_eq!(page.see_also, ["tabs", "profile_toolpath"]);
         assert!(page.body.starts_with("# Pocket"), "{}", page.body);
+    }
+
+    #[test]
+    fn a_page_may_name_its_icon() {
+        assert_eq!(parse("pocket_toolpath", GOOD).expect("good").icon, None);
+        let text = "---\nreviewed: 2026-11-20\nsee-also: tabs\nicon: common/edit.png\n---\n# Hi\n";
+        let page = parse("hi", text).expect("an icon");
+        assert_eq!(page.icon, Some("common/edit.png"));
+        assert_eq!(page.see_also, ["tabs"]);
+        let empty = parse("hi", "---\nreviewed: 2026-11-20\nicon:\n---\n").expect_err("empty");
+        assert!(empty.contains("names no icon"), "{empty}");
     }
 
     #[test]
