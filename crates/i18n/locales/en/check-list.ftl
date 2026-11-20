@@ -3,3 +3,13 @@ check-list-checking-the-toolpaths-a-big = Checking the toolpaths: a big 3D toolp
 check-list-checks-before-cutting = Checks before cutting
 check-list-tick-to-say-you-have = Tick to say you have read this and it is what you want
 check-list-not-checked = not checked: { $why }
+
+# The line over the finished checks; the parts are joined with " · ".
+check-list-count-passed = ✔ { $count } passed
+check-list-count-to-read = ⚠ { $count } to read
+check-list-count-must-fix = ✖ { $count } must fix
+check-list-count-not-checked = { $count } not checked
+check-list-what-each-check-looks-for = What each check looks for, and how to fix what it finds
+check-list-read-each-and-tick = Read each ⚠ and tick it to say you have: Save Toolpaths and Send to Machine wait until every one is ticked
+# A check's problem that has to be fixed before cutting.
+check-list-must-fix-message = Must fix: { $message }

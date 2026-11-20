@@ -1267,19 +1267,22 @@ fn seed(ui: &mut egui::Ui, name: &str, value: &mut Value) -> bool {
 /// What a turn of 180° ÷ `div` comes to (0 for none).
 fn turn_name(div: u16) -> String {
     if div == 0 {
-        "no turn".to_owned()
+        tr!("form-no-turn")
     } else {
-        format!("= {}°", (180.0 / f64::from(div) * 100.0).round() / 100.0)
+        tr!(
+            "form-turn-degrees",
+            angle = ((180.0 / f64::from(div) * 100.0).round() / 100.0).to_string()
+        )
     }
 }
 
-/// What each sample digit does, for its button's hint.
+/// What each sample digit does, for its button's hint: the keys of its words.
 const SAMPLES: [&str; 5] = [
-    "A space: no repeat here",
-    "The repeat as designed",
-    "Flipped UD: up and down, across the line",
-    "Flipped LR: left and right, along the line",
-    "Flipped LR and UD",
+    "form-sample-space",
+    "form-sample-as-designed",
+    "form-sample-flipped-ud",
+    "form-sample-flipped-lr",
+    "form-sample-flipped-both",
 ];
 
 /// What the pattern maker adds with each sample: the other way (R), a turn (/n), a
@@ -1344,6 +1347,10 @@ pub fn join_entries(list: &[String]) -> String {
 
 /// The Sequence box, and under it the pattern maker: a turn to add with, a sample button for
 /// each digit drawn with the form's settings, Undo, Clear and Random.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the box, then the pattern maker, in order"
+)]
 fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -> bool {
     let mut text = value.as_str().unwrap_or_default().to_owned();
     let changed = ui
@@ -1377,7 +1384,11 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
             });
             let sample = |ui: &mut egui::Ui, code: u8| {
                 let entry = entry_text(code, with);
-                let hint = format!("Add {entry}: {}", SAMPLES[usize::from(code)]);
+                let hint = tr!(
+                    "form-sample-add",
+                    entry = entry.clone(),
+                    what = tr!(SAMPLES[usize::from(code)])
+                );
                 sample_button(ui, maker, params, &entry, code)
                     .on_hover_hint(hint)
                     .clicked()

@@ -29,3 +29,11 @@ update-installed = Cut Craft is installed
 update-version-installed = Cut Craft { $version } is installed
 update-newest = Version { $version } is the newest version.
 update-you-have = You have version { $version }.
+
+update-new-version = A new version ({ $version }) is available
+# How far an update has got.
+update-downloading-of = Downloading... { $done } of { $total } MB
+update-downloading = Downloading...
+update-checking-signed = Checking the download is a genuine, signed Cut Craft release...
+update-installing = Installing...
+update-could-not-restart = Cut Craft could not start the new version ({ $error }). Open it again yourself: it is installed.

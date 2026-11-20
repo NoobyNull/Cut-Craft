@@ -47,3 +47,28 @@ clipart-tag-files = { $count ->
 clipart-tags = Tags: { $tags }
 clipart-too-many-files = There are more than { $most } files in your folders, so only the first { $most } are shown. Add smaller folders to see the rest.
 clipart-picked = { $count } picked
+
+# The Show list: which kinds of file the Library shows.
+clipart-show-everything = Everything
+clipart-show-models = 3D models
+clipart-show-drawings = 2D drawings
+clipart-show-pictures = Pictures
+clipart-show-depth-maps = Depth maps
+clipart-could-not-delete = Couldn't delete { $name }: { $error }
+clipart-could-not-read = Couldn't read { $name }: { $error }
+clipart-nothing-to-show = { $name } has nothing in it to show
+clipart-could-not-save-tags = Couldn't save the Library's tags: { $error }
+clipart-all-folders = All folders ({ $count })
+# Beside a Library folder that isn't there right now.
+clipart-folder-connecting = connecting...
+clipart-folder-cant-reach = can't reach
+clipart-folder-not-found = not found
+clipart-cant-reach-on-network = Can't reach { $place } on the network right now. Check that the computer or NAS it's on is turned on and that you're on the same network. If your file manager asks for a password for it, open it there once. It shows up here again by itself as soon as it can be reached.
+clipart-folder-is-not-there = { $place } isn't there. If it's on a drive that isn't plugged in, plug it in; if it was moved, use Remove Folder and add it again from where it is now.
+clipart-tile-hint = { $name }: double-click to add it to the project, or drag it onto a view. Click to pick it (Ctrl or Shift for more), right-click for more.
+# The right-click menu on Library files; with more than one picked, how many.
+clipart-menu-count = { $what } ({ $count })
+clipart-menu-add-to-project = Add to Project
+clipart-menu-add-to-level = Add to Level
+clipart-menu-add-tag = Add Tag...
+clipart-menu-delete-from-disk = Delete from Disk...

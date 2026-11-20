@@ -202,9 +202,12 @@ pub fn file_size(bytes: u64) -> String {
         unit = Some(u);
     }
     match unit {
-        None if bytes == 1 => "1 byte".into(),
-        None => format!("{bytes} bytes"),
-        Some(u) => format!("{size:.1} {u} ({} bytes)", grouped(bytes)),
+        None => tr!("clipart-properties-bytes", count = bytes),
+        Some(u) => tr!(
+            "clipart-properties-size-and-bytes",
+            size = format!("{size:.1} {u}"),
+            bytes = grouped(bytes)
+        ),
     }
 }
 
@@ -220,12 +223,12 @@ pub fn model_size([x, y, z]: [f64; 3]) -> String {
 }
 
 /// What a kind of file is called, one of them.
-pub fn kind_name(kind: Kind) -> &'static str {
+pub fn kind_name(kind: Kind) -> String {
     match kind {
-        Kind::Model => "3D model",
-        Kind::Drawing => "2D drawing",
-        Kind::Picture => "Picture",
-        Kind::DepthMap => "Depth map (heights as shades of grey)",
+        Kind::Model => tr!("clipart-properties-kind-model"),
+        Kind::Drawing => tr!("clipart-properties-kind-drawing"),
+        Kind::Picture => tr!("clipart-properties-kind-picture"),
+        Kind::DepthMap => tr!("clipart-properties-kind-depth-map"),
     }
 }
 
@@ -284,67 +287,90 @@ pub fn window(ctx: &egui::Context, open: &mut Option<Properties>) -> Option<Aske
 }
 
 /// The window's rows: a name on the left, what it is on the right.
+#[expect(clippy::too_many_lines, reason = "a row each, in order")]
 fn rows(ui: &mut egui::Ui, props: &Properties) {
     let extension = super::preview::extension(&props.file).to_uppercase();
-    let row = |ui: &mut egui::Ui, name: &str, value: String, hint: Option<&str>| {
-        let label = ui.strong(name);
-        if let Some(hint) = hint {
-            label.on_hover_hint(hint);
+    // each row's name is the key of its words; its hint, where it has one, is `.tooltip`
+    let row = |ui: &mut egui::Ui, key: &str, value: String, hint: bool| {
+        let label = ui.strong(tr!(key));
+        if hint {
+            label.on_hover_hint(tr!(&format!("{key}.tooltip")));
         }
         ui.add(egui::Label::new(value).wrap());
         ui.end_row();
     };
     let kind = if extension.is_empty() {
-        kind_name(props.kind).to_owned()
+        kind_name(props.kind)
     } else {
-        format!("{} ({extension} file)", kind_name(props.kind))
+        tr!(
+            "clipart-properties-kind-file",
+            kind = kind_name(props.kind),
+            extension = extension
+        )
     };
-    row(ui, "Kind", kind, None);
+    row(ui, "clipart-properties-row-kind", kind, false);
     let read = props.read.as_ref();
     match read.map(|r| &r.measured) {
-        None => row(ui, "Size", "Reading the file...".into(), None),
-        Some(Err(e)) => row(ui, "Size", format!("Couldn't measure it. {e}"), None),
+        None => row(
+            ui,
+            "clipart-properties-row-size",
+            tr!("clipart-properties-reading-the-file"),
+            false,
+        ),
+        Some(Err(e)) => row(
+            ui,
+            "clipart-properties-row-size",
+            tr!("clipart-properties-could-not-measure", error = e.clone()),
+            false,
+        ),
         Some(Ok(Measured::Model { size, triangles })) => {
             row(
                 ui,
-                "Size",
+                "clipart-properties-row-model-size",
                 model_size(*size),
-                Some(
-                    "Width (X) × length (Y) × thickness (Z), as saved in the file. You can \
-                     change its size when you add it to a project.",
-                ),
+                true,
             );
             if let Some(n) = triangles {
                 row(
                     ui,
-                    "Triangles",
+                    "clipart-properties-row-triangles",
                     grouped(*n as u64),
-                    Some(
-                        "A model's surface is made of flat triangles. More of them means \
-                         finer detail, and a slower file to open.",
-                    ),
+                    true,
                 );
             }
         }
         Some(Ok(Measured::Picture { width, height })) => {
-            row(ui, "Size", format!("{width} × {height} pixels"), None);
+            row(
+                ui,
+                "clipart-properties-row-size",
+                tr!(
+                    "clipart-properties-pixels",
+                    width = width.to_string(),
+                    height = height.to_string()
+                ),
+                false,
+            );
         }
         Some(Ok(Measured::Nothing)) => {}
     }
     if let Some(picture) = &props.picture {
         row(
             ui,
-            "Preview",
+            "clipart-properties-row-preview",
             super::name(picture),
-            Some("The picture beside it with the same name, shown as its tile."),
+            true,
         );
     }
     let (on_disk, modified) = match read {
-        None => ("Reading...".into(), "Reading...".into()),
+        None => (
+            tr!("clipart-properties-reading"),
+            tr!("clipart-properties-reading"),
+        ),
         Some(r) => (
-            r.bytes.map_or_else(|| "Unknown".into(), file_size),
+            r.bytes
+                .map_or_else(|| tr!("clipart-properties-unknown"), file_size),
             r.modified.map_or_else(
-                || "Unknown".into(),
+                || tr!("clipart-properties-unknown"),
                 |m| {
                     chrono::DateTime::<chrono::Local>::from(m)
                         .format("%Y-%m-%d %H:%M")
@@ -353,36 +379,31 @@ fn rows(ui: &mut egui::Ui, props: &Properties) {
             ),
         ),
     };
-    row(ui, "File size", on_disk, None);
-    row(ui, "Modified", modified, None);
+    row(ui, "clipart-properties-row-file-size", on_disk, false);
+    row(ui, "clipart-properties-row-modified", modified, false);
     let tags = if props.tags.is_empty() {
-        "None yet. Right-click it and pick Add Tag... to add one.".into()
+        tr!("clipart-properties-no-tags-yet")
     } else {
         props.tags.join(", ")
     };
-    row(
-        ui,
-        "Tags",
-        tags,
-        Some("Words to find it by: the search box looks through them."),
-    );
+    row(ui, "clipart-properties-row-tags", tags, true);
     if let Some(folder) = &props.library_folder {
         row(
             ui,
-            "Library folder",
+            "clipart-properties-row-library-folder",
             super::network::location(folder).unwrap_or_else(|| folder.display().to_string()),
-            Some("The folder you added to the Library that this file is in."),
+            true,
         );
     }
     if let Some(url) = super::network::location(&props.file) {
-        row(
-            ui,
-            "Network location",
-            url,
-            Some("Where it is on your network share; the path below is where it's mounted now."),
-        );
+        row(ui, "clipart-properties-row-network-location", url, true);
     }
-    row(ui, "Location", props.file.display().to_string(), None);
+    row(
+        ui,
+        "clipart-properties-row-location",
+        props.file.display().to_string(),
+        false,
+    );
 }
 
 #[cfg(test)]

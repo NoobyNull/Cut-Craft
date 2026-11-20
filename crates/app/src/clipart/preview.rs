@@ -6,6 +6,7 @@
 
 use cut_craft_core::component::Component;
 use cut_craft_core::glam::DVec3;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use image::{Rgba, RgbaImage};
 use std::collections::HashMap;
@@ -47,7 +48,13 @@ pub fn render(model: &Path) -> Result<RgbaImage, String> {
 
 /// `model` seen from its best side, `size` pixels square.
 pub fn render_at(model: &Path, size: u32) -> Result<RgbaImage, String> {
-    let bytes = std::fs::read(model).map_err(|e| format!("Couldn't read {}: {e}", name(model)))?;
+    let bytes = std::fs::read(model).map_err(|e| {
+        tr!(
+            "clipart-could-not-read",
+            name = name(model),
+            error = e.to_string()
+        )
+    })?;
     let image = if extension(model) == "ccclip" {
         let k = fmt_export_as_3d_clipart::read_clip(&bytes)
             .map_err(|e| format!("{}: {e}", name(model)))?;
@@ -57,7 +64,7 @@ pub fn render_at(model: &Path, size: u32) -> Result<RgbaImage, String> {
             fmt_import_stl::triangles(&bytes).map_err(|e| format!("{}: {e}", name(model)))?;
         best_view(&triangles, size as usize).and_then(|h| shade(&h))
     };
-    image.ok_or_else(|| format!("{} has nothing in it to show", name(model)))
+    image.ok_or_else(|| tr!("clipart-nothing-to-show", name = name(model)))
 }
 
 /// The preview of `model` for a tile, [`SIZE`] pixels square at most.
@@ -94,7 +101,13 @@ pub fn preview_at(
     }
     let image = match picture {
         Some(p) => image::open(p)
-            .map_err(|e| format!("Couldn't read {}: {e}", name(p)))?
+            .map_err(|e| {
+                tr!(
+                    "clipart-could-not-read",
+                    name = name(p),
+                    error = e.to_string()
+                )
+            })?
             .thumbnail(size, size)
             .into_rgba8(),
         None => render_at(model, size)?,

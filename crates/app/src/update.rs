@@ -441,7 +441,7 @@ fn offer(
 
 /// The offer's heading.
 fn offer_heading(version: &Version) -> String {
-    format!("A new version ({version}) is available")
+    tr!("update-new-version", version = version.to_string())
 }
 
 /// The commands in a how-to-update message: each part written in `backticks`, to copy.
@@ -460,28 +460,25 @@ fn progress(step: Step) -> (String, Option<f32>) {
     let mb = |bytes: u64| bytes as f64 / 1_000_000.0;
     match step {
         Step::Downloading { done, total } if total > 0 => (
-            format!("Downloading... {:.1} of {:.1} MB", mb(done), mb(total)),
+            tr!(
+                "update-downloading-of",
+                done = format!("{:.1}", mb(done)),
+                total = format!("{:.1}", mb(total))
+            ),
             #[expect(clippy::cast_possible_truncation, reason = "a fraction")]
             Some((mb(done) / mb(total)).min(1.0) as f32),
         ),
-        Step::Downloading { .. } => ("Downloading...".to_owned(), None),
-        Step::Checking => (
-            "Checking the download is a genuine, signed Cut Craft release...".to_owned(),
-            None,
-        ),
-        Step::Installing => ("Installing...".to_owned(), None),
+        Step::Downloading { .. } => (tr!("update-downloading"), None),
+        Step::Checking => (tr!("update-checking-signed"), None),
+        Step::Installing => (tr!("update-installing"), None),
     }
 }
 
 /// Starts the new version on the job `open`, if one was open; called once closing went
 /// ahead after Install Now or Relaunch Now.
 pub fn restart(program: &std::path::Path, open: Option<&std::path::Path>) -> Result<(), String> {
-    cut_craft_updater::restart(program, open).map_err(|e| {
-        format!(
-            "Cut Craft could not start the new version ({e}). Open it again yourself: it is \
-             installed."
-        )
-    })
+    cut_craft_updater::restart(program, open)
+        .map_err(|e| tr!("update-could-not-restart", error = e.to_string()))
 }
 
 #[cfg(test)]

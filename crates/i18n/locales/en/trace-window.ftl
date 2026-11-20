@@ -49,3 +49,12 @@ trace-window-zoom-out = Zoom out
 # $name is the colour as #rrggbb; $share a percentage, such as 12.5.
 trace-window-share = { $name }: { $share }% of the picture
 trace-window-colours-in-groups = { $colours } colours in { $groups } groups. Click swatches to pick them (Shift or Ctrl for more), then Merge; tick the colours to trace
+
+# How the preview shows the trace.
+trace-window-look-before-and-after = Before and after
+trace-window-look-result-only = Result only
+trace-window-look-outlines = Outlines over picture
+trace-window-choose = Choose…
+trace-window-import-a-picture = Import a picture to trace
+trace-window-tracing = Tracing…
+trace-window-click-update-preview = Click Update preview to see the trace

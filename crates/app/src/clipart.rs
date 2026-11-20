@@ -170,13 +170,13 @@ impl Show {
         Self::Only(Kind::DepthMap),
     ];
 
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::Everything => "Everything",
-            Self::Only(Kind::Model) => "3D models",
-            Self::Only(Kind::Drawing) => "2D drawings",
-            Self::Only(Kind::Picture) => "Pictures",
-            Self::Only(Kind::DepthMap) => "Depth maps",
+            Self::Everything => tr!("clipart-show-everything"),
+            Self::Only(Kind::Model) => tr!("clipart-show-models"),
+            Self::Only(Kind::Drawing) => tr!("clipart-show-drawings"),
+            Self::Only(Kind::Picture) => tr!("clipart-show-pictures"),
+            Self::Only(Kind::DepthMap) => tr!("clipart-show-depth-maps"),
         }
     }
 }
@@ -510,7 +510,11 @@ impl Clipart {
                     Ok(())
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(e) => Err(format!("Couldn't delete {}: {e}", name(f))),
+                Err(e) => Err(tr!(
+                    "clipart-could-not-delete",
+                    name = name(f),
+                    error = e.to_string()
+                )),
             });
         self.selected.retain(|s| !files.contains(s));
         // gone from the tab at once; the folders are read again for the counts
@@ -765,7 +769,7 @@ fn folders(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) -> Optio
             .max_height(most)
             .auto_shrink([false, true])
             .show(ui, |ui| {
-                let all = format!("All folders ({})", listing.entries.len());
+                let all = tr!("clipart-all-folders", count = listing.entries.len());
                 if ui
                     .selectable_label(clipart.open.is_none(), all)
                     .on_hover_hint(tr!("clipart-shows-what-s-in-every"))
@@ -775,15 +779,15 @@ fn folders(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) -> Optio
                 }
                 for root in &clipart.folders {
                     let tag = (!there(root)).then(|| match clipart.unreachable(root) {
-                        Some(false) => "connecting...",
-                        Some(true) => "can't reach",
-                        None => "not found",
+                        Some(false) => tr!("clipart-folder-connecting"),
+                        Some(true) => tr!("clipart-folder-cant-reach"),
+                        None => tr!("clipart-folder-not-found"),
                     });
                     node(
                         ui,
                         root,
                         true,
-                        tag,
+                        tag.as_deref(),
                         listing,
                         clipart.open.as_deref(),
                         &mut tree,
@@ -925,23 +929,18 @@ fn files(
             Some(true) => {
                 ui.colored_label(
                     warn,
-                    format!(
-                        "Can't reach {} on the network right now. Check that the computer or \
-                         NAS it's on is turned on and that you're on the same network. If your \
-                         file manager asks for a password for it, open it there once. It shows \
-                         up here again by itself as soon as it can be reached.",
-                        network::kept(open).display()
+                    tr!(
+                        "clipart-cant-reach-on-network",
+                        place = network::kept(open).display().to_string()
                     ),
                 );
             }
             None => {
                 ui.colored_label(
                     warn,
-                    format!(
-                        "{} isn't there. If it's on a drive that isn't plugged in, plug it in; \
-                         if it was moved, use Remove Folder and add it again from where it is \
-                         now.",
-                        open.display()
+                    tr!(
+                        "clipart-folder-is-not-there",
+                        place = open.display().to_string()
                     ),
                 );
             }
@@ -1209,13 +1208,7 @@ fn clip(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
     }
     let tags: Vec<String> = clipart.tags.of(file).map(str::to_owned).collect();
     if thumbnail.hovered() || caption.hovered() {
-        cut_craft_bug_report::hint::hint(
-            ui.ctx(),
-            &format!(
-                "{label}: double-click to add it to the project, or drag it onto a view. Click \
-                 to pick it (Ctrl or Shift for more), right-click for more."
-            ),
-        );
+        cut_craft_bug_report::hint::hint(ui.ctx(), &tr!("clipart-tile-hint", name = label.clone()));
     }
     // the pop-up hangs off the tile, not the pointer, so it holds still while looked at
     for response in [thumbnail, caption] {
@@ -1291,19 +1284,19 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
     let mut picked = None;
     let files = clipart.selected.clone();
     let many = files.len() > 1;
-    let count = |what: &str| {
+    let count = |key: &str| {
         if many {
-            format!("{what} ({})", files.len())
+            tr!("clipart-menu-count", what = tr!(key), count = files.len())
         } else {
-            what.to_owned()
+            tr!(key)
         }
     };
-    if ui.button(count("Add to Project")).clicked() {
+    if ui.button(count("clipart-menu-add-to-project")).clicked() {
         picked = Some(Picked::AddToProject(files.clone()));
     }
     // only 3D clipart becomes components, which is what a level holds
     if takes_a_level(&files) {
-        ui.menu_button(count("Add to Level"), |ui| {
+        ui.menu_button(count("clipart-menu-add-to-level"), |ui| {
             for (id, level) in tile.levels {
                 if ui.button(level).clicked() {
                     picked = Some(Picked::AddToLevel(files.clone(), ToLevel::Existing(*id)));
@@ -1326,7 +1319,7 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
     {
         picked = Some(Picked::Locate(tile.entry.file.clone()));
     }
-    if ui.button(count("Add Tag...")).clicked() {
+    if ui.button(count("clipart-menu-add-tag")).clicked() {
         clipart.tagging = Some((files.clone(), String::new()));
     }
     let tags = clipart.tags.of_all(&files);
@@ -1342,8 +1335,8 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
         });
     }
     ui.separator();
-    let delete =
-        egui::RichText::new(count("Delete from Disk...")).color(ui.visuals().error_fg_color);
+    let delete = egui::RichText::new(count("clipart-menu-delete-from-disk"))
+        .color(ui.visuals().error_fg_color);
     if ui
         .button(delete)
         .on_hover_hint(tr!("clipart-deletes-the-file-for-good"))
