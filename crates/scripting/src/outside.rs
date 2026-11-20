@@ -114,9 +114,10 @@ impl Outside {
 /// Whether `name` is a plain file name: no folders, no `..`, nothing hidden or odd.
 pub fn plain_file_name(name: &str) -> bool {
     // names Windows keeps for devices, even with an extension (`NUL.stl`)
-    const DEVICES: [&str; 22] = [
+    const DEVICES: [&str; 28] = [
         "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        "COM9", "COM¹", "COM²", "COM³", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7",
+        "LPT8", "LPT9", "LPT¹", "LPT²", "LPT³",
     ];
     let stem = name.split('.').next().unwrap_or("").trim_end();
     !name.is_empty()
@@ -715,6 +716,8 @@ mod tests {
             "",
             "NUL.stl",
             "com1",
+            "COM¹.stl",
+            "lpt²",
             "trailing.",
             "trailing ",
         ] {
