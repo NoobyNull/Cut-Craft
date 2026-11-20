@@ -5,10 +5,9 @@ use super::{
     APP_NAME, Align, BRUSH_FINE_STEP, BRUSH_STEP, Canvas, Change, CutCraftApp, DAffine2,
     DESIGN_TABS, DROP_SHADE, Drag, EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout,
     OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
-    Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
-    ViewTransform, bordered, dialog_size, egui, file_name, files, gui, handles, inspected,
-    inspected_rows, measured, measured_rows, page_width, paint_focus_ring, saving_path, show_page,
-    view2d,
+    Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, Value, View, ViewTool, ViewTransform, bordered,
+    dialog_size, egui, file_name, files, gui, handles, inspected, inspected_rows, measured,
+    measured_rows, page_width, paint_focus_ring, saving_path, show_page, view2d,
 };
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
@@ -4324,21 +4323,24 @@ impl CutCraftApp {
         }
     }
 
-    /// The wheel zooms about the cursor, and tilting it pans sideways (as Options ▸ Mouse and
+    /// The wheel zooms about the cursor, and tilting it pans sideways; a pinch zooms about
+    /// the cursor too; in Trackpad mode two fingers pan (each as Options ▸ Mouse and
     /// Shortcuts says); the pan buttons (the wheel, to start with) or the Pan tool pan.
     pub(super) fn zoom_and_pan(&mut self, ui: &egui::Ui, canvas: &mut Canvas) {
         let area = canvas.area;
-        // the wheel zooms about the cursor: a quarter of the view's height doubles the zoom
         if let Some(at) = canvas.hover() {
             let scroll = ui.input(|i| i.smooth_scroll_delta);
-            if scroll.y != 0.0 {
-                let factor = 2f32.powf(scroll.y / (area.height() / VIEW_ZOOM_QUARTERS));
-                canvas.transform = canvas.transform.zoomed_about(at, factor);
+            let pinch = self.pinch(ui.ctx());
+            let moved = self
+                .options
+                .controls
+                .view_move(scroll, pinch, area.height());
+            if moved.zoom != 1.0 {
+                canvas.transform = canvas.transform.zoomed_about(at, moved.zoom);
                 self.camera = Some(canvas.transform);
             }
-            let sideways = self.options.controls.tilt.pan(scroll.x);
-            if sideways != 0.0 {
-                canvas.transform = canvas.transform.panned(egui::vec2(sideways, 0.0));
+            if moved.pan != egui::Vec2::ZERO {
+                canvas.transform = canvas.transform.panned(moved.pan);
                 self.camera = Some(canvas.transform);
             }
         }
@@ -4351,6 +4353,25 @@ impl CutCraftApp {
             canvas.transform = canvas.transform.panned(by);
             self.camera = Some(canvas.transform);
         }
+    }
+
+    /// This frame's pinch on a trackpad or touch screen, as a zoom factor (1 for none). Ctrl
+    /// and the wheel count too (some trackpads send a pinch so), except while Sculpting,
+    /// whose brush they size.
+    pub(super) fn pinch(&self, ctx: &egui::Context) -> f32 {
+        let sculpting = self.form.as_ref().is_some_and(|f| f.id == "sculpt");
+        ctx.input(|i| {
+            if sculpting {
+                (i.raw.events.iter())
+                    .filter_map(|e| match e {
+                        egui::Event::Zoom(factor) => Some(*factor),
+                        _ => None,
+                    })
+                    .product()
+            } else {
+                i.zoom_delta()
+            }
+        })
     }
 
     /// Remembers where the pointer goes while dragging, for stroke tools.

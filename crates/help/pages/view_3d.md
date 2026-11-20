@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 see-also: 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
 ---
 
@@ -12,7 +12,9 @@ up to the [Preview detail](help:preview_detail) slider on the Toolpaths page's P
 ## Moving the view
 
 - **Drag** with the left or right button to turn the job; **drag with the wheel** (or
-  Ctrl and the right button) to slide it; **roll the wheel** to zoom where the pointer is.
+  Ctrl and the right button) to slide it; **roll the wheel** (or pinch on a trackpad) to
+  zoom where the pointer is. If a direction feels backwards, turn it the other way: see
+  [Moving the views](help:view_controls).
 - **Double-click** off the job, or press **F**, to fit the whole job in the view.
 - The cube in the top corner turns the view too: click a face, edge or corner to look
   from there, or drag it.
