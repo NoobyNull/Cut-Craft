@@ -1406,8 +1406,8 @@ pub(super) const TIPS: &[Tip] = &[
     icon(
         Area::Program,
         "diagrams/size_wh.png",
-        "Number fields know units: in a millimetre job type 2*M for two inches, and in an inch \
-         job 3' for three feet or 6*I for 6 mm.",
+        "Number fields know units: in a millimetre job type `2*M` for two inches, and in an \
+         inch job `3'` for three feet or `6*I` for 6 mm.",
         "number_fields",
     ),
     icon(

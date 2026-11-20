@@ -220,6 +220,7 @@ const SCENES: [Scene; 57] = [
         ctx.set_embed_viewports(true);
         (app.info, app.form, app.tool_manager) = (None, None, None);
         (app.snap_window, app.snap_draft) = (false, None);
+        app.first_run = None;
         cut_craft_bug_report::open_here(ctx);
     }),
     // Help: Long jobs and the time left

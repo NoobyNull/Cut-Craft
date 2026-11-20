@@ -25,7 +25,8 @@ dim screen in the workshop), pick other colors.
      pick for the light theme and for the dark theme, under **2D view in the light theme**
      and **2D view in the dark theme**. Pick a toolpath color lighter or darker than the
      vector color as well as another hue.
-3. Press **Apply** to see them. **Cancel** puts things back as they were (see
+3. Press **Apply** to see them. Before **Apply**, **Cancel** throws your changes away; after
+   it, the colors stay until you change them again or press **Reset to defaults** (see
    [Changing settings](help:settings)).
 
 ![The same in the light theme](pictures/line-colors-light.png)
