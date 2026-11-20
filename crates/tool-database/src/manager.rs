@@ -1756,7 +1756,7 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
                     "The width the laser burns (its diameter): Cut Outside and Cut Inside \
                      keep half of it off the line",
                 );
-                length(ui, "Diameter", &mut tool.diameter, tool.units);
+                length(ui, "Kerf", &mut tool.diameter, tool.units);
                 ui.end_row();
             });
         return;

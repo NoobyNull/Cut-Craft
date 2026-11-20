@@ -353,6 +353,10 @@ fn arrow(ui: &mut egui::Ui, rect: egui::Rect, id: egui::Id, up: bool, on: bool) 
         ui.ctx().request_repaint();
     } else {
         ui.data_mut(|d| d.remove::<Held>(id));
+        // a screen reader's press: one step (a mouse press stepped already, while held)
+        if on && ui.input(|i| i.has_accesskit_action_request(id, egui::accesskit::Action::Click)) {
+            times = 1;
+        }
     }
     if ui.is_rect_visible(rect) {
         let visuals = if on && ui.is_enabled() {
@@ -687,6 +691,50 @@ mod tests {
             .count();
         // the box itself takes the arrow keys; Tab goes straight on to the next setting
         assert_eq!(focusable, 0);
+    }
+
+    #[test]
+    fn a_screen_readers_click_on_an_arrow_steps_the_value_once() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut depth = 6.0;
+        let run = |events: Vec<egui::Event>, depth: &mut f64| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    ui.add(Number::new(depth).suffix(" mm").name("Cut Depth"));
+                });
+            });
+            out.textures_delta.clear();
+            out.platform_output.accesskit_update.expect("a tree")
+        };
+        let tree = run(vec![], &mut depth);
+        let arrow = |label: &str| {
+            tree.nodes
+                .iter()
+                .find(|(_, n)| n.label() == Some(label))
+                .map(|(id, _)| *id)
+                .expect("the arrow")
+        };
+        let click = |target| {
+            egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Click,
+                target_tree: egui::accesskit::TreeId::ROOT,
+                target_node: target,
+                data: None,
+            })
+        };
+        let (up, down) = (arrow("Increase Cut Depth"), arrow("Decrease Cut Depth"));
+        run(vec![click(up)], &mut depth);
+        assert_eq!(depth, 6.1);
+        run(vec![], &mut depth);
+        assert_eq!(depth, 6.1, "one click, one step");
+        run(vec![click(down)], &mut depth);
+        run(vec![click(down)], &mut depth);
+        assert_eq!(depth, 5.9);
     }
 
     /// Every number box is named for a screen reader: `.name(` follows each `Number::new(`
