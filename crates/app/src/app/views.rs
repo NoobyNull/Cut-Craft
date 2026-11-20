@@ -1785,6 +1785,7 @@ impl CutCraftApp {
     /// Guide Properties, on a right-clicked guide: its position (where it crosses its axis)
     /// and angle, typed; Lock Guide; new guides parallel to it, at an absolute position or an
     /// offset from it, one or several a step apart; Delete Guide.
+    #[expect(clippy::too_many_lines, reason = "one window, its rows in order")]
     pub(super) fn guide_window(&mut self, ctx: &egui::Context) {
         let Some(mut props) = self.guide_props.clone() else {
             return;
@@ -1810,17 +1811,25 @@ impl CutCraftApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label(tr!("views-position"));
-                    crate::form::length_edit(ui, &mut props.position, units, f64::NEG_INFINITY);
+                    crate::form::length_edit(
+                        ui,
+                        &tr!("views-position"),
+                        &mut props.position,
+                        units,
+                        f64::NEG_INFINITY,
+                    );
                 });
                 ui.horizontal(|ui| {
                     ui.label(tr!("views-angle"));
                     let hint = "Degrees anticlockwise from the X axis";
                     ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).show_value(false))
+                        .accessible_name(tr!("views-angle"))
                         .on_hover_hint(hint);
                     ui.add(
                         Number::new(&mut props.angle)
                             .range(-180.0..=180.0)
-                            .suffix("°"),
+                            .suffix("°")
+                            .name("Angle"),
                     )
                     .on_hover_hint(hint);
                 });
@@ -1842,9 +1851,24 @@ impl CutCraftApp {
                     } else {
                         tr!("views-position")
                     });
-                    crate::form::length_edit(ui, &mut props.new_at, units, f64::NEG_INFINITY);
+                    let name = tr!(if props.relative {
+                        "views-new-guide-offset"
+                    } else {
+                        "views-new-guide-position"
+                    });
+                    crate::form::length_edit(
+                        ui,
+                        &name,
+                        &mut props.new_at,
+                        units,
+                        f64::NEG_INFINITY,
+                    );
                     ui.label(tr!("views-count"));
-                    ui.add(Number::new(&mut props.count).range(1..=100));
+                    ui.add(
+                        Number::new(&mut props.count)
+                            .range(1..=100)
+                            .name(tr!("views-count")),
+                    );
                 });
                 create = ui
                     .button(tr!("views-create-new-guide"))

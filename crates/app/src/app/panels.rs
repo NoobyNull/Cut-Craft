@@ -3200,7 +3200,8 @@ impl CutCraftApp {
                     }
                     let percent = Number::new(&mut p.fade.percent)
                         .range(0.0..=100.0)
-                        .suffix(" %");
+                        .suffix(" %")
+                        .name("Fade");
                     s.dirty |= ui.add_enabled(p.fade.on, percent).changed();
                     ui.end_row();
                     s.dirty |= ui.checkbox(&mut p.tilt.on, tr!("panels-tilt")).changed();
@@ -3215,7 +3216,8 @@ impl CutCraftApp {
                     }
                     let angle = Number::new(&mut p.tilt.angle)
                         .range(-90.0..=90.0)
-                        .suffix(" °");
+                        .suffix(" °")
+                        .name("Tilt");
                     s.dirty |= ui.add_enabled(p.tilt.on, angle).changed();
                     ui.end_row();
                     ui.label(tr!("panels-appearance"));

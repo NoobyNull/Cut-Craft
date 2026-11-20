@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-20
-see-also: rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, job_setup, save_toolpaths
+see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths
 ---
 
 **4-Axis Rotary Machining** finishes a 3D model all the way round a turning cylinder. The bit
@@ -49,12 +49,12 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
 - **Tool**: a ball nose follows curves best. A flat-bottomed bit works too, resting on the
   highest point under it. Its **finishing stepover** (in the Tool Database) is the distance
   from one ring to the next.
-- **Strategy**: how the bit goes round the part (see Three ways round, below):
+- **Strategy**: how the bit goes round the part (see Four ways round, below):
   - **Radial** keeps the bit straight over the turning axis while A turns.
   - **Off centre** holds the bit to one side of the axis while A turns.
   - **Indexed** turns A to each side in turn and holds it still while the bit cuts across.
   - **Sides, then details** clears the bulk from each side with A held still, finishes each
-    side, then turns A only where detail is left.
+    side, then locks A at a few more angles for the detail the sides could not reach.
 - **Offset** (Off centre): how far to one side of the axis the bit is held. A third to a half
   of the bit's width suits most parts. Positive is the way the part comes up towards the bit
   as A turns back; a negative offset holds it the other side.
@@ -63,13 +63,23 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   for flat-ish parts such as a plane with its wings level.
 - **Roughing allowance** (Sides then details): how much the bulk clearing leaves on the model
   for each side's finish to take off.
+- **Tilts** (Sides then details): the most extra angles A locks at after the sides, for the
+  details. Each is picked where it reaches the most of what is still left. 6 suits most parts;
+  0 finishes with the sides alone.
+- **Tilt angles** (Sides then details): leave empty to have the angles picked for you, or type
+  your own in degrees, in order, such as `15, 165, 45`.
 - **Start** and **End**: where along the axis the rings go, from the job's start (the chuck
   end). End 0 runs to the job's end. Keep them clear of the chuck and tailstock you set in
-  [Machine Configuration](help:rotary_firmware).
+  [Machine Configuration](help:rotary_firmware). They count from the material's start
+  whatever XY zero [Job Setup](help:job_setup) uses: zeroed on the middle, the toolpath is
+  written where the material is, just as with a corner.
 - **Allowance**: material left all the way round for a later pass.
 - **Registration mark**: a notch 0.5 mm deep at A=0, a bit's width past the last ring. If a
   job stops part way, turn A until the notch is under the bit and zero A there before starting
-  again. Without one, pencil a line along the material at A=0 before you start.
+  again. It is only cut where there is waste past **End** to cut it in: when the part runs
+  right to the end of the material, it is left out and a note says so, rather than notch the
+  part. Bring **End** in a little to make room, or pencil a line along the material at A=0
+  before you start.
   [Rotary set up](help:check_rotary_setup) reminds you when there is neither.
 
 ## Four ways round
@@ -86,11 +96,18 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   whose A holds still better than it turns smoothly.
 - **Sides, then details** works bulk to fine detail, like a two-sided job the machine turns
   over by itself:
-  1. A turns to each side and holds still while the bulk is cleared from it a level at a time,
+  1. A turns to the top (A=0) and holds still while the bulk is cleared a level at a time,
      down to the **Roughing allowance** above the model, the way a flat 3D roughing does.
+     Then A turns to the next side and does the same, each side in turn, evenly round the part:
+     with **Faces** 2, the top and then the other side (A=180), turned over like a two-sided
+     job; with 4, every quarter turn.
   2. Each side is finished, A still held.
-  3. Last, A turns only where material is left that no side could reach: under a wing, into a
-     hollow, round the join between sides.
+  3. Last, A locks at a few more angles, a tilt at a time, for what no side could reach: the
+     back edge of a wing, under a tail, into a hollow. Each angle is picked where it reaches
+     the most of what is left, up to **Tilts** of them, or you type them in **Tilt angles**.
+     At every angle A holds still while the bit cuts, so the machine moves only X, Y and Z.
+
+  ![The bulk cleared from the top, then the other side, then locked tilts for the details](pictures/rotary_machining_toolpath/sides-then-details.png)
 
   It knows where the material is the whole way through: the blank you set in
   [Job Setup](help:job_setup) (round, square or a board), less what each pass has already cut.
@@ -107,6 +124,33 @@ Off centre and Indexed hold the bit away from the axis, so the rotary's
 warns until it is. The preview shows where the tip really cuts, and the file moves your
 machine's own axis across the rotary (Y beside a rotary along X) as well as A. Cut Craft's
 **Rotary A** posts write it; a post of your own needs `[ACROSS]` in its move lines.
+
+## Kept clear of the holder, chuck and tailstock
+
+The bit is not the only thing that comes down into the work. **Sides, then details** keeps the
+collet nut and spindle above every bit of material left at the angle A is locked at, not just
+the bit's tip off the model, so a deep cut beside a tall wing never brings the nut down onto it.
+The sizes come from your machine: the holder from [Machine Configuration](help:collisions)
+(the usual ER20 nut and a 65 mm spindle if none is set), and how far the bit sticks out from its
+stick-out in the [Tool Database](help:tool_database).
+
+It also keeps out of the **Chuck** and **Tailstock** set in Machine Configuration's rotary
+settings: nothing is cut where they hold the material. (The other ways round cut between
+**Start** and **End**, so keep those clear of the chuck and tailstock yourself.)
+
+When something can't be reached, the toolpath is still made, and a red note at the foot of the
+form says what and where:
+
+- **The model is too near the chuck or tailstock**: the collet nut is wider than the bit, so it
+  needs room beside the chuck to get down to the model. The note says how much to leave. Move
+  the model along, or use longer material, so a spacer of waste sits between the chuck and the
+  model. The same goes for the tailstock end.
+- **Some of the model is left rough**: no angle tried let the holder get down there. The note
+  says where along the part, and which angles A locked at. A bit that sticks out further, a
+  slimmer holder, more **Tilts**, or the model sliced into parts would reach it.
+
+To take the waste off the ends, or turn the blank round before the carving, use
+[Rotary Lathe](help:rotary_lathe_toolpath).
 
 ## Cut round the model as it really is
 

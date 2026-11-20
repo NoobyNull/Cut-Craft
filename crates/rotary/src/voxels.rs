@@ -194,6 +194,34 @@ impl Voxels {
         cut.len()
     }
 
+    /// Calls `f` with the middle of every solid cell, in the part's frame.
+    pub fn each_solid(&self, mut f: impl FnMut(DVec3)) {
+        for i in 0..self.dims[0] {
+            for j in 0..self.dims[1] {
+                for w in 0..self.words {
+                    let mut bits = self.bits[self.word(i, j, w)];
+                    while bits != 0 {
+                        let b = bits.trailing_zeros() as usize;
+                        bits &= bits - 1;
+                        f(self.centre(i, j, w * 64 + b));
+                    }
+                }
+            }
+        }
+    }
+
+    /// The corners of the box the cells fill, in the part's frame.
+    #[must_use]
+    #[expect(clippy::cast_precision_loss, reason = "cell counts are small")]
+    pub fn bounds(&self) -> (DVec3, DVec3) {
+        let size = DVec3::new(
+            self.dims[0] as f64,
+            self.dims[1] as f64,
+            self.dims[2] as f64,
+        ) * self.cell;
+        (self.origin, self.origin + size)
+    }
+
     /// How many solid cells `cutter` would cut standing at `pose`, counting no further than
     /// `enough`: whether the bit there cuts anything at all, or only air.
     #[must_use]

@@ -3,8 +3,12 @@
 use super::*;
 use eframe::egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
 
+#[path = "accessibility_tests.rs"]
+mod accessibility;
 #[path = "web_api_tests.rs"]
 mod web_api;
+
+mod how_to;
 
 /// Drives the real UI headlessly, one frame per call, with synthetic pointer input.
 #[test]

@@ -15,11 +15,14 @@
 //! - [`Voxels`]: the material as a fine grid of solid cells, cut by the bit moving exactly
 //!   as a file moves it (A, along, across and height all together), and its surface for
 //!   drawing.
+//! - [`Head`] and [`Clearance`]: the holder above the bit, and the chuck and tailstock, kept
+//!   clear of what is left of the material.
 //! - [`gcode::read`]: a rotary file read back as the bit's poses, for the simulator to cut
 //!   exactly what the machine will.
 //! - [`Replay`]: a file played back into the material over the machine's own time, to be
 //!   shown turning as it is cut, and moved back and forth.
 
+mod clearance;
 mod cutter;
 mod frame;
 pub mod gcode;
@@ -28,6 +31,7 @@ mod replay;
 mod stock;
 mod voxels;
 
+pub use clearance::{Clearance, Head};
 pub use cutter::Cutter;
 pub use frame::{Pose, angle, to_machine, to_part};
 pub use mesh::Mesh;

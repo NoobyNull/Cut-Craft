@@ -180,7 +180,7 @@ pub fn editor(ui: &mut egui::Ui, tool: &mut Tool) -> bool {
             ui.weak("Give the tool a diameter to see it drawn");
             ui.label("Diameter");
         });
-        return length(ui, &mut tool.diameter, tool.units);
+        return length(ui, "Diameter", &mut tool.diameter, tool.units);
     };
     let width = (ui.available_width() - 1.0)
         .floor()
@@ -466,8 +466,13 @@ fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) 
         changed |= on_left(ui, view, height, pointing, |ui| {
             ui.weak(caption)
                 .on_hover_hint("The angle across the point, from one side to the other");
-            ui.add(Number::new(&mut tool.angle).range(1.0..=179.0).suffix("°"))
-                .changed()
+            ui.add(
+                Number::new(&mut tool.angle)
+                    .range(1.0..=179.0)
+                    .suffix("°")
+                    .name(caption),
+            )
+            .changed()
         });
     }
     if tool.shape == ToolShape::RadiusedEndMill {
@@ -476,7 +481,7 @@ fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) 
         changed |= on_left(ui, view, 0.0, pointing, |ui| {
             ui.weak("Corner radius")
                 .on_hover_hint("How rounded the bit's bottom corners are");
-            length(ui, &mut tool.tip_radius, units)
+            length(ui, "Corner radius", &mut tool.tip_radius, units)
         });
     }
     if matches!(tool.shape, ToolShape::BallNose | ToolShape::EndMill) {
@@ -486,8 +491,13 @@ fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) 
             ui.weak("Taper angle").on_hover_hint(
                 "For a tapered bit, how far each side leans from straight; 0 for straight",
             );
-            ui.add(Number::new(&mut tool.taper).range(0.0..=45.0).suffix("°"))
-                .changed()
+            ui.add(
+                Number::new(&mut tool.taper)
+                    .range(0.0..=45.0)
+                    .suffix("°")
+                    .name("Taper angle"),
+            )
+            .changed()
         });
     }
     changed
@@ -516,7 +526,7 @@ fn labelled(
         ui.spacing_mut().item_spacing.y = 2.0;
         ui.weak(caption).on_hover_hint(hint);
         ui.horizontal(|ui| {
-            changed = length(ui, value, units);
+            changed = length(ui, caption, value, units);
             if !set {
                 ui.colored_label(ui.visuals().warn_fg_color, "not set")
                     .on_hover_hint(hint);

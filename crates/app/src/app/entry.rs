@@ -249,7 +249,8 @@ fn sizes(
                         Number::new(&mut settings.helix_diameter)
                             .range(10.0..=400.0)
                             .speed(1.0)
-                            .suffix(" %"),
+                            .suffix(" %")
+                            .name("Helix diameter"),
                     );
                     ui.weak(units.length(diameter * settings.helix_diameter / 100.0, 1));
                 });
@@ -258,6 +259,7 @@ fn sizes(
                     .on_hover_hint("How steeply it goes down, from level");
                 ui.add(
                     Number::new(&mut settings.helix_angle)
+                        .name("Helix angle")
                         .range(0.1..=45.0)
                         .speed(0.1)
                         .suffix("°"),
@@ -269,6 +271,7 @@ fn sizes(
                     .on_hover_hint("How steeply each leg goes down, from level");
                 ui.add(
                     Number::new(&mut settings.zigzag_angle)
+                        .name("Zig-zag angle")
                         .range(0.1..=45.0)
                         .speed(0.1)
                         .suffix("°"),
@@ -278,7 +281,11 @@ fn sizes(
                     "How many legs to go down a pass in; there and back is two, and an odd \
                      number is made even so the bit ends where it began",
                 );
-                ui.add(Number::new(&mut settings.zigzag_passes).range(1..=100));
+                ui.add(
+                    Number::new(&mut settings.zigzag_passes)
+                        .range(1..=100)
+                        .name("Passes"),
+                );
                 ui.end_row();
                 ui.label("Each leg");
                 ui.label(units.length(leg(settings, pass_depth), 1));
@@ -287,7 +294,7 @@ fn sizes(
             EntryMode::Ramp => {
                 ui.label("Distance")
                     .on_hover_hint("How far along the cut it takes to go down a pass");
-                super::tabs::length(ui, &mut settings.ramp_distance, units);
+                super::tabs::length(ui, "Ramp distance", &mut settings.ramp_distance, units);
                 ui.end_row();
                 ui.label("Angle");
                 ui.label(format!(
