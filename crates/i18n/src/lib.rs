@@ -433,6 +433,58 @@ start-whats-new = Neu in v{ $version }
         assert_eq!(count(3), "3 toolpaths");
     }
 
+    /// Every language pack in the source (`language-packs/<code>/`) reads with no problems,
+    /// has only keys English has, and its `addon.toml` names it as a language pack for that
+    /// code.
+    #[test]
+    fn every_pack_in_the_source_reads_and_matches_english() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../language-packs");
+        let mut packs = 0;
+        for entry in std::fs::read_dir(&root).unwrap().flatten() {
+            let folder = entry.path();
+            if !folder.is_dir() {
+                continue;
+            }
+            packs += 1;
+            let code = entry.file_name().to_string_lossy().into_owned();
+            let manifest = std::fs::read_to_string(folder.join("addon.toml"))
+                .unwrap_or_else(|e| panic!("{code}: addon.toml: {e}"));
+            for line in [
+                format!("id = \"language-{}\"", code.to_ascii_lowercase()),
+                "kind = \"language\"".to_owned(),
+                format!("language = \"{code}\""),
+            ] {
+                assert!(
+                    manifest.lines().any(|l| l.trim() == line),
+                    "{code}/addon.toml needs: {line}"
+                );
+            }
+            let mut files: Vec<(String, String)> = std::fs::read_dir(&folder)
+                .unwrap()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|x| x == "ftl"))
+                .map(|p| {
+                    let name = p.file_name().unwrap().to_string_lossy().into_owned();
+                    (name, std::fs::read_to_string(&p).unwrap())
+                })
+                .collect();
+            files.sort();
+            let borrowed: Vec<(&str, &str)> = files
+                .iter()
+                .map(|(n, t)| (n.as_str(), t.as_str()))
+                .collect();
+            let (pack, problems) = Catalogue::parse(&code, &borrowed);
+            assert!(problems.is_empty(), "{code}: {}", problems.join("\n"));
+            let unknown: Vec<&String> = pack.keys().iter().filter(|k| !english().has(k)).collect();
+            assert!(
+                unknown.is_empty(),
+                "{code}: keys English doesn't have: {unknown:?}"
+            );
+        }
+        assert_ne!(packs, 0, "no packs found in {}", root.display());
+    }
+
     #[test]
     fn coverage_counts_english_keys_a_pack_has() {
         let (done, total) = german().coverage();

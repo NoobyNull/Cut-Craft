@@ -5,7 +5,7 @@ use super::{CutCraftApp, Screen, egui};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::Change;
 use cut_craft_i18n::tr;
-use cut_craft_web_api::{Answer, ApiError, Call, Pending, Server, State};
+use cut_craft_web_api::{Answer, ApiError, Call, Pending, Pick, Server, State};
 use cut_craft_web_api::{job, openapi};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -189,6 +189,31 @@ impl CutCraftApp {
             | Call::Export { .. }
             | Call::NewJob { .. }
             | Call::Open { .. } => self.web_start_now(ctx, call),
+            Call::Select {
+                pick: Pick::Component { component },
+                add,
+            } => {
+                self.job_needed()?;
+                let id = job::pick_component(&self.doc, component)?;
+                // as a click in the Components panel: picks it alone, or adds it
+                if *add {
+                    self.doc.selected_components.insert(id);
+                } else {
+                    self.doc.selected_components = [id].into();
+                }
+                let count = self.doc.selected_components.len();
+                self.status.set_message(&components_message(count));
+                Ok(json!({
+                    "selection": self.doc.selection.iter().map(|v| v.0).collect::<Vec<_>>(),
+                    "components": self
+                        .doc
+                        .selected_components
+                        .iter()
+                        .map(|v| v.0)
+                        .collect::<Vec<_>>(),
+                    "message": self.status.message,
+                }))
+            }
             Call::Select { pick, add } => {
                 self.job_needed()?;
                 let mut ids = if *add {
@@ -315,6 +340,14 @@ impl CutCraftApp {
     /// one Undo step, with no form.
     fn web_run(&mut self, command: &str, given: &Value) -> Answer {
         self.job_needed()?;
+        // a call naming a component works on it as if it were picked in the window, so the
+        // settings it leaves out are that component's own, not those of the one picked
+        if let Some(id) = given.get("component").and_then(Value::as_u64) {
+            let id = cut_craft_core::document::EntityId(id);
+            if self.doc.components.contains_key(&id) {
+                self.doc.selected_components = [id].into();
+            }
+        }
         let params = job::run_params(&self.registry, &self.doc, command, given)?;
         cut_craft_bug_report::logs::step(&format!("Web API ran {command}"));
         let vectors: BTreeSet<_> = self.doc.vectors.keys().copied().collect();
@@ -332,6 +365,14 @@ impl CutCraftApp {
             "added_toolpaths": added(&mut self.doc.toolpaths.keys(), &toolpaths),
             "selection": self.doc.selection.iter().map(|v| v.0).collect::<Vec<_>>(),
         }))
+    }
+}
+
+/// The status bar's note after a call picks a component.
+fn components_message(count: usize) -> String {
+    match count {
+        1 => "1 component selected (Web API)".into(),
+        n => format!("{n} components selected (Web API)"),
     }
 }
 

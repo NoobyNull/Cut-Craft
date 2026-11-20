@@ -119,6 +119,7 @@ impl CutCraftApp {
             busy: None,
             wait_before_showing: crate::busy::SHOW_AFTER,
             addons: crate::addons::Addons::new(None),
+            language_packs: None,
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             machines_unsaved: false,
@@ -2133,6 +2134,7 @@ impl CutCraftApp {
                     left: None,
                     library: None,
                     holding: m.holding(),
+                    rotary: m.has_rotary().then_some(m.rotary_axis),
                 });
         limits.left = Some(self.options.confirmations.left());
         limits

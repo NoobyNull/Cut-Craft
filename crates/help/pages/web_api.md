@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-20
-see-also: updates
+see-also: updates, smooth_selected_components, component_properties
 ---
 
 # Web API
@@ -99,9 +99,20 @@ the header `Authorization: Bearer <token>`. Calls that send settings use POST wi
   `by` is `ids` (with `"ids": [3, 4]`), `layer`, `name` (a part's name), `inside`
   (with `x1`, `y1`, `x2`, `y2`), `all`, `open`, `closed` or `none`. Add `"add": true` to
   keep what was picked already. Vectors on hidden or locked layers are never picked.
+- **POST select** `{"by": "component", "component": "Prop"}`: picks one part of the 3D
+  model (a component) by its name, or by its id (`"component": 4`), as clicking it in the
+  Components panel does. **GET state** lists each component's id and name. The component
+  tools ([Smooth](help:smooth_selected_components), Emboss, Scale Z and the rest) then
+  change only that component. Add `"add": true` to keep the components picked already. If
+  two components share a name, the call asks for the id instead. Picking a component leaves
+  the picked vectors as they are.
 - **POST run** `{"command": "draw_circle", "params": {"radius": 10}}`: runs a tool with
   these settings straight away, with no form. Settings left out are what its form starts
   with; a misspelt setting is refused with the names there are.
+  A tool that works on one component, such as Component Properties with
+  `"params": {"component": 4, "visible": false}`, picks that component first, as
+  right-clicking it in the window does: settings left out stay as they are on that
+  component.
 - **POST invoke** `{"action": "undo"}`: presses a button or menu item. A greyed-out one is
   refused. Exit cannot be pressed from the Web API. An item that opens a file window waits
   for you to pick a file in Cut Craft.
