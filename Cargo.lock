@@ -536,7 +536,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-3d-finishing-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-3d-pencil-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-3d-roughing-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "glam",
@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-activate-sheet"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-add-draft"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-add-layer"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -593,7 +593,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-add-sheet"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -602,7 +602,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-add-zero-plane"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -611,14 +611,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-align"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-array-copy"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "glam",
@@ -628,7 +628,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-array-copy-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-auto-layout-text"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-bake-components"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-bitmap-properties"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-celtic-weave"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -674,7 +674,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-chamfer-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-circular-copy"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "glam",
@@ -693,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-close-extend-vector"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -702,7 +702,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-close-with-line"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -711,7 +711,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-component-boundary"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-component-properties"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -729,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-construction-lines"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "glam",
@@ -740,14 +740,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-convert-span"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-convert-text-to-curves"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-copy-along-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "glam",
@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-copy-to-other-side"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -776,7 +776,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-copy-toolpath-to-sheet"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-create-component-from-bitmap"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -795,7 +795,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-create-component-from-visible-model"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -804,7 +804,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-create-fillets"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -813,7 +813,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-create-shape"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-two-rail-sweep",
  "cut-craft-core",
@@ -824,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-crop-bitmap"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -833,7 +833,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-cross-section"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -842,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-cut-vector"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -851,7 +851,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-decorative-relief"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-vector-texture",
  "cut-craft-core",
@@ -863,14 +863,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-delete-component"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -879,7 +879,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-items"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-delete-component",
  "cmd-delete-layer",
@@ -892,7 +892,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-layer"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -901,7 +901,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-level"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -910,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-point"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -919,7 +919,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-sheet"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -937,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-dimensions"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-distort-object"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-document-variables"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-drag-knife-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-arc"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -984,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-circle"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -993,7 +993,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-curve"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-ellipse"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-freehand"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-polygon"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1029,7 +1029,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-polyline"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1038,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-rectangle"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-star"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1056,7 +1056,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-text"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-drill-bank-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-drilling-toolpath",
  "cut-craft-core",
@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-drilling-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1085,7 +1085,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-duplicate-component"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-duplicate-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1103,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-edit-picture"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1112,7 +1112,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-embellish"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "image",
@@ -1123,7 +1123,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-emboss"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1132,7 +1132,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-engrave-part-names"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "fmt-cut-list",
@@ -1143,7 +1143,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-extrude-and-weave"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-two-rail-sweep",
  "cut-craft-core",
@@ -1153,7 +1153,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-fit-curves-to-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1162,7 +1162,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-fluting-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1171,7 +1171,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-group"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-group-components"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1190,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-group-properties"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1199,7 +1199,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-import-toolpaths"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1209,7 +1209,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-inlay-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1218,7 +1218,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-insert-level"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1227,7 +1227,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-insert-point"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1236,7 +1236,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-interactive-vector-trim"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-join-vectors",
  "cut-craft-core",
@@ -1246,7 +1246,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-job-setup"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-materials",
  "cut-craft-core",
@@ -1257,7 +1257,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-join-close-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-close-extend-vector",
  "cut-craft-core",
@@ -1267,7 +1267,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-join-open-ends"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-join-close-vectors",
  "cut-craft-core",
@@ -1278,7 +1278,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-join-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1287,7 +1287,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-keep-out-zones"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-keyhole-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1306,7 +1306,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-laser-cut-fill-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-laser-picture-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-laser-cut-fill-toolpath",
  "cut-craft-core",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-layer-properties"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1334,7 +1334,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-level-clipping"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1343,7 +1343,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-level-properties"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1352,7 +1352,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-make-start-point"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1361,7 +1361,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-material-setup"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-job-setup",
  "cmd-scale-model-z-height",
@@ -1373,7 +1373,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-materials"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1382,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-merge-visible-layers"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1391,7 +1391,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-merged-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-mirror"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1410,7 +1410,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-moulding-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1420,7 +1420,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-move"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1429,7 +1429,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-move-node"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1438,7 +1438,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-move-nodes"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1447,7 +1447,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-move-to-layer"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1456,7 +1456,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-move-to-level"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1465,7 +1465,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-name-part"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "fmt-cut-list",
@@ -1475,7 +1475,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-nest-parts"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1484,7 +1484,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-notes"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1494,7 +1494,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-offset-model"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1503,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-offset-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1512,7 +1512,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-orientate-3d-model"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "fmt-import-stl",
@@ -1524,14 +1524,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-overlap-intersect"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-photo-vcarve-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1540,7 +1540,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-plate-production"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-draw-text",
  "cut-craft-core",
@@ -1551,7 +1551,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-pocket-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1561,7 +1561,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-prism-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1570,7 +1570,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-profile-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-quick-engrave-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1588,7 +1588,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-quick-trace"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-trace-bitmap",
  "cut-craft-core",
@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-relief-from-photo"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1607,7 +1607,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-reorder-component"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-reorder-layer"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1625,7 +1625,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-reorder-level"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1634,7 +1634,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-reorder-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1644,7 +1644,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-replace-below"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1653,7 +1653,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-reset-inside-selected-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1662,7 +1662,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-reset-outside-selected-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1671,7 +1671,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-reverse-direction"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1680,7 +1680,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-rotary-lathe-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "cut-craft-rotary",
@@ -1690,7 +1690,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-rotary-machining-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "cut-craft-rotary",
@@ -1700,7 +1700,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-rotate"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1709,7 +1709,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-rounding-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1718,7 +1718,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-scale-model-z-height"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1727,7 +1727,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-sculpt"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "fmt-export-as-3d-clipart",
@@ -1738,7 +1738,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-segment-3d-model"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "fmt-import-stl",
@@ -1748,14 +1748,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-select"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-select-layer-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1764,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-send-to-sheet"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1773,7 +1773,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-set-current-layer"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1782,7 +1782,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-set-size"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1791,7 +1791,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-sheet-properties"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1801,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-show-hide"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-component-properties",
  "cmd-layer-properties",
@@ -1814,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-sketch-carving-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1823,7 +1823,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-slice"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1832,14 +1832,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-smooth-point"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-smooth-selected-components"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-space-horizontally"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1857,7 +1857,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-space-vertically"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1866,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-split"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1875,14 +1875,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-subtract-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-surfacing-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1892,7 +1892,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-swap-sides"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1901,7 +1901,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-text-on-a-curve"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1911,7 +1911,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-texture-area"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1920,7 +1920,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-texture-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1929,7 +1929,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-thread-milling-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1938,7 +1938,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-toolpath-group"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1947,7 +1947,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-toolpath-properties"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1957,7 +1957,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-toolpath-tiling"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1966,7 +1966,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-trace-bitmap"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1975,7 +1975,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-trim-objects"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1984,7 +1984,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-turn-and-spin"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -1993,7 +1993,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-two-rail-sweep"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -2002,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-ungroup"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "serde",
@@ -2011,7 +2011,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-ungroup-components"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -2020,7 +2020,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-vcarve-engrave-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -2030,7 +2030,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-vcarve-inlay-toolpath"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-vcarve-engrave-toolpath",
  "cut-craft-core",
@@ -2040,7 +2040,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-vector-boundary"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -2049,14 +2049,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-vector-selector"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-vector-texture"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -2066,7 +2066,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-vector-unwrapper"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-two-rail-sweep",
  "cut-craft-core",
@@ -2076,7 +2076,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-vector-validator"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -2086,14 +2086,14 @@ dependencies = [
 
 [[package]]
 name = "cmd-weld-vectors"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-wrapped-fluting-layout"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -2102,7 +2102,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-wrapped-spiral-layout"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-wrapped-fluting-layout",
  "cut-craft-core",
@@ -2308,7 +2308,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "cut-craft"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "cmd-3d-finishing-toolpath",
@@ -2530,7 +2530,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-bug-report"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -2545,7 +2545,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-content-pack"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2554,7 +2554,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-core"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "base64 0.21.7",
  "cut-craft-core",
@@ -2573,7 +2573,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-depth"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -2583,14 +2583,14 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-help"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "tantivy",
 ]
 
 [[package]]
 name = "cut-craft-i18n"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "fluent-bundle",
  "fluent-syntax",
@@ -2599,7 +2599,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-machines"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "cut-craft-bug-report",
@@ -2614,7 +2614,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-post"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "cut-craft-core",
@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-rotary"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "cmd-rotary-machining-toolpath",
@@ -2633,7 +2633,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-scripting"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-draw-circle",
  "cut-craft-core",
@@ -2645,7 +2645,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-tool-database"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-bug-report",
  "cut-craft-core",
@@ -2656,7 +2656,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-updater"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "flate2",
  "log",
@@ -2674,7 +2674,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-vtdb"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "rusqlite",
@@ -2682,7 +2682,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-web-api"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "getrandom 0.3.4",
@@ -2696,7 +2696,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-window-owner"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "log",
  "raw-window-handle",
@@ -3453,7 +3453,7 @@ dependencies = [
 
 [[package]]
 name = "fmt-create-job-sheet"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "base64 0.21.7",
  "cmd-scale-model-z-height",
@@ -3466,14 +3466,14 @@ dependencies = [
 
 [[package]]
 name = "fmt-cut-list"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "fmt-export-as-3d-clipart"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "serde",
@@ -3482,7 +3482,7 @@ dependencies = [
 
 [[package]]
 name = "fmt-export-as-grayscale-bitmap"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "image",
@@ -3490,7 +3490,7 @@ dependencies = [
 
 [[package]]
 name = "fmt-export-as-stl"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "schemars",
@@ -3499,7 +3499,7 @@ dependencies = [
 
 [[package]]
 name = "fmt-export-dxf"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "dxf",
@@ -3508,21 +3508,21 @@ dependencies = [
 
 [[package]]
 name = "fmt-export-pdf"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "fmt-export-svg"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "fmt-import-bitmap"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "image",
@@ -3531,14 +3531,14 @@ dependencies = [
 
 [[package]]
 name = "fmt-import-crv3d"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "fmt-import-dxf"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "dxf",
@@ -3546,14 +3546,14 @@ dependencies = [
 
 [[package]]
 name = "fmt-import-stl"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
 ]
 
 [[package]]
 name = "fmt-import-svg"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "fmt-export-svg",
@@ -3563,7 +3563,7 @@ dependencies = [
 
 [[package]]
 name = "fmt-part-labels"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cut-craft-core",
  "fmt-cut-list",
@@ -5483,7 +5483,7 @@ dependencies = [
 
 [[package]]
 name = "pack-staunton-chess"
-version = "0.6.18"
+version = "0.7.0"
 dependencies = [
  "cmd-3d-finishing-toolpath",
  "cmd-3d-roughing-toolpath",
