@@ -229,7 +229,7 @@ fn stretch(text: &str) -> Cow<'_, str> {
         }
     }
     // German and French run about 40% longer than English: pad to that
-    let long = text.chars().count() * 14 / 10;
+    let long = (text.chars().count() * 14).div_ceil(10);
     while out.chars().count() < long {
         out.push('~');
     }
@@ -448,14 +448,32 @@ start-whats-new = Neu in v{ $version }
             let plain = english().words(key, None).unwrap();
             let long = p.words(key, None).unwrap();
             assert!(long.starts_with('[') && long.ends_with(']'), "{long}");
+            // a value put in (shown here as `{$name}`) is the same in every language, so only
+            // the words around it are measured
+            // the words, and the values put in, in order
+            let split = |s: &str| {
+                let (mut kept, mut values) = (String::new(), Vec::new());
+                let mut rest = s;
+                while let Some(start) = rest.find("{$") {
+                    kept.push_str(&rest[..start]);
+                    let end = rest[start..]
+                        .find('}')
+                        .map_or(rest.len(), |e| start + e + 1);
+                    values.push(rest[start..end].to_owned());
+                    rest = &rest[end..];
+                }
+                kept.push_str(rest);
+                (kept.chars().count(), values)
+            };
+            // measured inside the brackets the test language wraps its words in
+            let inner = &long['['.len_utf8()..long.len() - ']'.len_utf8()];
+            let ((short, plain_values), (stretched, long_values)) = (split(&plain), split(inner));
+            assert_eq!(plain_values, long_values, "{plain} -> {long}: its values");
             if plain.chars().filter(|c| c.is_alphabetic()).count() > 4 {
-                assert!(
-                    long.chars().count() * 10 >= plain.chars().count() * 13,
-                    "{plain} -> {long}"
-                );
+                assert!(stretched * 10 >= short * 13, "{plain} -> {long}");
             }
         }
-        assert_eq!(stretch("Cut 12 mm"), "Çüüt 12 mm~~");
+        assert_eq!(stretch("Cut 12 mm"), "Çüüt 12 mm~~~");
     }
 
     // One test switches languages, so the others never see another language mid-test.

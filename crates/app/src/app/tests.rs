@@ -170,6 +170,15 @@ fn about_lists_the_github_contributors() {
     h.frame(vec![]);
     assert!(h.text_at("Contributors on GitHub").is_some());
     assert!(h.text_at("NoobyNull").is_some());
+    // a count takes its plural form only as a number
+    assert_eq!(
+        cut_craft_i18n::tr!("about-commits", count = 1_u64),
+        "1 commit"
+    );
+    assert_eq!(
+        cut_craft_i18n::tr!("about-commits", count = 2_u64),
+        "2 commits"
+    );
 }
 
 #[test]
@@ -13270,7 +13279,7 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
         "no tick: a cut past the material is warned of on Calculate"
     );
     assert!(
-        h.text_at(super::tabs::LOOSE).is_none(),
+        h.text_at(&super::tabs::loose()).is_none(),
         "6 mm deep holds the part"
     );
     h.app.form.as_mut().unwrap().params["depth"] = thickness.into();
@@ -13280,7 +13289,7 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
     let over = h.form_heading("Profile Toolpath") + egui::vec2(0.0, 200.0);
     let add = scroll_above_foot(&mut h, over, "Add Tabs");
     assert!(
-        h.text_at(super::tabs::LOOSE).is_some(),
+        h.text_at(&super::tabs::loose()).is_some(),
         "right through, no tabs"
     );
     // made like that, the status bar warns too
@@ -13294,7 +13303,7 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
     h.click(add, Modifiers::NONE);
     h.frame(vec![]);
     assert_eq!(h.app.form.as_ref().unwrap().params["tabs"], "flat");
-    assert!(h.text_at(super::tabs::LOOSE).is_none());
+    assert!(h.text_at(&super::tabs::loose()).is_none());
 }
 
 #[test]
