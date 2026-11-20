@@ -1163,6 +1163,12 @@ pub(super) const TIPS: &[Tip] = &[
          catches the part beside it.",
     ),
     tool(
+        Area::Toolpaths,
+        "rotary_lathe_toolpath",
+        "On a rotary job, **Rotary Lathe** spins the material like a lathe: face an end flat, \
+         turn the part round to its outline, or part it off, leaving a small stub to hold it.",
+    ),
+    tool(
         Area::Cutting,
         "materials",
         "In the preview, each toolpath cuts in the colour of the swatch beside it in the toolpath \

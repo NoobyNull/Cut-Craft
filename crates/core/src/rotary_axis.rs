@@ -169,6 +169,56 @@ impl RotaryAxis {
     }
 }
 
+/// What a rotary toolpath keeps the bit's holder clear of besides the material, from the
+/// machine that will cut it (the app fills it in from Machine Configuration as a toolpath is
+/// made; the usual ER20 holder without one, and no chuck or tailstock).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct Surroundings {
+    /// The collet nut and spindle holding the bit.
+    pub holder: crate::collision::Holder,
+    /// How far the chuck reaches along the axis from the job's start, mm.
+    pub chuck: f64,
+    /// How far the tailstock reaches back along the axis from the job's end, mm.
+    pub tailstock: f64,
+}
+
+impl Default for Surroundings {
+    /// The usual holder, and no chuck or tailstock known to keep out of: what a toolpath
+    /// made without a machine (from the web API, or a test) keeps clear of.
+    fn default() -> Self {
+        Self {
+            holder: crate::collision::Holder::default(),
+            chuck: 0.0,
+            tailstock: 0.0,
+        }
+    }
+}
+
+impl Surroundings {
+    /// The machine's holder for `tool` (its own, with a holder per bit) and its rotary's chuck
+    /// and tailstock.
+    #[must_use]
+    pub fn of(
+        tool: &crate::toolpath::Tool,
+        holding: &crate::collision::Holding,
+        axis: &RotaryAxis,
+    ) -> Self {
+        Self {
+            holder: crate::collision::holder_of(tool, holding),
+            chuck: axis.chuck.max(0.0),
+            tailstock: axis.tailstock.max(0.0),
+        }
+    }
+}
+
+/// How far out from the axis the chuck's body is taken to reach, mm, when nothing says: a
+/// 100 mm chuck, the size most hobby rotaries carry (the material's own swing when wider).
+pub const CHUCK_RADIUS: f64 = 50.0;
+
+/// How far out from the axis the tailstock's centre and quill are taken to reach, mm.
+pub const TAILSTOCK_RADIUS: f64 = 20.0;
+
 #[cfg(test)]
 mod tests {
     use super::*;

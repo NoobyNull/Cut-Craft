@@ -1396,6 +1396,55 @@ pub const TOURS: &[Tour] = &[
         ],
     },
     Tour {
+        tool: "rotary_lathe_toolpath",
+        steps: &[
+            Step {
+                caption: "Rotary Lathe spins the material like a lathe while the bit stays over \
+                          the turning axis. Start a **rotary** job: here, a bead in a 60 mm bar.",
+                setup: turned_bead,
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Rotary Lathe** (under 3D Toolpaths).",
+                setup: |app, _| {
+                    app.view = View::TwoD;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:rotary_lathe_toolpath"),
+            },
+            Step {
+                caption: "Pick a square end mill: it leaves a flat face. Its pass depth sets \
+                          each step down, and its stepover the turns along the part.",
+                setup: |app, ctx| app.invoke(ctx, "rotary_lathe_toolpath"),
+                mark: Mark::At("field:tool"),
+            },
+            Step {
+                caption: "Choose what it does: **Face** an end down to a stub, **Turn** the part \
+                          round to its outline, or **Part off** with one groove.",
+                setup: |_, _| {},
+                mark: Mark::At("field:operation"),
+            },
+            Step {
+                caption: "Say where along the part it cuts with **Start** and **End**, measured \
+                          from the chuck end.",
+                setup: |_, _| {},
+                mark: Mark::At("field:start"),
+            },
+            Step {
+                caption: "**Holding stub** is how thick a stub is left on the axis, keeping the \
+                          part joined on until it is cut free.",
+                setup: |_, _| {},
+                mark: Mark::At("field:holding_stub"),
+            },
+            Step {
+                caption: "Press **Calculate**: a turn round the part at each step along it, a \
+                          level at a time, only where there is material.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
         tool: "rounding_toolpath",
         steps: &[
             Step {

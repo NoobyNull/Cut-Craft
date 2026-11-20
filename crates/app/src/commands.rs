@@ -197,6 +197,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_import_toolpaths::ImportToolpaths>();
     r.add::<cmd_quick_trace::QuickTrace>();
     r.add::<cmd_rotary_machining_toolpath::RotaryMachiningToolpath>();
+    r.add::<cmd_rotary_lathe_toolpath::RotaryLatheToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

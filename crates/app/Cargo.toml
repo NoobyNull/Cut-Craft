@@ -60,6 +60,7 @@ fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
 cmd-rotary-machining-toolpath = { path = "../commands/rotary-machining-toolpath" }
+cmd-rotary-lathe-toolpath = { path = "../commands/rotary-lathe-toolpath" }
 cmd-3d-pencil-toolpath = { path = "../commands/3d-pencil-toolpath" }
 cmd-quick-trace = { path = "../commands/quick-trace" }
 cmd-import-toolpaths = { path = "../commands/import-toolpaths" }
