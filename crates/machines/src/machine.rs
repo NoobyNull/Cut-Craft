@@ -42,6 +42,9 @@ pub struct Machine {
     /// A 4th axis (A) turning the material, for rotary jobs (2.5 axes + A): those are saved
     /// through the machine's post that wraps their side round onto A.
     pub rotary: bool,
+    /// Where the 4th axis lies, which way it turns, how fast, and its chuck and tailstock:
+    /// used once [`Self::has_rotary`].
+    pub rotary_axis: cut_craft_core::rotary_axis::RotaryAxis,
     /// Areas of the bed a tool must never pass over in any job (clamps fixed to the bed),
     /// in the machine's millimetres from the job's XY origin, as its G-code is.
     pub keep_out: Vec<Zone>,
