@@ -164,6 +164,7 @@ impl Check {
     /// What it looks for and what that protects against, for a beginner: shown when the
     /// check is pointed at, and at the top of its help.
     #[must_use]
+    #[expect(clippy::too_many_lines, reason = "one sentence per check")]
     pub fn guards(self) -> &'static str {
         match self {
             Self::CanCut => {
