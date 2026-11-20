@@ -290,22 +290,26 @@ pub fn run_outside_gadget(
         cutcraft.set(
             "download",
             scope.create_function(|lua, (url, file_name): (String, String)| {
-                // the answer is made before the file is saved, so running out of memory
-                // after the download cannot leave a saved file the gadget was told failed
-                let answer = lua.create_table_with_capacity(0, 2)?;
-                answer.set(
-                    "path",
-                    outside
-                        .files()
-                        .join(&file_name)
-                        .to_string_lossy()
-                        .into_owned(),
-                )?;
-                answer.set("size", 0)?;
-                let saved = download(outside, &download_agent, &url, &file_name)
+                // the file waits beside its place until the answer is whole, so running out
+                // of memory here cannot leave a saved file the gadget was told failed
+                let staged = download(outside, &download_agent, &url, &file_name)
                     .map_err(mlua::Error::runtime)?;
-                answer.set("size", saved.1)?;
-                Ok(answer)
+                let answer = (|| {
+                    let answer = lua.create_table()?;
+                    answer.set("path", staged.path.to_string_lossy().into_owned())?;
+                    answer.set("size", staged.size)?;
+                    Ok(answer)
+                })();
+                match answer {
+                    Ok(answer) => staged
+                        .publish()
+                        .map(|()| answer)
+                        .map_err(mlua::Error::runtime),
+                    Err(e) => {
+                        staged.discard();
+                        Err(e)
+                    }
+                }
             })?,
         )?;
         let store_table = lua.create_table()?;
@@ -441,14 +445,36 @@ fn save_store(path: &Path, store: &BTreeMap<String, String>) -> Result<(), Strin
 /// Numbers each download's temporary file.
 static NEXT_PART: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Saves `url` as `file_name` in the add-on's `files` folder: written beside it first, and
-/// put in place only once it is whole.
+/// A whole download written beside its place in the `files` folder, not yet put there.
+struct Staged {
+    part: PathBuf,
+    path: PathBuf,
+    size: u64,
+}
+
+impl Staged {
+    /// Puts the file in its place; if that fails, the part file is removed.
+    fn publish(self) -> Result<(), String> {
+        std::fs::rename(&self.part, &self.path).map_err(|e| {
+            let _ = std::fs::remove_file(&self.part);
+            format!("could not save {}: {e}", self.path.display())
+        })
+    }
+
+    /// Drops the part file and leaves anything already in its place as it was.
+    fn discard(self) {
+        let _ = std::fs::remove_file(&self.part);
+    }
+}
+
+/// Fetches `url` for `file_name` in the add-on's `files` folder, written beside it: the
+/// caller puts it in place with [`Staged::publish`] once it is ready.
 fn download(
     outside: &Outside,
     agent: &ureq::Agent,
     url: &str,
     file_name: &str,
-) -> Result<(PathBuf, u64), String> {
+) -> Result<Staged, String> {
     if !plain_file_name(file_name) {
         return Err(format!("\"{file_name}\" is not a plain file name"));
     }
@@ -492,15 +518,13 @@ fn download(
         file.sync_all().map_err(|e| e.to_string())?;
         Ok(total)
     })();
-    let saved = written.and_then(|size| {
-        std::fs::rename(&part, &path)
-            .map(|()| size)
-            .map_err(|e| format!("could not save {file_name}: {e}"))
-    });
-    if saved.is_err() {
-        let _ = std::fs::remove_file(&part);
+    match written {
+        Ok(size) => Ok(Staged { part, path, size }),
+        Err(e) => {
+            let _ = std::fs::remove_file(&part);
+            Err(e)
+        }
     }
-    saved.map(|size| (path, size))
 }
 
 #[cfg(test)]
@@ -834,6 +858,29 @@ mod tests {
         .unwrap();
         let notes = run(&o, "function run() print(cutcraft.store.get('LastReleasedAt'), cutcraft.store.get('none')) end", "").unwrap();
         assert_eq!(notes, vec!["2000\tnil"]);
+    }
+
+    #[test]
+    fn a_download_that_is_not_published_leaves_the_old_file_alone() {
+        let base = server();
+        let o = outside("staged");
+        std::fs::create_dir_all(o.files()).unwrap();
+        std::fs::write(o.files().join("leaf.stl"), "old").unwrap();
+        let staged = download(
+            &o,
+            &agent(Duration::from_secs(10)),
+            &format!("{base}/file"),
+            "leaf.stl",
+        )
+        .unwrap();
+        // the answer for the gadget failed: the new file is dropped
+        staged.discard();
+        assert_eq!(
+            std::fs::read_to_string(o.files().join("leaf.stl")).unwrap(),
+            "old"
+        );
+        let left = std::fs::read_dir(o.files()).unwrap().count();
+        assert_eq!(left, 1, "only the old file is left");
     }
 
     #[test]
