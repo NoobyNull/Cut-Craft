@@ -13,6 +13,8 @@ cut-craft-tool-database = { path = "../tool-database" }
 cut-craft-bug-report = { path = "../bug-report" }
 # Help ▸ Check for Updates
 cut-craft-help.workspace = true
+# every word the app shows, in the language picked, English where a pack has none
+cut-craft-i18n.workspace = true
 cut-craft-updater = { path = "../updater" }
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
