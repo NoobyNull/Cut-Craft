@@ -214,6 +214,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Exit: closes Cut Craft, offering to save your work first",
     ),
     (
+        "setup_material",
+        "Setup Material: sets this job's material: single sided, double sided or rotary, and its size",
+    ),
+    (
         "open_folder",
         "Open: opens a saved job, or a drawing or picture to bring in",
     ),

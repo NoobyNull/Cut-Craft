@@ -36,6 +36,7 @@ mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod send;
+mod setup_material;
 mod shortcuts_page;
 mod surfacing;
 mod tabs;
@@ -331,7 +332,8 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 105] = [
+const BUILT_INS: [&str; 106] = [
+    "setup_material",
     "import_into_shape",
     "try_sample_project",
     "machine_files",
@@ -1114,6 +1116,8 @@ struct OpenForm {
     /// What its last press said that is not a warning ("Already up to date"), with the
     /// settings it was said for: shown while they are unchanged.
     note: Option<(Value, String)>,
+    /// Setup Material: Job Setup showing only the job type and the material's size.
+    brief: bool,
 }
 
 /// See [`CutCraftApp::sketch_areas`].
@@ -1575,6 +1579,9 @@ struct CutCraftApp {
     /// Changes made in the Options window and not applied yet; `None` when it shows the
     /// options as they are. They take effect only on Apply.
     options_draft: Option<crate::options::Options>,
+    /// Options ▸ Job Defaults' job settings as being edited, and why the job they make was
+    /// refused, if it was (kept as typed until it is put right).
+    job_defaults_form: Option<(Value, Option<String>)>,
     /// Close was pressed with changes not applied: the window asks Apply or Discard.
     options_closing: bool,
     /// The Options category shown, by its place in the list.
@@ -3096,7 +3103,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
             app.start_recovery();
-            app.open_given(open);
+            app.open_at_start(open);
             // a crash last time: offer its crash log as a report
             if let Some(crash) =
                 files::config_dir().and_then(|d| cut_craft_bug_report::logs::take_crash(&d))
