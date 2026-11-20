@@ -268,7 +268,8 @@ fn announce(name: &str, unit: &str, field: &egui::Response, [up, down]: [&Presse
     let heard = if unit.is_empty() {
         name.to_owned()
     } else {
-        cut_craft_i18n::tr!("number-box-name", name = name, unit = unit)
+        // both already in the language shown: only joined, as the box shows them side by side
+        format!("{name}, {unit}")
     };
     field.clone().accessible_name(heard);
     for (arrow, key) in [(up, "number-box-increase"), (down, "number-box-decrease")] {

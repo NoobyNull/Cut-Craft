@@ -1841,11 +1841,11 @@ impl CutCraftApp {
                     ui.radio_value(&mut props.relative, true, "Relative");
                 });
                 ui.horizontal(|ui| {
-                    let new_at = if props.relative { "Offset" } else { "Position" };
-                    ui.label(new_at);
+                    ui.label(if props.relative { "Offset" } else { "Position" });
+                    let what = if props.relative { "offset" } else { "position" };
                     crate::form::length_edit(
                         ui,
-                        &format!("New guide {}", new_at.to_lowercase()),
+                        &format!("New guide {what}"),
                         &mut props.new_at,
                         units,
                         f64::NEG_INFINITY,

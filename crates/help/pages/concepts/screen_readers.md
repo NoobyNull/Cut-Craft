@@ -3,7 +3,7 @@ reviewed: 2026-11-20
 see-also: contents, settings
 ---
 
-# Using Cut Craft with a screen reader
+# Screen readers
 
 Cut Craft tells screen readers what is on the screen: the name of each button, box and
 choice, and what it is set to. It works with the screen reader your computer already has:

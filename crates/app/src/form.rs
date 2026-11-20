@@ -1354,8 +1354,8 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
             ui.horizontal(|ui| {
                 ui.label("Turn 180° ÷")
                     .on_hover_hint("Added samples are turned by 180° divided by this; 0 for none");
-                let turns = Number::new(&mut with.div).range(0..=999);
-                ui.add(turns.name("Turn 180° ÷"));
+                let turns = Number::new(&mut with.div).name("Turn 180° ÷");
+                ui.add(turns.range(0..=999));
                 ui.weak(turn_name(with.div));
                 ui.checkbox(&mut with.rev, "Other way (R)")
                     .on_hover_hint("Turn the other way; with no turn, flip LR");

@@ -124,7 +124,7 @@ deletes the selection.
 - **E** edits the selected shape (or Create Shape component) in the tool that made it. Once a Create Shape component has been sculpted, smoothed, embossed or cut back with Replace Below or Reset, it is kept as you left it: E no longer remakes it from its settings, so your hand work is never thrown away
 - Help ▸ Keyboard Shortcuts lists the rest.
 - Using Cut Craft by keyboard or with a screen reader (Narrator, NVDA, Orca, VoiceOver): see
-  [Using Cut Craft with a screen reader](help:screen_readers).
+  [Screen readers](help:screen_readers).
 
 ## Saving and opening jobs
 
