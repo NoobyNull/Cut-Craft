@@ -616,7 +616,8 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                             Number::new(&mut v)
                                 .speed(0.01)
                                 .max_decimals(3)
-                                .suffix(length),
+                                .suffix(length)
+                                .name(format!("Centre line {across}")),
                         )
                         .changed()
                     {
@@ -663,7 +664,8 @@ fn turning(
             .range(0.0..=f64::MAX)
             .speed(10.0)
             .max_decimals(0)
-            .suffix(" °/min"),
+            .suffix(" °/min")
+            .name("A top speed"),
     );
     ui.end_row();
     for (label, value, hint) in [
@@ -681,7 +683,7 @@ fn turning(
         ),
     ] {
         ui.label(label).on_hover_hint(hint);
-        measure(ui, value, per, length);
+        measure(ui, label, value, per, length);
         ui.end_row();
     }
 }
