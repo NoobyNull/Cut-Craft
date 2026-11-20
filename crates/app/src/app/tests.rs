@@ -7864,7 +7864,8 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     h.app.pages.set_pinned(Page::Design, true);
     h.app.invoke(&h.ctx, "help_contents");
     assert_eq!(h.app.info, Some(Info::Help("contents")));
-    // a new window measures itself on its first frame
+    // a new window measures itself on its first frame, and its scroll bar on the next
+    h.frame(vec![]);
     h.frame(vec![]);
     h.frame(vec![]);
     // the window's link, drawn over the Design page's own title and side tab
@@ -13808,6 +13809,45 @@ fn every_label_character_has_a_glyph() {
     );
 }
 
+/// Every character the language packs in the source use has a glyph in Cut Craft's fonts,
+/// so a pack never shows empty boxes (a language whose letters the fonts lack needs a font
+/// added first).
+#[test]
+fn every_language_pack_character_has_a_glyph() {
+    let ctx = egui::Context::default();
+    ctx.set_fonts(super::ui_fonts(None));
+    let _ = headless(ctx.run_ui(RawInput::default(), |_| {}));
+    let font = egui::FontId::proportional(14.0);
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../language-packs");
+    let mut missing = std::collections::BTreeSet::new();
+    for pack in std::fs::read_dir(&root).unwrap().flatten() {
+        for file in std::fs::read_dir(pack.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if file.path().extension().is_none_or(|x| x != "ftl") {
+                continue;
+            }
+            let text = std::fs::read_to_string(file.path()).unwrap();
+            for c in text.chars().filter(|c| !c.is_control()) {
+                if !ctx.fonts_mut(|f| f.has_glyph(&font, c)) {
+                    missing.insert(format!(
+                        "{c} (U+{:04X}) in {}",
+                        u32::from(c),
+                        file.path().display()
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "no glyph for:\n{}",
+        missing.into_iter().collect::<Vec<_>>().join("\n")
+    );
+}
+
 /// The push-pin is drawn, loose and pinned, not left to a font's 📌.
 #[test]
 fn the_pin_buttons_are_drawn_icons() {
@@ -19702,4 +19742,59 @@ fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
     h.frame(vec![]);
     assert!(!h.app.rail_gadgets, "nothing installed: no list");
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_language_pack_picked_in_options_is_used_once_applied() {
+    let addons = std::env::temp_dir().join(format!("cut-craft-language-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&addons);
+    let ru = addons.join("language-ru");
+    std::fs::create_dir_all(&ru).unwrap();
+    std::fs::write(
+        ru.join(cut_craft_updater::addon::MANIFEST),
+        "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\nversion = \"0.1.0\"\n\
+         language = \"ru\"",
+    )
+    .unwrap();
+    std::fs::write(
+        ru.join(cut_craft_updater::addon::RECORD),
+        "{\"repo\":{\"owner\":\"NoobyNull\",\"name\":\"CutCraft-Translations\"},\"tag\":\
+         \"v1.0.0\",\"version\":\"1.0.0\",\"signed\":false}",
+    )
+    .unwrap();
+    std::fs::write(ru.join("menus.ftl"), "menu-file = Файл\n").unwrap();
+    let mut h = Harness::new();
+    h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
+    h.app.options_window = true;
+    h.app.options_goto = Some(crate::options::LANGUAGE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // listed with how much it covers, and marked as not official (unsigned)
+    assert!(h.text_at("Русский").is_some(), "{:?}", h.texts());
+    assert!(h.text_at("⚠ not official").is_some());
+    click_button(&mut h, "Русский");
+    assert_eq!(h.app.edited_options().language.pack, "language-ru");
+    assert_eq!(
+        cut_craft_i18n::tr("menu-file"),
+        "File",
+        "not used before Apply"
+    );
+    h.apply_options();
+    assert_eq!(h.app.options.language.pack, "language-ru");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "Файл");
+    // what the pack lacks stays English
+    assert_eq!(cut_craft_i18n::tr("menu-edit"), "Edit");
+    // back to English, and a pack that has gone leaves English and says so
+    h.app.use_language("");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
+    std::fs::remove_dir_all(&addons).unwrap();
+    h.app.options.language.pack = "language-ru".to_owned();
+    h.app.use_language("language-ru");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
+    assert_eq!(h.app.options.language.pack, "", "Options says English too");
+    assert!(
+        h.app.status.message.contains("not installed"),
+        "{}",
+        h.app.status.message
+    );
 }

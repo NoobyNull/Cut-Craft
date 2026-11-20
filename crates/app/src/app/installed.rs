@@ -14,6 +14,25 @@ impl CutCraftApp {
     pub(super) fn load_addons(&mut self) {
         self.addons = crate::addons::Addons::new(crate::depth::addons_dir());
         self.refresh_installed();
+        let pack = self.options.language.pack.clone();
+        if !pack.is_empty() {
+            self.use_language(&pack);
+        }
+    }
+
+    /// Shows every word in the language pack `pack` (its id; empty for English) from now
+    /// on; one that is gone or will not read leaves English, and the status bar says why.
+    /// Options then says English too, so picking the pack again once it is back is a change
+    /// that Apply uses.
+    pub(super) fn use_language(&mut self, pack: &str) {
+        if let Err(e) = crate::languages::use_chosen(self.addons.dir(), pack) {
+            log::warn!("{e}");
+            self.status.set_message(&e);
+            if self.options.language.pack == pack {
+                self.options.language.pack.clear();
+                self.save_options();
+            }
+        }
     }
 
     /// Reads which add-ons are installed again, and lists them with the gadgets in Gadgets ▸
@@ -23,6 +42,8 @@ impl CutCraftApp {
             .addons
             .dir()
             .map_or_default(crate::addons::installed_tools);
+        // a pack installed or removed shows in Options ▸ Language
+        self.language_packs = None;
         let items = self.installed_items();
         self.menus.set_my_gadgets(&items);
         self.start_menus.set_my_gadgets(&items);
