@@ -7124,7 +7124,11 @@ fn about(ui: &mut egui::Ui) {
     for (login, commits, url) in contributors() {
         ui.horizontal(|ui| {
             ui.hyperlink_to(login, url);
-            ui.weak(tr!("about-commits", count = commits));
+            // a number, so "1 commit" takes its one-form
+            match commits.parse::<u64>() {
+                Ok(count) => ui.weak(tr!("about-commits", count = count)),
+                Err(_) => ui.weak(tr!("about-commits", count = commits)),
+            };
         });
     }
 }
