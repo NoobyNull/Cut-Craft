@@ -66,3 +66,4 @@ job defaults, default job, new job settings, startup settings
 classic startup flow, start page, splash screen, startup screen, welcome screen
 preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated
 filter, filters, narrow down
+language, translation, translate, locale, language pack, russian, german, french, spanish
