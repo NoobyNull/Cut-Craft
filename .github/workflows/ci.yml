@@ -1,17 +1,56 @@
 # The pre-commit gate (.githooks/pre-commit) on Linux, Windows and macOS, each on its own (one
 # failing stops none of the others), so all three keep building and passing their tests, and
 # on pull requests the help rule: a changed tool's help page changes too (scripts/help-touched).
+#
+# Tests run by area (.config/test-suites.toml). A pull request runs only the suites its changes
+# reach, and the suites those affect; Format and Clippy always cover the whole workspace. Main,
+# the nightly run and a run by hand run every suite, and check every test is in one of them.
 name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  schedule:
+    # every night, every suite on every system: 09:00 UTC is 1 or 2 AM in California
+    - cron: "0 9 * * *"
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  suites:
+    name: Pick test suites
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.pick.outputs.run }}
+      command: ${{ steps.pick.outputs.command }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # a pull request is checked out as a merge commit: its first parent is main
+          fetch-depth: 2
+
+      - name: Tests of the suite picker
+        run: scripts/test-pick-suites
+
+      - name: Suites this change needs
+        id: pick
+        run: |
+          if [[ "${{ github.event_name }}" == pull_request ]]; then
+            scripts/pick-suites --github HEAD^1
+          else
+            scripts/pick-suites --github --all
+          fi
+
   check:
+    # the required checks keep their names and always run: with no suite to run, the Tests step
+    # says so and passes, so no pull request waits on a check that never started
+    needs: suites
+    # even when picking failed, so a broken picker fails the required checks instead of
+    # skipping them (a skipped required check lets a pull request merge)
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
@@ -20,6 +59,12 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: The suites were picked
+        if: needs.suites.result != 'success'
+        run: |
+          echo "Picking the test suites failed: see the Pick test suites job."
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           # a pull request is checked out as a merge commit: its first parent is main, so the
@@ -65,4 +110,16 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Tests
-        run: cargo nextest run --workspace --all-features --no-tests=pass --no-fail-fast
+        if: needs.suites.outputs.run == 'true'
+        shell: bash
+        env:
+          COMMAND: ${{ needs.suites.outputs.command }}
+        run: eval "$COMMAND"
+
+      - name: No tests needed
+        if: needs.suites.outputs.run != 'true'
+        run: echo "Nothing this change touches has tests; Format and Clippy passed."
+
+      - name: Every test is in a suite
+        if: github.event_name != 'pull_request' && runner.os == 'Linux'
+        run: scripts/pick-suites --check

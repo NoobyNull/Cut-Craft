@@ -56,6 +56,13 @@ fn keep(ctx: &egui::Context, name: &str, rect: egui::Rect) -> bool {
     }
 }
 
+/// Lets go of where `name` was last drawn, so [`get`] finds it again only once it is drawn
+/// anew (the How-to suite, before each tour step).
+#[cfg(test)]
+pub fn forget(ctx: &egui::Context, name: &str) {
+    ctx.data_mut(|d| d.remove::<egui::Rect>(id(name)));
+}
+
 /// Where `name` was last drawn.
 pub fn get(ctx: &egui::Context, name: &str) -> Option<egui::Rect> {
     ctx.data(|d| d.get_temp::<egui::Rect>(id(name)))

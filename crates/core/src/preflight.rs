@@ -566,6 +566,25 @@ fn rotary_setup(
             ),
         ));
     }
+    if let Some(limit) = axis.limit() {
+        let limit = limit / 360.0 * circumference;
+        for t in toolpaths {
+            if let Some(span) = too_far(t, &round, limit, circumference) {
+                // a cable, hose or limit switch on the rotary: asked every time, like a crash
+                found.push(Finding::must_ask(
+                    Check::RotarySetup,
+                    format!(
+                        "\"{}\" turns A {:.0}° in one go without lifting, further than A can \
+                         turn allows ({:.0}° each way): the file turns A past that limit. In \
+                         Machine Configuration's Rotary, allow more turns or let A turn freely",
+                        t.name,
+                        span / circumference * 360.0,
+                        limit / circumference * 360.0,
+                    ),
+                ));
+            }
+        }
+    }
     let marked = toolpaths.iter().any(|t| {
         t.params
             .get("registration_mark")
@@ -620,6 +639,35 @@ fn rotary_setup(
             ),
         ));
     }
+}
+
+/// How far round the first pass of `t` (its cuts between lifts) goes that no whole turn
+/// keeps within `limit` either way of A=0, all flat round the material: `None` when every
+/// pass fits.
+fn too_far(
+    t: &Toolpath,
+    round: &impl Fn(DVec3) -> f64,
+    limit: f64,
+    circumference: f64,
+) -> Option<f64> {
+    let fits = |low: f64, high: f64| {
+        // the fewest whole turns that bring its low end within the limit
+        let turns = ((-limit - low) / circumference - 1e-9).ceil();
+        high + turns * circumference <= limit + 1e-6
+    };
+    let mut pass: Option<(f64, f64)> = None;
+    for m in t.moves.windows(2) {
+        if m[1].kind == MoveKind::Rapid {
+            if let Some((low, high)) = pass.take().filter(|&(l, h)| !fits(l, h)) {
+                return Some(high - low);
+            }
+            continue;
+        }
+        let (a, b) = (round(m[0].to), round(m[1].to));
+        let (low, high) = pass.unwrap_or((a, a));
+        pass = Some((low.min(a).min(b), high.max(a).max(b)));
+    }
+    pass.filter(|&(l, h)| !fits(l, h)).map(|(l, h)| h - l)
 }
 
 /// Whether the material has room to turn on the rotary: below it down to the spoilboard
@@ -1502,6 +1550,27 @@ mod tests {
         };
         rings.params = serde_json::json!({"registration_mark": true});
         assert_eq!(said(&limited, &rings), Vec::<String>::new());
+        // half a turn each way, but every ring goes a whole turn without lifting: asked about
+        // before saving, naming the toolpath, but never refused
+        let half = Limits {
+            rotary: Some(RotaryAxis {
+                centre_set: true,
+                turning: Turning::Unwind,
+                turns: 0.5,
+                ..RotaryAxis::default()
+            }),
+            ..Limits::default()
+        };
+        let found = said(&half, &rings);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("\"Rings\" turns A 360°"), "{found:?}");
+        assert!(found[0].contains("(180° each way)"), "{found:?}");
+        assert!(
+            check(&doc, &[&rings], &half)
+                .iter()
+                .any(|f| f.check == Check::RotarySetup && f.severity == Severity::MustAsk),
+            "asked about on every save, never refused"
+        );
     }
 
     #[test]

@@ -82,6 +82,31 @@ a key with no English words. Text already in the code before the move is listed 
 `crates/app/i18n/hard-coded-baseline.txt`; when you move one into Fluent, delete its line
 (the check fails on a stale line too, so the list only shrinks).
 
+## Test suites by area
+
+Every test belongs to exactly one suite, by area of the app: Core geometry, Toolpath
+generation, 3D modelling, Drawing and editing, Display and preview, Files, Help, How-to tours,
+App, and Whole-app workflows. `.config/test-suites.toml` says which packages and app modules
+each owns, and which other suites a change to it can break ("affects"). On a pull request the
+**check** jobs run only the suites the changed files reach, plus the suites those affect;
+Format and Clippy always cover the whole workspace. Main, the nightly run and a run by hand run
+every suite, and check that no test is left out of one. See what a change needs, or run it:
+
+    scripts/pick-suites origin/main          # which suites, why, and the command
+    scripts/pick-suites origin/main --run    # run them
+    scripts/pick-suites --suite how-to --run # one suite
+    scripts/pick-suites --list               # what each suite owns
+
+A file the suites file does not know runs every suite, to be safe. When you add a crate or an
+app module that belongs to an area, add it to that suite (a new `cmd-*` tool lands in Drawing
+and editing unless a suite before it names it). A new area gets its own suite there, with the
+packages and modules it owns moved into it and the suites it affects listed; run
+`scripts/test-pick-suites` and `scripts/pick-suites --check` after.
+
+The **How-to tours** suite plays every tool's tour (`crates/app/src/help_tours.rs`) in the app
+headless, step by step, and fails when a step can no longer find the button, field or tab it
+rings, so the help pictures never point at something that moved.
+
 ## Pull request titles and versions
 
 Cut Craft's version is **0.MINOR.PATCH**, and it only changes when a release is cut, one step at

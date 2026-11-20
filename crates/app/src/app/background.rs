@@ -146,7 +146,7 @@ impl CutCraftApp {
         let what = self.doing(id);
         let kind = self.job_kind(id);
         let registry = Arc::clone(&self.registry);
-        let (command, settings) = (id.to_owned(), params.clone());
+        let (command, settings) = (id.to_owned(), self.with_surroundings(id, params));
         let (id, params) = (id.to_owned(), params.clone());
         self.in_background(
             &what,
@@ -182,8 +182,12 @@ impl CutCraftApp {
             .toolpaths
             .get(&toolpath)
             .map_or_else(|| self.doing(id), |t| format!("Calculating {}", t.name));
-        let (registry, doc, settings) =
-            (Arc::clone(&self.registry), self.doc.clone(), params.clone());
+        // the machine's holder, chuck and tailstock as they are now, for a rotary toolpath
+        let (registry, doc, settings) = (
+            Arc::clone(&self.registry),
+            self.doc.clone(),
+            self.with_surroundings(id, params),
+        );
         let kind = self.job_kind(id);
         let settings_kept = params.clone();
         let id = id.to_owned();
@@ -231,11 +235,18 @@ impl CutCraftApp {
             ),
             _ => format!("Recalculating {} toolpaths", ids.len()),
         };
-        let (registry, doc, done) = (
+        let (registry, mut doc, done) = (
             Arc::clone(&self.registry),
             self.doc.clone(),
             done.to_owned(),
         );
+        // rotary toolpaths keep clear of the machine's holder, chuck and tailstock as they
+        // are now, not as they were when first made
+        for id in &ids {
+            if let Some(t) = doc.toolpaths.get_mut(id) {
+                t.params = self.with_surroundings(&t.strategy, &t.params);
+            }
+        }
         self.in_background(
             &what,
             "recalculate",

@@ -464,7 +464,7 @@ fn into_shape_settings(
             "The gap kept between the drawing and the shape's edge, so a cut \
                          inside the shape does not run into its border. 0 lets it touch",
         );
-        crate::form::length_edit(ui, margin, units, 0.0);
+        crate::form::length_edit(ui, "Margin", margin, units, 0.0);
     });
 }
 
@@ -509,7 +509,7 @@ fn along_line_settings(
             "How far in from each end of the line the drawing starts and stops. 0 runs it \
              the line's whole length",
         );
-        crate::form::length_edit(ui, gap, units, 0.0);
+        crate::form::length_edit(ui, "Gap at each end", gap, units, 0.0);
     });
 }
 

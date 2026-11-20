@@ -55,6 +55,8 @@ a CNC machine cuts them with.
 - [First-Time Setup](help:first_time_setup): your machine and usual material, asked again.
 - [Confirmation Choices](help:confirmation_choices): what happens when something looks
   wrong.
+- [Screen readers](help:screen_readers): using Cut Craft by keyboard or with a screen
+  reader (Narrator, NVDA, Orca, VoiceOver).
 
 ## Windows that open beside Cut Craft
 

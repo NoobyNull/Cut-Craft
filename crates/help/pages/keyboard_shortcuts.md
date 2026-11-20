@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-20
-see-also: find_tool, view_2d, settings, getting_started
+see-also: find_tool, view_2d, settings, getting_started, screen_readers
 ---
 
 # Keyboard shortcuts
@@ -48,6 +48,8 @@ deletes the selection.
   [Snapping Options](help:snapping).
 - **Ctrl+Q** starts Quick Engrave, except on a Mac, where **⌘Q** quits: set it another key
   if you use it.
+- Using Cut Craft by keyboard alone, or with a screen reader (Narrator, NVDA, Orca,
+  VoiceOver)? See [Screen readers](help:screen_readers).
 
 ## Changing a shortcut
 

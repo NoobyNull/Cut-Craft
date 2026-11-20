@@ -2216,6 +2216,30 @@ impl CutCraftApp {
             .map_or_default(cut_craft_machines::Machine::holding)
     }
 
+    /// `params` for command `id` with what a rotary toolpath must keep its holder clear of
+    /// (the active machine's holder for its bit, chuck and tailstock) filled in; other
+    /// commands' as they are.
+    pub(super) fn with_surroundings(&self, id: &str, params: &Value) -> Value {
+        use cut_craft_core::rotary_axis::{RotaryAxis, Surroundings};
+        if !ROTARY_SURROUNDED.contains(&id) {
+            return params.clone();
+        }
+        let tool: cut_craft_core::toolpath::Tool = params
+            .get("tool")
+            .and_then(|t| serde_json::from_value(t.clone()).ok())
+            .unwrap_or_default();
+        let machine = self.machines.active();
+        let axis = machine
+            .filter(|m| m.has_rotary())
+            .map_or_else(RotaryAxis::default, |m| m.rotary_axis);
+        let around = Surroundings::of(&tool, &self.holding(), &axis);
+        let mut params = params.clone();
+        if let (Value::Object(map), Ok(around)) = (&mut params, serde_json::to_value(around)) {
+            map.insert("surroundings".into(), around);
+        }
+        params
+    }
+
     /// The active machine's tool changer slots (empty without one), for `[T]`.
     pub(super) fn slots(&self) -> Vec<Option<String>> {
         self.machines.active().map_or_default(|m| m.slots.clone())
@@ -4123,7 +4147,8 @@ impl CutCraftApp {
     /// Runs a command and records it for undo.
     pub(super) fn apply(&mut self, id: &str, params: &Value) -> Result<(), String> {
         self.crossings_allowed(id, params)?;
-        let change = super::background::command_change(&self.registry, &self.doc, id, params);
+        let surrounded = self.with_surroundings(id, params);
+        let change = super::background::command_change(&self.registry, &self.doc, id, &surrounded);
         let depth = self.history.undo_depth();
         self.applied(id, params, change)?;
         // made in the toolpath list beside an open form: noted, for its Cancel to make again
@@ -6083,6 +6108,7 @@ impl CutCraftApp {
                 "surfacing_toolpath",
                 "3d_pencil_toolpath",
                 "rotary_machining_toolpath",
+                "rotary_lathe_toolpath",
             ]
             .contains(&open.id);
         let suggested = open.suggested.clone();
@@ -7564,6 +7590,9 @@ pub(super) fn texture_area_note(
         "Nothing selected: the whole material will be textured".to_owned()
     })
 }
+
+/// Rotary toolpaths, given the machine's holder, chuck and tailstock to keep clear of.
+const ROTARY_SURROUNDED: [&str; 2] = ["rotary_machining_toolpath", "rotary_lathe_toolpath"];
 
 /// The toolpaths that take only closed vectors from the selection.
 const CLOSED_ONLY_TOOLPATHS: [&str; 9] = [
