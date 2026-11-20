@@ -42,6 +42,10 @@ pub struct Layer {
     /// embellishments): `{"command": .., "params": .., "paths": ..}`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub made: Option<serde_json::Value>,
+    /// The colour its vectors are drawn in, red, green, blue; none draws them in the
+    /// usual vector colour (added with keeping an imported drawing's layers)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<[u8; 3]>,
 }
 
 impl Layer {
@@ -53,6 +57,7 @@ impl Layer {
             locked: false,
             material: String::new(),
             made: None,
+            colour: None,
         }
     }
 }
@@ -997,6 +1002,20 @@ impl Document {
         })
     }
 
+    /// The shown components a model tool changes: the picked ones when any are picked (as in
+    /// the Components panel), else every shown one.
+    pub fn components_to_change(&self) -> impl Iterator<Item = (&EntityId, &Component)> {
+        let picked: Vec<EntityId> = self
+            .selected_components
+            .iter()
+            .filter(|id| self.components.contains_key(id))
+            .copied()
+            .collect();
+        self.components
+            .iter()
+            .filter(move |(id, k)| k.visible && (picked.is_empty() || picked.contains(id)))
+    }
+
     /// The component a "selected component" command works on: the last one picked, else the
     /// newest.
     pub fn chosen_component(&self) -> Option<EntityId> {
@@ -1226,6 +1245,11 @@ impl Document {
             .get(&id)
             .copied()
             .unwrap_or_else(|| self.layers[0].id)
+    }
+
+    /// The colour vector `id` is drawn in: its layer's own, or none for the usual one.
+    pub fn colour_of(&self, id: EntityId) -> Option<[u8; 3]> {
+        self.layer(self.layer_of(id)).and_then(|l| l.colour)
     }
 
     /// Every item of a kind, by id, with whether it is shown.
