@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-18
+reviewed: 2026-11-20
 see-also: relief_from_photo, open_gadgets_folder, settings
 ---
 
