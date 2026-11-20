@@ -119,6 +119,7 @@ impl CutCraftApp {
             busy: None,
             wait_before_showing: crate::busy::SHOW_AFTER,
             addons: crate::addons::Addons::new(None),
+            language_packs: None,
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             machines_unsaved: false,
@@ -273,6 +274,7 @@ impl CutCraftApp {
             playback_redraw: super::PLAYBACK_REDRAW,
             playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
+            turning: None,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
             rotating: false,
@@ -1785,7 +1787,7 @@ impl CutCraftApp {
             return Err(why);
         }
         let post = match form.post.as_deref() {
-            Some(name) => self.posts.load(name),
+            Some(name) => self.posts.load(name).map(|p| self.on_machine(p)),
             None => self.output_post(),
         }?;
         let changer = self.has_tool_changer();
@@ -2072,6 +2074,20 @@ impl CutCraftApp {
     /// for a cylinder along X and X for one along Y. Without a machine, Cut Craft's
     /// `FluidNC` post for this kind of job.
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
+        self.output_post_as_written().map(|p| self.on_machine(p))
+    }
+
+    /// `post` writing for the active machine: a rotary post winds A as its rotary allows
+    /// (Machine Configuration ▸ Rotary), with its backlash and top speed.
+    fn on_machine(&self, post: cut_craft_post::Post) -> cut_craft_post::Post {
+        match self.machines.active() {
+            Some(m) if m.has_rotary() && post.wraps().is_some() => post.with_rotary(m.rotary_axis),
+            _ => post,
+        }
+    }
+
+    /// [`Self::output_post`] as its file is written, not yet told the machine's rotary.
+    fn output_post_as_written(&self) -> Result<cut_craft_post::Post, String> {
         use cut_craft_core::document::Along;
         if let Some(why) = self.no_a_axis() {
             return Err(why);
@@ -2198,6 +2214,30 @@ impl CutCraftApp {
         self.machines
             .active()
             .map_or_default(cut_craft_machines::Machine::holding)
+    }
+
+    /// `params` for command `id` with what a rotary toolpath must keep its holder clear of
+    /// (the active machine's holder for its bit, chuck and tailstock) filled in; other
+    /// commands' as they are.
+    pub(super) fn with_surroundings(&self, id: &str, params: &Value) -> Value {
+        use cut_craft_core::rotary_axis::{RotaryAxis, Surroundings};
+        if !ROTARY_SURROUNDED.contains(&id) {
+            return params.clone();
+        }
+        let tool: cut_craft_core::toolpath::Tool = params
+            .get("tool")
+            .and_then(|t| serde_json::from_value(t.clone()).ok())
+            .unwrap_or_default();
+        let machine = self.machines.active();
+        let axis = machine
+            .filter(|m| m.has_rotary())
+            .map_or_else(RotaryAxis::default, |m| m.rotary_axis);
+        let around = Surroundings::of(&tool, &self.holding(), &axis);
+        let mut params = params.clone();
+        if let (Value::Object(map), Ok(around)) = (&mut params, serde_json::to_value(around)) {
+            map.insert("surroundings".into(), around);
+        }
+        params
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.
@@ -4107,7 +4147,8 @@ impl CutCraftApp {
     /// Runs a command and records it for undo.
     pub(super) fn apply(&mut self, id: &str, params: &Value) -> Result<(), String> {
         self.crossings_allowed(id, params)?;
-        let change = super::background::command_change(&self.registry, &self.doc, id, params);
+        let surrounded = self.with_surroundings(id, params);
+        let change = super::background::command_change(&self.registry, &self.doc, id, &surrounded);
         let depth = self.history.undo_depth();
         self.applied(id, params, change)?;
         // made in the toolpath list beside an open form: noted, for its Cancel to make again
@@ -6059,9 +6100,17 @@ impl CutCraftApp {
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         // a form that only uses its tool's shape (Relief from Photo) has no passes to cut
         let cuts = open.id != "relief_from_photo";
-        // a surfacing toolpath flattens all it covers, and 3D Pencil has its own bits that
-        // finished before and follows the model: no rest machining or vector selector
-        let extras = cuts && !["surfacing_toolpath", "3d_pencil_toolpath"].contains(&open.id);
+        // a surfacing toolpath flattens all it covers, 3D Pencil has its own bits that
+        // finished before and follows the model, and 4-Axis Rotary Machining goes all the way
+        // round: no rest machining or vector selector
+        let extras = cuts
+            && ![
+                "surfacing_toolpath",
+                "3d_pencil_toolpath",
+                "rotary_machining_toolpath",
+                "rotary_lathe_toolpath",
+            ]
+            .contains(&open.id);
         let suggested = open.suggested.clone();
         let form_id = open.id;
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
@@ -7541,6 +7590,9 @@ pub(super) fn texture_area_note(
         "Nothing selected: the whole material will be textured".to_owned()
     })
 }
+
+/// Rotary toolpaths, given the machine's holder, chuck and tailstock to keep clear of.
+const ROTARY_SURROUNDED: [&str; 2] = ["rotary_machining_toolpath", "rotary_lathe_toolpath"];
 
 /// The toolpaths that take only closed vectors from the selection.
 const CLOSED_ONLY_TOOLPATHS: [&str; 9] = [

@@ -1351,16 +1351,109 @@ pub const TOURS: &[Tour] = &[
         ],
     },
     Tour {
+        tool: "rotary_machining_toolpath",
+        steps: &[
+            Step {
+                caption: "4-Axis Rotary Machining finishes a model all the way round a turning \
+                          cylinder. Start a **rotary** job and place a full 3D model in it: \
+                          here, a turned bead.",
+                setup: turned_bead,
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **4-Axis Rotary Machining** (under 3D \
+                          Toolpaths).",
+                setup: |app, _| {
+                    app.view = View::TwoD;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:rotary_machining_toolpath"),
+            },
+            Step {
+                caption: "Pick a ball nose bit: its finishing stepover spaces the rings round \
+                          the part.",
+                setup: |app, ctx| app.invoke(ctx, "rotary_machining_toolpath"),
+                mark: Mark::At("field:tool"),
+            },
+            Step {
+                caption: "Say where along the part the rings **Start** and **End**, clear of \
+                          the chuck and the tailstock.",
+                setup: |_, _| {},
+                mark: Mark::At("field:start"),
+            },
+            Step {
+                caption: "Tick **Registration mark** for a small notch at A=0, so the part can \
+                          go back exactly as it was if the job is started again.",
+                setup: |_, _| {},
+                mark: Mark::At("field:registration_mark"),
+            },
+            Step {
+                caption: "Press **Calculate** to make the toolpath: a ring round the part at \
+                          each step along it.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
+        tool: "rotary_lathe_toolpath",
+        steps: &[
+            Step {
+                caption: "Rotary Lathe spins the material like a lathe while the bit stays over \
+                          the turning axis. Start a **rotary** job: here, a bead in a 60 mm bar.",
+                setup: turned_bead,
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Toolpaths page, press **Rotary Lathe** (under 3D Toolpaths).",
+                setup: |app, _| {
+                    app.view = View::TwoD;
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
+                mark: Mark::At("tool:rotary_lathe_toolpath"),
+            },
+            Step {
+                caption: "Pick a square end mill: it leaves a flat face. Its pass depth sets \
+                          each step down, and its stepover the turns along the part.",
+                setup: |app, ctx| app.invoke(ctx, "rotary_lathe_toolpath"),
+                mark: Mark::At("field:tool"),
+            },
+            Step {
+                caption: "Choose what it does: **Face** an end down to a stub, **Turn** the part \
+                          round to its outline, or **Part off** with one groove.",
+                setup: |_, _| {},
+                mark: Mark::At("field:operation"),
+            },
+            Step {
+                caption: "Say where along the part it cuts with **Start** and **End**, measured \
+                          from the chuck end.",
+                setup: |_, _| {},
+                mark: Mark::At("field:start"),
+            },
+            Step {
+                caption: "**Holding stub** is how thick a stub is left on the axis, keeping the \
+                          part joined on until it is cut free.",
+                setup: |_, _| {},
+                mark: Mark::At("field:holding_stub"),
+            },
+            Step {
+                caption: "Press **Calculate**: a turn round the part at each step along it, a \
+                          level at a time, only where there is material.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Calculate"),
+            },
+        ],
+    },
+    Tour {
         tool: "rounding_toolpath",
         steps: &[
             Step {
                 caption: "Rounding turns a square or round blank into a smooth cylinder on a \
-                          rotary axis. Start a **rotary** job in Job Setup, with the finished \
-                          diameter.",
+                          rotary axis. Press **Setup Material** and pick **Rotary**, with the \
+                          finished diameter.",
                 setup: |app, ctx| {
-                    app.form = None;
-                    app.reset_job();
-                    app.invoke(ctx, "new");
+                    fresh_job(app, ctx);
+                    app.invoke(ctx, "setup_material");
                     set(app, "job_type", "rotary".into());
                 },
                 mark: Mark::At("field:job_type"),
@@ -2042,6 +2135,25 @@ pub const TOURS: &[Tour] = &[
                 caption: "Under **Import**, press **Import Vectors** and pick the file. A DXF asks which units it was drawn in.",
                 setup: |app, _| on_design_tab(app, 4),
                 mark: Mark::At("tool:import_vectors"),
+            },
+            Step {
+                caption: "Each layer of a DXF comes in as a layer of your job, with its name and colour. Open the **Layers** tab to see them, show or hide them, or change their colour.",
+                setup: |app, ctx| {
+                    use cut_craft_core::Importer as _;
+                    const SHEET: &[u8] = include_bytes!(
+                        "../../formats/import-dxf/tests/fixtures/nesting-sheet-layers.dxf"
+                    );
+                    let sheet = fmt_import_dxf::ImportDxf::import(&app.doc, SHEET);
+                    app.record(sheet, "Imported");
+                    app.design_tab = super::DESIGN_TABS
+                        .iter()
+                        .position(|&t| t == "Layers")
+                        .unwrap_or(0);
+                    // the whole drawing in view, then nothing selected, so its colours show
+                    app.invoke(ctx, "zoom_selected");
+                    app.doc.selection.clear();
+                },
+                mark: Mark::None,
             },
         ],
     },
@@ -4941,6 +5053,29 @@ fn dome(app: &mut CutCraftApp, ctx: &egui::Context) {
     }
     app.form = None;
     app.doc.selection.clear();
+    app.view = View::ThreeD;
+}
+
+/// A rotary job 60 mm across and 160 mm long along X, holding a turned bead: round, fatter
+/// in the middle, all the way round the axis.
+fn turned_bead(app: &mut CutCraftApp, ctx: &egui::Context) {
+    use cut_craft_core::component::{Combine, Component};
+    use cut_craft_core::document::{Along, Job};
+    fresh_job(app, ctx);
+    let job = Job {
+        clearance: 5.0,
+        ..Job::rotary(160.0, 60.0, Along::X)
+    };
+    let mut change = cut_craft_core::Change::builder(&app.doc);
+    change.set_job(job);
+    app.record(Ok(change.finish()), "Rotary job");
+    let bead = Component::from_fn("Bead", Combine::Add, app.doc.job.area(), 0.5, |p| {
+        let t = p.x / 160.0;
+        Some(18.0 + 12.0 * (std::f64::consts::PI * t).sin().powi(2))
+    });
+    let mut change = cut_craft_core::Change::builder(&app.doc);
+    change.add_new_component(bead);
+    app.record(Ok(change.finish()), "Bead added");
     app.view = View::ThreeD;
 }
 

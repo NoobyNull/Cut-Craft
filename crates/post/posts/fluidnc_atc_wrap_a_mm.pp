@@ -31,6 +31,7 @@ VAR SAFE_Z_HEIGHT = [SAFEZ|A|Z|1.3]
 VAR TOOL_NUMBER = [T|A|T|1.0]
 VAR DWELL_TIME = [DWELL|A|P|1.2]
 VAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]
+VAR ACROSS_POSITION = [ACROSS|C|Y|1.3]
 
 begin HEADER
 "([TP_FILENAME])"
@@ -50,17 +51,17 @@ begin HEADER
 "G93"
 
 begin INITIAL_RAPID_MOVE
-"G0 [X] [Y]"
+"G0 [X] [Y] [ACROSS]"
 "G0 [Z]"
 
 begin RAPID_MOVE
-"G0 [X] [Y] [Z]"
+"G0 [X] [Y] [ACROSS] [Z]"
 
 begin FIRST_FEED_MOVE
-"G1 [X] [Y] [Z] [FI]"
+"G1 [X] [Y] [ACROSS] [Z] [FI]"
 
 begin FEED_MOVE
-"G1 [X] [Y] [Z] [FI]"
+"G1 [X] [Y] [ACROSS] [Z] [FI]"
 
 begin DWELL_MOVE
 "G4 [DWELL]"

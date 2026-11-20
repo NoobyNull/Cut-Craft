@@ -6,6 +6,8 @@ use eframe::egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
 #[path = "web_api_tests.rs"]
 mod web_api;
 
+mod how_to;
+
 /// Drives the real UI headlessly, one frame per call, with synthetic pointer input.
 #[test]
 fn cut_copy_and_paste_vectors() {
@@ -6020,6 +6022,84 @@ fn the_preview_controls_stay_once_it_has_played_to_the_end() {
 }
 
 #[test]
+fn a_rotary_preview_plays_the_file_turning_the_material_with_a_in_step_with_its_controls() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 40.0, Along::X);
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.display.animate_preview = true;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let uncut = {
+        let turning = h.app.turning.as_ref().expect("the file played turning");
+        turning.replay.material().count()
+    };
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // in step with the Preview Control: as far through the file as it is through the job
+    let fraction = |h: &Harness| {
+        let p = h.app.playback.as_ref().unwrap();
+        let r = &h.app.turning.as_ref().unwrap().replay;
+        (p.at() / p.length(), r.at() / r.length())
+    };
+    // playing, it cuts toward the same point each frame, never past it (a busy computer
+    // may leave it a frame behind)
+    let (job, file) = fraction(&h);
+    assert!(
+        job > 0.0 && file > 0.0 && file <= job + 1e-9,
+        "{job} {file}"
+    );
+    h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
+    let caught_up = |h: &mut Harness| {
+        for _ in 0..50 {
+            h.frame(vec![]);
+            let (job, file) = fraction(h);
+            if (job - file).abs() < 1e-9 {
+                return true;
+            }
+        }
+        false
+    };
+    assert!(
+        caught_up(&mut h),
+        "paused, it gets there: {:?}",
+        fraction(&h)
+    );
+    let progress = h.text_at("Progress").expect("a Progress slider");
+    let from = progress + egui::vec2(80.0, 0.0);
+    h.drag(from, from + egui::vec2(200.0, 0.0));
+    assert!(caught_up(&mut h), "dragged, it follows: {:?}", fraction(&h));
+    h.app.playback_speed = 1000.0;
+    h.click(h.text_at("Run").unwrap(), Modifiers::NONE);
+    for _ in 0..600 {
+        if h.app.playback.is_none() {
+            break;
+        }
+        h.frame(vec![]);
+    }
+    // the material catches up a frame's budget at a time (a slow computer takes a few)
+    for _ in 0..200 {
+        h.frame(vec![]);
+        if h.app.turning.as_ref().is_some_and(|t| t.replay.finished()) {
+            break;
+        }
+    }
+    let turning = h.app.turning.as_ref().expect("kept with the controls");
+    assert!(turning.replay.finished(), "played through");
+    assert!(turning.replay.material().count() < uncut, "it cut");
+    h.click(h.text_at("Close").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.turning.is_none(), "gone with the controls");
+    // a flat job plays as before
+    h.app.doc.job = Job::default();
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    assert!(h.app.playback.is_some() && h.app.turning.is_none());
+}
+
+#[test]
 fn a_paused_preview_is_not_rebuilt_for_the_3d_view_every_frame() {
     let mut h = playing_preview();
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
@@ -7929,7 +8009,8 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     h.app.pages.set_pinned(Page::Design, true);
     h.app.invoke(&h.ctx, "help_contents");
     assert_eq!(h.app.info, Some(Info::Help("contents")));
-    // a new window measures itself on its first frame
+    // a new window measures itself on its first frame, and its scroll bar on the next
+    h.frame(vec![]);
     h.frame(vec![]);
     h.frame(vec![]);
     // the window's link, drawn over the Design page's own title and side tab
@@ -8801,6 +8882,7 @@ fn the_log_says_what_a_command_made() {
         group: None,
         drill_bank: None,
         fallbacks: vec![],
+        across: vec![],
     });
     assert_eq!(
         super::background::summary(&c.finish()),
@@ -9368,6 +9450,7 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         group: None,
         drill_bank: None,
         fallbacks: vec![],
+        across: vec![],
     });
     h.app.simulation = Some(m);
     h.app.orbit = view3d::Orbit::TOP;
@@ -13017,6 +13100,7 @@ fn moving_what_a_toolpath_was_made_from_says_it_is_out_of_date() {
         group: None,
         drill_bank: None,
         fallbacks: vec![],
+        across: vec![],
     });
     h.app.record(Ok(c.finish()), "made");
     h.frame(vec![]);
@@ -13873,6 +13957,45 @@ fn every_label_character_has_a_glyph() {
     );
 }
 
+/// Every character the language packs in the source use has a glyph in Cut Craft's fonts,
+/// so a pack never shows empty boxes (a language whose letters the fonts lack needs a font
+/// added first).
+#[test]
+fn every_language_pack_character_has_a_glyph() {
+    let ctx = egui::Context::default();
+    ctx.set_fonts(super::ui_fonts(None));
+    let _ = headless(ctx.run_ui(RawInput::default(), |_| {}));
+    let font = egui::FontId::proportional(14.0);
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../language-packs");
+    let mut missing = std::collections::BTreeSet::new();
+    for pack in std::fs::read_dir(&root).unwrap().flatten() {
+        for file in std::fs::read_dir(pack.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if file.path().extension().is_none_or(|x| x != "ftl") {
+                continue;
+            }
+            let text = std::fs::read_to_string(file.path()).unwrap();
+            for c in text.chars().filter(|c| !c.is_control()) {
+                if !ctx.fonts_mut(|f| f.has_glyph(&font, c)) {
+                    missing.insert(format!(
+                        "{c} (U+{:04X}) in {}",
+                        u32::from(c),
+                        file.path().display()
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "no glyph for:\n{}",
+        missing.into_iter().collect::<Vec<_>>().join("\n")
+    );
+}
+
 /// The push-pin is drawn, loose and pinned, not left to a font's 📌.
 #[test]
 fn the_pin_buttons_are_drawn_icons() {
@@ -14651,6 +14774,7 @@ fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() 
         group: None,
         drill_bank: None,
         fallbacks: vec![],
+        across: vec![],
     });
     h.app.record(Ok(c.finish()), "made");
     h.frame(vec![]);
@@ -19767,4 +19891,59 @@ fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
     h.frame(vec![]);
     assert!(!h.app.rail_gadgets, "nothing installed: no list");
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_language_pack_picked_in_options_is_used_once_applied() {
+    let addons = std::env::temp_dir().join(format!("cut-craft-language-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&addons);
+    let ru = addons.join("language-ru");
+    std::fs::create_dir_all(&ru).unwrap();
+    std::fs::write(
+        ru.join(cut_craft_updater::addon::MANIFEST),
+        "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\nversion = \"0.1.0\"\n\
+         language = \"ru\"",
+    )
+    .unwrap();
+    std::fs::write(
+        ru.join(cut_craft_updater::addon::RECORD),
+        "{\"repo\":{\"owner\":\"NoobyNull\",\"name\":\"CutCraft-Translations\"},\"tag\":\
+         \"v1.0.0\",\"version\":\"1.0.0\",\"signed\":false}",
+    )
+    .unwrap();
+    std::fs::write(ru.join("menus.ftl"), "menu-file = Файл\n").unwrap();
+    let mut h = Harness::new();
+    h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
+    h.app.options_window = true;
+    h.app.options_goto = Some(crate::options::LANGUAGE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // listed with how much it covers, and marked as not official (unsigned)
+    assert!(h.text_at("Русский").is_some(), "{:?}", h.texts());
+    assert!(h.text_at("⚠ not official").is_some());
+    click_button(&mut h, "Русский");
+    assert_eq!(h.app.edited_options().language.pack, "language-ru");
+    assert_eq!(
+        cut_craft_i18n::tr("menu-file"),
+        "File",
+        "not used before Apply"
+    );
+    h.apply_options();
+    assert_eq!(h.app.options.language.pack, "language-ru");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "Файл");
+    // what the pack lacks stays English
+    assert_eq!(cut_craft_i18n::tr("menu-edit"), "Edit");
+    // back to English, and a pack that has gone leaves English and says so
+    h.app.use_language("");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
+    std::fs::remove_dir_all(&addons).unwrap();
+    h.app.options.language.pack = "language-ru".to_owned();
+    h.app.use_language("language-ru");
+    assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
+    assert_eq!(h.app.options.language.pack, "", "Options says English too");
+    assert!(
+        h.app.status.message.contains("not installed"),
+        "{}",
+        h.app.status.message
+    );
 }

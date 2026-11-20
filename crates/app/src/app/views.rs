@@ -3446,6 +3446,26 @@ impl CutCraftApp {
         } else {
             (vec![], Value::Null, None)
         };
+        let on_language = fields
+            .get(self.options_page)
+            .is_some_and(|f| f.key == crate::options::LANGUAGE);
+        if on_language && self.language_packs.is_none() {
+            let dir = self.addons.dir().map(std::path::Path::to_path_buf);
+            self.language_packs = Some(dir.map_or_default(|dir| {
+                crate::languages::installed(&dir)
+                    .into_iter()
+                    .map(|p| {
+                        let percent = crate::languages::coverage(&dir, &p);
+                        (p, percent)
+                    })
+                    .collect()
+            }));
+        } else if !on_language {
+            self.language_packs = None;
+        }
+        let language_packs = self.language_packs.clone().unwrap_or_default();
+        let chosen_language = self.edited_options().language.pack.clone();
+        let mut language_picked = None;
         let capture = self.capture.clone();
         let edited_web_api = self.edited_options().web_api.clone();
         let web_api_state = self.web_api_state().clone();
@@ -3520,6 +3540,14 @@ impl CutCraftApp {
                             materials,
                         );
                     }
+                    if category.key == crate::options::LANGUAGE {
+                        language_picked = super::language_page::show(
+                            ui,
+                            &language_packs,
+                            &chosen_language,
+                            *show_advanced,
+                        );
+                    }
                     if category.key == "web_api" {
                         web_api_pressed =
                             super::web_api::options_section(ui, &web_api_state, &edited_web_api);
@@ -3545,6 +3573,13 @@ impl CutCraftApp {
         // leaving the page stops waiting for a shortcut
         if !on_shortcuts {
             self.capture = None;
+        }
+        if let Some(pack) = language_picked {
+            let mut options = changed
+                .take()
+                .unwrap_or_else(|| self.edited_options().clone());
+            options.language.pack = pack;
+            changed = Some(options);
         }
         // kept until Apply
         if let Some(options) = changed {
@@ -3684,9 +3719,14 @@ impl CutCraftApp {
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
             self.playback_speed = options.toolpaths.preview_speed();
         }
+        let language =
+            (options.language != self.options.language).then(|| options.language.pack.clone());
         options.apply();
         self.options = options;
         self.save_options();
+        if let Some(pack) = language {
+            self.use_language(&pack);
+        }
         // clipping turned on or off: the toolpaths made again with or without it
         if self.sync_machine_keep_out() {
             self.keep_out_changed();
