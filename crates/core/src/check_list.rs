@@ -10,6 +10,8 @@ pub enum Check {
     CanCut,
     /// Toolpaths made from the design as it is now.
     UpToDate,
+    /// The job's Z zero and X0 Y0 were looked at, not only taken from Job Defaults.
+    Zeroing,
     /// The toolpaths fit on the machine's bed.
     Bed,
     /// The toolpaths go no higher and deeper than the Z axis travels.
@@ -101,9 +103,10 @@ impl Phase {
 
 impl Check {
     /// Every check, in the order they are listed.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::CanCut,
         Self::UpToDate,
+        Self::Zeroing,
         Self::Bed,
         Self::ZTravel,
         Self::MachineSpeeds,
@@ -131,6 +134,7 @@ impl Check {
         match self {
             Self::CanCut => "Settings that can cut",
             Self::UpToDate => "Toolpaths up to date",
+            Self::Zeroing => "Zero set where the job says",
             Self::Bed => "Fits on the machine's bed",
             Self::ZTravel => "Fits the Z axis travel",
             Self::MachineSpeeds => "Feeds the machine can reach",
@@ -165,6 +169,12 @@ impl Check {
             Self::UpToDate => {
                 "Each toolpath was made from the design as it is now, so it cuts what you see \
                  and not an older shape"
+            }
+            Self::Zeroing => {
+                "The job says where you zero the bit (Z zero on top of the material or on \
+                 the bed, X0 Y0 at a corner or the middle). When those came from Job Defaults \
+                 and were never looked at for this job, you are asked to check them, so the \
+                 machine does not cut in the air or deep into the bed"
             }
             Self::Bed => {
                 "The toolpaths fit inside the machine's bed, so it does not run into its \
@@ -255,6 +265,7 @@ impl Check {
         match self {
             Self::CanCut => "check_can_cut",
             Self::UpToDate => "check_up_to_date",
+            Self::Zeroing => "check_zeroing",
             Self::Bed => "check_bed",
             Self::ZTravel => "check_z_travel",
             Self::MachineSpeeds => "check_machine_speeds",
@@ -281,7 +292,9 @@ impl Check {
     #[must_use]
     pub fn phase(self) -> Phase {
         match self {
-            Self::Bed | Self::ZTravel | Self::KeepOut | Self::ToolNumbers => Phase::Machine,
+            Self::Zeroing | Self::Bed | Self::ZTravel | Self::KeepOut | Self::ToolNumbers => {
+                Phase::Machine
+            }
             Self::Rapids | Self::AirCutting => Phase::Cutting,
             Self::Collisions => Phase::Collisions,
             _ => Phase::Settings,
