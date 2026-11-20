@@ -166,6 +166,14 @@ const SCENES: [Scene; 48] = [
         app.options_closing = true;
     }),
     ("snapping-not-applied", snapping_not_applied),
+    // Help: Changing settings ▸ Job Defaults
+    ("options-job-defaults", |app, ctx| {
+        (app.form, app.tool_manager, app.materials_window) = (None, None, None);
+        app.options_closing = false;
+        app.options_draft = None;
+        app.open_job_defaults();
+        ctx.set_embed_viewports(true);
+    }),
     // Help: Toolpaths ▸ Pressing Calculate again
     ("calculate-again", calculate_again),
     // Help: Reporting a bug (the details of the computer)

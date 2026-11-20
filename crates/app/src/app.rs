@@ -16,6 +16,8 @@ mod fit_import;
 mod follow;
 mod gcode_view;
 mod guide;
+#[cfg(test)]
+mod hard_coded_text;
 mod help;
 #[cfg(test)]
 mod help_coverage;
@@ -36,6 +38,7 @@ mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod send;
+mod setup_material;
 mod shortcuts_page;
 mod surfacing;
 mod tabs;
@@ -331,7 +334,8 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
-const BUILT_INS: [&str; 105] = [
+const BUILT_INS: [&str; 106] = [
+    "setup_material",
     "import_into_shape",
     "try_sample_project",
     "machine_files",
@@ -691,21 +695,30 @@ const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
 /// Scrolling a view's height divided by this doubles the zoom.
 // ponytail: fixed rate until a preferences dialog exists
 const VIEW_ZOOM_QUARTERS: f32 = 4.0;
-/// The startup tasks: action, label and icon.
-const STARTUP_TASKS: [(&str, &str, &str); 4] = [
-    ("new", "Create a new file", "file/new.png"),
-    (
-        "try_sample_project",
-        "Try a sample project",
-        "drawing/create_vectors/draw_text.png",
-    ),
-    (
-        "new_from_template",
-        "New file from template",
-        "toolpaths/load_toolpath_template.png",
-    ),
-    ("open", "Open an existing file", "file/open.png"),
+/// The start page's tasks: action id and icon. Each one's words are `start-task-` and its id
+/// (`locales/en/start.ftl`).
+const STARTUP_TASKS: [(&str, &str); 4] = [
+    ("new", "file/new.png"),
+    ("try_sample_project", "drawing/create_vectors/draw_text.png"),
+    ("new_from_template", "toolpaths/load_toolpath_template.png"),
+    ("open", "file/open.png"),
 ];
+
+/// A menu's words' key (`locales/en/menus.ftl`): `menu-` and its English name, lower case and
+/// hyphenated, so a menu is still found by its English name.
+pub(crate) fn menu_key(name: &str) -> String {
+    let mut key = String::from("menu-");
+    for word in name
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+    {
+        if !key.ends_with('-') {
+            key.push('-');
+        }
+        key.push_str(&word.to_lowercase());
+    }
+    key
+}
 /// The top bar's split and snapping toggles.
 const TOP_BAR_TOGGLES: [&str; 5] = [
     "split_stacked",
@@ -1076,6 +1089,9 @@ struct OpenForm {
     /// Size's width and height as last shown, to tell which one was typed in.
     shown_size: Option<[f64; 3]>,
     typed_size: [Option<f64>; 3],
+    /// Orientate 3D Model's position X and Y and Depth Below Top as Align in Material last
+    /// showed them: one changed since was typed, and drops that alignment.
+    shown_place: [Option<f64>; 3],
     /// Orientate 3D Model's model as placed, each triangle with whether a cutter from above
     /// cannot reach it: the 3D view shows it whole while the form is open.
     model: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
@@ -1114,6 +1130,8 @@ struct OpenForm {
     /// What its last press said that is not a warning ("Already up to date"), with the
     /// settings it was said for: shown while they are unchanged.
     note: Option<(Value, String)>,
+    /// Setup Material: Job Setup showing only the job type and the material's size.
+    brief: bool,
 }
 
 /// See [`CutCraftApp::sketch_areas`].
@@ -1575,6 +1593,9 @@ struct CutCraftApp {
     /// Changes made in the Options window and not applied yet; `None` when it shows the
     /// options as they are. They take effect only on Apply.
     options_draft: Option<crate::options::Options>,
+    /// Options ▸ Job Defaults' job settings as being edited, and why the job they make was
+    /// refused, if it was (kept as typed until it is put right).
+    job_defaults_form: Option<(Value, Option<String>)>,
     /// Close was pressed with changes not applied: the window asks Apply or Discard.
     options_closing: bool,
     /// The Options category shown, by its place in the list.
@@ -3096,7 +3117,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
             app.start_recovery();
-            app.open_given(open);
+            app.open_at_start(open);
             // a crash last time: offer its crash log as a report
             if let Some(crash) =
                 files::config_dir().and_then(|d| cut_craft_bug_report::logs::take_crash(&d))
