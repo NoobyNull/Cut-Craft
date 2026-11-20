@@ -480,7 +480,7 @@ fn plain(
                                 let inner: Vec<&Field> = inner.iter().collect();
                                 show_within(ui, &inner, value, look, top)
                             }
-                            kind => edit(ui, kind, value, &Value::Null, look),
+                            kind => edit(ui, &section.label, kind, value, &Value::Null, look),
                         })
                         .inner
                     })
@@ -561,7 +561,7 @@ fn grid(
                     _ => Value::Null,
                 };
                 let edited = ui.add_enabled_ui(enabled, |ui| {
-                    edit(ui, &f.kind, &mut params[&f.key], &around, look)
+                    edit(ui, &f.label, &f.kind, &mut params[&f.key], &around, look)
                 });
                 if let Some(help) = &f.help
                     && edited.response.contains_pointer()
@@ -619,15 +619,23 @@ pub fn pointed_at_help(ctx: &egui::Context) -> Option<String> {
 
 /// A number box for a length kept in millimetres, shown and typed in `units` (`15 mm` reads
 /// `0.5906 in` in an inch job, never `15 in`), at least `min`. Written back only when typed or
-/// dragged, so switching units and back never changes it.
-pub fn length_edit(ui: &mut egui::Ui, mm: &mut f64, units: Units, min: f64) -> egui::Response {
+/// dragged, so switching units and back never changes it. `name` is what a screen reader
+/// calls it: its label's words.
+pub fn length_edit(
+    ui: &mut egui::Ui,
+    name: &str,
+    mm: &mut f64,
+    units: Units,
+    min: f64,
+) -> egui::Response {
     let per = units.per();
     let mut shown = *mm / per;
     let response = ui.add(
         Number::new(&mut shown)
             .range(min / per..=f64::INFINITY)
             .speed(0.1 / per)
-            .suffix(format!(" {}", units.suffix())),
+            .suffix(format!(" {}", units.suffix()))
+            .name(name),
     );
     if response.changed() {
         *mm = shown * per;
@@ -708,8 +716,28 @@ pub fn units_chosen(params: &Value) -> Option<Units> {
         .find_map(|u| serde_json::from_value(u.clone()).ok())
 }
 
-/// Edits `value`; `around` holds the fields beside it, for pictures named by them.
-fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look: &Look) -> bool {
+/// Writes `n` into `value` when it `changed`, rounded for a whole number; whether it changed.
+fn store(changed: bool, value: &mut Value, n: f64, integer: bool) -> bool {
+    if changed {
+        *value = if integer {
+            Value::from(round(n))
+        } else {
+            Value::from(n)
+        };
+    }
+    changed
+}
+
+/// Edits `value`; `around` holds the fields beside it, for pictures named by them. `name` is
+/// the setting's label, what a screen reader calls its box.
+fn edit(
+    ui: &mut egui::Ui,
+    name: &str,
+    kind: &Kind,
+    value: &mut Value,
+    around: &Value,
+    look: &Look,
+) -> bool {
     match kind {
         Kind::Number {
             unit,
@@ -734,7 +762,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
                 None => (1.0, None),
             };
             if let (true, Some(lo), Some(hi)) = (*slider, *min, *max) {
-                return slide(ui, lo..=hi, *integer, factor, unit.as_deref(), value);
+                return slide(ui, name, lo..=hi, *integer, factor, unit.as_deref(), value);
             }
             let mut n = value.as_f64().unwrap_or_default() / factor;
             let range = min.map_or(f64::NEG_INFINITY, |m| m / factor)
@@ -748,7 +776,8 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
                 .range(range)
                 .step(step)
                 .speed(speed)
-                .trim_zeros();
+                .trim_zeros()
+                .name(name);
             if step < 0.001 {
                 // a few micrometres in inches: enough places to see them
                 drag = drag.max_decimals(decimals(step) + 1);
@@ -760,17 +789,9 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
             if *integer && factor == 1.0 {
                 drag = drag.fixed_decimals(0);
             }
-            let changed = ui.add(drag).changed();
-            if changed {
-                *value = if *integer {
-                    Value::from(round(n * factor))
-                } else {
-                    Value::from(n * factor)
-                };
-            }
-            changed
+            store(ui.add(drag).changed(), value, n * factor, *integer)
         }
-        Kind::Seed => seed(ui, value),
+        Kind::Seed => seed(ui, name, value),
         Kind::Sequence => sequence(ui, value, around, look),
         Kind::Bool => {
             let mut b = value.as_bool().unwrap_or_default();
@@ -796,7 +817,10 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
         Kind::Choice(options, widget) => choose(ui, options, widget, value, around, look),
         Kind::Material => pick_material(ui, value, look.materials),
         Kind::Group(inner) => ui.vertical(|ui| show(ui, inner, value, look)).inner,
-        Kind::List(item) => ui.vertical(|ui| edit_list(ui, item, value, look)).inner,
+        Kind::List(item) => {
+            ui.vertical(|ui| edit_list(ui, name, item, value, look))
+                .inner
+        }
         Kind::Colour => {
             let mut rgb = [0, 1, 2].map(|i| {
                 value[i]
@@ -1184,7 +1208,7 @@ pub fn nearest_corner(options: &[Choice], at: egui::Vec2) -> Option<&Choice> {
         .map(|(o, _)| o)
 }
 
-fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> bool {
+fn edit_list(ui: &mut egui::Ui, name: &str, item: &Kind, value: &mut Value, look: &Look) -> bool {
     let Some(items) = value.as_array_mut() else {
         return false;
     };
@@ -1192,7 +1216,8 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
     let mut remove = None;
     for (i, it) in items.iter_mut().enumerate() {
         ui.horizontal(|ui| {
-            changed |= edit(ui, item, it, &Value::Null, look);
+            let named = format!("{name} {}", i + 1);
+            changed |= edit(ui, &named, item, it, &Value::Null, look);
             if ui.small_button("×").on_hover_hint("Remove").clicked() {
                 remove = Some(i);
             }
@@ -1211,9 +1236,11 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
 }
 
 /// A seed's number, and a New variation button that steps it on.
-fn seed(ui: &mut egui::Ui, value: &mut Value) -> bool {
+fn seed(ui: &mut egui::Ui, name: &str, value: &mut Value) -> bool {
     let mut n = value.as_u64().unwrap_or_default();
-    let mut changed = ui.add(Number::new(&mut n).range(0..=u32::MAX)).changed();
+    let mut changed = ui
+        .add(Number::new(&mut n).range(0..=u32::MAX).name(name))
+        .changed();
     if ui
         .button("New variation")
         .on_hover_hint("Another design with the same settings")
@@ -1327,7 +1354,8 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
             ui.horizontal(|ui| {
                 ui.label("Turn 180° ÷")
                     .on_hover_hint("Added samples are turned by 180° divided by this; 0 for none");
-                ui.add(Number::new(&mut with.div).range(0..=999));
+                let turns = Number::new(&mut with.div).name("Turn 180° ÷");
+                ui.add(turns.range(0..=999));
                 ui.weak(turn_name(with.div));
                 ui.checkbox(&mut with.rev, "Other way (R)")
                     .on_hover_hint("Turn the other way; with no turn, flip LR");
@@ -1493,6 +1521,7 @@ fn sample_button(
 /// setting).
 fn slide(
     ui: &mut egui::Ui,
+    name: &str,
     range: std::ops::RangeInclusive<f64>,
     integer: bool,
     factor: f64,
@@ -1509,8 +1538,8 @@ fn slide(
             if integer && factor == 1.0 {
                 slider = slider.integer();
             }
-            let slid = ui.add(slider).changed();
-            let mut number = Number::new(&mut n).range(shown);
+            let slid = ui.add(slider).accessible_name(name).changed();
+            let mut number = Number::new(&mut n).range(shown).name(name);
             if integer && factor == 1.0 {
                 number = number.fixed_decimals(0);
             }
