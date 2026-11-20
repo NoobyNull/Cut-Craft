@@ -41,6 +41,14 @@ It fails only on gaps not listed in `crates/app/help/coverage-baseline.txt`. Whe
 gap, delete its line there. The Help coverage workflow keeps one GitHub issue (label
 `help-coverage`) listing every gap still open.
 
+## Rotary tests
+
+Rotary work (the turning axis, the rotary toolpaths, the posts that write A, and the
+`cut-craft-rotary` crate that knows where the material and the model are in space) has its own
+suite. Run it after any change that touches rotary:
+
+    cargo nextest run --workspace --profile rotary
+
 ## Words the app shows
 
 Every word the app shows lives in a Fluent file under `crates/i18n/locales/en/`, one file per

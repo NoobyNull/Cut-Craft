@@ -353,6 +353,7 @@ fn checks_before_cutting_say_where_an_entry_went_down_another_way() {
         group: None,
         drill_bank: None,
         fallbacks,
+        across: vec![],
     };
     let toolpath = |fallbacks| Toolpath {
         name: "Pocket 1".into(),
@@ -376,6 +377,7 @@ fn checks_before_cutting_say_where_an_entry_went_down_another_way() {
         group: None,
         drill_bank: None,
         fallbacks,
+        across: vec![],
     };
     let none = problems(&doc, &toolpath(vec![]));
     assert!(

@@ -1363,6 +1363,17 @@ impl CutCraftApp {
         let start = (self.simulation.clone())
             .filter(|m| !fresh && m.lies_on(&self.doc.job))
             .map_or_else(|| self.fresh_material(), |m| m.including(grid.area));
+        // on a rotary job, the file's own moves turning the material as well, carrying on
+        // from what the toolpaths before these cut when the preview does
+        let carries_on = (self.simulation.as_ref()).is_some_and(|m| !fresh && m.lies_on(&job));
+        let making = self.turning_making(
+            if carries_on {
+                earlier.iter().map(|(_, t)| t.clone()).collect()
+            } else {
+                vec![]
+            },
+            list.clone(),
+        );
         // each move as long as the Toolpath Summary times it
         let motion = self.motion();
         let revision = self.history.revision();
@@ -1390,14 +1401,16 @@ impl CutCraftApp {
                 };
                 let playback = cut_craft_core::playback::Playback::planned(start, &list, &motion)
                     .marked(&marks);
-                (playback, collided)
+                let turning = making.map(super::turning::Making::make);
+                (playback, collided, turning)
             },
-            move |app, (playback, collided)| {
+            move |app, (playback, collided, turning)| {
                 if let Some(hit) = super::background::collision_note(&collided) {
                     app.status.set_message(&hit);
                 }
                 app.collisions = collided;
                 app.playback = Some(playback);
+                app.turning = turning;
                 app.kept_playback = None;
                 app.playback_revision = revision;
                 app.simulation = None;
@@ -1425,6 +1438,7 @@ impl CutCraftApp {
         self.drop_preview_of_old_block();
         let Some(playback) = self.playback.as_mut() else {
             self.playback_goal = None;
+            self.follow_turning(ctx);
             return;
         };
         // a slow frame does not send the tool further on the next
@@ -1458,6 +1472,7 @@ impl CutCraftApp {
         if playback.finished() {
             self.finish_playback();
         }
+        self.follow_turning(ctx);
     }
 
     /// Once the job has changed (an edit, a recalculation, Undo), a preview's moves are old:
@@ -3724,6 +3739,10 @@ impl CutCraftApp {
         mesh
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one frame of the 3D view, in drawing order"
+    )]
     pub(super) fn paint_3d(&mut self, ui: &egui::Ui, area: egui::Rect) {
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         let shown = self.display;
@@ -3777,7 +3796,14 @@ impl CutCraftApp {
                     && f.model_whole
                     && f.params["model_type"] == "full"
             });
-        let wrap = wrap_for(&job, shown.auto_wrapping || turned, previewing, &surface);
+        // a rotary job's preview as the machine runs it is always shown round its axis
+        let spinning = self.turning.is_some() && job.rotary.is_some();
+        let wrap = wrap_for(
+            &job,
+            shown.auto_wrapping || turned || spinning,
+            previewing,
+            &surface,
+        );
         let look = view3d::Look { wrap, ..look };
         // the modeling plane a model being imported sits on, under the material so it shows
         // round it and through what the material leaves open
@@ -3803,7 +3829,9 @@ impl CutCraftApp {
             .is_some()
             .then(|| painter.add(egui::Shape::Noop));
         let (mut surface_draw, mut model_draw, mut ghost_draw) = (None, None, None);
-        if slot.is_some() {
+        if spinning {
+            surface_draw = self.paint_turning(ui, area, &camera, &look, slot.is_some());
+        } else if slot.is_some() {
             let geometry = self.surface_geometry(ui.ctx(), look.wrap, look.sides);
             let at = cut_craft_core::glam::DVec3::ZERO;
             surface_draw = Some(view3d::gpu::Draw::new(

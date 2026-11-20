@@ -285,10 +285,57 @@ impl Flip {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Rotary {
+    /// How far across the material is, straight up through the axis at A=0: a round blank's
+    /// diameter, a square's side, a board's thickness. The unrolled sheet goes round a
+    /// cylinder this size.
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub diameter: f64,
     /// The direction of the cylinder's axis; the other direction goes round it
     pub along: Along,
+    /// The material's shape across the axis: round, square, or a flat board
+    #[serde(default)]
+    pub blank: Blank,
+}
+
+/// The shape of the material held on the rotary, across its axis.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case", tag = "shape")]
+pub enum Blank {
+    /// A round blank: a dowel, a turned spindle or a log
+    #[default]
+    Round,
+    /// A square blank, its faces flat to the top at A=0
+    Square,
+    /// A flat board lying flat at A=0, `width` across: its thickness is the job's diameter
+    Board {
+        #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+        width: f64,
+    },
+}
+
+impl Rotary {
+    /// A round blank `diameter` across, along `along`.
+    #[must_use]
+    pub fn round(diameter: f64, along: Along) -> Self {
+        Self {
+            diameter,
+            along,
+            blank: Blank::Round,
+        }
+    }
+
+    /// How far out from the axis the material reaches as it turns, mm: what must clear the
+    /// bed below and the bit above. A square swings by half its diagonal, a board by half of
+    /// its across the corners, not half its thickness.
+    #[must_use]
+    pub fn swing(&self) -> f64 {
+        let half = self.diameter / 2.0;
+        match self.blank {
+            Blank::Round => half,
+            Blank::Square => half * std::f64::consts::SQRT_2,
+            Blank::Board { width } => half.hypot(width / 2.0),
+        }
+    }
 }
 
 #[derive(
@@ -548,9 +595,20 @@ impl Job {
             width,
             height,
             thickness: diameter / 2.0,
-            rotary: Some(Rotary { diameter, along }),
+            rotary: Some(Rotary::round(diameter, along)),
             ..Self::default()
         }
+    }
+
+    /// How far above the material's top the bit must be for A to turn under it: the
+    /// clearance gap, and on a rotary job whose material swings out further than its top (a
+    /// square or a board's corners) that much more.
+    #[must_use]
+    pub fn turning_gap(&self) -> f64 {
+        let beyond = self
+            .rotary
+            .map_or(0.0, |r| (r.swing() - r.diameter / 2.0).max(0.0));
+        self.clearance + beyond
     }
 
     /// Plunge (Z2) as a gap above the material.
