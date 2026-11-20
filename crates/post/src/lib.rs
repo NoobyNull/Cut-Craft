@@ -1155,7 +1155,8 @@ impl Post {
             self.rotary?,
             round,
             rotary.diameter,
-            job.clearance,
+            // clear of a square's corners or a board's edges as they swing round
+            job.turning_gap(),
         ))
     }
 
@@ -2267,6 +2268,36 @@ begin FOOTER
         assert!(has(&back, "G1 X10.000 A360.000 Z14.915"), "{back:#?}");
         // and home at the very start, unwound
         assert_eq!(a_words(&back).last(), Some(&0.0));
+    }
+
+    #[test]
+    fn a_turns_only_as_high_as_the_file_lifts_even_when_a_pass_is_reached_quickly() {
+        use cut_craft_core::rotary_axis::RotaryAxis;
+        // a ring, then lifted 30 above the top (clear of a board's edges as it swings), over to
+        // half way round, and down at the rapid rate to just above the next pass before plunging
+        let quick = Toolpath {
+            moves: vec![
+                mv(MoveKind::Rapid, 0.0, 0.0, 30.0),
+                mv(MoveKind::Plunge, 0.0, 0.0, -1.0),
+                mv(MoveKind::Cut, 0.0, 50.0, -1.0),
+                mv(MoveKind::Cut, 0.0, 100.0, -1.0),
+                mv(MoveKind::Rapid, 0.0, 100.0, 30.0),
+                mv(MoveKind::Rapid, 10.0, 50.0, 30.0),
+                mv(MoveKind::Rapid, 10.0, 50.0, 0.0),
+                mv(MoveKind::Plunge, 10.0, 50.0, -1.0),
+                mv(MoveKind::Cut, 10.0, 100.0, -1.0),
+                mv(MoveKind::Rapid, 10.0, 100.0, 30.0),
+            ],
+            ..toolpath("Rings", "T")
+        };
+        let lines = render_with(
+            &winding_post(RotaryAxis::default()),
+            hundred_round(),
+            vec![quick],
+        );
+        // A goes on round to 540 at the file's 30 above the top, not the job's 5 mm clearance
+        let turn = lines.iter().position(|l| l.contains("A540.000")).unwrap();
+        assert_eq!(lines[turn], "G0 X10.000 A540.000 Z45.915", "{lines:#?}");
     }
 
     #[test]

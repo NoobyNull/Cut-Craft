@@ -22,7 +22,8 @@ pub(crate) struct Winding {
     radius: f64,
     /// Flat millimetres a degree.
     per_degree: f64,
-    /// The bit's height clear of the material (the job's clearance, from its top).
+    /// The bit's height clear of the material as it swings round (the job's turning gap, from its
+    /// top).
     clearance: f64,
     /// Whole turns the next passes are moved by, so far.
     turns: f64,
@@ -116,8 +117,13 @@ impl Winding {
                     (pass[0].1, pass[0].3)
                 };
                 let above = self.moved(DVec3::new(start.x, start.y, approach.z), turns);
-                // lift straight up, turn at the clearance, then down as the file would
-                let high = self.clearance.max(approach.z);
+                // lift straight up, turn at the clearance (or as high as the file lifts on
+                // its way over, if higher: a pass may be reached quickly, from just
+                // above it), then down as the file would
+                let high = rapids
+                    .iter()
+                    .map(|r| r.1.z)
+                    .fold(self.clearance.max(approach.z), f64::max);
                 if at.z < high - 1e-9 {
                     at.z = high;
                     out.push(Step::Line(MoveKind::Rapid, at, 0.0, self.held));
