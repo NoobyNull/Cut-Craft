@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-20
 see-also: import_component_3d_model, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath
 ---
 
@@ -35,6 +35,23 @@ the model in the board drawn to scale.
 Press **Apply** and the 3D view shows the model where the toolpaths will cut it: inside
 the board, with what is round it cut down to the model's base. A toolpath preview carves
 the same place.
+
+## Lining it up on the material, then resizing it
+
+**Align in Material** on the import form lines the model up with the material: against
+its left or right side, its front or back edge, or centred, and in height on the zero
+plane, half way up, or with its top at the material's top. A new model starts centred,
+its bottom on the zero plane.
+
+The alignment is kept. Tick **Scale model to fit material**, untick it again to go back
+to the file's size (1:1), or type a new **Model Size**, and the model is lined up again at
+its new size, measured from the material's corner (its 0,0). So a model aligned to the
+right side stays against the right side as it grows, and a centred one stays centred
+with nothing of it under the modeling plane.
+
+Type a **position** X or Y, or a **Depth Below Top**, and that number is used as you
+typed it instead: the model's corner stays there when it is resized. Press an Align in
+Material button again to go back to lining it up.
 
 ## When it doesn't fit
 

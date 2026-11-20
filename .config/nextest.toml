@@ -1,8 +1,15 @@
-# The help coverage check is its own suite: the ordinary run (CI's check jobs, the pre-commit
-# hook) leaves it out, and `cargo nextest run --profile help` runs only it, as the Help coverage
-# workflow does. See crates/app/src/app/help_coverage.rs.
+# Two checks are suites of their own, left out of the ordinary run (CI's check jobs, the
+# pre-commit hook) and run by their own workflows:
+#
+# - Help coverage: `cargo nextest run -p cut-craft --profile help` (Help coverage workflow).
+#   See crates/app/src/app/help_coverage.rs.
+# - Languages: `cargo nextest run -p cut-craft -p cut-craft-i18n --profile languages`
+#   (Languages workflow): reading and falling back between languages, the English words, the
+#   test language, and the hard-coded text check. The hard-coded text check also stays in the
+#   ordinary run, so no pull request writes new words straight into the code. See
+#   crates/i18n/src/lib.rs and crates/app/src/app/hard_coded_text.rs.
 [profile.default]
-default-filter = "not test(=app::help_coverage::coverage::every_tool_has_help)"
+default-filter = "not test(=app::help_coverage::coverage::every_tool_has_help) and not package(cut-craft-i18n)"
 
 [profile.help]
 default-filter = "test(/^app::help_coverage::/)"
@@ -12,3 +19,6 @@ default-filter = "test(/^app::help_coverage::/)"
 # its posts and its checks. `cargo nextest run --profile rotary`.
 [profile.rotary]
 default-filter = "package(cut-craft-rotary) | package(cmd-rotary-machining-toolpath) | test(/rotary|winding|turn|held_off|indexed|off_centre|across/)"
+
+[profile.languages]
+default-filter = "package(cut-craft-i18n) or test(/^app::hard_coded_text::/) or test(=commands::tests::english_words_do_not_name_other_programs)"

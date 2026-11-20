@@ -16,6 +16,7 @@ use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::snap::Snap;
+use cut_craft_i18n::tr;
 
 /// Where a crash log is kept when the person chose not to send crash logs.
 const LAST_CRASH: &str = "last-crash.log";
@@ -1469,7 +1470,7 @@ impl CutCraftApp {
                     }
                     if ui
                         .link(EMPTY_SHEET_SAMPLE)
-                        .on_hover_hint("Open a finished sign, with its toolpaths, to look round")
+                        .on_hover_hint(tr!("start-empty-sheet-sample-tip"))
                         .clicked()
                     {
                         clicked = Some("try_sample_project".to_owned());
