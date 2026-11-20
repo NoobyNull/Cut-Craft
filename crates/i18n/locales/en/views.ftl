@@ -101,10 +101,9 @@ views-and-more = and { $count } more
 views-select-first = { $tool }: select something first
 # The post-processor list: the machine's own post.
 views-post-default = { $name } (default)
-# A keep-out zone while clipping is off. $edit is where it is edited.
-views-keep-out-machine-clamp = { $zone }: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. It is a clamp of the machine's, edited in Machine Configuration; right-click for a shortcut
-views-keep-out-job-zone = { $zone }: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. It is edited in Toolpaths ▸ Keep-Out Zones…; right-click for a shortcut
-views-keep-out-clipping-off = { $zone }: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. It is { $edit }; right-click for a shortcut
+# The hint over a keep-out zone: a clamp of the machine's, or one of the job's own.
+views-keep-out-machine-clamp = { $zone }: no toolpath cuts here. With Clip toolpaths at keep-out zones off (Edit ▸ Options) a toolpath that would cut into it is not made; with it on, the toolpath is made and lifts over it. It is a clamp of the machine's, edited in Machine Configuration; right-click for a shortcut
+views-keep-out-job-zone = { $zone }: no toolpath cuts here. With Clip toolpaths at keep-out zones off (Edit ▸ Options) a toolpath that would cut into it is not made; with it on, the toolpath is made and lifts over it. It is edited in Toolpaths ▸ Keep-Out Zones…; right-click for a shortcut
 # What a screen reader calls the new guide's box.
 views-new-guide-offset = New guide offset
 views-new-guide-position = New guide position
