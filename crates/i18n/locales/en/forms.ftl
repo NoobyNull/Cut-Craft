@@ -28,3 +28,8 @@ job-setup-cancel = Cancel
     .tooltip = Leave the job as it was
 job-setup-set-as-default = Set as Default
     .tooltip = Start every new job with these settings (your Clearing Settings default is kept)
+
+# Setup Material and Job Defaults (open straight to a blank job).
+setup-material-more-tip = Show every Job Setup setting here: Z zero, X0 Y0, the rapid heights, home and the material, for this job only
+setup-material-defaults-tip = Edit ▸ Options ▸ Job Defaults: what every new job starts with
+job-defaults-note = Every new job starts with these. Changing them leaves the job that is open as it is: its own are in Setup Material ▸ More settings for this job…
