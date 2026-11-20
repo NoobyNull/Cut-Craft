@@ -462,7 +462,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "draw_origin",
-        "Show Origin: marks the job's zero point, where the machine's X and Y start",
+        "Show Origin: marks the job's zero point, where the machine's X, Y and Z start",
     ),
     (
         "draw_vectors_in_3d_view",

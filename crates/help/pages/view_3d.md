@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-20
-see-also: 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
+see-also: job_setup, check_zeroing, 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
 ---
 
 # 3D View
@@ -21,6 +21,21 @@ up to the [Preview detail](help:preview_detail) slider on the Toolpaths page's P
 - **Top**, **Front**, **Right** and **Iso** along the top jump to those views; **Fit**
   fits the job; **Perspective** makes near things larger, as your eye sees them; **Vectors**
   shows or hides the vectors drawn over the model.
+
+## Where zero is
+
+Three short arrows, red for X, green for Y and blue for Z, start at the job's zero: the
+spot where you will zero the bit on your machine. They sit at the **XY zero** you picked in
+[Job Setup](help:job_setup), at the height its **Z Zero Position** says:
+
+- **Material Surface**: on the top of the material.
+- **Machine Bed**: on the bottom of the material, where it lies on the bed. On a
+  [rotary job](help:rotary_firmware) this choice is the turning axis instead: half the
+  cylinder's width under its top (20 mm under for a 40 mm cylinder).
+
+Switch it and press **Apply**, and the arrows move. Your model stays where it is in the
+material: only the Z numbers the machine is told change. To hide the arrows, untick
+**Show Origin** in Edit ▸ Options ▸ 3D View.
 
 ## Changing a model's height
 

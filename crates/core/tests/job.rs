@@ -54,6 +54,31 @@ fn z_zero_on_the_machine_bed_lifts_every_height_by_the_thickness() {
 }
 
 #[test]
+fn the_z_zero_sits_on_top_or_a_thickness_under_it_on_the_bed() {
+    let surface = Job::default();
+    assert!(
+        surface.zero_height().abs() < 1e-12,
+        "zeroed on top: the surface"
+    );
+    let bed = Job {
+        z_zero: ZZero::MachineBed,
+        ..Job::default()
+    };
+    assert!(
+        (bed.zero_height() + bed.thickness).abs() < 1e-12,
+        "zeroed on the bed: the material's bottom, a thickness under the top"
+    );
+    let axis = Job {
+        z_zero: ZZero::MachineBed,
+        ..Job::rotary(100.0, 40.0, Along::X)
+    };
+    assert!(
+        (axis.zero_height() + 20.0).abs() < 1e-12,
+        "a rotary job zeroed on the axis: a radius under the top"
+    );
+}
+
+#[test]
 fn a_rotary_job_is_its_cylinder_unrolled_with_the_axis_under_it() {
     use std::f64::consts::PI;
     let along_x = Job::rotary(100.0, 40.0, Along::X);

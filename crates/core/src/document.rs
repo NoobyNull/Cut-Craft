@@ -639,6 +639,12 @@ impl Job {
         }
     }
 
+    /// Where the machine's Z zero is, as a height from the material surface: 0 on top, or a
+    /// thickness under it on the bed (a rotary job's axis, a radius under its top).
+    pub fn zero_height(&self) -> f64 {
+        -self.machine_z(0.0)
+    }
+
     /// What to add to a model height for its depth from the material surface, for a model
     /// whose heights run from `lowest` to `top`, placed as Material Setup says.
     pub fn model_shift(&self, lowest: f64, top: f64) -> f64 {
