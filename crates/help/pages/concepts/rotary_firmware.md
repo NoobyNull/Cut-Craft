@@ -72,8 +72,9 @@ Below those, three more settings say how A may turn while it cuts:
   limit switch on the rotary means it must not wind on and on. It counts from where A was
   zeroed. A machine set up before this setting existed starts on **Up to 1 turn each way**
   with **Lift and spin back**, which is how its files always turned A; change it if you like.
-  A pass that on its own turns A further than the limit allows can't be written: saving says
-  which toolpath it is, so you can allow more turns or choose **Freely**.
+  If one pass on its own turns A further than the limit allows, [Rotary set
+  up](help:check_rotary_setup) names the toolpath and asks before every save, because the file
+  then has to turn A past the limit: allow more turns, or choose **Freely**.
 - **At the limit** (with **Up to**): what the file does when the next pass would turn A too far.
   - **Cut both ways**: the next pass is cut the other way round, so A comes back as it cuts and
     no time is spent spinning. A pass that ramps into the material, or steps down to more than

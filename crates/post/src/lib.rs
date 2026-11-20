@@ -794,9 +794,7 @@ impl Post {
                 }
                 let mut steps = self.steps(&part, &doc.job, at);
                 if let Some(w) = winding.as_mut() {
-                    steps = w
-                        .plan(steps, at)
-                        .map_err(|why| format!("\"{}\" {why}", toolpath.name))?;
+                    steps = w.plan(steps, at);
                 }
                 for step in steps {
                     let (kind, to, across) = match step {
@@ -1822,15 +1820,6 @@ begin FOOTER
         job: cut_craft_core::document::Job,
         toolpaths: Vec<Toolpath>,
     ) -> Vec<String> {
-        try_render(post, job, toolpaths).unwrap()
-    }
-
-    /// `render_with`, or why the post would not write the file.
-    fn try_render(
-        post: &Post,
-        job: cut_craft_core::document::Job,
-        toolpaths: Vec<Toolpath>,
-    ) -> Result<Vec<String>, String> {
         let mut doc = Document {
             job,
             ..Document::default()
@@ -1850,12 +1839,11 @@ begin FOOTER
             slots: &[],
             notes: &[],
         };
-        let text = post.render(&doc, &file)?;
-        Ok(text
-            .lines()
+        let text = post.render(&doc, &file).unwrap();
+        text.lines()
             .filter(|l| !l.is_empty())
             .map(String::from)
-            .collect())
+            .collect()
     }
 
     #[test]
@@ -2525,17 +2513,19 @@ begin FOOTER
     }
 
     #[test]
-    fn a_pass_longer_than_a_can_turn_is_refused_rather_than_written_past_the_limit() {
+    fn a_pass_longer_than_a_can_turn_is_still_written_as_near_the_middle_as_it_goes() {
         use cut_craft_core::rotary_axis::{RotaryAxis, Turning};
+        // half a turn each way, but each ring is a whole turn: the checks before cutting warn
+        // and ask; the file cuts each ring as little past the limit as it can
         let half = RotaryAxis {
             turning: Turning::Unwind,
             turns: 0.5,
             ..RotaryAxis::default()
         };
-        let why = try_render(&winding_post(half), hundred_round(), vec![two_rings()]).unwrap_err();
-        assert!(why.contains("\"Rings\""), "{why}");
-        assert!(why.contains("A can turn"), "{why}");
-        assert!(why.contains("360°"), "{why}");
+        let lines = render_with(&winding_post(half), hundred_round(), vec![two_rings()]);
+        let a = a_words(&lines);
+        assert!(a.iter().all(|a| (-360.0..=360.0).contains(a)), "{lines:#?}");
+        assert!(has(&lines, "G1 X10.000"), "both rings are cut: {lines:#?}");
     }
 
     #[test]

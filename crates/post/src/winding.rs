@@ -62,12 +62,11 @@ impl Winding {
 
     /// `steps` as written, starting `at` (as written): each pass moved whole turns, and
     /// turned round where "A can turn" says, with the moves between passes lifting clear
-    /// before A spins. Why not, when a pass turns A further than "A can turn" allows on any
-    /// whole turn.
-    pub(crate) fn plan(&mut self, steps: Vec<Step>, mut at: DVec3) -> Result<Vec<Step>, String> {
+    /// before A spins.
+    pub(crate) fn plan(&mut self, steps: Vec<Step>, mut at: DVec3) -> Vec<Step> {
         if steps.iter().any(|s| matches!(s, Step::Arc(..))) {
             // wrapped posts write no arcs; leave anything else as it is
-            return Ok(steps);
+            return steps;
         }
         let lines: Vec<(MoveKind, DVec3, f64, f64)> = steps
             .into_iter()
@@ -102,18 +101,7 @@ impl Winding {
                 continue;
             }
             let approach = rapids[rapids.len() - 1].1;
-            let Some((turns, backwards)) = self.choose(at, approach, pass) else {
-                let span = pass.iter().fold((f64::MAX, f64::MIN), |(lo, hi), l| {
-                    (lo.min(l.1[self.round]), hi.max(l.1[self.round]))
-                });
-                return Err(format!(
-                    "turns A {:.0}° in one pass, further than \"A can turn\" allows ({:.0}° each \
-                     way): allow more turns, or let A turn freely, in Machine Configuration's \
-                     rotary settings",
-                    (span.1 - span.0) / self.per_degree,
-                    self.axis.limit().unwrap_or(0.0),
-                ));
-            };
+            let (turns, backwards) = self.choose(at, approach, pass);
             if turns == self.turns && !backwards {
                 for l in rapids.iter().chain(pass) {
                     let to = self.moved(l.1, turns);
@@ -169,7 +157,7 @@ impl Winding {
             }
             i = pass_end;
         }
-        Ok(out)
+        out
     }
 
     /// `p` moved `turns` whole turns round.
@@ -179,13 +167,15 @@ impl Winding {
     }
 
     /// Which whole turn a `pass` reached from `approach` is cut on, from `at`, and whether it
-    /// is cut backwards; none when no whole turn keeps it within the limit.
+    /// is cut backwards. A pass that turns A further than the limit allows on any whole turn
+    /// is cut nearest the middle, as little past the limit either way as it can be: the
+    /// checks before cutting warn about it and ask before it is saved.
     fn choose(
         &self,
         at: DVec3,
         approach: DVec3,
         pass: &[(MoveKind, DVec3, f64, f64)],
-    ) -> Option<(f64, bool)> {
+    ) -> (f64, bool) {
         let round = self.round;
         // the whole turns that bring `start` nearest to where A is
         let nearest = |start: f64| ((at[round] - start) / self.turn()).round();
@@ -200,12 +190,12 @@ impl Winding {
         };
         let forward = nearest(pass[0].1[round]);
         if self.axis.turning == Turning::Free || fits(forward) {
-            return Some((forward, false));
+            return (forward, false);
         }
         if self.axis.at_limit == AtLimit::CutBothWays && reversible(approach, pass) {
             let back = nearest(pass[pass.len() - 1].1[round]);
             if fits(back) {
-                return Some((back, true));
+                return (back, true);
             }
         }
         // spin back: the whole turns that bring the pass nearest the middle, and of two
@@ -223,7 +213,7 @@ impl Winding {
                     spin(a).total_cmp(&spin(b))
                 }
             })
-            .map(|t| (t, false))
+            .map_or((middle, false), |t| (t, false))
     }
 
     /// A for the wrapped axis at flat `w`, in degrees, with the backlash taken up when A
