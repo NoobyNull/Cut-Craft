@@ -83,6 +83,11 @@ pub fn document(tools: &[Tool<'_>], actions: &[(String, String)], token: bool) -
             json!({ "by": "none" }),
         ),
         (
+            "component",
+            "One component, by id or name, as clicking it in the Components panel",
+            json!({ "by": "component", "component": "Component 1" }),
+        ),
+        (
             "add",
             "Add a layer to what is picked",
             json!({ "by": "layer", "layer": "Layer 1", "add": true }),
@@ -144,14 +149,20 @@ pub fn document(tools: &[Tool<'_>], actions: &[(String, String)], token: bool) -
                 "The job",
             ),
             "/select": { "post": {
-                "summary": "Pick vectors",
+                "summary": "Pick vectors or a component",
                 "description": "Picks vectors as clicking them does. Vectors on hidden or \
-                    locked layers are never picked. \"add\": true keeps what was picked.",
+                    locked layers are never picked. \"by\": \"component\" picks one \
+                    component by its id or name instead, as clicking it in the Components \
+                    panel does, so Smooth, Emboss, Scale Z and the other component tools \
+                    change only it. \"add\": true keeps what was picked.",
                 "requestBody": body(json!({
                     "type": "object", "required": ["by"],
                     "properties": {
                         "by": { "type": "string", "enum":
-                            ["ids", "layer", "name", "inside", "all", "open", "closed", "none"] },
+                            ["ids", "layer", "name", "inside", "all", "open", "closed", "none",
+                             "component"] },
+                        "component": { "description":
+                            "With \"by\": \"component\": its id (a number) or its name" },
                         "add": { "type": "boolean" },
                     },
                 }), select_examples),
