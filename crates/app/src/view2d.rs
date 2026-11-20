@@ -817,7 +817,8 @@ pub const CONSTRUCTION_DASHES: [f32; 2] = [2.0, 0.4];
 /// How faint a dragged component is drawn where it was, out of 255.
 const MOVING_FADE: u8 = 70;
 
-/// The shown vectors: selected ones dashed (selected groups solid), then their common lines
+/// The shown vectors, each in its layer's colour if it has one, else `colour`: selected ones
+/// dashed (selected groups solid), then their common lines
 /// (spans lying on another span of the same layer) over them in red, for attention.
 /// Stepped inside a group, vectors outside it are drawn faded.
 fn paint_vectors(
@@ -833,8 +834,6 @@ fn paint_vectors(
     let width = visuals.widgets.noninteractive.fg_stroke.width;
     let normal = Stroke::new(width, colour32(colour));
     let selected = visuals.selection.stroke;
-    // stepped inside a group, what is outside it fades back
-    let faded = Stroke::new(width, normal.color.gamma_multiply(OUTSIDE_GROUP_FADE));
     let outside = |id: EntityId| {
         doc.inside_group
             .is_some_and(|g| !doc.group_chain(id).contains(&g))
@@ -860,10 +859,17 @@ fn paint_vectors(
                 &[gap, gap],
                 0.0,
             ));
-        } else if outside(*id) {
-            painter.add(Shape::line(screen(path), faded));
         } else {
-            painter.add(Shape::line(screen(path), normal));
+            // in its layer's own colour, if it has one
+            let own = doc
+                .colour_of(*id)
+                .map_or(normal, |c| Stroke::new(width, colour32(c)));
+            let stroke = if outside(*id) {
+                Stroke::new(width, own.color.gamma_multiply(OUTSIDE_GROUP_FADE))
+            } else {
+                own
+            };
+            painter.add(Shape::line(screen(path), stroke));
         }
     }
     let red = Stroke::new(2.0 * width, visuals.error_fg_color);

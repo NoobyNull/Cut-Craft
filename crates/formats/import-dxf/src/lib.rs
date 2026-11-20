@@ -1,8 +1,8 @@
 //! Import vectors from DXF: lines, arcs, circles, polylines (with bulge arcs), ellipses and
-//! splines, scaled from the drawing's units to millimetres. Everything else (text, hatches,
-//! dimensions, blocks) is skipped.
+//! splines, scaled from the drawing's units to millimetres, each on its own layer with the
+//! layer's name and colour. Everything else (text, hatches, dimensions, blocks) is skipped.
 
-use cut_craft_core::document::{Document, Job, Units as JobUnits};
+use cut_craft_core::document::{Document, Job, LayerId, Units as JobUnits};
 use cut_craft_core::geometry::{Path, Point, Rect, Segment, polar};
 use cut_craft_core::glam::{DAffine2, DVec2};
 use cut_craft_core::{Change, CommandError, FileFormat, Importer, UnitGuess};
@@ -26,7 +26,7 @@ impl Importer for ImportDxf {
         let mut left_out = LeftOut::default();
         for e in drawing.entities() {
             match path(&e.specific) {
-                Some(p) => paths.push(p),
+                Some(p) => paths.push((p, e.common.layer.clone())),
                 None => left_out.add(kind(&e.specific)),
             }
         }
@@ -41,19 +41,222 @@ impl Importer for ImportDxf {
         }
         let size = paths
             .iter()
-            .map(Path::bounds)
+            .map(|(p, _)| p.bounds())
             .reduce(Rect::union)
             .map_or(DVec2::ZERO, Rect::size);
         let (scale, unit_guess) = scale(drawing.header.default_drawing_units, size, &doc.job);
         let to_mm = DAffine2::from_scale(DVec2::splat(scale));
-        let paths = paths
-            .into_iter()
-            .map(|p| p.transformed(&to_mm).closed_where_ends_meet())
-            .collect();
-        let mut change = Change::swap(doc, [], paths);
+        let mut c = Change::builder(doc);
+        let mut layers = Layers::make(&mut c, &file_layers(&drawing, bytes));
+        let mut selected = vec![];
+        for (p, layer) in paths {
+            let id = c.add(p.transformed(&to_mm).closed_where_ends_meet());
+            let (layer, shown) = layers.of(&mut c, &layer);
+            c.move_to_layer(id, layer);
+            // hidden vectors cannot be picked, so they are not selected either
+            if shown {
+                selected.push(id);
+            }
+        }
+        c.select(selected);
+        let mut change = c.finish();
         change.unit_guess = unit_guess;
         change.notes.extend(left_out.note());
         Ok(change)
+    }
+}
+
+/// A layer of the drawing, as the file has it: its name, colour (none for the usual vector
+/// colour) and whether it is shown (a layer turned off or frozen is not).
+#[derive(Clone, Debug, PartialEq)]
+struct FileLayer {
+    name: String,
+    colour: Option<[u8; 3]>,
+    visible: bool,
+}
+
+/// The drawing's layers, in the file's order, every one of them, even those with nothing on
+/// them or hidden: the reader gives the names, colour numbers and on/off; a text DXF's own
+/// LAYER table gives what the reader drops, frozen (flag 1) and true colours (code 420).
+fn file_layers(drawing: &dxf::Drawing, bytes: &[u8]) -> Vec<FileLayer> {
+    let raw = raw_layers(bytes);
+    drawing
+        .layers()
+        .map(|l| {
+            let extra = raw.iter().find(|r| r.name.eq_ignore_ascii_case(&l.name));
+            let frozen = extra.is_some_and(|r| r.flags & 1 != 0);
+            let colour = match extra.and_then(|r| r.true_colour) {
+                Some(rgb) => Some(rgb),
+                None => l.color.index().and_then(aci),
+            };
+            FileLayer {
+                name: l.name.clone(),
+                colour,
+                visible: l.is_layer_on && !frozen,
+            }
+        })
+        .collect()
+}
+
+/// What a text DXF's LAYER table says that the reader passes over.
+#[derive(Debug, Default)]
+struct RawLayer {
+    name: String,
+    flags: i64,
+    true_colour: Option<[u8; 3]>,
+}
+
+fn raw_layers(bytes: &[u8]) -> Vec<RawLayer> {
+    let mut lines = bytes.split(|&b| b == b'\n').map(<[u8]>::trim_ascii);
+    let mut layers: Vec<RawLayer> = vec![];
+    let mut in_layer = false;
+    let number = |v: &[u8]| std::str::from_utf8(v).ok()?.trim().parse::<i64>().ok();
+    while let (Some(code), Some(value)) = (lines.next(), lines.next()) {
+        match (code, value) {
+            (b"0", b"LAYER") => {
+                in_layer = true;
+                layers.push(RawLayer::default());
+            }
+            (b"0", _) => in_layer = false,
+            (b"2", b"ENTITIES") if !in_layer => break,
+            _ if in_layer => {
+                let layer = layers.last_mut().expect("a LAYER was pushed");
+                match code {
+                    b"2" => layer.name = String::from_utf8_lossy(value).into_owned(),
+                    b"70" => layer.flags = number(value).unwrap_or(0),
+                    b"420" => {
+                        layer.true_colour = number(value)
+                            .and_then(|n| u32::try_from(n & 0xFF_FFFF).ok())
+                            .map(|n| {
+                                let [_, r, g, b] = n.to_be_bytes();
+                                [r, g, b]
+                            });
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    layers
+}
+
+/// The job's layers for the drawing's: one of the same name if the job has it (names are
+/// matched whatever their case, as DXF does), else a new one.
+struct Layers(Vec<(String, LayerId, bool)>);
+
+impl Layers {
+    /// Every layer of the file, made in the job. They are added last first, so the layer
+    /// list, which shows the newest on top, reads in the file's order.
+    fn make(c: &mut cut_craft_core::ChangeBuilder, file: &[FileLayer]) -> Self {
+        let mut made = Layers(vec![]);
+        for l in file.iter().rev() {
+            if made.find(&l.name).is_none() {
+                made.add(c, l);
+            }
+        }
+        made
+    }
+
+    fn find(&self, name: &str) -> Option<(LayerId, bool)> {
+        self.0
+            .iter()
+            .find(|(n, ..)| n.eq_ignore_ascii_case(name))
+            .map(|&(_, id, shown)| (id, shown))
+    }
+
+    fn add(&mut self, c: &mut cut_craft_core::ChangeBuilder, l: &FileLayer) -> (LayerId, bool) {
+        let existing = c
+            .layers()
+            .iter()
+            .find(|have| have.name.eq_ignore_ascii_case(&l.name))
+            .map(|have| (have.id, have.visible));
+        let (id, shown) = existing.unwrap_or_else(|| {
+            // a layer with no name (allowed by some programs) still gets one to show
+            let name = if l.name.trim().is_empty() {
+                "Unnamed layer"
+            } else {
+                l.name.as_str()
+            };
+            let id = c.add_layer(name);
+            let mut layer = c
+                .layers()
+                .iter()
+                .find(|have| have.id == id)
+                .expect("just added")
+                .clone();
+            layer.colour = l.colour;
+            layer.visible = l.visible;
+            if layer.colour.is_some() || !layer.visible {
+                c.replace_layer(layer);
+            }
+            (id, l.visible)
+        });
+        self.0.push((l.name.clone(), id, shown));
+        (id, shown)
+    }
+
+    /// The layer a vector named for `name` goes on, made if the file's layer table lacks it.
+    fn of(&mut self, c: &mut cut_craft_core::ChangeBuilder, name: &str) -> (LayerId, bool) {
+        self.find(name).unwrap_or_else(|| {
+            let l = FileLayer {
+                name: name.to_owned(),
+                colour: None,
+                visible: true,
+            };
+            self.add(c, &l)
+        })
+    }
+}
+
+/// A DXF colour number (1 to 255) as red, green, blue, from the standard 256-colour table.
+/// 7 is "white on a dark screen, black on a light one": the usual vector colour, so none.
+fn aci(index: u8) -> Option<[u8; 3]> {
+    const FIRST: [[u8; 3]; 9] = [
+        [255, 0, 0],
+        [255, 255, 0],
+        [0, 255, 0],
+        [0, 255, 255],
+        [0, 0, 255],
+        [255, 0, 255],
+        [255, 255, 255],
+        [65, 65, 65],
+        [128, 128, 128],
+    ];
+    const GREYS: [u8; 6] = [51, 80, 105, 130, 190, 255];
+    match index {
+        0 | 7 => None,
+        1..=9 => Some(FIRST[usize::from(index) - 1]),
+        250..=255 => Some([GREYS[usize::from(index - 250)]; 3]),
+        _ => {
+            // 24 hues 15 degrees apart from red, each in five shades, full and half strength
+            let hue = f64::from((index - 10) / 10) * 15.0;
+            let shade = (index - 10) % 10;
+            let value = f64::from([255u8, 204, 153, 127, 76][usize::from(shade / 2)]);
+            let low = if shade.is_multiple_of(2) {
+                0.0
+            } else {
+                value / 2.0
+            };
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "between 0 and value, at most 255"
+            )]
+            let channel = |offset: f64| {
+                // how far round the hue circle from this channel's own colour, as a share
+                let d = ((hue - offset).rem_euclid(360.0)).min((offset - hue).rem_euclid(360.0));
+                let amount = if d <= 60.0 {
+                    1.0
+                } else if d >= 120.0 {
+                    0.0
+                } else {
+                    (120.0 - d) / 60.0
+                };
+                (low + amount * (value - low)).floor() as u8
+            };
+            Some([channel(0.0), channel(120.0), channel(240.0)])
+        }
     }
 }
 
@@ -826,5 +1029,182 @@ mod tests {
             "The DXF has no lines, arcs, circles, polylines, ellipses or splines. Export it again from the program that made it."
         );
         assert!(ImportDxf::import(&Document::default(), b"not a dxf").is_err());
+    }
+
+    /// A cabinet nesting sheet, trimmed to at most eight items a layer (79 in all): thirteen
+    /// layers with their own colours, "0" empty, every item drawn in its layer's colour.
+    const NESTING: &[u8] = include_bytes!("../tests/fixtures/nesting-sheet-layers.dxf");
+
+    fn with_layers(bytes: &[u8]) -> Document {
+        let mut doc = Document::default();
+        doc.apply(&ImportDxf::import(&doc, bytes).unwrap()).unwrap();
+        doc
+    }
+
+    fn named<'a>(doc: &'a Document, name: &str) -> &'a cut_craft_core::document::Layer {
+        doc.layers
+            .iter()
+            .find(|l| l.name == name)
+            .unwrap_or_else(|| panic!("no layer {name}"))
+    }
+
+    #[test]
+    fn every_layer_of_the_file_comes_in_by_name_in_the_files_order() {
+        let doc = with_layers(NESTING);
+        // the list shows the newest on top, so from the top it reads as the file does
+        let top_down: Vec<&str> = doc.layers.iter().rev().map(|l| l.name.as_str()).collect();
+        assert_eq!(
+            top_down,
+            [
+                "0",
+                "_ABF_SHEET_ID",
+                "_ABF_SHEET_MATERIAL",
+                "_ABF_SHEET_BORDER",
+                "_ABF_CUTTING_LINES",
+                "ABF_D10",
+                "ABF_D15",
+                "ABF_D3",
+                "ABF_D35",
+                "ABF_D5",
+                "ABF_D8",
+                "ABF_POCKET_Z8",
+                "ABF_REF_0_STATISTICS",
+                "Layer 1",
+            ]
+        );
+        assert_eq!(
+            doc.current_layer,
+            named(&doc, "Layer 1").id,
+            "the current layer stays"
+        );
+    }
+
+    #[test]
+    fn each_vector_goes_on_its_own_layer_and_an_empty_layer_is_kept() {
+        let doc = with_layers(NESTING);
+        assert_eq!(doc.vectors.len(), 79);
+        for (name, n) in [
+            ("_ABF_SHEET_BORDER", 1),
+            ("ABF_D10", 8),
+            ("ABF_POCKET_Z8", 2),
+        ] {
+            assert_eq!(doc.vectors_on(named(&doc, name).id).count(), n, "{name}");
+        }
+        assert_eq!(doc.vectors_on(named(&doc, "0").id).count(), 0);
+        assert_eq!(doc.vectors_on(named(&doc, "Layer 1").id).count(), 0);
+        assert_eq!(
+            doc.selection.len(),
+            79,
+            "all of it selected, to move or size"
+        );
+    }
+
+    #[test]
+    fn layers_keep_their_colours() {
+        let doc = with_layers(NESTING);
+        let colour = |name| named(&doc, name).colour;
+        assert_eq!(colour("_ABF_SHEET_ID"), Some([0, 255, 63]));
+        assert_eq!(colour("_ABF_SHEET_MATERIAL"), Some([255, 0, 0]));
+        assert_eq!(colour("_ABF_SHEET_BORDER"), Some([255, 127, 0]));
+        assert_eq!(colour("_ABF_CUTTING_LINES"), Some([153, 153, 0]));
+        assert_eq!(colour("ABF_D8"), Some([127, 0, 255]));
+        assert_eq!(colour("ABF_POCKET_Z8"), Some([255, 0, 0]));
+        assert_eq!(colour("0"), None, "7: the usual vector colour");
+        assert_eq!(colour("Layer 1"), None);
+    }
+
+    #[test]
+    fn a_true_colour_wins_over_the_colour_number() {
+        let text = String::from_utf8(NESTING.to_vec()).unwrap().replace(
+            "2\r\nABF_D5\r\n70\r\n0\r\n",
+            "2\r\nABF_D5\r\n70\r\n0\r\n420\r\n1146986\r\n",
+        );
+        let doc = with_layers(text.as_bytes());
+        assert_eq!(named(&doc, "ABF_D5").colour, Some([0x11, 0x80, 0x6a]));
+    }
+
+    #[test]
+    fn a_layer_turned_off_or_frozen_comes_in_hidden_and_unselected() {
+        let text = String::from_utf8(NESTING.to_vec())
+            .unwrap()
+            // frozen
+            .replace("2\r\nABF_D3\r\n70\r\n0\r\n", "2\r\nABF_D3\r\n70\r\n1\r\n")
+            // turned off: a negative colour number
+            .replace(
+                "2\r\nABF_D15\r\n70\r\n0\r\n62\r\n190\r\n",
+                "2\r\nABF_D15\r\n70\r\n0\r\n62\r\n-190\r\n",
+            );
+        let doc = with_layers(text.as_bytes());
+        let (frozen, off) = (named(&doc, "ABF_D3"), named(&doc, "ABF_D15"));
+        assert!(!frozen.visible && !off.visible);
+        assert_eq!(off.colour, Some([127, 0, 255]), "keeps its colour");
+        assert!(named(&doc, "ABF_D10").visible);
+        assert_eq!(doc.vectors.len(), 79, "hidden vectors still come in");
+        assert_eq!(doc.selection.len(), 79 - 16, "but are not selected");
+        assert!(
+            doc.selection
+                .iter()
+                .all(|&id| doc.layer_of(id) != frozen.id)
+        );
+    }
+
+    #[test]
+    fn a_layer_the_job_already_has_is_used_whatever_its_case() {
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        let mine = c.add_layer("abf_d10");
+        doc.apply(&c.finish()).unwrap();
+        doc.apply(&ImportDxf::import(&doc, NESTING).unwrap())
+            .unwrap();
+        assert_eq!(
+            doc.layers.len(),
+            14,
+            "13 of the file, less the one it had, and Layer 1"
+        );
+        assert!(!doc.layers.iter().any(|l| l.name == "ABF_D10"));
+        assert_eq!(doc.vectors_on(mine).count(), 8);
+        assert_eq!(named(&doc, "abf_d10").colour, None, "its own settings kept");
+    }
+
+    #[test]
+    fn importing_twice_adds_no_more_layers() {
+        let mut doc = with_layers(NESTING);
+        doc.apply(&ImportDxf::import(&doc, NESTING).unwrap())
+            .unwrap();
+        assert_eq!(doc.layers.len(), 14);
+        assert_eq!(doc.vectors.len(), 2 * 79);
+    }
+
+    #[test]
+    fn a_vector_on_a_layer_missing_from_the_table_gets_that_layer() {
+        let mut line = Entity::new(EntityType::Line(Line::new(
+            DxfPoint::new(0.0, 0.0, 0.0),
+            DxfPoint::new(50.0, 0.0, 0.0),
+        )));
+        line.common.layer = "Outline".into();
+        let mut drawing = Drawing::new();
+        drawing.add_entity(line);
+        let mut bytes = vec![];
+        drawing.save(&mut bytes).unwrap();
+        let doc = with_layers(&bytes);
+        assert_eq!(doc.vectors_on(named(&doc, "Outline").id).count(), 1);
+    }
+
+    #[test]
+    fn colour_numbers_follow_the_standard_table() {
+        assert_eq!(aci(1), Some([255, 0, 0]));
+        assert_eq!(aci(5), Some([0, 0, 255]));
+        assert_eq!(aci(7), None);
+        assert_eq!(aci(8), Some([65, 65, 65]));
+        assert_eq!(aci(10), Some([255, 0, 0]));
+        assert_eq!(aci(11), Some([255, 127, 127]));
+        assert_eq!(aci(12), Some([204, 0, 0]));
+        assert_eq!(aci(19), Some([76, 38, 38]));
+        assert_eq!(aci(30), Some([255, 127, 0]));
+        assert_eq!(aci(100), Some([0, 255, 63]));
+        assert_eq!(aci(150), Some([0, 127, 255]));
+        assert_eq!(aci(249), Some([76, 38, 47]));
+        assert_eq!(aci(250), Some([51, 51, 51]));
+        assert_eq!(aci(255), Some([255, 255, 255]));
     }
 }
