@@ -160,6 +160,15 @@ const SCENES: [Scene; 50] = [
     }),
     // Help: The 4th axis and your firmware (standard GRBL: the 4th axis greyed out)
     ("machine-firmware", machine_firmware),
+    ("machine-rotary", |app, _| {
+        if let Some(m) = app
+            .machine_window
+            .as_mut()
+            .and_then(|w| w.draft.active_mut())
+        {
+            m.firmware = Some(cut_craft_machines::Firmware::FluidNc);
+        }
+    }),
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {

@@ -9,6 +9,7 @@ use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::entry::{Entry, TabPlacement, TabSettings, TabSpacing, Tabs, spread_tabs};
 use cut_craft_core::toolpath::Tool;
+use cut_craft_i18n::tr;
 use eframe::egui;
 
 /// Where the window's open state is kept.
@@ -63,9 +64,9 @@ fn through(params: &serde_json::Value, stock: Stock) -> bool {
 }
 
 /// The words over Add Tabs when a profile would cut its piece loose.
-pub(super) const LOOSE: &str = "This cuts the piece right out with nothing holding it, so it \
-     can move into the cutter or be thrown. Add tabs, or hold it down another way (tape, \
-     screws, a vacuum table).";
+pub(super) fn loose() -> String {
+    tr!("tabs-loose")
+}
 
 /// A Profile Toolpath form's tabs in one line, for the form (their settings are in Edit
 /// Tabs): their size, and how many go where. None without tabs.
@@ -96,32 +97,37 @@ pub(super) fn summary(
     if tabs == Tabs::None {
         return None;
     }
-    let size = format!(
-        "{} long, {} thick{}",
-        shown(tab.length, units),
-        shown(tab.thickness, units),
-        if from_tool { " (from the tool)" } else { "" }
+    let size = tr!(
+        if from_tool {
+            "tabs-summary-size-from-tool"
+        } else {
+            "tabs-summary-size"
+        },
+        length = shown(tab.length, units),
+        thickness = shown(tab.thickness, units)
     );
     let spread = match tab.spacing {
-        TabSpacing::Automatic => format!(
-            "about one every {}, 3 or more a shape (fewer if small)",
-            shown(tab.distance, units)
+        TabSpacing::Automatic => tr!(
+            "tabs-summary-automatic",
+            distance = shown(tab.distance, units)
         ),
-        TabSpacing::ConstantNumber => format!("{} a shape", tab.number),
-        TabSpacing::ConstantDistance => format!(
-            "one every {} ({} to {} a shape)",
-            shown(tab.distance, units),
-            tab.minimum,
-            tab.maximum
+        TabSpacing::ConstantNumber => tr!("tabs-summary-number", number = tab.number),
+        TabSpacing::ConstantDistance => tr!(
+            "tabs-summary-distance",
+            distance = shown(tab.distance, units),
+            minimum = tab.minimum,
+            maximum = tab.maximum
         ),
-        TabSpacing::Placed => return Some(format!("{size}, {placed} placed by hand")),
+        TabSpacing::Placed => {
+            return Some(tr!("tabs-summary-placed", size = size, placed = placed));
+        }
     };
     let place = match tab.placement {
-        TabPlacement::Evenly => "",
-        TabPlacement::AtStart => ", the first at the start",
-        TabPlacement::AvoidCorners => ", off the corners",
+        TabPlacement::Evenly => "tabs-summary-evenly",
+        TabPlacement::AtStart => "tabs-summary-at-start",
+        TabPlacement::AvoidCorners => "tabs-summary-avoid-corners",
     };
-    Some(format!("{size}, {spread}{place}"))
+    Some(tr!(place, size = size, spread = spread))
 }
 
 /// The Edit Tabs… button, at the foot of a form's Tabs (Profile Toolpath's), with a warning
@@ -146,29 +152,14 @@ pub(super) fn group_end(
         if stock.untabbed > 0 && !cuts_loose(params, stock) && through(params, stock) {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
-                format!(
-                    "{} of the shapes this cuts out {} no tab, so {} loose. Each tab \
-                     you click goes on the shape nearest it: click on {} in Edit Tabs.",
-                    stock.untabbed,
-                    if stock.untabbed == 1 { "has" } else { "have" },
-                    if stock.untabbed == 1 {
-                        "it comes"
-                    } else {
-                        "they come"
-                    },
-                    if stock.untabbed == 1 {
-                        "it"
-                    } else {
-                        "each one"
-                    },
-                ),
+                tr!("tabs-untabbed", count = stock.untabbed),
             );
         }
         if cuts_loose(params, stock) {
-            ui.colored_label(ui.visuals().warn_fg_color, LOOSE);
+            ui.colored_label(ui.visuals().warn_fg_color, loose());
             if ui
-                .button("Add Tabs")
-                .on_hover_hint("Leave small bridges of material that hold the piece in place")
+                .button(tr!("tabs-add"))
+                .on_hover_hint(tr!("tabs-add.tooltip"))
                 .clicked()
             {
                 params["tabs"] = "flat".into();
@@ -179,8 +170,8 @@ pub(super) fn group_end(
             ui.label(line);
         }
         if ui
-            .button("Edit Tabs…")
-            .on_hover_hint("Place the tabs: how many, where, their size, 2D or 3D")
+            .button(tr!("tabs-edit"))
+            .on_hover_hint(tr!("tabs-edit.tooltip"))
             .clicked()
         {
             ui.data_mut(|d| d.insert_temp(window_id(), true));
@@ -211,7 +202,8 @@ impl CutCraftApp {
             let tool: Tool = serde_json::from_value(params["tool"].clone()).unwrap_or_default();
             let depth = params["depth"].as_f64().unwrap_or_default();
             let mut clear = false;
-            egui::Window::new("Edit Tabs")
+            egui::Window::new(tr!("tabs-window-title"))
+                .id(egui::Id::unique("edit_tabs_window"))
                 .open(&mut open)
                 .resizable(false)
                 .collapsible(false)
@@ -220,26 +212,16 @@ impl CutCraftApp {
                     ui.separator();
                     ui.horizontal(|ui| {
                         add = ui
-                            .button("Add Tabs")
-                            .on_hover_hint(
-                                "Put the tabs on the selected vectors, as set above, to move \
-                                 by hand (select the vectors first: with none selected, \
-                                 nothing changes)",
-                            )
+                            .button(tr!("tabs-add"))
+                            .on_hover_hint(tr!("tabs-add.tooltip-window"))
                             .clicked();
                         clear = ui
-                            .add_enabled(placed > 0, egui::Button::new("Delete All Tabs"))
-                            .on_hover_hint(
-                                "Take every tab off; they stay placed by hand, so click the \
-                                 vectors to put new ones on",
-                            )
+                            .add_enabled(placed > 0, egui::Button::new(tr!("tabs-delete-all")))
+                            .on_hover_hint(tr!("tabs-delete-all.tooltip"))
                             .clicked();
                     });
-                    ui.label(format!("{placed} tabs placed"));
-                    ui.weak(
-                        "In the 2D view: click a selected vector to add a tab, click a tab to \
-                         take it off, drag a tab to move it",
-                    );
+                    ui.label(tr!("tabs-placed", count = placed));
+                    ui.weak(tr!("tabs-how-to-place"));
                 });
             // Add Tabs spreads them as picked (by number when they were placed already),
             // then they are placed, to move by hand
@@ -265,10 +247,7 @@ impl CutCraftApp {
                 // still placed by hand, on or off as they were: say how to place more
                 params["tab_points"] = serde_json::json!([]);
                 form.dirty = true;
-                self.status.set_message(
-                    "All tabs deleted: click the vectors in the 2D view to place new ones, or \
-                     pick another spacing",
-                );
+                self.status.set_message(&tr!("tabs-all-deleted"));
             }
         }
         ui.data_mut(|d| d.insert_temp(id, open));
@@ -298,12 +277,11 @@ impl CutCraftApp {
             })
             .collect();
         if points.is_empty() {
-            self.status
-                .set_message("select the vectors to put the tabs on");
+            self.status.set_message(&tr!("tabs-select-first"));
             return false;
         }
         self.status
-            .set_message(&format!("{} tabs added", points.len()));
+            .set_message(&tr!("tabs-added", count = points.len()));
         if let Some(form) = self.form.as_mut() {
             form.params["tab_points"] = serde_json::json!(points);
             form.dirty = true;
@@ -322,23 +300,23 @@ fn settings(
     units: Units,
 ) {
     ui.horizontal(|ui| {
-        ui.radio_value(tabs, Tabs::Flat, "2D Tabs")
-            .on_hover_hint("Up at the start of each tab, across it flat, down at its end");
-        ui.radio_value(tabs, Tabs::Triangular, "3D Tabs")
-            .on_hover_hint("Up to the tab's thickness at its middle and down the other side");
+        ui.radio_value(tabs, Tabs::Flat, tr!("tabs-flat"))
+            .on_hover_hint(tr!("tabs-flat.tooltip"));
+        ui.radio_value(tabs, Tabs::Triangular, tr!("tabs-triangular"))
+            .on_hover_hint(tr!("tabs-triangular.tooltip"));
     });
-    ui.checkbox(&mut tab.size_from_tool, "Size from the tool")
-        .on_hover_hint("As thick as the pass depth (at most half the cut), twice as long");
+    ui.checkbox(&mut tab.size_from_tool, tr!("tabs-size-from-tool"))
+        .on_hover_hint(tr!("tabs-size-from-tool.tooltip"));
     let sized = tab.sized(tool.pass_depth, depth);
     egui::Grid::new("tab_size").num_columns(2).show(ui, |ui| {
-        ui.label("Length (width along the path)");
+        ui.label(tr!("tabs-length"));
         if tab.size_from_tool {
             ui.label(shown(sized.length, units));
         } else {
             length(ui, &mut tab.length, units);
         }
         ui.end_row();
-        ui.label("Thickness (height)");
+        ui.label(tr!("tabs-thickness"));
         if tab.size_from_tool {
             ui.label(shown(sized.thickness, units));
         } else {
@@ -347,49 +325,66 @@ fn settings(
         ui.end_row();
     });
     ui.separator();
-    ui.label("How many, and where");
-    ui.radio_value(&mut tab.spacing, TabSpacing::Automatic, "Automatic")
-        .on_hover_hint(
-            "About one every distance below, 3 or more on a shape, but never more than a \
-             third of it in tabs, so a small shape gets fewer (1 or 2): a safe start",
-        );
+    ui.label(tr!("tabs-how-many"));
+    ui.radio_value(
+        &mut tab.spacing,
+        TabSpacing::Automatic,
+        tr!("tabs-automatic"),
+    )
+    .on_hover_hint(tr!("tabs-automatic.tooltip"));
     egui::Grid::new("tab_spread").num_columns(2).show(ui, |ui| {
-        ui.radio_value(&mut tab.spacing, TabSpacing::ConstantNumber, "Number")
-            .on_hover_hint("This many on every shape, spread along it");
+        ui.radio_value(
+            &mut tab.spacing,
+            TabSpacing::ConstantNumber,
+            tr!("tabs-number"),
+        )
+        .on_hover_hint(tr!("tabs-number.tooltip"));
         ui.add(Number::new(&mut tab.number).range(1..=100));
         ui.end_row();
         ui.radio_value(
             &mut tab.spacing,
             TabSpacing::ConstantDistance,
-            "Distance apart",
+            tr!("tabs-distance-apart"),
         )
-        .on_hover_hint("One about every this far along each shape");
+        .on_hover_hint(tr!("tabs-distance-apart.tooltip"));
         length(ui, &mut tab.distance, units);
         ui.end_row();
         if tab.spacing == TabSpacing::ConstantDistance {
-            ui.label("    At least");
+            indented(ui, tr!("tabs-at-least"));
             ui.add(Number::new(&mut tab.minimum).range(1..=tab.maximum.max(1)));
             ui.end_row();
-            ui.label("    At most");
+            indented(ui, tr!("tabs-at-most"));
             ui.add(Number::new(&mut tab.maximum).range(tab.minimum.max(1)..=1000));
             ui.end_row();
         }
     });
-    ui.radio_value(&mut tab.spacing, TabSpacing::Placed, "Where clicked")
-        .on_hover_hint("Placed by hand: Add Tabs below, then click, drag or take them off");
+    ui.radio_value(
+        &mut tab.spacing,
+        TabSpacing::Placed,
+        tr!("tabs-where-clicked"),
+    )
+    .on_hover_hint(tr!("tabs-where-clicked.tooltip"));
     ui.horizontal(|ui| {
-        ui.radio_value(&mut tab.placement, TabPlacement::Evenly, "Evenly");
+        ui.radio_value(&mut tab.placement, TabPlacement::Evenly, tr!("tabs-evenly"));
         ui.radio_value(
             &mut tab.placement,
             TabPlacement::AtStart,
-            "First at the start",
+            tr!("tabs-first-at-start"),
         );
         ui.radio_value(
             &mut tab.placement,
             TabPlacement::AvoidCorners,
-            "Not on corners",
+            tr!("tabs-not-on-corners"),
         )
-        .on_hover_hint("Moved along a little to keep them off corners and curves");
+        .on_hover_hint(tr!("tabs-not-on-corners.tooltip"));
+    });
+}
+
+/// A label set in under the setting above it, as At least and At most under Distance apart.
+fn indented(ui: &mut egui::Ui, text: String) {
+    ui.horizontal(|ui| {
+        ui.add_space(ui.spacing().indent);
+        ui.label(text);
     });
 }
 

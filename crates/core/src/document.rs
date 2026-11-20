@@ -997,6 +997,20 @@ impl Document {
         })
     }
 
+    /// The shown components a model tool changes: the picked ones when any are picked (as in
+    /// the Components panel), else every shown one.
+    pub fn components_to_change(&self) -> impl Iterator<Item = (&EntityId, &Component)> {
+        let picked: Vec<EntityId> = self
+            .selected_components
+            .iter()
+            .filter(|id| self.components.contains_key(id))
+            .copied()
+            .collect();
+        self.components
+            .iter()
+            .filter(move |(id, k)| k.visible && (picked.is_empty() || picked.contains(id)))
+    }
+
     /// The component a "selected component" command works on: the last one picked, else the
     /// newest.
     pub fn chosen_component(&self) -> Option<EntityId> {
