@@ -1449,12 +1449,11 @@ pub const TOURS: &[Tour] = &[
         steps: &[
             Step {
                 caption: "Rounding turns a square or round blank into a smooth cylinder on a \
-                          rotary axis. Start a **rotary** job in Job Setup, with the finished \
-                          diameter.",
+                          rotary axis. Press **Setup Material** and pick **Rotary**, with the \
+                          finished diameter.",
                 setup: |app, ctx| {
-                    app.form = None;
-                    app.reset_job();
-                    app.invoke(ctx, "new");
+                    fresh_job(app, ctx);
+                    app.invoke(ctx, "setup_material");
                     set(app, "job_type", "rotary".into());
                 },
                 mark: Mark::At("field:job_type"),

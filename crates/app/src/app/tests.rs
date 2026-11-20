@@ -6,6 +6,8 @@ use eframe::egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
 #[path = "web_api_tests.rs"]
 mod web_api;
 
+mod how_to;
+
 /// Drives the real UI headlessly, one frame per call, with synthetic pointer input.
 #[test]
 fn cut_copy_and_paste_vectors() {
