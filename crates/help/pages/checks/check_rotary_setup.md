@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 see-also: checks_before_cutting, rotary_firmware, job_setup, rotary_machining_toolpath
 ---
 
@@ -17,6 +17,10 @@ up in **Machine ▸ Machine Configuration ▸ Rotary (4th axis)**:
   measured distance from the axis.
 - The rotary **lies along** the same direction (X or Y) as the job's cylinder in Job Setup.
 - When **A can turn** is **Freely**, the toolpaths don't wind A more than 500 turns one way.
+- When **A can turn** is **Up to … turns each way**, no single pass (the cutting between two
+  lifts) turns A further than that. One that does is asked about before every save, like a
+  collision, because a cable or hose on the chuck would be wound past its limit: allow more
+  turns, or choose **Freely** if nothing stops the chuck.
 - A [4-Axis Rotary Machining](help:rotary_machining_toolpath) job cuts a **registration mark**
   at A=0, so the part can go back exactly as it was if the job is started again.
 - The material has **room to turn**: a square's corners or a board's edges swing out further
