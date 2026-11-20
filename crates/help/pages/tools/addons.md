@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-18
-see-also: relief_from_photo, open_gadgets_folder, settings
+reviewed: 2026-11-20
+see-also: relief_from_photo, open_gadgets_folder, settings, language
 ---
 
 **Add-ons** brings in extra tools that are too big to come with Cut Craft, such as the Depth
@@ -30,6 +30,12 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
    installing it. You can still install it with **Install Anyway**, but nobody has checked
    what it does, so do that only if you trust whoever made it.
 4. When it is done, the add-on shows in **Gadgets ▸ My Gadgets** straight away.
+
+## Languages
+
+Under **Languages**, each language with a pack has its own **Install** button. A language
+pack doesn't appear in My Gadgets. Pick it in **Edit ▸ Options ▸ Language** instead (see
+[Using Cut Craft in another language](help:language)).
 
 ## Use what you installed
 

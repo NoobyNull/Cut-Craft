@@ -22,6 +22,7 @@ mod gadgets;
 mod gui;
 mod hints;
 mod icons;
+mod languages;
 mod marks;
 mod messages;
 mod options;

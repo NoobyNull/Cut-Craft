@@ -1,0 +1,102 @@
+# Translating Cut Craft
+
+Cut Craft's words live in [Fluent](https://projectfluent.org) files (`.ftl`), not in its
+code. English is built in (`crates/i18n/locales/en/`). Every other language is a
+**language pack**: a separate download that someone installs from Gadgets ▸ Add-ons ▸
+Languages and picks in Edit ▸ Options ▸ Language. A pack never ships inside Cut Craft.
+
+Anything a pack doesn't translate shows in English, so a pack can be published while it is
+still partway done.
+
+## Make a pack
+
+1. Copy the example pack's folder and rename it for your language's code, such as
+   `language-packs/de/` for German or `language-packs/pt-BR/` for Brazilian Portuguese.
+2. Edit its `addon.toml`:
+
+   ```toml
+   id = "language-de"        # "language-" and the code, in lower case (language-pt-br)
+   name = "Deutsch"          # the language's name in itself
+   kind = "language"
+   language = "de"           # the code
+   version = "0.1.0"         # raise it each time the pack changes
+   needs_cutcraft = ">=0.7.0"
+   ```
+
+3. Copy any English file you want to translate from `crates/i18n/locales/en/`, keeping its
+   name, and translate the words after each `=`. Keep everything else exactly as it is:
+
+   ```ftl
+   # English (start.ftl)
+   start-whats-new = What's new in v{ $version }
+   commit-calculate = Calculate
+       .tooltip = Work out the toolpath with these settings
+
+   # German
+   start-whats-new = Neu in v{ $version }
+   commit-calculate = Berechnen
+       .tooltip = Werkzeugweg mit diesen Einstellungen berechnen
+   ```
+
+   - **Keys** (left of `=`) never change. A key English doesn't have is never shown.
+   - **`.tooltip`, `.disabled` and other attribute lines** must be indented, as above, or
+     the file won't read.
+   - **`{ $name }`** is a value Cut Craft puts in, such as a number or a file name. Keep it,
+     with the same name, anywhere in your sentence.
+   - You may leave a key out. English shows in its place.
+
+4. **Counts** use plural forms. English has `one` and `other`. Use the forms your language
+   has, for example Russian `one`, `few`, `many` and `other`:
+
+   ```ftl
+   tabs-placed = { $count ->
+       [one] { $count } перемычка
+       [few] { $count } перемычки
+       [many] { $count } перемычек
+      *[other] { $count } перемычки
+   }
+   ```
+
+   The `*` marks the form used when no other fits. Every count needs one.
+
+5. **Menu and window names inside sentences**, such as "Edit ▸ Options ▸ Job Defaults",
+   should use the same words as your translation of those menus, so people can follow them.
+
+## Words to keep in English
+
+- **G-code, GRBL, Mach, FluidNC, DXF, SVG, STL** and other file and machine names.
+- **Cut Craft** itself.
+- Never name other CAD/CAM programs. Cut Craft's checks refuse them.
+
+## Test a pack
+
+- `cargo nextest run -p cut-craft-i18n --profile languages` reads every pack in
+  `language-packs/`. It fails on any line Fluent can't read, a key given twice, a key English
+  doesn't have, or a missing `addon.toml` field.
+- To see it in Cut Craft without publishing it, copy your pack's files into the add-ons
+  folder, in a folder named as its `id` (such as `language-de`). The add-ons folder is
+  `~/.config/cut-craft/addons/` on Linux, `%APPDATA%\cut-craft\addons\` on Windows and
+  `~/Library/Application Support/cut-craft/addons/` on a Mac. Beside the `.ftl` files, add an
+  `installed.json` that says where it came from:
+
+  ```json
+  {"repo": {"owner": "NoobyNull", "name": "CutCraft-Translations"},
+   "tag": "v0.0.0", "version": "0.1.0", "signed": false}
+  ```
+
+  Start Cut Craft and pick it in Edit ▸ Options ▸ Language. It shows as not official, which
+  is right for a pack you made yourself. Words that are too long for their place show
+  cut off. Shorten them, as nothing in Cut Craft moves to make room.
+- Edit ▸ Options ▸ Language ▸ **Test language** (with Show advanced settings ticked) shows
+  English stretched by 40%. It's a quick way to see where long words won't fit.
+
+## Publish
+
+Open a pull request with your folder. Once it's merged, the **Language packs** workflow
+(`.github/workflows/language-packs.yml`) zips each pack as `language-<code>.zip`, signs it
+with Cut Craft's release key (so it shows as official), and publishes it on
+[NoobyNull/CutCraft-Translations](https://github.com/NoobyNull/CutCraft-Translations).
+Cut Craft offers an update to anyone who has the pack installed.
+
+Translations made with a machine or an AI should be checked by a native speaker who knows
+woodworking and CNC words before they're published.
