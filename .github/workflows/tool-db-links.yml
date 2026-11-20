@@ -1,0 +1,21 @@
+# Tests for the tool-database links Worker (services/tool-db-links); not part of the Rust build.
+name: Tool database links
+
+on:
+  push:
+    paths: ['services/tool-db-links/**', '.github/workflows/tool-db-links.yml']
+  pull_request:
+    paths: ['services/tool-db-links/**', '.github/workflows/tool-db-links.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/tool-db-links
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
