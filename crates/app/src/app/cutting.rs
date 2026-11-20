@@ -327,6 +327,7 @@ fn engagement(step: f64) -> f64 {
 /// Clearing Settings' inside: the light step with a picture of the bite, the loops with a
 /// strip of them, and the way back with a picture of rows, each with a line or two saying
 /// what it does in a space that keeps its size. Edits `clearing`.
+#[expect(clippy::too_many_lines, reason = "one window, its rows in order")]
 pub(super) fn clearing_settings(
     ui: &mut egui::Ui,
     clearing: &mut ClearingSettings,
