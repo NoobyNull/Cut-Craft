@@ -2639,6 +2639,8 @@ dependencies = [
  "cut-craft-core",
  "mlua",
  "serde_json",
+ "ureq",
+ "url",
 ]
 
 [[package]]
