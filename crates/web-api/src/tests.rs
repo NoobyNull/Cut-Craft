@@ -340,6 +340,7 @@ mod job {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         };
         doc.toolpaths.insert(EntityId(50), t("Outline", false));
         doc.toolpaths.insert(EntityId(51), t("Pocket", true));

@@ -57,13 +57,7 @@ fn z_zero_on_the_machine_bed_lifts_every_height_by_the_thickness() {
 fn a_rotary_job_is_its_cylinder_unrolled_with_the_axis_under_it() {
     use std::f64::consts::PI;
     let along_x = Job::rotary(100.0, 40.0, Along::X);
-    assert_eq!(
-        along_x.rotary,
-        Some(Rotary {
-            diameter: 40.0,
-            along: Along::X
-        })
-    );
+    assert_eq!(along_x.rotary, Some(Rotary::round(40.0, Along::X)));
     assert!((along_x.width - 100.0).abs() < 1e-12 && (along_x.height - 40.0 * PI).abs() < 1e-9);
     assert!(
         (along_x.thickness - 20.0).abs() < 1e-12,
@@ -160,4 +154,33 @@ fn older_jobs_plunge_from_the_clearance_and_start_at_x0_y0_at_it() {
     };
     assert!((set.plunge_gap() - 2.0).abs() < 1e-12);
     assert!((set.home().x - 10.0).abs() < 1e-12);
+}
+
+#[test]
+fn a_square_or_a_board_on_the_rotary_swings_further_than_its_top() {
+    use cut_craft_core::document::Blank;
+    let round = Rotary::round(40.0, Along::X);
+    assert!((round.swing() - 20.0).abs() < 1e-12);
+    let square = Rotary {
+        blank: Blank::Square,
+        ..round
+    };
+    assert!((square.swing() - 20.0 * std::f64::consts::SQRT_2).abs() < 1e-9);
+    let board = Rotary {
+        blank: Blank::Board { width: 150.0 },
+        ..Rotary::round(20.0, Along::X)
+    };
+    assert!((board.swing() - 75f64.hypot(10.0)).abs() < 1e-9);
+    let mut job = Job::rotary(100.0, 20.0, Along::X);
+    assert!(
+        (job.turning_gap() - job.clearance).abs() < 1e-12,
+        "round: just the gap"
+    );
+    job.rotary = Some(board);
+    assert!((job.turning_gap() - (job.clearance + board.swing() - 10.0)).abs() < 1e-9);
+    // a job saved before shapes is round
+    let old: Rotary = serde_json::from_str(r#"{"diameter":40.0,"along":"x"}"#).unwrap();
+    assert_eq!(old, round);
+    let saved = serde_json::to_string(&board).unwrap();
+    assert_eq!(serde_json::from_str::<Rotary>(&saved).unwrap(), board);
 }

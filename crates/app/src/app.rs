@@ -48,6 +48,7 @@ mod tests;
 mod tips;
 mod title_bar;
 mod trace_window;
+mod turning;
 mod units_ask;
 mod updates;
 mod views;
@@ -1586,6 +1587,9 @@ struct CutCraftApp {
     playback_budget: std::time::Duration,
     /// How many times faster than the machine the preview plays (1: the machine's speed).
     playback_speed: f64,
+    /// A rotary job's preview as the machine runs it: the file's own moves played into the
+    /// material turning with A, kept in step with the playing (or kept) preview.
+    turning: Option<turning::Turning>,
     /// Component tree levels collapsed (Expand / Collapse).
     collapsed_levels: std::collections::HashSet<u64>,
     /// A guide being dragged: whether it is vertical, and which it is (`None` a new one).

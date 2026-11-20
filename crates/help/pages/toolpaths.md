@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-19
-see-also: preview_detail
+reviewed: 2026-11-20
+see-also: preview_detail, rotary_machining_toolpath, rotary_firmware, job_setup
 ---
 
 # Toolpaths
@@ -209,6 +209,34 @@ Raster and Adaptive pockets can also leave the edge pass out (Profile Pass: None
 rings always end on the edge. Only Raster offers First, round the edge before the rows:
 Adaptive always goes round the edge last, so switching a pocket set to First over to Adaptive
 picks Last.
+
+## Previewing a rotary job
+
+On a rotary job the animated preview plays your toolpaths the way the machine will run
+them. Cut Craft writes each toolpath through the machine's own post processor (the one Save
+Toolpaths uses), reads the file back move by move, and cuts the material
+[Job Setup](help:job_setup) describes (round, square or a flat board) with exactly those
+moves. The 3D view shows the material turning with A while the bit moves along, across and
+up and down over it, as on the machine, so what you see cut is what the file cuts.
+
+![The preview of a rotary job paused part way: a star's outline already cut round a dowel that has turned with A, and the bit cutting a pocket further along](pictures/rotary-turning-preview.png)
+
+1. Set the job up as rotary in Job Setup, with the material's shape.
+2. Pick a machine with a 4th axis (A) and a Rotary A post in Machine Configuration (see
+   [The 4th axis and your firmware](help:rotary_firmware)). With no machine picked, Cut Craft's
+   own rotary post is used.
+3. Turn on Animate Preview (Toolpaths menu ▸ Toolpath Drawing) and preview the toolpaths.
+4. Run, Pause, Single Step and the Progress slider move the turning material too: drag
+   back to see what had been cut by then, and on again.
+
+While it plays, the view is always drawn round the axis, even with Auto-Wrapping View off.
+Each move takes as long as the file's feed says (most rotary posts write feeds in inverse
+time, G93), and the turning material keeps to the same point through the job as the
+Progress slider. Previewing one toolpath after others carries on from what those cut. The
+material is cut as small cells, about two million over the job, and drawn smoothed, so very
+fine detail shows only roughly. If the job can't be saved for the active machine (a machine
+on standard GRBL has no A axis, say), the preview plays unrolled as before, and Save
+Toolpaths says why.
 
 ## Checks before cutting (the Analyse tab)
 
