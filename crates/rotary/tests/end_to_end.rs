@@ -18,9 +18,21 @@ const RADIUS: f64 = 20.0;
 const LO: DVec3 = DVec3::new(10.0, -6.0, -8.0);
 const HI: DVec3 = DVec3::new(50.0, 12.0, 10.0);
 
-fn boxed() -> Document {
+/// The box in a rotary job: on round material `2 * RADIUS` across, or on a `board` (width,
+/// thickness), which as it turns reaches past its own thickness.
+fn boxed(board: Option<(f64, f64)>) -> Document {
+    let mut job = Job::rotary(
+        60.0,
+        board.map_or(2.0 * RADIUS, |(_, thickness)| thickness),
+        Along::X,
+    );
+    if let Some((width, _)) = board {
+        let mut rotary = job.rotary.expect("a rotary job");
+        rotary.blank = cut_craft_core::document::Blank::Board { width };
+        job.rotary = Some(rotary);
+    }
     let mut doc = Document {
-        job: Job::rotary(60.0, 2.0 * RADIUS, Along::X),
+        job,
         ..Document::default()
     };
     let at = |i: usize| {
@@ -41,7 +53,8 @@ fn boxed() -> Document {
     .iter()
     .flat_map(|&[a, b, c, d]| [[at(a), at(b), at(c)], [at(a), at(c), at(d)]])
     .collect();
-    let mut model = Component::from_fn("Box", Combine::Add, doc.job.area(), 0.25, |_| Some(RADIUS));
+    let top = doc.job.rotary.expect("a rotary job").diameter / 2.0;
+    let mut model = Component::from_fn("Box", Combine::Add, doc.job.area(), 0.25, |_| Some(top));
     model.set_solid(&triangles);
     let mut c = Change::builder(&doc);
     c.add_new_component(model);
@@ -81,8 +94,8 @@ fn file(doc: &Document, axis: RotaryAxis) -> String {
 )]
 /// Cuts the box with `strategy` and checks what is left; how far the bit went at its
 /// cutting feed through nothing but air, as a share of all it went at that feed.
-fn finished(strategy: Strategy, clockwise: bool) -> f64 {
-    let mut doc = boxed();
+fn finished(strategy: Strategy, clockwise: bool, board: Option<(f64, f64)>) -> f64 {
+    let mut doc = boxed(board);
     let mut p = Params {
         strategy,
         offset: 4.0,
@@ -91,7 +104,8 @@ fn finished(strategy: Strategy, clockwise: bool) -> f64 {
     };
     // flutes long enough to reach the axis where there is no model: the simulator cuts with
     // the flutes alone, as the bit does
-    p.tool.flute_length = RADIUS + 5.0;
+    let stock = Stock::of(&doc.job).expect("a rotary job");
+    p.tool.flute_length = stock.swing() + 5.0;
     let tool = p.tool.clone();
     let change = RotaryMachiningToolpath::run(&doc, &p).unwrap();
     doc.apply(&change).unwrap();
@@ -112,12 +126,6 @@ fn finished(strategy: Strategy, clockwise: bool) -> f64 {
         flute_length: tool.flute_length + cell,
         ..tool.clone()
     });
-    let stock = Stock::new(
-        Section::Round {
-            diameter: 2.0 * RADIUS,
-        },
-        60.0,
-    );
     let mut material = Voxels::of(&stock, cell);
     let mut at: Option<Pose> = None;
     let (mut fed, mut air, mut plunged) = (0.0, 0.0, 0.0);
@@ -138,7 +146,7 @@ fn finished(strategy: Strategy, clockwise: bool) -> f64 {
                 let far = (m.to.along - from.along)
                     .hypot(m.to.across - from.across)
                     .hypot(m.to.height - from.height)
-                    + (m.to.turn - from.turn).abs() * RADIUS;
+                    + (m.to.turn - from.turn).abs() * stock.swing();
                 fed += far;
                 if cut == 0 && in_air {
                     air += far;
@@ -157,7 +165,7 @@ fn finished(strategy: Strategy, clockwise: bool) -> f64 {
     // nothing inside the box (a cell's middle half a cell in) was cut; everything a little
     // way out from it, along the length the rings cover, was
     let mut kept = 0;
-    let steps = (2.0 * RADIUS / cell) as i64;
+    let steps = (stock.swing() / cell) as i64 + 1;
     for i in 0..(60.0 / cell) as i64 {
         for j in -steps..=steps {
             for k in -steps..=steps {
@@ -192,21 +200,21 @@ fn finished(strategy: Strategy, clockwise: bool) -> f64 {
 
 #[test]
 fn rings_round_a_full_model_written_and_read_back_cut_it_and_only_it() {
-    finished(Strategy::Radial, true);
+    finished(Strategy::Radial, true, None);
 }
 
 #[test]
 fn bulk_to_fine_detail_written_and_read_back_cuts_it_and_only_it_and_hardly_any_air() {
     // the bulk cleared from each side with A held, each side finished, then rings only
     // where something is left
-    let air = finished(Strategy::SidesThenDetails, true);
+    let air = finished(Strategy::SidesThenDetails, true, None);
     assert!(
         air < 0.1,
         "{:.1}% of the feed moves cut only air",
         100.0 * air
     );
-    // the same model cut by rings alone goes through air at feed far more
-    let rings = finished(Strategy::Radial, true);
+    // for comparison: the same model cut by rings alone
+    let rings = finished(Strategy::Radial, true, None);
     eprintln!(
         "air at feed: bulk to fine {:.1}%, rings {:.1}%",
         100.0 * air,
@@ -216,6 +224,15 @@ fn bulk_to_fine_detail_written_and_read_back_cuts_it_and_only_it_and_hardly_any_
 
 #[test]
 fn off_centre_rings_written_and_read_back_cut_it_and_only_it_either_way_round() {
-    finished(Strategy::OffCentre, true);
-    finished(Strategy::OffCentre, false);
+    finished(Strategy::OffCentre, true, None);
+    finished(Strategy::OffCentre, false, None);
+}
+
+#[test]
+fn on_a_board_that_swings_past_its_thickness_the_bit_is_never_let_into_the_box() {
+    // a board 24 thick and 44 wide: the box reaches 15.6 from the axis, past the board's own
+    // 12, once A turns it up
+    let board = Some((44.0, 24.0));
+    finished(Strategy::SidesThenDetails, true, board);
+    finished(Strategy::Radial, true, board);
 }

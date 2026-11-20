@@ -350,6 +350,9 @@ struct Work<'a> {
     start: f64,
     end: f64,
     step: f64,
+    /// The highest the tip ever needs to be above the axis: how far out the blank swings
+    /// (a board or a square reaches past its own radius as it turns).
+    top: f64,
 }
 
 impl Work<'_> {
@@ -366,7 +369,11 @@ impl Work<'_> {
     fn down(&self, along: f64, round: f64, across: f64) -> (DVec3, f64) {
         let tip = self.tip(along, round, across);
         (
-            self.point(along, round, (tip - self.turned.radius).min(0.0)),
+            self.point(
+                along,
+                round,
+                (tip - self.turned.radius).min(self.top - self.turned.radius),
+            ),
             across,
         )
     }
@@ -580,7 +587,9 @@ impl Work<'_> {
         }
 
         progress::stage("Finishing each side");
-        let half = swing.min(radius + d);
+        // right across the blank: a board is wider than it is thick, and what is air is
+        // left out anyway
+        let half = swing;
         for face in 0..faces {
             progress::stop_if_cancelled()?;
             let round = self.circumference * f64::from(face) / f64::from(faces);
@@ -962,6 +971,7 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
         start,
         end,
         step: stepover * tool.diameter,
+        top: Stock::of(&doc.job).map_or(radius, |stock| stock.swing().max(radius)),
     };
     let plain = |passes: Vec<Pass>| passes.into_iter().map(|p| (p, false)).collect();
     // each pass, and whether the bit can come down to it at the rapid rate
