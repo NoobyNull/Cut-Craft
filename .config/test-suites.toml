@@ -87,8 +87,9 @@ modules = [
   "app::tabs",
 ]
 paths = ["machines/**"]
-# a toolpath is drawn and played in the preview, and its form is in the tours
-affects = ["display", "help", "how-to", "workflows"]
+# a toolpath is drawn and played in the preview, and its form is in the tours; rotary jobs use
+# its posts and machines
+affects = ["rotary", "display", "help", "how-to", "workflows"]
 
 [suites.model]
 title = "3D modelling"
