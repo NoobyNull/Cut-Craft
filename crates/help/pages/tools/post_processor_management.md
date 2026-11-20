@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-19
-see-also: save_toolpaths, check_tool_changer, job_setup
+see-also: save_toolpaths, check_tool_changer, job_setup, rotary_firmware
 ---
 
 A **post-processor** (post for short) turns your toolpaths into G-code written the way your
@@ -22,7 +22,10 @@ the top of **Machine ▸ Post-Processor Management** narrow the list to the ones
      if your controller does arcs (grbl, grblHAL, FluidNC and Mach3 all do).
    - **Straight**: lines only (G1), for controllers that can't do arcs.
    - **Rotary (A)**: for a 4th axis. The side that goes round the cylinder is written as A, in
-     degrees. **G93** at a row's end means its feeds are in inverse time.
+     degrees. These posts are named **Rotary A, cylinder along X** (or **Y**): pick the one
+     that matches which way the rotary lies on your bed. **G93** at a name's end means its
+     feeds are in inverse time. Standard GRBL has no A axis, so GRBL's rotary posts are named
+     **grblHAL** (see [The 4th axis and your firmware](help:rotary_firmware)).
 3. Pick your controller in **Any controller** to see only its posts, or type part of a name
    in **Search posts…**.
 4. The posts are grouped: **Installed by you** first, then Cut Craft's own under their
