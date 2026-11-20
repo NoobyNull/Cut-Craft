@@ -15,8 +15,9 @@ cut-craft-i18n = { path = "crates/i18n" }
 base64 = "0.21"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # accesskit: hands the controls to screen readers (Narrator and NVDA on Windows, Orca on Linux,
-# VoiceOver on a Mac)
-eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence", "accesskit"] }
+# VoiceOver on a Mac). "links" lets the window open web links in the browser (Help > Community,
+# the update window, help pages)
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "links", "wayland", "x11", "persistence", "accesskit"] }
 dxf = "0.6"
 # only for its bundled emoji fonts (egui 0.37 left them out): the last resort for ⚠ and ★ when
 # the system font lacks them, so they never draw as an empty box
@@ -31,6 +32,7 @@ rfd = "0.17"
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+roxmltree = "0.19"
 usvg = "0.37"
 
 [workspace.lints.rust]
