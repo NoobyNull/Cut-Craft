@@ -11,7 +11,7 @@ use cut_craft_core::rotary_axis::RotaryAxis;
 use cut_craft_core::{Change, Command};
 use cut_craft_post::{File, Post};
 use cut_craft_rotary::gcode::{Reading, read};
-use cut_craft_rotary::{Cutter, Pose, Section, Stock, Voxels};
+use cut_craft_rotary::{Cutter, Pose, Stock, Voxels};
 
 const RADIUS: f64 = 20.0;
 /// The box held off to one side of the axis, in the part's frame.
