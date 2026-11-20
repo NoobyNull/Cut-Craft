@@ -923,25 +923,33 @@ pub fn model_shape(doc: &Document, cells_across: usize) -> Material {
 /// bottom (Gap Below Model) is the gap from that face. With nothing modelled the material's
 /// uncut top stays at 0.
 pub fn seat_in_material(job: &crate::document::Job, shape: &mut Material) {
-    if shape.heights.iter().all(|h| h.is_nan()) {
-        shape.heights.fill(0.0);
-        return;
-    }
+    let shift = seat_shift(job, shape);
     for h in shape.heights.iter_mut().filter(|h| h.is_nan()) {
         *h = 0.0;
     }
-    let lowest = shape.heights.iter().copied().fold(f64::INFINITY, f64::min);
-    let top = shape
-        .heights
-        .iter()
-        .copied()
-        .fold(f64::NEG_INFINITY, f64::max);
-    let shift = job.model_shift(lowest, top);
     // a model that goes past the material's bottom is cut right through there, not drawn
     // under the block where its underside would hide it
     for h in &mut shape.heights {
         *h = (*h + shift).max(shape.bottom);
     }
+}
+
+/// How far [`seat_in_material`] moves the model's unseated `shape` down into the material
+/// (holes count as the zero plane; nothing modelled, none): so the material's top is at
+/// minus this in the unseated shape, as a model being imported is shown.
+pub fn seat_shift(job: &crate::document::Job, shape: &Material) -> f64 {
+    let heights = || {
+        shape
+            .heights
+            .iter()
+            .map(|&h| if h.is_nan() { 0.0 } else { h })
+    };
+    if shape.heights.iter().all(|h| h.is_nan()) {
+        return 0.0;
+    }
+    let lowest = heights().fold(f64::INFINITY, f64::min);
+    let top = heights().fold(f64::NEG_INFINITY, f64::max);
+    job.model_shift(lowest, top)
 }
 
 /// Where a 3D toolpath works: the tool's tip stays inside.
@@ -1294,6 +1302,23 @@ mod seated_tests {
         let lo = m.heights.iter().copied().fold(f64::INFINITY, f64::min);
         assert_eq!(lo, -6.0, "no lower than the material's bottom");
         assert_eq!(m.bottom, -6.0);
+    }
+
+    #[test]
+    fn the_unseated_model_has_the_material_top_at_minus_the_seat_shift() {
+        // bottom on the material's bottom: the 20 mm material's top is 20 over the zero plane
+        let d = doc(GapFrom::Below, 0.0);
+        assert_eq!(seat_shift(&d.job, &shape(&d)), -20.0);
+        // top flush: the model's 10 mm top is the material's top
+        let d = doc(GapFrom::Above, 0.0);
+        assert_eq!(seat_shift(&d.job, &shape(&d)), -10.0);
+        let mut empty = shape(&d);
+        empty.heights.fill(f64::NAN);
+        assert_eq!(
+            seat_shift(&d.job, &empty),
+            0.0,
+            "nothing modelled: no shift"
+        );
     }
 
     #[test]

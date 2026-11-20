@@ -19997,10 +19997,33 @@ fn the_3d_origin_moves_to_the_bed_with_the_z_zero() {
         thickness: 24.5,
         ..Job::default()
     };
-    assert!(panels::origin_3d(&job).abs() < 1e-12, "on top by default");
+    assert!(
+        panels::origin_3d(&job, None).abs() < 1e-12,
+        "on top by default"
+    );
     job.z_zero = ZZero::MachineBed;
     assert!(
-        (panels::origin_3d(&job) + 24.5).abs() < 1e-12,
+        (panels::origin_3d(&job, None) + 24.5).abs() < 1e-12,
         "on the bed, 24.5 mm under the top"
+    );
+    // a model being imported is shown unseated, on its zero plane: with its bottom on the
+    // material's bottom that plane is the bed, and the top 24.5 mm above
+    job.model_position = cut_craft_core::document::ModelPosition {
+        from: cut_craft_core::document::GapFrom::Below,
+        gap: 0.0,
+    };
+    let mut model = cut_craft_core::simulation::Material::new(&job, 4);
+    // 10 mm tall on half the job, its zero plane (nothing there) on the other half
+    for (i, h) in model.heights.iter_mut().enumerate() {
+        *h = if i % 4 < 2 { 10.0 } else { f64::NAN };
+    }
+    assert!(
+        panels::origin_3d(&job, Some(&model)).abs() < 1e-9,
+        "the bed"
+    );
+    job.z_zero = ZZero::MaterialSurface;
+    assert!(
+        (panels::origin_3d(&job, Some(&model)) - 24.5).abs() < 1e-9,
+        "the material's top, over the model's plane"
     );
 }

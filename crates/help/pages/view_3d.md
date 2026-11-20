@@ -29,7 +29,9 @@ spot where you will zero the bit on your machine. They sit at the **XY zero** yo
 [Job Setup](help:job_setup), at the height its **Z Zero Position** says:
 
 - **Material Surface**: on the top of the material.
-- **Machine Bed**: on the bottom of the material, where it lies on the bed.
+- **Machine Bed**: on the bottom of the material, where it lies on the bed. On a
+  [rotary job](help:rotary_firmware) this choice is the turning axis instead: half the
+  cylinder's width under its top (20 mm under for a 40 mm cylinder).
 
 Switch it and press **Apply**, and the arrows move. Your model stays where it is in the
 material: only the Z numbers the machine is told change. To hide the arrows, untick

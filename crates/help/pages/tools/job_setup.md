@@ -15,7 +15,7 @@ see-also: setup_material, material_setup, settings, draw_rectangle, rotary_firmw
 
    ![Step 2](pictures/job_setup/step-2.png)
 
-3. Choose where **Z zero** is: the top of the material (most common) or the machine bed. Zero the bit in the same place on your machine before cutting. In the [3D view](help:view_3d) the red, green and blue arrows move to the zero you choose, on the top or the bottom of the material.
+3. Choose where **Z zero** is: the top of the material (most common) or the machine bed. Zero the bit in the same place on your machine before cutting. In the [3D view](help:view_3d) the red, green and blue arrows move to the zero you choose, on the top or the bottom of the material (on a rotary job, the turning axis).
 
    ![Step 3](pictures/job_setup/step-3.png)
 
