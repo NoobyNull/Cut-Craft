@@ -44,7 +44,7 @@ model, 3d model, relief, component
 layers, layer
 undo, go back, mistake
 laser, burn, engrave with laser
-rotary, 4th axis, fourth axis, wrap, a axis, chuck, tailstock, unwind, wind up, spin back, 4 axis, four axis, registration mark, indexed, index, off centre, off center
+rotary, 4th axis, fourth axis, wrap, a axis, chuck, tailstock, unwind, wind up, spin back, 4 axis, four axis, registration mark, indexed, index, off centre, off center, 3+1, 3+1 axis, sides then details, bulk to fine, hybrid rotary, indexed roughing, two sided rotary
 nest, nesting, layout parts, fit parts
 array, copy along, repeat, duplicate
 measure, ruler, distance, dimension, dimensions

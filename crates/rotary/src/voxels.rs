@@ -182,16 +182,42 @@ impl Voxels {
     }
 
     /// Cuts away what `cutter` holds standing at `pose`. How many cells it cut.
+    pub fn cut_at(&mut self, cutter: &Cutter, pose: Pose) -> usize {
+        let mut cut = vec![];
+        self.each_held(cutter, pose, |c| {
+            cut.push(c);
+            true
+        });
+        for &[i, j, k] in &cut {
+            self.set(i, j, k, false);
+        }
+        cut.len()
+    }
+
+    /// How many solid cells `cutter` would cut standing at `pose`, counting no further than
+    /// `enough`: whether the bit there cuts anything at all, or only air.
+    #[must_use]
+    pub fn held(&self, cutter: &Cutter, pose: Pose, enough: usize) -> usize {
+        let mut n = 0;
+        self.each_held(cutter, pose, |_| {
+            n += 1;
+            n < enough
+        });
+        n
+    }
+
+    /// Calls `f` with each solid cell `cutter` holds standing at `pose` while it says to
+    /// carry on.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "clamped to the grid first"
     )]
-    pub fn cut_at(&mut self, cutter: &Cutter, pose: Pose) -> usize {
+    fn each_held(&self, cutter: &Cutter, pose: Pose, mut f: impl FnMut([usize; 3]) -> bool) {
         let reach = cutter.reach();
         let top = (pose.height + cutter.length()).min(self.swing + self.cell);
         if pose.height > top {
-            return 0;
+            return;
         }
         // the bit's box, in the part's frame
         let (mut lo, mut hi) = (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY));
@@ -216,7 +242,6 @@ impl Voxels {
             range(lo.y, hi.y, 1),
             range(lo.z, hi.z, 2),
         );
-        let mut cut = 0;
         for i in ri {
             for j in rj.clone() {
                 for k in rk.clone() {
@@ -225,14 +250,12 @@ impl Voxels {
                     }
                     let m = to_machine(self.centre(i, j, k), pose.turn);
                     let r = (m.x - pose.along).hypot(m.y - pose.across);
-                    if cutter.holds(r, m.z - pose.height) {
-                        self.set(i, j, k, false);
-                        cut += 1;
+                    if cutter.holds(r, m.z - pose.height) && !f([i, j, k]) {
+                        return;
                     }
                 }
             }
         }
-        cut
     }
 
     /// The material's surface, as points and triangles in the part's frame, facing out: a
@@ -328,6 +351,34 @@ mod tests {
             (v.volume() - want).abs() / want < 0.01,
             "{} vs {want}",
             v.volume()
+        );
+    }
+
+    #[test]
+    fn a_bit_knows_whether_it_would_cut_anything_before_it_cuts() {
+        use cut_craft_core::toolpath::{Tool, ToolShape};
+        let stock = Stock::new(Section::Round { diameter: 20.0 }, 30.0);
+        let mut v = Voxels::of(&stock, 0.25);
+        let ball = Cutter::new(&Tool {
+            diameter: 6.0,
+            shape: ToolShape::BallNose,
+            ..Tool::default()
+        });
+        let into = Pose::new(15.0, 0.0, 8.0, 0.0);
+        let above = Pose::new(15.0, 0.0, 10.5, 0.0);
+        assert_eq!(v.held(&ball, above, 1), 0, "clear of the material");
+        assert_eq!(v.held(&ball, into, 5), 5, "counts no further than asked");
+        let all = v.held(&ball, into, usize::MAX);
+        assert!(all > 5);
+        assert_eq!(
+            v.cut_at(&ball, into),
+            all,
+            "what it would cut is what it cuts"
+        );
+        assert_eq!(
+            v.held(&ball, into, usize::MAX),
+            0,
+            "and then there is nothing left there"
         );
     }
 }

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 see-also: rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, job_setup, save_toolpaths
 ---
 
@@ -53,11 +53,16 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   - **Radial** keeps the bit straight over the turning axis while A turns.
   - **Off centre** holds the bit to one side of the axis while A turns.
   - **Indexed** turns A to each side in turn and holds it still while the bit cuts across.
+  - **Sides, then details** clears the bulk from each side with A held still, finishes each
+    side, then turns A only where detail is left.
 - **Offset** (Off centre): how far to one side of the axis the bit is held. A third to a half
   of the bit's width suits most parts. Positive is the way the part comes up towards the bit
   as A turns back; a negative offset holds it the other side.
-- **Faces** (Indexed): how many sides the part is cut from, evenly round it from A=0. Four
-  suits most parts; more sides leave a smoother finish where they meet.
+- **Faces** (Indexed, Sides then details): how many sides the part is cut from, evenly round it
+  from A=0. Four suits most parts for Indexed; two (top and bottom) suits Sides then details
+  for flat-ish parts such as a plane with its wings level.
+- **Roughing allowance** (Sides then details): how much the bulk clearing leaves on the model
+  for each side's finish to take off.
 - **Start** and **End**: where along the axis the rings go, from the job's start (the chuck
   end). End 0 runs to the job's end. Keep them clear of the chuck and tailstock you set in
   [Machine Configuration](help:rotary_firmware).
@@ -67,7 +72,7 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   again. Without one, pencil a line along the material at A=0 before you start.
   [Rotary set up](help:check_rotary_setup) reminds you when there is neither.
 
-## Three ways round
+## Four ways round
 
 ![Radial, Off centre and Indexed, seen down the turning axis](pictures/rotary_machining_toolpath/strategies.png)
 
@@ -79,6 +84,23 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
 - **Indexed**: A stops at each side and holds still while the bit goes back and forth across
   it, along the part, like a flat 3D finish. Use it for flat faces, square parts, and machines
   whose A holds still better than it turns smoothly.
+- **Sides, then details** works bulk to fine detail, like a two-sided job the machine turns
+  over by itself:
+  1. A turns to each side and holds still while the bulk is cleared from it a level at a time,
+     down to the **Roughing allowance** above the model, the way a flat 3D roughing does.
+  2. Each side is finished, A still held.
+  3. Last, A turns only where material is left that no side could reach: under a wing, into a
+     hollow, round the join between sides.
+
+  It knows where the material is the whole way through: the blank you set in
+  [Job Setup](help:job_setup) (round, square or a board), less what each pass has already cut.
+  Wherever the bit would cut nothing it lifts and moves over instead, and where the way down is
+  clear it comes down at the rapid rate to just above the material before it plunges. One limit:
+  each side comes down to the turning axis and no further, so where nothing of the model is
+  between the sides, a thin ridge between the lines can be left along the axis. Sand it off.
+
+Every way round leaves out the air: a pass that would only cut air beyond the blank (past a
+round blank's edge, or where the model is the blank's own surface) is skipped.
 
 Off centre and Indexed hold the bit away from the axis, so the rotary's
 [centre line](help:rotary_firmware) must be found first: [Rotary set up](help:check_rotary_setup)

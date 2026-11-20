@@ -11,6 +11,10 @@
 //! like a flat 3D finish with A held still. Either way the moves are kept where the tip cuts
 //! on the unrolled material, with how far across the bit is held beside them, so the preview
 //! shows them true and the post works out A, the across axis and Z.
+//!
+//! Or it can work bulk to fine detail (Sides, then details): the bulk cleared from each side
+//! with A held still, each side finished, then A turned only where detail is left. It keeps
+//! what is left of the blank as it goes and never cuts air.
 
 use cut_craft_core::component::{Combine, model, placed_model};
 use cut_craft_core::document::{Along, Document};
@@ -19,9 +23,11 @@ use cut_craft_core::glam::DVec3;
 use cut_craft_core::progress;
 use cut_craft_core::rotary_axis;
 use cut_craft_core::simulation::Material;
-use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, Toolpath, follow, made_by};
+use cut_craft_core::toolpath::{
+    Move, MoveKind, Tool, ToolDatabase, ToolShape, Toolpath, follow, made_by,
+};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
-use cut_craft_rotary::{Cutter, Mesh};
+use cut_craft_rotary::{Cutter, Mesh, Pose, Stock, Voxels};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +49,11 @@ pub enum Strategy {
     /// back and forth along the part like a flat 3D finish: for flats, faces and machines
     /// whose A is better at holding still than moving smoothly
     Indexed,
+    /// Bulk to fine detail: A turns to each side in turn and holds still while the bulk is
+    /// cleared from it, a level at a time, then each side is finished, like a two-sided job
+    /// the machine turns over itself; last, A turns only where detail is left that no side
+    /// could reach. The bit never cuts air: every move is checked against what is left
+    SidesThenDetails,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -61,8 +72,11 @@ pub struct Params {
     pub offset: f64,
     /// How many sides the part is cut from, evenly round it, starting at A=0: A turns to
     /// each and holds still while that side is cut
-    #[schemars(extend("x-group" = "Strategy", "x-show-when" = {"strategy": "indexed"}), range(min = 1, max = 36))]
+    #[schemars(extend("x-group" = "Strategy", "x-show-when" = {"strategy": ["indexed", "sides_then_details"]}), range(min = 1, max = 36))]
     pub faces: u32,
+    /// Material the bulk clearing leaves on the model for each side's finish to take off
+    #[schemars(extend("x-unit" = "mm", "x-group" = "Strategy", "x-show-when" = {"strategy": "sides_then_details"}), range(min = 0))]
+    pub roughing_allowance: f64,
     /// Where along the axis the rings start, from the job's start (the chuck end)
     #[schemars(extend("x-unit" = "mm", "x-group" = "Along the part"), range(min = 0))]
     pub start: f64,
@@ -89,6 +103,7 @@ impl Default for Params {
             strategy: Strategy::Radial,
             offset: 3.0,
             faces: 4,
+            roughing_allowance: 0.5,
             start: 0.0,
             end: 0.0,
             allowance: 0.0,
@@ -117,6 +132,10 @@ impl Command for RotaryMachiningToolpath {
         Ok(c.finish())
     }
 }
+
+/// How far above where a stretch starts the bit comes down to at the rapid rate, when
+/// nothing is in the way, before it plunges, mm.
+const APPROACH: f64 = 1.0;
 
 /// How deep the registration mark goes, mm.
 const MARK_DEPTH: f64 = 0.5;
@@ -345,6 +364,16 @@ impl Work<'_> {
 
     /// The bit as low as it goes `along` the part with A at `round`, held `across`.
     fn down(&self, along: f64, round: f64, across: f64) -> (DVec3, f64) {
+        let tip = self.tip(along, round, across);
+        (
+            self.point(along, round, (tip - self.turned.radius).min(0.0)),
+            across,
+        )
+    }
+
+    /// The lowest the tip of the bit can go without touching the model: its height above the
+    /// axis.
+    fn tip(&self, along: f64, round: f64, across: f64) -> f64 {
         let radius = self.turned.radius;
         let turned = round.rem_euclid(self.circumference);
         let mut tip = self
@@ -353,7 +382,22 @@ impl Work<'_> {
         if let Some(solid) = self.solid {
             tip = tip.max(solid.drop(along, turned / radius, across));
         }
-        (self.point(along, round, (tip - radius).min(0.0)), across)
+        tip
+    }
+
+    /// Where the bit is at a point of a pass, in the machine's frame.
+    fn pose(&self, &(point, across): &(DVec3, f64)) -> Pose {
+        let (along, round) = if self.along_x {
+            (point.x, point.y)
+        } else {
+            (point.y, point.x)
+        };
+        Pose::new(
+            along,
+            across,
+            self.turned.radius + point.z,
+            round / self.turned.radius,
+        )
     }
 
     /// A ring round the part at each step along it, from A=0 all the way back round, the bit
@@ -368,16 +412,19 @@ impl Work<'_> {
         progress::stage("Following the model round");
         let rings = ((self.end - self.start) / self.step).ceil() as usize + 1;
         let mut passes = Vec::with_capacity(rings);
-        for k in 0..rings {
+        // a batch at a time over every core, so it can be stopped and show how far it is
+        let batch = 4 * cores();
+        for first in (0..rings).step_by(batch) {
             progress::stop_if_cancelled()?;
-            let along = (self.start + k as f64 * self.step).min(self.end);
-            // the last point closes the ring
-            passes.push(
+            let count = batch.min(rings - first);
+            passes.extend(parallel(count, |i| {
+                let along = (self.start + (first + i) as f64 * self.step).min(self.end);
+                // the last point closes the ring
                 (0..=self.turned.round)
                     .map(|j| self.down(along, j as f64 * self.turned.round_cell, across))
-                    .collect(),
-            );
-            progress::report_steps(k + 1, rings);
+                    .collect::<Pass>()
+            }));
+            progress::report_steps(first + count, rings);
         }
         Ok(passes)
     }
@@ -385,12 +432,6 @@ impl Work<'_> {
     /// Each of `faces` sides in turn, from A=0, cut back and forth along the part with A held
     /// still: as far across as its share of the way round, and a bit's width more, so the
     /// sides overlap.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss,
-        reason = "line and point counts are small"
-    )]
     fn sides(&self, faces: u32) -> Result<Vec<Pass>, CommandError> {
         progress::stage("Cutting each side");
         let radius = self.turned.radius;
@@ -400,43 +441,295 @@ impl Work<'_> {
             (radius * (std::f64::consts::PI / f64::from(faces)).sin() + self.tool.diameter / 2.0)
                 .min(radius)
         };
-        let lines = ((2.0 * half / self.step).ceil() as usize).max(1) + 1;
-        let spacing = 2.0 * half / (lines - 1) as f64;
-        let cell = self.turned.along_cell;
-        let points = ((self.end - self.start) / cell).ceil() as usize + 1;
         let mut passes = Vec::with_capacity(faces as usize);
         for face in 0..faces {
             progress::stop_if_cancelled()?;
             let round = self.circumference * f64::from(face) / f64::from(faces);
-            let mut pass: Pass = vec![];
-            for line in 0..lines {
-                let across = -half + line as f64 * spacing;
-                if let Some(&(last, held)) = pass.last() {
-                    // over to the next line, staying down on the part
-                    let along = if self.along_x { last.x } else { last.y };
-                    let over = ((across - held) / cell).abs().ceil() as usize;
-                    for k in 1..over {
-                        let between = held + (across - held) * k as f64 / over as f64;
-                        pass.push(self.down(along, round, between));
-                    }
-                }
-                let along = |k: usize| (self.start + k as f64 * cell).min(self.end);
-                if line % 2 == 0 {
-                    pass.extend((0..points).map(|k| self.down(along(k), round, across)));
-                } else {
-                    pass.extend(
-                        (0..points)
-                            .rev()
-                            .map(|k| self.down(along(k), round, across)),
-                    );
-                }
-            }
-            passes.push(pass);
+            passes.push(
+                self.side(half, self.step, self.turned.along_cell, |along, across| {
+                    self.down(along, round, across)
+                }),
+            );
             progress::report_steps(face as usize + 1, faces as usize);
         }
         Ok(passes)
     }
+
+    /// One side: lines `step` apart across it from `-half` to `half`, cut
+    /// back and forth along the part at points `cell` apart, staying down from one line
+    /// over to the next; `at` says where the bit is at each point.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "line and point counts are small"
+    )]
+    fn side(
+        &self,
+        half: f64,
+        step: f64,
+        cell: f64,
+        at: impl Fn(f64, f64) -> (DVec3, f64) + Sync,
+    ) -> Pass {
+        let lines = ((2.0 * half / step).ceil() as usize).max(1) + 1;
+        let spacing = 2.0 * half / (lines - 1) as f64;
+        let points = ((self.end - self.start) / cell).ceil() as usize + 1;
+        let along = |k: usize| (self.start + k as f64 * cell).min(self.end);
+        let across = |line: usize| -half + line as f64 * spacing;
+        // each line worked out on its own, over every core: back and forth, and over to it
+        // from where the line before ended, staying down on the part
+        parallel(lines, |line| {
+            let mut pass: Pass = vec![];
+            if line > 0 {
+                let (held, to) = (across(line - 1), across(line));
+                let ended = along(if line % 2 == 1 { points - 1 } else { 0 });
+                let over = ((to - held) / cell).abs().ceil() as usize;
+                for k in 1..over {
+                    pass.push(at(ended, held + (to - held) * k as f64 / over as f64));
+                }
+            }
+            if line % 2 == 0 {
+                pass.extend((0..points).map(|k| at(along(k), across(line))));
+            } else {
+                pass.extend((0..points).rev().map(|k| at(along(k), across(line))));
+            }
+            pass
+        })
+        .concat()
+    }
+
+    /// Bulk to fine detail ([`Strategy::SidesThenDetails`]): each of `faces` sides cleared
+    /// a level at a time down to `roughing_allowance` above the model, A held still; then
+    /// each side finished; then rings round the part where material is still left. What is
+    /// left of the `stock` is kept as the passes are worked out, and any stretch where the
+    /// bit would cut nothing is left out.
+    fn sides_then_details(
+        &self,
+        faces: u32,
+        stock: &Stock,
+        roughing_allowance: f64,
+    ) -> Result<Vec<(Pass, bool)>, CommandError> {
+        let tool = self.tool;
+        let d = tool.diameter;
+        let radius = self.turned.radius;
+        let depth = if tool.pass_depth > 0.0 {
+            tool.pass_depth
+        } else {
+            d / 2.0
+        };
+        // no finer than a twelfth of the bit: what is left between is not worth a pass
+        let mut material = Voxels::of(stock, Voxels::cell_for(stock, CELLS).max(d / 12.0));
+        // only the bottom of the bit matters for what a pass cuts: the material above it
+        // went with the levels before. The bulk is cleared wherever the bit finds material;
+        // a side is finished wherever there is any within a cell of it, however thin; a
+        // ring goes round only where the sides left a few cells' worth
+        let cell = material.cell();
+        let rough = Check::new(tool, depth + cell, 0.0, 1, cell);
+        let fine = Check::new(tool, d, cell, 1, cell);
+        let detail = Check::new(tool, d, 0.0, DETAIL, cell);
+        let swing = stock.swing();
+        let mut passes = vec![];
+
+        progress::stage("Clearing the bulk from each side");
+        let rough_step = tool.stepover.clamp(0.05, 1.0) * d;
+        let rough_cell = (d / 4.0).max(self.turned.along_cell);
+        for face in 0..faces {
+            let round = self.circumference * f64::from(face) / f64::from(faces);
+            // the lowest the bit may go anywhere on the side, and the highest a fine drop
+            // comes anywhere near each coarse point, so the straight moves between them
+            // never dip into the model
+            let floor = |along: f64, across: f64| {
+                let fine_cell = self.turned.along_cell;
+                let n = (rough_cell / fine_cell).ceil();
+                let mut top = f64::NEG_INFINITY;
+                let mut k = -n;
+                while k <= n {
+                    let a = (along + k * fine_cell).clamp(self.start, self.end);
+                    top = top.max(self.tip(a, round, across));
+                    k += 1.0;
+                }
+                top + roughing_allowance
+            };
+            let floors = self.side(swing, rough_step, rough_cell, |along, across| {
+                (
+                    self.point(along, round, floor(along, across) - radius),
+                    across,
+                )
+            });
+            let lowest = floors
+                .iter()
+                .map(|(p, _)| p.z + radius)
+                .fold(f64::INFINITY, f64::min);
+            let mut level = swing;
+            let mut k = 0;
+            while level > lowest {
+                progress::stop_if_cancelled()?;
+                k += 1;
+                level = (swing - f64::from(k) * depth).max(lowest);
+                let pass: Pass = floors
+                    .iter()
+                    .map(|&(p, across)| {
+                        let mut p = p;
+                        p.z = p.z.max(level - radius);
+                        (p, across)
+                    })
+                    .collect();
+                passes.extend(self.cutting(&pass, &mut material, &rough));
+            }
+            progress::report_steps(face as usize + 1, 3 * faces as usize);
+        }
+
+        progress::stage("Finishing each side");
+        let half = swing.min(radius + d);
+        for face in 0..faces {
+            progress::stop_if_cancelled()?;
+            let round = self.circumference * f64::from(face) / f64::from(faces);
+            let pass = self.side(half, self.step, self.turned.along_cell, |along, across| {
+                (
+                    self.point(along, round, self.tip(along, round, across) - radius),
+                    across,
+                )
+            });
+            passes.extend(self.cutting(&pass, &mut material, &fine));
+            progress::report_steps((faces + face) as usize + 1, 3 * faces as usize);
+        }
+
+        progress::stage("Turning for the details");
+        // a few cells, not one: the sides leave slivers finer than a cell that are not
+        // worth a ring
+        for ring in self.rings(0.0)? {
+            progress::stop_if_cancelled()?;
+            passes.extend(self.cutting(&ring, &mut material, &detail));
+        }
+        progress::report_steps(3 * faces as usize, 3 * faces as usize);
+        Ok(passes)
+    }
+
+    /// `pass` broken where the bit would cut too little of what is left of the `material`
+    /// to be worth it (as `check` says), which loses what the rest cuts.
+    fn cutting(
+        &self,
+        pass: &[(DVec3, f64)],
+        material: &mut Voxels,
+        check: &Check,
+    ) -> Vec<(Pass, bool)> {
+        let Check {
+            cutter,
+            looks,
+            above,
+            margin,
+            enough,
+        } = check;
+        let mut cuts = Vec::with_capacity(pass.len());
+        // where a stretch may start, whether the bit can come straight down to it quickly:
+        // nothing of the material anywhere above it, just before it goes there
+        let mut clear = vec![false; pass.len()];
+        let mut last: Option<Pose> = None;
+        for (i, point) in pass.iter().enumerate() {
+            let pose = self.pose(point);
+            let looking = Pose {
+                height: pose.height - margin,
+                ..pose
+            };
+            let cutting = material.held(looks, looking, *enough) >= *enough;
+            if cutting {
+                if last.is_none() {
+                    let start = if i > 0 { i - 1 } else { i };
+                    clear[start] = material.held(above, self.pose(&pass[start]), 1) == 0;
+                }
+                match last {
+                    Some(from) => material.cut(cutter, from, pose),
+                    None => material.cut_at(cutter, pose),
+                };
+                last = Some(pose);
+            } else {
+                last = None;
+            }
+            cuts.push(cutting);
+        }
+        let found = runs(pass, &cuts, 2.0 * self.tool.diameter);
+        found
+            .into_iter()
+            .map(|run| (clear[run.start], pass[run].to_vec()))
+            .map(|(clear, run)| (run, clear))
+            .collect()
+    }
 }
+
+/// How many threads to work out drops on.
+fn cores() -> usize {
+    std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+}
+
+/// `f` of each of `0..count`, in order, worked out over every core.
+fn parallel<T: Send>(count: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
+    let threads = cores().min(count).max(1);
+    if threads == 1 {
+        return (0..count).map(f).collect();
+    }
+    let f = &f;
+    let mut parts: Vec<Vec<(usize, T)>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..threads)
+            .map(|t| {
+                scope.spawn(move || {
+                    (t..count)
+                        .step_by(threads)
+                        .map(|i| (i, f(i)))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("a drop never panics"))
+            .collect()
+    });
+    let mut all: Vec<(usize, T)> = parts.drain(..).flatten().collect();
+    all.sort_by_key(|(i, _)| *i);
+    all.into_iter().map(|(_, t)| t).collect()
+}
+
+/// How a pass of bulk to fine detail decides whether a point cuts anything.
+struct Check {
+    /// The bit, as far up as matters.
+    cutter: Cutter,
+    /// The bit grown by `margin` all round (and its tip lowered by it), to look for
+    /// material with: the material is kept in cells, and a layer thinner than a cell must
+    /// still be found.
+    looks: Cutter,
+    /// The whole bit and holder, all the way up, a cell wider all round: what must find
+    /// nothing above a point for the bit to come straight down to it at the rapid rate.
+    above: Cutter,
+    margin: f64,
+    /// How many cells it must find.
+    enough: usize,
+}
+
+impl Check {
+    fn new(tool: &Tool, length: f64, margin: f64, enough: usize, cell: f64) -> Self {
+        let bit = |grow: f64, length: f64| {
+            Cutter::new(&Tool {
+                diameter: tool.diameter + 2.0 * grow,
+                flute_length: length + grow,
+                ..tool.clone()
+            })
+        };
+        Self {
+            cutter: bit(0.0, length),
+            looks: bit(margin, length),
+            // past the material's swing however long the bit is: as high as matters
+            above: bit(cell, f64::MAX / 4.0),
+            margin,
+            enough,
+        }
+    }
+}
+
+/// How many cells the material is kept in as bulk to fine detail works it out: about 16 MB.
+const CELLS: usize = 120_000_000;
+
+/// How many cells of material a ring must find to be worth cutting for detail.
+const DETAIL: usize = 3;
 
 /// The model in two parts: the rest as heights (`None` when there is none), and full 3D
 /// models cut round as they really are, each moved as the whole model was (`surface`) to
@@ -477,6 +770,140 @@ fn parts(
         Some(surface)
     };
     (rest, solid)
+}
+
+/// How far into the material the bit must go for a point to count as cutting, mm.
+const GRAZE: f64 = 0.05;
+
+/// `passes` with every stretch that cuts only air taken out, each broken where the bit
+/// would be clear of the `stock` (the blank as Job Setup has it, turned as A says): the bit
+/// lifts and moves over instead. One point of air is kept at each end of what is left, so
+/// the bit comes onto the material and leaves it at its cutting height, and short gaps (less
+/// than two bit widths) are cut through rather than lifted over.
+fn in_material(
+    passes: Vec<Pass>,
+    stock: &Stock,
+    cutter: &Cutter,
+    along_x: bool,
+    radius: f64,
+) -> Vec<Pass> {
+    let short = 2.0 * cutter.tool().diameter;
+    let cuts = |&(point, across): &(DVec3, f64)| {
+        let (along, round) = if along_x {
+            (point.x, point.y)
+        } else {
+            (point.y, point.x)
+        };
+        stock
+            .drop(cutter, along, across, round / radius)
+            .is_some_and(|top| radius + point.z < top - GRAZE)
+    };
+    passes
+        .into_iter()
+        .flat_map(|pass| {
+            let cutting: Vec<bool> = pass.iter().map(cuts).collect();
+            runs(&pass, &cutting, short)
+                .into_iter()
+                .map(|run| pass[run].to_vec())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// The stretches of `pass` where `cutting` says the bit cuts something, each with one
+/// point of air kept at either end, so the bit comes onto the material and leaves it at its
+/// cutting height; gaps shorter than `short` are cut through rather than lifted over.
+fn runs(pass: &[(DVec3, f64)], cutting: &[bool], short: f64) -> Vec<std::ops::Range<usize>> {
+    let mut keep = cutting.to_vec();
+    for (i, &c) in cutting.iter().enumerate() {
+        if c {
+            if i > 0 {
+                keep[i - 1] = true;
+            }
+            if i + 1 < keep.len() {
+                keep[i + 1] = true;
+            }
+        }
+    }
+    let mut i = 0;
+    while i < keep.len() {
+        if keep[i] {
+            i += 1;
+            continue;
+        }
+        let from = i;
+        while i < keep.len() && !keep[i] {
+            i += 1;
+        }
+        if from > 0 && i < keep.len() {
+            let length: f64 = pass[from - 1..=i]
+                .windows(2)
+                .map(|w| w[0].0.distance(w[1].0))
+                .sum();
+            if length < short {
+                keep[from..i].fill(true);
+            }
+        }
+    }
+    let mut out = vec![];
+    let mut from: Option<usize> = None;
+    for (i, &kept) in keep.iter().enumerate() {
+        match (kept, from) {
+            (true, None) => from = Some(i),
+            (false, Some(f)) => {
+                out.push(f..i);
+                from = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(f) = from {
+        out.push(f..keep.len());
+    }
+    out
+}
+
+/// The passes as moves, each from above its start and back up after: with how far across
+/// the bit is held at each when it is `held_off` the axis (otherwise none).
+fn joined(
+    passes: &[(Pass, bool)],
+    safe: f64,
+    held_off: bool,
+    radius: f64,
+    along_x: bool,
+) -> (Vec<Move>, Vec<f64>) {
+    let round = usize::from(along_x);
+    let mut moves: Vec<Move> = vec![];
+    let mut across = vec![];
+    for (pass, quick) in passes {
+        let points: Vec<DVec3> = pass.iter().map(|&(point, _)| point).collect();
+        let mut followed = follow(&points, safe);
+        let mut held: Vec<f64> = std::iter::once(pass[0].1)
+            .chain(pass.iter().map(|&(_, d)| d))
+            .chain(std::iter::once(pass[pass.len() - 1].1))
+            .collect();
+        if *quick && followed.len() > 1 {
+            // nothing above where it starts: down at the rapid rate to just above it, and
+            // only the last of the way at the plunge rate
+            let mut near = followed[1];
+            near.kind = MoveKind::Rapid;
+            near.to.z += APPROACH;
+            followed.insert(1, near);
+            held.insert(1, pass[0].1);
+        }
+        if held_off {
+            // follow adds a rise to above the first point and from the last
+            for (m, &d) in followed.iter_mut().zip(&held) {
+                // kept where the tip of the bit held d across cuts, on the unrolled material
+                let (w, z) = rotary_axis::tip_of(radius, m.to[round], m.to.z, d);
+                m.to[round] = w;
+                m.to.z = z;
+            }
+            across.extend(held);
+        }
+        moves.extend(followed);
+    }
+    (moves, across)
 }
 
 /// The toolpath: rings round the part at each step along it, each from A=0 all the way round
@@ -536,39 +963,36 @@ fn machine(doc: &Document, p: &Params) -> Result<Toolpath, CommandError> {
         end,
         step: stepover * tool.diameter,
     };
-    let mut passes = match p.strategy {
-        Strategy::Radial => work.rings(0.0)?,
-        Strategy::OffCentre => work.rings(p.offset)?,
-        Strategy::Indexed => work.sides(p.faces.clamp(1, 36))?,
+    let plain = |passes: Vec<Pass>| passes.into_iter().map(|p| (p, false)).collect();
+    // each pass, and whether the bit can come down to it at the rapid rate
+    let mut passes: Vec<(Pass, bool)> = match p.strategy {
+        Strategy::Radial => plain(work.rings(0.0)?),
+        Strategy::OffCentre => plain(work.rings(p.offset)?),
+        Strategy::Indexed => plain(work.sides(p.faces.clamp(1, 36))?),
+        Strategy::SidesThenDetails => match Stock::of(&doc.job) {
+            Some(stock) => {
+                work.sides_then_details(p.faces.clamp(1, 36), &stock, p.roughing_allowance)?
+            }
+            None => plain(work.sides(p.faces.clamp(1, 36))?),
+        },
     };
     if p.registration_mark {
         // just past the last ring, clear of the part when there is room
         let along = (end + tool.diameter).min(length);
-        passes.push(vec![(work.point(along, 0.0, -MARK_DEPTH), 0.0)]);
+        passes.push((vec![(work.point(along, 0.0, -MARK_DEPTH), 0.0)], false));
+    }
+    if let Some(stock) = Stock::of(&doc.job).filter(|_| p.strategy != Strategy::SidesThenDetails) {
+        let only: Vec<Pass> = passes.into_iter().map(|(p, _)| p).collect();
+        passes = plain(in_material(
+            only,
+            &stock,
+            &Cutter::new(tool),
+            along_x,
+            radius,
+        ));
     }
     let held_off = p.strategy != Strategy::Radial;
-    let round = usize::from(along_x);
-    let mut moves: Vec<Move> = vec![];
-    let mut across = vec![];
-    for pass in &passes {
-        let points: Vec<DVec3> = pass.iter().map(|&(point, _)| point).collect();
-        let mut followed = follow(&points, doc.job.turning_gap());
-        if held_off {
-            // follow adds a rise to above the first point and from the last
-            let held: Vec<f64> = std::iter::once(pass[0].1)
-                .chain(pass.iter().map(|&(_, d)| d))
-                .chain(std::iter::once(pass[pass.len() - 1].1))
-                .collect();
-            for (m, &d) in followed.iter_mut().zip(&held) {
-                // kept where the tip of the bit held d across cuts, on the unrolled material
-                let (w, z) = rotary_axis::tip_of(radius, m.to[round], m.to.z, d);
-                m.to[round] = w;
-                m.to.z = z;
-            }
-            across.extend(held);
-        }
-        moves.extend(followed);
-    }
+    let (moves, across) = joined(&passes, doc.job.turning_gap(), held_off, radius, along_x);
     let mut toolpath =
         made_by::<RotaryMachiningToolpath>(p, p.name.clone(), tool.clone(), vec![], moves);
     toolpath.across = across;
@@ -621,7 +1045,7 @@ mod tests {
         }
     }
 
-    fn cuts(doc: &Document, p: &Params) -> Vec<DVec3> {
+    fn cuts_of(doc: &Document, p: &Params) -> Vec<DVec3> {
         machine(doc, p)
             .unwrap()
             .moves
@@ -639,9 +1063,48 @@ mod tests {
             ..Params::default()
         };
         // the part is 12 mm from the axis in a 20 mm one: 8 mm below the top all round
-        for c in cuts(&doc, &p).into_iter().filter(|c| c.x > 6.0) {
+        for c in cuts_of(&doc, &p).into_iter().filter(|c| c.x > 6.0) {
             assert!((c.z + 8.0).abs() < 0.05, "{c:?}");
         }
+    }
+
+    #[test]
+    fn where_the_part_is_the_material_surface_the_bit_cuts_no_air() {
+        // the lip is the material's own surface: nothing to cut there, so no ring goes round
+        // it; the rest of the part is still followed all the way round
+        let doc = lipped();
+        let p = Params {
+            tool: ball(6.0),
+            ..Params::default()
+        };
+        let cuts = cuts_of(&doc, &p);
+        let first = cuts.iter().map(|c| c.x).fold(f64::MAX, f64::min);
+        let at: Vec<_> = cuts.iter().filter(|c| c.x < 1.0).take(5).collect();
+        assert!(first > 1.0, "no ring on the lip: {first} {at:?}");
+        assert!(cuts.iter().any(|c| c.x > 58.0));
+        // held to one side, the same
+        let off = Params {
+            strategy: Strategy::OffCentre,
+            ..p.clone()
+        };
+        assert!(cuts_of(&doc, &off).iter().all(|c| c.x > 1.0));
+        // cut side by side, the bit only crosses the lip at the ends of its lines, from one
+        // line over to the next: never further than two bit widths through the air
+        let sides = Params {
+            strategy: Strategy::Indexed,
+            ..p
+        };
+        let toolpath = machine(&doc, &sides).unwrap();
+        let (mut through, mut most) = (0.0, 0.0f64);
+        for w in toolpath.moves.windows(2) {
+            if w[1].kind == MoveKind::Cut && w[1].to.x < 1.0 {
+                through += w[0].to.distance(w[1].to);
+                most = most.max(through);
+            } else {
+                through = 0.0;
+            }
+        }
+        assert!(most < 12.0, "{most}");
     }
 
     #[test]
@@ -659,8 +1122,9 @@ mod tests {
             .filter(|m| m.kind == MoveKind::Plunge)
             .map(|m| m.to)
             .collect();
-        // 60 mm in 1.5 mm steps: 41 rings, each plunging at A=0
-        assert_eq!(plunges.len(), 41);
+        // 60 mm in 1.5 mm steps: 41 rings, each plunging at A=0, but for the two at the
+        // ends, where the bead is the material's own surface and there is nothing to cut
+        assert_eq!(plunges.len(), 39);
         assert!(plunges.iter().all(|p| p.y.abs() < 1e-9));
         let last_cut = |i: usize| {
             toolpath.moves[..i]
@@ -746,7 +1210,7 @@ mod tests {
             allowance: 0.5,
             ..Params::default()
         };
-        for c in cuts(&doc, &p).into_iter().filter(|c| c.x > 6.0) {
+        for c in cuts_of(&doc, &p).into_iter().filter(|c| c.x > 6.0) {
             assert!((c.z + 7.5).abs() < 0.05, "{c:?}");
         }
     }
