@@ -71,3 +71,4 @@ language, translation, translate, locale, language pack, russian, german, french
 firmware, grbl, grblhal, fluidnc, mach3, mach4, controller
 room to turn, swing, swings, clearance round the axis, corners hit, hits the bed, axis height
 colour, color, colours, colors, line colour, line color, layer colour, layer color
+screen reader, screen readers, narrator, nvda, jaws, orca, voiceover, accessibility, accessible, blind, low vision, keyboard only
