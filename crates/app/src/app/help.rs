@@ -18,6 +18,9 @@ enum Step {
 /// is a tool's, headed by its button's icon.
 pub(super) const OWN_PAGES: [&str; 4] = ["contents", "design", "toolpaths", "tips"];
 
+/// Tools whose help pages are tool pages though no toolbar group holds them.
+const TOOLS_WITHOUT_BUTTONS: [&str; 1] = ["job_setup"];
+
 /// How many points across a tool's icon is beside its name at the top of its help page.
 pub(super) const PAGE_ICON: u16 = 48;
 /// And beside its name in a list of tools or of search results.
@@ -268,6 +271,8 @@ impl CutCraftApp {
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
         }
+        // a tool with no button of its own: Setup Material's More settings for this job…
+        topics.extend(TOOLS_WITHOUT_BUTTONS);
         topics
     }
 

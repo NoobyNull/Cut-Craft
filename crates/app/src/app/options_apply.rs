@@ -36,6 +36,7 @@ impl CutCraftApp {
 
     fn close_options(&mut self) {
         self.options_draft = None;
+        self.job_defaults_form = None;
         self.options_closing = false;
         self.options_window = false;
         self.capture = None;

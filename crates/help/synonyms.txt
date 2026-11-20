@@ -61,6 +61,9 @@ fold, folded, collapse, collapsed, hidden tools, missing buttons, narrow window
 construction line, construction lines, construction geometry, reference line, helper line, guide path, layout line
 add-on, add-ons, addon, addons, plugin, plugins, extension, extensions, gadget, gadgets, script, scripts, lua
 high detail, large model, finer detail, more detail
+setup material, material size, stock size, board size, blank size, job size
+job defaults, default job, new job settings, startup settings
+classic startup flow, start page, splash screen, startup screen, welcome screen
 preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated
 filter, filters, narrow down
 firmware, grbl, grblhal, fluidnc, mach3, mach4, controller
