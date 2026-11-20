@@ -9,6 +9,7 @@
 use super::{CutCraftApp, Layout, egui};
 use cut_craft_core::document::Document;
 use cut_craft_core::{CommandError, DynCommand};
+use cut_craft_i18n::tr;
 
 /// A tool's guidance: its name, what it does, and what to do next (nothing for a tool that
 /// just runs, such as Undo).
@@ -211,7 +212,7 @@ impl CutCraftApp {
                 }
                 if let Some(next) = &tip.next {
                     ui.horizontal_wrapped(|ui| {
-                        ui.strong("Next:");
+                        ui.strong(tr!("guide-next"));
                         ui.label(next);
                     });
                 }

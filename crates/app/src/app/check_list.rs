@@ -7,6 +7,7 @@
 use super::{CutCraftApp, Info, egui};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::preflight::{Check, Finding, Phase, Severity};
+use cut_craft_i18n::tr;
 
 /// The help page about all the checks.
 pub(super) const OVERVIEW: &str = "checks_before_cutting";
@@ -95,7 +96,7 @@ impl CutCraftApp {
     ) -> bool {
         let mut help = None;
         ui.horizontal(|ui| {
-            ui.strong("Checks before cutting");
+            ui.strong(tr!("check-list-checks-before-cutting"));
             if help_button(
                 ui,
                 "What each check looks for, and how to fix what it finds",
@@ -109,7 +110,7 @@ impl CutCraftApp {
                 let phase = self.busy.as_ref().and_then(|b| Phase::of_stage(&b.stage()));
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.label("Checking the toolpaths: a big 3D toolpath takes a little while");
+                    ui.label(tr!("check-list-checking-the-toolpaths-a-big"));
                 });
                 rows_area(ui, |ui| {
                     for check in Check::ALL {
@@ -201,7 +202,7 @@ impl CutCraftApp {
                         .color(visuals.warn_fg_color);
                     if ui
                         .checkbox(&mut ticked, text)
-                        .on_hover_hint("Tick to say you have read this and it is what you want")
+                        .on_hover_hint(tr!("check-list-tick-to-say-you-have"))
                         .changed()
                     {
                         if ticked {
@@ -258,7 +259,7 @@ fn row(
         mark(ui);
         ui.label(check.name()).on_hover_hint(check.guards());
         if let Some(why) = not_checked {
-            ui.weak(format!("not checked: {why}"));
+            ui.weak(tr!("check-list-not-checked", why = why));
         }
         pressed = help_button(ui, check.guards());
     });

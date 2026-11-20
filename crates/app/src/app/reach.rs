@@ -4,6 +4,7 @@
 
 use cut_craft_core::reach::{self, Line, Missed, Side};
 use cut_craft_core::toolpath::Tool;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 
@@ -45,10 +46,7 @@ pub(super) fn show(ui: &mut egui::Ui, line: &Line) {
     };
     let shown = ui.colored_label(colour, line.text());
     if matches!(line, Line::Short(_)) {
-        shown.on_hover_text(
-            "Pick a smaller bit (or one with longer flutes) with Select…, or cut less deep. \
-             Calculate still makes the toolpath; what the bit can't reach is left uncut",
-        );
+        shown.on_hover_text(tr!("reach-pick-a-smaller-bit-or"));
     }
 }
 

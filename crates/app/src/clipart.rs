@@ -10,6 +10,7 @@ mod properties;
 mod tags;
 
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -753,10 +754,10 @@ struct Tree {
 /// them; with Add, Remove and Open Folder.
 fn folders(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) -> Option<Picked> {
     let mut picked = None;
-    ui.strong("Folders");
+    ui.strong(tr!("clipart-folders"));
     let mut tree = Tree::default();
     if clipart.folders.is_empty() {
-        ui.weak("No folders yet. Add a folder of your models and pictures to see them here.");
+        ui.weak(tr!("clipart-no-folders-yet-add-a"));
     } else {
         let most = ui.spacing().interact_size.y * TREE_ROWS;
         egui::ScrollArea::vertical()
@@ -767,7 +768,7 @@ fn folders(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) -> Optio
                 let all = format!("All folders ({})", listing.entries.len());
                 if ui
                     .selectable_label(clipart.open.is_none(), all)
-                    .on_hover_hint("Shows what's in every folder at once.")
+                    .on_hover_hint(tr!("clipart-shows-what-s-in-every"))
                     .clicked()
                 {
                     tree.all = true;
@@ -793,21 +794,27 @@ fn folders(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) -> Optio
     let root = (clipart.open.as_ref()).filter(|o| clipart.folders.contains(o));
     let mut remove = None;
     ui.horizontal(|ui| {
-        if ui.button("Add Folder...").clicked() {
+        if ui.button(tr!("clipart-add-folder")).clicked() {
             picked = Some(Picked::AddFolder);
         }
         if ui
-            .add_enabled(root.is_some(), egui::Button::new("Remove Folder"))
-            .on_hover_hint("Takes the folder out of the Library; its files stay on disk.")
-            .on_disabled_hover_text("Click one of your folders in the list first.")
+            .add_enabled(
+                root.is_some(),
+                egui::Button::new(tr!("clipart-remove-folder")),
+            )
+            .on_hover_hint(tr!("clipart-takes-the-folder-out-of"))
+            .on_disabled_hover_text(tr!("clipart-click-one-of-your-folders"))
             .clicked()
         {
             remove = root.cloned();
         }
         if ui
-            .add_enabled(clipart.open.is_some(), egui::Button::new("Open Folder"))
-            .on_hover_hint("Shows the folder in your file manager.")
-            .on_disabled_hover_text("Click a folder in the list first.")
+            .add_enabled(
+                clipart.open.is_some(),
+                egui::Button::new(tr!("clipart-open-folder")),
+            )
+            .on_hover_hint(tr!("clipart-shows-the-folder-in-your"))
+            .on_disabled_hover_text(tr!("clipart-click-a-folder-in-the"))
             .clicked()
             && let Some(open) = &clipart.open
         {
@@ -859,13 +866,13 @@ fn node(
             tree.choose = Some(folder.to_path_buf());
         }
         cut_craft_bug_report::context_menu(&row, |ui| {
-            if ui.button("Open Folder").clicked() {
+            if ui.button(tr!("clipart-open-folder")).clicked() {
                 tree.show = Some(folder.to_path_buf());
             }
             if root
                 && ui
-                    .button("Remove Folder")
-                    .on_hover_hint("Takes the folder out of the Library; its files stay on disk.")
+                    .button(tr!("clipart-remove-folder"))
+                    .on_hover_hint(tr!("clipart-takes-the-folder-out-of"))
                     .clicked()
             {
                 tree.remove = Some(folder.to_path_buf());
@@ -909,9 +916,9 @@ fn files(
             Some(false) => {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.weak(format!(
-                        "Connecting to {}...",
-                        network::kept(open).display()
+                    ui.weak(tr!(
+                        "clipart-connecting",
+                        place = network::kept(open).display().to_string()
                     ));
                 });
             }
@@ -961,36 +968,31 @@ fn files(
         .collect();
     filters(ui, clipart, locked, listing.full);
     let place = clipart.open.as_deref().map_or_else(
-        || "all your folders".to_owned(),
-        |open| format!("{} and the folders in it", name(open)),
+        || tr!("clipart-place-everywhere"),
+        |open| tr!("clipart-place-folder", folder = name(open)),
     );
-    let files = |n: usize| {
-        if n == 1 {
-            "1 file".into()
-        } else {
-            format!("{n} files")
-        }
-    };
     if shown.is_empty() {
         if reading {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.weak("Reading your folders...");
+                ui.weak(tr!("clipart-reading-your-folders"));
             });
         } else if here.is_empty() {
-            ui.weak(
-                "Nothing here yet. 3D models (STL, OBJ, .ccclip), pictures and drawings (SVG, \
-                 DXF) show up here.",
-            );
+            ui.weak(tr!("clipart-nothing-here-yet-3d-models"));
         } else {
-            ui.weak("Nothing here matches. Clear the search or choose Everything.");
+            ui.weak(tr!("clipart-nothing-here-matches-clear-the"));
         }
         return None;
     }
     ui.weak(if shown.len() == here.len() {
-        format!("{} in {place}", files(here.len()))
+        tr!("clipart-files-in", count = here.len(), place = place)
     } else {
-        format!("{} of {} in {place}", shown.len(), files(here.len()))
+        tr!(
+            "clipart-some-files-in",
+            shown = shown.len(),
+            count = here.len(),
+            place = place
+        )
     });
     grid(ui, clipart, &shown, levels)
 }
@@ -1007,13 +1009,10 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, locked: usize, full: bool) 
                 }
             })
             .response
-            .on_hover_hint(
-                "Show one kind of file. Depth maps are greyscale pictures, or pictures you've \
-                 tagged \"depth map\".",
-            );
+            .on_hover_hint(tr!("clipart-show-one-kind-of-file"));
         ui.add(
             egui::TextEdit::singleline(&mut clipart.search)
-                .hint_text("Search names and tags")
+                .hint_text(tr!("clipart-search-names-and-tags"))
                 .desired_width(f32::INFINITY),
         );
     });
@@ -1030,15 +1029,12 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, locked: usize, full: bool) 
     }
     if full {
         let most = limits::most();
-        ui.weak(format!(
-            "There are more than {most} files in your folders, so only the first {most} are \
-             shown. Add smaller folders to see the rest."
-        ));
+        ui.weak(tr!("clipart-too-many-files", most = most));
     }
     if clipart.selected.len() > 1 {
         ui.horizontal(|ui| {
-            ui.label(format!("{} picked", clipart.selected.len()));
-            if ui.small_button("Clear").clicked() {
+            ui.label(tr!("clipart-picked", count = clipart.selected.len()));
+            if ui.small_button(tr!("clipart-clear")).clicked() {
                 clipart.selected.clear();
             }
         });
@@ -1046,22 +1042,20 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, locked: usize, full: bool) 
     let mut done = None;
     if let Some((files, tag)) = &mut clipart.tagging {
         ui.horizontal(|ui| {
-            ui.label(if files.len() == 1 {
-                "Tag:".to_owned()
-            } else {
-                format!("Tag for {}:", files.len())
-            });
+            ui.label(tr!("clipart-tag-files", count = files.len()));
             let field = ui.add(
                 egui::TextEdit::singleline(tag)
-                    .hint_text("e.g. animals, depth map")
+                    .hint_text(tr!("clipart-e-g-animals-depth-map"))
                     .desired_width(ui.available_width() - 110.0),
             );
             field.request_focus();
             let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            if ui.button("Add").clicked() || enter {
+            if ui.button(tr!("clipart-add")).clicked() || enter {
                 done = Some(true);
             }
-            if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if ui.button(tr!("clipart-cancel")).clicked()
+                || ui.input(|i| i.key_pressed(egui::Key::Escape))
+            {
                 done = Some(false);
             }
         });
@@ -1285,10 +1279,10 @@ fn enlarged(
     ui.set_max_width(edge.max(ui.spacing().tooltip_width));
     ui.strong(name(&entry.file));
     if !tags.is_empty() {
-        ui.weak(format!("Tags: {}", tags.join(", ")));
+        ui.weak(tr!("clipart-tags", tags = tags.join(", ")));
     }
     if let Some(trouble) = trouble {
-        ui.weak(format!("No preview: {trouble}"));
+        ui.weak(tr!("clipart-no-preview", trouble = trouble.to_string()));
     }
 }
 
@@ -1316,8 +1310,8 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
                 }
             }
             if ui
-                .button("New Level")
-                .on_hover_hint("Each model on a new level named after it.")
+                .button(tr!("clipart-new-level"))
+                .on_hover_hint(tr!("clipart-each-model-on-a-new"))
                 .clicked()
             {
                 picked = Some(Picked::AddToLevel(files.clone(), ToLevel::New));
@@ -1326,8 +1320,8 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
     }
     ui.separator();
     if ui
-        .add_enabled(!many, egui::Button::new("Locate"))
-        .on_hover_hint("Shows the file in its folder.")
+        .add_enabled(!many, egui::Button::new(tr!("clipart-locate")))
+        .on_hover_hint(tr!("clipart-shows-the-file-in-its"))
         .clicked()
     {
         picked = Some(Picked::Locate(tile.entry.file.clone()));
@@ -1337,7 +1331,7 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
     }
     let tags = clipart.tags.of_all(&files);
     if !tags.is_empty() {
-        ui.menu_button("Remove Tag", |ui| {
+        ui.menu_button(tr!("clipart-remove-tag"), |ui| {
             for tag in &tags {
                 if ui.button(tag).clicked()
                     && let Err(e) = clipart.tags.remove(&files, tag)
@@ -1352,7 +1346,7 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
         egui::RichText::new(count("Delete from Disk...")).color(ui.visuals().error_fg_color);
     if ui
         .button(delete)
-        .on_hover_hint("Deletes the file for good. You're asked first.")
+        .on_hover_hint(tr!("clipart-deletes-the-file-for-good"))
         .clicked()
     {
         let mut doomed = files.clone();
@@ -1365,8 +1359,8 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
     }
     ui.separator();
     if ui
-        .button("Properties")
-        .on_hover_hint("Its size, date, tags and where it is.")
+        .button(tr!("clipart-properties"))
+        .on_hover_hint(tr!("clipart-its-size-date-tags-and"))
         .clicked()
     {
         let file = &tile.entry.file;

@@ -5,6 +5,7 @@
 use super::CutCraftApp;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 
@@ -60,21 +61,18 @@ impl CutCraftApp {
         let (mut ok, mut cancel) = (false, false);
         egui::Modal::new(egui::Id::unique("deep_cut")).show(ctx, |ui| {
             ui.set_max_width(ui.spacing().interact_size.x * 6.0);
-            ui.heading("Warning: deeper than the material");
+            ui.heading(tr!("depth-warning-deeper-than-the-material"));
             ui.label(warning(held.depth, thickness, self.doc.job.units));
-            ui.label(
-                "OK makes the toolpath as it is set. Cancel goes back to the form, with the cut \
-                 depth set to the material's thickness.",
-            );
+            ui.label(tr!("depth-ok-makes-the-toolpath-as"));
             ui.separator();
             ui.horizontal(|ui| {
                 ok = ui
-                    .button("OK")
-                    .on_hover_hint("Cut this deep anyway: the settings are not changed")
+                    .button(tr!("depth-ok"))
+                    .on_hover_hint(tr!("depth-cut-this-deep-anyway-the"))
                     .clicked();
                 cancel = ui
-                    .button("Cancel")
-                    .on_hover_hint("Back to the form, cutting no deeper than the material")
+                    .button(tr!("depth-cancel"))
+                    .on_hover_hint(tr!("depth-back-to-the-form-cutting"))
                     .clicked();
             });
         });

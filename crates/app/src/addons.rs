@@ -349,11 +349,8 @@ impl Addons {
         let dir = self.dir.clone();
         let installed = |id: &str| dir.as_deref().and_then(|d| addon::installed(d, id));
 
-        ui.heading("Cut Craft add-ons");
-        ui.label(
-            "Extra tools that are too big to come with Cut Craft. Each shows up as an \
-                  ordinary tool once it is installed.",
-        );
+        ui.heading(tr!("addons-cut-craft-add-ons"));
+        ui.label(tr!("addons-extra-tools-that-are-too"));
         ui.add_space(4.0);
         for a in OFFICIAL {
             ui.group(|ui| {
@@ -379,11 +376,15 @@ impl Addons {
             .collect();
         if !others.is_empty() {
             ui.add_space(8.0);
-            ui.strong("Installed from GitHub");
+            ui.strong(tr!("addons-installed-from-github"));
             for (id, record) in &others {
                 ui.group(|ui| {
                     ui.set_width(ui.available_width());
-                    ui.label(format!("{id}, from {}", record.repo));
+                    ui.label(tr!(
+                        "addons-from-repo",
+                        id = id.as_str(),
+                        repo = record.repo.to_string()
+                    ));
                     let repo = record.repo.to_string();
                     self.row(ui, id, &repo, Some(record), busy, &mut press);
                 });
@@ -391,11 +392,8 @@ impl Addons {
         }
 
         ui.add_space(8.0);
-        ui.strong("Install from GitHub");
-        ui.label(
-            "A gadget or other add-on published on GitHub: type its repository, such as \
-                  owner/name, or paste its link. Cut Craft installs its newest release.",
-        );
+        ui.strong(tr!("addons-install-from-github"));
+        ui.label(tr!("addons-a-gadget-or-other-add"));
         ui.horizontal(|ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.repo_text)
@@ -403,7 +401,10 @@ impl Addons {
                     .desired_width(300.0),
             );
             let ok = !busy && !self.repo_text.trim().is_empty();
-            if ui.add_enabled(ok, egui::Button::new("Install")).clicked() {
+            if ui
+                .add_enabled(ok, egui::Button::new(tr!("addons-install")))
+                .clicked()
+            {
                 press = Press::Install(self.repo_text.trim().to_owned());
             }
         });
@@ -424,18 +425,18 @@ impl Addons {
             Phase::Finding(repo) => {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.label(format!("Asking GitHub for {repo}'s newest release..."));
+                    ui.label(tr!("addons-asking-repo", repo = repo.as_str()));
                 });
             }
             Phase::Asking(offer) => {
                 ui.group(|ui| {
-                    ui.strong("\u{26a0} Not official");
+                    ui.strong(tr!("addons-not-official-heading"));
                     ui.label(unsigned_warning(offer));
                     ui.horizontal(|ui| {
-                        if ui.button("Install Anyway").clicked() {
+                        if ui.button(tr!("addons-install-anyway")).clicked() {
                             *press = Press::InstallAnyway;
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(tr!("addons-cancel")).clicked() {
                             *press = Press::Cancel;
                         }
                     });
@@ -445,17 +446,17 @@ impl Addons {
                 ui.group(|ui| {
                     ui.colored_label(ui.visuals().warn_fg_color, remove_question(name));
                     ui.horizontal(|ui| {
-                        if ui.button("Remove").clicked() {
+                        if ui.button(tr!("addons-remove")).clicked() {
                             *press = Press::RemoveAnyway;
                         }
-                        if ui.button("Keep").clicked() {
+                        if ui.button(tr!("addons-keep")).clicked() {
                             *press = Press::Cancel;
                         }
                     });
                 });
             }
             Phase::Installing { name, done, total } => {
-                ui.label(format!("Downloading {name}..."));
+                ui.label(tr!("addons-downloading", name = name.as_str()));
                 #[expect(clippy::cast_precision_loss, reason = "a fraction for the bar")]
                 let fraction = if *total > 0 {
                     *done as f32 / *total as f32
@@ -546,7 +547,7 @@ impl Addons {
         ui.horizontal(|ui| match had {
             None => {
                 if ui
-                    .add_enabled(!busy, egui::Button::new("Install"))
+                    .add_enabled(!busy, egui::Button::new(tr!("addons-install")))
                     .clicked()
                 {
                     *press = Press::Install(repo.to_owned());
@@ -560,7 +561,10 @@ impl Addons {
                         *press = Press::Update(id.to_owned());
                     }
                 }
-                if ui.add_enabled(!busy, egui::Button::new("Remove")).clicked() {
+                if ui
+                    .add_enabled(!busy, egui::Button::new(tr!("addons-remove")))
+                    .clicked()
+                {
                     *press = Press::Remove(id.to_owned());
                 }
             }
@@ -735,7 +739,7 @@ fn ask_to_run(name: &str) -> bool {
         .set_level(rfd::MessageLevel::Warning)
         .set_buttons(rfd::MessageButtons::OkCancelCustom(
             "Run Add-on".into(),
-            "Cancel".into(),
+            tr!("addons-cancel"),
         ))
         .show();
     matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Add-on")

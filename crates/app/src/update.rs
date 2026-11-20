@@ -3,6 +3,7 @@
 //! Cut Craft (asking to save first) and opens the new version on the same job. The work is
 //! [`cut_craft_updater`]'s, on a thread of its own so the window keeps drawing.
 
+use cut_craft_i18n::tr;
 use cut_craft_updater::{Found, Install, RELEASES_PAGE, Step, Version};
 use eframe::egui;
 use std::path::PathBuf;
@@ -261,15 +262,15 @@ impl Updates {
             Phase::Checking => {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.label("Asking GitHub for the newest version...");
+                    ui.label(tr!("update-asking-github-for-the-newest"));
                 });
                 Press::Nothing
             }
             Phase::Found(Found::UpToDate) => {
-                ui.heading("Cut Craft is up to date");
-                ui.label(format!("Version {} is the newest version.", self.current));
+                ui.heading(tr!("update-cut-craft-is-up-to"));
+                ui.label(tr!("update-newest", version = self.current.to_string()));
                 ui.add_space(8.0);
-                pressed(ui.button("Close").clicked(), Press::Close)
+                pressed(ui.button(tr!("update-close")).clicked(), Press::Close)
             }
             Phase::Found(Found::Release { release, ready }) => {
                 offer(ui, release, ready, &self.current)
@@ -284,32 +285,23 @@ impl Updates {
                     bar.animate(true)
                 });
                 ui.add_space(4.0);
-                ui.weak(
-                    "You can close this window and keep working. When the new version is \
-                     installed, Cut Craft closes and opens it on the same job, asking you to \
-                     save any changes first.",
-                );
+                ui.weak(tr!("update-you-can-close-this-window"));
                 Press::Nothing
             }
             Phase::Installed(program) => {
-                let version = self
-                    .offered
-                    .as_ref()
-                    .map_or_else(String::new, |v| format!(" {v}"));
-                ui.heading(format!("Cut Craft{version} is installed"));
-                ui.label(
-                    "Relaunch Cut Craft to start using it. If your job has changes that are \
-                     not saved, you are asked whether to save them first, and the job opens \
-                     again in the new version.",
-                );
+                ui.heading(self.offered.as_ref().map_or_else(
+                    || tr!("update-installed"),
+                    |v| tr!("update-version-installed", version = v.to_string()),
+                ));
+                ui.label(tr!("update-relaunch-cut-craft-to-start"));
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     let now = ui
-                        .button(egui::RichText::new("Relaunch Now").strong())
+                        .button(egui::RichText::new(tr!("update-relaunch-now")).strong())
                         .clicked();
                     let later = ui
-                        .button("Relaunch Later")
-                        .on_hover_text("The new version starts the next time you open Cut Craft")
+                        .button(tr!("update-relaunch-later"))
+                        .on_hover_text(tr!("update-the-new-version-starts-the"))
                         .clicked();
                     if now {
                         Press::Restart(program.clone())
@@ -320,16 +312,16 @@ impl Updates {
                 .inner
             }
             Phase::Failed(e) => {
-                ui.heading("The update did not finish");
+                ui.heading(tr!("update-the-update-did-not-finish"));
                 ui.label(e);
-                ui.label("This copy of Cut Craft has not been changed.");
+                ui.label(tr!("update-this-copy-of-cut-craft"));
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    let again = ui.button("Try Again").clicked();
-                    if ui.button("Open the Download Page").clicked() {
+                    let again = ui.button(tr!("update-try-again")).clicked();
+                    if ui.button(tr!("update-open-the-download-page")).clicked() {
                         ui.ctx().open_url(egui::OpenUrl::new_tab(RELEASES_PAGE));
                     }
-                    let close = ui.button("Close").clicked();
+                    let close = ui.button(tr!("update-close")).clicked();
                     if again {
                         Press::TryAgain
                     } else {
@@ -366,10 +358,11 @@ fn offer(
     current: &Version,
 ) -> Press {
     ui.heading(offer_heading(&release.version));
-    ui.label(format!("You have version {current}."));
+    ui.label(tr!("update-you-have", version = current.to_string()));
     ui.add_space(4.0);
     if !release.notes.is_empty() {
-        egui::CollapsingHeader::new("What's new")
+        egui::CollapsingHeader::new(tr!("update-what-s-new"))
+            .id_salt("update_whats_new")
             .default_open(true)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical()
@@ -378,29 +371,24 @@ fn offer(
             });
     }
     if !release.page.is_empty() {
-        ui.hyperlink_to("See this version on GitHub", &release.page);
+        ui.hyperlink_to(tr!("update-see-this-version-on-github"), &release.page);
     }
     ui.add_space(8.0);
     match ready {
         Ok(()) => {
-            ui.label(egui::RichText::new("Download, install and relaunch?").strong());
-            ui.label(
-                "Install Now downloads it from GitHub, checks it is a genuine, signed Cut \
-                 Craft release that arrived complete, installs it, and reopens Cut Craft on \
-                 your job. If the job has unsaved changes you are asked to save them first. \
-                 If anything goes wrong, this version is left as it is.",
-            );
+            ui.label(egui::RichText::new(tr!("update-download-install-and-relaunch")).strong());
+            ui.label(tr!("update-install-now-downloads-it-from"));
         }
         Err(why) => {
-            ui.label(egui::RichText::new("Update this copy yourself").strong());
+            ui.label(egui::RichText::new(tr!("update-update-this-copy-yourself")).strong());
             // the commands are shown below, each with Copy
             ui.label(why.replace('`', ""));
             for command in commands_in(why) {
                 ui.horizontal(|ui| {
                     ui.add(egui::Label::new(egui::RichText::new(command).monospace()).wrap());
                     if ui
-                        .small_button("Copy")
-                        .on_hover_text("Copy this command, to paste into a terminal")
+                        .small_button(tr!("update-copy"))
+                        .on_hover_text(tr!("update-copy-this-command-to-paste"))
                         .clicked()
                     {
                         ui.ctx().copy_text(command.to_owned());
@@ -415,13 +403,13 @@ fn offer(
             let mut press = Press::Nothing;
             if ready.is_ok() {
                 if ui
-                    .button(egui::RichText::new("Install Now").strong())
-                    .on_hover_text("Download, install and relaunch Cut Craft")
+                    .button(egui::RichText::new(tr!("update-install-now")).strong())
+                    .on_hover_text(tr!("update-download-install-and-relaunch-cut"))
                     .clicked()
                 {
                     press = Press::InstallNow;
                 }
-            } else if ui.button("Open the Download Page").clicked() {
+            } else if ui.button(tr!("update-open-the-download-page")).clicked() {
                 let page = if release.page.is_empty() {
                     RELEASES_PAGE
                 } else {
@@ -430,18 +418,15 @@ fn offer(
                 ui.ctx().open_url(egui::OpenUrl::new_tab(page));
             }
             if ui
-                .button("Later")
-                .on_hover_text("Ask again the next time Cut Craft starts")
+                .button(tr!("update-later"))
+                .on_hover_text(tr!("update-ask-again-the-next-time"))
                 .clicked()
             {
                 press = Press::Close;
             }
             if ui
-                .button("Skip This Version")
-                .on_hover_text(
-                    "Not offered again when Cut Craft starts; Help ▸ Check for Updates still \
-                     finds it",
-                )
+                .button(tr!("update-skip-this-version"))
+                .on_hover_text(tr!("update-not-offered-again-when-cut"))
                 .clicked()
             {
                 press = Press::Skip(release.version.to_string());
@@ -450,7 +435,7 @@ fn offer(
         })
         .inner;
     ui.add_space(4.0);
-    ui.weak("Automatic checks can be turned off in Edit ▸ Options ▸ Updates.");
+    ui.weak(tr!("update-automatic-checks-can-be-turned"));
     press
 }
 

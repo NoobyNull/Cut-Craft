@@ -1,0 +1,21 @@
+# src/app/web_api.rs
+web-api-access-token = Access token
+web-api-copy-command = Copy Command
+web-api-copy-the-whole-token-to = Copy the whole token, to paste into your script
+web-api-copy-this-command-to-paste = Copy this command, to paste in a terminal
+web-api-copy = Copy
+web-api-every-call = Every call
+web-api-help-contents-web-api-explains = Help ▸ Contents ▸ Web API explains more.
+web-api-make-new-token = Make New Token
+web-api-open-docs-page = Open Docs Page
+web-api-open-the-docs-page-in = Open the docs page in your web browser
+web-api-other-computers-can-reach-cut = Other computers can reach Cut Craft, so every call must send this. Give it only to programs you trust, and keep it private, like a password.
+web-api-paste-this-in-a-terminal = Paste this in a terminal: Cut Craft answers with its version and what it is doing.
+web-api-programs-on-this-computer-need = Programs on this computer need no token. Tick Allow other computers on my network and every call will need an access token, shown here.
+web-api-start-the-web-api-again = Start the Web API again with these settings
+web-api-stop-the-old-token-working = Stop the old token working, for example if someone you did not mean to have it does
+web-api-the-web-api-is-off = The Web API is off. Tick Turn on the Web API to start it.
+web-api-the-web-api-must-be = The Web API must be running to show its docs page
+web-api-try-again = Try Again
+web-api-try-it = Try it
+web-api-docs-page = The docs page lists every call, and every tool and menu item, each ready to try in your web browser: { $page }

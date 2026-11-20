@@ -8,6 +8,7 @@
 
 use cut_craft_core::eta::{self, Estimate, Estimator};
 use cut_craft_core::progress::Progress;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::{Value, json};
 use std::cell::RefCell;
@@ -213,15 +214,15 @@ impl<A: 'static> Busy<A> {
                 None => {
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.label("Working…");
+                        ui.label(tr!("busy-working"));
                     });
                 }
             }
             ui.weak(time_line(elapsed, estimate));
             ui.add_space(ui.spacing().item_spacing.y);
             cancel = ui
-                .button("Cancel")
-                .on_hover_text("Stop it (Esc): nothing in the job changes")
+                .button(tr!("busy-cancel"))
+                .on_hover_text(tr!("busy-stop-it-esc-nothing-in"))
                 .clicked();
         });
         // Escape is Cancel, as in any other window

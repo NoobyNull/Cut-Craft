@@ -7,6 +7,7 @@
 
 use super::{CutCraftApp, SaveForm, dialog_size, message_dialog};
 use crate::options::EarlierGcode;
+use cut_craft_i18n::tr;
 use cut_craft_machines::send::{
     Folder, Item, SendTo, Store, distinct_names, safe_file_name, safe_name, size_text,
 };
@@ -438,7 +439,10 @@ impl MachineFiles {
 
     /// The window's contents; whether Upload Files was pressed.
     fn show(&mut self, ui: &mut egui::Ui) -> bool {
-        ui.weak(format!("The machine's files at {}", self.store.place()));
+        ui.weak(tr!(
+            "send-machine-files-at",
+            place = self.store.place().clone()
+        ));
         self.path_row(ui);
         ui.separator();
         let mut asked = None;
@@ -447,7 +451,7 @@ impl MachineFiles {
                 ui.colored_label(ui.visuals().error_fg_color, e);
             }
             Ok(items) if items.is_empty() => {
-                ui.weak("Nothing here yet. Send to Machine in Save Toolpaths puts files here");
+                ui.weak(tr!("send-nothing-here-yet-send-to"));
             }
             Ok(items) => {
                 let items = items.clone();
@@ -461,11 +465,11 @@ impl MachineFiles {
             let mut make = false;
             let mut cancel = false;
             ui.horizontal(|ui| {
-                ui.label("New folder");
+                ui.label(tr!("send-new-folder-2"));
                 let edit = ui.text_edit_singleline(name);
-                make = ui.button("Make").clicked()
+                make = ui.button(tr!("send-make")).clicked()
                     || (edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
-                cancel = ui.button("Cancel").clicked();
+                cancel = ui.button(tr!("send-cancel")).clicked();
             });
             if make && !name.trim().is_empty() {
                 let name = name.clone();
@@ -480,19 +484,16 @@ impl MachineFiles {
         let mut upload = false;
         ui.horizontal(|ui| {
             upload = ui
-                .add_enabled(reachable, egui::Button::new("Upload Files…"))
-                .on_hover_text(
-                    "Copy files from this computer into this folder. If a file of the same \
-                     name is here already, you are asked before it is replaced",
-                )
+                .add_enabled(reachable, egui::Button::new(tr!("send-upload-files")))
+                .on_hover_text(tr!("send-copy-files-from-this-computer"))
                 .clicked();
             if ui
-                .add_enabled(reachable, egui::Button::new("New Folder"))
+                .add_enabled(reachable, egui::Button::new(tr!("send-new-folder")))
                 .clicked()
             {
                 self.new_folder = Some(String::new());
             }
-            if ui.button("Refresh").clicked() {
+            if ui.button(tr!("send-refresh")).clicked() {
                 self.message = Ok(String::new());
                 self.refresh();
             }
@@ -514,7 +515,7 @@ impl MachineFiles {
         let mut back_to = None;
         ui.horizontal_wrapped(|ui| {
             if ui
-                .add_enabled(!self.at.is_empty(), egui::Button::new("⬆ Up"))
+                .add_enabled(!self.at.is_empty(), egui::Button::new(tr!("send-up")))
                 .clicked()
             {
                 back_to = Some(self.at.len() - 1);
@@ -551,10 +552,10 @@ impl MachineFiles {
                             edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                         ui.label("");
                         ui.horizontal(|ui| {
-                            if ui.button("OK").clicked() || enter {
+                            if ui.button(tr!("send-ok")).clicked() || enter {
                                 asked = Some(Ask::Rename(from.clone(), to.clone()));
                             }
-                            if ui.button("Cancel").clicked() {
+                            if ui.button(tr!("send-cancel")).clicked() {
                                 asked = Some(Ask::StopRenaming);
                             }
                         });
@@ -564,18 +565,18 @@ impl MachineFiles {
                     if item.folder {
                         if ui
                             .link(format!("🗀 {}", item.name))
-                            .on_hover_text("Open this folder")
+                            .on_hover_text(tr!("send-open-this-folder"))
                             .clicked()
                         {
                             asked = Some(Ask::Open(item.name.clone()));
                         }
-                        ui.weak("folder");
+                        ui.weak(tr!("send-folder"));
                     } else {
                         ui.label(&item.name);
                         ui.weak(size_text(item.size));
                     }
                     ui.horizontal(|ui| {
-                        if ui.button("Rename").clicked() {
+                        if ui.button(tr!("send-rename")).clicked() {
                             asked = Some(Ask::StartRenaming(item.name.clone()));
                         }
                         if self.deleting.as_deref() == Some(item.name.as_str()) {
@@ -590,12 +591,12 @@ impl MachineFiles {
                             if ui.add(sure).clicked() {
                                 asked = Some(Ask::Delete(item.name.clone()));
                             }
-                            if ui.button("Keep").clicked() {
+                            if ui.button(tr!("send-keep")).clicked() {
                                 asked = Some(Ask::KeepIt);
                             }
                         } else if ui
-                            .button("Delete")
-                            .on_hover_text("Asks once more before deleting")
+                            .button(tr!("send-delete"))
+                            .on_hover_text(tr!("send-asks-once-more-before-deleting"))
                             .clicked()
                         {
                             asked = Some(Ask::ConfirmDelete(item.name.clone()));

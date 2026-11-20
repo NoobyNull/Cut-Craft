@@ -4,6 +4,7 @@
 
 use super::tabs::Stock;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 
@@ -88,10 +89,7 @@ fn area_end(ui: &mut egui::Ui, params: &mut Value, stock: Stock) -> bool {
                     ui.colored_label(red, format!("⚠ {SPOILBOARD_WARNING}"));
                 });
             if stock.bed[0] <= 0.0 {
-                ui.weak(
-                    "Your machine's bed size isn't set: type the spoilboard's size, or set the \
-                     bed size in Machine ▸ Machines",
-                );
+                ui.weak(tr!("surfacing-your-machine-s-bed-size"));
             }
         }
         "selected_vectors" if !stock.closed => {
@@ -109,17 +107,18 @@ fn pattern_end(ui: &mut egui::Ui, params: &mut Value) -> bool {
     let id = egui::Id::unique("surfacing_cutting");
     let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     ui.label(cutting_said(params));
-    ui.weak("Goes down beside the work and feeds in from the side: it never plunges");
+    ui.weak(tr!("surfacing-goes-down-beside-the-work"));
     if ui
-        .button("Cutting…")
-        .on_hover_hint("Which way the bit runs, and back and forth or one way")
+        .button(tr!("surfacing-cutting-2"))
+        .on_hover_hint(tr!("surfacing-which-way-the-bit-runs"))
         .clicked()
     {
         open = true;
     }
     let before = params.clone();
     if open {
-        egui::Window::new("Cutting")
+        egui::Window::new(tr!("surfacing-cutting"))
+            .id(egui::Id::unique("surfacing_cutting_window"))
             .open(&mut open)
             .resizable(false)
             .collapsible(false)

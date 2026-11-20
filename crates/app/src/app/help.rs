@@ -4,6 +4,7 @@
 use super::{CutCraftApp, Info, Page, dialog_size, egui, form, gui};
 use cut_craft_help::search::Doc;
 use cut_craft_help::wiki::{Name, Sidebar, autolink, sidebar};
+use cut_craft_i18n::tr;
 use egui_commonmark::CommonMarkViewer;
 use std::fmt::Write as _;
 
@@ -102,10 +103,7 @@ impl CutCraftApp {
             }
             egui::ScrollArea::vertical().id_salt(topic).show(ui, |ui| {
                 if found.is_empty() {
-                    ui.label(format!(
-                        "Nothing in the help answers \"{query}\". Try other words, such as \
-                         \"pocket\", \"tabs\" or \"how do I cut out a shape\"."
-                    ));
+                    ui.label(tr!("help-nothing-found", query = query.as_str()));
                     return;
                 }
                 if let Some(t) = results_ui(ui, &found, &found_icons) {
@@ -266,7 +264,7 @@ impl CutCraftApp {
             "contents" => "Help Contents".into(),
             "design" => "Design page".into(),
             "toolpaths" => "Toolpaths page".into(),
-            "tips" => "Did You Know?".into(),
+            "tips" => tr!("help-did-you-know"),
             id if self.is_concept(id) => concept_title(id),
             id => self.tool_label(id),
         }
@@ -519,29 +517,29 @@ fn top_bar(
     });
     ui.horizontal(|ui| {
         let back = ui
-            .add_enabled(can_back, egui::Button::new("◀ Back"))
-            .on_hover_text("The page you were on before (Alt+Left)");
+            .add_enabled(can_back, egui::Button::new(tr!("help-back")))
+            .on_hover_text(tr!("help-the-page-you-were-on"));
         if (back.clicked() || mouse_back) && can_back {
             step = Some(Step::Back);
         }
         let forward = ui
-            .add_enabled(can_forward, egui::Button::new("Forward ▶"))
-            .on_hover_text("The page you came back from (Alt+Right)");
+            .add_enabled(can_forward, egui::Button::new(tr!("help-forward")))
+            .on_hover_text(tr!("help-the-page-you-came-back"));
         if (forward.clicked() || mouse_forward) && can_forward {
             step = Some(Step::Forward);
         }
         ui.add(
             egui::TextEdit::singleline(search)
-                .hint_text("🔍 Ask a question or type a word: how do I cut out a sign?")
+                .hint_text(tr!("help-ask-a-question-or-type"))
                 .desired_width(ui.available_width() * 0.55),
         );
-        if !search.is_empty() && ui.button("Clear").clicked() {
+        if !search.is_empty() && ui.button(tr!("help-clear")).clicked() {
             search.clear();
         }
-        if ui.button("Contents").clicked() {
+        if ui.button(tr!("help-contents")).clicked() {
             picked = Some("contents");
         }
-        if ui.button("Did You Know?").clicked() {
+        if ui.button(tr!("help-did-you-know")).clicked() {
             picked = Some("tips");
         }
     });
@@ -589,10 +587,7 @@ fn results_ui(
     icons: &[Option<String>],
 ) -> Option<&'static str> {
     let mut picked = None;
-    ui.weak(match found.len() {
-        1 => "1 page found, best first".to_owned(),
-        n => format!("{n} pages found, best first"),
-    });
+    ui.weak(tr!("help-pages-found", count = found.len()));
     let edge = egui::Vec2::splat(f32::from(LIST_ICON));
     for ((t, title, line), icon) in found.iter().zip(icons) {
         ui.horizontal(|ui| {

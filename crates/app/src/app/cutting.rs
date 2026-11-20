@@ -7,6 +7,7 @@ use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::entry::{ClearingSettings, Loops, Turn, WayBack, trochoid};
 use cut_craft_core::geometry::Point;
+use cut_craft_i18n::tr;
 use eframe::egui::{self, Pos2, Vec2, pos2, vec2};
 use serde_json::Value;
 
@@ -219,8 +220,8 @@ pub(super) fn group_end(
                 ui.small(line);
             }
             if ui
-                .button("Cutting…")
-                .on_hover_hint("Direction, passes, motion and loops, with a picture of them")
+                .button(tr!("cutting-cutting-2"))
+                .on_hover_hint(tr!("cutting-direction-passes-motion-and-loops"))
                 .clicked()
             {
                 open = true;
@@ -230,7 +231,8 @@ pub(super) fn group_end(
     let before = params.clone();
     if open {
         let diameter = params["tool"]["diameter"].as_f64().unwrap_or(6.0).max(0.1);
-        egui::Window::new("Cutting")
+        egui::Window::new(tr!("cutting-cutting"))
+            .id(egui::Id::unique("cutting_window"))
             .open(&mut open)
             .resizable(false)
             .collapsible(false)
@@ -283,11 +285,8 @@ fn window(
         ui.separator();
         ui.label(clearing_said(clearing, diameter, units));
         if ui
-            .button("Clearing Settings…")
-            .on_hover_hint(
-                "For the whole job: the light step, the loops, and whether rows and loops \
-                 keep climb on the way back",
-            )
+            .button(tr!("cutting-clearing-settings"))
+            .on_hover_hint(tr!("cutting-for-the-whole-job-the"))
             .clicked()
         {
             ui.data_mut(|d| d.insert_temp(clearing_window_id(), true));
@@ -328,6 +327,7 @@ fn engagement(step: f64) -> f64 {
 /// Clearing Settings' inside: the light step with a picture of the bite, the loops with a
 /// strip of them, and the way back with a picture of rows, each with a line or two saying
 /// what it does in a space that keeps its size. Edits `clearing`.
+#[expect(clippy::too_many_lines, reason = "one window, its rows in order")]
 pub(super) fn clearing_settings(
     ui: &mut egui::Ui,
     clearing: &mut ClearingSettings,
@@ -341,8 +341,14 @@ pub(super) fn clearing_settings(
             egui::Label::new(egui::RichText::new(text).weak()).wrap(),
         );
     };
-    ui.heading("Light Step");
-    slider(ui, "Light Step", &mut clearing.loops.step, 1.0..=50.0, true);
+    ui.heading(tr!("cutting-light-step"));
+    slider(
+        ui,
+        &tr!("cutting-light-step"),
+        &mut clearing.loops.step,
+        1.0..=50.0,
+        true,
+    );
     ui.horizontal(|ui| {
         bite_picture(ui, clearing.loops.step);
         ui.vertical(|ui| {
@@ -361,30 +367,34 @@ pub(super) fn clearing_settings(
         });
     });
     ui.separator();
-    ui.heading("Trochoidal Loops");
+    ui.heading(tr!("cutting-trochoidal-loops"));
     egui::Grid::new("clearing_loops")
         .num_columns(2)
         .show(ui, |ui| {
-            ui.label("Loop Width")
-                .on_hover_hint("How wide each loop is, of the tool's diameter");
+            ui.label(tr!("cutting-loop-width"))
+                .on_hover_hint(tr!("cutting-how-wide-each-loop-is"));
             slider(
                 ui,
-                "Loop Width",
+                &tr!("cutting-loop-width"),
                 &mut clearing.loops.width,
                 10.0..=400.0,
                 false,
             );
             ui.end_row();
-            ui.label("Loops Turn");
+            ui.label(tr!("cutting-loops-turn"));
             ui.horizontal(|ui| {
                 ui.radio_value(
                     &mut clearing.loops.turn,
                     Turn::Anticlockwise,
-                    "Anticlockwise",
+                    tr!("cutting-anticlockwise"),
                 )
-                .on_hover_hint("Each loop cuts climb");
-                ui.radio_value(&mut clearing.loops.turn, Turn::Clockwise, "Clockwise")
-                    .on_hover_hint("Each loop cuts conventional");
+                .on_hover_hint(tr!("cutting-each-loop-cuts-climb"));
+                ui.radio_value(
+                    &mut clearing.loops.turn,
+                    Turn::Clockwise,
+                    tr!("cutting-clockwise"),
+                )
+                .on_hover_hint(tr!("cutting-each-loop-cuts-conventional"));
             });
             ui.end_row();
         });
@@ -398,12 +408,20 @@ pub(super) fn clearing_settings(
         clearing.loops.turn == Turn::Anticlockwise,
     );
     ui.separator();
-    ui.heading("On the Way Back");
+    ui.heading(tr!("cutting-on-the-way-back"));
     ui.horizontal(|ui| {
-        ui.radio_value(&mut clearing.way_back, WayBack::KeepClimb, "Keep climb")
-            .on_hover_hint("Every cut climb: a cleaner wall, a little longer");
-        ui.radio_value(&mut clearing.way_back, WayBack::Alternate, "Alternate")
-            .on_hover_hint("Back and forth, climb then conventional: quicker");
+        ui.radio_value(
+            &mut clearing.way_back,
+            WayBack::KeepClimb,
+            tr!("cutting-keep-climb"),
+        )
+        .on_hover_hint(tr!("cutting-every-cut-climb-a-cleaner"));
+        ui.radio_value(
+            &mut clearing.way_back,
+            WayBack::Alternate,
+            tr!("cutting-alternate"),
+        )
+        .on_hover_hint(tr!("cutting-back-and-forth-climb-then"));
     });
     ui.horizontal(|ui| {
         way_back_picture(ui, clearing.way_back);
@@ -594,10 +612,7 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
         }
     });
     if params.get("rings").is_some() && params["strategy"] != "adaptive" {
-        ui.weak(
-            "For a light bite at full depth, pick Adaptive under Clear Pocket: it does what \
-             trochoidal loops did, following the pocket's shape.",
-        );
+        ui.weak(tr!("cutting-for-a-light-bite-at"));
     }
 }
 

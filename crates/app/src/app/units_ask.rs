@@ -9,6 +9,7 @@ use cut_craft_core::document::Units;
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::{DAffine2, DVec2};
 use cut_craft_core::{Change, CommandError, Edit, UnitGuess};
+use cut_craft_i18n::tr;
 use eframe::egui;
 use fmt_import_dxf::{Fit, fit, other_units};
 
@@ -72,8 +73,8 @@ impl CutCraftApp {
         let (mut zoom, mut set_size, mut cancel) = (false, false, false);
         egui::Modal::new(egui::Id::unique("units_ask")).show(ctx, |ui| {
             ui.set_width(ui.spacing().interact_size.x * 11.0);
-            ui.heading("Which units is this drawing in?");
-            ui.label("This drawing doesn't say what units it was made in");
+            ui.heading(tr!("units-ask-which-units-is-this-drawing"));
+            ui.label(tr!("units-ask-this-drawing-doesn-t-say"));
             ui.add_space(ui.spacing().item_spacing.y);
             // the guess first
             for units in [ask.guess.taken, other_units(ask.guess.taken)] {
@@ -97,16 +98,16 @@ impl CutCraftApp {
             ui.separator();
             ui.horizontal(|ui| {
                 zoom = ui
-                    .button("Zoom to It")
-                    .on_hover_hint("Bring it in at this size and zoom the view to it")
+                    .button(tr!("units-ask-zoom-to-it"))
+                    .on_hover_hint(tr!("units-ask-bring-it-in-at-this"))
                     .clicked();
                 set_size = ui
-                    .button("Zoom and Set Size…")
-                    .on_hover_hint("Bring it in, zoom to it and open Set Size to type its size")
+                    .button(tr!("units-ask-zoom-and-set-size"))
+                    .on_hover_hint(tr!("units-ask-bring-it-in-zoom-to"))
                     .clicked();
                 cancel = ui
-                    .button("Cancel")
-                    .on_hover_hint("Don't bring the drawing in")
+                    .button(tr!("units-ask-cancel"))
+                    .on_hover_hint(tr!("units-ask-don-t-bring-the-drawing"))
                     .clicked();
             });
         });
