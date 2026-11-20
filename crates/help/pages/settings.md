@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 see-also: setup_material, job_setup, web_api, bug_reports, contents
 ---
 
@@ -81,6 +81,9 @@ their **Apply** button uses what you typed, as before.
 
 A shortcut you set or remove in **Mouse and Shortcuts** also waits for **Apply**. Until
 then the old shortcut still runs.
+
+**Mouse and Shortcuts** also holds **Trackpad mode** and an **Invert** box for each way of
+moving the views: see [Moving the views](help:view_controls).
 
 ## How the window looks: three layouts, light or dark
 

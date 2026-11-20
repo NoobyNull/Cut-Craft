@@ -306,18 +306,99 @@ impl Rotation {
 
 /// The mouse in the 2D and 3D views, and the shortcuts set in place of Cut Craft's own.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the page's own check boxes, one for each control"
+)]
 pub struct Controls {
     /// What tilting the mouse wheel left or right does over the 2D and 3D views. Holding
     /// Shift while turning the wheel, or swiping sideways on a touchpad, does the same
     #[serde(default)]
     #[schemars(title = "Tilting the wheel left or right")]
     pub tilt: Tilt,
+    /// Trackpad mode: two fingers dragging pan the 2D and 3D views, and pinching zooms (in
+    /// place of the wheel). For laptops with no mouse
+    #[serde(default)]
+    #[schemars(title = "Trackpad mode")]
+    pub trackpad: bool,
+    /// Turns the 3D view the other way when dragging left or right
+    #[serde(default)]
+    #[schemars(title = "Invert drag left / right (3D view)")]
+    pub invert_drag_x: bool,
+    /// Tilts the 3D view the other way when dragging up or down: a drag down tilts the top
+    /// of the job away from you instead of towards you
+    #[serde(default)]
+    #[schemars(title = "Invert drag up / down (3D view)")]
+    pub invert_drag_y: bool,
+    /// Turning the wheel towards you zooms in instead of out
+    #[serde(default)]
+    #[schemars(title = "Invert wheel zoom")]
+    pub invert_wheel: bool,
+    /// Pinching zooms in instead of out on a trackpad or touch screen
+    #[serde(default)]
+    #[schemars(title = "Invert pinch zoom")]
+    pub invert_pinch: bool,
+    /// In Trackpad mode, the view moves against your fingers instead of with them
+    #[serde(default)]
+    #[schemars(title = "Invert two-finger pan", extend("x-enable-when" = {"trackpad": true}))]
+    pub invert_pan: bool,
     /// The shortcuts changed from Cut Craft's own, by action, written as the menus write
     /// them (`Ctrl+K`, `Mouse Back`); an empty list takes an action's shortcuts away. Set on
     /// this page's shortcut list, below its settings.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
     pub shortcuts: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// What the wheel (or two fingers) and a pinch do to a 2D or 3D view in one frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ViewMove {
+    /// How much bigger the view is drawn, about the pointer (1 for no change).
+    pub zoom: f32,
+    /// How far the drawing moves on the screen, in points.
+    pub pan: egui::Vec2,
+}
+
+impl Controls {
+    /// What the wheel's or two fingers' `scroll` and a `pinch` (a factor, 1 for none) do to
+    /// a view `height` points tall: the wheel zooms (a quarter of the height doubles it) and
+    /// tilting it pans sideways, or in Trackpad mode two fingers pan; a pinch always zooms.
+    /// Each turned the other way when its Invert box is ticked.
+    pub fn view_move(&self, scroll: egui::Vec2, pinch: f32, height: f32) -> ViewMove {
+        let pinch = if self.invert_pinch && pinch > 0.0 {
+            1.0 / pinch
+        } else {
+            pinch
+        };
+        if self.trackpad {
+            let pan = if self.invert_pan { -scroll } else { scroll };
+            return ViewMove { zoom: pinch, pan };
+        }
+        let wheel = if self.invert_wheel {
+            -scroll.y
+        } else {
+            scroll.y
+        };
+        let zoom = if wheel == 0.0 {
+            1.0
+        } else {
+            2f32.powf(wheel / (height / crate::app::VIEW_ZOOM_QUARTERS).max(1.0))
+        };
+        ViewMove {
+            zoom: zoom * pinch,
+            pan: egui::vec2(self.tilt.pan(scroll.x), 0.0),
+        }
+    }
+
+    /// A drag across the 3D view as it turns the view: each way flipped when its Invert box
+    /// is ticked.
+    pub fn turn(&self, drag: egui::Vec2) -> egui::Vec2 {
+        let flip = |v: f32, on: bool| if on { -v } else { v };
+        egui::vec2(
+            flip(drag.x, self.invert_drag_x),
+            flip(drag.y, self.invert_drag_y),
+        )
+    }
 }
 
 /// What tilting the mouse wheel sideways does.
@@ -2167,6 +2248,78 @@ fn path() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn every_view_control_turns_the_other_way_when_inverted() {
+        let plain = Controls::default();
+        let up = egui::vec2(0.0, 50.0);
+        let zoomed = plain.view_move(up, 1.0, 400.0).zoom;
+        assert!(zoomed > 1.0, "the wheel zooms in: {zoomed}");
+        let inverted = Controls {
+            invert_wheel: true,
+            ..Controls::default()
+        };
+        let back = inverted.view_move(up, 1.0, 400.0).zoom;
+        assert!((back * zoomed - 1.0).abs() < 1e-5, "the other way: {back}");
+        // a pinch zooms, or the other way
+        assert!((plain.view_move(egui::Vec2::ZERO, 1.25, 400.0).zoom - 1.25).abs() < 1e-6);
+        let pinch = Controls {
+            invert_pinch: true,
+            ..Controls::default()
+        };
+        assert!((pinch.view_move(egui::Vec2::ZERO, 1.25, 400.0).zoom - 0.8).abs() < 1e-6);
+        // drags turning the 3D view, each way on its own
+        let drag = egui::vec2(3.0, 4.0);
+        assert_eq!(plain.turn(drag), drag);
+        let x = Controls {
+            invert_drag_x: true,
+            ..Controls::default()
+        };
+        assert_eq!(x.turn(drag), egui::vec2(-3.0, 4.0));
+        let y = Controls {
+            invert_drag_y: true,
+            ..Controls::default()
+        };
+        assert_eq!(y.turn(drag), egui::vec2(3.0, -4.0));
+    }
+
+    #[test]
+    fn in_trackpad_mode_two_fingers_pan_and_a_pinch_zooms() {
+        let pad = Controls {
+            trackpad: true,
+            ..Controls::default()
+        };
+        let swipe = egui::vec2(12.0, -30.0);
+        let moved = pad.view_move(swipe, 1.0, 400.0);
+        assert_eq!(moved.pan, swipe, "the drawing follows the fingers");
+        assert!(
+            (moved.zoom - 1.0).abs() < f32::EPSILON,
+            "two fingers never zoom"
+        );
+        assert!((pad.view_move(swipe, 0.5, 400.0).zoom - 0.5).abs() < f32::EPSILON);
+        let against = Controls {
+            invert_pan: true,
+            ..pad
+        };
+        assert_eq!(against.view_move(swipe, 1.0, 400.0).pan, -swipe);
+        // off, the wheel zooms and only a sideways scroll pans, as before
+        let wheel = Controls::default().view_move(swipe, 1.0, 400.0);
+        assert_eq!(wheel.pan, egui::vec2(12.0, 0.0));
+        assert!(wheel.zoom < 1.0);
+    }
+
+    #[test]
+    fn the_new_controls_start_off_and_old_settings_files_still_read() {
+        let old: Controls = serde_json::from_str(r#"{"tilt": "pan_reversed"}"#).unwrap();
+        assert_eq!(
+            old,
+            Controls {
+                tilt: Tilt::PanReversed,
+                ..Controls::default()
+            }
+        );
+        assert!(!old.trackpad && !old.invert_drag_y && !old.invert_pinch);
+    }
     use super::*;
 
     #[test]

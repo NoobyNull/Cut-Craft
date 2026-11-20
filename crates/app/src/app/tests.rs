@@ -5385,6 +5385,71 @@ fn the_wheel_zooms_about_the_cursor() {
     assert!(t.to_job(at).distance(under) < 0.01, "about the cursor");
 }
 
+/// #588: a pinch on a trackpad zooms the 2D view about the pointer, as the wheel does; in
+/// Trackpad mode two fingers pan instead of zooming.
+#[test]
+fn a_pinch_zooms_and_in_trackpad_mode_two_fingers_pan() {
+    let mut h = Harness::new();
+    let at = view_middle(&h) + vec2(40.0, -30.0);
+    let (before, under) = {
+        let t = h.app.view_transform.unwrap();
+        (t.scale, t.to_job(at))
+    };
+    h.frame(vec![Event::PointerMoved(at)]);
+    h.frame(vec![Event::Zoom(1.5)]);
+    h.frame(vec![]);
+    let t = h.app.view_transform.unwrap();
+    assert!(t.scale > before * 1.4, "pinching out zooms in");
+    assert!(t.to_job(at).distance(under) < 0.01, "about the cursor");
+    // Trackpad mode: two fingers move the drawing with them, and leave the zoom
+    h.app.options.controls.trackpad = true;
+    let p = Point::new(100.0, 100.0);
+    let (scale, was) = (t.scale, t.to_screen(p));
+    h.frame(vec![Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(30.0, -20.0),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Trackpad,
+        modifiers: Modifiers::NONE,
+    }]);
+    for _ in 0..30 {
+        h.frame(vec![]);
+    }
+    let t = h.app.view_transform.unwrap();
+    assert!((t.scale - scale).abs() < 1e-9, "no zoom");
+    let moved = t.to_screen(p) - was;
+    assert!(
+        (moved - vec2(30.0, -20.0)).length() < 1.0,
+        "the drawing follows the fingers: {moved:?}"
+    );
+}
+
+/// #588: Invert drag up / down tilts the 3D view the other way.
+#[test]
+fn inverting_up_down_tilts_the_3d_view_the_other_way() {
+    let tilt_after_drag = |invert: bool| {
+        let mut h = Harness::new();
+        h.app.view = View::ThreeD;
+        h.app.options.controls.invert_drag_y = invert;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        let fit = h.app.fit_3d.expect("the 3D view is drawn");
+        let from = fit.center() + vec2(60.0, 60.0);
+        let before = h.app.orbit;
+        h.drag(from, from + vec2(0.0, 40.0));
+        (before, h.app.orbit)
+    };
+    let (before, plain) = tilt_after_drag(false);
+    let (_, inverted) = tilt_after_drag(true);
+    let (a, b) = (plain.towards_viewer(), inverted.towards_viewer());
+    let start = before.towards_viewer();
+    assert!(a != start && b != start, "both drags turn the view");
+    assert!(
+        (a.z - start.z) * (b.z - start.z) < 0.0,
+        "the tilt goes the other way: {start:?} {a:?} {b:?}"
+    );
+}
+
 #[test]
 fn the_middle_button_and_the_pan_tool_pan() {
     let mut h = Harness::new();
