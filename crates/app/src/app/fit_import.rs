@@ -13,6 +13,7 @@ use cut_craft_core::fit::{FitError, FitMode, Morph, fit_into};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::{Change, Edit};
+use cut_craft_i18n::tr;
 use eframe::egui;
 
 /// How the drawing takes the shape's size.
@@ -389,12 +390,12 @@ impl CutCraftApp {
                 ui.separator();
                 ui.horizontal(|ui| {
                     done = ui
-                        .button("Done")
-                        .on_hover_hint("Keep the drawing as it is now")
+                        .button(tr!("fit-import-done"))
+                        .on_hover_hint(tr!("fit-import-keep-the-drawing-as-it"))
                         .clicked();
                     undo = ui
-                        .button("Undo Import")
-                        .on_hover_hint("Take the drawing back out, as if it was never imported")
+                        .button(tr!("fit-import-undo-import"))
+                        .on_hover_hint(tr!("fit-import-take-the-drawing-back-out"))
                         .clicked();
                 });
             });
@@ -430,7 +431,7 @@ fn into_shape_settings(
     margin: &mut f64,
     units: cut_craft_core::document::Units,
 ) {
-    ui.label("How the drawing takes the shape's size:");
+    ui.label(tr!("fit-import-how-the-drawing-takes-the"));
     let ways = [
         (
             Way::Scale,
@@ -460,10 +461,8 @@ fn into_shape_settings(
         ui.weak(*help);
     }
     ui.horizontal(|ui| {
-        ui.label("Margin").on_hover_hint(
-            "The gap kept between the drawing and the shape's edge, so a cut \
-                         inside the shape does not run into its border. 0 lets it touch",
-        );
+        ui.label(tr!("fit-import-margin"))
+            .on_hover_hint(tr!("fit-import-the-gap-kept-between-the"));
         crate::form::length_edit(ui, margin, units, 0.0);
     });
 }
@@ -476,8 +475,8 @@ fn along_line_settings(
     gap: &mut f64,
     units: cut_craft_core::document::Units,
 ) {
-    ui.label("The drawing is bent to run the line's length, like lettering on an arc.");
-    ui.label("Where it sits:");
+    ui.label(tr!("fit-import-the-drawing-is-bent-to"));
+    ui.label(tr!("fit-import-where-it-sits"));
     let sides = [
         (
             Side::Above,
@@ -505,10 +504,8 @@ fn along_line_settings(
         ui.weak(*help);
     }
     ui.horizontal(|ui| {
-        ui.label("Gap at each end").on_hover_hint(
-            "How far in from each end of the line the drawing starts and stops. 0 runs it \
-             the line's whole length",
-        );
+        ui.label(tr!("fit-import-gap-at-each-end"))
+            .on_hover_hint(tr!("fit-import-how-far-in-from-each"));
         crate::form::length_edit(ui, gap, units, 0.0);
     });
 }

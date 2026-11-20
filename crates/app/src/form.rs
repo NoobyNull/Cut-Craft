@@ -3,6 +3,7 @@
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 
@@ -389,7 +390,7 @@ fn diagram(ui: &mut egui::Ui, fields: &[&Field], look: &Look) {
 /// A measurement's callout letter, as the picture above it marks it.
 fn dim_letter(ui: &mut egui::Ui, dim: &str) {
     ui.label(egui::RichText::new(dim).strong().color(DIM_COLOUR))
-        .on_hover_hint(format!("Marked {dim} on the picture above"));
+        .on_hover_hint(tr!("form-marked-on-picture", dim = dim));
 }
 
 /// A strip of tabs over `fields`, the picked tab's fields under it; the pick is kept with
@@ -1193,7 +1194,11 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
     for (i, it) in items.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= edit(ui, item, it, &Value::Null, look);
-            if ui.small_button("×").on_hover_hint("Remove").clicked() {
+            if ui
+                .small_button("×")
+                .on_hover_hint(tr!("form-remove"))
+                .clicked()
+            {
                 remove = Some(i);
             }
         });
@@ -1203,7 +1208,11 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
         changed = true;
     }
     // "+" copies the last item; the first is a blank one
-    if ui.small_button("+").on_hover_hint("Add another").clicked() {
+    if ui
+        .small_button("+")
+        .on_hover_hint(tr!("form-add-another"))
+        .clicked()
+    {
         items.push(items.last().cloned().unwrap_or_else(|| blank(item)));
         changed = true;
     }
@@ -1215,8 +1224,8 @@ fn seed(ui: &mut egui::Ui, value: &mut Value) -> bool {
     let mut n = value.as_u64().unwrap_or_default();
     let mut changed = ui.add(Number::new(&mut n).range(0..=u32::MAX)).changed();
     if ui
-        .button("New variation")
-        .on_hover_hint("Another design with the same settings")
+        .button(tr!("form-new-variation"))
+        .on_hover_hint(tr!("form-another-design-with-the-same"))
         .clicked()
     {
         n = u64::from(next_seed(u32::try_from(n).unwrap_or_default()));
@@ -1315,7 +1324,7 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
             let mut changed = ui
                 .add(
                     egui::TextEdit::singleline(&mut text)
-                        .hint_text("Empty: 1 over and over")
+                        .hint_text(tr!("form-empty-1-over-and-over"))
                         .desired_width(ui.available_width().min(260.0)),
                 )
                 .changed();
@@ -1325,18 +1334,18 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
             let id = ui.scope_id().with("pattern_maker");
             let mut with: AddWith = ui.data(|d| d.get_temp(id)).unwrap_or_default();
             ui.horizontal(|ui| {
-                ui.label("Turn 180° ÷")
-                    .on_hover_hint("Added samples are turned by 180° divided by this; 0 for none");
+                ui.label(tr!("form-turn-180"))
+                    .on_hover_hint(tr!("form-added-samples-are-turned-by"));
                 ui.add(Number::new(&mut with.div).range(0..=999));
                 ui.weak(turn_name(with.div));
-                ui.checkbox(&mut with.rev, "Other way (R)")
-                    .on_hover_hint("Turn the other way; with no turn, flip LR");
+                ui.checkbox(&mut with.rev, tr!("form-other-way-r"))
+                    .on_hover_hint(tr!("form-turn-the-other-way-with"));
             });
             ui.horizontal(|ui| {
-                ui.checkbox(&mut with.size, "Random size (S)")
-                    .on_hover_hint("Each time this entry comes round it is a different size");
-                ui.checkbox(&mut with.lean, "Random lean (T)")
-                    .on_hover_hint("Each time this entry comes round it leans a different way");
+                ui.checkbox(&mut with.size, tr!("form-random-size-s"))
+                    .on_hover_hint(tr!("form-each-time-this-entry-comes"));
+                ui.checkbox(&mut with.lean, tr!("form-random-lean-t"))
+                    .on_hover_hint(tr!("form-each-time-this-entry-comes-2"));
             });
             let sample = |ui: &mut egui::Ui, code: u8| {
                 let entry = entry_text(code, with);
@@ -1374,8 +1383,8 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
             }
             ui.horizontal(|ui| {
                 if ui
-                    .button("Undo")
-                    .on_hover_hint("Take off the last entry")
+                    .button(tr!("form-undo"))
+                    .on_hover_hint(tr!("form-take-off-the-last-entry"))
                     .clicked()
                 {
                     let mut list = entries(&text);
@@ -1384,16 +1393,16 @@ fn sequence(ui: &mut egui::Ui, value: &mut Value, params: &Value, look: &Look) -
                     changed = true;
                 }
                 if ui
-                    .button("Clear")
-                    .on_hover_hint("Empty the sequence: 1 over and over")
+                    .button(tr!("form-clear"))
+                    .on_hover_hint(tr!("form-empty-the-sequence-1-over"))
                     .clicked()
                 {
                     text.clear();
                     changed = true;
                 }
                 if ui
-                    .button("Random")
-                    .on_hover_hint("Make up a sequence that repeats")
+                    .button(tr!("form-random"))
+                    .on_hover_hint(tr!("form-make-up-a-sequence-that"))
                     .clicked()
                 {
                     let frame = ui.ctx().cumulative_frame_nr() % u64::from(u32::MAX);

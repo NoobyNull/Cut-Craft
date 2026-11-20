@@ -3,6 +3,7 @@
 //! the Help window's own page of them. Cut Craft's own (see `re/SPEC.md`, Did You Know?).
 
 use super::{CutCraftApp, Info, SPLASH_LOGO, egui};
+use cut_craft_i18n::tr;
 use std::fmt::Write as _;
 
 /// What a tip is about: the Help window's page of tips lists them under these, in this order.
@@ -1546,7 +1547,7 @@ impl CutCraftApp {
         let (cache, icons) = (&mut self.tips_cache, &self.icons);
         let id = egui::Id::unique("did_you_know");
         cut_craft_bug_report::dialog(ctx, id, "Did You Know?", size, &mut open, |ui| {
-            ui.weak(format!("Tip {} of {}", n + 1, TIPS.len()));
+            ui.weak(tr!("tips-tip-of", number = n + 1, count = TIPS.len()));
             // the picture across the top, in a 2:1 space, then the words under it: a scene
             // fills the space; an icon is shown no bigger than it is drawn, in its middle
             let wide = ui
@@ -1571,20 +1572,20 @@ impl CutCraftApp {
             egui_commonmark::CommonMarkViewer::new().show(ui, cache, tip.text);
             ui.add_space(ui.spacing().item_spacing.y);
             ui.horizontal(|ui| {
-                if ui.button("◀ Previous").clicked() {
+                if ui.button(tr!("tips-previous")).clicked() {
                     press = Some(Press::Previous);
                 }
-                if ui.button("Next ▶").clicked() {
+                if ui.button(tr!("tips-next")).clicked() {
                     press = Some(Press::Next);
                 }
-                if ui.button("Tell Me More…").clicked() {
+                if ui.button(tr!("tips-tell-me-more")).clicked() {
                     press = Some(Press::More(tip.topic));
                 }
             });
             ui.separator();
             ui.horizontal(|ui| {
-                ui.checkbox(&mut show, "Show a tip when Cut Craft starts");
-                if ui.button("Close").clicked() {
+                ui.checkbox(&mut show, tr!("tips-show-a-tip-when-cut"));
+                if ui.button(tr!("tips-close")).clicked() {
                     press = Some(Press::Close);
                 }
             });

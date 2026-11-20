@@ -9,6 +9,7 @@ use crate::options::CrashLogs;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{Job, Units};
 use cut_craft_core::toolpath::ToolDatabase;
+use cut_craft_i18n::tr;
 use cut_craft_machines::{Controller, Machine, Machines};
 use eframe::egui;
 
@@ -311,49 +312,54 @@ impl CutCraftApp {
     }
 
     fn first_run_questions(ui: &mut egui::Ui, setup: &mut Setup) -> Option<Finish> {
-        ui.heading("Welcome to Cut Craft");
-        ui.label(
-            "A few quick questions so your first job matches your machine. You can change \
-             any of this later.",
-        );
+        ui.heading(tr!("first-run-welcome-to-cut-craft"));
+        ui.label(tr!("first-run-a-few-quick-questions-so"));
         ui.add_space(ui.spacing().item_spacing.y);
-        ui.strong("1. Which machine do you have?");
+        ui.strong(tr!("first-run-1-which-machine-do-you"));
         Self::machine_question(ui, setup);
         ui.add_space(ui.spacing().item_spacing.y);
-        ui.strong("2. Millimetres or inches?");
+        ui.strong(tr!("first-run-2-millimetres-or-inches"));
         ui.horizontal(|ui| {
             let mut inches = setup.inches;
-            ui.radio_value(&mut inches, false, "Millimetres");
-            ui.radio_value(&mut inches, true, "Inches");
+            ui.radio_value(&mut inches, false, tr!("first-run-millimetres"));
+            ui.radio_value(&mut inches, true, tr!("first-run-inches"));
             if inches != setup.inches {
                 setup.set_inches(inches);
             }
         });
-        ui.weak("Picked to match your machine. Choose whichever your rulers and bits use.");
+        ui.weak(tr!("first-run-picked-to-match-your-machine"));
         ui.add_space(ui.spacing().item_spacing.y);
-        ui.strong("3. What size material do you usually cut?");
+        ui.strong(tr!("first-run-3-what-size-material-do"));
         egui::Grid::new("first_run_sheet")
             .num_columns(2)
             .show(ui, |ui| {
                 let inches = setup.inches;
                 let [width, length_, thickness] = &mut setup.sheet;
-                ui.label("Width (X)");
+                ui.label(tr!("first-run-width-x"));
                 length(ui, width, inches);
                 ui.end_row();
-                ui.label("Length (Y)");
+                ui.label(tr!("first-run-length-y"));
                 length(ui, length_, inches);
                 ui.end_row();
-                ui.label("Thickness");
+                ui.label(tr!("first-run-thickness"));
                 length(ui, thickness, inches);
                 ui.end_row();
             });
-        ui.weak("New jobs start this size. Each job can be changed in Job Setup.");
+        ui.weak(tr!("first-run-new-jobs-start-this-size"));
         ui.add_space(ui.spacing().item_spacing.y);
-        ui.strong("4. If Cut Craft crashes, may it send a crash report to help fix it?");
+        ui.strong(tr!("first-run-4-if-cut-craft-crashes"));
         ui.horizontal_wrapped(|ui| {
-            ui.radio_value(&mut setup.crash_logs, CrashLogs::Send, "Yes");
-            ui.radio_value(&mut setup.crash_logs, CrashLogs::Ask, "Ask me each time");
-            ui.radio_value(&mut setup.crash_logs, CrashLogs::DontSend, "No");
+            ui.radio_value(&mut setup.crash_logs, CrashLogs::Send, tr!("first-run-yes"));
+            ui.radio_value(
+                &mut setup.crash_logs,
+                CrashLogs::Ask,
+                tr!("first-run-ask-me-each-time"),
+            );
+            ui.radio_value(
+                &mut setup.crash_logs,
+                CrashLogs::DontSend,
+                tr!("first-run-no"),
+            );
         });
         ui.weak(CRASH_LOGS_NOTE);
         ui.separator();
@@ -362,19 +368,18 @@ impl CutCraftApp {
             let start = ui
                 .add_enabled(
                     setup.ready(),
-                    egui::Button::new(egui::RichText::new("Start using Cut Craft").strong())
-                        .fill(ui.visuals().selection.bg_fill),
+                    egui::Button::new(
+                        egui::RichText::new(tr!("first-run-start-using-cut-craft")).strong(),
+                    )
+                    .fill(ui.visuals().selection.bg_fill),
                 )
-                .on_disabled_hover_text("Pick your machine first, or Mine is not listed");
+                .on_disabled_hover_text(tr!("first-run-pick-your-machine-first-or"));
             if start.clicked() {
                 finish = Some(Finish::Done);
             }
             if ui
-                .button("Skip for now")
-                .on_hover_text(
-                    "Start with Cut Craft's usual 600 × 400 × 20 mm job and no machine. \
-                     Help ▸ Run First-Time Setup Again asks again.",
-                )
+                .button(tr!("first-run-skip-for-now"))
+                .on_hover_text(tr!("first-run-start-with-cut-craft-s"))
                 .clicked()
             {
                 finish = Some(Finish::Skipped);
@@ -388,13 +393,13 @@ impl CutCraftApp {
         let shown = match &setup.maker {
             Maker::Unpicked => "Pick the maker…".to_owned(),
             Maker::Named(m) => m.clone(),
-            Maker::NotListed => "Mine is not listed".to_owned(),
+            Maker::NotListed => tr!("first-run-mine-is-not-listed").to_owned(),
         };
         let mut picked = None;
         egui::Grid::new("first_run_machine")
             .num_columns(2)
             .show(ui, |ui| {
-                ui.label("Maker");
+                ui.label(tr!("first-run-maker"));
                 egui::ComboBox::from_id_salt("first_run_maker")
                     .selected_text(shown)
                     .show_ui(ui, |ui| {
@@ -404,7 +409,10 @@ impl CutCraftApp {
                             }
                         }
                         ui.separator();
-                        if ui.selectable_label(false, "Mine is not listed").clicked() {
+                        if ui
+                            .selectable_label(false, tr!("first-run-mine-is-not-listed"))
+                            .clicked()
+                        {
                             picked = Some(Maker::NotListed);
                         }
                     });
@@ -416,7 +424,7 @@ impl CutCraftApp {
                         .map_or("Pick the model…", |i| &setup.catalogue[i].model)
                         .to_owned();
                     let mut model = None;
-                    ui.label("Model");
+                    ui.label(tr!("first-run-model"));
                     egui::ComboBox::from_id_salt("first_run_model")
                         .selected_text(shown)
                         .show_ui(ui, |ui| {
@@ -436,17 +444,17 @@ impl CutCraftApp {
                     let inches = setup.inches;
                     let [width, height] = &mut setup.bed;
                     let mut moved = false;
-                    ui.label("Working area width (X)");
+                    ui.label(tr!("first-run-working-area-width-x"));
                     moved |= length(ui, width, inches).changed();
                     ui.end_row();
-                    ui.label("Working area length (Y)");
+                    ui.label(tr!("first-run-working-area-length-y"));
                     moved |= length(ui, height, inches).changed();
                     ui.end_row();
                     if moved {
                         setup.sheet[0] = setup.bed[0];
                         setup.sheet[1] = setup.bed[1];
                     }
-                    ui.label("Controller");
+                    ui.label(tr!("first-run-controller"));
                     egui::ComboBox::from_id_salt("first_run_controller")
                         .selected_text(setup.controller.label())
                         .show_ui(ui, |ui| {
@@ -458,10 +466,7 @@ impl CutCraftApp {
                 }
             });
         if setup.maker == Maker::NotListed {
-            ui.weak(
-                "The controller is the board or program that runs the machine. Not sure? Most \
-                 hobby routers run grbl.",
-            );
+            ui.weak(tr!("first-run-the-controller-is-the-board"));
         }
         if let Some(maker) = picked {
             setup.pick_maker(maker);

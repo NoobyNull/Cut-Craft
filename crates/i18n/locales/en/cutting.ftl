@@ -1,0 +1,21 @@
+# src/app/cutting.rs
+cutting-anticlockwise = Anticlockwise
+cutting-back-and-forth-climb-then = Back and forth, climb then conventional: quicker
+cutting-clearing-settings = Clearing Settings…
+cutting-clockwise = Clockwise
+cutting-cutting = Cutting
+cutting-cutting-2 = Cutting…
+cutting-direction-passes-motion-and-loops = Direction, passes, motion and loops, with a picture of them
+cutting-each-loop-cuts-climb = Each loop cuts climb
+cutting-each-loop-cuts-conventional = Each loop cuts conventional
+cutting-every-cut-climb-a-cleaner = Every cut climb: a cleaner wall, a little longer
+cutting-for-a-light-bite-at = For a light bite at full depth, pick Adaptive under Clear Pocket: it does what trochoidal loops did, following the pocket's shape.
+cutting-for-the-whole-job-the = For the whole job: the light step, the loops, and whether rows and loops keep climb on the way back
+cutting-how-wide-each-loop-is = How wide each loop is, of the tool's diameter
+cutting-keep-climb = Keep climb
+cutting-light-step = Light Step
+cutting-loop-width = Loop Width
+cutting-loops-turn = Loops Turn
+cutting-on-the-way-back = On the Way Back
+cutting-trochoidal-loops = Trochoidal Loops
+cutting-alternate = Alternate

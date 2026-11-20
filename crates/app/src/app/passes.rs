@@ -8,6 +8,7 @@ use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::Tool;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 
@@ -23,15 +24,16 @@ pub(super) fn edit_passes(ui: &mut egui::Ui, params: &mut Value, units: Units) -
     let id = egui::Id::unique("edit_passes");
     let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     if ui
-        .button("Edit Passes…")
-        .on_hover_hint("See and set each pass down to the cut depth")
+        .button(tr!("passes-edit-passes-2"))
+        .on_hover_hint(tr!("passes-see-and-set-each-pass"))
         .clicked()
     {
         open = true;
     }
     let before = (tool.passes.clone(), tool.last_pass);
     if open {
-        egui::Window::new("Edit Passes")
+        egui::Window::new(tr!("passes-edit-passes"))
+            .id(egui::Id::unique("edit_passes_window"))
             .open(&mut open)
             .resizable(false)
             .collapsible(false)
@@ -66,10 +68,10 @@ fn editor(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, units: Units) {
     let (per, unit) = form::shown_in("mm", units).unwrap_or((1.0, "mm"));
     let show = |mm: f64| format!("{} {unit}", trimmed(mm / per));
     let depths: Vec<f64> = tool.pass_depths(depth).iter().map(|z| -z).collect();
-    ui.label(format!(
-        "Cut Depth {} in {} passes",
-        show(depth),
-        depths.len()
+    ui.label(tr!(
+        "passes-depth-in-passes",
+        depth = show(depth),
+        count = depths.len()
     ));
     ui.horizontal(|ui| {
         if let Some(set) = picture(ui, &depths, depth, &show) {
@@ -78,7 +80,7 @@ fn editor(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, units: Units) {
         }
         ui.vertical(|ui| controls(ui, tool, depth, depths.len(), per, unit));
     });
-    ui.weak("Click the picture to add a pass or take one away; drag a pass to move it");
+    ui.weak(tr!("passes-click-the-picture-to-add"));
 }
 
 /// The material from its top to the cut depth, each pass a line across it with its depth,
@@ -124,7 +126,11 @@ fn picture(
             colour,
         );
     };
-    label(block.top(), "Top".to_owned(), visuals.weak_text_color());
+    label(
+        block.top(),
+        tr!("passes-top").to_owned(),
+        visuals.weak_text_color(),
+    );
     let last = depths.len().saturating_sub(1);
     for (i, &d) in depths.iter().enumerate() {
         let (stroke, colour) = if i == last {
@@ -183,13 +189,13 @@ fn controls(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, count: usize, per: f
     let id = egui::Id::unique("edit_passes_count");
     let mut wanted = ui.data(|d| d.get_temp::<usize>(id)).unwrap_or(count);
     ui.horizontal(|ui| {
-        ui.label("Passes");
+        ui.label(tr!("passes-passes"));
         ui.add(Number::new(&mut wanted).range(1..=100));
     });
     ui.data_mut(|d| d.insert_temp(id, wanted));
     if ui
-        .button("Spread Evenly")
-        .on_hover_hint("That many passes, each as deep as the next")
+        .button(tr!("passes-spread-evenly"))
+        .on_hover_hint(tr!("passes-that-many-passes-each-as"))
         .clicked()
     {
         #[expect(clippy::cast_precision_loss, reason = "a small count")]
@@ -202,8 +208,8 @@ fn controls(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, count: usize, per: f
     ui.separator();
     let mut thin = tool.last_pass > 0.0;
     if ui
-        .checkbox(&mut thin, "Last Pass Thickness")
-        .on_hover_hint("A thin last pass for a clean floor; the passes above it even")
+        .checkbox(&mut thin, tr!("passes-last-pass-thickness"))
+        .on_hover_hint(tr!("passes-a-thin-last-pass-for"))
         .changed()
     {
         tool.passes.clear();
@@ -232,9 +238,9 @@ fn controls(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, count: usize, per: f
     if ui
         .add_enabled(
             !tool.passes.is_empty() || tool.last_pass > 0.0,
-            egui::Button::new("From Pass Depth"),
+            egui::Button::new(tr!("passes-from-pass-depth")),
         )
-        .on_hover_hint("Even passes no deeper than the tool's pass depth, as before")
+        .on_hover_hint(tr!("passes-even-passes-no-deeper-than"))
         .clicked()
     {
         tool.passes.clear();

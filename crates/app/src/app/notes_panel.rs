@@ -5,6 +5,7 @@
 
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::notes::{self, Format, Kind, Variable};
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 use std::rc::Rc;
@@ -174,17 +175,15 @@ impl super::CutCraftApp {
         // Write / Preview and the Variable Explorer, then the toolbar
         let mut format = None;
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut state.preview, false, "Write")
-                .on_hover_hint("Write the notes; {{variables}} show as coloured chips");
-            ui.selectable_value(&mut state.preview, true, "Preview")
-                .on_hover_hint("See the notes as they will read, with every variable filled in");
+            ui.selectable_value(&mut state.preview, false, tr!("notes-panel-write"))
+                .on_hover_hint(tr!("notes-panel-write-hint"));
+            ui.selectable_value(&mut state.preview, true, tr!("notes-panel-preview"))
+                .on_hover_hint(tr!("notes-panel-see-the-notes-as-they"));
             ui.separator();
             let mut shown = !state.explorer_hidden;
             if ui
                 .toggle_value(&mut shown, "{x} Variables")
-                .on_hover_hint(
-                    "Show or hide the Variable Explorer: live values to put in the notes",
-                )
+                .on_hover_hint(tr!("notes-panel-show-or-hide-the-variable"))
                 .changed()
             {
                 state.explorer_hidden = !shown;
@@ -200,15 +199,12 @@ impl super::CutCraftApp {
             });
         });
         changed |= ui
-            .checkbox(&mut opens, "Show these notes when the job opens")
-            .on_hover_hint("The notes open by themselves each time the job is opened")
+            .checkbox(&mut opens, tr!("notes-panel-show-these-notes-when-the"))
+            .on_hover_hint(tr!("notes-panel-the-notes-open-by-themselves"))
             .changed();
         changed |= ui
-            .checkbox(&mut in_gcode, "Put these notes at the top of the G-code")
-            .on_hover_hint(
-                "Each saved G-code file starts with the notes, variables filled in, as \
-                 comments the machine skips",
-            )
+            .checkbox(&mut in_gcode, tr!("notes-panel-put-these-notes-at-the"))
+            .on_hover_hint(tr!("notes-panel-each-saved-g-code-file"))
             .changed();
 
         // the notes box gets what the Variable Explorer leaves
@@ -244,11 +240,7 @@ impl super::CutCraftApp {
                 .show(ui, |ui| {
                     egui::TextEdit::multiline(&mut body)
                         .id(text_id)
-                        .hint_text(
-                            "Notes for this job: what to clamp, which bit goes first…\n\
-                     The buttons above make headings and lists; drag a variable in from \
-                     the Variable Explorer to show a live value.",
-                        )
+                        .hint_text(tr!("notes-panel-notes-for-this-job-what"))
                         .desired_width(f32::INFINITY)
                         .min_size(size)
                         .layouter(&mut layouter)
@@ -401,7 +393,7 @@ fn preview(ui: &mut egui::Ui, raw: &str, vars: &[Variable], size: egui::Vec2) ->
                 ui.set_min_size(inner);
                 let lines = notes::parse_resolved(raw, vars);
                 if lines.iter().all(|l| l.text().trim().is_empty()) {
-                    ui.weak("No notes yet: write some under Write.");
+                    ui.weak(tr!("notes-panel-no-notes-yet-write-some"));
                 }
                 for (i, line) in lines.iter().enumerate() {
                     ui.horizontal_wrapped(|ui| {
@@ -423,7 +415,7 @@ fn preview(ui: &mut egui::Ui, raw: &str, vars: &[Variable], size: egui::Vec2) ->
                                 let mut done = *done;
                                 if ui
                                     .checkbox(&mut done, "")
-                                    .on_hover_hint("Tick or untick it")
+                                    .on_hover_hint(tr!("notes-panel-tick-or-untick-it"))
                                     .changed()
                                 {
                                     ticked = Some(i);
@@ -473,8 +465,8 @@ fn preview(ui: &mut egui::Ui, raw: &str, vars: &[Variable], size: egui::Vec2) ->
 /// or Insert. Rows can be dragged into the notes too.
 fn variable_explorer(ui: &mut egui::Ui, state: &mut NotesUi, vars: &[Variable]) -> Option<String> {
     let mut chosen = None;
-    ui.strong("Variable Explorer");
-    ui.weak("Double-click a variable, or drag it into the notes. Click one, then Insert.");
+    ui.strong(tr!("notes-panel-variable-explorer"));
+    ui.weak(tr!("notes-panel-double-click-a-variable-or"));
     let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
     ui.allocate_ui_with_layout(
         row,
@@ -482,18 +474,21 @@ fn variable_explorer(ui: &mut egui::Ui, state: &mut NotesUi, vars: &[Variable]) 
         |ui| {
             let picked = state.picked.clone();
             if ui
-                .add_enabled(picked.is_some(), egui::Button::new("Insert"))
-                .on_hover_hint("Put the picked variable in the notes, where the text cursor is")
+                .add_enabled(
+                    picked.is_some(),
+                    egui::Button::new(tr!("notes-panel-insert")),
+                )
+                .on_hover_hint(tr!("notes-panel-put-the-picked-variable-in"))
                 .clicked()
             {
                 chosen = picked;
             }
             ui.add(
                 egui::TextEdit::singleline(&mut state.search)
-                    .hint_text("Search: thickness, feed, tool…")
+                    .hint_text(tr!("notes-panel-search-thickness-feed-tool"))
                     .desired_width(ui.available_width()),
             )
-            .on_hover_hint("Find a variable by its name, its value or what it is");
+            .on_hover_hint(tr!("notes-panel-find-a-variable-by-its"));
         },
     );
     let searching = !state.search.trim().is_empty();
@@ -540,7 +535,7 @@ fn variable_explorer(ui: &mut egui::Ui, state: &mut NotesUi, vars: &[Variable]) 
                     });
             }
             if !any {
-                ui.weak("No variable matches that: try fewer or other words.");
+                ui.weak(tr!("notes-panel-no-variable-matches-that-try"));
             }
         });
     chosen

@@ -4,6 +4,7 @@
 use super::{CutCraftApp, Screen, egui};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::Change;
+use cut_craft_i18n::tr;
 use cut_craft_web_api::{Answer, ApiError, Call, Pending, Server, State};
 use cut_craft_web_api::{job, openapi};
 use serde_json::{Value, json};
@@ -443,7 +444,7 @@ pub(super) fn options_section(
     ui.separator();
     match state {
         State::Off => {
-            ui.weak("The Web API is off. Tick Turn on the Web API to start it.");
+            ui.weak(tr!("web-api-the-web-api-is-off"));
         }
         State::Running(at) => {
             ui.colored_label(RUNNING_GREEN, format!("{RUNNING} at http://{at}"));
@@ -452,8 +453,8 @@ pub(super) fn options_section(
             ui.colored_label(ui.visuals().error_fg_color, NOT_RUNNING);
             ui.label(why);
             if ui
-                .button("Try Again")
-                .on_hover_hint("Start the Web API again with these settings")
+                .button(tr!("web-api-try-again"))
+                .on_hover_hint(tr!("web-api-start-the-web-api-again"))
                 .clicked()
             {
                 pressed = Some(Pressed::TryAgain);
@@ -464,34 +465,25 @@ pub(super) fn options_section(
     let needs_token = settings.allow_network && !token.is_empty();
     ui.add_space(ui.spacing().item_spacing.y);
     if needs_token {
-        ui.strong("Access token");
-        ui.label(
-            "Other computers can reach Cut Craft, so every call must send this. Give it only to \
-             programs you trust, and keep it private, like a password.",
-        );
+        ui.strong(tr!("web-api-access-token"));
+        ui.label(tr!("web-api-other-computers-can-reach-cut"));
     } else {
-        ui.label(
-            "Programs on this computer need no token. Tick Allow other computers on my network \
-             and every call will need an access token, shown here.",
-        );
+        ui.label(tr!("web-api-programs-on-this-computer-need"));
     }
     if needs_token {
         ui.horizontal(|ui| {
             ui.monospace(format!("{}…", token.chars().take(8).collect::<String>()));
             if ui
-                .button("Copy")
-                .on_hover_hint("Copy the whole token, to paste into your script")
+                .button(tr!("web-api-copy"))
+                .on_hover_hint(tr!("web-api-copy-the-whole-token-to"))
                 .clicked()
             {
                 ui.ctx().copy_text(token.clone());
                 pressed = Some(Pressed::Copied);
             }
             if ui
-                .button("Make New Token")
-                .on_hover_hint(
-                    "Stop the old token working, for example if someone you did not mean to have \
-                 it does",
-                )
+                .button(tr!("web-api-make-new-token"))
+                .on_hover_hint(tr!("web-api-stop-the-old-token-working"))
                 .clicked()
             {
                 pressed = Some(Pressed::NewToken);
@@ -499,35 +491,32 @@ pub(super) fn options_section(
         });
     }
     ui.add_space(ui.spacing().item_spacing.y);
-    ui.strong("Try it");
-    ui.label("Paste this in a terminal: Cut Craft answers with its version and what it is doing.");
+    ui.strong(tr!("web-api-try-it"));
+    ui.label(tr!("web-api-paste-this-in-a-terminal"));
     let example = example_call(settings.port, needs_token);
     ui.add(egui::Label::new(egui::RichText::new(&example).monospace()).wrap());
     if ui
-        .button("Copy Command")
-        .on_hover_hint("Copy this command, to paste in a terminal")
+        .button(tr!("web-api-copy-command"))
+        .on_hover_hint(tr!("web-api-copy-this-command-to-paste"))
         .clicked()
     {
         ui.ctx().copy_text(example.replace("<token>", token));
         pressed = Some(Pressed::Copied);
     }
     ui.add_space(ui.spacing().item_spacing.y);
-    ui.strong("Every call");
+    ui.strong(tr!("web-api-every-call"));
     let page = docs_address(settings.port);
-    ui.label(format!(
-        "The docs page lists every call, and every tool and menu item, each ready to try in \
-         your web browser: {page}"
-    ));
+    ui.label(tr!("web-api-docs-page", page = page.as_str()));
     let running = matches!(state, State::Running(_));
     if ui
-        .add_enabled(running, egui::Button::new("Open Docs Page"))
-        .on_hover_hint("Open the docs page in your web browser")
-        .on_disabled_hover_text("The Web API must be running to show its docs page")
+        .add_enabled(running, egui::Button::new(tr!("web-api-open-docs-page")))
+        .on_hover_hint(tr!("web-api-open-the-docs-page-in"))
+        .on_disabled_hover_text(tr!("web-api-the-web-api-must-be"))
         .clicked()
     {
         ui.ctx().open_url(egui::OpenUrl::new_tab(&page));
     }
-    ui.label("Help ▸ Contents ▸ Web API explains more.");
+    ui.label(tr!("web-api-help-contents-web-api-explains"));
     pressed
 }
 

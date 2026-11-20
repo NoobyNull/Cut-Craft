@@ -7,6 +7,7 @@ use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::entry::{EntryMode, EntrySettings, Ramp, Ramping};
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 
@@ -126,17 +127,14 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value, unit
     let id = window_id();
     let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     ui.horizontal_wrapped(|ui| {
-        ui.label("Entry:");
+        ui.label(tr!("entry-entry-2"));
         ui.label(summary(&settings, diameter, pass_depth, units));
         if older {
-            ui.weak("(as set before entry modes)");
+            ui.weak(tr!("entry-as-set-before-entry-modes"));
         }
         if ui
-            .button("Entry…")
-            .on_hover_hint(
-                "How the bit goes down into the material: in a helix, a zig-zag, a ramp or \
-                 straight down",
-            )
+            .button(tr!("entry-entry-3"))
+            .on_hover_hint(tr!("entry-how-the-bit-goes-down-2"))
             .clicked()
         {
             open = true;
@@ -144,7 +142,8 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value, unit
     });
     let before = settings;
     if open {
-        egui::Window::new("Entry")
+        egui::Window::new(tr!("entry-entry"))
+            .id(egui::Id::unique("entry_window"))
             .open(&mut open)
             .resizable(false)
             .collapsible(false)
@@ -174,7 +173,7 @@ fn window(
     helix: bool,
     units: Units,
 ) {
-    ui.label("How the bit goes down into the material each time a cut starts:");
+    ui.label(tr!("entry-how-the-bit-goes-down"));
     let ways = [
         (
             EntryMode::Helix,
@@ -217,14 +216,9 @@ fn window(
     if settings.mode != EntryMode::Plunge {
         ui.separator();
         ui.weak(if helix {
-            "Each place the bit goes down fits this to the room it has, never steeper: a \
-             helix gets smaller, then turns into a zig-zag along the cut; a zig-zag or ramp \
-             takes shorter legs. Only where there is no room at all does it go straight \
-             down, and Checks before cutting says where."
+            tr!("entry-each-place-the-bit-goes")
         } else {
-            "It slides in along the groove's own centre line, never deeper than the groove's \
-             width sets. Where a groove is too short for it, it goes straight down there, as \
-             a V-carve usually does."
+            tr!("entry-it-slides-in-along-the")
         });
     }
 }
@@ -241,9 +235,8 @@ fn sizes(
         .num_columns(2)
         .show(ui, |ui| match settings.mode {
             EntryMode::Helix => {
-                ui.label("Diameter").on_hover_hint(
-                    "Across the circle the bit's centre goes round, as a share of the bit",
-                );
+                ui.label(tr!("entry-diameter"))
+                    .on_hover_hint(tr!("entry-across-the-circle-the-bit"));
                 ui.horizontal(|ui| {
                     ui.add(
                         Number::new(&mut settings.helix_diameter)
@@ -254,8 +247,8 @@ fn sizes(
                     ui.weak(units.length(diameter * settings.helix_diameter / 100.0, 1));
                 });
                 ui.end_row();
-                ui.label("Angle")
-                    .on_hover_hint("How steeply it goes down, from level");
+                ui.label(tr!("entry-angle"))
+                    .on_hover_hint(tr!("entry-how-steeply-it-goes-down"));
                 ui.add(
                     Number::new(&mut settings.helix_angle)
                         .range(0.1..=45.0)
@@ -265,8 +258,8 @@ fn sizes(
                 ui.end_row();
             }
             EntryMode::ZigZag => {
-                ui.label("Angle")
-                    .on_hover_hint("How steeply each leg goes down, from level");
+                ui.label(tr!("entry-angle"))
+                    .on_hover_hint(tr!("entry-how-steeply-each-leg-goes"));
                 ui.add(
                     Number::new(&mut settings.zigzag_angle)
                         .range(0.1..=45.0)
@@ -274,25 +267,23 @@ fn sizes(
                         .suffix("°"),
                 );
                 ui.end_row();
-                ui.label("Passes").on_hover_hint(
-                    "How many legs to go down a pass in; there and back is two, and an odd \
-                     number is made even so the bit ends where it began",
-                );
+                ui.label(tr!("entry-passes"))
+                    .on_hover_hint(tr!("entry-how-many-legs-to-go"));
                 ui.add(Number::new(&mut settings.zigzag_passes).range(1..=100));
                 ui.end_row();
-                ui.label("Each leg");
+                ui.label(tr!("entry-each-leg"));
                 ui.label(units.length(leg(settings, pass_depth), 1));
                 ui.end_row();
             }
             EntryMode::Ramp => {
-                ui.label("Distance")
-                    .on_hover_hint("How far along the cut it takes to go down a pass");
+                ui.label(tr!("entry-distance"))
+                    .on_hover_hint(tr!("entry-how-far-along-the-cut"));
                 super::tabs::length(ui, &mut settings.ramp_distance, units);
                 ui.end_row();
-                ui.label("Angle");
-                ui.label(format!(
-                    "about {}° for a full pass",
-                    super::trimmed(ramp_angle(settings, pass_depth).round())
+                ui.label(tr!("entry-angle"));
+                ui.label(tr!(
+                    "entry-ramp-angle",
+                    angle = super::trimmed(ramp_angle(settings, pass_depth).round())
                 ));
                 ui.end_row();
             }

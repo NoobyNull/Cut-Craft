@@ -8,6 +8,7 @@ use super::{
 };
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_i18n::tr;
 
 /// View ▸ Window Layout's items and the layouts they pick.
 const LAYOUTS: [(&str, WindowLayout); 3] = [
@@ -99,7 +100,7 @@ impl CutCraftApp {
         let matches = self.search_matches(&text);
         let (mut open, mut picked) = (true, None);
         let row = ctx.global_style().spacing.interact_size.y;
-        egui::Window::new("Find Tool")
+        egui::Window::new(tr!("layouts-find-tool"))
             .id(egui::Id::unique("find_tool"))
             .collapsible(false)
             .resizable(false)
@@ -107,8 +108,10 @@ impl CutCraftApp {
             .open(&mut open)
             .show(ctx, |ui| {
                 cut_craft_bug_report::mark(ui, "Find Tool");
-                let edit = ui
-                    .add(egui::TextEdit::singleline(&mut text).hint_text("Part of a tool's name"));
+                let edit = ui.add(
+                    egui::TextEdit::singleline(&mut text)
+                        .hint_text(tr!("layouts-part-of-a-tool-s")),
+                );
                 // the field takes the keyboard when the window opens
                 if ui.memory(egui::Memory::focused).is_none() {
                     edit.request_focus();
@@ -118,7 +121,7 @@ impl CutCraftApp {
                 }
                 ui.separator();
                 if matches.is_empty() {
-                    ui.weak("No tool has that in its name");
+                    ui.weak(tr!("layouts-no-tool-has-that-in"));
                 }
                 egui::ScrollArea::vertical()
                     .max_height(10.0 * row)
@@ -287,10 +290,7 @@ impl CutCraftApp {
                             .selected(self.rail_favourites);
                         if ui
                             .add(star)
-                            .on_hover_hint(
-                                "Favourites: the tools you keep at hand. Right-click any tool \
-                                 ▸ Add to Favourites",
-                            )
+                            .on_hover_hint(tr!("layouts-favourites-the-tools-you-keep"))
                             .clicked()
                         {
                             self.rail_favourites = !self.rail_favourites;
@@ -321,7 +321,7 @@ impl CutCraftApp {
                         let row = ui.spacing().interact_size.y;
                         if ui
                             .add(self.pin_button(self.rail_pinned, row))
-                            .on_hover_hint("Keep this list open after picking a tool")
+                            .on_hover_hint(tr!("layouts-keep-this-list-open-after"))
                             .clicked()
                         {
                             self.rail_pinned = !self.rail_pinned;
@@ -370,7 +370,7 @@ impl CutCraftApp {
         .selected(self.rail_gadgets);
         if ui
             .add(button)
-            .on_hover_hint("Gadgets: the gadgets and add-ons you installed")
+            .on_hover_hint(tr!("layouts-gadgets-the-gadgets-and-add"))
             .clicked()
         {
             self.rail_gadgets = !self.rail_gadgets;
@@ -515,11 +515,9 @@ impl CutCraftApp {
                     ui.close();
                 }
             });
-            response.response.on_hover_hint(format!(
-                "{}: folded to make room, as you use it least. Click for its tools, or widen \
-                 the window to see them all",
-                group.name
-            ));
+            response
+                .response
+                .on_hover_hint(tr!("layouts-group-folded", group = group.name));
         });
     }
 

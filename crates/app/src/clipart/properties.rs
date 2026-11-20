@@ -5,6 +5,7 @@
 
 use super::Kind;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_i18n::tr;
 use eframe::egui;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -242,7 +243,7 @@ pub fn window(ctx: &egui::Context, open: &mut Option<Properties>) -> Option<Aske
     let mut asked = None;
     let mut shown = true;
     let mut close = ctx.input(|i| i.key_pressed(egui::Key::Escape));
-    egui::Window::new("Properties")
+    egui::Window::new(tr!("clipart-properties-properties"))
         .id(egui::Id::unique("library_properties"))
         .open(&mut shown)
         .collapsible(false)
@@ -258,20 +259,20 @@ pub fn window(ctx: &egui::Context, open: &mut Option<Properties>) -> Option<Aske
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui
-                    .button("Copy Path")
-                    .on_hover_hint("Copies where the file is, to paste somewhere else.")
+                    .button(tr!("clipart-properties-copy-path"))
+                    .on_hover_hint(tr!("clipart-properties-copies-where-the-file-is"))
                     .clicked()
                 {
                     ui.ctx().copy_text(props.file.display().to_string());
                 }
                 if ui
-                    .button("Locate")
-                    .on_hover_hint("Shows the file in its folder.")
+                    .button(tr!("clipart-properties-locate"))
+                    .on_hover_hint(tr!("clipart-properties-shows-the-file-in-its"))
                     .clicked()
                 {
                     asked = Some(Asked::Locate(props.file.clone()));
                 }
-                if ui.button("Close").clicked() {
+                if ui.button(tr!("clipart-properties-close")).clicked() {
                     close = true;
                 }
             });

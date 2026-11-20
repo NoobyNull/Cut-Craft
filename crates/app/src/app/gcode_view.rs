@@ -6,6 +6,7 @@
 
 use super::{CutCraftApp, SaveForm};
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_i18n::tr;
 use eframe::egui;
 
 /// The G-code window's contents, made when it opened (Refresh makes them again).
@@ -158,25 +159,25 @@ impl CutCraftApp {
         cut_craft_bug_report::dialog_with_panels(ctx, id, "View G-code", size, &mut open, |ui| {
             if !view.post.is_empty() {
                 ui.horizontal(|ui| {
-                    ui.label("Post-processor:");
+                    ui.label(tr!("gcode-view-post-processor"));
                     ui.strong(&view.post);
                 });
             }
             let files = match &view.files {
                 Ok(files) if !files.is_empty() => files,
                 Ok(_) => {
-                    ui.label("There is nothing to cut in the toolpaths shown.");
+                    ui.label(tr!("gcode-view-there-is-nothing-to-cut"));
                     return;
                 }
                 Err(why) => {
                     ui.colored_label(ui.visuals().warn_fg_color, why);
-                    refresh = ui.button("Refresh").clicked();
+                    refresh = ui.button(tr!("gcode-view-refresh")).clicked();
                     return;
                 }
             };
             view.shown = view.shown.min(files.len() - 1);
             ui.horizontal(|ui| {
-                ui.label("File:");
+                ui.label(tr!("gcode-view-file"));
                 if files.len() > 1 {
                     egui::ComboBox::from_id_salt("gcode_file")
                         .selected_text(&files[view.shown].0)
@@ -186,38 +187,33 @@ impl CutCraftApp {
                             }
                         })
                         .response
-                        .on_hover_hint(
-                            "Saving makes these files, run in this order: pick one to read",
-                        );
+                        .on_hover_hint(tr!("gcode-view-saving-makes-these-files-run"));
                 } else {
                     ui.strong(&files[0].0);
                 }
-                ui.weak(format!(
-                    "{} lines, made at {}",
-                    view.starts[view.shown].len(),
-                    view.made.format("%H:%M:%S")
+                ui.weak(tr!(
+                    "gcode-view-lines-made-at",
+                    count = view.starts[view.shown].len(),
+                    time = view.made.format("%H:%M:%S").to_string()
                 ));
             });
-            ui.weak(
-                "What saving would write, through the machine's post-processor. Nothing is \
-                 saved; the checks before cutting run when you save.",
-            );
+            ui.weak(tr!("gcode-view-what-saving-would-write-through"));
             let (_, text) = &files[view.shown];
             ui.horizontal(|ui| {
                 if ui
-                    .button("Copy All")
-                    .on_hover_hint("Copy this file's G-code, to paste somewhere else")
+                    .button(tr!("gcode-view-copy-all"))
+                    .on_hover_hint(tr!("gcode-view-copy-this-file-s-g"))
                     .clicked()
                 {
                     ui.ctx().copy_text(text.clone());
                 }
                 save = ui
-                    .button("Save Toolpaths…")
-                    .on_hover_hint("Check the toolpaths and save the files for the machine")
+                    .button(tr!("gcode-view-save-toolpaths"))
+                    .on_hover_hint(tr!("gcode-view-check-the-toolpaths-and-save"))
                     .clicked();
                 refresh = ui
-                    .button("Refresh")
-                    .on_hover_hint("Make the G-code again from the toolpaths as they are now")
+                    .button(tr!("gcode-view-refresh"))
+                    .on_hover_hint(tr!("gcode-view-make-the-g-code-again"))
                     .clicked();
             });
             ui.separator();
@@ -288,7 +284,7 @@ impl CutCraftApp {
         let mut answer = None;
         egui::Modal::new(egui::Id::unique("save_anyway")).show(ctx, |ui| {
             ui.set_width(ui.spacing().interact_size.x * 11.0);
-            ui.heading("Check before cutting");
+            ui.heading(tr!("gcode-view-check-before-cutting"));
             // a long list scrolls, so the buttons under it stay in reach
             egui::ScrollArea::vertical()
                 .max_height(ui.ctx().content_rect().height() * 0.5)
@@ -298,27 +294,27 @@ impl CutCraftApp {
                     }
                 });
             ui.add_space(ui.spacing().item_spacing.y);
-            ui.strong("Save the toolpaths anyway?");
+            ui.strong(tr!("gcode-view-save-the-toolpaths-anyway"));
             ui.separator();
             ui.horizontal(|ui| {
                 if ui
                     .button(if ask.sending {
-                        "Send Anyway"
+                        tr!("gcode-view-send-anyway")
                     } else {
-                        "Save Anyway"
+                        tr!("gcode-view-save-anyway")
                     })
-                    .on_hover_hint("Go ahead: you have read these and they are what you want")
+                    .on_hover_hint(tr!("gcode-view-go-ahead-you-have-read"))
                     .clicked()
                 {
                     answer = Some(true);
                 }
                 if ui
                     .button(if ask.sending {
-                        "Don't Send"
+                        tr!("gcode-view-don-t-send")
                     } else {
-                        "Don't Save"
+                        tr!("gcode-view-don-t-save")
                     })
-                    .on_hover_hint("Save nothing, to put the toolpaths right first")
+                    .on_hover_hint(tr!("gcode-view-save-nothing-to-put-the"))
                     .clicked()
                 {
                     answer = Some(false);

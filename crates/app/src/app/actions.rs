@@ -6090,7 +6090,7 @@ impl CutCraftApp {
             }
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
-                ui.strong("Tool");
+                ui.strong(tr!("actions-tool"));
                 asked.set(tool_picker(ui, form_id, params, tools, &slots, units));
                 if let Some(line) = &reach {
                     super::reach::show(ui, line);

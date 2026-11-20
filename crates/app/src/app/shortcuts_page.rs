@@ -3,6 +3,7 @@
 
 use super::{CutCraftApp, ShortcutCapture};
 use crate::shortcut::{self, Captured, Trigger};
+use cut_craft_i18n::tr;
 use eframe::egui;
 
 /// The key of the Options category this page draws under.
@@ -264,18 +265,13 @@ pub(super) fn show(
 ) -> Option<Edit> {
     let mut edit = None;
     ui.add_space(ui.spacing().item_spacing.y);
-    ui.strong("Shortcuts");
-    ui.label(
-        "Press Add beside an action, then the key or mouse button to run it with. The \
-         thumb buttons (Back and Forward) and the wheel click can be used as well as keys. \
-         Press × on a shortcut to take it away. Ctrl+C, Ctrl+X and Ctrl+V only ever copy, \
-         cut and paste.",
-    );
+    ui.strong(tr!("shortcuts-page-shortcuts"));
+    ui.label(tr!("shortcuts-page-press-add-beside-an-action"));
     ui.horizontal(|ui| {
-        ui.label("Find");
+        ui.label(tr!("shortcuts-page-find"));
         ui.add(
             egui::TextEdit::singleline(search)
-                .hint_text("an action or a shortcut, such as Pan or Ctrl+Z"),
+                .hint_text(tr!("shortcuts-page-an-action-or-a-shortcut")),
         );
     });
     // each action's name in a column of its own, its shortcuts and buttons beside it, going
@@ -321,35 +317,32 @@ pub(super) fn show(
 fn row_buttons(ui: &mut egui::Ui, row: &Row, capture: Option<&ShortcutCapture>) -> Option<Edit> {
     let mut edit = None;
     if row.shortcuts.is_empty() {
-        ui.weak("none");
+        ui.weak(tr!("shortcuts-page-none"));
     }
     for t in &row.shortcuts {
         if ui
             .button(format!("{}  ×", t.text()))
-            .on_hover_text("Take this shortcut away")
+            .on_hover_text(tr!("shortcuts-page-take-this-shortcut-away"))
             .clicked()
         {
             edit = Some(Edit::Remove(row.id.clone(), *t));
         }
     }
     if capture.is_some_and(|c| c.id == row.id) {
-        if ui.button("Cancel").clicked() {
+        if ui.button(tr!("shortcuts-page-cancel")).clicked() {
             edit = Some(Edit::Cancel);
         }
     } else if ui
-        .button("Add…")
-        .on_hover_text("Then press the key or mouse button to use")
+        .button(tr!("shortcuts-page-add"))
+        .on_hover_text(tr!("shortcuts-page-then-press-the-key-or"))
         .clicked()
     {
         edit = Some(Edit::Start(row.id.clone()));
     }
     if row.changed
         && ui
-            .button("Reset")
-            .on_hover_text(
-                "Back to Cut Craft's own shortcut for this. If another action has that key \
-                 now, you are asked whether to move it back here",
-            )
+            .button(tr!("shortcuts-page-reset"))
+            .on_hover_text(tr!("shortcuts-page-back-to-cut-craft-s"))
             .clicked()
     {
         edit = Some(Edit::Reset(row.id.clone()));
@@ -378,10 +371,10 @@ fn waiting_note(
             ),
         );
         ui.horizontal(|ui| {
-            if ui.button("Move it here").clicked() {
+            if ui.button(tr!("shortcuts-page-move-it-here")).clicked() {
                 *edit = Some(Edit::Move);
             }
-            if ui.button("Pick another").clicked() {
+            if ui.button(tr!("shortcuts-page-pick-another")).clicked() {
                 *edit = Some(Edit::PickAnother);
             }
         });

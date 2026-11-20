@@ -11,6 +11,7 @@ use cmd_trace_bitmap::{Colours, Mode, Params, PictureType, Traced};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::geometry::{Point, Rect};
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 use std::sync::Arc;
@@ -300,12 +301,12 @@ fn counts(shapes: &[Traced]) -> (usize, usize) {
 impl CutCraftApp {
     /// Trace Bitmap's side form: the settings are in the trace window, which this reopens.
     pub(super) fn trace_form(&mut self, ui: &mut egui::Ui) {
-        ui.label("The settings and a preview of the trace are in the trace window.");
+        ui.label(tr!("trace-window-the-settings-and-a-preview"));
         let view = self.trace_view.get_or_insert_with(TraceView::default);
         if !view.open
             && ui
-                .button("Show Trace Window")
-                .on_hover_hint("Open the window with the trace settings and preview")
+                .button(tr!("trace-window-show-trace-window"))
+                .on_hover_hint(tr!("trace-window-open-the-window-with-the"))
                 .clicked()
         {
             view.open = true;
@@ -325,7 +326,7 @@ impl CutCraftApp {
         if view.open {
             let mut open = true;
             let mut pressed = None;
-            egui::Window::new("Trace Bitmap")
+            egui::Window::new(tr!("trace-window-trace-bitmap"))
                 .id(egui::Id::unique("trace_window"))
                 .open(&mut open)
                 .collapsible(false)
@@ -468,15 +469,15 @@ impl CutCraftApp {
                 }
                 ui.horizontal(|ui| {
                     if ui
-                        .button("Trace")
-                        .on_hover_hint("Trace the whole picture into the job with these settings")
+                        .button(tr!("trace-window-trace"))
+                        .on_hover_hint(tr!("trace-window-trace-the-whole-picture-into"))
                         .clicked()
                     {
                         pressed = Some(Press::Apply);
                     }
                     if ui
-                        .button("Close")
-                        .on_hover_hint("Close Trace Bitmap, keeping what was applied")
+                        .button(tr!("trace-window-close"))
+                        .on_hover_hint(tr!("trace-window-close-trace-bitmap-keeping-what"))
                         .clicked()
                     {
                         pressed = Some(Press::Close);
@@ -490,7 +491,7 @@ impl CutCraftApp {
     /// Over the preview: how it shows, zoom, Live updates and Update preview.
     fn preview_bar(&self, ui: &mut egui::Ui, view: &mut TraceView) {
         ui.horizontal_wrapped(|ui| {
-            ui.label("Preview:");
+            ui.label(tr!("trace-window-preview"));
             egui::ComboBox::from_id_salt("trace_look")
                 .selected_text(view.look.label())
                 .show_ui(ui, |ui| {
@@ -500,26 +501,32 @@ impl CutCraftApp {
                 });
             if view.look == Look::Outlines {
                 ui.add(egui::Slider::new(&mut view.fade, 0.0..=1.0).text("Picture"))
-                    .on_hover_hint("How strongly the picture shows under the outlines");
+                    .on_hover_hint(tr!("trace-window-how-strongly-the-picture-shows"));
             }
-            if ui.button("−").on_hover_hint("Zoom out").clicked() {
+            if ui
+                .button("−")
+                .on_hover_hint(tr!("trace-window-zoom-out"))
+                .clicked()
+            {
                 view.zoom = (view.zoom / 1.5).max(0.25);
             }
-            if ui.button("+").on_hover_hint("Zoom in").clicked() {
+            if ui
+                .button("+")
+                .on_hover_hint(tr!("trace-window-zoom-in"))
+                .clicked()
+            {
                 view.zoom = (view.zoom * 1.5).min(64.0);
             }
             if ui
-                .button("Fit")
-                .on_hover_hint("Fit the whole picture in the preview")
+                .button(tr!("trace-window-fit"))
+                .on_hover_hint(tr!("trace-window-fit-the-whole-picture-in"))
                 .clicked()
             {
                 (view.zoom, view.pan) = (1.0, egui::Vec2::ZERO);
             }
             ui.separator();
-            ui.checkbox(&mut view.live, "Live updates").on_hover_hint(
-                "Trace again as the settings change; untick on a slow computer and use \
-                 Update preview",
-            );
+            ui.checkbox(&mut view.live, tr!("trace-window-live-updates"))
+                .on_hover_hint(tr!("trace-window-trace-again-as-the-settings"));
             let current = view
                 .shown
                 .as_ref()
@@ -528,10 +535,10 @@ impl CutCraftApp {
             if ui
                 .add_enabled(
                     !current && view.running.is_none(),
-                    egui::Button::new("Update preview"),
+                    egui::Button::new(tr!("trace-window-update-preview")),
                 )
-                .on_hover_hint("Trace the preview again with the settings as they are")
-                .on_disabled_hover_text("The preview shows these settings")
+                .on_hover_hint(tr!("trace-window-trace-the-preview-again-with"))
+                .on_disabled_hover_text(tr!("trace-window-the-preview-shows-these-settings"))
                 .clicked()
             {
                 view.asked = true;
@@ -555,7 +562,7 @@ impl CutCraftApp {
             return;
         };
         ui.horizontal(|ui| {
-            ui.label("Picture type");
+            ui.label(tr!("trace-window-picture-type"));
             egui::ComboBox::from_id_salt("trace_picture_type")
                 .selected_text("Choose…")
                 .show_ui(ui, |ui| {
@@ -574,11 +581,11 @@ impl CutCraftApp {
                     }
                 });
             if ui
-                .add_enabled(quick.is_some(), egui::Button::new("Quick Trace"))
-                .on_hover_hint(
-                    "Let Trace Bitmap look at the picture and choose the settings: its colours \
-                     when it has some, else black and white split where it suits it best",
+                .add_enabled(
+                    quick.is_some(),
+                    egui::Button::new(tr!("trace-window-quick-trace")),
                 )
+                .on_hover_hint(tr!("trace-window-let-trace-bitmap-look-at"))
                 .clicked()
                 && let Some(q) = &quick
                 && let Ok(p) = serde_json::from_value::<Params>(open.params.clone())
@@ -592,8 +599,8 @@ impl CutCraftApp {
                 view.selected.clear();
             }
             if ui
-                .button("Reset")
-                .on_hover_hint("Back to the settings Trace Bitmap starts with")
+                .button(tr!("trace-window-reset"))
+                .on_hover_hint(tr!("trace-window-back-to-the-settings-trace"))
                 .clicked()
                 && let Ok(p) = serde_json::from_value::<Params>(open.params.clone())
                 && let Ok(v) = serde_json::to_value(Params {
@@ -607,7 +614,7 @@ impl CutCraftApp {
             }
         })
         .response
-        .on_hover_hint("Fill in settings that suit the kind of picture traced");
+        .on_hover_hint(tr!("trace-window-fill-in-settings-that-suit"));
         ui.separator();
         let none = |_: &str| None;
         let look = form::Look {
@@ -873,24 +880,36 @@ pub(super) fn pick(selected: &mut Vec<String>, names: &[String], add: bool) {
 
 /// The colour list: each group traced as one colour, its swatches beside a tick for whether
 /// it is traced; Merge and Separate for the swatches picked. The parameters changed, if any.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the list, its rows and Merge and Separate"
+)]
 fn colour_list(ui: &mut egui::Ui, view: &mut TraceView, p: &Params) -> Option<Value> {
     let mut changed: Option<Params> = None;
     ui.horizontal(|ui| {
-        ui.strong("Colors");
+        ui.strong(tr!("trace-window-colors"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.selectable_value(&mut view.sort, Sort::MostUsed, "Most used")
-                .on_hover_hint("The colours covering most of the picture first");
-            ui.selectable_value(&mut view.sort, Sort::Similarity, "Similar")
-                .on_hover_hint("Alike colours next to each other, darkest first");
+            ui.selectable_value(
+                &mut view.sort,
+                Sort::MostUsed,
+                tr!("trace-window-most-used"),
+            )
+            .on_hover_hint(tr!("trace-window-the-colours-covering-most-of"));
+            ui.selectable_value(
+                &mut view.sort,
+                Sort::Similarity,
+                tr!("trace-window-similar"),
+            )
+            .on_hover_hint(tr!("trace-window-alike-colours-next-to-each"));
         });
     });
     let (Some(shown), Some(picture)) = (view.shown.as_ref(), view.picture.as_ref()) else {
-        ui.weak("The colours show once the preview is traced");
+        ui.weak(tr!("trace-window-the-colours-show-once-the"));
         return None;
     };
     let (Some(colours), Some(swatches)) = (shown.colours.as_ref(), picture.swatches.as_ref())
     else {
-        ui.weak("The colours show once the preview is traced");
+        ui.weak(tr!("trace-window-the-colours-show-once-the"));
         return None;
     };
     let total: usize = colours.grouping.groups.iter().map(|g| g.pixels).sum();
@@ -899,11 +918,10 @@ fn colour_list(ui: &mut egui::Ui, view: &mut TraceView, p: &Params) -> Option<Va
     if view.sort == Sort::MostUsed {
         order.sort_by_key(|&g| std::cmp::Reverse(colours.grouping.groups[g].pixels));
     }
-    ui.weak(format!(
-        "{} colours in {} groups. Click swatches to pick them (Shift or Ctrl for more), then \
-         Merge; tick the colours to trace",
-        swatches.list.len(),
-        colours.grouping.groups.len()
+    ui.weak(tr!(
+        "trace-window-colours-in-groups",
+        colours = swatches.list.len(),
+        groups = colours.grouping.groups.len()
     ));
     let edge = ui.spacing().interact_size.y * 0.8;
     let shift = ui.input(|i| i.modifiers.shift || i.modifiers.command);
@@ -913,7 +931,7 @@ fn colour_list(ui: &mut egui::Ui, view: &mut TraceView, p: &Params) -> Option<Va
             let mut on = traced.contains(&g);
             if ui
                 .checkbox(&mut on, "")
-                .on_hover_hint("Trace this colour")
+                .on_hover_hint(tr!("trace-window-trace-this-colour"))
                 .changed()
             {
                 changed = Some(Params {
@@ -923,24 +941,25 @@ fn colour_list(ui: &mut egui::Ui, view: &mut TraceView, p: &Params) -> Option<Va
             }
             #[expect(clippy::cast_precision_loss, reason = "pixel counts")]
             let share = group.pixels as f64 * 100.0 / total.max(1) as f64;
-            let note = if g == colours.background {
-                " background"
+            let (note, about) = if g == colours.background {
+                (
+                    tr!("trace-window-background"),
+                    tr!("trace-window-the-colour-round-the-picture"),
+                )
             } else if colours.blends[g] {
-                " edge blend"
+                (
+                    tr!("trace-window-edge-blend"),
+                    tr!("trace-window-in-between-colours-along-the"),
+                )
             } else {
-                ""
+                (String::new(), tr!("trace-window-how-much-of-the-picture"))
             };
-            ui.weak(format!("{share:4.1}%{note}"))
-                .on_hover_text(match note {
-                    " background" => {
-                        "The colour round the picture's edges: not traced unless ticked"
-                    }
-                    " edge blend" => {
-                        "In-between colours along the edges of others: traced with the colours \
-                     beside them unless ticked"
-                    }
-                    _ => "How much of the picture this colour covers",
-                });
+            let shown = if note.is_empty() {
+                format!("{share:4.1}%")
+            } else {
+                format!("{share:4.1}% {note}")
+            };
+            ui.weak(shown).on_hover_text(about);
             for &k in &group.swatches {
                 let c = swatches.list[k].colour;
                 let name = hex(c);
@@ -959,7 +978,11 @@ fn colour_list(ui: &mut egui::Ui, view: &mut TraceView, p: &Params) -> Option<Va
                 #[expect(clippy::cast_precision_loss, reason = "pixel counts")]
                 let share = swatches.list[k].pixels as f64 * 100.0 / total.max(1) as f64;
                 if response
-                    .on_hover_text(format!("{name}: {share:.1}% of the picture"))
+                    .on_hover_text(tr!(
+                        "trace-window-share",
+                        name = name.as_str(),
+                        share = format!("{share:.1}")
+                    ))
                     .clicked()
                 {
                     pick(&mut view.selected, &[name], shift);
@@ -985,18 +1008,24 @@ fn merge_buttons(ui: &mut egui::Ui, view: &mut TraceView, p: &Params) -> Option<
     let mut merged = None;
     ui.horizontal(|ui| {
         if ui
-            .add_enabled(view.selected.len() > 1, egui::Button::new("Merge"))
-            .on_hover_hint("Trace the picked swatches as one colour, their average")
-            .on_disabled_hover_text("Pick two swatches or more to merge")
+            .add_enabled(
+                view.selected.len() > 1,
+                egui::Button::new(tr!("trace-window-merge")),
+            )
+            .on_hover_hint(tr!("trace-window-trace-the-picked-swatches-as"))
+            .on_disabled_hover_text(tr!("trace-window-pick-two-swatches-or-more"))
             .clicked()
         {
             merged = Some(cmd_trace_bitmap::colours::merge(&p.merged, &view.selected));
             view.selected.clear();
         }
         if ui
-            .add_enabled(merged_picked, egui::Button::new("Separate"))
-            .on_hover_hint("Take the picked swatches out of what they were merged with")
-            .on_disabled_hover_text("Pick a swatch that was merged by hand")
+            .add_enabled(
+                merged_picked,
+                egui::Button::new(tr!("trace-window-separate")),
+            )
+            .on_hover_hint(tr!("trace-window-take-the-picked-swatches-out"))
+            .on_disabled_hover_text(tr!("trace-window-pick-a-swatch-that-was"))
             .clicked()
         {
             merged = Some(cmd_trace_bitmap::colours::separate(
@@ -1006,7 +1035,10 @@ fn merge_buttons(ui: &mut egui::Ui, view: &mut TraceView, p: &Params) -> Option<
             view.selected.clear();
         }
         if ui
-            .add_enabled(!view.selected.is_empty(), egui::Button::new("Pick None"))
+            .add_enabled(
+                !view.selected.is_empty(),
+                egui::Button::new(tr!("trace-window-pick-none")),
+            )
             .clicked()
         {
             view.selected.clear();
@@ -1019,7 +1051,7 @@ fn merge_buttons(ui: &mut egui::Ui, view: &mut TraceView, p: &Params) -> Option<
 /// a smaller copy.
 fn details(ui: &mut egui::Ui, view: &TraceView) {
     let Some(shown) = &view.shown else {
-        ui.weak("Not traced yet");
+        ui.weak(tr!("trace-window-not-traced-yet"));
         return;
     };
     match &shown.result {
@@ -1042,7 +1074,7 @@ fn details(ui: &mut egui::Ui, view: &TraceView) {
         }
     }
     if view.picture.as_ref().is_some_and(|p| p.scale > 1.0) {
-        ui.weak("Big picture: previewed from a smaller copy. Trace uses the whole picture");
+        ui.weak(tr!("trace-window-big-picture-previewed-from-a"));
     }
 }
 

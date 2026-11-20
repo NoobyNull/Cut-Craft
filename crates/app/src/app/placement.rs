@@ -6,6 +6,7 @@
 
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{GapFrom, ModelPosition, Poke, Units};
+use cut_craft_i18n::tr;
 use eframe::egui;
 use serde_json::Value;
 
@@ -115,20 +116,18 @@ pub(super) fn section_end(
                 len(gap)
             }
         };
-        ui.label(format!("Gap above the model: {}", said(above)))
+        ui.label(tr!("placement-gap-above", gap = said(above)))
             .on_hover_hint(hint);
-        ui.label(format!("Gap below the model: {}", said(below)))
+        ui.label(tr!("placement-gap-below", gap = said(below)))
             .on_hover_hint(hint);
     } else {
-        ui.weak("No 3D model yet: the gap is used once there is one");
+        ui.weak(tr!("placement-no-3d-model-yet-the"));
     }
     let mut picked = None;
     ui.horizontal_wrapped(|ui| {
         if ui
-            .button("⬆ Top at material top")
-            .on_hover_hint(
-                "The model's highest point flush with the top of the material (Gap Above Model, 0)",
-            )
+            .button(tr!("placement-top-at-material-top"))
+            .on_hover_hint(tr!("placement-the-model-s-highest-point"))
             .clicked()
         {
             picked = Some(ModelPosition {
@@ -137,10 +136,8 @@ pub(super) fn section_end(
             });
         }
         if ui
-            .button("⬇ Bottom on material bottom")
-            .on_hover_hint(
-                "The model's lowest point on the bottom of the material (Gap Below Model, 0)",
-            )
+            .button(tr!("placement-bottom-on-material-bottom"))
+            .on_hover_hint(tr!("placement-the-model-s-lowest-point"))
             .clicked()
         {
             picked = Some(ModelPosition {
