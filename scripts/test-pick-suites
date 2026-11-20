@@ -29,24 +29,24 @@ expect "rotary toolpaths display help how-to workflows" "a toolpath tool" \
   crates/commands/pocket-toolpath/src/lib.rs
 expect "rotary toolpaths display help how-to workflows" "a post processor" crates/post/src/lib.rs
 expect "rotary toolpaths display help how-to workflows" "a machine file" machines/sienci.json
-expect "rotary toolpaths display help how-to workflows" "the app's toolpath code" \
+expect "rotary toolpaths display help how-to languages workflows" "the app's toolpath code" \
   crates/app/src/app/cutting.rs
 expect "rotary toolpaths display help how-to workflows" "the rotary crate" crates/rotary/src/lib.rs
 expect "model display help how-to workflows" "a modelling tool" crates/commands/sculpt/src/lib.rs
 expect "design help how-to workflows" "a drawing tool" crates/commands/draw-circle/src/lib.rs
-expect "display how-to workflows" "the 3D view" crates/app/src/view3d/gpu.rs
+expect "display how-to languages workflows" "the 3D view" crates/app/src/view3d/gpu.rs
 expect "files workflows" "an importer" crates/formats/import-dxf/src/lib.rs
-expect "files workflows" "clipart" crates/app/src/clipart/preview.rs
+expect "files languages workflows" "clipart" crates/app/src/clipart/preview.rs
 expect "help how-to" "a help page" crates/help/pages/tools/pocket_toolpath.md
-expect "help how-to" "the app's help window" crates/app/src/app/help.rs
-expect "how-to" "a tour (moved into the app module by #[path])" crates/app/src/help_tours.rs
-expect "how-to" "where to ring" crates/app/src/marks.rs
-expect "how-to" "the tours' test" crates/app/src/app/tests/how_to.rs
-expect "help how-to app workflows" "the whole-app tests, whose Harness the tours and web API tests use" \
+expect "help how-to languages" "the app's help window" crates/app/src/app/help.rs
+expect "how-to languages" "a tour (moved into the app module by #[path])" crates/app/src/help_tours.rs
+expect "how-to languages" "where to ring" crates/app/src/marks.rs
+expect "how-to languages" "the tours' test" crates/app/src/app/tests/how_to.rs
+expect "help how-to languages app workflows" "the whole-app tests, whose Harness the tours and web API tests use" \
   crates/app/src/app/tests.rs
-expect "help how-to app workflows" "the web API's tests" crates/app/src/app/web_api_tests.rs
+expect "help how-to languages app workflows" "the web API's tests" crates/app/src/app/web_api_tests.rs
 expect "help how-to app workflows" "the updater" crates/updater/src/lib.rs
-expect "help how-to app workflows" "an app module nobody owns" crates/app/src/startup.rs
+expect "help how-to languages app workflows" "an app module nobody owns" crates/app/src/startup.rs
 expect "help how-to app workflows" "the app's own words" crates/app/whats-new.md
 expect "help how-to app workflows" "an icon" assets/splash-logo.jpg
 expect "rotary toolpaths design display help how-to workflows" "two areas at once" \
@@ -59,11 +59,11 @@ git -C .. worktree add -q --detach "$repo" HEAD
 cp ./pick-suites "$repo/scripts/pick-suites"
 (
   cd "$repo"
-  git -c user.name=test -c user.email=test@example.invalid commit -qam "this pick-suites" \
+  git -c user.name=test -c user.email=test@example.invalid -c core.hooksPath=/dev/null commit -qam "this pick-suites" \
     --allow-empty
   mkdir -p docs/moved
   git mv crates/help/pages/tools/pocket_toolpath.md docs/moved/pocket_toolpath.md
-  git -c user.name=test -c user.email=test@example.invalid commit -qm "move a help page"
+  git -c user.name=test -c user.email=test@example.invalid -c core.hooksPath=/dev/null commit -qm "move a help page"
   scripts/pick-suites HEAD^
 ) > "$repo.out" 2>&1
 got=$(sed -n 's/^  \([a-z-]*\) (.*/\1/p' "$repo.out" | tr '\n' ' ')

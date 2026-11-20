@@ -67,6 +67,7 @@ class Suite:
     paths: list[str]
     affects: list[str]
     rest: bool
+    checks: list[str] = field(default_factory=list)
     packages: list[str] = field(default_factory=list)  # the packages it owns, worked out
 
 
@@ -106,6 +107,7 @@ def load(root: Path = ROOT, config: Path = CONFIG) -> Plan:
             paths=s.get("paths", []),
             affects=s.get("affects", []),
             rest=s.get("rest", False),
+            checks=s.get("checks", []),
         )
     rests = [s.name for s in suites.values() if s.rest]
     if len(rests) != 1:
@@ -233,6 +235,11 @@ def pick(plan: Plan, files: list[str]) -> dict[str, str]:
             if other not in why:
                 why[other] = f"{name} affects it"
                 queue.append(other)
+    # files a suite's tests read: they wake that suite alone, not the suites it affects
+    for path in files:
+        for s in plan.suites.values():
+            if s.name not in why and any_glob(s.checks, path):
+                why[s.name] = f"{path} (its tests read it)"
     return {name: why[name] for name in plan.suites if name in why}
 
 
@@ -320,8 +327,10 @@ def show_list(plan: Plan) -> None:
 
 def listed_tests(filterset: str | None) -> set[str]:
     """The tests nextest lists, all of them or those of a filter, as `binary test`."""
+    # the default profile's filter stays on, as in the runs: the tests it leaves out (help
+    # coverage, the language packs) run in their own workflows
     command = ["cargo", "nextest", "list", "--workspace", "--all-features",
-               "--message-format", "json", "--ignore-default-filter"]
+               "--message-format", "json"]
     if filterset:
         command += ["-E", filterset]
     out = subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True).stdout

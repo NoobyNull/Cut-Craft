@@ -16,6 +16,12 @@
 #             wakes the suite owning that package (in crates/app/src, the one owning its module)
 #             before anything else here is looked at.
 #   affects   the suites a change to this one can break too, woken with it (and theirs in turn).
+#   checks    files its tests read (globs, like paths): a change to one wakes this suite alone,
+#             not the suites it affects.
+#
+# Tests the default nextest profile leaves out (.config/nextest.toml: help coverage, and the
+# cut-craft-i18n package) are run by their own workflows, Help coverage and Languages, on every
+# pull request; a suite's run here leaves them out too.
 #
 # Adding a suite (Rotary, Languages, ...): give it a table here and move the packages and modules
 # it owns into it; `scripts/test-pick-suites` and `scripts/pick-suites --list` show the result.
@@ -174,6 +180,9 @@ title = "Languages"
 packages = ["cut-craft-i18n"]
 modules = ["app::hard_coded_text", "app::language_page"]
 paths = ["crates/app/i18n/**"]
+# the hard-coded text check reads every file of the app's code: a change there runs it, but
+# not the suites a language change affects
+checks = ["crates/app/src/**"]
 affects = ["help", "how-to", "app", "workflows"]
 
 [suites.app]
