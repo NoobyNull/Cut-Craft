@@ -12,8 +12,7 @@ name: Language packs
 
 on:
   push:
-    # language-packs-and-picker: only to try publishing before this first merges
-    branches: [main, language-packs-and-picker]
+    branches: [main]
     paths: ['language-packs/**', '.github/workflows/language-packs.yml']
   workflow_dispatch:
 
