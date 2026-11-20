@@ -6778,7 +6778,7 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
     h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
     assert_eq!(
         h.app.output_post().unwrap().name,
-        "Cut Craft FluidNC ATC Wrap A G93 (mm) (*.nc)"
+        "Cut Craft FluidNC ATC Rotary A, G93 (mm) (*.nc)"
     );
 }
 
@@ -8510,11 +8510,29 @@ fn rotary_jobs_need_a_4th_axis_and_save_through_the_post_wrapping_their_side() {
     assert_eq!(wraps(&h.app), Ok(None), "a flat job: the flat default");
     h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
     let why = wraps(&h.app).unwrap_err();
-    assert!(why.contains("4th axis"), "{why}");
+    assert!(why.contains("Standard GRBL supports only 3 axes"), "{why}");
+    h.app.machines.active_mut().unwrap().firmware = Some(cut_craft_machines::Firmware::GrblHal);
+    let why = wraps(&h.app).unwrap_err();
+    assert!(why.contains("tick its 4th axis"), "{why}");
     let names: Vec<String> = h.app.posts.entries().into_iter().map(|e| e.name).collect();
     let machine = h.app.machines.active_mut().unwrap();
     machine.rotary = true;
     machine.add_rotary_posts(&names);
+    let firmware = machine.firmware();
+    machine.firmware = Some(cut_craft_machines::Firmware::Grbl);
+    let why = wraps(&h.app).unwrap_err();
+    assert!(why.contains("Standard GRBL supports only 3 axes"), "{why}");
+    // the firmware is said first, with the tick off or no posts at all
+    let machine = h.app.machines.active_mut().unwrap();
+    let (posts, ticked) = (std::mem::take(&mut machine.posts), machine.rotary);
+    machine.rotary = false;
+    let why = wraps(&h.app).unwrap_err();
+    assert!(why.contains("Standard GRBL supports only 3 axes"), "{why}");
+    let machine = h.app.machines.active_mut().unwrap();
+    (machine.posts, machine.rotary) = (posts, ticked);
+    h.app.machines.active_mut().unwrap().firmware = Some(firmware)
+        .filter(|f| f.has_a_axis())
+        .or(Some(cut_craft_machines::Firmware::GrblHal));
     assert_eq!(
         wraps(&h.app),
         Ok(Some("Y".into())),
@@ -16739,6 +16757,7 @@ fn selecting_a_post_that_does_not_suit_the_open_job_says_which_post_it_saves_thr
         .clone();
     let machine = h.app.machines.active_mut().unwrap();
     machine.rotary = true;
+    machine.firmware = Some(cut_craft_machines::Firmware::FluidNc);
     machine.posts = vec![round.clone()];
     // a rotary job: a flat post picked is the default for flat jobs only
     h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);

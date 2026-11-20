@@ -44,7 +44,7 @@ model, 3d model, relief, component
 layers, layer
 undo, go back, mistake
 laser, burn, engrave with laser
-rotary, 4th axis, fourth axis, wrap
+rotary, 4th axis, fourth axis, wrap, a axis
 nest, nesting, layout parts, fit parts
 array, copy along, repeat, duplicate
 measure, ruler, distance, dimension, dimensions
@@ -66,3 +66,4 @@ job defaults, default job, new job settings, startup settings
 classic startup flow, start page, splash screen, startup screen, welcome screen
 preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated
 filter, filters, narrow down
+firmware, grbl, grblhal, fluidnc, mach3, mach4, controller
