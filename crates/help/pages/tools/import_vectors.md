@@ -21,12 +21,13 @@ see-also: import_vectors_bitmap, vector_validator, join_vectors, layer_propertie
 
 ## Layers
 
-A DXF often keeps its drawing on layers: the outline of each part on one, the holes of
-each size on another, notes on a third. Every one of them comes in as a layer of your job,
-with the same name and colour, so you can still tell them apart:
+A DXF or SVG often keeps its drawing on layers: the outline of each part on one, the holes
+of each size on another, notes on a third. Every one of them comes in as a layer of your
+job, with the same name and colour, so the **Layers** tab looks like the layer list in the
+program that made the file:
 
-- Each vector goes on the layer it was on in the file. Open the **Layers** tab to see them,
-  listed in the file's order.
+- Each vector goes on the layer it was on in the file, and the layers are listed in the
+  same order as in that program.
 - Every layer comes in, even one with nothing on it, so the list matches the program that
   made the file.
 - A layer the file had turned off or frozen comes in hidden: its vectors are there, but not
@@ -40,4 +41,10 @@ with the same name and colour, so you can still tell them apart:
 Layers drawn in white or black in the file use the usual vector colour, so they show on a
 light or dark screen alike.
 
-An SVG's layers and colours are not read yet: an SVG comes in on the current layer.
+Where the layers come from:
+
+- **DXF**: the file's own layer list, with each layer's colour.
+- **SVG**: the layers made in most drawing programs. A layer's colour is the colour most of its lines are drawn
+  in. Shapes not on any layer go on the current layer.
+- **Job files** (`.crv3d`): each vector goes on its layer by name. Their colours are not
+  read yet, so they use the usual vector colour.

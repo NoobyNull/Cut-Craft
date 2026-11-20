@@ -2,9 +2,10 @@
 //! splines, scaled from the drawing's units to millimetres, each on its own layer with the
 //! layer's name and colour. Everything else (text, hatches, dimensions, blocks) is skipped.
 
-use cut_craft_core::document::{Document, Job, LayerId, Units as JobUnits};
+use cut_craft_core::document::{Document, Job, Units as JobUnits};
 use cut_craft_core::geometry::{Path, Point, Rect, Segment, polar};
 use cut_craft_core::glam::{DAffine2, DVec2};
+use cut_craft_core::import_layers::{FileLayer, ImportLayers};
 use cut_craft_core::{Change, CommandError, FileFormat, Importer, UnitGuess};
 use dxf::entities::{Ellipse, EntityType, Spline};
 use dxf::enums::Units;
@@ -47,7 +48,7 @@ impl Importer for ImportDxf {
         let (scale, unit_guess) = scale(drawing.header.default_drawing_units, size, &doc.job);
         let to_mm = DAffine2::from_scale(DVec2::splat(scale));
         let mut c = Change::builder(doc);
-        let mut layers = Layers::make(&mut c, &file_layers(&drawing, bytes));
+        let mut layers = ImportLayers::make(&mut c, &file_layers(&drawing, bytes));
         let mut selected = vec![];
         for (p, layer) in paths {
             let id = c.add(p.transformed(&to_mm).closed_where_ends_meet());
@@ -64,15 +65,6 @@ impl Importer for ImportDxf {
         change.notes.extend(left_out.note());
         Ok(change)
     }
-}
-
-/// A layer of the drawing, as the file has it: its name, colour (none for the usual vector
-/// colour) and whether it is shown (a layer turned off or frozen is not).
-#[derive(Clone, Debug, PartialEq)]
-struct FileLayer {
-    name: String,
-    colour: Option<[u8; 3]>,
-    visible: bool,
 }
 
 /// The drawing's layers, in the file's order, every one of them, even those with nothing on
@@ -139,74 +131,6 @@ fn raw_layers(bytes: &[u8]) -> Vec<RawLayer> {
         }
     }
     layers
-}
-
-/// The job's layers for the drawing's: one of the same name if the job has it (names are
-/// matched whatever their case, as DXF does), else a new one.
-struct Layers(Vec<(String, LayerId, bool)>);
-
-impl Layers {
-    /// Every layer of the file, made in the job. They are added last first, so the layer
-    /// list, which shows the newest on top, reads in the file's order.
-    fn make(c: &mut cut_craft_core::ChangeBuilder, file: &[FileLayer]) -> Self {
-        let mut made = Layers(vec![]);
-        for l in file.iter().rev() {
-            if made.find(&l.name).is_none() {
-                made.add(c, l);
-            }
-        }
-        made
-    }
-
-    fn find(&self, name: &str) -> Option<(LayerId, bool)> {
-        self.0
-            .iter()
-            .find(|(n, ..)| n.eq_ignore_ascii_case(name))
-            .map(|&(_, id, shown)| (id, shown))
-    }
-
-    fn add(&mut self, c: &mut cut_craft_core::ChangeBuilder, l: &FileLayer) -> (LayerId, bool) {
-        let existing = c
-            .layers()
-            .iter()
-            .find(|have| have.name.eq_ignore_ascii_case(&l.name))
-            .map(|have| (have.id, have.visible));
-        let (id, shown) = existing.unwrap_or_else(|| {
-            // a layer with no name (allowed by some programs) still gets one to show
-            let name = if l.name.trim().is_empty() {
-                "Unnamed layer"
-            } else {
-                l.name.as_str()
-            };
-            let id = c.add_layer(name);
-            let mut layer = c
-                .layers()
-                .iter()
-                .find(|have| have.id == id)
-                .expect("just added")
-                .clone();
-            layer.colour = l.colour;
-            layer.visible = l.visible;
-            if layer.colour.is_some() || !layer.visible {
-                c.replace_layer(layer);
-            }
-            (id, l.visible)
-        });
-        self.0.push((l.name.clone(), id, shown));
-        (id, shown)
-    }
-
-    /// The layer a vector named for `name` goes on, made if the file's layer table lacks it.
-    fn of(&mut self, c: &mut cut_craft_core::ChangeBuilder, name: &str) -> (LayerId, bool) {
-        self.find(name).unwrap_or_else(|| {
-            let l = FileLayer {
-                name: name.to_owned(),
-                colour: None,
-                visible: true,
-            };
-            self.add(c, &l)
-        })
-    }
 }
 
 /// A DXF colour number (1 to 255) as red, green, blue, from the standard 256-colour table.
