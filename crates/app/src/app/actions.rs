@@ -273,6 +273,7 @@ impl CutCraftApp {
             options: crate::options::Options::default(),
             options_window: false,
             options_draft: None,
+            job_defaults_form: None,
             options_closing: false,
             options_page: 0,
             show_advanced: false,
@@ -682,7 +683,13 @@ impl CutCraftApp {
             "options" => self.options_window = true,
             // F1: the open form's help page, else the contents
             "tool_help" => {
-                let topic = self.form.as_ref().map_or("contents", |f| f.id);
+                let topic = self.form.as_ref().map_or("contents", |f| {
+                    if f.brief {
+                        super::setup_material::ID
+                    } else {
+                        f.id
+                    }
+                });
                 self.info = Some(Info::Help(topic));
             }
             "view_2d" => self.view = View::TwoD,
@@ -690,6 +697,7 @@ impl CutCraftApp {
             "first_run_setup" => self.open_first_run(),
             "did_you_know" => self.open_tips(self.options.next_tip),
             "try_sample_project" => self.open_sample(),
+            super::setup_material::ID => self.open_setup_material(),
             id if id.starts_with(gui::COMMUNITY) => {
                 let link = id[gui::COMMUNITY.len()..].parse::<usize>().ok();
                 if let Some((_, url, _)) = link.and_then(|n| super::LINKS.get(n)) {
@@ -1116,7 +1124,15 @@ impl CutCraftApp {
 
     pub(super) fn file_action(&mut self, id: &str) {
         match id {
-            // a new job starts in Job Setup
+            // a new job opens blank, made with Options ▸ Job Defaults; the classic flow
+            // starts it in Job Setup
+            "new" if !self.options.job_defaults.classic_startup => {
+                if self.confirm_discard() {
+                    self.start_blank_job();
+                    self.status
+                        .set_message(&format!("New job: {}", self.material_summary()));
+                }
+            }
             "new" => {
                 if self.confirm_discard() {
                     self.reset_job();
@@ -1138,8 +1154,13 @@ impl CutCraftApp {
             }
             "close" => {
                 if self.confirm_discard() {
-                    self.reset_job();
-                    self.screen = Screen::Start;
+                    if self.options.job_defaults.classic_startup {
+                        self.reset_job();
+                        self.screen = Screen::Start;
+                    } else {
+                        // no start page: a blank job to carry on with
+                        self.start_blank_job();
+                    }
                 }
             }
             "save" => match self.session.path.clone() {
@@ -2536,6 +2557,7 @@ impl CutCraftApp {
                 way: crate::flyout::DragWay::AsIs,
                 made: None,
                 note: None,
+                brief: false,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -2778,6 +2800,12 @@ impl CutCraftApp {
             self.drop_file(path);
             return;
         }
+        if !self.options.job_defaults.classic_startup {
+            // a blank job to bring it into, as if dropped on the window
+            self.start_blank_job();
+            self.drop_file(path);
+            return;
+        }
         self.file_action("new");
         if self.screen == Screen::NewJob {
             self.import_after_setup = Some(path.to_owned());
@@ -2877,6 +2905,31 @@ impl CutCraftApp {
         self.form_back = None;
         self.checks_accepted = false;
         self.clear_recovery();
+    }
+
+    /// A blank job made with Options ▸ Job Defaults, open to draw on, with nothing to undo
+    /// or save yet.
+    pub(super) fn start_blank_job(&mut self) {
+        self.reset_job();
+        self.view = View::TwoD;
+        self.screen = Screen::Job;
+        "Select".clone_into(&mut self.status.current_tool);
+    }
+
+    /// What Cut Craft shows once it has started: the file named on the command line, if
+    /// one was; else a blank job, unless Classic Startup Flow asks for the start page or a
+    /// job is already open (recovered work).
+    pub(super) fn open_at_start(&mut self, given: Option<&std::path::Path>) {
+        self.open_given(given);
+        if self.screen == Screen::Start && !self.options.job_defaults.classic_startup {
+            self.start_blank_job();
+        }
+    }
+
+    /// The material in one line, for the status bar and the foot of the sheet:
+    /// "600 × 400 × 20 mm, single sided, Z zero on top, X0 Y0 bottom left".
+    pub(super) fn material_summary(&self) -> String {
+        super::setup_material::summary(&self.doc.job)
     }
 
     /// Set as Default in Job Setup: new jobs start with the job its settings make.
@@ -6301,6 +6354,7 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
+            "job_setup" => self.setup_material_extras(ui),
             "set_size" => self.link_set_size(),
             "relief_from_photo" => {
                 self.depth_section(ui);

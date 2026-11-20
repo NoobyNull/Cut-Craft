@@ -492,6 +492,19 @@ impl CutCraftApp {
             round(job.thickness / scale)
         );
         let machine = name.map_or_else(String::new, |n| format!("{n}, "));
+        // the blank job opened before the questions were answered: made again as answered
+        let blank = self.screen == super::Screen::Job
+            && self.nothing_drawn()
+            && !self.session.is_dirty(&self.history);
+        if blank && !self.options.job_defaults.classic_startup {
+            self.start_blank_job();
+            self.status.set_message(&format!(
+                "Set up: {machine}new jobs {size}. Draw on the sheet, or Try a sample project. \
+                 Change these any time in Machine ▸ Machine Configuration and Edit ▸ Options ▸ \
+                 Job Defaults."
+            ));
+            return;
+        }
         self.status.set_message(&format!(
             "Set up: {machine}new jobs {size}. Press Create a new file to start, or Try a \
              sample project. Change these any time in Machine ▸ Machine Configuration and Job \
