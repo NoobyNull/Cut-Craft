@@ -30,7 +30,7 @@ const DARK: &str = "-dark";
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 49] = [
+const SCENES: [Scene; 50] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("design-2d-dark", |_, _| {}),
@@ -158,6 +158,8 @@ const SCENES: [Scene; 49] = [
             w.edit_capabilities(&app.posts, "Cut Craft GRBL Arcs (mm) (*.nc)");
         }
     }),
+    // Help: The 4th axis and your firmware (standard GRBL: the 4th axis greyed out)
+    ("machine-firmware", machine_firmware),
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {
@@ -205,6 +207,7 @@ fn post_window(app: &mut CutCraftApp, ctx: &egui::Context, rotary: bool) {
         m.name = "Shop Router".into();
         m.inches = false;
         m.rotary = rotary;
+        m.firmware = Some(cut_craft_machines::Firmware::FluidNc);
     }
     app.post_window = None;
     app.invoke(ctx, "post_processor_management");
@@ -694,6 +697,23 @@ fn tool_database(app: &mut CutCraftApp, ctx: &egui::Context) {
     if let Some(manager) = &mut app.tool_manager {
         manager.pick = Some(cut_craft_tool_database::Pick::Tool(1));
     }
+}
+
+/// Machine Configuration for a machine on standard GRBL with a rotary added: the 4th axis
+/// greyed out, and the warning that says why.
+fn machine_firmware(app: &mut CutCraftApp, ctx: &egui::Context) {
+    ctx.set_embed_viewports(true);
+    (app.info, app.form, app.tool_manager, app.machine_window) = (None, None, None, None);
+    app.post_window = None;
+    app.machines.add();
+    if let Some(m) = app.machines.active_mut() {
+        m.name = "Garage Router".into();
+        m.manufacturer = "Home built".into();
+        m.controller = "Arduino Uno + CNC shield".into();
+        (m.width, m.height, m.depth) = (600.0, 400.0, 80.0);
+        m.rotary = true;
+    }
+    app.invoke(ctx, "machine_configuration");
 }
 
 /// A machine with a five-slot tool changer, in Machine Configuration.

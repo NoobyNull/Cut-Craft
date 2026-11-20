@@ -60,6 +60,16 @@ impl Controller {
         }
     }
 
+    /// The firmware it stands for, when it names one: "grbl or grblHAL" and "not sure" are
+    /// left to be read (as standard GRBL) until picked in Machine Configuration.
+    pub fn firmware(self) -> Option<crate::Firmware> {
+        match self {
+            Self::FluidNc => Some(crate::Firmware::FluidNc),
+            Self::Mach3 => Some(crate::Firmware::Mach),
+            Self::Grbl | Self::Other => None,
+        }
+    }
+
     /// The word Cut Craft's own posts for this controller are named with.
     fn post_word(self) -> &'static str {
         match self {
@@ -78,7 +88,7 @@ impl Controller {
             .entries()
             .into_iter()
             .map(|e| e.name)
-            .filter(|n| n.starts_with(&prefix) && !n.contains("Wrap"))
+            .filter(|n| n.starts_with(&prefix) && !n.contains("Rotary A"))
             .collect();
         // stable: each units' posts keep the library's order
         posts.sort_by_key(|n| !n.contains(units));
@@ -121,7 +131,7 @@ mod tests {
         let (posts, default) = Controller::Grbl.posts(true);
         assert_eq!(default, "Cut Craft GRBL Arcs (inch) (*.nc)");
         assert!(posts[0].contains("(inch)") && posts.iter().any(|p| p.contains("(mm)")));
-        assert!(posts.iter().all(|p| !p.contains("Wrap")), "{posts:?}");
+        assert!(posts.iter().all(|p| !p.contains("Rotary A")), "{posts:?}");
         let (_, mach3) = Controller::Mach3.posts(false);
         assert_eq!(mach3, "Cut Craft Mach3 Arcs (mm) (*.tap)");
         let (_, fluid) = Controller::FluidNc.posts(false);

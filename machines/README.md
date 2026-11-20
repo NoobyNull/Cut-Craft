@@ -15,14 +15,17 @@ grbl 1.1 and grblHAL: a tool change stops the spindle and pauses (M0) for you to
 zero the tool, then resume from your sender.
 
 Cut Craft also has, for GRBL, Mach3 and FluidNC (with a tool changer), in mm and in inches:
-**Arcs**, **Straight**, and rotary **Wrap Y to A** / **Wrap X to A**, each with feeds in
-units a minute or in inverse time (**G93**). Add one to a machine in Machine Configuration,
+**Arcs**, **Straight**, and rotary **Rotary A, cylinder along X** / **Rotary A, cylinder along
+Y**, each with feeds in units a minute or in inverse time (**G93**). GRBL's rotary posts are
+named grblHAL: standard GRBL 1.1 has no A axis. Add one to a machine in Machine Configuration,
 or customise and edit a copy in Post-Processor Management.
 
-**Rotary needs a 4th axis.** The machines here are 3-axis as they come. If yours has a rotary
-axis (A) added, tick **4th axis** in Machine Configuration: that adds the Wrap Y to A and
-Wrap X to A (G93) posts for the machine's posts, and rotary jobs are saved through the one
-wrapping their side. Without it, Cut Craft won't save a rotary job for the machine.
+**Rotary needs a 4th axis, and firmware that can drive it.** The machines here are 3-axis as
+they come. If yours has a rotary axis (A) added, pick its **Firmware** in Machine Configuration
+(grblHAL built with 4 or more axes, FluidNC with an A axis, or Mach3/Mach4), then tick **4th
+axis**: that adds the Rotary A (G93) posts for the machine's posts, and rotary jobs are saved
+through the one for their cylinder's direction. On standard GRBL 1.1 (also what an unknown
+firmware is taken for) the tick is greyed out, and Cut Craft won't save a rotary job.
 
 **Check the working area against your own machine before cutting.** These are the
 makers' published sizes as the packages were written; extensions, kits and revisions

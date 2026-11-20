@@ -1,7 +1,7 @@
 + Cut Craft's post for hobby routers on grbl (grbl 1.1, grblHAL), millimetres, tools changed
 + by hand: grbl refuses M6, so a tool change stops the spindle and pauses (M0) for the
 + new tool, to be resumed from the sender once it is in and zeroed.
-+ Rotary: X wrapped onto A, for a cylinder along Y; feeds in units a minute. Needs an A axis.
++ Rotary: X wrapped onto A, for a cylinder along Y; feeds in units a minute. Needs an A axis (grblHAL built with 4 or more axes; standard GRBL 1.1 has none).
 + Made by scripts/make_posts.py: edit its template and run it again.
 
 + History
@@ -10,7 +10,7 @@
 + Cut Craft  2026-10-27 First version: arcs, tool change by hand (M0)
 + Cut Craft  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft GRBL Wrap X to A (mm) (*.nc)"
+POST_NAME = "Cut Craft grblHAL Rotary A, cylinder along Y (mm) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "MM"
 LINE_ENDING = "[10]"

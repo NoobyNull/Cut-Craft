@@ -8,7 +8,7 @@
 + Cut Craft  2026-10-27 First version: arcs, tool change with T M6
 + Cut Craft  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft Mach3 Wrap Y to A (inch) (*.tap)"
+POST_NAME = "Cut Craft Mach3 Rotary A, cylinder along X (inch) (*.tap)"
 FILE_EXTENSION = "tap"
 UNITS = "INCHES"
 LINE_ENDING = "[10]"
