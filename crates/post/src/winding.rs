@@ -62,11 +62,12 @@ impl Winding {
 
     /// `steps` as written, starting `at` (as written): each pass moved whole turns, and
     /// turned round where "A can turn" says, with the moves between passes lifting clear
-    /// before A spins.
-    pub(crate) fn plan(&mut self, steps: Vec<Step>, mut at: DVec3) -> Vec<Step> {
+    /// before A spins. Why not, when a pass turns A further than "A can turn" allows on any
+    /// whole turn.
+    pub(crate) fn plan(&mut self, steps: Vec<Step>, mut at: DVec3) -> Result<Vec<Step>, String> {
         if steps.iter().any(|s| matches!(s, Step::Arc(..))) {
             // wrapped posts write no arcs; leave anything else as it is
-            return steps;
+            return Ok(steps);
         }
         let lines: Vec<(MoveKind, DVec3, f64, f64)> = steps
             .into_iter()
@@ -101,7 +102,18 @@ impl Winding {
                 continue;
             }
             let approach = rapids[rapids.len() - 1].1;
-            let (turns, backwards) = self.choose(at, approach, pass);
+            let Some((turns, backwards)) = self.choose(at, approach, pass) else {
+                let span = pass.iter().fold((f64::MAX, f64::MIN), |(lo, hi), l| {
+                    (lo.min(l.1[self.round]), hi.max(l.1[self.round]))
+                });
+                return Err(format!(
+                    "turns A {:.0}° in one pass, further than \"A can turn\" allows ({:.0}° each \
+                     way): allow more turns, or let A turn freely, in Machine Configuration's \
+                     rotary settings",
+                    (span.1 - span.0) / self.per_degree,
+                    self.axis.limit().unwrap_or(0.0),
+                ));
+            };
             if turns == self.turns && !backwards {
                 for l in rapids.iter().chain(pass) {
                     let to = self.moved(l.1, turns);
@@ -157,7 +169,7 @@ impl Winding {
             }
             i = pass_end;
         }
-        out
+        Ok(out)
     }
 
     /// `p` moved `turns` whole turns round.
@@ -167,13 +179,13 @@ impl Winding {
     }
 
     /// Which whole turn a `pass` reached from `approach` is cut on, from `at`, and whether it
-    /// is cut backwards.
+    /// is cut backwards; none when no whole turn keeps it within the limit.
     fn choose(
         &self,
         at: DVec3,
         approach: DVec3,
         pass: &[(MoveKind, DVec3, f64, f64)],
-    ) -> (f64, bool) {
+    ) -> Option<(f64, bool)> {
         let round = self.round;
         // the whole turns that bring `start` nearest to where A is
         let nearest = |start: f64| ((at[round] - start) / self.turn()).round();
@@ -188,12 +200,12 @@ impl Winding {
         };
         let forward = nearest(pass[0].1[round]);
         if self.axis.turning == Turning::Free || fits(forward) {
-            return (forward, false);
+            return Some((forward, false));
         }
         if self.axis.at_limit == AtLimit::CutBothWays && reversible(approach, pass) {
             let back = nearest(pass[pass.len() - 1].1[round]);
             if fits(back) {
-                return (back, true);
+                return Some((back, true));
             }
         }
         // spin back: the whole turns that bring the pass nearest the middle, and of two
@@ -211,7 +223,7 @@ impl Winding {
                     spin(a).total_cmp(&spin(b))
                 }
             })
-            .map_or((middle, false), |t| (t, false))
+            .map(|t| (t, false))
     }
 
     /// A for the wrapped axis at flat `w`, in degrees, with the backlash taken up when A
@@ -252,23 +264,58 @@ impl Winding {
     }
 
     /// Where A goes home at the end of the file, flat: the very start after a spin back to
-    /// it, otherwise the start's place on the material nearest where A is.
+    /// it, otherwise the start's place on the material nearest where A is that is within the
+    /// limit.
     pub(crate) fn home(&self, home: f64, at: f64) -> f64 {
         if self.axis.turning == Turning::Unwind && self.axis.at_limit == AtLimit::SpinBack {
-            home
-        } else {
-            home + ((at - home) / self.turn()).round() * self.turn()
+            return home;
         }
+        let turn = self.turn();
+        let k = ((at - home) / turn).round();
+        let Some(limit) = self.limit() else {
+            return home + k * turn;
+        };
+        [k, k - 1.0, k + 1.0]
+            .into_iter()
+            .map(|t| home + t * turn)
+            .filter(|w| w.abs() <= limit + 1e-6)
+            .min_by(|a, b| (a - at).abs().total_cmp(&(b - at).abs()))
+            .unwrap_or(home)
     }
 }
 
-/// A pass can be cut backwards when it goes straight down into the material and never cuts
-/// upwards after: backwards it then goes straight down at its far end, and never cuts down
-/// sideways.
+/// A pass can be cut backwards when it goes straight down into the material and stays at that
+/// one depth: backwards it then goes straight down at its far end to the same depth. A pass
+/// that steps down again (several depths, or a ramp) would start at its deepest backwards,
+/// taking every step at once, so it is never reversed.
 fn reversible(approach: DVec3, pass: &[(MoveKind, DVec3, f64, f64)]) -> bool {
     let (kind, first, _, _) = pass[0];
     kind == MoveKind::Plunge
         && (first.x - approach.x).abs() < 1e-6
         && (first.y - approach.y).abs() < 1e-6
-        && pass.windows(2).all(|w| w[1].1.z <= w[0].1.z + 1e-6)
+        && pass[1..].iter().all(|l| (l.1.z - first.z).abs() < 1e-6)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn going_home_stays_within_the_limit_when_home_is_not_at_zero_round() {
+        // 100 mm round, so a turn is 100 mm flat; A can turn 1 turn either way (±100 mm)
+        let axis = RotaryAxis {
+            turning: Turning::Unwind,
+            turns: 1.0,
+            at_limit: AtLimit::CutBothWays,
+            ..RotaryAxis::default()
+        };
+        let w = Winding::new(axis, 1, 100.0 / std::f64::consts::PI, 5.0);
+        // home 40 mm round, A at the limit (100): 140 would be 504°, so it goes back to 40
+        assert!((w.home(40.0, 100.0) - 40.0).abs() < 1e-9);
+        // and from -100 to -60, the nearest that fits
+        assert!((w.home(40.0, -100.0) + 60.0).abs() < 1e-9);
+        // turning freely, the nearest whole turn as before
+        let free = Winding::new(RotaryAxis::default(), 1, 100.0 / std::f64::consts::PI, 5.0);
+        assert!((free.home(40.0, 100.0) - 140.0).abs() < 1e-9);
+    }
 }

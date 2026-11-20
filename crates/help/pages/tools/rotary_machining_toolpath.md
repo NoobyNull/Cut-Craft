@@ -65,11 +65,16 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   for each side's finish to take off.
 - **Start** and **End**: where along the axis the rings go, from the job's start (the chuck
   end). End 0 runs to the job's end. Keep them clear of the chuck and tailstock you set in
-  [Machine Configuration](help:rotary_firmware).
+  [Machine Configuration](help:rotary_firmware). They count from the material's start
+  whatever XY zero [Job Setup](help:job_setup) uses: zeroed on the middle, the toolpath is
+  written where the material is, just as with a corner.
 - **Allowance**: material left all the way round for a later pass.
 - **Registration mark**: a notch 0.5 mm deep at A=0, a bit's width past the last ring. If a
   job stops part way, turn A until the notch is under the bit and zero A there before starting
-  again. Without one, pencil a line along the material at A=0 before you start.
+  again. It is only cut where there is waste past **End** to cut it in: when the part runs
+  right to the end of the material, it is left out and a note says so, rather than notch the
+  part. Bring **End** in a little to make room, or pencil a line along the material at A=0
+  before you start.
   [Rotary set up](help:check_rotary_setup) reminds you when there is neither.
 
 ## Four ways round
