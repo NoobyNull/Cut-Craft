@@ -157,6 +157,7 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
     });
     if !progress::cancelled() {
         progress::stage(&Phase::Machine.stage(""));
+        zeroing(doc, &mut found);
         machine(doc, toolpaths, limits, &mut found);
         keep_out(doc, toolpaths, &mut found);
         tool_numbers(toolpaths, &mut found);
@@ -606,6 +607,52 @@ fn rotary_setup(
     }
 }
 
+/// A job whose material was never set up (Material Setup not shown, as when the
+/// toolpaths came from a template): where to zero the bit, from Job Defaults, to read.
+fn zeroing(doc: &Document, found: &mut Vec<Finding>) {
+    if doc.material_checked {
+        return;
+    }
+    let job = &doc.job;
+    let z = match (job.z_zero, job.rotary.is_some()) {
+        (crate::document::ZZero::MaterialSurface, false) => "on top of the material",
+        (crate::document::ZZero::MachineBed, false) => "on the machine bed",
+        (crate::document::ZZero::MaterialSurface, true) => "on top of the cylinder",
+        (crate::document::ZZero::MachineBed, true) => "on the cylinder's axis",
+    };
+    let xy = match job.datum {
+        crate::document::Datum::BottomLeft => "at the material's bottom left corner",
+        crate::document::Datum::TopLeft => "at the material's top left corner",
+        crate::document::Datum::TopRight => "at the material's top right corner",
+        crate::document::Datum::BottomRight => "at the material's bottom right corner",
+        crate::document::Datum::Centre => "in the middle of the material",
+    };
+    let offset = if job.offset == crate::geometry::Point::ZERO {
+        String::new()
+    } else {
+        format!(
+            ", moved {} {u} across and {} {u} up",
+            trim(job.offset.x / job.units.per()),
+            trim(job.offset.y / job.units.per()),
+            u = job.units.suffix()
+        )
+    };
+    found.push(Finding::warning(
+        Check::Zeroing,
+        format!(
+            "This job's zero comes from your Job Defaults and was not looked at: zero the \
+             bit's Z {z}, and X0 Y0 {xy}{offset}. To change them for this job, open Material \
+             Setup on the Toolpaths page"
+        ),
+    ));
+}
+
+/// `value` to three places at most, without trailing zeros.
+fn trim(value: f64) -> String {
+    let text = format!("{value:.3}");
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
 /// The checks that cannot be made on `toolpaths` with `limits`, each with why: the
 /// machine not saying what it can do, no tool changer or keep-out zones, a rotary job.
 #[must_use]
@@ -992,8 +1039,41 @@ mod tests {
                 thickness: 18.0,
                 ..Job::default()
             },
+            // its zero looked at in Material Setup: no Zeroing warning in every test
+            material_checked: true,
             ..Document::default()
         }
+    }
+
+    #[test]
+    fn a_zero_never_looked_at_is_said_where_to_set() {
+        let mut doc = job();
+        let path = slot("Profile", 150.0, 20.0, 180.0, 3.0);
+        let zeroing = |doc: &Document| {
+            check(doc, &[&path], &Limits::default())
+                .into_iter()
+                .filter(|f| f.check == Check::Zeroing)
+                .collect::<Vec<_>>()
+        };
+        assert!(zeroing(&doc).is_empty(), "looked at in Material Setup");
+        doc.material_checked = false;
+        let found = zeroing(&doc);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Warning, "to read and tick");
+        assert!(
+            found[0]
+                .message
+                .contains("zero the bit's Z on top of the material, and X0 Y0 at the material's bottom left corner. "),
+            "{}",
+            found[0].message
+        );
+        doc.job.datum = crate::document::Datum::Centre;
+        doc.job.offset = crate::geometry::Point::new(10.0, 5.0);
+        assert!(
+            zeroing(&doc)[0]
+                .message
+                .contains("in the middle of the material, moved 10 mm across and 5 mm up."),
+        );
     }
 
     fn tool() -> Tool {

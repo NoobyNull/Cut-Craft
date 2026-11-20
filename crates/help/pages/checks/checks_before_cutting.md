@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-19
 see-also: toolpaths, save_toolpaths
 ---
 
@@ -61,6 +61,7 @@ back, it stays ticked; a new or changed warning needs a new tick.
 
 **Does it fit the machine?**
 
+- [Zero set where the job says](help:check_zeroing)
 - [Fits on the machine's bed](help:check_bed)
 - [Fits the Z axis travel](help:check_z_travel)
 - [Feeds the machine can reach](help:check_machine_speeds)

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-19
 see-also:
 ---
 
@@ -136,8 +136,10 @@ deletes the selection.
   already there, it asks before replacing it. The same goes for exports, templates and
   other saved files.
 - Opening a file with Cut Craft from your file manager (**Open With**, or dragging it onto
-  Cut Craft's icon) starts Cut Craft with it. A job opens. A drawing or picture starts a
-  new job: set up the material in **Job Setup**, and **OK** makes the job and imports the
+  Cut Craft's icon) starts Cut Craft with it. A job opens. A drawing or picture is brought
+  into a new, blank job: change the material's size with
+  [Setup Material](help:setup_material). With **Classic Startup Flow** ticked (Edit ▸
+  Options ▸ Job Defaults), Job Setup asks first, and **OK** makes the job and imports the
   file into it (**Cancel** goes back to the start page without it).
 - A job that will not open says why. **Damaged** means the file was cut short or broken,
   often by a copy or cloud sync that did not finish: open a backup or an earlier copy.
