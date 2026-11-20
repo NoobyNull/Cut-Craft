@@ -1,4 +1,4 @@
-- Rotary machining: wrap a real 3D model round the A axis, watch it turn in the preview, and cut with a Rotary Lathe toolpath
-- Opens straight to a blank job; Setup Material and Job Defaults replace the old Job Setup steps
-- The app's words now come from language files, so language packs can be installed as add-ons
-- Gadgets can reach the web hosts they list, and imports keep the file's layers, names and colours
+- Turn any view control round (orbit, pan, zoom), pinch to zoom, and a Trackpad mode in Options > Mouse and Shortcuts
+- Every Did You Know? tip's Tell Me More now opens a help page of its own, with steps and pictures
+- Two tips that had the number-box letters I and M backwards are fixed
+- More of the app's words (its other windows) moved into language files, ready for language packs
