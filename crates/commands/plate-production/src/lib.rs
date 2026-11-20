@@ -431,6 +431,7 @@ fn sheet_toolpaths(
                 visible: t.visible && sheet == 0,
                 drill_bank: t.drill_bank.as_ref().map(|b| b.copied(&placed)),
                 fallbacks: vec![],
+                across: vec![],
                 ..t.clone()
             });
         }
@@ -768,6 +769,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         };
         let mut c = Change::builder(&doc);
         c.add_toolpath(toolpath("Carve name", letters));
@@ -866,6 +868,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         });
         doc.apply(&c.finish()).unwrap();
         let without = doc.clone();

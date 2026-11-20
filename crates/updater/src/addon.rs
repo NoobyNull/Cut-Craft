@@ -172,6 +172,11 @@ pub struct Manifest {
     /// still carries the same file.
     #[serde(default)]
     pub optional: Vec<String>,
+    /// Gadget add-ons only: the web hosts its gadgets may fetch from over https, such as
+    /// `relay.example.com`. Empty: no web at all. (Showing the list before installing is
+    /// planned, issue #587.)
+    #[serde(default)]
+    pub network: Vec<String>,
     /// For a language pack (kind `language`): the language its `.ftl` files are in, such as
     /// `ru` or `pt-BR`.
     #[serde(default)]
@@ -197,6 +202,15 @@ impl Manifest {
             .find(|d| !plain_name(d))
         {
             return Err(format!("the add-on asks for an odd file \"{name}\""));
+        }
+        if let Some(host) = m.network.iter().find(|h| !host_name(h)) {
+            return Err(format!(
+                "the add-on lists \"{host}\" as a web host; list host names only, such as \
+                 relay.example.com"
+            ));
+        }
+        if !m.network.is_empty() && m.kind != "gadget" {
+            return Err("only gadget add-ons may list web hosts".to_owned());
         }
         if m.kind == "language" {
             let code = m.language.as_deref().unwrap_or_default();
@@ -235,6 +249,27 @@ impl Manifest {
 }
 
 /// A file name with no folders in it.
+/// A bare host name such as `relay.example.com`: no scheme, port, path or user name.
+fn host_name(host: &str) -> bool {
+    // a name, never a number like 10.0.0.1 or 256.0.0.1: no top-level name is all digits
+    let numeric = host
+        .rsplit('.')
+        .next()
+        .is_some_and(|last| last.chars().all(|c| c.is_ascii_digit()));
+    host.len() <= 253
+        && host.contains('.')
+        && !numeric
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        })
+}
+
 fn plain_name(name: &str) -> bool {
     !name.is_empty() && !name.contains(['/', '\\']) && name != "." && name != ".."
 }
@@ -768,6 +803,38 @@ mod tests {
             want.tag_url("v0.2.0")
                 .ends_with("/repos/NoobyNull/CutCraft-Depth/releases/tags/v0.2.0")
         );
+    }
+
+    #[test]
+    fn a_gadget_add_on_lists_its_web_hosts_by_name_only() {
+        let base = "id = \"daily\"\nname = \"Daily\"\nkind = \"gadget\"\nversion = \"0.1.0\"\n";
+        let m = Manifest::parse(&format!(
+            "{base}network = [\"relay.example.com\", \"drive.usercontent.google.com\"]"
+        ))
+        .unwrap();
+        assert_eq!(
+            m.network,
+            ["relay.example.com", "drive.usercontent.google.com"]
+        );
+        assert_eq!(Manifest::parse(base).unwrap().network, Vec::<String>::new());
+        for bad in [
+            "https://relay.example.com",
+            "relay.example.com:443",
+            "relay.example.com/api",
+            "me@relay.example.com",
+            "localhost",
+            "Relay.Example.com",
+            "-bad.example.com",
+            "256.0.0.1",
+            "10.0.0.1",
+            "",
+        ] {
+            let e = Manifest::parse(&format!("{base}network = [\"{bad}\"]")).unwrap_err();
+            assert!(e.contains("host names only"), "{bad}: {e}");
+        }
+        let tool = base.replace("gadget", "tool");
+        let e = Manifest::parse(&format!("{tool}network = [\"relay.example.com\"]")).unwrap_err();
+        assert!(e.contains("only gadget add-ons"), "{e}");
     }
 
     #[test]

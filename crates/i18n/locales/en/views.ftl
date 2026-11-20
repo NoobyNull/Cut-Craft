@@ -103,3 +103,6 @@ views-select-first = { $tool }: select something first
 views-post-default = { $name } (default)
 # A keep-out zone while clipping is off. $edit is where it is edited.
 views-keep-out-clipping-off = { $zone }: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. It is { $edit }; right-click for a shortcut
+# What a screen reader calls the new guide's box.
+views-new-guide-offset = New guide offset
+views-new-guide-position = New guide position

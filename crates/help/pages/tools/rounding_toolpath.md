@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-20
 see-also: job_setup, 3d_roughing_toolpath
 ---
 
@@ -7,7 +7,7 @@ see-also: job_setup, 3d_roughing_toolpath
 
 ![The steps, one after another](pictures/rounding_toolpath/tour.gif)
 
-1. Rounding turns a square or round blank into a smooth cylinder on a rotary axis. Start a **rotary** job in Job Setup, with the finished diameter.
+1. Rounding turns a square or round blank into a smooth cylinder on a rotary axis. Press **Setup Material** and pick **Rotary**, with the finished diameter.
 
    ![Step 1](pictures/rounding_toolpath/step-1.png)
 

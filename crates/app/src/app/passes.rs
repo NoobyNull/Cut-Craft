@@ -190,7 +190,11 @@ fn controls(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, count: usize, per: f
     let mut wanted = ui.data(|d| d.get_temp::<usize>(id)).unwrap_or(count);
     ui.horizontal(|ui| {
         ui.label(tr!("passes-passes"));
-        ui.add(Number::new(&mut wanted).range(1..=100));
+        ui.add(
+            Number::new(&mut wanted)
+                .range(1..=100)
+                .name(tr!("passes-passes")),
+        );
     });
     ui.data_mut(|d| d.insert_temp(id, wanted));
     if ui
@@ -226,7 +230,8 @@ fn controls(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, count: usize, per: f
                 Number::new(&mut shown)
                     .range(0.0..=depth / per)
                     .speed(0.01)
-                    .suffix(format!(" {unit}")),
+                    .suffix(format!(" {unit}"))
+                    .name("Last Pass Thickness"),
             )
             .changed()
         {

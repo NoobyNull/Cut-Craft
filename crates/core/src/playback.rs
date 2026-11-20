@@ -398,6 +398,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
         };
         (Material::new(&job, 100), toolpath)
     }

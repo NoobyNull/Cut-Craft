@@ -463,7 +463,7 @@ fn into_shape_settings(
     ui.horizontal(|ui| {
         ui.label(tr!("fit-import-margin"))
             .on_hover_hint(tr!("fit-import-the-gap-kept-between-the"));
-        crate::form::length_edit(ui, margin, units, 0.0);
+        crate::form::length_edit(ui, &tr!("fit-import-margin"), margin, units, 0.0);
     });
 }
 
@@ -506,7 +506,7 @@ fn along_line_settings(
     ui.horizontal(|ui| {
         ui.label(tr!("fit-import-gap-at-each-end"))
             .on_hover_hint(tr!("fit-import-how-far-in-from-each"));
-        crate::form::length_edit(ui, gap, units, 0.0);
+        crate::form::length_edit(ui, &tr!("fit-import-gap-at-each-end"), gap, units, 0.0);
     });
 }
 

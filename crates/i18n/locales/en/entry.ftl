@@ -18,3 +18,5 @@ entry-how-the-bit-goes-down-2 = How the bit goes down into the material: in a he
 entry-it-slides-in-along-the = It slides in along the groove's own centre line, never deeper than the groove's width sets. Where a groove is too short for it, it goes straight down there, as a V-carve usually does.
 entry-passes = Passes
 entry-ramp-angle = about { $angle }° for a full pass
+# What a screen reader calls the ramp's distance box.
+entry-ramp-distance-name = Ramp distance

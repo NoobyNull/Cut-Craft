@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-19
-see-also: post_processor_management, job_setup, save_toolpaths, check_rotary_setup
+reviewed: 2026-11-20
+see-also: post_processor_management, job_setup, save_toolpaths, check_rotary_setup, rotary_machining_toolpath
 ---
 
 # The 4th Axis and Your Firmware
@@ -34,7 +34,8 @@ part-way through a job.
 Ticking **4th axis** adds Cut Craft's rotary posts for your machine, named **Rotary A, cylinder
 along X** and **along Y**. GRBL's are named **grblHAL**, since standard GRBL can't run them.
 Choose posts in [Post-Processor Management](help:post_processor_management), and set up a
-rotary job in [Job Setup](help:job_setup).
+rotary job in [Job Setup](help:job_setup), then finish a model all the way round with
+[4-Axis Rotary Machining](help:rotary_machining_toolpath).
 
 ## Finding the centre line
 
@@ -54,9 +55,65 @@ Once the 4th axis is ticked, Machine Configuration shows **Rotary (4th axis)**. 
    half its diameter) or on the top of the cylinder. Nothing to type here: the job knows which.
 6. Tick **Centre line found**.
 7. Jog A by +10° and watch which way the chuck turns, seen from the chuck end. Set **+A turns**
-   to match.
+   to match. [Off centre and Indexed](help:rotary_machining_toolpath) toolpaths hold the bit
+   to one side of the axis, and this says which side.
 8. Set **A top speed** from the controller's settings, and how far the **Chuck** and
    **Tailstock** reach along the axis.
+
+## How far A turns
+
+Below those, three more settings say how A may turn while it cuts:
+
+![A can turn, At the limit and Backlash in Rotary (4th axis)](pictures/concepts/rotary_winding.png)
+
+- **A can turn**: **Freely** if nothing stops the chuck turning one way for as long as the job
+  likes, like a lathe. A then never turns back by itself: the next ring of cutting carries on
+  from where the last one ended. Choose **Up to … turns each way** when a cable, a hose or a
+  limit switch on the rotary means it must not wind on and on. It counts from where A was
+  zeroed. A machine set up before this setting existed starts on **Up to 1 turn each way**
+  with **Lift and spin back**, which is how its files always turned A; change it if you like.
+  If one pass on its own turns A further than the limit allows, [Rotary set
+  up](help:check_rotary_setup) names the toolpath and asks before every save, because the file
+  then has to turn A past the limit: allow more turns, or choose **Freely**.
+- **At the limit** (with **Up to**): what the file does when the next pass would turn A too far.
+  - **Cut both ways**: the next pass is cut the other way round, so A comes back as it cuts and
+    no time is spent spinning. A pass that ramps into the material, or steps down to more than
+    one depth, can't be cut backwards (it would start at its deepest), so it spins back
+    instead. Cutting the other way round turns climb cuts into conventional ones, so
+    the finish on alternate passes can differ a little.
+  - **Lift and spin back**: the bit lifts clear, then A spins back whole turns before the next
+    pass, and the file ends with A back where it started. If A has lost steps, the work no
+    longer lines up with the start: an easy way to spot it.
+- **Backlash**: how far A turns before the material moves when it changes direction, from a
+  little play in its gears or belt. Turn A one way, then the other, and watch the chuck: the
+  degrees before it starts moving are the backlash. The file turns that much further each time
+  A changes direction. Leave it at 0 if you see none.
+
+Turning whole turns further cuts the same place on the material, so none of these change what
+is carved, only how A gets there. Rotary files are timed where the bit actually cuts (nearer
+the axis when it cuts deep), and A is never asked to turn faster than **A top speed**.
+
+## Room to turn
+
+Material on the rotary needs room all the way round as it turns: a board's edges swing out
+much further than its top. Three settings at the foot of **Rotary (4th axis)** say how much
+room there is. Measure them once, with the rotary on the machine:
+
+![A board on the rotary: the axis height above the spoilboard, the spoilboard, and the room above up to the bit lifted all the way](pictures/concepts/rotary_room.png)
+
+1. **Axis height**: from the top of the spoilboard up to the turning axis (the middle of the
+   chuck). Material can swing out no further than this below the axis. As a rule of thumb, it
+   is about half of what Z can travel.
+2. **Spoilboard**: how thick the spoilboard under the rotary is. Tick **Taken out** if you
+   take it out from under the rotary: the material can then swing down past where its top was,
+   to the bed.
+3. **Room above**: jog Z all the way up, then measure from the turning axis up to the tip of
+   the bit. Material can only turn under the bit if it swings out less than this.
+
+Leave a setting at 0 until you have measured it. The [Rotary set up](help:check_rotary_setup)
+check warns when the material won't clear the spoilboard or the bit, when a toolpath turns A
+with the bit too low to clear a board's edges, and when a toolpath lifts higher than Z can go.
+Set the material's shape in [Job Setup](help:job_setup).
 
 The [Rotary set up](help:check_rotary_setup) check before cutting asks until **Centre line
 found** is ticked.

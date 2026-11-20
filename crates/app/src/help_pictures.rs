@@ -292,7 +292,7 @@ fn small_png(picture: &image::RgbaImage) -> Result<Vec<u8>, String> {
 }
 
 /// Where `mark` is on screen, if it can be found.
-fn where_is(app: &CutCraftApp, ctx: &egui::Context, mark: Mark) -> Option<egui::Rect> {
+pub(super) fn where_is(app: &CutCraftApp, ctx: &egui::Context, mark: Mark) -> Option<egui::Rect> {
     match mark {
         Mark::None => None,
         Mark::At(name) => crate::marks::get(ctx, name),

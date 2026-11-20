@@ -105,6 +105,46 @@ pub struct Component {
     /// form on it again and a change remakes it (added with editable shapes).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shape: Option<serde_json::Value>,
+    /// A full 3D model on a rotary job as it really is round the turning axis: its
+    /// triangles, nine numbers each: `x` along the job's axis (as the unrolled sheet has it)
+    /// and `y`, `z` out from the axis across it (`z` straight up at A=0, `y` the way A turns
+    /// round to). Rotary toolpaths cut round it, undercuts and all;
+    /// the heights are its outline for everything else. Empty for every other component
+    /// (added with rotary solids).
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        with = "crate::packed::f32s"
+    )]
+    pub solid: Vec<f32>,
+}
+
+impl Component {
+    /// [`Self::solid`]'s triangles.
+    #[must_use]
+    pub fn solid_triangles(&self) -> Vec<[glam::DVec3; 3]> {
+        self.solid
+            .as_chunks::<9>()
+            .0
+            .iter()
+            .map(|n| {
+                let at = |k: usize| {
+                    glam::DVec3::new(f64::from(n[k]), f64::from(n[k + 1]), f64::from(n[k + 2]))
+                };
+                [at(0), at(3), at(6)]
+            })
+            .collect()
+    }
+
+    /// Keeps `triangles` as [`Self::solid`].
+    #[expect(clippy::cast_possible_truncation, reason = "kept to a micrometre")]
+    pub fn set_solid(&mut self, triangles: &[[glam::DVec3; 3]]) {
+        self.solid = triangles
+            .iter()
+            .flatten()
+            .flat_map(|v| [v.x as f32, v.y as f32, v.z as f32])
+            .collect();
+    }
 }
 
 /// Where an imported model came from: it can be imported again, its settings changed, only
@@ -466,6 +506,7 @@ impl Component {
             colour: None,
             texture: None,
             shape: None,
+            solid: vec![],
         }
     }
 
@@ -541,6 +582,7 @@ impl Component {
             colour: None,
             texture: None,
             shape: None,
+            solid: vec![],
         }
     }
 

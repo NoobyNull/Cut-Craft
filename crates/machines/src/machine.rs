@@ -43,7 +43,10 @@ pub struct Machine {
     /// through the machine's post that wraps their side round onto A.
     pub rotary: bool,
     /// Where the 4th axis lies, which way it turns, how fast, and its chuck and tailstock:
-    /// used once [`Self::has_rotary`].
+    /// used once [`Self::has_rotary`]. A machine saved before these settings loads with
+    /// [`RotaryAxis::saved_before`](cut_craft_core::rotary_axis::RotaryAxis::saved_before), so
+    /// its files keep unwinding A as they did.
+    #[serde(default = "cut_craft_core::rotary_axis::RotaryAxis::saved_before")]
     pub rotary_axis: cut_craft_core::rotary_axis::RotaryAxis,
     /// Areas of the bed a tool must never pass over in any job (clamps fixed to the bed),
     /// in the machine's millimetres from the job's XY origin, as its G-code is.
@@ -670,5 +673,31 @@ mod holder_tests {
         let holding = machine.holding();
         assert_eq!(holding.holder, cut_craft_core::collision::Holder::default());
         assert!(!holding.per_bit);
+    }
+}
+
+#[cfg(test)]
+mod rotary_tests {
+    use super::Machine;
+    use cut_craft_core::rotary_axis::{AtLimit, RotaryAxis, Turning};
+
+    #[test]
+    fn a_rotary_machine_saved_before_a_can_turn_keeps_unwinding_a() {
+        // saved with a rotary but none of its settings, or some settings but not "A can turn"
+        for old in [
+            r#"{"name": "Old 4th axis", "rotary": true}"#,
+            r#"{"name": "Old 4th axis", "rotary": true, "rotary_axis": {"centre_set": true}}"#,
+        ] {
+            let machine: Machine = serde_json::from_str(old).unwrap();
+            let axis = machine.rotary_axis;
+            assert_eq!(axis.turning, Turning::Unwind, "{old}");
+            assert_eq!(axis.at_limit, AtLimit::SpinBack, "{old}");
+            assert_eq!(axis.limit(), Some(360.0), "{old}");
+        }
+        // a new machine turns freely, and keeps that when saved and loaded
+        let new = Machine::default();
+        assert_eq!(new.rotary_axis.turning, Turning::Free);
+        let again: Machine = serde_json::from_str(&serde_json::to_string(&new).unwrap()).unwrap();
+        assert_eq!(again.rotary_axis, RotaryAxis::default());
     }
 }
