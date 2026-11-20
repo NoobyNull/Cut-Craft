@@ -13628,6 +13628,22 @@ fn the_community_links_are_in_help_not_on_the_start_page() {
     );
 }
 
+/// Every web link (Help > Community, the update window's links and download button, links
+/// in help pages) asks the window to open it; the window only does so when eframe is built
+/// with its "links" part. Without it each click was silently dropped (#609).
+#[test]
+fn the_window_is_built_to_open_web_links() {
+    let manifest = include_str!("../../../../Cargo.toml");
+    let eframe = manifest
+        .lines()
+        .find(|l| l.trim_start().starts_with("eframe ="))
+        .expect("the workspace names eframe");
+    assert!(
+        eframe.contains("\"links\""),
+        "eframe needs the \"links\" feature, or no link opens a browser: {eframe}"
+    );
+}
+
 #[test]
 fn plate_production_recalculates_toolpaths_on_placeholder_text_for_each_plates_text() {
     let mut h = Harness::new();
