@@ -19987,3 +19987,20 @@ fn a_language_pack_picked_in_options_is_used_once_applied() {
         h.app.status.message
     );
 }
+
+/// The 3D view's origin arrows start at the machine's Z zero: on the material's top, or on
+/// its bottom (the bed) once Job Setup says Machine Bed.
+#[test]
+fn the_3d_origin_moves_to_the_bed_with_the_z_zero() {
+    use cut_craft_core::document::{Job, ZZero};
+    let mut job = Job {
+        thickness: 24.5,
+        ..Job::default()
+    };
+    assert!(panels::origin_3d(&job).abs() < 1e-12, "on top by default");
+    job.z_zero = ZZero::MachineBed;
+    assert!(
+        (panels::origin_3d(&job) + 24.5).abs() < 1e-12,
+        "on the bed, 24.5 mm under the top"
+    );
+}
