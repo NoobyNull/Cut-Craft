@@ -2137,6 +2137,25 @@ pub const TOURS: &[Tour] = &[
                 setup: |app, _| on_design_tab(app, 4),
                 mark: Mark::At("tool:import_vectors"),
             },
+            Step {
+                caption: "Each layer of a DXF comes in as a layer of your job, with its name and colour. Open the **Layers** tab to see them, show or hide them, or change their colour.",
+                setup: |app, ctx| {
+                    use cut_craft_core::Importer as _;
+                    const SHEET: &[u8] = include_bytes!(
+                        "../../formats/import-dxf/tests/fixtures/nesting-sheet-layers.dxf"
+                    );
+                    let sheet = fmt_import_dxf::ImportDxf::import(&app.doc, SHEET);
+                    app.record(sheet, "Imported");
+                    app.design_tab = super::DESIGN_TABS
+                        .iter()
+                        .position(|&t| t == "Layers")
+                        .unwrap_or(0);
+                    // the whole drawing in view, then nothing selected, so its colours show
+                    app.invoke(ctx, "zoom_selected");
+                    app.doc.selection.clear();
+                },
+                mark: Mark::None,
+            },
         ],
     },
     Tour {

@@ -1,12 +1,13 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 see-also: setup_material, job_setup, web_api, bug_reports, contents
 ---
 
 # Changing settings
 
 **Edit ▸ Options** holds Cut Craft's settings, page by page down the left: how it looks,
-the mouse and shortcuts, toolpath previews, the Web API and more.
+the mouse and shortcuts, toolpath previews, the [language](help:language), the Web API
+and more.
 
 A change you make there does **not** take effect straight away. It waits until you press
 **Apply**, so you can try a few changes, look them over, and still back out.

@@ -187,6 +187,22 @@ fn each_call_is_read_from_its_path_and_body() {
         )),
         "Select { pick: Layer { layer: \"Cut\" }, add: true }"
     );
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/select",
+            r#"{"by":"component","component":4}"#
+        )),
+        "Select { pick: Component { component: Id(4) }, add: false }"
+    );
+    assert_eq!(
+        call(post(
+            address,
+            "/api/v1/select",
+            r#"{"by":"component","component":"Prop"}"#
+        )),
+        "Select { pick: Component { component: Name(\"Prop\") }, add: false }"
+    );
 }
 
 #[test]
@@ -275,8 +291,8 @@ fn tokens_are_long_and_different_each_time() {
 }
 
 mod job {
-    use crate::Pick;
     use crate::job::{command, pick, run_params, summary};
+    use crate::{ComponentRef, Pick};
     use cut_craft_core::document::{EntityId, Layer, LayerId, Units};
     use cut_craft_core::testing::sample_document;
     use serde_json::json;
@@ -482,6 +498,56 @@ mod job {
             pick(&doc, &Pick::Name { name: "lid".into() }).unwrap(),
             vec![ids[0], ids[1]]
         );
+    }
+
+    /// The dome job with a second component, "Prop", beside it.
+    fn two_components() -> (cut_craft_core::document::Document, EntityId, EntityId) {
+        let mut doc = cut_craft_core::testing::domed();
+        let dome = *doc.components.keys().next().unwrap();
+        let mut prop = doc.components[&dome].clone();
+        prop.name = "Prop".into();
+        let mut c = cut_craft_core::Change::builder(&doc);
+        let prop = c.add_component(prop);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        (doc, dome, prop)
+    }
+
+    #[test]
+    fn a_component_is_picked_by_its_id_or_its_name() {
+        use crate::job::pick_component;
+        let (doc, dome, prop) = two_components();
+        assert_eq!(
+            pick_component(&doc, &ComponentRef::Id(prop.0)).unwrap(),
+            prop
+        );
+        assert_eq!(
+            pick_component(&doc, &ComponentRef::Name(" prop ".into())).unwrap(),
+            prop
+        );
+        assert_eq!(
+            pick_component(&doc, &ComponentRef::Name("dome".into())).unwrap(),
+            dome
+        );
+        let missing = pick_component(&doc, &ComponentRef::Id(999)).unwrap_err();
+        assert_eq!(missing.status, 404);
+        let unnamed = pick_component(&doc, &ComponentRef::Name("Lid".into())).unwrap_err();
+        assert_eq!(unnamed.status, 404);
+        assert!(
+            unnamed.message.contains("dome") && unnamed.message.contains("Prop"),
+            "names the components there are: {}",
+            unnamed.message
+        );
+    }
+
+    #[test]
+    fn a_name_two_components_share_asks_for_the_id() {
+        use crate::job::pick_component;
+        let (mut doc, dome, _) = two_components();
+        doc.components.get_mut(&dome).unwrap().name = "Prop".into();
+        let both = pick_component(&doc, &ComponentRef::Name("Prop".into())).unwrap_err();
+        assert_eq!(both.status, 409);
+        assert!(both.message.contains("id"), "{}", both.message);
     }
 
     fn registry() -> cut_craft_core::Registry {

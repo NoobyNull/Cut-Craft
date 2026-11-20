@@ -1763,6 +1763,20 @@ fn on() -> bool {
     true
 }
 
+/// Which language Cut Craft's words are in. Its page lists the choices itself (the packs
+/// installed), so it has no settings of the ordinary kind.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Language {
+    /// The language pack in use, by its add-on id (`language-ru`), or
+    /// [`crate::languages::TEST_LANGUAGE`]; empty for English.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub pack: String,
+}
+
+/// The Language page's key.
+pub const LANGUAGE: &str = "language";
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Options {
     #[schemars(title = "3D View Settings", extend("x-section" = true))]
@@ -1771,6 +1785,11 @@ pub struct Options {
     pub toolpaths: ToolpathSettings,
     #[schemars(title = "General Settings", extend("x-section" = true))]
     pub general: General,
+    /// The language Cut Craft's words are in: English, built in, or a language pack
+    /// installed from Gadgets ▸ Add-ons.
+    #[serde(default)]
+    #[schemars(title = "Language", extend("x-section" = true))]
+    pub language: Language,
     /// How Cut Craft starts, and what every new job starts with: the material, where X0 Y0
     /// and Z zero are, the rapid heights and home (the job settings under it).
     #[serde(default)]
@@ -1935,6 +1954,7 @@ impl Default for Options {
                 change_by_hand: change_by_hand(),
                 change_by_changer: change_by_changer(),
             },
+            language: Language::default(),
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
                     .expect("a small count"),
@@ -2304,6 +2324,7 @@ mod tests {
                 "3D View Settings",
                 "Toolpath Settings",
                 "General Settings",
+                "Language",
                 "Job Defaults",
                 "Confirmation Choices",
                 "Importing and Exporting",
