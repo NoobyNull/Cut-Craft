@@ -306,6 +306,7 @@ fn engagement(step: f64) -> f64 {
 /// Clearing Settings' inside: the light step with a picture of the bite, the loops with a
 /// strip of them, and the way back with a picture of rows, each with a line or two saying
 /// what it does in a space that keeps its size. Edits `clearing`.
+#[expect(clippy::too_many_lines, reason = "one window, its rows in order")]
 pub(super) fn clearing_settings(
     ui: &mut egui::Ui,
     clearing: &mut ClearingSettings,
@@ -320,7 +321,13 @@ pub(super) fn clearing_settings(
         );
     };
     ui.heading(tr!("cutting-light-step"));
-    slider(ui, &mut clearing.loops.step, 1.0..=50.0, true);
+    slider(
+        ui,
+        &tr!("cutting-light-step"),
+        &mut clearing.loops.step,
+        1.0..=50.0,
+        true,
+    );
     ui.horizontal(|ui| {
         bite_picture(ui, clearing.loops.step);
         ui.vertical(|ui| {
@@ -345,7 +352,13 @@ pub(super) fn clearing_settings(
         .show(ui, |ui| {
             ui.label(tr!("cutting-loop-width"))
                 .on_hover_hint(tr!("cutting-how-wide-each-loop-is"));
-            slider(ui, &mut clearing.loops.width, 10.0..=400.0, false);
+            slider(
+                ui,
+                &tr!("cutting-loop-width"),
+                &mut clearing.loops.width,
+                10.0..=400.0,
+                false,
+            );
             ui.end_row();
             ui.label(tr!("cutting-loops-turn"));
             ui.horizontal(|ui| {
@@ -822,14 +835,22 @@ fn loops_strip(ui: &mut egui::Ui, radius: f64, advance: f64, diameter: f64, anti
 }
 
 /// A percentage on a slider, its value in a number box with up and down buttons beside it.
-fn slider(ui: &mut egui::Ui, percent: &mut f64, range: std::ops::RangeInclusive<f64>, log: bool) {
+/// `name` is what a screen reader calls the slider and the box: their label's words.
+fn slider(
+    ui: &mut egui::Ui,
+    name: &str,
+    percent: &mut f64,
+    range: std::ops::RangeInclusive<f64>,
+    log: bool,
+) {
     ui.horizontal(|ui| {
         ui.add(
             egui::Slider::new(percent, range.clone())
                 .logarithmic(log)
                 .show_value(false),
-        );
-        ui.add(Number::new(percent).range(range).suffix(" %"));
+        )
+        .accessible_name(name);
+        ui.add(Number::new(percent).range(range).suffix(" %").name(name));
     });
 }
 

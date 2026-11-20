@@ -595,6 +595,7 @@ mod tests {
             group: None,
             drill_bank: None,
             fallbacks: vec![],
+            across: vec![],
             moves: vec![
                 at(100.0, 50.0, 5.0, MoveKind::Rapid),
                 at(100.0, 50.0, -depth, MoveKind::Plunge),

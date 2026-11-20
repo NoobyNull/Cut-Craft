@@ -33,3 +33,5 @@ entry-way-ramp = Ramp
     .tooltip = Down along the cut in one straight slope
 entry-way-plunge = Straight down
     .tooltip = Like a drill: quickest, but hardest on the bit, and only for bits that cut at their centre
+# What a screen reader calls the ramp's distance box.
+entry-ramp-distance-name = Ramp distance

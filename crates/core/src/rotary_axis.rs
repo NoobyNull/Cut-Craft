@@ -27,6 +27,56 @@ pub struct RotaryAxis {
     pub chuck: f64,
     /// How far the tailstock reaches back along the axis from the job's end, mm.
     pub tailstock: f64,
+    /// Whether A may keep turning one way for as long as the job likes. A machine saved
+    /// before this setting loads as [`Turning::Unwind`], one turn and spin back, as its files
+    /// were written then; new machines turn freely.
+    #[serde(default = "Turning::saved_before")]
+    pub turning: Turning,
+    /// With [`Turning::Unwind`]: how many whole turns A may go either way from where it
+    /// started (a cable or hose on the chuck, or a limit switch, decides it).
+    #[serde(default = "saved_before_turns")]
+    pub turns: f64,
+    /// With [`Turning::Unwind`]: what the file does at the limit.
+    #[serde(default = "AtLimit::saved_before")]
+    pub at_limit: AtLimit,
+    /// How far A turns before it moves the material when it changes direction, degrees: the
+    /// file turns that much further on each change of direction. 0 for none.
+    pub backlash: f64,
+    /// How high the turning axis is above the spoilboard's top, mm: the most material can
+    /// swing out below it. 0 until measured.
+    pub axis_height: f64,
+    /// How thick the spoilboard under the rotary is, mm.
+    pub spoilboard: f64,
+    /// The spoilboard is taken out from under the rotary, so material can swing down past
+    /// where its top was, to the bed.
+    pub spoilboard_off: bool,
+    /// How high above the turning axis the bit's tip is with Z all the way up, mm: the most
+    /// material can swing out above it. 0 until measured.
+    pub room_above: f64,
+}
+
+/// How far A may turn one way.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Turning {
+    /// As far as it likes, like a lathe: A never turns back unless the job does.
+    #[default]
+    Free,
+    /// No more than a set number of whole turns either way from where it started.
+    Unwind,
+}
+
+/// What a file does when the next pass would take A past its turns.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AtLimit {
+    /// Cut the next pass the other way round, so A comes back as it cuts: no turning spent
+    /// on spinning back. A pass that can't be cut backwards (one that ramps in) spins back.
+    #[default]
+    CutBothWays,
+    /// Lift the bit clear and spin A back whole turns, nearer where it started. Spinning
+    /// back to the start also shows up any steps A has lost.
+    SpinBack,
 }
 
 impl Default for RotaryAxis {
@@ -39,7 +89,76 @@ impl Default for RotaryAxis {
             max_rate: 3600.0,
             chuck: 40.0,
             tailstock: 40.0,
+            turning: Turning::Free,
+            turns: 2.0,
+            at_limit: AtLimit::CutBothWays,
+            backlash: 0.0,
+            axis_height: 0.0,
+            spoilboard: 0.0,
+            spoilboard_off: false,
+            room_above: 0.0,
         }
+    }
+}
+
+/// Turns either way for a machine saved before "A can turn": one, as its files spun back.
+fn saved_before_turns() -> f64 {
+    1.0
+}
+
+impl Turning {
+    /// For a machine saved before "A can turn": its files spun A back every turn.
+    fn saved_before() -> Self {
+        Self::Unwind
+    }
+}
+
+impl AtLimit {
+    /// For a machine saved before "A can turn".
+    fn saved_before() -> Self {
+        Self::SpinBack
+    }
+}
+
+impl RotaryAxis {
+    /// A machine's rotary saved before "A can turn" existed: everything as new, but A unwinds
+    /// after one turn by spinning back, so its files go on turning A as they always did.
+    #[must_use]
+    pub fn saved_before() -> Self {
+        Self {
+            turning: Turning::saved_before(),
+            turns: saved_before_turns(),
+            at_limit: AtLimit::saved_before(),
+            ..Self::default()
+        }
+    }
+
+    /// How far out from the axis material can swing before it hits what is under the
+    /// rotary, mm: the axis height, and the spoilboard's thickness too with it taken out.
+    /// `None` until the axis height is measured.
+    #[must_use]
+    pub fn room_below(&self) -> Option<f64> {
+        (self.axis_height > 0.0).then(|| {
+            self.axis_height
+                + if self.spoilboard_off {
+                    self.spoilboard.max(0.0)
+                } else {
+                    0.0
+                }
+        })
+    }
+
+    /// How far out from the axis material can swing and still turn under the bit lifted
+    /// all the way up, mm. `None` until measured.
+    #[must_use]
+    pub fn room_above(&self) -> Option<f64> {
+        (self.room_above > 0.0).then_some(self.room_above)
+    }
+
+    /// How far A may turn either way from where it started, degrees; `None` when it is free.
+    #[must_use]
+    pub fn limit(&self) -> Option<f64> {
+        (self.turning == Turning::Unwind).then(|| self.turns.max(0.5) * 360.0)
     }
 }
 
@@ -51,5 +170,152 @@ impl Along {
             Self::X => "X",
             Self::Y => "Y",
         }
+    }
+}
+
+/// Where the tip of a bit held `across` mm off the turning axis cuts, on the unrolled
+/// material: from A (as flat `round`, mm round the surface) and the bit's height `z` (from
+/// the material's top, straight up from the axis) to the tip's own `(round, z)`, its depth
+/// measured towards the axis. A material of `radius`.
+#[must_use]
+pub fn tip_of(radius: f64, round: f64, z: f64, across: f64) -> (f64, f64) {
+    let height = radius + z;
+    let out = height.hypot(across);
+    (round + radius * across.atan2(height), out - radius)
+}
+
+/// What [`tip_of`] undoes: where A turns to (as flat `round`) and how high the bit is (from
+/// the material's top) for its tip, held `across` off the axis, to cut at `(round, z)` on the
+/// unrolled material.
+#[must_use]
+pub fn held_at(radius: f64, round: f64, z: f64, across: f64) -> (f64, f64) {
+    let out = (radius + z).max(across.abs());
+    let height = (out * out - across * across).sqrt();
+    (round - radius * across.atan2(height), height - radius)
+}
+
+impl RotaryAxis {
+    /// Which way along the machine's across axis (Y for a rotary along X, X for one along Y)
+    /// a positive `across` is: +1 or -1. +A turning clockwise from the chuck end carries the
+    /// top of the material towards -Y on a rotary along X, and towards +X on one along Y.
+    #[must_use]
+    pub fn across_sign(&self, along: Along) -> f64 {
+        let sign = if along == Along::X { 1.0 } else { -1.0 };
+        if self.clockwise { sign } else { -sign }
+    }
+}
+
+/// What a rotary toolpath keeps the bit's holder clear of besides the material, from the
+/// machine that will cut it (the app fills it in from Machine Configuration as a toolpath is
+/// made; the usual ER20 holder without one, and no chuck or tailstock).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct Surroundings {
+    /// The collet nut and spindle holding the bit.
+    pub holder: crate::collision::Holder,
+    /// How far the chuck reaches along the axis from the job's start, mm.
+    pub chuck: f64,
+    /// How far the tailstock reaches back along the axis from the job's end, mm.
+    pub tailstock: f64,
+}
+
+impl Default for Surroundings {
+    /// The usual holder, and no chuck or tailstock known to keep out of: what a toolpath
+    /// made without a machine (from the web API, or a test) keeps clear of.
+    fn default() -> Self {
+        Self {
+            holder: crate::collision::Holder::default(),
+            chuck: 0.0,
+            tailstock: 0.0,
+        }
+    }
+}
+
+impl Surroundings {
+    /// The machine's holder for `tool` (its own, with a holder per bit) and its rotary's chuck
+    /// and tailstock.
+    #[must_use]
+    pub fn of(
+        tool: &crate::toolpath::Tool,
+        holding: &crate::collision::Holding,
+        axis: &RotaryAxis,
+    ) -> Self {
+        Self {
+            holder: crate::collision::holder_of(tool, holding),
+            chuck: axis.chuck.max(0.0),
+            tailstock: axis.tailstock.max(0.0),
+        }
+    }
+}
+
+/// How far out from the axis the chuck's body is taken to reach, mm, when nothing says: a
+/// 100 mm chuck, the size most hobby rotaries carry (the material's own swing when wider).
+pub const CHUCK_RADIUS: f64 = 50.0;
+
+/// How far out from the axis the tailstock's centre and quill are taken to reach, mm.
+pub const TAILSTOCK_RADIUS: f64 = 20.0;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_bit_held_off_the_axis_cuts_where_its_tip_reaches_and_back() {
+        // straight over the axis nothing changes
+        assert_eq!(tip_of(30.0, 12.0, -4.0, 0.0), (12.0, -4.0));
+        // held 10 off a 30 radius, 26 up: its tip is 10 round and sqrt(26²+10²) out
+        let (round, z) = tip_of(30.0, 0.0, -4.0, 10.0);
+        assert!((z - (26f64.hypot(10.0) - 30.0)).abs() < 1e-9);
+        assert!((round - 30.0 * 10f64.atan2(26.0)).abs() < 1e-9);
+        for (r, a, z, d) in [(30.0, 5.0, -4.0, 10.0), (20.0, -3.0, 2.0, -7.0)] {
+            let (w, t) = tip_of(r, a, z, d);
+            let (back, height) = held_at(r, w, t, d);
+            assert!((back - a).abs() < 1e-9 && (height - z).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn positive_across_is_the_way_the_top_turns_from_minus_a() {
+        let mut axis = RotaryAxis::default();
+        assert_eq!(axis.across_sign(Along::X), 1.0);
+        assert_eq!(axis.across_sign(Along::Y), -1.0);
+        axis.clockwise = false;
+        assert_eq!(axis.across_sign(Along::X), -1.0);
+    }
+
+    #[test]
+    fn taking_the_spoilboard_out_gives_material_more_room_below() {
+        let mut axis = RotaryAxis::default();
+        assert_eq!(axis.room_below(), None, "not measured yet");
+        assert_eq!(axis.room_above(), None);
+        axis.axis_height = 60.0;
+        axis.spoilboard = 18.0;
+        assert_eq!(axis.room_below(), Some(60.0));
+        axis.spoilboard_off = true;
+        assert_eq!(axis.room_below(), Some(78.0));
+        axis.room_above = 90.0;
+        assert_eq!(axis.room_above(), Some(90.0));
+    }
+
+    #[test]
+    fn old_machines_without_the_room_settings_still_load() {
+        let old = r#"{"along":"x","centre_set":true,"centre_across":2.0}"#;
+        let axis: RotaryAxis = serde_json::from_str(old).unwrap();
+        assert!(axis.centre_set && axis.room_below().is_none() && !axis.spoilboard_off);
+    }
+
+    #[test]
+    fn old_machines_without_a_can_turn_keep_unwinding_as_their_files_did() {
+        let old = r#"{"along":"x","centre_set":true,"centre_across":2.0}"#;
+        let axis: RotaryAxis = serde_json::from_str(old).unwrap();
+        assert_eq!(axis.turning, Turning::Unwind);
+        assert_eq!(axis.at_limit, AtLimit::SpinBack);
+        assert_eq!(axis.limit(), Some(360.0));
+        assert_eq!(RotaryAxis::saved_before().limit(), Some(360.0));
+        // a machine saved since keeps what it was set to, free turning included
+        let new = serde_json::to_string(&RotaryAxis::default()).unwrap();
+        let axis: RotaryAxis = serde_json::from_str(&new).unwrap();
+        assert_eq!(axis, RotaryAxis::default());
+        assert_eq!(axis.limit(), None);
     }
 }

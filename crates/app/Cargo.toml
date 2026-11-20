@@ -18,6 +18,7 @@ cut-craft-i18n.workspace = true
 cut-craft-updater = { path = "../updater" }
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
+cut-craft-rotary.workspace = true
 cut-craft-scripting = { path = "../scripting" }
 # Options ▸ Web API: the local HTTP server scripts drive Cut Craft through
 cut-craft-web-api = { path = "../web-api" }
@@ -60,6 +61,8 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-rotary-machining-toolpath = { path = "../commands/rotary-machining-toolpath" }
+cmd-rotary-lathe-toolpath = { path = "../commands/rotary-lathe-toolpath" }
 cmd-3d-pencil-toolpath = { path = "../commands/3d-pencil-toolpath" }
 cmd-quick-trace = { path = "../commands/quick-trace" }
 cmd-import-toolpaths = { path = "../commands/import-toolpaths" }

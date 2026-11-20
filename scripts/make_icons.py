@@ -810,6 +810,8 @@ I[tp + "engraving.svg"] = lambda: [material(4, 8, 40, 32), text("A", 15, 14, 20,
 I[tp + "quick_engrave.svg"] = lambda: [material(4, 14, 40, 28), path("M10,30 Q18,20 24,30 T38,30", TP, 3), pl([(28, 2), (20, 14), (27, 14), (21, 25)], ACC, 2.5)]
 I[tp + "fluting_toolpath.svg"] = lambda: [material(4, 6, 40, 36)] + [path(f"M{x},12 Q{x},10 {x + 2},10 Q{x + 4},10 {x + 4},12 V36 Q{x + 4},38 {x + 2},38 Q{x},38 {x},36 Z", TP, 2, TPL) for x in (11, 22, 33)]
 I[tp + "chamfer_toolpath.svg"] = lambda: [path("M4,40 V20 L14,10 H44 V40 Z", WOODD, 2.5, WOOD), line(4, 20, 14, 10, TP, 4), bit("v_bit", 22, 0, 14, 3.5)]
+# a cylinder seen from the side, rings of green round it, A turning at its end
+I[tp + "rotary_machining_toolpath.svg"] = lambda: [path("M10,12 H38 A5,12 0 0 1 38,36 H10 Z", WOODD, 2.5, WOOD), ell(10, 24, 5, 12, WOODD, 2.5, "#e9c89a")] + [path(f"M{x},12 A5,12 0 0 1 {x},36", TP, 2.5) for x in (18, 25, 32)] + [curved_arrow(10, 24, 9, 200, 330, ACC, 2.5, 5)]
 I[tp + "rounding_toolpath.svg"] = lambda: [path("M4,40 V22 A12,12 0 0 1 16,10 H44 V40 Z", WOODD, 2.5, WOOD), path("M4,22 A12,12 0 0 1 16,10", TP, 4)]
 I[tp + "keyhole_toolpath.svg"] = lambda: [material(4, 6, 40, 36), path("M17,20 A7,7 0 1 1 31,20 A7,7 0 1 1 17,20 Z", TP, 2.5, TPL), path("M21,26 L19,38 H29 L27,26", TP, 2.5, TPL)]
 I[tp + "surfacing_toolpath.svg"] = lambda: [material(8, 22, 32, 20), path("M2,26 H46 V32 H2 V38 H46", TP, 2.5), rect(21, 2, 6, 9, 1, INK, 2.5), rect(13, 11, 22, 6, 2, ACC, 2.5)]

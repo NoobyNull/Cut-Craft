@@ -1,6 +1,6 @@
 [package]
 name = "cut-craft-scripting"
-description = "Lua gadgets: a sandboxed Lua 5.4 that drives the commands, one undo step per run"
+description = "Lua gadgets: a sandboxed Lua 5.4 that drives the commands, one undo step per run, and add-on gadgets that fetch from listed hosts"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -9,6 +9,9 @@ license-file.workspace = true
 cut-craft-core.workspace = true
 mlua = { version = "0.12.2", features = ["lua54", "vendored", "serde"] }
 serde_json.workspace = true
+# outside gadgets: web requests to the hosts an add-on lists
+ureq = { version = "3", features = ["platform-verifier"] }
+url = "2"
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

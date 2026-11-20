@@ -313,14 +313,14 @@ fn settings(
         if tab.size_from_tool {
             ui.label(shown(sized.length, units));
         } else {
-            length(ui, &mut tab.length, units);
+            length(ui, &tr!("tabs-length"), &mut tab.length, units);
         }
         ui.end_row();
         ui.label(tr!("tabs-thickness"));
         if tab.size_from_tool {
             ui.label(shown(sized.thickness, units));
         } else {
-            length(ui, &mut tab.thickness, units);
+            length(ui, &tr!("tabs-thickness"), &mut tab.thickness, units);
         }
         ui.end_row();
     });
@@ -339,7 +339,11 @@ fn settings(
             tr!("tabs-number"),
         )
         .on_hover_hint(tr!("tabs-number.tooltip"));
-        ui.add(Number::new(&mut tab.number).range(1..=100));
+        ui.add(
+            Number::new(&mut tab.number)
+                .range(1..=100)
+                .name(tr!("tabs-number")),
+        );
         ui.end_row();
         ui.radio_value(
             &mut tab.spacing,
@@ -347,14 +351,22 @@ fn settings(
             tr!("tabs-distance-apart"),
         )
         .on_hover_hint(tr!("tabs-distance-apart.tooltip"));
-        length(ui, &mut tab.distance, units);
+        length(ui, &tr!("tabs-distance-apart"), &mut tab.distance, units);
         ui.end_row();
         if tab.spacing == TabSpacing::ConstantDistance {
             indented(ui, tr!("tabs-at-least"));
-            ui.add(Number::new(&mut tab.minimum).range(1..=tab.maximum.max(1)));
+            ui.add(
+                Number::new(&mut tab.minimum)
+                    .range(1..=tab.maximum.max(1))
+                    .name(tr!("tabs-at-least")),
+            );
             ui.end_row();
             indented(ui, tr!("tabs-at-most"));
-            ui.add(Number::new(&mut tab.maximum).range(tab.minimum.max(1)..=1000));
+            ui.add(
+                Number::new(&mut tab.maximum)
+                    .range(tab.minimum.max(1)..=1000)
+                    .name(tr!("tabs-at-most")),
+            );
             ui.end_row();
         }
     });
@@ -395,7 +407,8 @@ fn shown(mm: f64, units: Units) -> String {
 }
 
 /// A length edited in the job's units, kept in mm.
-pub(super) fn length(ui: &mut egui::Ui, mm: &mut f64, units: Units) {
+/// `name` is what a screen reader calls the box: its label's words.
+pub(super) fn length(ui: &mut egui::Ui, name: &str, mm: &mut f64, units: Units) {
     let (per, unit) = form::shown_in("mm", units).unwrap_or((1.0, "mm"));
     let mut value = *mm / per;
     if ui
@@ -403,7 +416,8 @@ pub(super) fn length(ui: &mut egui::Ui, mm: &mut f64, units: Units) {
             Number::new(&mut value)
                 .range(0.0..=f64::MAX)
                 .speed(0.1 / per)
-                .suffix(format!(" {unit}")),
+                .suffix(format!(" {unit}"))
+                .name(name),
         )
         .changed()
     {

@@ -238,7 +238,8 @@ pub(super) fn units_first(tools: &mut ToolDatabase, inches: bool) -> bool {
 }
 
 /// A length in mm, shown and typed in the units picked.
-fn length(ui: &mut egui::Ui, mm: &mut f64, inches: bool) -> egui::Response {
+/// `name` is what a screen reader calls the box: its label's words.
+fn length(ui: &mut egui::Ui, name: &str, mm: &mut f64, inches: bool) -> egui::Response {
     let scale = if inches { MM_PER_INCH } else { 1.0 };
     let mut shown = *mm / scale;
     let response = ui.add(
@@ -246,7 +247,8 @@ fn length(ui: &mut egui::Ui, mm: &mut f64, inches: bool) -> egui::Response {
             .range(0.01..=100_000.0)
             .speed(if inches { 0.05 } else { 1.0 })
             .max_decimals(if inches { 3 } else { 1 })
-            .suffix(if inches { " in" } else { " mm" }),
+            .suffix(if inches { " in" } else { " mm" })
+            .name(name),
     );
     if response.changed() {
         *mm = shown * scale;
@@ -332,13 +334,13 @@ impl CutCraftApp {
                 let inches = setup.inches;
                 let [width, length_, thickness] = &mut setup.sheet;
                 ui.label(tr!("first-run-width-x"));
-                length(ui, width, inches);
+                length(ui, &tr!("first-run-width-x"), width, inches);
                 ui.end_row();
                 ui.label(tr!("first-run-length-y"));
-                length(ui, length_, inches);
+                length(ui, &tr!("first-run-length-y"), length_, inches);
                 ui.end_row();
                 ui.label(tr!("first-run-thickness"));
-                length(ui, thickness, inches);
+                length(ui, &tr!("first-run-thickness"), thickness, inches);
                 ui.end_row();
             });
         ui.weak(tr!("first-run-new-jobs-start-this-size"));
@@ -441,10 +443,12 @@ impl CutCraftApp {
                     let [width, height] = &mut setup.bed;
                     let mut moved = false;
                     ui.label(tr!("first-run-working-area-width-x"));
-                    moved |= length(ui, width, inches).changed();
+                    moved |=
+                        length(ui, &tr!("first-run-working-area-width-x"), width, inches).changed();
                     ui.end_row();
                     ui.label(tr!("first-run-working-area-length-y"));
-                    moved |= length(ui, height, inches).changed();
+                    moved |= length(ui, &tr!("first-run-working-area-length-y"), height, inches)
+                        .changed();
                     ui.end_row();
                     if moved {
                         setup.sheet[0] = setup.bed[0];

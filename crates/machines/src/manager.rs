@@ -334,7 +334,7 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_fir
                     ("Z travel", &mut machine.depth),
                 ] {
                     ui.label(label);
-                    measure(ui, value, per, unit);
+                    measure(ui, label, value, per, unit);
                     ui.end_row();
                 }
                 ui.label("Units");
@@ -409,14 +409,16 @@ fn firmware(ui: &mut egui::Ui, machine: &mut Machine, find: &mut bool) {
 }
 
 /// A length (or a rate of one) kept in mm and shown `per` to the unit: 0 reads as not given.
-fn measure(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) {
+/// `name` is what a screen reader calls the box: its label's words.
+fn measure(ui: &mut egui::Ui, name: &str, value: &mut f64, per: f64, unit: &str) {
     let mut shown = *value / per;
     let speed = (shown.abs() / 100.0).max(f64::EPSILON);
     let drag = Number::new(&mut shown)
         .speed(speed)
         .range(0.0..=f64::MAX)
         .max_decimals(3)
-        .suffix(unit);
+        .suffix(unit)
+        .name(name);
     if ui.add(drag).changed() {
         *value = shown * per;
     }
@@ -453,8 +455,8 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
                 ];
                 for (label, values, unit) in rows {
                     ui.label(label);
-                    for value in values.iter_mut() {
-                        measure(ui, value, per, &unit);
+                    for (axis, value) in ["X", "Y", "Z"].into_iter().zip(values.iter_mut()) {
+                        measure(ui, &format!("{label} {axis}"), value, per, &unit);
                     }
                     ui.end_row();
                 }
@@ -468,18 +470,20 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
                     .speed(0.001)
                     .range(0.0..=f64::MAX)
                     .max_decimals(4)
-                    .suffix(format!(" {length}"));
+                    .suffix(format!(" {length}"))
+                    .name("Cornering");
                 if ui.add(corner).changed() {
                     machine.junction_deviation = shown * per;
                 }
                 ui.end_row();
                 ui.label("Spindle");
-                for value in &mut machine.spindle {
+                for (end, value) in ["slowest", "fastest"].into_iter().zip(&mut machine.spindle) {
                     ui.add(
                         Number::new(value)
                             .speed(100.0)
                             .range(0.0..=f64::MAX)
-                            .suffix(" rpm"),
+                            .suffix(" rpm")
+                            .name(format!("Spindle {end}")),
                     );
                 }
                 ui.end_row();
@@ -541,7 +545,7 @@ fn holder(ui: &mut egui::Ui, machine: &mut Machine) {
                     ];
                     for (label, value, hint) in rows {
                         ui.label(label).on_hover_hint(hint);
-                        measure(ui, value, per, length);
+                        measure(ui, label, value, per, length);
                         ui.end_row();
                     }
                 });
@@ -612,7 +616,8 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                             Number::new(&mut v)
                                 .speed(0.01)
                                 .max_decimals(3)
-                                .suffix(length),
+                                .suffix(length)
+                                .name(format!("Centre line {across}")),
                         )
                         .changed()
                     {
@@ -628,6 +633,8 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                         );
                     ui.end_row();
                     turning(ui, axis, per, length);
+                    winding(ui, axis);
+                    room(ui, axis, per, length);
                 });
         });
 }
@@ -659,7 +666,8 @@ fn turning(
             .range(0.0..=f64::MAX)
             .speed(10.0)
             .max_decimals(0)
-            .suffix(" °/min"),
+            .suffix(" °/min")
+            .name("A top speed"),
     );
     ui.end_row();
     for (label, value, hint) in [
@@ -677,9 +685,91 @@ fn turning(
         ),
     ] {
         ui.label(label).on_hover_hint(hint);
-        measure(ui, value, per, length);
+        measure(ui, label, value, per, length);
         ui.end_row();
     }
+}
+
+/// How much room material has to swing round the axis: down to the spoilboard (or the bed
+/// with it out) and up to the bit lifted all the way (lengths shown `per` to the `length`
+/// unit). 0 is not measured yet.
+fn room(
+    ui: &mut egui::Ui,
+    axis: &mut cut_craft_core::rotary_axis::RotaryAxis,
+    per: f64,
+    length: &str,
+) {
+    ui.label("Axis height").on_hover_hint(
+        "From the top of the spoilboard up to the turning axis: the middle of the chuck. \
+         Material turning on the rotary can swing out no further than this below it. 0 until \
+         you measure it",
+    );
+    measure(ui, "Axis height", &mut axis.axis_height, per, length);
+    ui.end_row();
+    ui.label("Spoilboard").on_hover_hint(
+        "How thick the spoilboard under the rotary is. Take it out and material can swing \
+         down past where its top was, to the bed",
+    );
+    ui.horizontal(|ui| {
+        measure(ui, "Spoilboard", &mut axis.spoilboard, per, length);
+        ui.checkbox(&mut axis.spoilboard_off, "Taken out");
+    });
+    ui.end_row();
+    ui.label("Room above").on_hover_hint(
+        "With Z all the way up, from the turning axis up to the tip of the bit. Material can \
+         turn under the bit only if it swings out less than this. 0 until you measure it",
+    );
+    measure(ui, "Room above", &mut axis.room_above, per, length);
+    ui.end_row();
+}
+
+/// How far A may wind one way, what happens at the limit, and its backlash.
+fn winding(ui: &mut egui::Ui, axis: &mut cut_craft_core::rotary_axis::RotaryAxis) {
+    use cut_craft_core::rotary_axis::{AtLimit, Turning};
+    ui.label("A can turn").on_hover_hint(
+        "Freely: A keeps turning one way as long as the job needs, like a lathe. Choose a \
+         number of turns when a cable, a hose or a limit switch on the rotary stops it \
+         winding on and on",
+    );
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut axis.turning, Turning::Free, "Freely");
+        ui.radio_value(&mut axis.turning, Turning::Unwind, "Up to");
+        ui.add_enabled(
+            axis.turning == Turning::Unwind,
+            Number::new(&mut axis.turns)
+                .range(0.5..=1000.0)
+                .speed(0.5)
+                .max_decimals(1)
+                .suffix(" turns each way"),
+        );
+    });
+    ui.end_row();
+    ui.label("At the limit").on_hover_hint(
+        "When the next pass would turn A past its turns. Cut both ways: the next pass is \
+         cut the other way round, so A comes back as it cuts. Lift and spin back: the bit \
+         lifts clear and A spins back whole turns before the next pass; spinning back to \
+         the start also shows up any steps A has lost",
+    );
+    ui.add_enabled_ui(axis.turning == Turning::Unwind, |ui| {
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut axis.at_limit, AtLimit::CutBothWays, "Cut both ways");
+            ui.radio_value(&mut axis.at_limit, AtLimit::SpinBack, "Lift and spin back");
+        });
+    });
+    ui.end_row();
+    ui.label("Backlash").on_hover_hint(
+        "How far A turns before the material moves when it changes direction (a little \
+         play in its gears or belt). The file turns that much further each time A changes \
+         direction. 0 for none",
+    );
+    ui.add(
+        Number::new(&mut axis.backlash)
+            .range(0.0..=10.0)
+            .speed(0.01)
+            .max_decimals(3)
+            .suffix(" °"),
+    );
+    ui.end_row();
 }
 
 /// A length for a summary line: no more decimals than it needs.
@@ -723,7 +813,7 @@ pub fn tool_changer(
         ui.horizontal(|ui| {
             ui.label("Slots");
             if ui
-                .add(Number::new(&mut count).range(1..=MOST_SLOTS))
+                .add(Number::new(&mut count).range(1..=MOST_SLOTS).name("Slots"))
                 .changed()
             {
                 machine.set_slot_count(count);
@@ -820,22 +910,33 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
                     let hint = zone.name_at(i);
                     ui.add(
                         egui::TextEdit::singleline(&mut zone.name)
-                            .hint_text(hint)
+                            .hint_text(hint.clone())
                             .desired_width(ui.spacing().text_edit_width / 2.0),
                     )
                     .on_hover_hint("What its label in the 2D and 3D views calls it");
                     // the corner may be either side of the origin
-                    for value in [&mut zone.x, &mut zone.y] {
+                    let zone_name = if zone.name.is_empty() {
+                        hint.clone()
+                    } else {
+                        zone.name.clone()
+                    };
+                    for (axis, value) in [("X", &mut zone.x), ("Y", &mut zone.y)] {
                         let mut shown = *value / per;
                         let drag = Number::new(&mut shown)
                             .max_decimals(3)
-                            .suffix(format!(" {length}"));
+                            .suffix(format!(" {length}"))
+                            .name(format!("{zone_name} {axis}"));
                         if ui.add(drag).changed() {
                             *value = shown * per;
                         }
                     }
-                    for value in [&mut zone.width, &mut zone.height, &mut zone.stands] {
-                        measure(ui, value, per, &format!(" {length}"));
+                    for (what, value) in [
+                        ("Width", &mut zone.width),
+                        ("Height", &mut zone.height),
+                        ("Tall", &mut zone.stands),
+                    ] {
+                        let name = format!("{zone_name} {what}");
+                        measure(ui, &name, value, per, &format!(" {length}"));
                     }
                     if ui.button("Remove").clicked() {
                         gone = Some(i);
@@ -984,18 +1085,18 @@ fn bank_layout(
                 let (mut across, mut along) = (bank.horizontal.len(), bank.vertical.len());
                 ui.label("Drills along X")
                     .on_hover_hint("How many drills are on the arm running left to right");
-                let a = ui.add(Number::new(&mut across).range(0..=32));
+                let a = ui.add(Number::new(&mut across).range(0..=32).name("Drills along X"));
                 ui.end_row();
                 ui.label("Drills along Y")
                     .on_hover_hint("How many drills are on the arm running front to back; 0 for a single row");
-                let b = ui.add(Number::new(&mut along).range(0..=32));
+                let b = ui.add(Number::new(&mut along).range(0..=32).name("Drills along Y"));
                 ui.end_row();
                 if a.changed() || b.changed() {
                     bank.set_counts(across, along);
                 }
                 ui.label("Pitch")
                     .on_hover_hint("The distance between neighbouring drills, centre to centre");
-                measure(ui, &mut bank.pitch, per, &format!(" {length}"));
+                measure(ui, "Pitch", &mut bank.pitch, per, &format!(" {length}"));
                 ui.end_row();
                 if !bank.horizontal.is_empty() && !bank.vertical.is_empty() {
                     ui.label("Arms cross at").on_hover_hint(
@@ -1003,10 +1104,11 @@ fn bank_layout(
                     );
                     ui.horizontal(|ui| {
                         let limits = [bank.horizontal.len(), bank.vertical.len()];
-                        for (place, most) in bank.central.iter_mut().zip(limits) {
+                        let arms = ["Arms cross at X", "Arms cross at Y"];
+                        for ((place, most), arm) in bank.central.iter_mut().zip(limits).zip(arms) {
                             let mut shown = *place + 1;
                             if ui
-                                .add(Number::new(&mut shown).range(1..=most))
+                                .add(Number::new(&mut shown).range(1..=most).name(arm))
                                 .changed()
                             {
                                 *place = shown - 1;
@@ -1052,20 +1154,26 @@ fn bank_drills(
                 ui.label(if crossing {
                     format!("{name} (both arms)")
                 } else {
-                    name
+                    name.clone()
                 });
                 ui.horizontal(|ui| {
                     let drill = match id.arm {
                         Arm::Horizontal => &mut bank.horizontal[id.index],
                         Arm::Vertical => &mut bank.vertical[id.index],
                     };
-                    ui.add(Number::new(&mut drill.number)).on_hover_hint(
-                        "The number the controller picks this drill by; controllers that \
+                    ui.add(Number::new(&mut drill.number).name(format!("Drill {name} number")))
+                        .on_hover_hint(
+                            "The number the controller picks this drill by; controllers that \
                              take a bitmask expect 1, 2, 4, 8...",
-                    );
+                        );
                     if crossing {
                         let y = &mut bank.vertical[bank.central[1]].number;
-                        ui.add(Number::new(y).prefix("Y ")).on_hover_hint(
+                        ui.add(
+                            Number::new(y)
+                                .prefix("Y ")
+                                .name(format!("Drill {name} Y arm number")),
+                        )
+                        .on_hover_hint(
                             "Its number on the Y arm, for controllers that number the \
                                  arms apart",
                         );
@@ -1075,7 +1183,13 @@ fn bank_drills(
                     Arm::Horizontal => &mut bank.horizontal[id.index],
                     Arm::Vertical => &mut bank.vertical[id.index],
                 };
-                measure(ui, &mut drill.diameter, per, &format!(" {length}"));
+                measure(
+                    ui,
+                    &format!("Drill {name} diameter"),
+                    &mut drill.diameter,
+                    per,
+                    &format!(" {length}"),
+                );
                 let is_reference = bank.same(bank.reference, *id);
                 if ui
                     .radio(is_reference, "")

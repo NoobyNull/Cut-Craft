@@ -39,6 +39,7 @@ fn with_tool(tool: Tool, points: &[(f64, f64, f64)]) -> Toolpath {
         group: None,
         drill_bank: None,
         fallbacks: vec![],
+        across: vec![],
     }
 }
 
