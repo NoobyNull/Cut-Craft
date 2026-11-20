@@ -19,3 +19,20 @@ notes-panel-tick-or-untick-it = Tick or untick it
 notes-panel-variable-explorer = Variable Explorer
 notes-panel-write = Write
 notes-panel-write-hint = Write the notes; {"{{"}variables{"}}"} show as coloured chips
+
+# The Notes toolbar: each button's label, and its hint.
+notes-panel-bold = B
+    .tooltip = Bold: **words**
+notes-panel-italic = I
+    .tooltip = Italic: *words*
+notes-panel-heading = H
+    .tooltip = Heading: a line starting ##
+notes-panel-bullet = •
+    .tooltip = Bulleted list: lines starting -
+notes-panel-numbered = 1.
+    .tooltip = Numbered list: lines starting 1.
+notes-panel-check = ☐
+    .tooltip = Check list: lines starting - [ ], ticked in Preview
+notes-panel-link = Link
+    .tooltip = Link to a web page: [words](https://…)
+notes-panel-variables = { "{x}" } Variables

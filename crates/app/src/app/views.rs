@@ -2922,16 +2922,12 @@ impl CutCraftApp {
             return;
         }
         if let Some((zone, machine)) = canvas.cursor().and_then(|at| self.doc.keep_out_at(at)) {
-            let edit = if machine {
-                "a clamp of the machine's, edited in Machine Configuration"
+            let hint = if machine {
+                tr!("views-keep-out-machine-clamp", zone = zone.label())
             } else {
-                "edited in Toolpaths ▸ Keep-Out Zones…"
+                tr!("views-keep-out-job-zone", zone = zone.label())
             };
-            response.clone().on_hover_text(tr!(
-                "views-keep-out-clipping-off",
-                zone = zone.label(),
-                edit = edit
-            ));
+            response.clone().on_hover_text(hint);
         }
     }
 

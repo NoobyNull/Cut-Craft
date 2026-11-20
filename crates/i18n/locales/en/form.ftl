@@ -20,3 +20,14 @@ form-turn-the-other-way-with = Turn the other way; with no turn, flip LR
 form-undo = Undo
 # $dim is a letter, such as A, as the picture above marks a measurement.
 form-marked-on-picture = Marked { $dim } on the picture above
+
+# How far each sample the pattern maker adds is turned.
+form-no-turn = no turn
+form-turn-degrees = = { $angle }°
+# A pattern maker sample button's hint: the entry it adds, and what that does.
+form-sample-add = Add { $entry }: { $what }
+form-sample-space = A space: no repeat here
+form-sample-as-designed = The repeat as designed
+form-sample-flipped-ud = Flipped UD: up and down, across the line
+form-sample-flipped-lr = Flipped LR: left and right, along the line
+form-sample-flipped-both = Flipped LR and UD

@@ -42,12 +42,11 @@ pub(super) fn too_deep(id: &str, params: &Value, thickness: f64) -> Option<f64> 
 pub(super) fn warning(depth: f64, thickness: f64, units: Units) -> String {
     let (per, unit) = crate::form::shown_in("mm", units).unwrap_or((1.0, "mm"));
     let shown = |mm: f64| format!("{} {unit}", super::trimmed(mm / per));
-    format!(
-        "This toolpath is set to cut {} deep, {} past the bottom of the {} thick material, \
-         so the bit will cut into the machine bed or spoilboard.",
-        shown(depth),
-        shown(depth - thickness),
-        shown(thickness)
+    tr!(
+        "depth-cuts-into-the-bed",
+        depth = shown(depth),
+        past = shown(depth - thickness),
+        thickness = shown(thickness)
     )
 }
 

@@ -24,10 +24,6 @@ const BED_INCH: [f64; 2] = [24.0 * MM_PER_INCH, 16.0 * MM_PER_INCH];
 /// The starter tool groups, by units.
 const METRIC_TOOLS: &str = "Metric Tools";
 const IMPERIAL_TOOLS: &str = "Imperial Tools";
-/// What first-time setup says about crash reports.
-pub(super) const CRASH_LOGS_NOTE: &str = "A crash report says what Cut Craft was doing when it \
-    closed. Your user name, folders and file names are left out of it. Change this any time in \
-    Edit ▸ Options ▸ Bug Reports.";
 /// What a machine not in the list is called.
 const MY_MACHINE: &str = "My Machine";
 
@@ -361,7 +357,7 @@ impl CutCraftApp {
                 tr!("first-run-no"),
             );
         });
-        ui.weak(CRASH_LOGS_NOTE);
+        ui.weak(tr!("first-run-crash-logs-note"));
         ui.separator();
         let mut finish = None;
         ui.horizontal(|ui| {
@@ -391,9 +387,9 @@ impl CutCraftApp {
     fn machine_question(ui: &mut egui::Ui, setup: &mut Setup) {
         let makers = cut_craft_machines::makers(&setup.catalogue);
         let shown = match &setup.maker {
-            Maker::Unpicked => "Pick the maker…".to_owned(),
+            Maker::Unpicked => tr!("first-run-pick-the-maker"),
             Maker::Named(m) => m.clone(),
-            Maker::NotListed => tr!("first-run-mine-is-not-listed").to_owned(),
+            Maker::NotListed => tr!("first-run-mine-is-not-listed"),
         };
         let mut picked = None;
         egui::Grid::new("first_run_machine")
@@ -419,10 +415,10 @@ impl CutCraftApp {
                 ui.end_row();
                 if let Maker::Named(_) = setup.maker {
                     let models = setup.models();
-                    let shown = setup
-                        .model
-                        .map_or("Pick the model…", |i| &setup.catalogue[i].model)
-                        .to_owned();
+                    let shown = setup.model.map_or_else(
+                        || tr!("first-run-pick-the-model"),
+                        |i| setup.catalogue[i].model.clone(),
+                    );
                     let mut model = None;
                     ui.label(tr!("first-run-model"));
                     egui::ComboBox::from_id_salt("first_run_model")

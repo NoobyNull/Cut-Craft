@@ -53,15 +53,23 @@ pub(super) fn fill_bed(params: &mut Value, bed: [f64; 2]) -> bool {
 /// What the Cutting choices make, in a line.
 pub(super) fn cutting_said(params: &Value) -> String {
     let climb = params["direction"] != "conventional";
-    let cut = if climb { "climb" } else { "conventional" };
+    let cut = if climb {
+        tr!("cutting-word-climb")
+    } else {
+        tr!("cutting-word-conventional")
+    };
     if params["pattern"] == "spiral" {
-        let way = if climb { "clockwise" } else { "anticlockwise" };
-        return format!("Rings from the outside in, going {way} ({cut})");
+        let way = if climb {
+            tr!("cutting-word-clockwise")
+        } else {
+            tr!("cutting-word-anticlockwise")
+        };
+        return tr!("surfacing-said-rings", way = way, cut = cut);
     }
     if params["rows"] == "one_way" {
-        format!("Every row one way ({cut}), lifting back between rows")
+        tr!("surfacing-said-one-way", cut = cut)
     } else {
-        format!("Back and forth, staying down; the first row {cut}")
+        tr!("surfacing-said-back-and-forth", cut = cut)
     }
 }
 
@@ -137,15 +145,10 @@ fn window(ui: &mut egui::Ui, params: &mut Value) {
                 ui,
                 params,
                 "direction",
-                "Direction",
+                &tr!("surfacing-choice-direction"),
                 &[
-                    (
-                        "climb",
-                        "Climb",
-                        "The cutter's edge meets the material head on: usually the smoother \
-                         finish",
-                    ),
-                    ("conventional", "Conventional", "The other way round"),
+                    ("climb", "surfacing-choice-climb"),
+                    ("conventional", "surfacing-choice-conventional"),
                 ],
             );
             if params["pattern"] != "spiral" {
@@ -153,19 +156,10 @@ fn window(ui: &mut egui::Ui, params: &mut Value) {
                     ui,
                     params,
                     "rows",
-                    "Rows",
+                    &tr!("surfacing-choice-rows"),
                     &[
-                        (
-                            "back_and_forth",
-                            "Back and forth",
-                            "Each row back the way the last came, staying down: the quickest",
-                        ),
-                        (
-                            "one_way",
-                            "One way",
-                            "Every row the direction chosen, lifting back between rows: the \
-                             most even finish",
-                        ),
+                        ("back_and_forth", "surfacing-choice-back-and-forth"),
+                        ("one_way", "surfacing-choice-one-way"),
                     ],
                 );
             }

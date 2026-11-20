@@ -4872,14 +4872,11 @@ impl CutCraftApp {
                 }
                 if self.screen == Screen::Job {
                     // the job's units, and the one-click way to swap them
-                    let (unit, other) = match self.doc.job.units {
-                        Units::Mm => ("mm", "inches"),
-                        Units::Inch => ("in", "millimetres"),
+                    let (unit, hint) = match self.doc.job.units {
+                        Units::Mm => ("mm", tr!("panels-switch-to-inches")),
+                        Units::Inch => ("in", tr!("panels-switch-to-millimetres")),
                     };
-                    swap = ui
-                        .small_button(unit)
-                        .on_hover_hint(tr!("panels-switch-units", other = other))
-                        .clicked();
+                    swap = ui.small_button(unit).on_hover_hint(hint).clicked();
                     if let Some((figures, _)) = self.coordinates() {
                         ui.monospace(figures);
                     }

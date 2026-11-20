@@ -64,18 +64,21 @@ pub(super) fn summary(found: &[Finding], skipped: &[(Check, String)]) -> String 
             .filter(|&&c| outcome(c, found, skipped) == o)
             .count()
     };
-    let mut parts = vec![format!("✔ {} passed", count(Outcome::Passed))];
+    let mut parts = vec![tr!(
+        "check-list-count-passed",
+        count = count(Outcome::Passed)
+    )];
     let warnings = count(Outcome::Warning);
     if warnings > 0 {
-        parts.push(format!("⚠ {warnings} to read"));
+        parts.push(tr!("check-list-count-to-read", count = warnings));
     }
     let errors = count(Outcome::MustFix);
     if errors > 0 {
-        parts.push(format!("✖ {errors} must fix"));
+        parts.push(tr!("check-list-count-must-fix", count = errors));
     }
     let skipped = count(Outcome::NotChecked);
     if skipped > 0 {
-        parts.push(format!("{skipped} not checked"));
+        parts.push(tr!("check-list-count-not-checked", count = skipped));
     }
     parts.join(" · ")
 }
@@ -97,10 +100,7 @@ impl CutCraftApp {
         let mut help = None;
         ui.horizontal(|ui| {
             ui.strong(tr!("check-list-checks-before-cutting"));
-            if help_button(
-                ui,
-                "What each check looks for, and how to fix what it finds",
-            ) {
+            if help_button(ui, &tr!("check-list-what-each-check-looks-for")) {
                 help = Some(OVERVIEW);
             }
         });
@@ -130,8 +130,7 @@ impl CutCraftApp {
                 {
                     ui.colored_label(
                         ui.visuals().warn_fg_color,
-                        "Read each ⚠ and tick it to say you have: Save Toolpaths and Send to \
-                         Machine wait until every one is ticked",
+                        tr!("check-list-read-each-and-tick"),
                     );
                 }
                 rows_area(ui, |ui| {
@@ -193,7 +192,7 @@ impl CutCraftApp {
                     if f.severity == Severity::Error {
                         ui.colored_label(
                             visuals.error_fg_color,
-                            format!("Must fix: {}", f.message),
+                            tr!("check-list-must-fix-message", message = f.message.clone()),
                         );
                         return;
                     }

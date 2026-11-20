@@ -55,16 +55,13 @@ pub(super) struct FitImport {
 
 /// The one vector selected, which a drawing is fitted into (a closed shape) or bent along
 /// (an open line), or what to do instead.
-pub(super) fn chosen_shape(doc: &Document) -> Result<EntityId, &'static str> {
+pub(super) fn chosen_shape(doc: &Document) -> Result<EntityId, String> {
     let picked: Vec<EntityId> = doc.selection.iter().copied().collect();
     match picked[..] {
-        [] => Err(
-            "Select the shape to import into first (a circle, rectangle or any closed vector), \
-             or an open line to bend the drawing along, then choose Import Into Selected Shape",
-        ),
+        [] => Err(tr!("fit-import-select-first")),
         [id] if doc.vectors.contains_key(&id) => Ok(id),
-        [_] => Err("Select a vector to import into: a 3D component cannot hold a drawing"),
-        _ => Err("Select just one shape or line to import into"),
+        [_] => Err(tr!("fit-import-select-a-vector")),
+        _ => Err(tr!("fit-import-select-just-one")),
     }
 }
 
@@ -88,7 +85,9 @@ pub(super) fn default_margin(shape: &Path) -> f64 {
 }
 
 /// The warning added when a bend crumples the drawing's inside edge.
-const CRUMPLES: &str = "The line bends tighter than the drawing is tall, so the drawing's edge on the inside of the bend folds over itself. Put it on the other side of the line, or use a gentler curve";
+fn crumples() -> String {
+    tr!("fit-import-crumples")
+}
 
 /// Every point of what `change` adds, curves flattened finely: for finding its size and
 /// shape. Pictures and 3D components count by their corners.
@@ -191,7 +190,7 @@ fn bent(raw: &Change, line: &Path, gap: f64, side: Side) -> Result<Change, Strin
         }
     }
     if bend.folds() {
-        change.notes.push(CRUMPLES.to_owned());
+        change.notes.push(crumples());
     }
     Ok(change)
 }
@@ -277,7 +276,7 @@ impl CutCraftApp {
         let shape = match chosen_shape(&self.doc) {
             Ok(id) => id,
             Err(why) => {
-                self.status.set_message(why);
+                self.status.set_message(&why);
                 return;
             }
         };
@@ -296,7 +295,7 @@ impl CutCraftApp {
         );
         let name = super::file_name(path);
         self.in_background(
-            &format!("Importing {name}"),
+            &tr!("fit-import-importing", name = name.clone()),
             &super::panels::importing(path),
             move || super::files::import(&registry, &doc, &reading),
             move |app, read| match read {
@@ -321,18 +320,18 @@ impl CutCraftApp {
             self.history.undo(&mut self.doc);
         }
         let Some(shape) = self.doc.vectors.get(&fit.shape).cloned() else {
-            self.status
-                .set_message("The shape to import into is gone: nothing was imported");
+            self.status.set_message(&tr!("fit-import-shape-gone"));
             return;
         };
         let done = if shape.closed {
-            format!("Imported {} into the selected shape", fit.name)
+            tr!("fit-import-imported-into", name = fit.name.clone())
         } else {
-            format!("Imported {} along the selected line", fit.name)
+            tr!("fit-import-imported-along", name = fit.name.clone())
         };
         match fitted(&fit.raw, &shape, fit.margin, fit.way, fit.side) {
             Ok(change) => {
-                fit.caution = change.notes.iter().find(|n| *n == CRUMPLES).cloned();
+                let crumples = crumples();
+                fit.caution = change.notes.iter().find(|n| **n == crumples).cloned();
                 self.record(Ok(change), &done);
                 fit.placed = Some(self.history.revision());
                 fit.problem = None;
@@ -363,19 +362,20 @@ impl CutCraftApp {
         let (mut way, mut side, mut margin) = (fit.way, fit.side, fit.margin);
         let (problem, caution) = (fit.problem.clone(), fit.caution.clone());
         let line = self.doc.vectors.get(&fit.shape).is_some_and(|p| !p.closed);
-        let title = if line {
-            "Import Along Line"
+        let (title, mark) = if line {
+            (tr!("fit-import-along-line-title"), "Import Along Line")
         } else {
-            "Import Into Shape"
+            (tr!("fit-import-into-shape-title"), "Import Into Shape")
         };
         let mut open = true;
         let (mut done, mut undo) = (false, false);
         egui::Window::new(title)
+            .id(egui::Id::unique("fit_import_window"))
             .open(&mut open)
             .resizable(false)
             .collapsible(false)
             .show(ctx, |ui| {
-                cut_craft_bug_report::mark(ui, title);
+                cut_craft_bug_report::mark(ui, mark);
                 if line {
                     along_line_settings(ui, &mut side, &mut margin, units);
                 } else {
@@ -405,7 +405,7 @@ impl CutCraftApp {
             {
                 self.history.undo(&mut self.doc);
             }
-            self.status.set_message("Import undone: nothing changed");
+            self.status.set_message(&tr!("fit-import-undone"));
             return;
         }
         if done || !open {
@@ -433,32 +433,18 @@ fn into_shape_settings(
 ) {
     ui.label(tr!("fit-import-how-the-drawing-takes-the"));
     let ways = [
-        (
-            Way::Scale,
-            "Scale to fit",
-            "As big as fits inside the shape's outline, its proportions kept: \
-                         nothing is squashed",
-        ),
-        (
-            Way::Stretch,
-            "Stretch",
-            "Made as wide and tall as the shape, so it fills it: lettering and \
-                         pictures come out squashed or stretched",
-        ),
-        (
-            Way::Morph,
-            "Morph to shape",
-            "Bent so its edges follow the shape's outline all the way round, like \
-                         a picture on a balloon. Curves become many short lines",
-        ),
+        (Way::Scale, "fit-import-way-scale"),
+        (Way::Stretch, "fit-import-way-stretch"),
+        (Way::Morph, "fit-import-way-morph"),
     ];
     ui.horizontal(|ui| {
-        for (w, name, help) in ways {
-            ui.radio_value(way, w, name).on_hover_hint(help);
+        for (w, key) in ways {
+            ui.radio_value(way, w, tr!(key))
+                .on_hover_hint(tr!(&format!("{key}.tooltip")));
         }
     });
-    if let Some((_, _, help)) = ways.iter().find(|w| w.0 == *way) {
-        ui.weak(*help);
+    if let Some((_, key)) = ways.iter().find(|w| w.0 == *way) {
+        ui.weak(tr!(&format!("{key}.tooltip")));
     }
     ui.horizontal(|ui| {
         ui.label(tr!("fit-import-margin"))
@@ -478,30 +464,18 @@ fn along_line_settings(
     ui.label(tr!("fit-import-the-drawing-is-bent-to"));
     ui.label(tr!("fit-import-where-it-sits"));
     let sides = [
-        (
-            Side::Above,
-            "Above the line",
-            "The drawing stands on the line, as lettering stands on a ruled line. On an \
-             arch it sits on the outside of the curve",
-        ),
-        (
-            Side::On,
-            "Centred on the line",
-            "The line runs through the middle of the drawing",
-        ),
-        (
-            Side::Below,
-            "Below the line",
-            "The drawing hangs from the line. On an arch it sits on the inside of the curve",
-        ),
+        (Side::Above, "fit-import-side-above"),
+        (Side::On, "fit-import-side-on"),
+        (Side::Below, "fit-import-side-below"),
     ];
     ui.horizontal(|ui| {
-        for (s, name, help) in sides {
-            ui.radio_value(side, s, name).on_hover_hint(help);
+        for (s, key) in sides {
+            ui.radio_value(side, s, tr!(key))
+                .on_hover_hint(tr!(&format!("{key}.tooltip")));
         }
     });
-    if let Some((_, _, help)) = sides.iter().find(|s| s.0 == *side) {
-        ui.weak(*help);
+    if let Some((_, key)) = sides.iter().find(|s| s.0 == *side) {
+        ui.weak(tr!(&format!("{key}.tooltip")));
     }
     ui.horizontal(|ui| {
         ui.label(tr!("fit-import-gap-at-each-end"))

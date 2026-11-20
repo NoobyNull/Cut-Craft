@@ -13181,13 +13181,13 @@ fn the_profile_form_shows_which_side_it_cuts_just_under_the_depth() {
             "{choice} is a picture under the heading"
         );
     }
-    assert!(h.text_at(super::cutting::side_said("outside")).is_some());
+    assert!(h.text_at(&super::cutting::side_said("outside")).is_some());
     // the picture over Inside picks it, and the sentence says what that makes
     let inside = h.text_at("Inside").unwrap();
     h.click(inside - egui::vec2(0.0, 25.0), Modifiers::NONE);
     h.frame(vec![]);
     assert_eq!(h.app.form.as_ref().unwrap().params["side"], "inside");
-    assert!(h.text_at(super::cutting::side_said("inside")).is_some());
+    assert!(h.text_at(&super::cutting::side_said("inside")).is_some());
 }
 
 #[test]

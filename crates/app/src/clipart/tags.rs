@@ -3,6 +3,7 @@
 //! is kept by its location there, as its folder is (see [`super::network`]), so its tags
 //! last when the share is mounted somewhere else next time.
 
+use cut_craft_i18n::tr;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -114,7 +115,7 @@ impl Tags {
         };
         let bytes = serde_json::to_vec_pretty(&self.map).map_err(|e| e.to_string())?;
         cut_craft_core::file::write_atomic(store, &bytes)
-            .map_err(|e| format!("Couldn't save the Library's tags: {e}"))
+            .map_err(|e| tr!("clipart-could-not-save-tags", error = e.to_string()))
     }
 }
 

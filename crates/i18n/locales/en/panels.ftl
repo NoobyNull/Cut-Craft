@@ -69,7 +69,8 @@ panels-1-plays-at-the-machine = ×1 plays at the machine's own speed, as the Too
 # The Components list's heading: the active sheet's name.
 panels-components-of-sheet = Components ({ $sheet })
 # The status bar's units button. $other is the units it switches to.
-panels-switch-units = Switch to { $other } (Edit ▸ Units)
+panels-switch-to-inches = Switch to inches (Edit ▸ Units)
+panels-switch-to-millimetres = Switch to millimetres (Edit ▸ Units)
 panels-current-tool = Tool: { $tool }
 # A layer in the Layers list: how many vectors are on it.
 panels-layer-vectors = { $count ->

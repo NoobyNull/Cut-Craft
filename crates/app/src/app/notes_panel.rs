@@ -15,23 +15,15 @@ const EXPLORER_SHARE: f32 = 0.45;
 /// The fewest rows of text the notes box keeps, however small the panel.
 const LEAST_TEXT_ROWS: f32 = 6.0;
 
-/// The toolbar: its label, what it does, and its hint.
-const TOOLBAR: [(&str, Format, &str); 7] = [
-    ("B", Format::Bold, "Bold: **words**"),
-    ("I", Format::Italic, "Italic: *words*"),
-    ("H", Format::Heading, "Heading: a line starting ## "),
-    ("•", Format::Bullet, "Bulleted list: lines starting - "),
-    ("1.", Format::Numbered, "Numbered list: lines starting 1. "),
-    (
-        "☐",
-        Format::Check,
-        "Check list: lines starting - [ ] , ticked in Preview",
-    ),
-    (
-        "Link",
-        Format::Link,
-        "Link to a web page: [words](https://…)",
-    ),
+/// The toolbar: the key of its label (with its `.tooltip` hint), and what it does.
+const TOOLBAR: [(&str, Format); 7] = [
+    ("notes-panel-bold", Format::Bold),
+    ("notes-panel-italic", Format::Italic),
+    ("notes-panel-heading", Format::Heading),
+    ("notes-panel-bullet", Format::Bullet),
+    ("notes-panel-numbered", Format::Numbered),
+    ("notes-panel-check", Format::Check),
+    ("notes-panel-link", Format::Link),
 ];
 
 /// What the Notes panel keeps between frames.
@@ -182,7 +174,7 @@ impl super::CutCraftApp {
             ui.separator();
             let mut shown = !state.explorer_hidden;
             if ui
-                .toggle_value(&mut shown, "{x} Variables")
+                .toggle_value(&mut shown, tr!("notes-panel-variables"))
                 .on_hover_hint(tr!("notes-panel-show-or-hide-the-variable"))
                 .changed()
             {
@@ -191,8 +183,12 @@ impl super::CutCraftApp {
         });
         ui.horizontal_wrapped(|ui| {
             ui.add_enabled_ui(!state.preview, |ui| {
-                for (label, f, hint) in TOOLBAR {
-                    if ui.button(label).on_hover_hint(hint).clicked() {
+                for (key, f) in TOOLBAR {
+                    if ui
+                        .button(tr!(key))
+                        .on_hover_hint(tr!(&format!("{key}.tooltip")))
+                        .clicked()
+                    {
                         format = Some(f);
                     }
                 }

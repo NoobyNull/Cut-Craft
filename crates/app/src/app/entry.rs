@@ -71,22 +71,22 @@ pub(super) fn summary(
     units: Units,
 ) -> String {
     match settings.mode {
-        EntryMode::Plunge => "Straight down into the material".into(),
-        EntryMode::Helix => format!(
-            "Helix {} across at {}°, smaller where there is less room",
-            units.length(diameter * settings.helix_diameter / 100.0, 1),
-            super::trimmed(settings.helix_angle)
+        EntryMode::Plunge => tr!("entry-summary-plunge"),
+        EntryMode::Helix => tr!(
+            "entry-summary-helix",
+            across = units.length(diameter * settings.helix_diameter / 100.0, 1),
+            angle = super::trimmed(settings.helix_angle)
         ),
-        EntryMode::ZigZag => format!(
-            "Zig-zag at {}° in {} passes ({} legs)",
-            super::trimmed(settings.zigzag_angle),
-            even(settings.zigzag_passes),
-            units.length(leg(settings, pass_depth), 1)
+        EntryMode::ZigZag => tr!(
+            "entry-summary-zigzag",
+            angle = super::trimmed(settings.zigzag_angle),
+            passes = even(settings.zigzag_passes),
+            legs = units.length(leg(settings, pass_depth), 1)
         ),
-        EntryMode::Ramp => format!(
-            "Ramp down a pass over {} (about {}°)",
-            units.length(settings.ramp_distance, 1),
-            super::trimmed(ramp_angle(settings, pass_depth).round())
+        EntryMode::Ramp => tr!(
+            "entry-summary-ramp",
+            distance = units.length(settings.ramp_distance, 1),
+            angle = super::trimmed(ramp_angle(settings, pass_depth).round())
         ),
     }
 }
@@ -175,40 +175,22 @@ fn window(
 ) {
     ui.label(tr!("entry-how-the-bit-goes-down"));
     let ways = [
-        (
-            EntryMode::Helix,
-            "Helix",
-            "Down in circles, like a corkscrew: the gentlest on the bit, for pockets and holes",
-        ),
-        (
-            EntryMode::ZigZag,
-            "Zig-zag",
-            "Back and forth along the start of the cut, a little lower each time: for narrow \
-             slots and lines",
-        ),
-        (
-            EntryMode::Ramp,
-            "Ramp",
-            "Down along the cut in one straight slope",
-        ),
-        (
-            EntryMode::Plunge,
-            "Straight down",
-            "Like a drill: quickest, but hardest on the bit, and only for bits that cut at \
-             their centre",
-        ),
+        (EntryMode::Helix, "entry-way-helix"),
+        (EntryMode::ZigZag, "entry-way-zigzag"),
+        (EntryMode::Ramp, "entry-way-ramp"),
+        (EntryMode::Plunge, "entry-way-plunge"),
     ];
     ui.horizontal(|ui| {
-        for (mode, name, help) in ways {
+        for (mode, key) in ways {
             if mode == EntryMode::Helix && !helix {
                 continue;
             }
-            ui.radio_value(&mut settings.mode, mode, name)
-                .on_hover_hint(help);
+            ui.radio_value(&mut settings.mode, mode, tr!(key))
+                .on_hover_hint(tr!(&format!("{key}.tooltip")));
         }
     });
-    if let Some((_, _, help)) = ways.iter().find(|w| w.0 == settings.mode) {
-        ui.weak(*help);
+    if let Some((_, key)) = ways.iter().find(|w| w.0 == settings.mode) {
+        ui.weak(tr!(&format!("{key}.tooltip")));
     }
     ui.separator();
     sizes(ui, settings, diameter, pass_depth, units);

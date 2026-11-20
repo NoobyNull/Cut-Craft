@@ -47,11 +47,11 @@ pub(super) enum Look {
 impl Look {
     const ALL: [Self; 3] = [Self::BeforeAndAfter, Self::Result, Self::Outlines];
 
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::BeforeAndAfter => "Before and after",
-            Self::Result => "Result only",
-            Self::Outlines => "Outlines over picture",
+            Self::BeforeAndAfter => tr!("trace-window-look-before-and-after"),
+            Self::Result => tr!("trace-window-look-result-only"),
+            Self::Outlines => tr!("trace-window-look-outlines"),
         }
     }
 }
@@ -564,7 +564,7 @@ impl CutCraftApp {
         ui.horizontal(|ui| {
             ui.label(tr!("trace-window-picture-type"));
             egui::ComboBox::from_id_salt("trace_picture_type")
-                .selected_text("Choose…")
+                .selected_text(tr!("trace-window-choose"))
                 .show_ui(ui, |ui| {
                     for kind in PictureType::ALL {
                         if ui
@@ -648,7 +648,7 @@ fn preview_panes(ui: &mut egui::Ui, view: &mut TraceView, size: egui::Vec2) {
         ui.painter_at(whole).text(
             whole.center(),
             egui::Align2::CENTER_CENTER,
-            "Import a picture to trace",
+            tr!("trace-window-import-a-picture"),
             egui::FontId::proportional(16.0),
             ui.visuals().weak_text_color(),
         );
@@ -689,8 +689,8 @@ fn preview_panes(ui: &mut egui::Ui, view: &mut TraceView, size: egui::Vec2) {
                 } else {
                     let note = match shown.map(|s| &s.result) {
                         Some(Err(e)) => e.clone(),
-                        _ if view.running.is_some() => "Tracing…".into(),
-                        _ => "Click Update preview to see the trace".into(),
+                        _ if view.running.is_some() => tr!("trace-window-tracing"),
+                        _ => tr!("trace-window-click-update-preview"),
                     };
                     painter.text(
                         pane.center(),

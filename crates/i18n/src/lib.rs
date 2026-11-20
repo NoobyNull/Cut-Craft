@@ -304,6 +304,31 @@ start-whats-new = Neu in v{ $version }
     }
 
     #[test]
+    fn no_english_key_is_given_twice() {
+        // a second one would be dropped quietly, and its words never shown
+        let mut seen = std::collections::BTreeMap::new();
+        let mut twice = Vec::new();
+        for (file, text) in ENGLISH {
+            for line in text.lines() {
+                let Some((key, _)) = line.split_once(" =") else {
+                    continue;
+                };
+                if key.is_empty()
+                    || !key
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+                {
+                    continue;
+                }
+                if let Some(first) = seen.insert(key.to_owned(), *file) {
+                    twice.push(format!("{key} in {first} and {file}"));
+                }
+            }
+        }
+        assert!(twice.is_empty(), "{}", twice.join("\n"));
+    }
+
+    #[test]
     fn english_reads_with_no_problems() {
         let (_, problems) = Catalogue::parse(ENGLISH_ID, ENGLISH);
         assert!(problems.is_empty(), "{}", problems.join("\n"));

@@ -102,4 +102,5 @@ views-select-first = { $tool }: select something first
 # The post-processor list: the machine's own post.
 views-post-default = { $name } (default)
 # A keep-out zone while clipping is off. $edit is where it is edited.
-views-keep-out-clipping-off = { $zone }: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. It is { $edit }; right-click for a shortcut
+views-keep-out-machine-clamp = { $zone }: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. It is a clamp of the machine's, edited in Machine Configuration; right-click for a shortcut
+views-keep-out-job-zone = { $zone }: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. It is edited in Toolpaths ▸ Keep-Out Zones…; right-click for a shortcut

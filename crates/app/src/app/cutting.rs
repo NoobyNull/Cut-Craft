@@ -83,106 +83,95 @@ impl Cutting {
 
     /// What the choices make in plain words, before the detail [`Self::told`] gives.
     fn headline(&self) -> String {
-        let way = if self.clockwise() {
-            "clockwise"
-        } else {
-            "anticlockwise"
-        };
+        let way = way(self.clockwise());
         match self.at {
-            At::Outside => format!("Cuts round the outside of each shape, going {way}"),
-            At::Inside => format!("Cuts round the inside of each shape, going {way}"),
-            At::On => format!("Cuts along the line itself, going {way}"),
-            At::Pocket if self.raster => "Clears the pocket in rows".to_owned(),
-            At::Pocket if self.adaptive => {
-                "Clears the pocket with a thin, steady bite, then once round the wall".to_owned()
-            }
-            At::Pocket => format!("Clears the pocket in rings, going {way}"),
+            At::Outside => tr!("cutting-headline-outside", way = way),
+            At::Inside => tr!("cutting-headline-inside", way = way),
+            At::On => tr!("cutting-headline-on", way = way),
+            At::Pocket if self.raster => tr!("cutting-headline-rows"),
+            At::Pocket if self.adaptive => tr!("cutting-headline-adaptive"),
+            At::Pocket => tr!("cutting-headline-rings", way = way),
         }
     }
 
     /// What the choices make, a line each.
     fn told(&self) -> Vec<String> {
-        let way = |cw: bool| if cw { "clockwise" } else { "anticlockwise" };
-        let cut = |climb: bool| if climb { "climb" } else { "conventional" };
-        let round = match self.at {
-            At::Outside => "round the part",
-            At::Inside => "round the hole",
-            At::On => "along the line",
-            At::Pocket => "round the pocket",
-        };
         if self.adaptive {
             return vec![
-                format!(
-                    "Spirals out from the roomiest spot, cutting {} all the way",
-                    cut(self.climb)
-                ),
-                "Turns tighter where the bite would grow, so corners are cut in thin slices"
-                    .to_owned(),
-                format!(
-                    "Then once round the wall, {}, for a clean edge",
-                    way(self.clockwise())
-                ),
+                tr!("cutting-told-adaptive-spirals", cut = cut(self.climb)),
+                tr!("cutting-told-adaptive-tighter"),
+                tr!("cutting-told-adaptive-wall", way = way(self.clockwise())),
             ];
         }
         if self.raster {
             return vec![if self.keep_climb {
-                format!(
-                    "Every row cuts {}: the tool comes back through the row it just cut, then \
-                     steps over along the wall without lifting",
-                    cut(self.climb)
-                )
+                tr!("cutting-told-rows-keep-climb", cut = cut(self.climb))
             } else {
-                "Rows go back and forth, stepping over along the wall without lifting: \
-                 one row cuts climb, the next conventional"
-                    .to_owned()
+                tr!("cutting-told-rows-alternate")
             }];
         }
-        let mut lines = vec![format!(
-            "Pass 1: {}, {} {round}",
-            cut(self.climb),
-            way(self.clockwise())
-        )];
+        let first = (cut(self.climb), way(self.clockwise()));
+        let mut lines = vec![match self.at {
+            At::Outside => tr!("cutting-told-first-part", cut = first.0, way = first.1),
+            At::Inside => tr!("cutting-told-first-hole", cut = first.0, way = first.1),
+            At::On => tr!("cutting-told-first-line", cut = first.0, way = first.1),
+            At::Pocket => tr!("cutting-told-first-pocket", cut = first.0, way = first.1),
+        }];
         if self.both && self.trochoidal && self.keep_climb {
-            lines.push(format!(
-                "Pass 2: back the other way, {}, its loops still turning the same way; and so on",
-                way(!self.clockwise())
+            lines.push(tr!(
+                "cutting-told-second-loops",
+                way = way(!self.clockwise())
             ));
         } else if self.both {
-            lines.push(format!(
-                "Pass 2: back the other way, {}, {}; and so on",
-                cut(!self.climb),
-                way(!self.clockwise())
+            lines.push(tr!(
+                "cutting-told-second",
+                cut = cut(!self.climb),
+                way = way(!self.clockwise())
             ));
         }
         if self.raster {
-            lines.push(
-                "Rows go back and forth, stepping over along the wall without lifting: \
-                 one row cuts climb, the next conventional"
-                    .to_owned(),
-            );
+            lines.push(tr!("cutting-told-rows-alternate"));
         }
         if let Some(rings) = &self.rings
             && !self.trochoidal
         {
             lines.push(match rings.as_str() {
-                "outline_in" => format!("Rings from the outline in: they cut {}", cut(!self.climb)),
-                "alternate" => format!(
-                    "Rings middle out ({}), then outline in ({}), pass by pass",
-                    cut(self.climb),
-                    cut(!self.climb)
+                "outline_in" => tr!("cutting-told-rings-outline-in", cut = cut(!self.climb)),
+                "alternate" => tr!(
+                    "cutting-told-rings-alternate",
+                    first = cut(self.climb),
+                    then = cut(!self.climb)
                 ),
-                _ => format!("Rings from the middle out: they cut {}", cut(self.climb)),
+                _ => tr!("cutting-told-rings-middle-out", cut = cut(self.climb)),
             });
         }
         if self.trochoidal {
             let anticlockwise = self.loops.turn == Turn::Anticlockwise;
-            lines.push(format!(
-                "In loops turning {}: each loop cuts {}",
-                way(!anticlockwise),
-                cut(anticlockwise)
+            lines.push(tr!(
+                "cutting-told-loops",
+                way = way(!anticlockwise),
+                cut = cut(anticlockwise)
             ));
         }
         lines
+    }
+}
+
+/// Clockwise or anticlockwise, in words.
+fn way(clockwise: bool) -> String {
+    if clockwise {
+        tr!("cutting-word-clockwise")
+    } else {
+        tr!("cutting-word-anticlockwise")
+    }
+}
+
+/// Climb or conventional, in words.
+fn cut(climb: bool) -> String {
+    if climb {
+        tr!("cutting-word-climb")
+    } else {
+        tr!("cutting-word-conventional")
     }
 }
 
@@ -244,20 +233,11 @@ pub(super) fn group_end(
 
 /// What a profile cut on `side` of the vectors makes, in plain words for someone who has not
 /// cut one before.
-pub(super) fn side_said(side: &str) -> &'static str {
+pub(super) fn side_said(side: &str) -> String {
     match side {
-        "inside" => {
-            "Cuts a hole: the tool goes round the inside of each shape, so the hole is \
-                     the size drawn."
-        }
-        "on" => {
-            "Follows the line: the middle of the tool runs along it, so the cut is as wide \
-                 as the tool. Use it for open lines and grooves."
-        }
-        _ => {
-            "Cuts a part out: the tool goes round the outside of each shape, so the part is \
-              the size drawn."
-        }
+        "inside" => tr!("cutting-side-inside"),
+        "on" => tr!("cutting-side-on"),
+        _ => tr!("cutting-side-outside"),
     }
 }
 
@@ -305,15 +285,14 @@ fn clearing_said(
     diameter: f64,
     units: cut_craft_core::document::Units,
 ) -> String {
-    let way_back = match clearing.way_back {
-        WayBack::KeepClimb => "keeps climb on the way back",
-        WayBack::Alternate => "alternates climb and conventional",
-    };
-    format!(
-        "This job: light step {}% ({} with this bit), {way_back}",
+    let (step, bite) = (
         clearing.loops.step,
-        units.length(clearing.light_bite(diameter), 2)
-    )
+        units.length(clearing.light_bite(diameter), 2),
+    );
+    match clearing.way_back {
+        WayBack::KeepClimb => tr!("cutting-this-job-keeps-climb", step = step, bite = bite),
+        WayBack::Alternate => tr!("cutting-this-job-alternates", step = step, bite = bite),
+    }
 }
 
 /// How much of a bit's edge, in degrees, is in the material when it takes a side bite of
@@ -522,15 +501,10 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
             ui,
             params,
             "direction",
-            "Direction",
+            &tr!("cutting-choice-direction"),
             &[
-                (
-                    "climb",
-                    "Climb",
-                    "The cutter's edge meets the material head on: clockwise round a part or \
-                     along a closed line (an open line runs the way it was drawn)",
-                ),
-                ("conventional", "Conventional", "The other way round"),
+                ("climb", "cutting-choice-climb"),
+                ("conventional", "cutting-choice-conventional"),
             ],
         );
         if adaptive {
@@ -540,14 +514,10 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
             ui,
             params,
             "ways",
-            "Passes",
+            &tr!("cutting-choice-passes"),
             &[
-                ("one", "Single direction", "Every pass the direction's way"),
-                (
-                    "both",
-                    "Both directions",
-                    "Each pass back the way the last came",
-                ),
+                ("one", "cutting-choice-single-direction"),
+                ("both", "cutting-choice-both-directions"),
             ],
         );
         if params["strategy"] == "offset" {
@@ -555,23 +525,11 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
                 ui,
                 params,
                 "rings",
-                "Rings",
+                &tr!("cutting-choice-rings"),
                 &[
-                    (
-                        "middle_out",
-                        "From the middle out",
-                        "Cut the direction chosen",
-                    ),
-                    (
-                        "outline_in",
-                        "From the outline in",
-                        "Cut the other direction",
-                    ),
-                    (
-                        "alternate",
-                        "Alternate",
-                        "Middle out, then outline in, pass by pass",
-                    ),
+                    ("middle_out", "cutting-choice-middle-out"),
+                    ("outline_in", "cutting-choice-outline-in"),
+                    ("alternate", "cutting-choice-alternate"),
                 ],
             );
         }
@@ -582,18 +540,10 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
                 ui,
                 params,
                 "motion",
-                "Motion",
+                &tr!("cutting-choice-motion"),
                 &[
-                    (
-                        "straight",
-                        "Straight",
-                        "Along the path, the cutter's whole side cutting",
-                    ),
-                    (
-                        "trochoidal",
-                        "Trochoidal",
-                        "In small loops, a sliver of the edge cutting",
-                    ),
+                    ("straight", "cutting-choice-straight"),
+                    ("trochoidal", "cutting-choice-trochoidal"),
                 ],
             );
         }
@@ -603,20 +553,20 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
     }
 }
 
-/// A row of radio buttons for `params[key]`.
+/// A row of radio buttons for `params[key]`. Each option is the value kept and the key of its words (with its `.tooltip`).
 pub(super) fn choose(
     ui: &mut egui::Ui,
     params: &mut Value,
     key: &str,
     label: &str,
-    options: &[(&str, &str, &str)],
+    options: &[(&str, &str)],
 ) {
     ui.label(label);
     ui.horizontal(|ui| {
-        for &(value, name, help) in options {
+        for &(value, words) in options {
             if ui
-                .radio(params[key] == value, name)
-                .on_hover_hint(help)
+                .radio(params[key] == value, tr!(words))
+                .on_hover_hint(tr!(&format!("{words}.tooltip")))
                 .clicked()
             {
                 params[key] = value.into();
@@ -809,11 +759,11 @@ fn loops_said(
     diameter: f64,
     units: cut_craft_core::document::Units,
 ) -> String {
-    format!(
-        "Loops {} across, each {} on; the cutter {}",
-        units.length(2.0 * radius, 2),
-        units.length(advance, 2),
-        units.length(diameter, 2)
+    tr!(
+        "cutting-loops-said",
+        across = units.length(2.0 * radius, 2),
+        on = units.length(advance, 2),
+        cutter = units.length(diameter, 2)
     )
 }
 

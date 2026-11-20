@@ -26,3 +26,7 @@ first-run-width-x = Width (X)
 first-run-working-area-length-y = Working area length (Y)
 first-run-working-area-width-x = Working area width (X)
 first-run-yes = Yes
+
+first-run-crash-logs-note = A crash report says what Cut Craft was doing when it closed. Your user name, folders and file names are left out of it. Change this any time in Edit ▸ Options ▸ Bug Reports.
+first-run-pick-the-maker = Pick the maker…
+first-run-pick-the-model = Pick the model…
