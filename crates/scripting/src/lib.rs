@@ -8,6 +8,10 @@
 //! The sandbox: only Lua's `string`, `table`, `math` and `utf8` libraries and the `cutcraft`
 //! table are there. No files, programs, network, other Lua code or compiled Lua. A gadget that
 //! runs too long or uses too much memory is stopped.
+//!
+//! An add-on that lists web hosts in its `network` key can also have gadgets that reach
+//! outside the job (see [`outside`]): they fetch from those hosts only, save downloads in the
+//! add-on's own folder, and never change the document.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Registry};
@@ -20,7 +24,9 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 mod gadget;
+pub mod outside;
 pub use gadget::{GadgetCommand, load_gadget};
+pub use outside::{Outside, run_outside_gadget};
 
 /// How much a gadget may do before it is stopped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

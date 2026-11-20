@@ -259,3 +259,13 @@ fn gadget_limits_are_kept_to_what_options_offers() {
     // what gadgets run with until Options sets it; nothing in these tests sets it
     assert_eq!(gadget_limits(), Limits::default());
 }
+
+#[test]
+fn a_job_gadget_cannot_reach_the_web_or_save_files() {
+    let change = run(r#"
+        function run()
+          cutcraft.message(tostring(cutcraft.http) .. " " .. tostring(cutcraft.download) .. " " .. tostring(cutcraft.store))
+        end"#)
+    .expect("the gadget runs");
+    assert_eq!(change.notes, vec!["nil nil nil"]);
+}
