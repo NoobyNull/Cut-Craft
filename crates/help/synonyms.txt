@@ -74,3 +74,4 @@ firmware, grbl, grblhal, fluidnc, mach3, mach4, controller
 room to turn, swing, swings, clearance round the axis, corners hit, hits the bed, axis height
 colour, color, colours, colors, line colour, line color, layer colour, layer color
 screen reader, screen readers, narrator, nvda, jaws, orca, voiceover, accessibility, accessible, blind, low vision, keyboard only
+scale to fit, fit to material, fill the material, make it fit
