@@ -2292,18 +2292,14 @@ impl CutCraftApp {
                 // a drag from a rotation ring turns about its axis, whatever Drag turns says
                 let mode = ring.or(turn["mode"].as_str()).map(str::to_owned);
                 match mode.as_deref() {
-                    // a ring held turns the model the way the drag goes round it, about the
-                    // job's own axis the ring is drawn round
+                    // a ring held turns the model the way the drag goes round it, its own box
+                    // alone (the ring is drawn round the axis that box turns about)
                     Some(axis @ ("x" | "y" | "z")) if ring.is_some() && grip.is_some() => {
                         let (along, radius) = grip.unwrap_or_default();
-                        let keys = ["x", "y", "z"];
-                        let now = keys.map(|k| turn[k].as_f64().unwrap_or(0.0));
-                        let about = crate::axes::Axis::named(axis).unwrap_or(crate::axes::Axis::Z);
-                        let by = crate::axes::ring_turn(delta, along, radius);
-                        let then = crate::axes::turned_about(now, about, by);
-                        for (k, v) in keys.into_iter().zip(then) {
-                            turn[k] = Value::from(v);
-                        }
+                        add(
+                            &mut turn[axis],
+                            crate::axes::ring_turn(delta, along, radius),
+                        );
                     }
                     Some("x") => add(&mut turn["x"], about_x),
                     Some("y") => add(&mut turn["y"], about_z),
@@ -3472,8 +3468,10 @@ impl CutCraftApp {
     /// green and blue rings round it turn it about X, Y and Z (the axis colours used
     /// everywhere), and the grey sphere in its middle about all three. Each ring has arrows
     /// both ways round where it stands out most, the + way marked (X+ and X−): dragging
-    /// along the ring that way turns the model by a positive angle, as the X, Y and Z boxes
-    /// count it (help: Import 3D Model, Initial Orientation).
+    /// along the ring that way turns the model by a positive angle in that ring's box alone.
+    /// Before any turn each ring is square to the job's own axis; turned, the Y ring tilts
+    /// with the Z turn and the X ring with the Z and Y turns, so a ring always goes round
+    /// the axis its box turns about (help: Orientate 3D Model, Turning the model).
     fn rings_3d(&mut self, ui: &egui::Ui, area: egui::Rect, fit: egui::Rect) {
         use crate::axes::Axis;
         use cut_craft_core::glam::DVec3;
@@ -3510,17 +3508,24 @@ impl CutCraftApp {
         // Z over towards X, Z turns X round towards Y)
         let steps = 72;
         let mut looks = vec![];
+        let turns = self.form.as_ref().map_or([0.0; 3], |f| {
+            ["x", "y", "z"].map(|k| f.params["turn"][k].as_f64().unwrap_or(0.0))
+        });
         for axis in Axis::ALL {
+            // tilted with the turns made after its own, so it goes round the axis its box
+            // turns the model about
+            let frame = crate::axes::ring_frame(turns, axis);
             let points: Vec<egui::Pos2> = (0..=steps)
                 .map(|i| {
                     let a = std::f64::consts::TAU * f64::from(i) / f64::from(steps);
                     let (c, s) = (a.cos() * reach, a.sin() * reach);
                     middle
-                        + match axis {
-                            Axis::X => DVec3::new(0.0, c, s),
-                            Axis::Y => DVec3::new(s, 0.0, c),
-                            Axis::Z => DVec3::new(c, s, 0.0),
-                        }
+                        + frame
+                            * match axis {
+                                Axis::X => DVec3::new(0.0, c, s),
+                                Axis::Y => DVec3::new(s, 0.0, c),
+                                Axis::Z => DVec3::new(c, s, 0.0),
+                            }
                 })
                 .map(screen)
                 .collect();
@@ -5614,7 +5619,8 @@ fn ring_arrows(
     for (k, inner, sign) in ends {
         let (tip, before) = (at(k), at(inner));
         crate::axes::head(painter, tip, tip - before, head, stroke.color);
-        let out = (tip - centre).normalized() * head * 1.5 + (tip - before).normalized() * head;
+        let out =
+            (tip - centre).normalized() * head * 1.5 + (tip - before).normalized() * head * 2.0;
         crate::axes::tag(
             painter,
             tip + out,

@@ -11,11 +11,13 @@ as the **X**, **Y** and **Z** boxes under **Interactive Rotation** and the arrow
 cube. Drag the grey ball in the middle to turn it about all three.
 
 Each ring has a pair of arrows, marked **X+** and **X−** on the red ring (Y+ and Y− on the
-green one, and so on). Drag along the ring the way the **+** arrow points and the model
-turns the + way about that axis of the job; drag the **−** way and it turns back. With
-nothing else turned, that ring's box goes up and down with it. Once the model is turned
-about another axis too, a ring still turns it about the axis it is drawn round, so more
-than one box can change.
+green one, and so on). Drag along the ring the way the **+** arrow points and the angle in
+that ring's box goes up; drag the **−** way and it goes down. Only that box changes.
+
+Before you turn anything, each ring is square to the job's own X, Y or Z. Once you have
+turned the model about Z, the green Y ring turns with it, and the red X ring follows the Z
+and Y turns. That way each ring always goes round the axis its own box turns the model
+about, so the model turns exactly the way the ring's arrows show.
 
 ![The red, green and blue rings round a model, each with its + and − arrows](pictures/turn-rings.png)
 
