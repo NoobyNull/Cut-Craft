@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: checks_before_cutting, profile_toolpath, pocket_toolpath, collisions
+reviewed: 2026-11-21
+see-also: checks_before_cutting, profile_toolpath, pocket_toolpath, collisions, rotary_machining_toolpath
 ---
 
 ## Steps
@@ -28,3 +28,14 @@ Always check the toolpaths in the preview first: what you save is exactly what t
 If the collet nut, spindle or shank would hit the wood (or a clamp) beside a deep cut, the
 checks list it as **⚠ Check** and Save always asks before writing the file, whatever
 Options say. See [Collet and Holder Collisions](help:collisions).
+
+## Rotary toolpaths
+
+Saving makes each toolpath's file a little smaller by leaving out points that lie on a
+straight line between their neighbours. A [4-Axis Rotary Machining](help:rotary_machining_toolpath)
+toolpath that holds the bit to one side of the turning axis (**Off centre**, **Indexed** and
+**Sides, then details**) keeps a place across the axis for every point, so it is saved with
+every point it has. Its file is bigger, and it is exactly what the turning preview plays.
+
+Files saved with **Indexed** or **Sides, then details** in versions 0.7.0 to 0.7.2 lost that
+match and can cut into the model: save them again with this version before cutting.
