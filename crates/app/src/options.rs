@@ -655,8 +655,10 @@ impl ToolpathSettings {
         use cut_craft_core::simplify::{family, simplify};
         let mut doc = doc.clone();
         for toolpath in doc.toolpaths.values_mut() {
-            // a laser's power goes move by move, so its moves stay as they are
-            if toolpath.power.is_empty() {
+            // a laser's power goes move by move, and so does how far a rotary toolpath holds
+            // the bit off the turning axis, so their moves stay as they are (thinning them
+            // alone would pair each move with another move's power or place across the axis)
+            if toolpath.power.is_empty() && toolpath.across.is_empty() {
                 toolpath.moves = simplify(&toolpath.moves, self.tolerance(family(toolpath)));
             }
         }
@@ -2569,6 +2571,54 @@ mod tests {
             (count(1), count(2)),
             (2, 11),
             "2D thinned, 3D kept whole at 0"
+        );
+    }
+
+    #[test]
+    fn a_saved_rotary_toolpath_held_off_the_axis_is_the_one_the_preview_plays() {
+        use cut_craft_core::Command;
+        use cut_craft_core::component::{Combine, Component};
+        use cut_craft_core::document::{Along, Document, Job};
+        use cut_craft_core::rotary_axis::RotaryAxis;
+        // a bump on a round blank, cut from four sides with A held still: the bit is held
+        // off the axis, so each move has its own place across it
+        let mut doc = Document {
+            job: Job::rotary(60.0, 40.0, Along::X),
+            ..Document::default()
+        };
+        let model = Component::from_fn("Bump", Combine::Add, doc.job.area(), 0.5, |p| {
+            ((p.x - 30.0).abs() < 15.0).then_some(17.0)
+        });
+        let mut c = cut_craft_core::Change::builder(&doc);
+        c.add_new_component(model);
+        doc.apply(&c.finish()).unwrap();
+        let p = cmd_rotary_machining_toolpath::Params {
+            strategy: cmd_rotary_machining_toolpath::Strategy::Indexed,
+            ..cmd_rotary_machining_toolpath::Params::default()
+        };
+        let change = cmd_rotary_machining_toolpath::RotaryMachiningToolpath::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        let toolpath = doc.toolpaths.values().next().unwrap();
+        assert!(!toolpath.across.is_empty(), "held off the axis");
+        let post = cut_craft_post::Post::default_for(&doc.job).with_rotary(RotaryAxis {
+            centre_set: true,
+            ..RotaryAxis::default()
+        });
+        let file = cut_craft_post::File {
+            path: std::path::Path::new("/jobs/bump.nc"),
+            job: None,
+            made: chrono::NaiveDateTime::default(),
+            slots: &[],
+            notes: &[],
+        };
+        // what Save Toolpaths and View G-code write, at the default tolerance, is what the
+        // turning preview plays: the toolpath as it was calculated
+        let saved = Options::default().toolpaths.thinned(&doc);
+        let kept = saved.toolpaths.values().next().unwrap();
+        assert_eq!(kept.moves.len(), kept.across.len());
+        assert_eq!(
+            post.render(&saved, &file).unwrap(),
+            post.render(&doc, &file).unwrap()
         );
     }
 
