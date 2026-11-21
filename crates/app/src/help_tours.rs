@@ -2921,9 +2921,62 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:node_edit"),
             },
             Step {
-                caption: "Drag a node to move it. Right-click a node or a span for more: add or delete nodes, make a span straight or curved.",
+                caption: "Drag a node (a square) to move it. Right-click a node or a span for more: add or delete nodes, make a span straight or curved. A curved span shows round handles: drag one to bend it ([Convert Span to Bezier](help:span_to_bezier), [Move Handle](help:move_handle)).",
                 setup: |app, ctx| {
                     app.invoke(ctx, "node_edit");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
+        tool: "span_to_bezier",
+        steps: &[
+            Step {
+                caption: "Convert Span to Bezier turns one side of a shape (a span) into a \
+                          curve you can bend. Select the shape.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    shapes_rect(app);
+                },
+                mark: Mark::Shape(RECT_X, RECT_Y + RECT_H / 2.0),
+            },
+            Step {
+                caption: "On the Design page, under **Edit**, press **Node Edit** (or press \
+                          N). Small squares appear on the shape's corners: its nodes.",
+                setup: |app, ctx| {
+                    on_design_tab(app, 1);
+                    app.invoke(ctx, "node_edit");
+                },
+                mark: Mark::At("tool:node_edit"),
+            },
+            Step {
+                caption: "Right-click the side you want to curve and pick **Convert Span to \
+                          Bezier**. Two round handles appear on it, each joined by a line to \
+                          the corner it pulls from.",
+                setup: |app, _| {
+                    let at = serde_json::json!({
+                        "vector": first_vector(app),
+                        "at": { "x": RECT_X + RECT_W / 2.0, "y": RECT_Y },
+                        "reach": 2.0,
+                    });
+                    let _ = app.apply("span_to_bezier", &at);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "Drag a round handle. The side bends towards it while the corners \
+                          stay put. Drag the other handle to shape the other end of the curve.",
+                setup: |app, _| {
+                    let params = serde_json::json!({
+                        "from": {
+                            "vector": first_vector(app),
+                            "at": { "x": RECT_X + RECT_W / 3.0, "y": RECT_Y },
+                            "reach": 2.0,
+                        },
+                        "to": { "x": RECT_X + RECT_W / 3.0, "y": RECT_Y - 45.0 },
+                    });
+                    let _ = app.apply("move_handle", &params);
                 },
                 mark: Mark::None,
             },
@@ -5181,6 +5234,11 @@ fn shapes_circle(app: &mut CutCraftApp) {
 fn shapes_star(app: &mut CutCraftApp) {
     draw(app, "draw_star", star());
     select_all(app);
+}
+
+/// The first vector drawn, as a node-editing command names it.
+fn first_vector(app: &CutCraftApp) -> serde_json::Value {
+    serde_json::json!(app.doc.vectors.keys().next().map_or(0, |id| id.0))
 }
 
 /// A rectangle, selected.

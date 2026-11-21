@@ -2954,10 +2954,18 @@ impl CutCraftApp {
         }
     }
 
-    /// Node handles on the selected vectors, and the dragged node's vector as it would be.
+    /// Node handles on the selected vectors, their Bézier handles, and the dragged node's
+    /// (or handle's) vector as it would be.
     pub(super) fn node_overlay(&self, gesture: Option<Gesture>, reach: f64) -> Overlay {
         // the dragged node's vector as it would be, drawn over the old one
         let mut moving: Vec<Path> = match gesture {
+            Some(Gesture::Dragging(drag)) if self.handle_move(drag, reach).is_some() => self
+                .handle_move(drag, reach)
+                .and_then(|params| {
+                    let cmd = self.registry.get("move_handle")?;
+                    cmd.run_json(&self.doc, &params).ok()
+                })
+                .map_or_default(|change| change.added().cloned().collect()),
             Some(Gesture::Dragging(drag)) if self.picked_drag(drag, reach).is_some() => self
                 .picked_drag(drag, reach)
                 .and_then(|params| {
@@ -3001,7 +3009,51 @@ impl CutCraftApp {
             }
         }
         let picked = self.picked_nodes.iter().map(|n| n.at.into()).collect();
-        Overlay::Nodes { at, picked, moving }
+        let handles = self
+            .doc
+            .selection
+            .iter()
+            .filter(|id| self.doc.editable(**id))
+            .flat_map(|id| cut_craft_core::nodes::handles(&self.doc.vectors[id]))
+            .map(|h| (h.node, h.at))
+            .collect();
+        Overlay::Nodes {
+            at,
+            picked,
+            moving,
+            handles,
+        }
+    }
+
+    /// Move Handle's params when `drag` starts on a selected vector's Bézier handle (nearer
+    /// it than to any node, so a handle lying on its node leaves the node draggable).
+    pub(super) fn handle_move(&self, drag: Drag, reach: f64) -> Option<Value> {
+        use cut_craft_core::nodes::{handle_near, nodes};
+        let (vector, d) = self
+            .doc
+            .selection
+            .iter()
+            .filter(|id| self.doc.editable(**id))
+            .filter_map(|&id| {
+                let h = handle_near(&self.doc.vectors[&id], drag.start, reach)?;
+                Some((id, h.at.distance(drag.start)))
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1))?;
+        let node_nearer = self.doc.selection.iter().any(|id| {
+            nodes(&self.doc.vectors[id])
+                .iter()
+                .any(|q| q.distance(drag.start) < d)
+        });
+        if node_nearer {
+            return None;
+        }
+        let from = cut_craft_core::nodes::NodeAt {
+            vector,
+            at: cut_craft_core::params::Xy::new(drag.start.x, drag.start.y),
+            reach,
+        };
+        let to = cut_craft_core::params::Xy::new(drag.end.x, drag.end.y);
+        Some(serde_json::json!({ "from": from, "to": to }))
     }
 
     /// Move Nodes' params when `drag` starts on one of two or more picked nodes.
@@ -3051,6 +3103,10 @@ impl CutCraftApp {
                     }
                 }
                 Err(e) => self.status.set_message(&e),
+            }
+        } else if let Some(params) = self.handle_move(drag, reach) {
+            if let Err(e) = self.apply("move_handle", &params) {
+                self.status.set_message(&e);
             }
         } else if let Some(params) = self.node_move(drag, reach) {
             self.picked_nodes.clear();

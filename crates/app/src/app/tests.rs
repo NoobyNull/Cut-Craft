@@ -1044,6 +1044,61 @@ fn node_editing_drags_a_corner_and_offers_its_menu() {
 }
 
 #[test]
+fn a_span_made_a_bezier_shows_handles_that_drag_to_bend_it() {
+    use cut_craft_core::geometry::Segment;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let id = *h.app.doc.selection.iter().next().unwrap();
+    h.app.invoke(&h.ctx, "node_edit");
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.snap_to_grid = false;
+    // right-click the bottom side, Convert Span to Bezier
+    let target = h
+        .app
+        .node_target(Point::new(20.0, 10.0), 1.0)
+        .expect("the bottom side");
+    let menu = gui::node_menu(&h.app.doc, &target);
+    let convert = leaf(&menu, &["Convert Span to Bezier"]);
+    h.app.invoke(&h.ctx, &convert.action);
+    assert!(
+        h.app.doc.selection.contains(&id),
+        "still the one being edited"
+    );
+    let crate::view2d::Overlay::Nodes { handles, .. } = h.app.node_overlay(None, 1.0) else {
+        panic!("the node overlay")
+    };
+    assert_eq!(
+        handles.len(),
+        2,
+        "one at each end of the curve: {handles:?}"
+    );
+    // drag the handle nearest the left corner down: the side bends, the corners stay
+    let (_, handle) = handles
+        .iter()
+        .copied()
+        .min_by(|a, b| a.1.x.total_cmp(&b.1.x))
+        .unwrap();
+    let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+    let (from, to) = (h.at(handle.x, handle.y), h.at(handle.x, handle.y - 6.0));
+    h.drag(from, to);
+    let path = &h.app.doc.vectors[&id];
+    assert_eq!(
+        cut_craft_core::nodes::nodes(path),
+        corners,
+        "the corners stay"
+    );
+    let pulled = path.segments.iter().any(|s| {
+        matches!(s, Segment::Cubic { c1, c2, .. }
+            if c1.y < 7.0 || c2.y < 7.0)
+    });
+    assert!(
+        pulled,
+        "a handle went down with the drag: {:?}",
+        path.segments
+    );
+}
+
+#[test]
 fn a_template_opens_as_a_new_unsaved_job() {
     let dir = std::env::temp_dir().join(format!("cut-craft-template-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
