@@ -93,37 +93,9 @@ impl Geometry {
 /// The material's surface: its heights, and a quad over each four neighbouring cells that
 /// have a model; with `sides` the block's sides and bottom; round the axis when `wrap`, the
 /// way round closed on itself. The shader places and lights the vertices.
-#[expect(clippy::cast_possible_truncation, reason = "millimetres fit f32")]
 pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry {
     let height = |c: usize, r: usize| m.heights[r * m.columns + c];
-    let mut g = Geometry {
-        grid: Some(Grid {
-            columns: u32::try_from(m.columns).expect("a cell count"),
-            rows: u32::try_from(m.rows).expect("a cell count"),
-            cell: m.cell,
-            bottom: m.bottom,
-            top: m
-                .heights
-                .iter()
-                .copied()
-                .filter(|h| !h.is_nan())
-                .fold(m.bottom, f64::max),
-        }),
-        ..Geometry::default()
-    };
-    for &h in &m.heights {
-        let h = if h.is_nan() { EMPTY } else { h as f32 };
-        g.data.extend_from_slice(&h.to_ne_bytes());
-    }
-    g.painted = !m.paint.is_empty();
-    for &p in &m.paint {
-        g.data.extend_from_slice(&p.to_ne_bytes());
-    }
-    g.undersided = !m.under.is_empty() && sides && wrap.is_none();
-    for &h in m.under.iter().filter(|_| g.undersided) {
-        let h = if h.is_nan() { EMPTY } else { h as f32 };
-        g.data.extend_from_slice(&h.to_ne_bytes());
-    }
+    let mut g = heights(m, wrap, sides);
     let floor = |c: usize, r: usize| m.under.get(r * m.columns + c).copied().unwrap_or(m.bottom);
     let index = |c: usize, r: usize| u32::try_from(r * m.columns + c).expect("fits u32");
     let (columns, rows) = match wrap {
@@ -185,6 +157,90 @@ pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
         }
     }
     g
+}
+
+/// A surface's heights (and paint, and underside) and its grid, ready for the card, with no
+/// triangles: [`surface`] adds them, or a tiled preview draws them a tile at a time
+/// ([`tile`]).
+#[expect(clippy::cast_possible_truncation, reason = "millimetres fit f32")]
+pub fn heights(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry {
+    let mut g = Geometry {
+        grid: Some(Grid {
+            columns: u32::try_from(m.columns).expect("a cell count"),
+            rows: u32::try_from(m.rows).expect("a cell count"),
+            cell: m.cell,
+            bottom: m.bottom,
+            top: m
+                .heights
+                .iter()
+                .copied()
+                .filter(|h| !h.is_nan())
+                .fold(m.bottom, f64::max),
+        }),
+        ..Geometry::default()
+    };
+    for &h in &m.heights {
+        let h = if h.is_nan() { EMPTY } else { h as f32 };
+        g.data.extend_from_slice(&h.to_ne_bytes());
+    }
+    g.painted = !m.paint.is_empty();
+    for &p in &m.paint {
+        g.data.extend_from_slice(&p.to_ne_bytes());
+    }
+    g.undersided = !m.under.is_empty() && sides && wrap.is_none();
+    for &h in m.under.iter().filter(|_| g.undersided) {
+        let h = if h.is_nan() { EMPTY } else { h as f32 };
+        g.data.extend_from_slice(&h.to_ne_bytes());
+    }
+    g
+}
+
+/// One tile of a tiled preview: the triangles over the quads `columns` × `rows` from
+/// (`c0`, `r0`) of a grid `across` cells wide, the quads with a corner gone (`gone`) left
+/// out. They index the grid's own heights ([`heights`]), so neighbouring tiles share
+/// their edges and the shading and shadows run on across them.
+pub struct Tile {
+    bytes: Vec<u8>,
+}
+
+impl Tile {
+    pub fn new(
+        across: usize,
+        [c0, r0, columns, rows]: [usize; 4],
+        gone: impl Fn(usize, usize) -> bool,
+    ) -> Self {
+        let mut bytes = Vec::with_capacity(columns * rows * 24);
+        let index = |c: usize, r: usize| u32::try_from(r * across + c).expect("fits u32");
+        for r in r0..r0 + rows {
+            for c in c0..c0 + columns {
+                let corners = [(c, r), (c + 1, r), (c + 1, r + 1), (c, r + 1)];
+                if corners.iter().any(|&(c, r)| gone(c, r)) {
+                    continue;
+                }
+                let [a, b, cc, d] = corners.map(|(c, r)| index(c, r));
+                for i in [a, b, cc, a, cc, d] {
+                    bytes.extend_from_slice(&i.to_ne_bytes());
+                }
+            }
+        }
+        Self { bytes }
+    }
+
+    /// Bytes on the card.
+    pub fn bytes(&self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Indices drawn.
+    fn count(&self) -> u32 {
+        u32::try_from(self.bytes.len() / 4).expect("fits u32")
+    }
+}
+
+/// A tiled preview's frame: one level's heights, and the tiles of it in sight.
+pub struct Tiles {
+    pub draw: Draw,
+    pub tiles: Vec<Arc<Tile>>,
 }
 
 /// An imported model's faces: three corners and whether the face is marked, each.
@@ -381,9 +437,12 @@ pub fn fits(flags: wgpu::DownlevelFlags, limits: &wgpu::Limits) -> bool {
 
 /// [`Gpu::most_points`] for a card with `limits`.
 pub fn most_points(limits: &wgpu::Limits) -> usize {
-    let by_indices = limits.max_buffer_size / 24;
-    let by_heights = limits.max_storage_buffer_binding_size / 8;
-    usize::try_from(by_indices.min(by_heights) / 10 * 9).unwrap_or(usize::MAX)
+    // a preview's triangles go a tile at a time, so its heights alone are one buffer
+    let by_heights = limits
+        .max_buffer_size
+        .min(limits.max_storage_buffer_binding_size)
+        / 8;
+    usize::try_from(by_heights / 10 * 9).unwrap_or(usize::MAX)
 }
 
 /// Whether the device `adapter` gets ([`device`]) fits ([`fits`]).
@@ -478,6 +537,11 @@ pub struct Gpu {
     body: Option<Piece>,
     /// A model's parts past the material's edges, drawn see-through after the rest.
     ghost: Option<Piece>,
+    /// A tiled preview's level being drawn: its heights, with no triangles of its own.
+    level: Option<Piece>,
+    /// Tiles' triangles on the card, kept while the app keeps their [`Tile`]: the app's
+    /// memory budget decides what stays.
+    tiles: Vec<(Arc<Tile>, wgpu::Buffer)>,
     /// Pieces drawn lately and put aside, so going back to one (the 3D view's detail
     /// following the frame rate) uploads nothing; one whose geometry nothing else holds
     /// leaves the card.
@@ -616,13 +680,15 @@ impl Gpu {
             model: None,
             body: None,
             ghost: None,
+            level: None,
+            tiles: Vec::new(),
             spare: Vec::new(),
         }
     }
 
-    /// The most points a surface may have on this card: each takes six indices (24 bytes)
-    /// in one buffer and its height and paint (8 bytes) in another, and neither buffer may
-    /// pass the card's limits; a tenth is kept spare for the sides and the rest.
+    /// The most points a tiled preview may have on this card: its heights and paint (8
+    /// bytes a point) are one buffer, which may not pass the card's limits (its triangles
+    /// go a tile at a time); a tenth is kept spare.
     pub fn most_points(&self) -> usize {
         most_points(&self.state.device.limits())
     }
@@ -637,8 +703,10 @@ impl Gpu {
         model: Option<Draw>,
         body: Option<Draw>,
         ghost: Option<Draw>,
+        tiled: Option<Tiles>,
     ) -> Shape {
         let mut calls = vec![];
+        self.paint_tiles(tiled, &mut calls);
         let spare = &mut self.spare;
         for (slot, draw, pipeline) in [
             (&mut self.surface, surface, &self.pipeline),
@@ -671,8 +739,57 @@ impl Gpu {
             });
         }
         tidy_spare(spare);
+        // the tiles last drawn stay on the card while the app keeps them
+        self.tiles.retain(|(tile, _)| Arc::strong_count(tile) > 1);
         let paint = Paint { calls };
         Shape::Callback(egui_wgpu::Callback::new_paint_callback(rect, paint))
+    }
+}
+
+impl Gpu {
+    /// A tiled preview's calls: its level's heights bound once, then a draw for each tile
+    /// in sight, its triangles uploaded the first time it is seen.
+    fn paint_tiles(&mut self, tiled: Option<Tiles>, calls: &mut Vec<Call>) {
+        let Some(Tiles { draw, tiles }) = tiled.filter(|t| !t.tiles.is_empty()) else {
+            self.spare.extend(self.level.take());
+            return;
+        };
+        if self
+            .level
+            .as_ref()
+            .is_none_or(|p| !Arc::ptr_eq(&p.geometry, &draw.geometry))
+        {
+            let piece = take_spare(&mut self.spare, &draw.geometry).unwrap_or_else(|| {
+                Piece::new(&self.state.device, &self.layout, Arc::clone(&draw.geometry))
+            });
+            self.spare.extend(self.level.replace(piece));
+        }
+        let level = self.level.as_ref().expect("put above");
+        self.state
+            .queue
+            .write_buffer(&level.uniform, 0, &draw.uniform);
+        for tile in tiles.iter().filter(|t| t.count() > 0) {
+            let at = self.tiles.iter().position(|(t, _)| Arc::ptr_eq(t, tile));
+            let at = at.unwrap_or_else(|| {
+                use wgpu::util::DeviceExt;
+                let buffer =
+                    self.state
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("view3d tile"),
+                            contents: &tile.bytes,
+                            usage: wgpu::BufferUsages::INDEX,
+                        });
+                self.tiles.push((Arc::clone(tile), buffer));
+                self.tiles.len() - 1
+            });
+            calls.push(Call {
+                pipeline: self.pipeline.clone(),
+                bind_group: level.bind_group.clone(),
+                indices: Some(self.tiles[at].1.clone()),
+                count: tile.count(),
+            });
+        }
     }
 }
 
@@ -727,13 +844,48 @@ mod tests {
     }
 
     #[test]
-    fn a_surface_s_points_fit_the_card_s_buffers() {
-        // wgpu's defaults: 256 MB a buffer, 128 MB a storage binding
+    fn a_tiled_preview_s_heights_fit_the_card_s_buffers() {
+        // wgpu's defaults: 256 MB a buffer, 128 MB a storage binding; the triangles go a
+        // tile at a time, so the heights alone are the limit
         let limits = wgpu::Limits::default();
         let most = most_points(&limits);
-        assert!(most * 24 <= 256 << 20, "{most}");
         assert!(most * 8 <= 128 << 20, "{most}");
-        assert!(most > 9_000_000, "{most}");
+        assert!(most > 15_000_000, "{most}");
+        let small = wgpu::Limits {
+            max_buffer_size: 64 << 20,
+            ..limits
+        };
+        assert!(most_points(&small) * 8 <= 64 << 20);
+    }
+
+    #[test]
+    fn a_tile_indexes_the_whole_grid_s_heights_and_leaves_out_gone_quads() {
+        // a grid 5 across; the tile is the 2 x 1 quads from (1, 2)
+        let tile = Tile::new(5, [1, 2, 2, 1], |_, _| false);
+        assert_eq!(tile.count(), 12);
+        let first: Vec<u32> = tile.bytes[..24]
+            .chunks(4)
+            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+            .collect();
+        // the quad (1,2)-(2,3): corners 11, 12, 17, 16 of the whole grid
+        assert_eq!(first, [11, 12, 17, 11, 17, 16]);
+        let holed = Tile::new(5, [1, 2, 2, 1], |c, r| (c, r) == (3, 3));
+        assert_eq!(holed.count(), 6, "the quad with a corner gone is left out");
+        assert_eq!(holed.bytes(), 24);
+    }
+
+    #[test]
+    fn a_surface_is_its_heights_and_its_triangles() {
+        let m = Material {
+            columns: 3,
+            rows: 2,
+            heights: vec![0.0; 6],
+            ..Material::new(&cut_craft_core::document::Job::default(), 3)
+        };
+        let (whole, bare) = (surface(&m, None, false), heights(&m, None, false));
+        assert_eq!(whole.data, bare.data);
+        assert_eq!(bare.indices, [] as [u8; 0]);
+        assert_eq!(whole.indices.len(), 2 * 6 * 4);
     }
 
     #[test]

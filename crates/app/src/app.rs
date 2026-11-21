@@ -173,11 +173,8 @@ struct SurfaceGpu {
     /// The surface at the detail when still, painted, that the coarser ones are made from.
     fine: Option<std::sync::Arc<Material>>,
     /// A preview drawn at its own detail: the sheet round it (with a hole where it goes)
-    /// and the preview itself, both painted.
-    preview: Option<(
-        std::sync::Arc<view3d::gpu::Geometry>,
-        std::sync::Arc<view3d::gpu::Geometry>,
-    )>,
+    /// and the preview itself in tiles, both painted.
+    preview: Option<(std::sync::Arc<view3d::gpu::Geometry>, view3d::tiles::Tiled)>,
     /// Coarser ones being made, by their cells.
     making: Vec<(usize, std::thread::JoinHandle<SurfaceLevel>)>,
 }

@@ -7,6 +7,7 @@ use eframe::egui::{
 };
 
 pub mod gpu;
+pub mod tiles;
 
 // ponytail: fixed lighting until the 3D view has light settings
 /// Where the light comes from: upper left (-x, +y) and above.

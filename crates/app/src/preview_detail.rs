@@ -29,6 +29,10 @@ const SPACING: [f64; 3] = [0.5, 0.1, 0.025];
 /// The most points a preview takes at 0%, 50% and 100%, before the card's own limit.
 const POINTS: [f64; 3] = [1.0e6, 4.0e6, 16.0e6];
 
+/// Bytes of a preview's triangles the graphics card keeps at 0%, 50% and 100%: tiles
+/// past it, the ones not looked at for longest, are let go and made again when seen.
+const KEPT_ON_CARD: [f64; 3] = [128.0e6, 512.0e6, 2048.0e6];
+
 /// How far past what a bit reaches the preview reaches too, mm: the cut's edges are seen
 /// against uncut material.
 pub const MARGIN: f64 = 5.0;
@@ -61,6 +65,16 @@ pub fn finest(percent: u8) -> f64 {
 )]
 pub fn most_points(percent: u8) -> usize {
     along(percent, POINTS).round() as usize
+}
+
+/// Bytes of a preview's triangles the graphics card keeps at `percent`.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a byte count"
+)]
+pub fn kept_on_card(percent: u8) -> usize {
+    along(percent, KEPT_ON_CARD).round() as usize
 }
 
 /// The least percent whose finest spacing is `spacing` or finer; `None` when even 100%
@@ -219,6 +233,18 @@ mod tests {
 
     fn close(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-9 * b.abs().max(1.0)
+    }
+
+    #[test]
+    fn the_card_keeps_more_of_a_preview_further_right() {
+        assert_eq!(kept_on_card(0), 128_000_000);
+        assert_eq!(kept_on_card(50), 512_000_000);
+        assert_eq!(kept_on_card(100), 2_048_000_000);
+        // room for the whole preview's triangles (24 bytes a point) at every setting
+        for p in 0..=100 {
+            assert!(kept_on_card(p) >= most_points(p) * 24, "{p}%");
+            assert!(p == 0 || kept_on_card(p) >= kept_on_card(p - 1));
+        }
     }
 
     #[test]
