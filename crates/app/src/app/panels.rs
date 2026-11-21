@@ -1176,7 +1176,12 @@ impl CutCraftApp {
         let cut = (!whole)
             .then(|| crate::preview_detail::cut_area(&job, source.toolpaths.values()))
             .flatten();
-        let card = self.gpu_3d.as_ref().map(view3d::gpu::Gpu::most_points);
+        // a flat job's preview goes to the card in tiles; a rotary or double-sided one whole
+        let card = self.gpu_3d.as_ref().map(if whole {
+            view3d::gpu::Gpu::most_points_whole
+        } else {
+            view3d::gpu::Gpu::most_points
+        });
         crate::preview_detail::grid(&job, cut, self.display.detail, card)
     }
 

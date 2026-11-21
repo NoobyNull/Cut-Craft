@@ -445,6 +445,13 @@ pub fn most_points(limits: &wgpu::Limits) -> usize {
     usize::try_from(by_heights / 10 * 9).unwrap_or(usize::MAX)
 }
 
+/// [`Gpu::most_points_whole`] for a card with `limits`.
+pub fn most_points_whole(limits: &wgpu::Limits) -> usize {
+    let by_indices = limits.max_buffer_size / 24;
+    let by_heights = limits.max_storage_buffer_binding_size / 8;
+    usize::try_from(by_indices.min(by_heights) / 10 * 9).unwrap_or(usize::MAX)
+}
+
 /// Whether the device `adapter` gets ([`device`]) fits ([`fits`]).
 fn adapter_fits(adapter: &wgpu::Adapter) -> bool {
     fits(
@@ -693,6 +700,13 @@ impl Gpu {
         most_points(&self.state.device.limits())
     }
 
+    /// The most points a preview drawn whole may have on this card (a rotary or
+    /// double-sided job's, not tiled): each takes six indices (24 bytes) in one buffer and
+    /// its height and paint (8 bytes) in another, and neither may pass the card's limits.
+    pub fn most_points_whole(&self) -> usize {
+        most_points_whole(&self.state.device.limits())
+    }
+
     /// This frame's picture over `rect`: uploads what changed, sets the cameras, and gives
     /// the shape that draws it; the see-through `ghost` goes last, over the rest. A
     /// geometry not drawn leaves the card.
@@ -856,6 +870,10 @@ mod tests {
             ..limits
         };
         assert!(most_points(&small) * 8 <= 64 << 20);
+        // drawn whole (rotary, double-sided), the triangles are one buffer too
+        let whole = most_points_whole(&limits);
+        assert!(whole * 24 <= 256 << 20, "{whole}");
+        assert!(whole > 9_000_000 && whole < most, "{whole}");
     }
 
     #[test]

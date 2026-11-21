@@ -183,18 +183,26 @@ impl Level {
     }
 
     /// The tiles in sight: each one's slot and how far apart its points are on screen, in
-    /// points (the widest it shows over its quads, so leaning tiles are never short).
+    /// points: along its rows and along its columns, at its top and its bottom, the widest
+    /// of those, so a tile seen nearly edge-on one way is never drawn short the other way.
     fn in_sight(&self, screen: &impl Fn(DVec3) -> Pos2, view: Rect) -> Vec<(usize, f64)> {
         (self.slots.iter().enumerate())
             .filter_map(|(i, slot)| {
-                let seen = Rect::from_points(&self.corners(slot).map(screen));
-                if !seen.intersects(view) || slot.high.is_infinite() {
+                let at = self.corners(slot).map(screen);
+                if !Rect::from_points(&at).intersects(view) || slot.high.is_infinite() {
                     return None;
                 }
-                let quads = slot.span[2].max(slot.span[3]).max(1);
-                #[expect(clippy::cast_precision_loss, reason = "a quad count")]
-                let apart = f64::from(seen.width().max(seen.height())) / quads as f64;
-                Some((i, apart))
+                // corners: bit 0 the far column, bit 1 the far row, bit 2 the top
+                let along = |step: usize, quads: usize| {
+                    let length = [0, 4]
+                        .map(|z| at[z].distance(at[z + step]))
+                        .into_iter()
+                        .fold(0.0, f32::max);
+                    #[expect(clippy::cast_precision_loss, reason = "a quad count")]
+                    let quads = quads.max(1) as f64;
+                    f64::from(length) / quads
+                };
+                Some((i, along(1, slot.span[2]).max(along(2, slot.span[3]))))
             })
             .collect()
     }
@@ -237,7 +245,8 @@ impl Tiled {
 
     /// This frame's drawing: `screen` places a point of the job on screen (in points),
     /// `pixels` of which there are in a point, over `view`. The level whose points show
-    /// about a pixel apart (the finest any tile in sight needs) and its tiles in sight,
+    /// about a pixel apart (the finest any tile in sight needs, the nearest in perspective)
+    /// and its tiles in sight,
     /// their triangles made the first time; then those drawn longest ago are let go while
     /// the budget is passed. `None` when no tile is in sight.
     pub fn frame(
@@ -248,7 +257,8 @@ impl Tiled {
     ) -> Option<Frame> {
         self.frame += 1;
         let finest = self.levels[0].in_sight(&screen, view);
-        let apart = finest.iter().map(|&(_, a)| a).fold(f64::INFINITY, f64::min);
+        // the widest apart any tile in sight shows them: no tile drawn coarser than a pixel
+        let apart = (finest.iter().map(|&(_, a)| a)).fold(f64::NEG_INFINITY, f64::max);
         if !apart.is_finite() {
             return None;
         }
@@ -449,6 +459,32 @@ mod tests {
         // looking away: nothing
         let away = |p: DVec3| above(1.0)(p) + eframe::egui::vec2(5000.0, 0.0);
         assert!(t.frame(away, view, 1.0).is_none());
+    }
+
+    #[test]
+    fn the_nearest_tile_and_the_widest_way_round_decide_the_detail() {
+        let m = grid(1001, 1001);
+        let view = Rect::from_min_size(Pos2::ZERO, eframe::egui::vec2(2000.0, 2000.0));
+        let mut t = Tiled::new(&m, usize::MAX);
+        // nearer at the bottom: 0.2 px apart far off, 1.0 near (as in perspective)
+        #[expect(clippy::cast_possible_truncation, reason = "a test's screen")]
+        let leaning = |p: DVec3| {
+            let zoom = 0.2 + 0.8 * (1.0 - p.y / 1010.0);
+            Pos2::new((p.x * zoom) as f32, (p.y * 0.2) as f32)
+        };
+        assert_eq!(
+            t.frame(leaning, view, 1.0).unwrap().level,
+            0,
+            "the near part"
+        );
+        // nearly edge-on one way: 0.6 px apart across, a hair up
+        #[expect(clippy::cast_possible_truncation, reason = "a test's screen")]
+        let edge_on = |p: DVec3| Pos2::new((p.x * 0.6) as f32, (p.y * 0.0006) as f32);
+        assert_eq!(
+            t.frame(edge_on, view, 1.0).unwrap().level,
+            0,
+            "0.6 px across"
+        );
     }
 
     #[test]
