@@ -1176,7 +1176,12 @@ impl CutCraftApp {
         let cut = (!whole)
             .then(|| crate::preview_detail::cut_area(&job, source.toolpaths.values()))
             .flatten();
-        let card = self.gpu_3d.as_ref().map(view3d::gpu::Gpu::most_points);
+        // a flat job's preview goes to the card in tiles; a rotary or double-sided one whole
+        let card = self.gpu_3d.as_ref().map(if whole {
+            view3d::gpu::Gpu::most_points_whole
+        } else {
+            view3d::gpu::Gpu::most_points
+        });
         crate::preview_detail::grid(&job, cut, self.display.detail, card)
     }
 
@@ -2596,7 +2601,7 @@ impl CutCraftApp {
             return geometry;
         }
         // a finished preview on the card: the sheet round it, the preview drawn over it
-        if let Some((sheet, _)) = self.preview_pair(wrap, sides) {
+        if let Some(sheet) = self.preview_pair(wrap, sides) {
             self.solid_gpu = None;
             return sheet;
         }
@@ -2663,21 +2668,27 @@ impl CutCraftApp {
         level.surface
     }
 
-    /// A finished preview drawn at its own detail by `camera` over `area`, in its place on
-    /// the sheet whose corner is `sheet`; `None` when [`Self::preview_pair`] has none.
+    /// A finished preview drawn at its own detail by `camera` over `area` (`pixels` to a
+    /// point), in its place on the sheet whose corner is `sheet`: the tiles in sight, at the
+    /// detail the screen shows ([`view3d::tiles`]); `None` when [`Self::preview_pair`] has
+    /// none, or none is in sight.
     fn preview_draw(
         &mut self,
         camera: &view3d::Camera,
         area: egui::Rect,
         look: &view3d::Look,
         mark: egui::Color32,
-        sheet: cut_craft_core::geometry::Point,
-    ) -> Option<view3d::gpu::Draw> {
-        let (_, geometry) = self.preview_pair(look.wrap, look.sides)?;
-        let at = (self.simulation.as_ref()?.origin - sheet).extend(0.0);
-        Some(view3d::gpu::Draw::new(
-            geometry, camera, area, at, look, mark,
-        ))
+        (sheet, pixels): (cut_craft_core::geometry::Point, f32),
+    ) -> Option<view3d::gpu::Tiles> {
+        self.preview_pair(look.wrap, look.sides)?;
+        let (_, tiled) = self.surface_gpu.as_mut()?.preview.as_mut()?;
+        let screen = |p: cut_craft_core::glam::DVec3| camera.screen(p - sheet.extend(0.0));
+        let frame = tiled.frame(screen, area, pixels)?;
+        let at = (frame.origin - sheet).extend(0.0);
+        Some(view3d::gpu::Tiles {
+            draw: view3d::gpu::Draw::new(frame.geometry, camera, area, at, look, mark),
+            tiles: frame.tiles,
+        })
     }
 
     /// What the kept surfaces on the card were made for.
@@ -2701,10 +2712,7 @@ impl CutCraftApp {
         &mut self,
         wrap: Option<view3d::Wrap>,
         sides: bool,
-    ) -> Option<(
-        std::sync::Arc<view3d::gpu::Geometry>,
-        std::sync::Arc<view3d::gpu::Geometry>,
-    )> {
+    ) -> Option<std::sync::Arc<view3d::gpu::Geometry>> {
         if self.playback.is_some()
             || wrap.is_some()
             || self.gpu_3d.is_none()
@@ -2715,9 +2723,9 @@ impl CutCraftApp {
         let key = self.geometry_key(wrap, sides);
         if let Some(kept) = &self.surface_gpu
             && kept.key == key
-            && let Some(pair) = &kept.preview
+            && let Some((sheet, _)) = &kept.preview
         {
-            return Some(pair.clone());
+            return Some(std::sync::Arc::clone(sheet));
         }
         let material = self.simulation.as_ref()?;
         let (area, most) = (self.doc.job.area(), key.cells);
@@ -2726,16 +2734,15 @@ impl CutCraftApp {
         let preview = material.clone();
         let sheet = view3d::holed(self.painted(sheet), hole);
         let preview = self.painted(preview);
-        let pair = (
-            std::sync::Arc::new(view3d::gpu::surface(&sheet, None, sides)),
-            std::sync::Arc::new(view3d::gpu::surface(&preview, None, false)),
-        );
+        let sheet = std::sync::Arc::new(view3d::gpu::surface(&sheet, None, sides));
+        let budget = crate::preview_detail::kept_on_card(self.display.detail);
+        let tiled = view3d::tiles::Tiled::new(&preview, budget);
         let kept = match &mut self.surface_gpu {
             Some(kept) if kept.key == key => kept,
             other => other.insert(super::SurfaceGpu::new(key)),
         };
-        kept.preview = Some(pair.clone());
-        Some(pair)
+        kept.preview = Some((std::sync::Arc::clone(&sheet), tiled));
+        Some(sheet)
     }
 
     /// Mesh cells along the job's longer side while the model or the view moves: as the
@@ -3869,10 +3876,13 @@ impl CutCraftApp {
                 view3d::gpu::Draw::new(geometry, &camera, area, at, &look, mark)
             });
         // a finished preview at its own detail, in its place over the sheet (on the card)
-        let body_draw =
-            body_draw.or_else(|| self.preview_draw(&camera, area, &look, mark, surface.origin));
+        let pixels = ui.ctx().pixels_per_point();
+        let tiled = body_draw
+            .is_none()
+            .then(|| self.preview_draw(&camera, area, &look, mark, (surface.origin, pixels)))
+            .flatten();
         if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
-            let shape = gpu.paint(area, surface_draw, model_draw, body_draw, ghost_draw);
+            let shape = gpu.paint(area, surface_draw, model_draw, body_draw, ghost_draw, tiled);
             painter.set(slot, shape);
         }
     }

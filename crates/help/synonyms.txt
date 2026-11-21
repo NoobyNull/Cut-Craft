@@ -65,7 +65,7 @@ high detail, large model, finer detail, more detail
 setup material, material size, stock size, board size, blank size, job size
 job defaults, default job, new job settings, startup settings
 classic startup flow, start page, splash screen, startup screen, welcome screen
-preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated
+preview detail, preview quality, simulation quality, level of detail, lod, resolution, stair steps, stepped, jagged, blocky, pixelated, tiles, mipmap, laggy preview, slow preview
 filter, filters, narrow down
 invert, inverted, backwards, other way round, natural scrolling
 pinch, pinch zoom, trackpad, touchpad, two-finger, two finger, magic mouse

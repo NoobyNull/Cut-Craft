@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-21
 see-also: toolpaths, view_3d, settings
 ---
 
@@ -44,6 +44,27 @@ the preview stays quick. Then a red note under the slider says the preview is dr
 coarser than the slider asks: slide toward **More detail** if your computer can take it.
 If the graphics card itself can take no more, the note says so; that is the most this
 computer can show.
+
+A 3D toolpath set to **Material Boundary** works over the whole block, so its preview
+covers the whole sheet and its points are spread over all of it. Set the toolpath to
+**Model Boundary** to keep the preview, and its detail, to your model.
+
+## Zooming in and out
+
+The preview is kept on the graphics card in tiles, at its full detail and at a half and
+a quarter of it. The 3D view draws the copy whose points are about a pixel apart on your
+screen, and only the tiles you can see:
+
+- **Zoomed out**, it draws a quarter of the points over the whole preview, so turning
+  and moving the view stays smooth. Nothing finer is lost: a fine groove still shows,
+  as the deepest point of each group is the one kept.
+- **Zoomed in**, it draws the full detail of the part you are looking at.
+- Zooming out never throws the fine tiles away. They stay on the card, up to an amount
+  of memory the slider sets (more toward **More detail**); past that, the tiles you
+  haven't looked at for longest are let go first, and made again when you look back.
+
+All of it is let go when you press **Reset Preview**, make a new preview, or close Cut
+Craft.
 
 ## Now and the default
 
