@@ -2430,20 +2430,24 @@ impl CutCraftApp {
             }
             let square = egui::Rect::from_center_size(at, egui::vec2(half, half) * 2.0);
             match handle {
-                Handle::Move => {
-                    for d in [egui::vec2(half, 0.0), egui::vec2(0.0, half)] {
-                        painter.line_segment([at - d, at + d], stroke);
-                    }
-                }
+                // arrows both ways along X (red, + to the right) and Y (green, + up)
+                Handle::Move => move_cross(
+                    &painter,
+                    at,
+                    [egui::Vec2::X, -egui::Vec2::Y],
+                    half,
+                    stroke.width,
+                ),
                 Handle::Scale { .. } => {
                     painter.rect_filled(square, 0.0, visuals.extreme_bg_color);
                     painter.rect_stroke(square, 0, stroke, egui::StrokeKind::Middle);
                 }
+                // turns about Z: blue, as Z is everywhere
                 Handle::Rotate { .. } => {
                     painter.circle(
                         at,
                         half,
-                        stroke.color,
+                        crate::axes::Axis::Z.colour(),
                         egui::Stroke::new(stroke.width, visuals.extreme_bg_color),
                     );
                 }
@@ -4761,3 +4765,34 @@ fn files_section(
         }
     }
 }
+
+/// The move handle: a cross of arrows pointing both ways along the job's X (red) and Y
+/// (green) through `at`, `along` being which way + X and + Y run on screen, each arm
+/// `half` long past the middle and a bit (the 2D and the 3D view alike).
+pub(super) fn move_cross(
+    painter: &egui::Painter,
+    at: egui::Pos2,
+    along: [egui::Vec2; 2],
+    half: f32,
+    width: f32,
+) {
+    use crate::axes::Axis;
+    let reach = half * MOVE_ARM_SHARE;
+    for (axis, way) in [Axis::X, Axis::Y].into_iter().zip(along) {
+        let way = way.normalized();
+        if !way.is_finite() || way == egui::Vec2::ZERO {
+            continue;
+        }
+        let stroke = egui::Stroke::new(width * 1.5, axis.colour());
+        crate::axes::both_ways(
+            painter,
+            at - way * reach,
+            at + way * reach,
+            stroke,
+            reach * 0.45,
+        );
+    }
+}
+
+/// How far the move handle's arrows reach past its middle, in the handle's half size.
+const MOVE_ARM_SHARE: f32 = 1.6;

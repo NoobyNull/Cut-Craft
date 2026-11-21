@@ -1,7 +1,36 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-21
 see-also: import_component_3d_model, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath
 ---
+
+## Turning the model with the rings
+
+While you import a model, three rings round it in the 3D view turn it: the **red** ring
+about **X**, the **green** ring about **Y** and the **blue** ring about **Z**, the same colours
+as the **X**, **Y** and **Z** boxes under **Interactive Rotation** and the arrows on the view
+cube. Drag the grey ball in the middle to turn it about all three.
+
+Each ring has a pair of arrows, marked **X+** and **X−** on the red ring (Y+ and Y− on the
+green one, and so on). Drag along the ring the way the **+** arrow points and the angle in
+that ring's box goes up; drag the **−** way and it goes down.
+
+![The red, green and blue rings round a model, each with its + and − arrows](pictures/turn-rings.png)
+
+Steps:
+
+1. Press **Import 3D Model** and pick your file. The model shows in the 3D view with the
+   rings round it.
+2. Drag a ring to turn the model about that axis, or type the angle into its box.
+3. Changed your mind? Press **↺ Reset rotation** at the foot of Interactive Rotation. The
+   model goes back to how its file has it: its top up, every turn back to 0.
+4. Moved it with **Align in Material**, a position or Depth Below Top? Press
+   **⌖ Reset position** at the foot of **Position relative to Modeling Plane**. The model goes
+   back to where it came in: centred on the material, sitting on the zero plane (on a
+   rotary job, back on the axis).
+
+Nothing is imported until you press **Import**, so the reset buttons need no **Undo**. Undo
+takes back an import that is already made. Each reset button is greyed while there is
+nothing to put back.
 
 ## Where the model sits in the material
 

@@ -10909,6 +10909,40 @@ fn orientate_3d_models_rings_turn_the_model_about_their_axis_and_the_sphere_abou
 }
 
 #[test]
+fn orientate_3d_models_rings_turn_plus_the_way_their_plus_arrow_points_and_minus_back() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("ring-ways");
+    h.app.import_file(&file);
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let (rings, _) = h.app.rings_3d.clone();
+    let turn = |h: &Harness, k: &str| h.app.form.as_ref().unwrap().params["turn"][k].as_f64();
+    let centre = h.app.rings_3d.1.unwrap().0;
+    let all: Vec<&[Pos2]> = rings.iter().map(|(_, p)| p.as_slice()).collect();
+    let marks = crate::axes::rings_marks(
+        &all,
+        centre,
+        9.0 * egui::Style::default().spacing.interact_size.y / 2.0,
+    );
+    for (i, key) in ["x", "y", "z"].into_iter().enumerate() {
+        let points = &rings[i].1;
+        // where the + and − arrows are: along the ring the + way, then back
+        let (at, along) = marks[i].unwrap();
+        let from = points[at];
+        let before = turn(&h, key).unwrap();
+        h.drag(from, from + along * 30.0);
+        let after = turn(&h, key).unwrap();
+        assert!(after > before + 1.0, "{key}: {before} -> {after}");
+        let from = h.app.rings_3d.0[i].1[at];
+        h.drag(from, from - along * 30.0);
+        let back = turn(&h, key).unwrap();
+        assert!(back < after - 1.0, "{key}: {after} -> {back}");
+    }
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
 fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "draw_text");
