@@ -1983,6 +1983,58 @@ impl CutCraftApp {
         self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty()
     }
 
+    /// Whether the 3D view shows the job turned round its axis with its full 3D models as
+    /// they really are: a rotary job with one (or one being imported), the model's own view
+    /// (not a preview).
+    pub(super) fn shows_turned(&self) -> bool {
+        if self.doc.job.rotary.is_none() || self.simulation.is_some() || self.playback.is_some() {
+            return false;
+        }
+        let importing = self.form.as_ref().is_some_and(|f| {
+            f.id == "orientate_3d_model"
+                && f.model.is_some()
+                && f.model_whole
+                && f.params["model_type"] == "full"
+        });
+        importing
+            || self
+                .doc
+                .components
+                .values()
+                .any(|k| k.visible && real_3d(k))
+    }
+
+    /// The rotary job's full 3D models as they really are round its axis, in the view's
+    /// millimetres (along the job's axis, across and up from it), but for `skip` (the one
+    /// being imported, shown from the form's own faces). Nothing is marked out of reach: a
+    /// rotary job is cut all the way round.
+    pub(super) fn rotary_models(
+        &self,
+        skip: Option<EntityId>,
+    ) -> Vec<cmd_orientate_3d_model::Seen> {
+        let Some(rotary) = self.doc.job.rotary else {
+            return vec![];
+        };
+        let along_x = rotary.along == cut_craft_core::document::Along::X;
+        self.doc
+            .components
+            .iter()
+            .filter(|(id, k)| Some(**id) != skip && k.visible && real_3d(k))
+            .flat_map(|(_, k)| k.solid_triangles())
+            .map(|t| {
+                // the part's own frame at A=0: along the axis, then across and up from it
+                let placed = t.map(|v| {
+                    if along_x {
+                        v
+                    } else {
+                        cut_craft_core::glam::DVec3::new(v.y, v.x, v.z)
+                    }
+                });
+                (placed, false)
+            })
+            .collect()
+    }
+
     /// Whether an imported model is shown whole, in place of its component.
     fn importing_whole(&self) -> bool {
         self.form
@@ -2078,15 +2130,32 @@ impl CutCraftApp {
             .as_ref()
             .filter(|f| f.model.is_some() && f.model_whole)
             .and_then(|f| f.drawn);
-        // hidden for the moment, not as an edit: nothing to undo
-        let show = |doc: &mut cut_craft_core::document::Document, visible: bool| {
-            let k = drawn.and_then(|id| doc.components.get_mut(&id))?;
-            Some(std::mem::replace(&mut k.visible, visible))
+        // on a rotary job, full 3D models are drawn as they really are round the axis
+        // ([`Self::rotary_models`]), never wrapped again from their unrolled heights
+        let real: Vec<EntityId> = if self.doc.job.rotary.is_some() {
+            self.doc
+                .components
+                .iter()
+                .filter(|(_, k)| real_3d(k))
+                .map(|(id, _)| *id)
+                .collect()
+        } else {
+            vec![]
         };
-        let was = show(&mut self.doc, false);
+        // hidden for the moment, not as an edit: nothing to undo
+        let left_out: Vec<(EntityId, bool)> = drawn
+            .into_iter()
+            .chain(real)
+            .filter_map(|id| {
+                let k = self.doc.components.get_mut(&id)?;
+                Some((id, std::mem::replace(&mut k.visible, false)))
+            })
+            .collect();
         let mut shape = cut_craft_core::component::model_shape(&self.doc, cells);
-        if let Some(was) = was {
-            show(&mut self.doc, was);
+        for (id, was) in left_out.into_iter().rev() {
+            if let Some(k) = self.doc.components.get_mut(&id) {
+                k.visible = was;
+            }
         }
         // the model in the material where Material Setup's Model Position puts it, as the
         // 3D toolpaths will cut it: where no component is, the model's zero plane
@@ -3689,7 +3758,7 @@ impl CutCraftApp {
         gpu: Option<&mut Option<view3d::gpu::Draw>>,
     ) {
         use cut_craft_core::glam::DVec3;
-        let Some(model) = self.form.as_ref().and_then(|f| f.model.clone()) else {
+        let Some(model) = self.turned_models() else {
             return;
         };
         let painter = ui.painter_at(area);
@@ -3724,6 +3793,45 @@ impl CutCraftApp {
         for [a, b] in view3d::cylinder_edges(wrap.along_x, wrap.radius, 0.0, length) {
             painter.line_segment([screen(a), screen(b)], stroke);
         }
+    }
+
+    /// What [`Self::paint_turned`] draws: the model being imported (its form's own faces)
+    /// and every other full 3D model as it really is; kept while nothing changes, so the
+    /// GPU's copy is made once. `None` with nothing to draw.
+    fn turned_models(&mut self) -> Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>> {
+        let importing = self
+            .form
+            .as_ref()
+            .filter(|f| f.model_whole)
+            .and_then(|f| Some((f.model.clone()?, f.drawn)));
+        let key = (
+            self.history.revision(),
+            importing
+                .as_ref()
+                .map(|(m, _)| std::sync::Arc::as_ptr(m) as usize),
+        );
+        if let Some((kept, model)) = &self.turned_3d
+            && *kept == key
+        {
+            return Some(std::sync::Arc::clone(model));
+        }
+        let (own, skip) = importing.map_or((None, None), |(m, id)| (Some(m), id));
+        let mut all = self.rotary_models(skip);
+        if let Some(own) = &own {
+            if all.is_empty() {
+                // only the import: its own faces, kept as they are
+                self.turned_3d = Some((key, std::sync::Arc::clone(own)));
+                return Some(std::sync::Arc::clone(own));
+            }
+            all.extend(own.iter().copied());
+        }
+        if all.is_empty() {
+            self.turned_3d = None;
+            return None;
+        }
+        let all = std::sync::Arc::new(all);
+        self.turned_3d = Some((key, std::sync::Arc::clone(&all)));
+        Some(all)
     }
 
     /// The imported model's triangles drawn for this view, kept from frame to frame while
@@ -3803,15 +3911,9 @@ impl CutCraftApp {
         let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
             return;
         };
-        // a full 3D model being imported into a rotary job is shown turned round the axis,
-        // so the job is drawn wrapped while it is
-        let turned = job.rotary.is_some()
-            && self.form.as_ref().is_some_and(|f| {
-                f.id == "orientate_3d_model"
-                    && f.model.is_some()
-                    && f.model_whole
-                    && f.params["model_type"] == "full"
-            });
+        // a rotary job's full 3D models (and one being imported) are shown as they really
+        // are round the axis, so the job is drawn wrapped while there are any
+        let turned = self.shows_turned();
         // a rotary job's preview as the machine runs it is always shown round its axis
         let spinning = self.turning.is_some() && job.rotary.is_some();
         let wrap = wrap_for(
@@ -5499,4 +5601,14 @@ pub(super) fn importing(path: &std::path::Path) -> String {
 /// the top is where seating it would move 0 to.
 pub(super) fn origin_3d(job: &cut_craft_core::document::Job, unseated: Option<&Material>) -> f64 {
     job.zero_height() - unseated.map_or(0.0, |m| cut_craft_core::component::seat_shift(job, m))
+}
+
+/// Whether a component is a full 3D model kept as it really is (a rotary job's), raised onto
+/// or merged with what is under it: drawn and cut from its real shape, not its heights.
+fn real_3d(k: &cut_craft_core::component::Component) -> bool {
+    !k.solid.is_empty()
+        && matches!(
+            k.combine,
+            cut_craft_core::component::Combine::Add | cut_craft_core::component::Combine::Merge
+        )
 }

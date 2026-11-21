@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: rotary_machining_toolpath, rounding_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths
+reviewed: 2026-11-21
+see-also: rotary_machining_toolpath, orientate_3d_model, rounding_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths
 ---
 
 **Rotary Lathe** works a rotary job like a lathe: A spins the material steadily while the bit
@@ -50,8 +50,10 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   waste at an end of the material, or room beside the part so the collet nut can get down to
   it later.
 - **Turn** takes everything between **Start** and **End** down to the model's outline, round:
-  as far out as any of the model reaches at each point along, plus the **Allowance**. Where
-  there is no model it goes down to the stub. It is the quickest way to rough a round part
+  as far out as any of the model reaches at each point along, plus the **Allowance**. A full
+  3D model (see [Orientate 3D Model](help:orientate_3d_model)) counts as it really is in
+  space, wherever Material Setup's flat-job model position says. Where there is no model it
+  goes down to the stub. It is the quickest way to rough a round part
   before [4-Axis Rotary Machining](help:rotary_machining_toolpath) carves it.
 - **Part off** cuts one groove, a bit wide, at **Start**, down to the stub, so the finished
   piece can be snapped or sawn free.

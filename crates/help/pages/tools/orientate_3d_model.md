@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: import_component_3d_model, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath
+reviewed: 2026-11-21
+see-also: import_component_3d_model, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath, rotary_lathe_toolpath
 ---
 
 ## Where the model sits in the material
@@ -43,15 +43,33 @@ its left or right side, its front or back edge, or centred, and in height on the
 plane, half way up, or with its top at the material's top. A new model starts centred,
 its bottom on the zero plane.
 
-The alignment is kept. Tick **Scale model to fit material**, untick it again to go back
-to the file's size (1:1), or type a new **Model Size**, and the model is lined up again at
-its new size, measured from the material's corner (its 0,0). So a model aligned to the
-right side stays against the right side as it grows, and a centred one stays centred
-with nothing of it under the modeling plane.
+The alignment is kept. Resize the model (below) and it is lined up again at its new size,
+measured from the material's corner (its 0,0). So a model aligned to the right side stays
+against the right side as it grows, and a centred one stays centred with nothing of it
+under the modeling plane.
 
 Type a **position** X or Y, or a **Depth Below Top**, and that number is used as you
 typed it instead: the model's corner stays there when it is resized. Press an Align in
 Material button again to go back to lining it up.
+
+## Changing the model's size
+
+A model comes in at the size its file says. Its size is **locked**, so turning it or
+nudging a setting never resizes it without you knowing:
+
+1. Under **Model Size**, tick **Change size**. Until you do, X, Y, Z and **Lock XYZ
+   ratio** are greyed out, and so is the button at the foot of the form.
+2. Either type a new **X**, **Y** or **Z** (with Lock XYZ ratio ticked the other two
+   follow), or press **Scale to Fit Material**, the last button on the form. It makes the
+   model as big as the material allows (on a rotary job, as long as the job and out to
+   the material's radius), turned the way it is now.
+3. Untick **Change size** to lock the new size in.
+
+Either way the model is scaled **once**. Turn it afterwards with **Interactive Rotation**
+and it keeps that size: it is not fitted again at every step of the turn. If a turn makes
+it poke out of the material, press **Scale to Fit Material** again.
+
+![A rotary import: Change size ticked under Model Size and the model scaled to fit, shown round the axis inside the material](pictures/rotary-import-scale-to-fit.png)
 
 ## When it doesn't fit
 
@@ -71,12 +89,26 @@ largest gap that fits.
 
 ## On a rotary job
 
-On a [rotary](help:job_setup) job, a **Full** 3D model is turned round the job's axis and
-fitted to the material. Cut Craft keeps it two ways: as heights round the axis, for the 3D
-view and most tools, and as the model itself, every triangle as it really is round the axis.
-[4-Axis Rotary Machining](help:rotary_machining_toolpath) cuts round the model itself, so a bit
-held off centre can reach under a ledge or into a hollow the heights would have filled in.
-Keeping the model makes the job file bigger, by about the size of the model's file.
+On a [rotary](help:job_setup) job, a **Full** 3D model is a real 3D shape in space: its
+length along the job's axis, the axis through its middle (move it off with **Rotation Axis
+Movement**). It comes in at its file's size; press **Scale to Fit Material** (above) to fill
+the material.
+
+The 3D view always shows it exactly as it is, both while you import it and after you press
+**Import**: the same model, in the same place, inside the outline of the material.
+[4-Axis Rotary Machining](help:rotary_machining_toolpath) and the
+[Rotary Lathe](help:rotary_lathe_toolpath)'s Turn cut round that same shape, so a bit held
+off centre can reach under a ledge or into a hollow.
+
+**Model Position in Material** (top at material top, gaps) is for flat jobs and does not
+move a full 3D model on a rotary job: it is cut where it sits. Where the material reaches
+further out than the model, the toolpath cuts the material down to the model.
+
+![After Import on a rotary job: the model drawn as it really is round the axis, the same as while it was imported](pictures/rotary-imported-as-it-is.png)
+
+Cut Craft also keeps a model's heights round the axis, for the tools that work on
+heights. Keeping the model makes the job file bigger, by about the size of the model's
+file.
 
 ## See also
 

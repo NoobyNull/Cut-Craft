@@ -63,6 +63,9 @@ align-height = Height
 undercuts-update = Update Undercuts
     .tooltip = Judge again what a cutter from above cannot reach
     .disabled = Tick Highlight undercuts first
+scale-to-fit = Scale to Fit Material
+    .tooltip = Make the model as big as the material allows, turned as it is now. Done once: turning the model after keeps its size
+    .disabled = Tick Change size under Model Size first
 
 # Sculpting's brushes.
 sculpt-load-brush = Load Brush…

@@ -7916,9 +7916,16 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     h.frame(vec![]);
     let size = &h.app.form.as_ref().unwrap().params["size"];
     assert!((size["x"].as_f64().unwrap() - 40.0).abs() < 1e-6, "{size}");
-    // the fit is offered in a flat job too; the model type only when the options offer
-    // both kinds, and what the options are is never shown
-    assert!(h.text_at("Scale model to fit material").is_some());
+    // the fit is offered in a flat job too, as a button done once; the model type only when
+    // the options offer both kinds, and what the options are is never shown
+    let over = h.text_at("Initial Orientation").unwrap();
+    assert!(
+        h.scroll_to(over, "Change size").is_some(),
+        "the size's lock"
+    );
+    let fit = h.scroll_to(over, "Scale to Fit Material").unwrap();
+    let undercuts = h.text_at("Update Undercuts").unwrap();
+    assert!(fit.y > undercuts.y, "the last choice on the form");
     for label in ["Imported model type", "Offered"] {
         assert_eq!(h.text_at(label), None, "{label} is not shown");
     }
@@ -20026,4 +20033,115 @@ fn the_3d_origin_moves_to_the_bed_with_the_z_zero() {
         (panels::origin_3d(&job, Some(&model)) - 24.5).abs() < 1e-9,
         "the material's top, over the model's plane"
     );
+}
+
+#[test]
+fn a_full_model_imported_into_a_rotary_job_is_drawn_as_it_really_is_not_wrapped_again() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 30.0, Along::X);
+    let file = pyramid_stl("rotary-real");
+    h.app.import_file(&file);
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    // what the import showed, turned round the axis
+    let importing: Vec<_> = h
+        .app
+        .form
+        .as_ref()
+        .unwrap()
+        .model
+        .as_deref()
+        .unwrap()
+        .clone();
+    h.app.form = None;
+    h.frame(vec![]);
+    let k = h.app.doc.components.values().next().unwrap().clone();
+    assert!(!k.solid.is_empty(), "kept as its real 3D shape");
+    // not wrapped round the cylinder again from its unrolled heights
+    let shape = h.app.model_shape(64);
+    assert!(
+        shape.heights.iter().all(|h| h.is_nan()),
+        "the wrapped surface leaves the full model out"
+    );
+    assert!(h.app.shows_turned(), "the job is shown round its axis");
+    // drawn where the import showed it, to the micrometre
+    let shown = h.app.rotary_models(None);
+    assert_eq!(shown.len(), importing.len());
+    for ((a, _), (b, _)) in shown.iter().zip(&importing) {
+        for (p, q) in a.iter().zip(b) {
+            assert!(p.distance(*q) < 1e-3, "{p} vs {q}");
+        }
+    }
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn a_rotary_model_along_y_is_drawn_with_its_axis_along_y() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 30.0, Along::Y);
+    let file = pyramid_stl("rotary-real-y");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    let importing: Vec<_> = h
+        .app
+        .form
+        .as_ref()
+        .unwrap()
+        .model
+        .as_deref()
+        .unwrap()
+        .clone();
+    h.app.form = None;
+    let shown = h.app.rotary_models(None);
+    for ((a, _), (b, _)) in shown.iter().zip(&importing) {
+        for (p, q) in a.iter().zip(b) {
+            assert!(p.distance(*q) < 1e-3, "{p} vs {q}");
+        }
+    }
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn an_import_s_size_is_locked_and_set_once_whichever_way_it_is_turned() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 30.0, Along::X);
+    let file = pyramid_stl("size-once");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["fit_material"], false, "not fitted unasked");
+    assert_eq!(
+        form.params["size"]["change_size"], false,
+        "the size starts locked"
+    );
+    let shown = |h: &Harness| {
+        h.app.form.as_ref().unwrap().params["size"]["x"]
+            .as_f64()
+            .unwrap()
+    };
+    // the 20 long pyramid at the file's size
+    assert!((shown(&h) - 20.0).abs() < 0.01, "{}", shown(&h));
+    // a length typed scales it once: twice as big
+    let form = h.app.form.as_mut().unwrap();
+    form.params["size"]["change_size"] = Value::Bool(true);
+    form.params["size"]["x"] = Value::from(40.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let scale = |h: &Harness| h.app.form.as_ref().unwrap().params["size"]["scale"].clone();
+    assert_eq!(scale(&h), serde_json::json!([2.0, 2.0, 2.0]));
+    // turned a quarter about Z: still twice as big, not sized again to 40 along X
+    let form = h.app.form.as_mut().unwrap();
+    form.params["turn"]["z"] = Value::from(90.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(scale(&h), serde_json::json!([2.0, 2.0, 2.0]));
+    // the pyramid's 10 wide side along the axis now: 20 long at twice
+    assert!((shown(&h) - 20.0).abs() < 0.05, "{}", shown(&h));
+    let _ = std::fs::remove_file(file);
 }
