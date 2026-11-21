@@ -2292,13 +2292,18 @@ impl CutCraftApp {
                 // a drag from a rotation ring turns about its axis, whatever Drag turns says
                 let mode = ring.or(turn["mode"].as_str()).map(str::to_owned);
                 match mode.as_deref() {
-                    // a ring held turns the model the way the drag goes round it
+                    // a ring held turns the model the way the drag goes round it, about the
+                    // job's own axis the ring is drawn round
                     Some(axis @ ("x" | "y" | "z")) if ring.is_some() && grip.is_some() => {
                         let (along, radius) = grip.unwrap_or_default();
-                        add(
-                            &mut turn[axis],
-                            crate::axes::ring_turn(delta, along, radius),
-                        );
+                        let keys = ["x", "y", "z"];
+                        let now = keys.map(|k| turn[k].as_f64().unwrap_or(0.0));
+                        let about = crate::axes::Axis::named(axis).unwrap_or(crate::axes::Axis::Z);
+                        let by = crate::axes::ring_turn(delta, along, radius);
+                        let then = crate::axes::turned_about(now, about, by);
+                        for (k, v) in keys.into_iter().zip(then) {
+                            turn[k] = Value::from(v);
+                        }
                     }
                     Some("x") => add(&mut turn["x"], about_x),
                     Some("y") => add(&mut turn["y"], about_z),

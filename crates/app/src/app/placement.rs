@@ -119,8 +119,10 @@ pub(super) fn moved(params: &Value) -> bool {
     let off = |v: &Value| v.as_f64().is_some_and(|a| a != 0.0);
     let at = |k: &str, want: f64| placing["align"][k].as_f64() == Some(want);
     // centred until shown, then kept as the middle of the material, on the zero plane
-    let home =
-        placing["center"] == true || (at("across", 0.5) && at("up", 0.5) && at("height", 0.0));
+    let height = &placing["align"]["height"];
+    let low = height.is_null() || at("height", 0.0);
+    let home = (placing["center"] == true && low)
+        || (at("across", 0.5) && at("up", 0.5) && at("height", 0.0));
     !home || off(&params["axis"]["across"]) || off(&params["axis"]["up"])
 }
 
@@ -357,6 +359,11 @@ mod tests {
         reset_position(&mut p);
         assert!(!moved(&p), "{p}");
         assert_eq!(p["placing"]["depth_below_top"], 0.0);
+        // lifted by Align in Material's height before the centring is shown
+        p["placing"]["align"]["height"] = 1.0.into();
+        p["placing"]["depth_below_top"] = 20.0.into();
+        assert!(moved(&p), "lifted, still centred across");
+        reset_position(&mut p);
         p["axis"]["up"] = 4.0.into();
         assert!(moved(&p), "off a rotary job's axis");
         reset_position(&mut p);

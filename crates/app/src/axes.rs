@@ -154,6 +154,25 @@ pub fn rings_marks(rings: &[&[Pos2]], centre: Pos2, gap: f32) -> Vec<Option<(usi
         .collect()
 }
 
+/// Fine turns about X, Y and Z (degrees, applied X first, then Y, then Z, as Import 3D
+/// Model applies them) after the model is turned a further `degrees` about the job's own
+/// `axis`, the way that axis's ring shows: the same three turns given back, so a ring turns
+/// the model about the axis it is drawn round whatever the other turns are.
+#[must_use]
+pub fn turned_about(turns: [f64; 3], axis: Axis, degrees: f64) -> [f64; 3] {
+    use cut_craft_core::glam::{DMat3, EulerRot};
+    let [x, y, z] = turns.map(f64::to_radians);
+    let now = DMat3::from_euler(EulerRot::ZYX, z, y, x);
+    let then = DMat3::from_axis_angle(axis.direction(), degrees.to_radians()) * now;
+    let (z, y, x) = then.to_euler(EulerRot::ZYX);
+    // a millionth of a degree is noise from the sums, not a turn anyone made
+    let tidy = |a: f64| {
+        let d = (a.to_degrees() * 1e6).round() / 1e6;
+        if d == 0.0 { 0.0 } else { d }
+    };
+    [tidy(x), tidy(y), tidy(z)]
+}
+
 /// How far a drag `by` turns a ring whose screen tangent (the + way) at the pointer is
 /// `along` and which reaches `radius` points from its middle, in degrees: the part of the
 /// drag along the ring, as an arc of that radius.
@@ -203,6 +222,37 @@ mod tests {
         assert_eq!(Axis::named("Y"), Some(Axis::Y));
         assert_eq!(Axis::named("z"), Some(Axis::Z));
         assert_eq!(Axis::named("width"), None);
+    }
+
+    #[test]
+    fn a_ring_turns_the_model_about_the_jobs_own_axis_whatever_the_other_turns() {
+        use cut_craft_core::glam::{DMat3, DVec3, EulerRot};
+        let fine = |[x, y, z]: [f64; 3]| {
+            DMat3::from_euler(
+                EulerRot::ZYX,
+                z.to_radians(),
+                y.to_radians(),
+                x.to_radians(),
+            )
+        };
+        // nothing else turned: only that axis's own number moves
+        assert_eq!(turned_about([0.0; 3], Axis::X, 10.0), [10.0, 0.0, 0.0]);
+        assert_eq!(
+            turned_about([0.0, 5.0, 0.0], Axis::Y, 10.0),
+            [0.0, 15.0, 0.0]
+        );
+        // spun half round Z first, the red ring still turns it about the job's +X
+        for (start, axis) in [([0.0, 0.0, 180.0], Axis::X), ([30.0, 20.0, 45.0], Axis::Y)] {
+            let after = turned_about(start, axis, 10.0);
+            let step = fine(after) * fine(start).transpose();
+            let want = DMat3::from_axis_angle(axis.direction(), 10f64.to_radians());
+            for c in [DVec3::X, DVec3::Y, DVec3::Z] {
+                assert!(
+                    (step * c - want * c).length() < 1e-6,
+                    "{start:?} {axis:?} {after:?}"
+                );
+            }
+        }
     }
 
     #[test]
