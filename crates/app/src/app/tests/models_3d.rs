@@ -320,6 +320,62 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
     );
     assert_eq!(h.app.doc.components.len(), 1, "and the relief is made");
     assert_eq!(h.app.view, super::View::ThreeD, "shown in 3D");
+
+    // estimated again, to another depth: the relief is made again from it, still one
+    let shape = |h: &Harness| h.app.doc.components.values().next().unwrap().clone();
+    let first = shape(&h);
+    image::ImageBuffer::<image::Luma<u16>, _>::from_raw(2, 2, vec![65_535_u16, 0, 50_000, 30_000])
+        .unwrap()
+        .save(&answer)
+        .unwrap();
+    let photo = h.app.doc.bitmaps[&id].clone();
+    h.app.depth_estimate =
+        Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
+    for _ in 0..200 {
+        if h.app.depth_estimate.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.frame(vec![]);
+    }
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.len(), 1, "made again in place");
+    assert_ne!(shape(&h), first, "the relief follows the new depth");
+
+    // another picture picked while the estimate ran: no relief is made from it
+    h.app.form = None;
+    h.app.doc.components.clear();
+    let mut c = Change::builder(&h.app.doc);
+    let other = c.add_bitmap(Bitmap {
+        name: "other".into(),
+        columns: 2,
+        rows: 2,
+        grey: vec![1, 2, 3, 4],
+        rect: Rect::new(Point::new(30.0, 0.0), Point::new(50.0, 20.0)),
+        depth: vec![0.5; 4],
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.doc.selected_bitmaps = [id].into();
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    h.app.form.as_mut().unwrap().params["depth_from"] = "estimated".into();
+    let photo = h.app.doc.bitmaps[&id].clone();
+    h.app.depth_estimate =
+        Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
+    h.app.doc.selected_bitmaps = [other].into();
+    for _ in 0..200 {
+        if h.app.depth_estimate.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.frame(vec![]);
+    }
+    h.frame(vec![]);
+    assert!(
+        h.app.doc.components.is_empty(),
+        "not made from the other picture"
+    );
     std::fs::remove_dir_all(addons).unwrap();
 }
 
