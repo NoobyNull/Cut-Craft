@@ -1,6 +1,6 @@
 + Cut Craft's post for FluidNC with an automatic tool changer (M6), millimetres.
 + Rotary: Y wrapped onto A, for a cylinder along X; feeds in inverse time (G93). Needs an A axis.
-+ Made by scripts/make_posts.py: edit its template and run it again.
++ Made from this controller's Arcs post: change the two together.
 
 + History
 + Who        When       What

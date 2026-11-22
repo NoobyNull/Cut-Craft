@@ -62,65 +62,6 @@ fn polygon(n: u32, r: f64, catenary: bool) -> Path {
     Path::polyline(&pts, true)
 }
 
-/// The Style list's pictures: each style's vectors on a rounded square, as JSON lists of
-/// points for `scripts/make_embellish_icons.py`: `EMBELLISH_ICONS=dir cargo nextest run
-/// -p cmd-embellish style_pictures --run-ignored only`.
-#[test]
-#[ignore = "writes the style pictures' outlines"]
-fn style_pictures() {
-    let out = std::path::PathBuf::from(std::env::var("EMBELLISH_ICONS").unwrap());
-    // a 100 mm square with 16 mm round corners
-    let mut pts = vec![];
-    for (cx, cy, a0) in [
-        (84.0, 16.0, -90.0),
-        (84.0, 84.0, 0.0),
-        (16.0, 84.0, 90.0),
-        (16.0, 16.0, 180.0),
-    ] {
-        for k in 0..=12 {
-            let a = f64::to_radians(a0 + 90.0 * f64::from(k) / 12.0);
-            pts.push(Point::new(cx, cy) + Point::from_angle(a) * 16.0);
-        }
-    }
-    let shape = Path::polyline(&pts, true);
-    let doc = cut_craft_core::testing::document_with(vec![shape.clone()]);
-    for (key, style) in [
-        ("folk_mix", Style::FolkMix),
-        ("scrolls", Style::Scrolls),
-        ("flowers", Style::Flowers),
-        ("band_border", Style::BandBorder),
-        ("rope", Style::Rope),
-        ("chain", Style::Chain),
-        ("twist", Style::Twist),
-        ("braid", Style::Braid),
-        ("bead_and_reel", Style::BeadAndReel),
-        ("laurel", Style::Laurel),
-        ("feathers", Style::Feathers),
-        ("chevrons", Style::Chevrons),
-    ] {
-        let p = Params {
-            style,
-            make: Make::Vectors,
-            border_width: 16.0,
-            tightness: 5,
-            objects: 9,
-            ..Params::default()
-        };
-        let mut after = doc.clone();
-        after.apply(&Embellish::run(&doc, &p).unwrap()).unwrap();
-        let rings: Vec<Vec<[f64; 2]>> = after
-            .vectors
-            .values()
-            .map(|v| v.flatten(0.1).iter().map(|q| [q.x, q.y]).collect())
-            .collect();
-        std::fs::write(
-            out.join(format!("{key}.json")),
-            serde_json::to_string(&rings).unwrap(),
-        )
-        .unwrap();
-    }
-}
-
 /// Every style along an open S-curve, as 3D carvings: `EMBELLISH_OUT=dir cargo nextest
 /// run -p cmd-embellish line_pictures --run-ignored only`.
 #[test]

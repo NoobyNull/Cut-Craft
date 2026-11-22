@@ -1,6 +1,6 @@
 # Notes on the CNC video courses
 
-What each video teaches, written while reading the captions (fetched by `scripts/courses`;
+What each video teaches, written while reading the captions (fetched once;
 video ids are YouTube ids). The capability table `docs/courses-capabilities.tsv` and the report
 `docs/courses.md` are built from these.
 

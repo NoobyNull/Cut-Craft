@@ -344,7 +344,7 @@ fn borders_installed(app: &mut CutCraftApp) {
 }
 
 /// A border as Generate saves it, in a Library of its own (not the user's): the hand-drawn
-/// sample from `scripts/border_sample_picture.py`.
+/// sample in `crates/app/samples/`.
 fn sample_border(app: &mut CutCraftApp) {
     let root = std::env::temp_dir().join("cut-craft-help-pictures-library");
     let folder = crate::borders::folder(&root);
