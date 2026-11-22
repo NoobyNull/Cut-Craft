@@ -1,4 +1,5 @@
-//! The app's fixed values (sizes, timings, built-in names, links and services) and the small records its state keeps.
+//! The app's fixed values (sizes, timings, built-in names, links and services) and the small
+//! records its state keeps.
 
 use super::*;
 
