@@ -1783,6 +1783,7 @@ dependencies = [
 name = "cmd-orientate-3d-model"
 version = "0.7.3"
 dependencies = [
+ "cut-craft-border-tile",
  "cut-craft-core",
  "fmt-import-stl",
  "log",
@@ -2795,6 +2796,16 @@ dependencies = [
  "sha2",
  "winit",
  "winresource",
+]
+
+[[package]]
+name = "cut-craft-border-tile"
+version = "0.7.3"
+dependencies = [
+ "cut-craft-core",
+ "image",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

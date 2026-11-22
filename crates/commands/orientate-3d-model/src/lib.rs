@@ -52,7 +52,13 @@ fn read_file(path: &str) -> Result<Read, CommandError> {
     let started = Instant::now();
     let read_at = std::time::SystemTime::now();
     let bytes = std::fs::read(path).map_err(|e| CommandError::Failed(format!("{path}: {e}")))?;
-    let triangles = fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?;
+    // a generated border from the Library: its depth map, at the size its recipe says
+    let tile = std::path::Path::new(path);
+    let triangles = if cut_craft_border_tile::of_depth_map(tile).is_some() {
+        cut_craft_border_tile::triangles(tile).map_err(CommandError::Failed)?
+    } else {
+        fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?
+    };
     let md5 = Source::md5(&bytes);
     log::info!(
         "Orientate 3D Model: read {path}: {} triangles in {} ms",
@@ -1130,6 +1136,60 @@ mod tests {
         doc.apply(&change).unwrap();
         let k = doc.components.values().next().unwrap().clone();
         (doc, k)
+    }
+
+    #[test]
+    fn a_generated_border_from_the_library_comes_in_at_its_recipes_size() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-border-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (w, h) = (60, 20);
+        // a ridge along the middle, 0 at the top and bottom edges
+        let depth: Vec<f32> = (0..w * h)
+            .map(|k| {
+                let y = f32::from(u16::try_from(k / w).unwrap());
+                1.0 - (y - 9.5).abs() / 9.5
+            })
+            .collect();
+        cut_craft_border_tile::save(
+            &dir,
+            "Rope",
+            &depth,
+            w,
+            h,
+            &one_pixel_bmp(),
+            &cut_craft_border_tile::Recipe::new("rope", "3:1", 90.0, 30.0, 4.0),
+        )
+        .unwrap();
+        let p = Params {
+            file: dir.join("Rope.png").display().to_string(),
+            ..Params::default()
+        };
+        let mut doc = Document::default();
+        let change = Orientate3dModel::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        let k = doc.components.values().next().unwrap();
+        let size = |n: usize| f64::from(u32::try_from(n).unwrap()) * k.cell;
+        let (x, y) = (size(k.columns), size(k.rows));
+        assert!((x - 90.0).abs() < 2.0 * k.cell && (y - 30.0).abs() < 2.0 * k.cell, "{x} {y}");
+        let top = k.heights.iter().copied().filter(|v| v.is_finite()).fold(0.0, f64::max);
+        assert!((top - 4.0).abs() < 0.3, "{top}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A picture one pixel big, as a BMP.
+    fn one_pixel_bmp() -> Vec<u8> {
+        let mut b = vec![b'B', b'M'];
+        b.extend(58u32.to_le_bytes());
+        b.extend([0u8; 4]);
+        b.extend(54u32.to_le_bytes());
+        b.extend(40u32.to_le_bytes());
+        b.extend(1i32.to_le_bytes());
+        b.extend(1i32.to_le_bytes());
+        b.extend(1u16.to_le_bytes());
+        b.extend(24u16.to_le_bytes());
+        b.extend([0u8; 24]);
+        b.extend([90, 150, 200, 0]);
+        b
     }
 
     #[test]
