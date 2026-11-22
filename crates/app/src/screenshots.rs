@@ -222,6 +222,25 @@ const SCENES: &[Scene] = &[
         app.options_goto = Some("confirmations");
         ctx.set_embed_viewports(true);
     }),
+    // Help: Using Cut Craft in another language (Options ▸ Language)
+    ("options-language", |app, ctx| {
+        everyday(app);
+        app.options_window = true;
+        app.options_goto = Some("language");
+        ctx.set_embed_viewports(true);
+    }),
+    // Help: Screen readers (Options ▸ Appearance, where the text size is)
+    ("options-appearance", |app, ctx| {
+        everyday(app);
+        app.options_window = true;
+        app.options_goto = Some("appearance");
+        ctx.set_embed_viewports(true);
+    }),
+    // Help: Help Contents (the Help window open on it)
+    ("help-contents", |app, _| {
+        everyday(app);
+        help_window(app, "contents", "");
+    }),
     // Help: First-Time Setup
     ("first-time-setup", |app, ctx| {
         everyday(app);

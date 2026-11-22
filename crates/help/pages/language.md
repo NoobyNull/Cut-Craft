@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 see-also: settings, addons
 ---
 
@@ -21,6 +21,8 @@ signed with Cut Craft's release key is **official**. One that isn't still works,
 marked **⚠ not official**, the same as any other [add-on](help:addons).
 
 ## Switch language
+
+![Edit ▸ Options ▸ Language, with English built in](pictures/options-language.png)
 
 1. Open **Edit ▸ Options** and pick the **Language** page.
 2. Pick the language. Beside each pack it says how much of Cut Craft it translates, such

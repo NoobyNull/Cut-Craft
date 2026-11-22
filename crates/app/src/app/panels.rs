@@ -687,7 +687,7 @@ impl CutCraftApp {
         use cmd_reorder_layer::{Direction, moved_to};
         let layer = self.doc.current_layer;
         let mut moved = None;
-        ui.horizontal(|ui| {
+        let arrows = ui.horizontal(|ui| {
             for (direction, arrow, tip) in [
                 (
                     Direction::Up,
@@ -710,6 +710,7 @@ impl CutCraftApp {
                 }
             }
         });
+        crate::marks::note(ui, "tool:reorder_layer", arrows.response.rect);
         ui.checkbox(
             &mut self.layers_on_sheet,
             tr!("panels-show-only-layers-used-on"),
@@ -785,6 +786,7 @@ impl CutCraftApp {
                 let row = ui
                     .selectable_label(self.doc.current_layer == layer.id, &layer.name)
                     .on_hover_hint(tr!("panels-layer-vectors", count = count));
+                crate::marks::note(ui, &format!("layer:{}", layer.name), row.rect);
                 if row.clicked() {
                     clicked = Some((layer.id, "set_current_layer"));
                 }
@@ -796,7 +798,9 @@ impl CutCraftApp {
                 }
             });
         }
-        let add = ui.button(label("add_layer")).clicked();
+        let add = ui.button(label("add_layer"));
+        crate::marks::note(ui, "tool:add_layer", add.rect);
+        let add = add.clicked();
         if let Some((layer, action)) = clicked {
             self.layer_action(ui.ctx(), layer, action);
         }
@@ -1010,6 +1014,7 @@ impl CutCraftApp {
                 let job = self.doc.sheet_job(i).unwrap_or(sheet.job);
                 let active = i == self.doc.active_sheet;
                 let row = ui.radio(active, &sheet.name);
+                crate::marks::note(ui, &format!("sheet:{}", sheet.name), row.rect);
                 if row.clicked() && !active {
                     activate = Some(i);
                 }
@@ -1022,7 +1027,9 @@ impl CutCraftApp {
                 ui.end_row();
             }
         });
-        let add = ui.button(tr!("panels-add-new-sheet")).clicked();
+        let add = ui.button(tr!("panels-add-new-sheet"));
+        crate::marks::note(ui, "tool:add_sheet", add.rect);
+        let add = add.clicked();
         if let Some(sheet) = activate
             && let Err(e) = self.apply("activate_sheet", &serde_json::json!({ "sheet": sheet }))
         {
@@ -1731,7 +1738,7 @@ impl CutCraftApp {
         use cmd_reorder_component::{Direction, neighbour};
         let mut moved = None;
         let last = self.doc.selected_components.last();
-        ui.horizontal(|ui| {
+        let arrows = ui.horizontal(|ui| {
             for (label, direction) in [
                 (tr!("panels-move-up"), Direction::Up),
                 (tr!("panels-move-down"), Direction::Down),
@@ -1745,6 +1752,7 @@ impl CutCraftApp {
                 }
             }
         });
+        crate::marks::note(ui, "tool:reorder_component", arrows.response.rect);
         moved
     }
 
@@ -1759,6 +1767,7 @@ impl CutCraftApp {
         let text = format!("{} ({:?})", component.name, component.combine);
         let on = self.doc.selected_components.contains(&id);
         let row = ui.selectable_label(on, text);
+        crate::marks::note(ui, &format!("component:{}", component.name), row.rect);
         let mut picked = None;
         if row.clicked() {
             picked = Some((id, ui.input(|i| i.modifiers.shift)));
@@ -1830,6 +1839,7 @@ impl CutCraftApp {
         for (&level_id, level) in self.doc.levels.iter().rev() {
             let collapsed = self.collapsed_levels.contains(&level_id);
             let (header, toggled) = self.level_header(ui, level, collapsed);
+            crate::marks::note(ui, &format!("level:{}", level.name), header.rect);
             if toggled {
                 toggle = Some(level_id);
             }
@@ -1864,6 +1874,7 @@ impl CutCraftApp {
                     }
                     shown_groups.push(group.id);
                     let header = ui.label(format!("{} ({:?})", group.name, group.combine));
+                    crate::marks::note(ui, &format!("group:{}", group.name), header.rect);
                     if let Some(action) = self.popup(&header, || gui::group_menu(group)) {
                         chosen = Some(action);
                     }
@@ -4596,11 +4607,11 @@ impl CutCraftApp {
             // is the id with hyphens
             let mut button = |ui: &mut egui::Ui, can: bool, id: &'static str| {
                 let key = id.replace('_', "-");
-                if ui
+                let response = ui
                     .add_enabled(can, egui::Button::new(tr!(&key)))
-                    .on_hover_hint(tr!(&format!("{key}.tooltip")))
-                    .clicked()
-                {
+                    .on_hover_hint(tr!(&format!("{key}.tooltip")));
+                crate::marks::note(ui, &format!("button:{id}"), response.rect);
+                if response.clicked() {
                     clicked = Some(id);
                 }
             };
@@ -4617,11 +4628,11 @@ impl CutCraftApp {
             // is the id with hyphens
             let mut button = |ui: &mut egui::Ui, can: bool, id: &'static str| {
                 let key = id.replace('_', "-");
-                if ui
+                let response = ui
                     .add_enabled(can, egui::Button::new(tr!(&key)))
-                    .on_hover_hint(tr!(&format!("{key}.tooltip")))
-                    .clicked()
-                {
+                    .on_hover_hint(tr!(&format!("{key}.tooltip")));
+                crate::marks::note(ui, &format!("button:{id}"), response.rect);
+                if response.clicked() {
                     clicked = Some(id);
                 }
             };
@@ -4748,6 +4759,7 @@ impl CutCraftApp {
         let label = ui
             .selectable_label(picked, name)
             .on_hover_hint(tr!("panels-a-toolpath-group-its-toolpaths"));
+        crate::marks::note(ui, &format!("toolpath_group:{group}"), label.rect);
         let pick = if label.clicked() {
             Some(!picked)
         } else if label.secondary_clicked() {
@@ -4857,6 +4869,11 @@ impl CutCraftApp {
                             let (label, ticked, rgb) =
                                 toolpath_row(ui, toolpath, (selected, collided), swatch, *in_group);
                             let label = label.interact(egui::Sense::drag());
+                            crate::marks::note(
+                                ui,
+                                &format!("toolpath:{}", toolpath.name),
+                                label.rect,
+                            );
                             if let Some(visible) = ticked {
                                 shown = Some((id, visible));
                             }
