@@ -2473,7 +2473,7 @@ fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
     let params = h.app.form.as_ref().unwrap().params.clone();
     let refused = h.app.apply("profile_toolpath", &params).unwrap_err();
     assert!(
-        refused.starts_with(super::actions::KEEP_OUT_REFUSED),
+        refused.starts_with(super::toolpath_output::KEEP_OUT_REFUSED),
         "{refused}"
     );
     assert!(refused.contains("\"Clamp 1\""), "names the zone: {refused}");
@@ -8137,6 +8137,20 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     // a new window measures itself on its first frame, and its scroll bar on the next
     h.frame(vec![]);
     h.frame(vec![]);
+    h.frame(vec![]);
+    // the icons decode on a background thread: one that lands after the link is found moves
+    // the page under the click (Windows runners were slow enough), so wait for them all
+    for _ in 0..500 {
+        if !h.ctx.has_pending_images() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        h.frame(vec![]);
+    }
+    assert!(
+        !h.ctx.has_pending_images(),
+        "the icons never finished loading"
+    );
     h.frame(vec![]);
     // the window's link, drawn over the Design page's own title and side tab
     let at = *h
@@ -15018,28 +15032,28 @@ fn the_status_bar_and_a_pocket_form_count_the_selected_vectors() {
 
 #[test]
 fn an_on_the_line_profile_leaves_no_open_vector_out() {
-    assert!(actions::closed_only_toolpath(
+    assert!(form_panel::closed_only_toolpath(
         "pocket_toolpath",
         &serde_json::json!({})
     ));
-    assert!(actions::closed_only_toolpath(
+    assert!(form_panel::closed_only_toolpath(
         "profile_toolpath",
         &serde_json::json!({ "side": "outside" })
     ));
-    assert!(!actions::closed_only_toolpath(
+    assert!(!form_panel::closed_only_toolpath(
         "profile_toolpath",
         &serde_json::json!({ "side": "on" })
     ));
-    assert!(!actions::closed_only_toolpath(
+    assert!(!form_panel::closed_only_toolpath(
         "quick_engrave_toolpath",
         &serde_json::json!({})
     ));
     // a texture fills closed vectors, but follows any vector used as the pattern
-    assert!(actions::closed_only_toolpath(
+    assert!(form_panel::closed_only_toolpath(
         "texture_toolpath",
         &serde_json::json!({ "use_selected_vectors_as_pattern": false })
     ));
-    assert!(!actions::closed_only_toolpath(
+    assert!(!form_panel::closed_only_toolpath(
         "texture_toolpath",
         &serde_json::json!({ "use_selected_vectors_as_pattern": true })
     ));
@@ -15050,7 +15064,7 @@ fn the_texture_form_says_when_it_will_texture_the_whole_material() {
     use cut_craft_core::document::VectorCount;
     let filled = serde_json::json!({ "use_selected_vectors_as_pattern": false });
     let note = |closed, open| {
-        actions::texture_area_note("texture_toolpath", &filled, VectorCount { closed, open })
+        form_panel::texture_area_note("texture_toolpath", &filled, VectorCount { closed, open })
     };
     assert!(note(0, 0).is_some_and(|n| n.contains("whole material")));
     let open_only = note(0, 2).unwrap();
@@ -15061,7 +15075,7 @@ fn the_texture_form_says_when_it_will_texture_the_whole_material() {
     assert_eq!(note(1, 2), None, "the closed one is textured");
     let pattern = serde_json::json!({ "use_selected_vectors_as_pattern": true });
     assert_eq!(
-        actions::texture_area_note(
+        form_panel::texture_area_note(
             "texture_toolpath",
             &pattern,
             VectorCount { closed: 0, open: 0 }
@@ -15143,8 +15157,8 @@ fn dont_ask_again_stops_the_question_but_not_the_mark() {
 
 #[test]
 fn the_recalculate_question_counts_the_toolpaths() {
-    assert!(actions::recalculate_question(1).starts_with("1 toolpath is now out of date"));
-    assert!(actions::recalculate_question(3).starts_with("3 toolpaths are now out of date"));
+    assert!(form_apply::recalculate_question(1).starts_with("1 toolpath is now out of date"));
+    assert!(form_apply::recalculate_question(3).starts_with("3 toolpaths are now out of date"));
 }
 
 #[test]
@@ -20153,34 +20167,60 @@ fn the_3d_origin_moves_to_the_bed_with_the_z_zero() {
         thickness: 24.5,
         ..Job::default()
     };
-    assert!(
-        panels::origin_3d(&job, None).abs() < 1e-12,
-        "on top by default"
-    );
+    assert!(panels::origin_3d(&job, false).abs() < 1e-12, "on top");
     job.z_zero = ZZero::MachineBed;
     assert!(
-        (panels::origin_3d(&job, None) + 24.5).abs() < 1e-12,
+        (panels::origin_3d(&job, false) + 24.5).abs() < 1e-12,
         "on the bed, 24.5 mm under the top"
     );
-    // a model being imported is shown unseated, on its zero plane: with its bottom on the
-    // material's bottom that plane is the bed, and the top 24.5 mm above
-    job.model_position = cut_craft_core::document::ModelPosition {
-        from: cut_craft_core::document::GapFrom::Below,
-        gap: 0.0,
-    };
-    let mut model = cut_craft_core::simulation::Material::new(&job, 4);
-    // 10 mm tall on half the job, its zero plane (nothing there) on the other half
-    for (i, h) in model.heights.iter_mut().enumerate() {
-        *h = if i % 4 < 2 { 10.0 } else { f64::NAN };
-    }
+}
+
+/// While Import 3D Model is open the model sits on its zero plane at 0, and the material's
+/// outline is drawn from 0 up to its thickness: the arrows go on that outline's top, or on
+/// its bottom for Machine Bed, never off the outline.
+#[test]
+fn the_3d_origin_sits_on_the_material_outline_while_a_model_is_imported() {
+    use cut_craft_core::document::ZZero;
+    let mut h = Harness::new();
+    h.app.doc.job.thickness = 18.0;
+    let file = pyramid_stl("origin-import");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    assert!(h.app.importing_whole(), "the model is shown whole");
     assert!(
-        panels::origin_3d(&job, Some(&model)).abs() < 1e-9,
-        "the bed"
+        (h.app.origin_height_3d() - 18.0).abs() < 1e-9,
+        "Material Surface: the outline's top, {}",
+        h.app.origin_height_3d()
     );
-    job.z_zero = ZZero::MaterialSurface;
+    h.app.doc.job.z_zero = ZZero::MachineBed;
     assert!(
-        (panels::origin_3d(&job, Some(&model)) - 24.5).abs() < 1e-9,
-        "the material's top, over the model's plane"
+        h.app.origin_height_3d().abs() < 1e-9,
+        "Machine Bed: the outline's bottom, {}",
+        h.app.origin_height_3d()
+    );
+    // the form closed, the material's top is back at 0
+    h.app.form = None;
+    assert!((h.app.origin_height_3d() + 18.0).abs() < 1e-9, "the bed");
+    h.app.doc.job.z_zero = ZZero::MaterialSurface;
+    assert!(h.app.origin_height_3d().abs() < 1e-9, "the top");
+}
+
+/// A rotary job's Machine Bed is the turning axis: half the blank under its top, and on the
+/// outline's middle while a model is imported unwrapped.
+#[test]
+fn a_rotary_jobs_3d_origin_is_on_the_axis_for_machine_bed() {
+    use cut_craft_core::document::{Along, Job, ZZero};
+    let job = Job {
+        z_zero: ZZero::MachineBed,
+        ..Job::rotary(300.0, 40.0, Along::X)
+    };
+    assert!(
+        (panels::origin_3d(&job, false) + 20.0).abs() < 1e-9,
+        "20 mm under the top of a 40 mm blank"
+    );
+    assert!(
+        panels::origin_3d(&job, true).abs() < 1e-9,
+        "the outline's bottom, its top being the blank's radius up"
     );
 }
 
