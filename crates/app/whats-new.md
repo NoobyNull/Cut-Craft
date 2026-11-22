@@ -1,4 +1,4 @@
-- Generate Border makes repeating picture-frame borders and saves them to the Library
-- Node Edit shows a curve's handles so you can drag them; Save Toolpaths checks match your machine
-- The Z zero arrows sit on the material while a model is imported; 74 help pages gained steps
-- Cut Craft's own add-ons keep updating when they move to their new home on GitHub
+- Relief from Photo makes its relief again, with pictures in colour that you can drag
+- Estimate Depth remakes the relief from the estimated photo only
+- Scale to Fit Material now sits under Change size in Model Size
+- A big model stays on the modeling plane with the origin while it is imported
