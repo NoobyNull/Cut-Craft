@@ -113,6 +113,7 @@ impl CutCraftApp {
                 job_sheet: false,
             },
             depth_estimate: None,
+            border: super::generate_border::BorderForm::default(),
             depth_high_detail: None,
             depth_detail_fetch: None,
             depth_detail_failed: None,
@@ -3557,6 +3558,11 @@ impl CutCraftApp {
         if let Some(form) = &mut self.form {
             form.note = None;
         }
+        // Generate Border's Generate: the add-on runs in the background, from the next frame
+        if id == super::generate_border::ID {
+            self.border.pending = Some(params.clone());
+            return Ok(());
+        }
         let editing = self.form.as_ref().and_then(|f| f.editing);
         // Calculate pressed again: kept when nothing changed, else updated in place
         match self.calculate_again(params) {
@@ -6397,6 +6403,7 @@ impl CutCraftApp {
             "draw_text" => self.spelling(ui),
             "job_setup" => self.setup_material_extras(ui),
             "set_size" => self.link_set_size(),
+            super::generate_border::ID => self.border_section(ui),
             "relief_from_photo" => {
                 self.depth_section(ui);
                 self.bit_note(ui);

@@ -425,6 +425,7 @@ fn every_menu_and_startup_task_has_english_words() {
         super::commit::Commit::Create,
         super::commit::Commit::Calculate,
         super::commit::Commit::Apply,
+        super::commit::Commit::Generate,
     ] {
         let label = commit.label();
         assert!(!label.contains('-'), "{label}");

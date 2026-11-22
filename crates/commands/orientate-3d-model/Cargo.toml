@@ -7,6 +7,7 @@ license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true
+cut-craft-border-tile.workspace = true
 fmt-import-stl = { path = "../../formats/import-stl" }
 log = "0.4"
 schemars.workspace = true

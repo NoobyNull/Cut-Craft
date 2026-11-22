@@ -617,8 +617,9 @@ fn remove_question(name: &str) -> String {
 }
 
 /// The tool add-ons this Cut Craft has tools for: a tool add-on only works through a Cut
-/// Craft tool made for it (Relief from Photo for Depth), never with its own interface.
-pub const TOOLS: &[&str] = &[crate::depth::ADDON_ID];
+/// Craft tool made for it (Relief from Photo for Depth, Generate Border for Borders), never
+/// with its own interface.
+pub const TOOLS: &[&str] = &[crate::depth::ADDON_ID, crate::borders::ADDON_ID];
 
 /// Whether this Cut Craft can use the add-on `m` describes, or why not, said before it is
 /// installed.
@@ -661,9 +662,13 @@ fn installed_words(m: &Manifest) -> String {
 }
 
 /// The tool the installed add-on `id` brings, when Cut Craft knows it: the Depth add-on's
-/// is Relief from Photo.
+/// is Relief from Photo, the Borders add-on's Generate Border.
 pub fn tool_of(id: &str) -> Option<&'static str> {
-    (id == crate::depth::ADDON_ID).then_some("relief_from_photo")
+    match id {
+        crate::depth::ADDON_ID => Some("relief_from_photo"),
+        crate::borders::ADDON_ID => Some("generate_border"),
+        _ => None,
+    }
 }
 
 /// The add-ons installed in `dir` that are not gadgets (a gadget lists itself), by name in
@@ -815,6 +820,12 @@ mod tests {
             .unwrap()
         };
         assert_eq!(usable(&m("depth", "tool")), Ok(()));
+        assert_eq!(
+            usable(&m("borders", "tool")),
+            Ok(()),
+            "Generate Border's add-on"
+        );
+        assert_eq!(tool_of("borders"), Some("generate_border"));
         assert_eq!(usable(&m("anything", "gadget")), Ok(()));
         assert!(
             usable(&m("other", "tool"))
