@@ -1,4 +1,4 @@
-- Saved Indexed and Sides, then details rotary files now cut exactly what the preview shows (save 0.7.0 to 0.7.2 files again)
-- A rotary job's 3D model is shown and cut as it really is; Scale to Fit scales once
-- X red, Y green, Z blue everywhere, with both-way arrows and reset buttons on Import 3D Model
-- The toolpath preview draws in tiles, at the detail the screen shows
+- Generate Border makes repeating picture-frame borders and saves them to the Library
+- Node Edit shows a curve's handles so you can drag them; Save Toolpaths checks match your machine
+- The Z zero arrows sit on the material while a model is imported; 74 help pages gained steps
+- Cut Craft's own add-ons keep updating when they move to their new home on GitHub
