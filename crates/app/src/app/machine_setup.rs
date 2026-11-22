@@ -48,6 +48,8 @@ impl CutCraftApp {
     /// The active machine's tool changer was loaded differently: the machines are saved,
     /// and each tool now in a slot takes the slot as its tool number.
     pub(super) fn tool_changer_changed(&mut self) {
+        // the checks made so far used the slots just changed
+        self.forget_save_checks();
         self.machines_changed("Tool changer changed");
         let slots = self.machines.active().map_or_default(|m| m.slots.clone());
         if self.tools.number_by_slots(&slots) {
@@ -166,7 +168,7 @@ impl CutCraftApp {
                 MachineOutcome::Apply | MachineOutcome::Ok => {
                     self.machines = draft;
                     // the checks made so far used the holder and limits just replaced
-                    self.save_checks.clear();
+                    self.forget_save_checks();
                     if outcome == MachineOutcome::Ok {
                         self.machine_window = None;
                     } else if let Some(w) = &mut self.machine_window {

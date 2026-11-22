@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-22
 see-also: checks_before_cutting, check_tool_numbers
 ---
 
@@ -12,6 +12,9 @@ see-also: checks_before_cutting, check_tool_numbers
 When **Tool changer (ATC)** is chosen under Tool changes, every bit the job uses must be
 loaded in one of the tool changer's slots in Machine Configuration. It also warns when
 Tool changer is chosen for a machine with no tool changer set up.
+
+Changing a slot, or a slot's holder, runs the checks again, so the list always matches the
+slots as they are now.
 
 ## Why it matters
 
