@@ -8138,6 +8138,20 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     h.frame(vec![]);
     h.frame(vec![]);
     h.frame(vec![]);
+    // the icons decode on a background thread: one that lands after the link is found moves
+    // the page under the click (Windows runners were slow enough), so wait for them all
+    for _ in 0..500 {
+        if !h.ctx.has_pending_images() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        h.frame(vec![]);
+    }
+    assert!(
+        !h.ctx.has_pending_images(),
+        "the icons never finished loading"
+    );
+    h.frame(vec![]);
     // the window's link, drawn over the Design page's own title and side tab
     let at = *h
         .texts_at("Design")
