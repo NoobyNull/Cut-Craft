@@ -281,7 +281,14 @@ impl CutCraftApp {
         let Some(form) = &mut self.form else {
             return Err("no Texture Toolpath form is open".into());
         };
-        form.params = serde_json::to_value(params).expect("texture settings serialise");
+        let mut loaded = serde_json::to_value(params).expect("texture settings serialise");
+        // what the form holds besides the texture's settings (its Vector Selector) stays
+        if let (Some(loaded), Some(old)) = (loaded.as_object_mut(), form.params.as_object()) {
+            for (key, value) in old {
+                loaded.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
+        form.params = loaded;
         form.dirty = true;
         self.status
             .set_message(&format!("Loaded texture {}", path.display()));

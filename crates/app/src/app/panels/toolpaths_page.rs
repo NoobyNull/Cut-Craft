@@ -125,6 +125,11 @@ impl CutCraftApp {
             });
             return false;
         }
+        // other work running: the checks start once it is done, nothing was cancelled
+        if self.busy.is_some() {
+            ui.label(tr!("panels-the-checks-wait-for-the-work-running"));
+            return false;
+        }
         ui.label(tr!("panels-the-checks-were-cancelled-so"));
         ui.button(tr!("panels-check-again"))
             .on_hover_hint(tr!("panels-run-the-checks-before-cutting"))

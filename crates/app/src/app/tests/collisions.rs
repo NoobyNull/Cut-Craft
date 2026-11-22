@@ -767,6 +767,34 @@ fn cancelled_checks_say_so_and_check_again_runs_them() {
 }
 
 #[test]
+fn checks_waiting_on_other_work_say_so_rather_than_cancelled() {
+    let mut h = analysing();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    h.app.in_background(
+        "Calculating Slow Toolpath",
+        "test:slow",
+        move || {
+            wait.recv_timeout(std::time::Duration::from_secs(30)).ok();
+        },
+        |_, ()| {},
+    );
+    // the job changed: the checks must run again, once the slow work is done
+    h.app.save_checks.clear();
+    h.frame(vec![]);
+    assert!(
+        h.text_at("The checks start once the work running now is done")
+            .is_some(),
+        "waiting, not cancelled"
+    );
+    assert!(h.text_at("Check Again").is_none(), "nothing to run again");
+    go.send(()).ok();
+    until_not_busy(&mut h);
+}
+
+#[test]
 fn save_toolpaths_waits_for_cancelled_checks_rather_than_saving_unchecked() {
     let mut h = analysing();
     let form = SaveForm {
@@ -1092,5 +1120,45 @@ fn the_collet_nut_coming_down_over_a_clamp_is_marked_after_a_preview() {
         collided.sentence.contains("below the top of Clamp 1"),
         "{}",
         collided.sentence
+    );
+}
+
+#[test]
+fn checks_asked_for_while_other_work_runs_wait_their_turn_without_holding_up_the_window() {
+    // Save Toolpaths and the Analyse tab can both ask for checks in one frame; the second
+    // must not wait on the first on the window's thread, nor be kept as started
+    use crate::files::ToolChanges;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    h.app.in_background(
+        "Calculating Slow Toolpath",
+        "test:slow",
+        move || {
+            wait.recv_timeout(std::time::Duration::from_secs(3)).ok();
+        },
+        |_, ()| {},
+    );
+    assert!(h.app.busy.is_some(), "the slow work is running");
+    let asked = std::time::Instant::now();
+    assert!(
+        h.app.save_checks(&plan, ToolChanges::ToolChanger).is_none(),
+        "not checked yet"
+    );
+    assert!(
+        asked.elapsed() < std::time::Duration::from_secs(2),
+        "the window kept drawing"
+    );
+    assert!(h.app.save_checks.is_empty(), "not counted as started");
+    go.send(()).ok();
+    until_not_busy(&mut h);
+    // asked for again (the next frame): checked now
+    let _ = h.app.save_checks(&plan, ToolChanges::ToolChanger);
+    until_not_busy(&mut h);
+    assert!(
+        h.app.save_checks(&plan, ToolChanges::ToolChanger).is_some(),
+        "checked once the worker was free"
     );
 }

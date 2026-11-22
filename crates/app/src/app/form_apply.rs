@@ -429,16 +429,30 @@ impl CutCraftApp {
     /// A remaking form's Apply: its pieces made again with `params` in place of the ones it
     /// last made, while that is still the last thing done (one undo); else a new one.
     pub(super) fn remake(&mut self, id: &str, params: &Value) -> Result<(), String> {
+        let mut taken_back = None;
         if let Some(applied) = self.remade_last() {
             if applied == *params {
                 return Ok(());
             }
-            self.history.undo(&mut self.doc);
+            if self.history.undo(&mut self.doc) {
+                taken_back = Some(applied);
+            }
         }
         if let Some(form) = &mut self.form {
             form.remade = None;
         }
-        self.apply(id, params)?;
+        if let Err(e) = self.apply(id, params) {
+            // what it last made comes back, still the one it remakes in place
+            if let Some(applied) = taken_back
+                && self.history.redo(&mut self.doc)
+            {
+                let after = (self.history.revision(), self.doc.selection.clone());
+                if let Some(form) = &mut self.form {
+                    form.remade = Some((after.0, after.1, applied));
+                }
+            }
+            return Err(e);
+        }
         let after = (self.history.revision(), self.doc.selection.clone());
         if let Some(form) = &mut self.form {
             form.remade = Some((after.0, after.1, params.clone()));
@@ -494,8 +508,8 @@ impl CutCraftApp {
             return;
         }
         // the last frame's step of this drag taken back first, so the drag is one undo
-        if let Some((depth, drawn, applied)) = dragged
-            && self.history.undo_depth() == depth
+        if let Some((revision, drawn, applied)) = dragged
+            && self.history.revision() == revision
             && self.history.undo(&mut self.doc)
             && let Some(form) = self.form.as_mut()
         {
@@ -506,8 +520,9 @@ impl CutCraftApp {
         let before = (self.history.undo_depth(), form.drawn, form.applied.clone());
         self.apply_live();
         let depth = self.history.undo_depth();
+        let revision = self.history.revision();
         if let (true, Some(form)) = (pressed && depth > before.0, self.form.as_mut()) {
-            form.dragged = Some((depth, before.1, before.2));
+            form.dragged = Some((revision, before.1, before.2));
         }
     }
 

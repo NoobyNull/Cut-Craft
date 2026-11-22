@@ -126,7 +126,7 @@ impl Harness {
     fn drop_files(&mut self, files: &[std::path::PathBuf], dropped: bool) {
         self.time += 0.1;
         let input = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.window)),
             time: Some(self.time),
             dropped_files: if dropped {
                 files
@@ -645,6 +645,10 @@ fn until_not_busy(h: &mut Harness) {
         std::thread::sleep(std::time::Duration::from_millis(5));
         h.frame(vec![]);
     }
+    // the last frame may have been the one that finished it
+    if h.app.busy.is_none() {
+        return;
+    }
     panic!("the job never finished");
 }
 
@@ -895,4 +899,15 @@ fn one_file_form() -> SaveForm {
         changes: crate::files::ToolChanges::SeparateFiles,
         job_sheet: false,
     }
+}
+
+/// An empty folder of the test's own under the temp folder, named for `name`, this run and a
+/// count, so no two tests (or runs of one) share it.
+fn fresh_dir(name: &str) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("cut-craft-{name}-{}-{n}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a temp folder");
+    dir
 }

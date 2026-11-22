@@ -136,7 +136,7 @@ impl CutCraftApp {
             earlier_ask: None,
             gcode_view: None,
             save_anyway: None,
-            checks_accepted: false,
+            checks_accepted: Vec::new(),
             acknowledged: std::collections::BTreeSet::new(),
             save_after: None,
             form_back: None,

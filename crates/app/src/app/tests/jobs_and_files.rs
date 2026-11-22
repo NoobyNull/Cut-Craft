@@ -100,8 +100,7 @@ fn closing_the_job_goes_back_to_the_start_page() {
 #[test]
 fn saved_and_opened_jobs_are_listed_as_recent_files() {
     let mut h = Harness::new();
-    let dir = std::env::temp_dir().join(format!("cut-craft-recent-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_dir("recent");
     h.app.recent_path = Some(dir.join("recent.json"));
     let job = dir.join("first.ccjob");
     h.app.save_to(&job);
@@ -180,8 +179,7 @@ fn rest_machining_sizes_show_in_inches_in_an_inch_job() {
 
 #[test]
 fn a_longer_recovery_interval_in_the_options_waits_longer() {
-    let dir = std::env::temp_dir().join(format!("cut-craft-later-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_dir("later");
     let mut h = Harness::new();
     h.app.options.general.autosave_seconds = 120;
     h.app.recovery_path = Some(dir.join("later.ccjob"));
@@ -196,6 +194,7 @@ fn a_longer_recovery_interval_in_the_options_waits_longer() {
         .autosave
         .take()
         .expect("written once the options' interval is up")
+        .1
         .join()
         .unwrap()
         .unwrap();
@@ -204,9 +203,7 @@ fn a_longer_recovery_interval_in_the_options_waits_longer() {
 
 #[test]
 fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
-    let dir = std::env::temp_dir().join(format!("cut-craft-recovery-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_dir("recovery");
     // each run (window) keeps a copy of its own, named for it
     let copy = |run: &str| dir.join(format!("recovery-{run}.ccjob"));
     let autosaved = |h: &mut Harness, run: &str| {
@@ -217,7 +214,7 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
         assert!(!copy(run).exists(), "not at once");
         h.time += AUTOSAVE_SECONDS;
         h.frame(vec![]);
-        let writing = h.app.autosave.take().expect("a copy is being written");
+        let (_, writing) = h.app.autosave.take().expect("a copy is being written");
         writing.join().unwrap().unwrap();
         assert!(copy(run).exists());
     };
@@ -403,8 +400,7 @@ fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
     ];
     for (post, said, form, retried) in cases {
         let mut h = Harness::new();
-        let dir = std::env::temp_dir().join(format!("cut-craft-retry-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = fresh_dir("retry");
         h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
         h.app.reporter.crash_service = Some("https://crash.example/v1/crash".into());
         h.app.reporter.post = post;
@@ -487,9 +483,7 @@ fn job_setup_for_a_new_job_is_as_wide_as_the_design_page_after() {
 #[test]
 fn library_adds_several_in_turn() {
     let mut h = Harness::new();
-    let dir = std::env::temp_dir().join(format!("cut-craft-library-add-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_dir("library-add");
     let square = r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="20mm" viewBox="0 0 20 20"><rect x="0" y="0" width="20" height="20"/></svg>"#;
     let (first, last) = (dir.join("first.svg"), dir.join("last.svg"));
     std::fs::write(&first, square).unwrap();
@@ -597,9 +591,7 @@ fn a_save_that_fails_after_replace_or_archive_leaves_the_earlier_files_where_the
     // a clamp put down over the first rectangle after its toolpath was made
     let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
     h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
-    let dir = std::env::temp_dir().join(format!("cut-craft-resave-fail-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_dir("resave-fail");
     let form = SaveForm {
         mode: SaveMode::VisibleToOneFile,
         group: false,
@@ -640,9 +632,7 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
     use crate::options::EarlierGcode;
     let mut h = Harness::new();
     two_tools(&mut h);
-    let dir = std::env::temp_dir().join(format!("cut-craft-resave-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_dir("resave");
     let form = SaveForm {
         mode: SaveMode::VisibleToOneFile,
         group: false,
@@ -756,8 +746,7 @@ fn save_as_suggests_the_jobs_own_name_in_its_own_folder() {
 
 #[test]
 fn opening_a_job_from_a_newer_version_warns_which_settings_this_one_will_leave_out() {
-    let dir = std::env::temp_dir().join(format!("cut-craft-newer-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_dir("newer");
     let path = dir.join("newer.ccjob");
     let mut json: serde_json::Value =
         serde_json::from_slice(&cut_craft_core::file::save_job(&Document::default())).unwrap();
@@ -783,8 +772,7 @@ fn opening_a_job_from_a_newer_version_warns_which_settings_this_one_will_leave_o
 
 #[test]
 fn a_file_named_on_the_command_line_opens_at_startup() {
-    let dir = std::env::temp_dir().join(format!("cut-craft-argv-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_dir("argv");
     let path = dir.join("sign.ccjob");
     std::fs::write(&path, cut_craft_core::file::save_job(&Document::default())).unwrap();
     let mut h = Harness::at_start();
@@ -832,9 +820,9 @@ fn save_anyway_is_asked_in_the_window_not_by_a_dialog_that_can_hide_behind_it() 
     assert_eq!(h.app.status.message, "Toolpaths not saved");
     // answered Save Anyway, the same save goes on without asking again
     assert!(h.app.ready_to_save(&form, false).is_none());
-    h.app.checks_accepted = true;
+    h.app.checks_accepted = vec!["Air cutting".to_owned()];
     assert!(h.app.ready_to_save(&form, false).is_some(), "agreed to");
-    assert!(!h.app.checks_accepted, "only for that save");
+    assert!(h.app.checks_accepted.is_empty(), "only for that save");
 }
 
 #[test]
@@ -863,9 +851,12 @@ fn save_anyway_counts_only_for_the_save_it_answered() {
         }]
     };
     h.app.save_checks = checks(cut_craft_core::preflight::Severity::Error, "Too deep");
-    h.app.checks_accepted = true;
+    h.app.checks_accepted = vec!["Too deep".to_owned()];
     assert!(h.app.ready_to_save(&form, false).is_none(), "refused");
-    assert!(!h.app.checks_accepted, "used up by the save it was for");
+    assert!(
+        h.app.checks_accepted.is_empty(),
+        "used up by the save it was for"
+    );
     h.app.save_checks = checks(cut_craft_core::preflight::Severity::MustAsk, "Collet hits");
     assert!(h.app.ready_to_save(&form, false).is_none(), "asks again");
     assert!(h.app.save_anyway.is_some());
@@ -927,8 +918,7 @@ fn job_defaults_page_changes_new_jobs_once_applied() {
 
 /// An add-ons folder holding the Depth add-on, as Gadgets ▸ Add-ons installs it.
 fn depth_installed(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("cut-craft-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = fresh_dir(name);
     let depth = dir.join("depth");
     std::fs::create_dir_all(&depth).unwrap();
     std::fs::write(
@@ -1083,4 +1073,82 @@ fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
     h.frame(vec![]);
     assert!(!h.app.rail_gadgets, "nothing installed: no list");
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_recovery_copy_that_could_not_be_written_is_tried_again() {
+    let dir = fresh_dir("recovery-retry");
+    // a file where its folder should be: the first copy cannot be written
+    let missing = dir.join("not-yet");
+    std::fs::write(&missing, "in the way").unwrap();
+    let mut h = Harness::new();
+    h.app.recovery_path = Some(missing.join("retry.ccjob"));
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    let written = |h: &mut Harness| {
+        for _ in 0..500 {
+            h.frame(vec![]);
+            if h.app.autosave.is_none() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("the recovery copy never finished");
+    };
+    h.time += AUTOSAVE_SECONDS;
+    h.frame(vec![]);
+    assert!(h.app.autosave.is_some(), "a copy is being written");
+    written(&mut h);
+    assert!(
+        h.app.status.message.contains("recovery copy"),
+        "{}",
+        h.app.status.message
+    );
+    std::fs::remove_file(&missing).unwrap();
+    // not at once, but once the interval is up again
+    h.frame(vec![]);
+    assert!(h.app.autosave.is_none(), "retries are spaced out");
+    h.time += AUTOSAVE_SECONDS;
+    h.frame(vec![]);
+    assert!(h.app.autosave.is_some(), "tried again with no new change");
+    written(&mut h);
+    assert!(missing.join("retry.ccjob").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn save_anyway_agrees_only_to_the_problems_it_showed() {
+    // an answer to one list of problems is no answer to a list with more in it
+    let mut h = ready_for_output();
+    let form = one_file_form();
+    let post = h.app.form_post(&form).unwrap();
+    let finding = |message: &str| cut_craft_core::preflight::Finding {
+        severity: cut_craft_core::preflight::Severity::Warning,
+        message: message.to_owned(),
+        check: cut_craft_core::preflight::Check::AirCutting,
+    };
+    h.app.save_checks = vec![super::SaveChecks {
+        plan: h.app.plan(&form, &post).unwrap(),
+        changes: form.changes,
+        revision: h.app.history.revision(),
+        machine: h.app.machines.active,
+        found: Some(vec![finding("Air cutting"), finding("Slow feed")]),
+    }];
+    h.app.checks_accepted = vec!["Air cutting".to_owned()];
+    assert!(
+        h.app.ready_to_save(&form, false).is_none(),
+        "Slow feed was never shown"
+    );
+    assert!(h.app.save_anyway.is_some(), "asked again");
+    // answered for both, it saves
+    h.app.save_anyway = None;
+    h.app.checks_accepted = vec!["Slow feed".to_owned(), "Air cutting".to_owned()];
+    assert!(h.app.ready_to_save(&form, false).is_some());
+}
+
+#[test]
+fn a_new_job_forgets_a_save_anyway_answer() {
+    let mut h = ready_for_output();
+    h.app.checks_accepted = vec!["Air cutting".to_owned()];
+    h.app.reset_job();
+    assert!(h.app.checks_accepted.is_empty(), "forgotten");
 }

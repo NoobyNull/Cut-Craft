@@ -1295,6 +1295,36 @@ fn esc_on_import_3d_model_cancels_the_import() {
     let _ = std::fs::remove_file(file);
 }
 
+/// A model that could not be placed is not imported: Import waits for a placement that
+/// worked, and the form stays open with what went wrong, for Cancel or new settings.
+#[test]
+fn import_waits_for_a_model_that_was_placed() {
+    let dir = fresh_dir("unplaceable");
+    let file = dir.join("nothing.stl");
+    std::fs::write(&file, "solid nothing\nendsolid nothing\n").unwrap();
+    let mut h = Harness::new();
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let _ = std::fs::remove_dir_all(&dir);
+    let form = h.app.form.as_ref().expect("the import form is open");
+    assert_eq!(form.id, "orientate_3d_model");
+    assert!(form.error.is_some(), "it says what went wrong");
+    assert!(h.app.doc.components.is_empty());
+    let at = h.text_at("Import").expect("an Import button, greyed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(
+        !h.app.status.message.contains("Model imported"),
+        "{}",
+        h.app.status.message
+    );
+    assert!(
+        h.app.form.is_some(),
+        "the form stays for Cancel or new settings"
+    );
+}
+
 #[test]
 fn ctrl_v_of_another_windows_vectors_leaves_out_this_windows_old_components() {
     let mut h = Harness::new();

@@ -335,14 +335,15 @@ impl CutCraftApp {
             });
             return;
         }
-        self.checks_accepted = true;
+        // agreed to the problems shown, and no others
+        self.checks_accepted = ask.problems;
         if ask.sending {
             self.send_toolpaths(&ask.form);
         } else {
             self.save_toolpaths(&ask.form);
         }
         // only for that save, whatever stopped it short
-        self.checks_accepted = false;
+        self.checks_accepted.clear();
     }
 }
 

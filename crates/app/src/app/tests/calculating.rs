@@ -112,7 +112,8 @@ fn a_slow_job_shows_a_progress_window_that_cancels_with_nothing_changed() {
     );
     assert!(h.app.busy.is_some(), "still running");
     // the job's thread may start late (Windows): the bar is drawn once it has reported
-    said.recv().unwrap();
+    said.recv_timeout(std::time::Duration::from_secs(30))
+        .expect("the job reported its progress");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Calculating Slow Toolpath…").is_some());

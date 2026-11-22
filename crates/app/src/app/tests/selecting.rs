@@ -1198,6 +1198,31 @@ fn esc_from_a_move_opened_over_a_form_goes_back_to_it_with_its_edits() {
     assert!(h.app.form.is_none());
 }
 
+/// A form kept behind a placing tool belongs to its job: after a new job, Esc from a placing
+/// tool never brings the last job's form back.
+#[test]
+fn a_new_job_lets_go_of_the_form_kept_behind_a_placing_tool() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.frame(vec![]);
+    h.frame(vec![key(Key::M)]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("move"));
+    h.app.reset_job();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.frame(vec![]);
+    h.frame(vec![key(Key::M)]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("move"));
+    h.frame(vec![escape()]);
+    assert_eq!(
+        h.app.form.as_ref().map(|f| f.id),
+        None,
+        "the last job's form is not brought back"
+    );
+}
+
 #[test]
 fn the_ribbon_folds_the_least_used_groups_first_and_never_a_favourites() {
     use super::layouts::{GroupFit, fold_plan};

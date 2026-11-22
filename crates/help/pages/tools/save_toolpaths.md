@@ -29,6 +29,14 @@ If the collet nut, spindle or shank would hit the wood (or a clamp) beside a dee
 checks list it as **⚠ Check** and Save always asks before writing the file, whatever
 Options say. See [Collet and Holder Collisions](help:collisions).
 
+When Save asks, it lists every problem the checks found. **Save Anyway** goes on despite
+those problems only. If the checks find one it did not list (say you changed a toolpath
+in between), Save asks again. A new or opened job always asks afresh.
+
+The checks run in the background, so the window keeps working while they do. If a
+toolpath is still calculating when you press Save, the checks wait until it is done: the
+status bar says so, and you press **Save** again once it finishes.
+
 ## Rotary toolpaths
 
 Saving makes each toolpath's file a little smaller by leaving out points that lie on a

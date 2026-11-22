@@ -95,6 +95,44 @@ fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
     assert_eq!(h.app.doc.vectors.len(), 2);
 }
 
+/// A value dragged on a drawing form is one undo: each step takes back the drag's last one.
+/// Only that step: an Undo and another edit made while the button is still held are not
+/// taken back by the drag going on.
+#[test]
+fn a_drag_on_a_form_takes_back_only_its_own_last_step() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.frame(vec![]);
+    let (from, to) = (h.at(100.0, 100.0), h.at(200.0, 160.0));
+    h.drag(from, to);
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    let dragged = *h.app.doc.vectors.keys().next().unwrap();
+    // held on the form, a value dragged: its first step
+    let on_form = h.text_at("Rounded").expect("the form is open");
+    h.frame(vec![mouse(PointerButton::Primary, on_form, true)]);
+    h.app.form.as_mut().unwrap().params["width"] = Value::from(80.0);
+    h.app.form.as_mut().unwrap().dirty = true;
+    h.frame_holding(Modifiers::NONE, vec![]);
+    // still held: that step undone, and another edit in its place
+    h.app.invoke(&h.ctx, "undo");
+    let params = serde_json::json!({
+        "x": 290.0, "y": 290.0, "width": 20.0, "height": 20.0, "corners": "square", "radius": 0.0
+    });
+    h.app.apply("draw_rectangle", &params).unwrap();
+    assert_eq!(h.app.doc.vectors.len(), 2);
+    h.app.doc.selection = [dragged].into_iter().collect();
+    // the drag goes on: it must not take back the square drawn meanwhile
+    h.app.form.as_mut().unwrap().params["width"] = Value::from(90.0);
+    h.app.form.as_mut().unwrap().dirty = true;
+    h.frame_holding(Modifiers::NONE, vec![]);
+    let square_stays = h.app.doc.vectors.values().any(|v| {
+        let b = v.bounds();
+        (b.center().x - 300.0).abs() < 1e-6 && (b.size().x - 20.0).abs() < 1e-6
+    });
+    assert!(square_stays, "the square drawn meanwhile stays");
+    assert_eq!(h.app.doc.vectors.len(), 2, "beside the one dragged");
+}
+
 #[test]
 fn reshaping_a_made_shape_by_hand_stops_it_being_remade_from_its_settings() {
     // sculpting or embossing a Create Shape dome and then pressing E would rebuild it from
@@ -706,4 +744,40 @@ fn a_drawing_named_on_the_command_line_comes_into_a_blank_job() {
     assert_eq!(h.app.screen, Screen::Job, "no Job Setup first");
     assert!(!h.app.doc.vectors.is_empty(), "the drawing came in");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_embellish_remake_that_fails_keeps_what_it_last_made() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 160.0, 120.0);
+    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
+    h.app.invoke(&h.ctx, "embellish");
+    h.frame(vec![]);
+    let params = h.app.registry.get("embellish").unwrap().default_params();
+    h.app.form.as_mut().unwrap().params = params.clone();
+    h.app.apply_form("embellish", &params).unwrap();
+    let made = (h.app.doc.vectors.len(), h.app.doc.components.len());
+    let depth = h.app.history.undo_depth();
+    // a raise height of nothing cannot be made
+    let mut bad = params.clone();
+    bad["make"] = "both".into();
+    bad["direction"] = "raised".into();
+    bad["height"] = 0.0.into();
+    assert!(h.app.apply_form("embellish", &bad).is_err());
+    assert_eq!(
+        (h.app.doc.vectors.len(), h.app.doc.components.len()),
+        made,
+        "the last ornament is still there"
+    );
+    assert_eq!(h.app.history.undo_depth(), depth, "still one undo");
+    assert_eq!(
+        h.app.remade_last(),
+        Some(params.clone()),
+        "and the form still remakes it in place"
+    );
+    // a good change after replaces it, not adds a second one
+    let mut good = params.clone();
+    good["seed"] = 7.into();
+    h.app.apply_form("embellish", &good).unwrap();
+    assert_eq!(h.app.history.undo_depth(), depth, "in place");
 }

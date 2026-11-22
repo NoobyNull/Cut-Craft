@@ -58,6 +58,7 @@ import-model-cancel = Cancel
     .tooltip = Close without importing the model (Esc does the same)
 import-model-import = Import
     .tooltip = Keep the model as placed
+    .waiting = Nothing is placed yet: change the settings above until the model shows, or press Cancel
 align-in-material = Align in Material
 align-height = Height
 undercuts-update = Update Undercuts
