@@ -92,6 +92,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_scale_model_z_height::ScaleModelZHeight>();
     r.add::<cmd_create_component_from_bitmap::CreateComponentFromBitmap>();
     r.add::<cmd_relief_from_photo::ReliefFromPhoto>();
+    r.add::<cmd_generate_border::GenerateBorder>();
     r.add::<cmd_bake_components::BakeComponents>();
     r.add::<cmd_create_component_from_visible_model::CreateComponentFromVisibleModel>();
     r.add::<cmd_smooth_selected_components::SmoothSelectedComponents>();
@@ -129,6 +130,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_nest_parts::NestParts>();
     r.add::<cmd_text_on_a_curve::TextOnACurve>();
     r.add::<cmd_move_node::MoveNode>();
+    r.add::<cmd_move_node::MoveHandle>();
     r.add::<cmd_insert_point::InsertPoint>();
     r.add::<cmd_delete_point::DeletePoint>();
     r.add::<cmd_cut_vector::CutVector>();

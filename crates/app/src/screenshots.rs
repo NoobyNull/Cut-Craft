@@ -45,6 +45,10 @@ const SCENES: &[Scene] = &[
     ("ribbon-layout", ribbon),
     ("ribbon-layout-dark", |_, _| {}),
     ("rotary-import", rotary_import),
+    // Help: Orientate 3D Model ▸ Changing the model's size
+    ("rotary-import-scale-to-fit", |_, _| {}),
+    // Help: Orientate 3D Model ▸ On a rotary job (after Import, as it really is)
+    ("rotary-imported-as-it-is", |app, _| app.form = None),
     // Help: Toolpaths ▸ Previewing a rotary job
     ("rotary-turning-preview", rotary_turning),
     // Help: Toolpaths ▸ Looking at the G-code
@@ -228,6 +232,25 @@ const SCENES: &[Scene] = &[
         app.options_goto = Some("confirmations");
         ctx.set_embed_viewports(true);
     }),
+    // Help: Using Cut Craft in another language (Options ▸ Language)
+    ("options-language", |app, ctx| {
+        everyday(app);
+        app.options_window = true;
+        app.options_goto = Some("language");
+        ctx.set_embed_viewports(true);
+    }),
+    // Help: Screen readers (Options ▸ Appearance, where the text size is)
+    ("options-appearance", |app, ctx| {
+        everyday(app);
+        app.options_window = true;
+        app.options_goto = Some("appearance");
+        ctx.set_embed_viewports(true);
+    }),
+    // Help: Help Contents (the Help window open on it)
+    ("help-contents", |app, _| {
+        everyday(app);
+        help_window(app, "contents", "");
+    }),
     // Help: First-Time Setup
     ("first-time-setup", |app, ctx| {
         everyday(app);
@@ -241,6 +264,30 @@ const SCENES: &[Scene] = &[
         (app.snap_window, app.snap_draft) = (false, None);
         app.first_run = None;
         cut_craft_bug_report::open_here(ctx);
+    }),
+    // Help: 3D View ▸ Which way is X, Y and Z (the view cube's arrows and the zero's)
+    ("axis-colours", |app, ctx| {
+        height_start(app, ctx);
+    }),
+    // Help: Transform ▸ Which way the handles go (the move cross along X and Y in 3D)
+    ("transform-axis-handles", |app, ctx| {
+        let medallion = app
+            .doc
+            .components
+            .iter()
+            .find(|(_, k)| k.name == "Medallion")
+            .map(|(&id, _)| id);
+        app.doc.selected_components = medallion.into_iter().collect();
+        app.view_action(ctx, "transform");
+    }),
+    // Help: Orientate 3D Model ▸ Turning the model with the rings
+    ("turn-rings", |app, ctx| {
+        app.view_tool = None;
+        import(app, ctx);
+        if let Some(form) = app.form.as_mut() {
+            form.params["turn"]["z"] = 30.0.into();
+            form.dirty = true;
+        }
     }),
     // Help: Long jobs and the time left
     ("progress-window", progress_window),
@@ -863,6 +910,21 @@ fn rotary_import(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.doc.job =
         cut_craft_core::document::Job::rotary(200.0, 90.0, cut_craft_core::document::Along::X);
     import(app, ctx);
+    // Change size ticked and Scale to Fit Material pressed, as a person would
+    if let Some(form) = app.form.as_mut() {
+        form.params["size"]["change_size"] = serde_json::Value::Bool(true);
+        let doc = cut_craft_core::document::Document {
+            job: app.doc.job,
+            ..cut_craft_core::document::Document::default()
+        };
+        if let Ok(fits) = serde_json::from_value(form.params.clone())
+            .map_err(|e| e.to_string())
+            .and_then(|p| cmd_orientate_3d_model::fit_scale(&doc, &p).map_err(|e| e.to_string()))
+        {
+            form.params["size"]["scale"] = serde_json::json!([fits, fits, fits]);
+        }
+        form.dirty = true;
+    }
     app.framing = crate::view3d::Framing::default();
 }
 

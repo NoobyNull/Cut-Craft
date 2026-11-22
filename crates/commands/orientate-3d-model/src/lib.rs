@@ -52,7 +52,13 @@ fn read_file(path: &str) -> Result<Read, CommandError> {
     let started = Instant::now();
     let read_at = std::time::SystemTime::now();
     let bytes = std::fs::read(path).map_err(|e| CommandError::Failed(format!("{path}: {e}")))?;
-    let triangles = fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?;
+    // a generated border from the Library: its depth map, at the size its recipe says
+    let tile = std::path::Path::new(path);
+    let triangles = if cut_craft_border_tile::of_depth_map(tile).is_some() {
+        cut_craft_border_tile::triangles(tile).map_err(CommandError::Failed)?
+    } else {
+        fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?
+    };
     let md5 = Source::md5(&bytes);
     log::info!(
         "Orientate 3D Model: read {path}: {} triangles in {} ms",
@@ -114,7 +120,7 @@ pub struct Orientation {
     /// Then a turn about the upright axis, in degrees
     #[schemars(
         title = "Rotation about Z Axis",
-        extend("x-unit" = "deg"),
+        extend("x-unit" = "deg", "x-axis" = "z"),
         extend("x-steps" = [-180, -90, 0, 90, 180])
     )]
     pub rotation: f64,
@@ -124,21 +130,39 @@ pub struct Orientation {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ModelSize {
     /// Keep the model's proportions: the size changed sets the others
-    #[schemars(title = "Lock XYZ ratio")]
+    #[schemars(title = "Lock XYZ ratio", extend("x-enable-when" = {"change_size": "true"}))]
     pub lock_ratio: bool,
-    /// The model's length once placed; 0 keeps the file's size
-    #[schemars(title = "X", extend("x-unit" = "mm"))]
+    /// The model's length once placed. Typing one scales the model once; turning it after
+    /// keeps that scale
+    #[schemars(title = "X", extend("x-unit" = "mm", "x-enable-when" = {"change_size": "true"}))]
     pub x: f64,
-    /// The model's width once placed; 0 keeps the file's size
-    #[schemars(title = "Y", extend("x-unit" = "mm"))]
+    /// The model's width once placed. Typing one scales the model once; turning it after
+    /// keeps that scale
+    #[schemars(title = "Y", extend("x-unit" = "mm", "x-enable-when" = {"change_size": "true"}))]
     pub y: f64,
-    /// The model's height once placed; 0 keeps the file's size
-    #[schemars(title = "Z", extend("x-unit" = "mm"))]
+    /// The model's height once placed. Typing one scales the model once; turning it after
+    /// keeps that scale
+    #[schemars(title = "Z", extend("x-unit" = "mm", "x-enable-when" = {"change_size": "true"}))]
     #[serde(default)]
     pub z: f64,
     /// The numbers in the file are in these units
     #[schemars(extend("x-widget" = "row"))]
     pub units: FileUnits,
+    /// Unlocks the size: X, Y, Z and Scale to Fit Material can change it. Off, the model
+    /// keeps the size it has, so nothing resizes it by accident
+    #[schemars(title = "Change size")]
+    #[serde(default)]
+    pub change_size: bool,
+    /// How much the model is scaled from the file's size, along the job's X, Y and Z: set
+    /// once by a size typed or Scale to Fit Material, and kept while the model is turned.
+    /// Not in the form: the size boxes show what it makes
+    #[schemars(skip)]
+    #[serde(default = "unscaled")]
+    pub scale: [f64; 3],
+}
+
+fn unscaled() -> [f64; 3] {
+    [1.0; 3]
 }
 
 /// Where the model sits relative to the modelling plane.
@@ -307,10 +331,11 @@ pub struct Params {
     #[schemars(title = "Imported model type", extend("x-hide-when" = {"offered": ["full", "flat"]}))]
     #[serde(default)]
     pub model_type: ModelType,
-    /// Scaled to fit the material, keeping its proportions: as big as its length, width and
-    /// thickness allow (a rotary job's length and diameter); else Model Size (0 keeps the
-    /// file's size). Either way it stays where Align in Material put it
-    #[schemars(title = "Scale model to fit material")]
+    /// Scaled to fit the material again on every change, keeping its proportions: as big as
+    /// its length, width and thickness allow (a rotary job's length and diameter). Not in the
+    /// form, which scales to fit once instead (its Scale to Fit Material button, kept in
+    /// `size.scale`); kept for settings saved before, and for scripts
+    #[schemars(extend("x-hide-when" = {"rotary": ["true", "false"]}))]
     #[serde(default)]
     pub fit_material: bool,
     /// What Options ▸ Importing and Exporting offers; never shown. Set by the app when the form
@@ -390,6 +415,8 @@ impl Default for Params {
                 y: 0.0,
                 z: 0.0,
                 units: FileUnits::Mm,
+                change_size: false,
+                scale: unscaled(),
             },
             placing: Placing {
                 center: true,
@@ -424,10 +451,10 @@ impl Command for Orientate3dModel {
         }
     }
 
-    /// Every job starts on a full 3D model; a rotary one scaled to its material.
+    /// Every job starts on a full 3D model at the file's size, its size locked: Scale to Fit
+    /// Material is a step the user takes.
     fn initial_params(doc: &Document) -> Params {
         Params {
-            fit_material: doc.job.rotary.is_some(),
             in_material: doc.job.model_position,
             ..Params::default()
         }
@@ -587,15 +614,10 @@ fn placed(
         wanted(p.size.z, size.z),
     ];
     let scale = if p.fit_material {
-        // as big as the material allows, every axis at the same rate until one meets it
-        let room = [area.size().x, area.size().y, doc.job.thickness];
-        let fits = room
-            .into_iter()
-            .zip([size.x, size.y, size.z])
-            .filter(|&(have, need)| have > 0.0 && need > 0.0)
-            .map(|(have, need)| have / need)
-            .fold(f64::INFINITY, f64::min);
-        DVec3::splat(if fits.is_finite() { fits } else { 1.0 })
+        DVec3::splat(fits_flat(doc, size))
+    } else if each.iter().all(Option::is_none) {
+        // the scale set once, kept whichever way the model is turned
+        DVec3::from(p.size.scale)
     } else if p.size.lock_ratio {
         DVec3::splat(each.into_iter().flatten().next().unwrap_or(1.0))
     } else {
@@ -636,6 +658,42 @@ fn placed(
         *t = t.map(place);
     }
     Ok((tris, Rect::new(corner, corner + footprint)))
+}
+
+/// As big as a flat job's material allows a model `size` big, every axis at the same rate
+/// until one meets it.
+fn fits_flat(doc: &Document, size: DVec3) -> f64 {
+    let area = doc.job.area();
+    let room = [area.size().x, area.size().y, doc.job.thickness];
+    let fits = room
+        .into_iter()
+        .zip([size.x, size.y, size.z])
+        .filter(|&(have, need)| have > 0.0 && need > 0.0)
+        .map(|(have, need)| have / need)
+        .fold(f64::INFINITY, f64::min);
+    if fits.is_finite() { fits } else { 1.0 }
+}
+
+/// Scale to Fit Material, worked out once: how much the file's model, turned as `p` turns
+/// it, is scaled to be as big as the material allows (a rotary job's length and radius for
+/// a full 3D model). The form keeps it as the model's scale, so turning the model after
+/// does not size it again.
+///
+/// # Errors
+/// When the file cannot be read, or the model has no size.
+pub fn fit_scale(doc: &Document, p: &Params) -> Result<f64, CommandError> {
+    let tris = oriented(p)?.0;
+    if let Some(rotary) = doc.job.rotary
+        && p.model_type == ModelType::Full
+    {
+        let fitting = Params {
+            fit_material: true,
+            ..p.clone()
+        };
+        return Ok(Turning::of(doc, rotary, &tris, &fitting)?.scale);
+    }
+    let (lo, hi) = bounds(&tris).ok_or_else(|| CommandError::Failed(EMPTY_MODEL.into()))?;
+    Ok(fits_flat(doc, hi - lo))
 }
 
 /// A triangle of the previewed model, and whether a cutter from above cannot reach it.
@@ -817,7 +875,8 @@ impl Turning {
         } else if params.size.x > 0.0 {
             params.size.x / length
         } else {
-            1.0
+            // the scale set once (the same every way round the axis), kept as it turns
+            params.size.scale[0]
         };
         let first = if params.placing.center {
             unrolled.along_from + (job_length - length * scale) / 2.0
@@ -1077,6 +1136,68 @@ mod tests {
         doc.apply(&change).unwrap();
         let k = doc.components.values().next().unwrap().clone();
         (doc, k)
+    }
+
+    #[test]
+    fn a_generated_border_from_the_library_comes_in_at_its_recipes_size() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-border-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (wide, high) = (60, 20);
+        // a ridge along the middle, 0 at the top and bottom edges
+        let depth: Vec<f32> = (0..wide * high)
+            .map(|at| {
+                let y = f32::from(u16::try_from(at / wide).unwrap());
+                1.0 - (y - 9.5).abs() / 9.5
+            })
+            .collect();
+        cut_craft_border_tile::save(
+            &dir,
+            "Rope",
+            &depth,
+            wide,
+            high,
+            &one_pixel_bmp(),
+            &cut_craft_border_tile::Recipe::new("rope", "3:1", 90.0, 30.0, 4.0),
+        )
+        .unwrap();
+        let params = Params {
+            file: dir.join("Rope.png").display().to_string(),
+            ..Params::default()
+        };
+        let mut doc = Document::default();
+        let change = Orientate3dModel::run(&doc, &params).unwrap();
+        doc.apply(&change).unwrap();
+        let model = doc.components.values().next().unwrap();
+        let size = |n: usize| f64::from(u32::try_from(n).unwrap()) * model.cell;
+        let (x, y) = (size(model.columns), size(model.rows));
+        assert!(
+            (x - 90.0).abs() < 2.0 * model.cell && (y - 30.0).abs() < 2.0 * model.cell,
+            "{x} {y}"
+        );
+        let top = model
+            .heights
+            .iter()
+            .copied()
+            .filter(|v| v.is_finite())
+            .fold(0.0, f64::max);
+        assert!((top - 4.0).abs() < 0.3, "{top}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A picture one pixel big, as a BMP.
+    fn one_pixel_bmp() -> Vec<u8> {
+        let mut b = vec![b'B', b'M'];
+        b.extend(58u32.to_le_bytes());
+        b.extend([0u8; 4]);
+        b.extend(54u32.to_le_bytes());
+        b.extend(40u32.to_le_bytes());
+        b.extend(1i32.to_le_bytes());
+        b.extend(1i32.to_le_bytes());
+        b.extend(1u16.to_le_bytes());
+        b.extend(24u16.to_le_bytes());
+        b.extend([0u8; 24]);
+        b.extend([90, 150, 200, 0]);
+        b
     }
 
     #[test]
@@ -1557,6 +1678,104 @@ mod rotary {
     }
 
     #[test]
+    fn a_rotary_job_starts_at_the_file_s_size_with_its_size_locked() {
+        // scaled to fit only when asked, so a turn or a small change never resizes it unseen
+        let p = Orientate3dModel::initial_params(&rotary_job());
+        assert!(!p.fit_material);
+        assert!(
+            !p.size.change_size,
+            "the size is locked until Change size is ticked"
+        );
+        assert_eq!(p.size.scale, [1.0; 3]);
+    }
+
+    #[test]
+    fn scale_to_fit_is_worked_out_once_and_kept_while_the_model_turns() {
+        // a 50 long, 20 across cylinder on a 100 long, 30 across job: as it lies, it fits at
+        // 1.5 (its 10 mm reach to the 15 mm radius)
+        let faces = cylinder(10.0, 50.0);
+        let p = Params {
+            file: stl("fit-once", &faces),
+            model_type: ModelType::Full,
+            ..Params::default()
+        };
+        let fits = fit_scale(&rotary_job(), &p).unwrap();
+        assert!((fits - 1.5).abs() < 1e-3, "{fits}");
+        let p = Params {
+            size: ModelSize {
+                scale: [fits; 3],
+                ..p.size.clone()
+            },
+            ..p
+        };
+        let reach = |p: &Params| {
+            let tris = preview(&rotary_job(), p).unwrap().unwrap();
+            tris.iter()
+                .flat_map(|(t, _)| t.iter().map(|v| v.y.hypot(v.z)))
+                .fold(0.0, f64::max)
+        };
+        assert!((reach(&p) - 15.0).abs() < 0.1, "fitted: {}", reach(&p));
+        // turned 30° about Y: the same size, not fitted again (its reach out grows past the
+        // radius instead of the model shrinking every step of the turn)
+        let turned = Params {
+            turn: Turn {
+                y: 30.0,
+                ..Turn::default()
+            },
+            ..p.clone()
+        };
+        let tris = preview(&rotary_job(), &turned).unwrap().unwrap();
+        let first = tris[0].0;
+        let straight = preview(&rotary_job(), &p).unwrap().unwrap()[0].0;
+        for (a, b) in [(0, 1), (1, 2), (0, 2)] {
+            let (now, was) = (
+                first[a].distance(first[b]),
+                straight[a].distance(straight[b]),
+            );
+            assert!((now - was).abs() < 1e-6, "edge {a}-{b}: {now} vs {was}");
+        }
+        let out = reach(&turned);
+        assert!(
+            out > 15.5,
+            "kept its size, so it reaches past the radius: {out}"
+        );
+    }
+
+    #[test]
+    fn a_flat_job_s_scale_to_fit_is_worked_out_once_too() {
+        // a 10 tall box 40 by 20 on the 600 by 400, 20 thick default job: 2 times fills
+        // its thickness first
+        let faces = cuboid([0.0, 0.0, 0.0], [40.0, 20.0, 10.0]);
+        let p = Params {
+            file: stl("fit-flat", &faces),
+            ..Params::default()
+        };
+        let doc = Document::default();
+        let fits = fit_scale(&doc, &p).unwrap();
+        assert!((fits - 2.0).abs() < 1e-9, "{fits}");
+        let p = Params {
+            size: ModelSize {
+                scale: [fits; 3],
+                ..p.size.clone()
+            },
+            turn: Turn {
+                z: 90.0,
+                ..Turn::default()
+            },
+            ..p
+        };
+        let tris = preview(&doc, &p).unwrap().unwrap();
+        let (lo, hi) = bounds(&tris.iter().map(|(t, _)| *t).collect::<Vec<_>>()).unwrap();
+        let size = hi - lo;
+        // turned flat on the spot, still 80 by 40 by 20: not fitted again
+        assert!(
+            (size.x - 40.0).abs() < 1e-4 && (size.y - 80.0).abs() < 1e-4,
+            "{size}"
+        );
+        assert!((size.z - 20.0).abs() < 1e-4, "{size}");
+    }
+
+    #[test]
     fn a_steep_slope_is_within_reach() {
         // a wedge rising at 70° across the job: every face is cut from above, so none is red
         // (the old rule marked a steep face by its own cell, which is higher than its middle)
@@ -1719,14 +1938,14 @@ mod rotary {
     }
 
     #[test]
-    fn every_job_starts_on_a_full_model_a_rotary_one_fitted() {
+    fn every_job_starts_on_a_full_model_none_fitted_unasked() {
         let rotary = Orientate3dModel::initial_params(&rotary_job());
         let flat = Orientate3dModel::initial_params(&Document::default());
         assert_eq!(
             (rotary.model_type, flat.model_type),
             (ModelType::Full, ModelType::Full)
         );
-        assert!(rotary.fit_material && !flat.fit_material);
+        assert!(!rotary.fit_material && !flat.fit_material);
     }
 
     #[test]

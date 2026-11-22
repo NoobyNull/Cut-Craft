@@ -15,6 +15,7 @@ mod first_run;
 mod fit_import;
 mod follow;
 mod gcode_view;
+mod generate_border;
 mod guide;
 #[cfg(test)]
 mod hard_coded_text;
@@ -233,6 +234,13 @@ impl SurfaceGpu {
         self.making.push((cells, job));
     }
 }
+
+/// A rotary job's full 3D models as the 3D view draws them, kept by the change and the
+/// import (its faces' address) they show.
+type TurnedModels = (
+    (u64, Option<usize>),
+    std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
+);
 
 /// The GPU's surface (and, with `solid`, walls and bottom) of `surface`.
 fn level_of(
@@ -1251,6 +1259,8 @@ struct CutCraftApp {
     immediate_output: SaveForm,
     /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
     depth_estimate: Option<crate::depth::Estimating>,
+    /// Generate Border's key, and the border it is generating.
+    border: generate_border::BorderForm,
     /// Relief from Photo's High detail tick: unset means on once the model is fetched.
     depth_high_detail: Option<bool>,
     /// The High detail model downloading, or why its last download failed.
@@ -1368,6 +1378,9 @@ struct CutCraftApp {
     /// The handle a drag started on, which the drag then turns the model about (`xyz`: the
     /// sphere, all three axes).
     turn_ring: Option<&'static str>,
+    /// While a ring is held: the way + runs round it under the pointer, on screen, and how
+    /// far it reaches from its middle, points.
+    ring_grip: Option<(egui::Vec2, f32)>,
     /// An open Help window.
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.
@@ -1458,6 +1471,9 @@ struct CutCraftApp {
     /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
     /// made once a change, not every frame.
     rough_3d: Option<(RoughKey, Material)>,
+    /// A rotary job's full 3D models as the view draws them round the axis, kept by the
+    /// change and the import they show.
+    turned_3d: Option<TurnedModels>,
     /// What the collet nut, spindle or shank hit in the last preview, by toolpath: the
     /// toolpath list marks them ⚠ in red and the 3D view shows the stock in the way red.
     collisions: std::collections::BTreeMap<EntityId, Collided>,
@@ -1832,6 +1848,7 @@ fn summary_fields() -> [crate::form::Field; 2] {
             tab: None,
             dim: None,
             diagram: None,
+            axis: None,
         },
         crate::form::Field {
             key: "scale_factor".into(),
@@ -1856,6 +1873,7 @@ fn summary_fields() -> [crate::form::Field; 2] {
             tab: None,
             dim: None,
             diagram: None,
+            axis: None,
         },
     ]
 }

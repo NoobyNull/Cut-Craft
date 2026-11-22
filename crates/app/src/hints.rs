@@ -97,6 +97,14 @@ pub const HINTS: &[(&str, &str)] = &[
         "Convert Span to Bezier: makes the span under the pointer a curve with two handles you can drag to shape it",
     ),
     (
+        "move_node",
+        "Move Node: drags the node (a square) under the pointer to a new place; a curve's handles move with it",
+    ),
+    (
+        "move_handle",
+        "Move Handle: drags a curve's round handle in Node Edit to bend that span; its nodes stay put",
+    ),
+    (
         "ungroup_onto_current_layer",
         "Ungroup onto Current Layer: takes the selected groups apart one level (groups and text in them come out as they were) and moves their vectors onto the layer you are working on",
     ),

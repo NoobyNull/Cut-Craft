@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 see-also: profile_toolpath, nest_parts, tool_database
 ---
 
@@ -14,6 +14,8 @@ Use tabs whenever a profile cuts **through** the material and the part isn't hel
 another way (screws, tape or a vacuum table).
 
 ## Adding tabs
+
+![Add tabs to toolpath, on the Profile form](pictures/profile_toolpath/step-5.png)
 
 1. Open the [Profile Toolpath](help:profile_toolpath) form and tick **Add tabs to
    toolpath**.

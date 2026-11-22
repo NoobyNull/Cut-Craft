@@ -86,6 +86,91 @@ pub(super) fn warning(params: &Value, room: Room) -> Option<String> {
     }
 }
 
+/// Import 3D Model's sections that turn or move the model.
+const ROTATION_SECTION: &str = "Interactive Rotation";
+const POSITION_SECTION: &str = "Position relative to Modeling Plane";
+const AXIS_SECTION: &str = "Rotation Axis Movement";
+
+/// Whether Import 3D Model's model is turned from how its file has it: another face up, a
+/// turn about Z, or a fine turn about any axis.
+pub(super) fn turned(params: &Value) -> bool {
+    let off = |v: &Value| v.as_f64().is_some_and(|a| a != 0.0);
+    params["orientation"]["face"]
+        .as_str()
+        .is_some_and(|f| f != "top")
+        || off(&params["orientation"]["rotation"])
+        || ["x", "y", "z"].iter().any(|k| off(&params["turn"][k]))
+}
+
+/// Import 3D Model's model turned back to how its file has it: its top up, no turn about Z
+/// and no fine turns (what Drag turns does is kept).
+pub(super) fn reset_rotation(params: &mut Value) {
+    params["orientation"]["face"] = Value::from("top");
+    params["orientation"]["rotation"] = Value::from(0.0);
+    for k in ["x", "y", "z"] {
+        params["turn"][k] = Value::from(0.0);
+    }
+}
+
+/// Whether Import 3D Model's model has been moved from where it first came in: centred on
+/// the material (or on a rotary job's axis), sitting on the zero plane.
+pub(super) fn moved(params: &Value) -> bool {
+    let placing = &params["placing"];
+    let off = |v: &Value| v.as_f64().is_some_and(|a| a != 0.0);
+    let at = |k: &str, want: f64| placing["align"][k].as_f64() == Some(want);
+    // centred until shown, then kept as the middle of the material, on the zero plane
+    let height = &placing["align"]["height"];
+    let low = height.is_null() || at("height", 0.0);
+    let home = (placing["center"] == true && low)
+        || (at("across", 0.5) && at("up", 0.5) && at("height", 0.0));
+    !home || off(&params["axis"]["across"]) || off(&params["axis"]["up"])
+}
+
+/// Import 3D Model's model put back where it first came in: centred on the material, its
+/// bottom on the zero plane, and on a rotary job's axis.
+pub(super) fn reset_position(params: &mut Value) {
+    let placing = &mut params["placing"];
+    placing["center"] = Value::Bool(true);
+    placing["align"] = serde_json::json!({ "across": null, "up": null, "height": null });
+    placing["depth_below_top"] = Value::from(0.0);
+    params["axis"]["across"] = Value::from(0.0);
+    params["axis"]["up"] = Value::from(0.0);
+}
+
+/// The foot of Import 3D Model's Interactive Rotation section (Reset rotation) and of its
+/// position sections (Reset position): back to how the file has it, or where it first came
+/// in, before it is imported, with no Undo needed (Undo only takes back what was imported).
+/// Each is greyed while there is nothing to put back. Whether the settings changed.
+pub(super) fn reset_end(ui: &mut egui::Ui, section: &str, params: &mut Value) -> bool {
+    if params.get("turn").is_none() || params.get("placing").is_none() {
+        return false;
+    }
+    let (word, tip, can, reset): (_, _, _, fn(&mut Value)) = match section {
+        ROTATION_SECTION => (
+            tr!("placement-reset-rotation"),
+            tr!("placement-reset-rotation.tooltip"),
+            turned(params),
+            reset_rotation,
+        ),
+        POSITION_SECTION | AXIS_SECTION => (
+            tr!("placement-reset-position"),
+            tr!("placement-reset-position.tooltip"),
+            moved(params),
+            reset_position,
+        ),
+        _ => return false,
+    };
+    let clicked = ui
+        .add_enabled(can, egui::Button::new(word))
+        .on_hover_hint(&tip)
+        .on_disabled_hover_text(tr!("placement-reset-nothing"))
+        .clicked();
+    if clicked {
+        reset(params);
+    }
+    clicked
+}
+
 /// Draws the foot of the Model Position in Material section: the picture, both gaps and
 /// the two one-click places. Whether the settings changed.
 pub(super) fn section_end(
@@ -237,6 +322,73 @@ mod tests {
 
     fn import(from: &str, gap: f64) -> Value {
         serde_json::json!({ "in_material": { "from": from, "gap": gap } })
+    }
+
+    /// Import 3D Model's settings as they open.
+    fn opened() -> Value {
+        serde_json::to_value(cmd_orientate_3d_model::Params::default()).unwrap()
+    }
+
+    #[test]
+    fn reset_rotation_turns_the_model_back_to_how_its_file_has_it() {
+        let mut p = opened();
+        assert!(!turned(&p), "a new import is as drawn");
+        p["orientation"]["face"] = "front".into();
+        p["orientation"]["rotation"] = 90.0.into();
+        p["turn"]["y"] = 35.0.into();
+        p["turn"]["mode"] = "y".into();
+        assert!(turned(&p));
+        reset_rotation(&mut p);
+        assert!(!turned(&p), "{p}");
+        assert_eq!(p["turn"]["mode"], "y", "what a drag turns is kept");
+        let back: cmd_orientate_3d_model::Params = serde_json::from_value(p).unwrap();
+        assert_eq!(back.turn.x + back.turn.y + back.turn.z, 0.0);
+    }
+
+    #[test]
+    fn reset_position_puts_the_model_back_centred_on_the_zero_plane_and_on_the_axis() {
+        let mut p = opened();
+        assert!(!moved(&p), "a new import is centred");
+        // shown as the app shows a centred model: kept in the middle, on the plane
+        p["placing"]["center"] = false.into();
+        p["placing"]["align"] = serde_json::json!({ "across": 0.5, "up": 0.5, "height": 0.0 });
+        assert!(!moved(&p), "still where it came in");
+        p["placing"]["align"]["across"] = 0.0.into();
+        p["placing"]["depth_below_top"] = 12.0.into();
+        assert!(moved(&p));
+        reset_position(&mut p);
+        assert!(!moved(&p), "{p}");
+        assert_eq!(p["placing"]["depth_below_top"], 0.0);
+        // lifted by Align in Material's height before the centring is shown
+        p["placing"]["align"]["height"] = 1.0.into();
+        p["placing"]["depth_below_top"] = 20.0.into();
+        assert!(moved(&p), "lifted, still centred across");
+        reset_position(&mut p);
+        p["axis"]["up"] = 4.0.into();
+        assert!(moved(&p), "off a rotary job's axis");
+        reset_position(&mut p);
+        assert!(!moved(&p));
+        let _: cmd_orientate_3d_model::Params = serde_json::from_value(p).unwrap();
+    }
+
+    #[test]
+    fn only_import_3d_models_turn_and_place_sections_get_reset_buttons() {
+        let ctx = egui::Context::default();
+        let mut shown = vec![];
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut p = opened();
+            for section in [ROTATION_SECTION, POSITION_SECTION, AXIS_SECTION, SECTION] {
+                let before = ui.min_rect().height();
+                reset_end(ui, section, &mut p);
+                shown.push(ui.min_rect().height() > before);
+            }
+            let mut other = serde_json::json!({ "x": 1.0 });
+            let before = ui.min_rect().height();
+            reset_end(ui, ROTATION_SECTION, &mut other);
+            shown.push(ui.min_rect().height() > before);
+        });
+        out.textures_delta.clear();
+        assert_eq!(shown, [true, true, true, false, false]);
     }
 
     #[test]

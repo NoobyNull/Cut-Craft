@@ -1044,6 +1044,122 @@ fn node_editing_drags_a_corner_and_offers_its_menu() {
 }
 
 #[test]
+fn a_span_made_a_bezier_shows_handles_that_drag_to_bend_it() {
+    use cut_craft_core::geometry::Segment;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let id = *h.app.doc.selection.iter().next().unwrap();
+    h.app.invoke(&h.ctx, "node_edit");
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.snap_to_grid = false;
+    // right-click the bottom side, Convert Span to Bezier
+    let target = h
+        .app
+        .node_target(Point::new(20.0, 10.0), 1.0)
+        .expect("the bottom side");
+    let menu = gui::node_menu(&h.app.doc, &target);
+    let convert = leaf(&menu, &["Convert Span to Bezier"]);
+    h.app.invoke(&h.ctx, &convert.action);
+    assert!(
+        h.app.doc.selection.contains(&id),
+        "still the one being edited"
+    );
+    let crate::view2d::Overlay::Nodes { handles, .. } = h.app.node_overlay(None, 1.0) else {
+        panic!("the node overlay")
+    };
+    assert_eq!(
+        handles.len(),
+        2,
+        "one at each end of the curve: {handles:?}"
+    );
+    // drag the handle nearest the left corner down: the side bends, the corners stay
+    let (_, handle) = handles
+        .iter()
+        .copied()
+        .min_by(|a, b| a.1.x.total_cmp(&b.1.x))
+        .unwrap();
+    let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+    let (from, to) = (h.at(handle.x, handle.y), h.at(handle.x, handle.y - 6.0));
+    h.drag(from, to);
+    let path = &h.app.doc.vectors[&id];
+    assert_eq!(
+        cut_craft_core::nodes::nodes(path),
+        corners,
+        "the corners stay"
+    );
+    let pulled = path.segments.iter().any(|s| {
+        matches!(s, Segment::Cubic { c1, c2, .. }
+            if c1.y < 7.0 || c2.y < 7.0)
+    });
+    assert!(
+        pulled,
+        "a handle went down with the drag: {:?}",
+        path.segments
+    );
+}
+
+#[test]
+fn a_handle_beside_its_corner_drags_with_snapping_on_and_one_on_its_corner_moves_the_corner() {
+    use cut_craft_core::geometry::Segment;
+    use cut_craft_core::nodes::{handles, move_handle, nodes, span_to_bezier};
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let id = *h.app.doc.selection.iter().next().unwrap();
+    h.app.invoke(&h.ctx, "node_edit");
+    // the bottom side a curve, the handle at its left pulled in close beside the corner,
+    // well inside the snapping radius of the corner (snapping is on, as it is by default)
+    let path = h.app.doc.vectors[&id].clone();
+    let k = cut_craft_core::nodes::span_near(&path, Point::new(20.0, 10.0), 1.0).unwrap();
+    let curved = span_to_bezier(&path, k);
+    let left = handles(&curved)
+        .into_iter()
+        .find(|g| g.span == k && g.node.x < 15.0)
+        .unwrap();
+    let beside = left.node + Point::new(0.8, 0.0);
+    h.app
+        .doc
+        .vectors
+        .insert(id, move_handle(&curved, left.span, left.second, beside));
+    let corners = nodes(&h.app.doc.vectors[&id]);
+    // let go well away from anything the end could snap to
+    h.drag(
+        h.at(beside.x, beside.y),
+        h.at(beside.x + 4.0, beside.y - 15.0),
+    );
+    let path = &h.app.doc.vectors[&id];
+    assert_eq!(
+        nodes(path),
+        corners,
+        "the press on the handle did not snap to the corner"
+    );
+    assert!(
+        handles(path).iter().any(|g| g.at.y < 0.0),
+        "the handle went down: {:?}",
+        path.segments
+    );
+    // a handle lying on its corner: the corner wins
+    let on = handles(path).into_iter().find(|g| g.at.y < 0.0).unwrap();
+    let flat = move_handle(path, on.span, on.second, on.node);
+    h.app.doc.vectors.insert(id, flat);
+    h.app.options.snapping.smart_snapping = false;
+    h.drag(
+        h.at(on.node.x, on.node.y),
+        h.at(on.node.x + 20.0, on.node.y - 25.0),
+    );
+    let moved = nodes(&h.app.doc.vectors[&id]);
+    assert!(
+        moved
+            .iter()
+            .any(|q| q.distance(on.node + Point::new(20.0, -25.0)) < 0.5),
+        "the corner moved: {moved:?}"
+    );
+    assert!(matches!(
+        h.app.doc.vectors[&id].segments[on.span],
+        Segment::Cubic { .. }
+    ));
+}
+
+#[test]
 fn a_template_opens_as_a_new_unsaved_job() {
     let dir = std::env::temp_dir().join(format!("cut-craft-template-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -7916,15 +8032,22 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     h.frame(vec![]);
     let size = &h.app.form.as_ref().unwrap().params["size"];
     assert!((size["x"].as_f64().unwrap() - 40.0).abs() < 1e-6, "{size}");
-    // the fit is offered in a flat job too; the model type only when the options offer
-    // both kinds, and what the options are is never shown
-    assert!(h.text_at("Scale model to fit material").is_some());
+    // the fit is offered in a flat job too, as a button done once; the model type only when
+    // the options offer both kinds, and what the options are is never shown
+    let over = h.text_at("Initial Orientation").unwrap();
+    assert!(
+        h.scroll_to(over, "Change size").is_some(),
+        "the size's lock"
+    );
+    // the placing is on the same page, Center model left to the alignment buttons
+    assert!(h.scroll_to(over, "Depth Below Top").is_some());
+    assert!(h.text_at("Center model").is_none());
+    let fit = h.scroll_to(over, "Scale to Fit Material").unwrap();
+    let undercuts = h.text_at("Update Undercuts").unwrap();
+    assert!(fit.y > undercuts.y, "the last choice on the form");
     for label in ["Imported model type", "Offered"] {
         assert_eq!(h.text_at(label), None, "{label} is not shown");
     }
-    // the placing is on the same page, Center model left to the alignment buttons
-    assert!(h.text_at("Depth Below Top").is_some());
-    assert!(h.text_at("Center model").is_none());
     let _ = std::fs::remove_file(file);
 }
 
@@ -10905,6 +11028,39 @@ fn orientate_3d_models_rings_turn_the_model_about_their_axis_and_the_sphere_abou
     h.drag(corner, corner + vec2(60.0, 0.0));
     assert_eq!(turn(&h), before);
     assert_ne!(h.app.orbit, orbit, "the view turned");
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn orientate_3d_models_rings_turn_plus_the_way_their_plus_arrow_points_and_minus_back() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("ring-ways");
+    h.app.import_file(&file);
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let turn = |h: &Harness, k: &str| h.app.form.as_ref().unwrap().params["turn"][k].as_f64();
+    // the + and − arrows as drawn now: the rings follow the model as it turns
+    let marks_now = |h: &Harness, i: usize| {
+        let (rings, sphere) = h.app.rings_3d.clone();
+        let all: Vec<&[Pos2]> = rings.iter().map(|(_, p)| p.as_slice()).collect();
+        let gap = 9.0 * egui::Style::default().spacing.interact_size.y / 2.0;
+        let marks = crate::axes::rings_marks(&all, sphere.unwrap().0, gap);
+        let (at, along) = marks[i].unwrap();
+        (rings[i].1[at], along)
+    };
+    for (i, key) in ["x", "y", "z"].into_iter().enumerate() {
+        // along the ring the + way from its arrows, then back
+        let (from, along) = marks_now(&h, i);
+        let before = turn(&h, key).unwrap();
+        h.drag(from, from + along * 30.0);
+        let after = turn(&h, key).unwrap();
+        assert!(after > before + 1.0, "{key}: {before} -> {after}");
+        let (from, along) = marks_now(&h, i);
+        h.drag(from, from - along * 30.0);
+        let back = turn(&h, key).unwrap();
+        assert!(back < after - 1.0, "{key}: {after} -> {back}");
+    }
     let _ = std::fs::remove_file(file);
 }
 
@@ -20052,4 +20208,115 @@ fn a_rotary_jobs_3d_origin_is_on_the_axis_for_machine_bed() {
         panels::origin_3d(&job, true).abs() < 1e-9,
         "the outline's bottom, its top being the blank's radius up"
     );
+}
+
+#[test]
+fn a_full_model_imported_into_a_rotary_job_is_drawn_as_it_really_is_not_wrapped_again() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 30.0, Along::X);
+    let file = pyramid_stl("rotary-real");
+    h.app.import_file(&file);
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    // what the import showed, turned round the axis
+    let importing: Vec<_> = h
+        .app
+        .form
+        .as_ref()
+        .unwrap()
+        .model
+        .as_deref()
+        .unwrap()
+        .clone();
+    h.app.form = None;
+    h.frame(vec![]);
+    let k = h.app.doc.components.values().next().unwrap().clone();
+    assert!(!k.solid.is_empty(), "kept as its real 3D shape");
+    // not wrapped round the cylinder again from its unrolled heights
+    let shape = h.app.model_shape(64);
+    assert!(
+        shape.heights.iter().all(|h| h.is_nan()),
+        "the wrapped surface leaves the full model out"
+    );
+    assert!(h.app.shows_turned(), "the job is shown round its axis");
+    // drawn where the import showed it, to the micrometre
+    let shown = h.app.rotary_models(None);
+    assert_eq!(shown.len(), importing.len());
+    for ((a, _), (b, _)) in shown.iter().zip(&importing) {
+        for (p, q) in a.iter().zip(b) {
+            assert!(p.distance(*q) < 1e-3, "{p} vs {q}");
+        }
+    }
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn a_rotary_model_along_y_is_drawn_with_its_axis_along_y() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 30.0, Along::Y);
+    let file = pyramid_stl("rotary-real-y");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    let importing: Vec<_> = h
+        .app
+        .form
+        .as_ref()
+        .unwrap()
+        .model
+        .as_deref()
+        .unwrap()
+        .clone();
+    h.app.form = None;
+    let shown = h.app.rotary_models(None);
+    for ((a, _), (b, _)) in shown.iter().zip(&importing) {
+        for (p, q) in a.iter().zip(b) {
+            assert!(p.distance(*q) < 1e-3, "{p} vs {q}");
+        }
+    }
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn an_import_s_size_is_locked_and_set_once_whichever_way_it_is_turned() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 30.0, Along::X);
+    let file = pyramid_stl("size-once");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["fit_material"], false, "not fitted unasked");
+    assert_eq!(
+        form.params["size"]["change_size"], false,
+        "the size starts locked"
+    );
+    let shown = |h: &Harness| {
+        h.app.form.as_ref().unwrap().params["size"]["x"]
+            .as_f64()
+            .unwrap()
+    };
+    // the 20 long pyramid at the file's size
+    assert!((shown(&h) - 20.0).abs() < 0.01, "{}", shown(&h));
+    // a length typed scales it once: twice as big
+    let form = h.app.form.as_mut().unwrap();
+    form.params["size"]["change_size"] = Value::Bool(true);
+    form.params["size"]["x"] = Value::from(40.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let scale = |h: &Harness| h.app.form.as_ref().unwrap().params["size"]["scale"].clone();
+    assert_eq!(scale(&h), serde_json::json!([2.0, 2.0, 2.0]));
+    // turned a quarter about Z: still twice as big, not sized again to 40 along X
+    let form = h.app.form.as_mut().unwrap();
+    form.params["turn"]["z"] = Value::from(90.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(scale(&h), serde_json::json!([2.0, 2.0, 2.0]));
+    // the pyramid's 10 wide side along the axis now: 20 long at twice
+    assert!((shown(&h) - 20.0).abs() < 0.05, "{}", shown(&h));
+    let _ = std::fs::remove_file(file);
 }

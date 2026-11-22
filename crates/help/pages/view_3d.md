@@ -22,9 +22,23 @@ up to the [Preview detail](help:preview_detail) slider on the Toolpaths page's P
   fits the job; **Perspective** makes near things larger, as your eye sees them; **Vectors**
   shows or hides the vectors drawn over the model.
 
+## Which way is X, Y and Z
+
+Every axis has one colour all through Cut Craft: **X is red, Y is green and Z is blue**.
+The same colours are on the arrows in the views, on the rings and arrows you drag to turn
+or move something, and on the **X**, **Y** and **Z** boxes in the forms, so a red box always
+means X.
+
+The **view cube** in the top right corner has three arrows along its edges, one
+for each axis, each with its letter at the **+** end. They turn with the cube, so however you
+have turned the view you can see at once which way X, Y and Z run.
+
+![The view cube with its red X, green Y and blue Z arrows, and the job's zero arrows on the material](pictures/axis-colours.png)
+
 ## Where zero is
 
-Three short arrows, red for X, green for Y and blue for Z, start at the job's zero: the
+Three short arrows, red for X, green for Y and blue for Z, start at the job's zero, each
+with an arrow head and its letter at its **+** end: the
 spot where you will zero the bit on your machine. They sit at the **XY zero** you picked in
 [Job Setup](help:job_setup), at the height its **Z Zero Position** says:
 

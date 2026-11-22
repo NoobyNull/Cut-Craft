@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 see-also: contents, settings
 ---
 
@@ -27,6 +27,8 @@ Start the screen reader before or after Cut Craft; either way it picks Cut Craft
 - **Esc** closes the open form or small window.
 - **Ctrl+Plus** and **Ctrl+Minus** make everything bigger or smaller.
   [Edit ▸ Options ▸ Appearance ▸ Text size](help:settings) sets the size it starts at.
+
+![Text size, at the foot of Edit ▸ Options ▸ Appearance](pictures/options-appearance.png)
 
 ## What you hear in a form
 

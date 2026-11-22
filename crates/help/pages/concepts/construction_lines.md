@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-22
 see-also: make_construction_line, make_real_line, embellish, import_into_shape
 ---
 
@@ -17,6 +17,8 @@ Use one when you want something to follow a path you don't want carved, for exam
 - Snap shapes to a centre line or a circle you only need as a guide.
 
 ## Making one
+
+![A centre line made into a construction line: drawn dashed, never cut](pictures/make_construction_line/step-2.png)
 
 1. Draw the line or shape with any drawing tool, and select it.
 2. Right-click it and pick **Make Construction Line**
