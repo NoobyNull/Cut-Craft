@@ -3,7 +3,7 @@ reviewed: 2026-11-22
 see-also: arrange_toolpaths, group_toolpaths, toolpath_summary
 ---
 
-**Move Up** and **Move Down** under the Toolpath List move the picked toolpath one place. The list
+**Move Up** and **Move Down** above the Toolpath List move the picked toolpath one place. The list
 is the order the toolpaths are cut and saved in, top first.
 
 ## Steps

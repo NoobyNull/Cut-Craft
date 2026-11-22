@@ -19,7 +19,7 @@ the cut-out on another, and show, hide or select each on its own.
 
    ![Step 2](pictures/add_layer/step-2.png)
 
-3. Press **Apply**. The new layer goes to the top of the list and is made current, so what you draw next goes on it.
+3. Press **Create**. The new layer goes to the top of the list and is made current, so what you draw next goes on it.
 
    ![Step 3](pictures/add_layer/step-3.png)
 

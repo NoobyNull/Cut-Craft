@@ -3,8 +3,8 @@ reviewed: 2026-11-22
 see-also: select_all_vectors, vector_validator, delete
 ---
 
-**Select All Duplicate Vectors** (Edit ▸ Selection) selects every vector lying exactly on top of
-another one. Drawings from other programs often have them, and they would be cut twice. Press
+**Select All Duplicate Vectors** (Edit ▸ Selection) selects the extra copies of every vector
+drawn twice, one exactly on top of the other, leaving one of each unselected. Drawings from other programs often have them, and they would be cut twice. Press
 **Delete** to keep one of each.
 
 ## Steps

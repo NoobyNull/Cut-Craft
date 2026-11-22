@@ -20,5 +20,7 @@ it start, and plunge, at that node. It is on node editing's right-click menu.
 
 ## Good to know
 
+- It counts when the profile's **Start At** is **Keep Current Start Points**: the default,
+  Optimize Start Points, picks its own.
 - Put the start where a plunge mark won't show, such as an inside corner.
 - Choose which way it runs with [Reverse Direction](help:reverse_direction).

@@ -4,8 +4,8 @@ see-also: layer_properties, interface_layout, zoom_to_job
 ---
 
 **Show** and **Hide** on the right-click menu of a layer, toolpath or component show or hide it,
-or a whole set at once. Hidden layers' vectors are not drawn or picked, hidden toolpaths are not
-previewed or saved, and hidden components are left out of the model.
+or a whole set at once. Hidden layers' vectors are not drawn or picked, hidden toolpaths are left
+out of Preview Visible and of saving the shown ones, and hidden components are left out of the model.
 
 ## Steps
 

@@ -24,7 +24,7 @@ profile picked.
 
    ![Step 3](pictures/create_shape/step-3.png)
 
-4. Press **Apply**. The shape is added to the model as a component.
+4. Press **Create**. The shape is added to the model as a component.
 
    ![Step 4](pictures/create_shape/step-4.png)
 

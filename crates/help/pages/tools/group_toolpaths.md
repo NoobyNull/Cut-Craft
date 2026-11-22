@@ -15,7 +15,7 @@ and move up and down the list together. Pick toolpaths and press **Group**, or r
 
    ![Step 1](pictures/group_toolpaths/step-1.png)
 
-2. Press **Group** under the list. The group is cut one toolpath after another, and moves as one.
+2. Press **Group** above the list. The group is cut one toolpath after another, and moves as one.
 
    ![Step 2](pictures/group_toolpaths/step-2.png)
 

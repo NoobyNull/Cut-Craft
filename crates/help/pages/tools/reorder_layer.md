@@ -18,7 +18,7 @@ The order is only how layers are listed and drawn: it never changes how they are
 
    ![Step 2](pictures/reorder_layer/step-2.png)
 
-3. The layer is one place lower in the list now.
+3. The layer is one place lower in the list now (Move Up takes it back up).
 
    ![Step 3](pictures/reorder_layer/step-3.png)
 

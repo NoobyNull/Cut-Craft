@@ -15,7 +15,7 @@ deletes the toolpaths too.
 
    ![Step 1](pictures/ungroup_toolpaths/step-1.png)
 
-2. Press **Ungroup** under the list (or right-click the group ▸ **Ungroup**). Its toolpaths stay, out of the group.
+2. Press **Ungroup** above the list (or right-click the group ▸ **Ungroup**). Its toolpaths stay, out of the group.
 
    ![Step 2](pictures/ungroup_toolpaths/step-2.png)
 

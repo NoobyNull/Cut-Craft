@@ -18,7 +18,7 @@ Toolpath List: right-click ▸ **Rename**, the tick before it, and its coloured 
 
    ![Step 2](pictures/toolpath_properties/step-2.png)
 
-3. The tick before a toolpath shows or hides it, and its coloured square sets its colour in the preview.
+3. The tick before a toolpath shows or hides it. Its coloured square, shown when the material's Machined Area Color is Toolpath Color, sets its colour.
 
    ![Step 3](pictures/toolpath_properties/step-3.png)
 
@@ -26,4 +26,8 @@ Toolpath List: right-click ▸ **Rename**, the tick before it, and its coloured 
 
 - **Preview Color: No Fill** on the right-click menu shows its areas in the material's own
   colour.
-- Hidden (unticked) toolpaths are not drawn, previewed or saved.
+- The coloured square shows only when the material's **Machined Area Color** is **Toolpath
+  Color**.
+- Hidden (unticked) toolpaths are not drawn, and **Preview Visible** and **Save Toolpaths**
+  (shown ones) leave them out. **Preview All** still previews them, and saving the selected
+  toolpath alone still saves it.

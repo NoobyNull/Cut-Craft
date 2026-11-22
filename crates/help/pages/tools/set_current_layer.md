@@ -22,4 +22,6 @@ The current layer is the one new vectors, text and imports go on. Click a layer'
 
 - A shape remade from others (Weld, Trim, Join and the like) stays on the layer the originals
   were on.
+- A DXF or SVG drawing keeps its own layers when brought in, rather than going on the current
+  layer.
 - The layer box at the top of the view shows the current layer and changes it too.

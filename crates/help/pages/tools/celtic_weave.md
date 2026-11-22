@@ -20,7 +20,7 @@ smooth closed vectors, the rails [Extrude and Weave](help:extrude_and_weave) tur
 
    ![Step 2](pictures/celtic_weave/step-2.png)
 
-3. Press **Apply**. The knot's loops are drawn as smooth closed vectors, the rails Extrude and Weave turns into a weave.
+3. Press **Create**. The knot's loops are drawn as smooth closed vectors, the rails Extrude and Weave turns into a weave.
 
    ![Step 3](pictures/celtic_weave/step-3.png)
 

@@ -40,6 +40,6 @@ A drawing brought in from a DXF keeps the colours its layers had: see
 
    ![Step 2](pictures/layer_properties/step-2.png)
 
-3. Tick **Own Colour** and pick a **Colour** to tell this layer's vectors apart at a glance.
+3. Tick **Own Colour** and pick a **Colour** to tell this layer's vectors apart, then press **Apply** to keep the changes.
 
    ![Step 3](pictures/layer_properties/step-3.png)

@@ -24,3 +24,4 @@ toolpaths.
 - Close them with [Join / Close Vectors](help:join_close_vectors) or
   [Join Open Ends](help:join_open_ends).
 - **View ▸ Show Open Vector Ends** marks their ends on screen.
+- It only picks from visible, unlocked layers.

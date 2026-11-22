@@ -4975,7 +4975,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:name"),
             },
             Step {
-                caption: "Press **Apply**. The new layer goes to the top of the list and is \
+                caption: "Press **Create**. The new layer goes to the top of the list and is \
                           made current, so what you draw next goes on it.",
                 setup: |app, _| {
                     apply_form(app);
@@ -5004,7 +5004,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:name"),
             },
             Step {
-                caption: "Press **Apply**. The new sheet is listed; click it to work on it, and \
+                caption: "Press **Create**. The new sheet is listed; click it to work on it, and \
                           change its size in **Job Setup**.",
                 setup: |app, _| {
                     apply_form(app);
@@ -5027,7 +5027,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("toolpath:Cut out"),
             },
             Step {
-                caption: "Press **Move Up** or **Move Down** under the list, or drag the \
+                caption: "Press **Move Up** or **Move Down** above the list, or drag the \
                           toolpath to its new place.",
                 setup: |_, _| {},
                 mark: Mark::At("button:toolpaths_move_up"),
@@ -5121,7 +5121,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:cross_section"),
             },
             Step {
-                caption: "Press **Apply**. The knot's loops are drawn as smooth closed vectors, \
+                caption: "Press **Create**. The knot's loops are drawn as smooth closed vectors, \
                           the rails Extrude and Weave turns into a weave.",
                 setup: |app, _| {
                     set(app, "cross_section", true.into());
@@ -5256,7 +5256,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:angle"),
             },
             Step {
-                caption: "Press **Apply**. The shape is added to the model as a component.",
+                caption: "Press **Create**. The shape is added to the model as a component.",
                 setup: |app, _| model_result(app, &[("total_height", 12.0)]),
                 mark: Mark::None,
             },
@@ -5479,7 +5479,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("toolpath:Engrave"),
             },
             Step {
-                caption: "Press **Delete** under the list (or the Delete key). The vectors it \
+                caption: "Press **Delete** above the list (or the Delete key). The vectors it \
                           was made from stay.",
                 setup: |_, _| {},
                 mark: Mark::At("button:toolpaths_delete"),
@@ -5505,8 +5505,8 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("component:Shape"),
             },
             Step {
-                caption: "Choose **Duplicate**. The copy sits in the same place, just above it \
-                          in the list: move it where you want it.",
+                caption: "Choose **Duplicate**. The copy sits in the same place, at the top of \
+                          its level in the list: click it there, then move it.",
                 setup: |app, _| {
                     let first = app.doc.components.keys().next().copied();
                     if let Some(id) = first {
@@ -5624,7 +5624,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("toolpath:Engrave"),
             },
             Step {
-                caption: "Press **Group** under the list. The group is cut one toolpath after \
+                caption: "Press **Group** above the list. The group is cut one toolpath after \
                           another, and moves as one.",
                 setup: |_, _| {},
                 mark: Mark::At("button:toolpaths_group"),
@@ -5692,7 +5692,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:name"),
             },
             Step {
-                caption: "Press **Apply**. The new level goes on top: it combines with the \
+                caption: "Press **Create**. The new level goes on top: it combines with the \
                           levels below it.",
                 setup: |app, _| {
                     apply_form(app);
@@ -5773,7 +5773,7 @@ pub const TOURS: &[Tour] = &[
             },
             Step {
                 caption: "Tick **Own Colour** and pick a **Colour** to tell this layer's \
-                          vectors apart at a glance.",
+                          vectors apart, then press **Apply** to keep the changes.",
                 setup: |app, _| set(app, "own_colour", true.into()),
                 mark: Mark::At("field:own_colour"),
             },
@@ -6115,11 +6115,16 @@ pub const TOURS: &[Tour] = &[
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
                     model_dome2(app, ctx);
+                    for (component, name) in
+                        app.doc.components.values_mut().zip(["Dome 1", "Dome 2"])
+                    {
+                        component.name = name.into();
+                    }
                     let last = app.doc.components.keys().last().copied();
                     app.doc.selected_components = last.into_iter().collect();
                     on_list(app, COMPONENTS);
                 },
-                mark: Mark::At("component:Shape"),
+                mark: Mark::At("component:Dome 2"),
             },
             Step {
                 caption: "Press **Move Up** or **Move Down** over the list to move it one place \
@@ -6148,7 +6153,8 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:reorder_layer"),
             },
             Step {
-                caption: "The layer is one place lower in the list now.",
+                caption: "The layer is one place lower in the list now (Move Up takes it \
+                          back up).",
                 setup: |app, _| {
                     let params = serde_json::json!({ "layer": 2, "direction": "down" });
                     run(app, "reorder_layer", params);
@@ -6521,7 +6527,8 @@ pub const TOURS: &[Tour] = &[
         tool: "space_horizontally",
         steps: &[
             Step {
-                caption: "Select three or more shapes. The outermost two stay where they are.",
+                caption: "Select three or more shapes, clicking them in the order you want them \
+                          from left to right.",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
                     shapes_three(app);
@@ -6543,8 +6550,8 @@ pub const TOURS: &[Tour] = &[
         tool: "space_vertically",
         steps: &[
             Step {
-                caption: "Select three or more shapes. The top and bottom ones stay where they \
-                          are.",
+                caption: "Select three or more shapes, clicking them in the order you want them \
+                          from bottom to top.",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
                     stacked_three(app);
@@ -6652,8 +6659,8 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:name"),
             },
             Step {
-                caption: "The tick before a toolpath shows or hides it, and its coloured square \
-                          sets its colour in the preview.",
+                caption: "The tick before a toolpath shows or hides it. Its coloured square, \
+                          shown when the material's Machined Area Color is Toolpath Color, sets its colour.",
                 setup: |app, _| {
                     set(app, "name", "Cut out".into());
                     apply_form(app);
@@ -6792,7 +6799,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("toolpath_group:Group 1"),
             },
             Step {
-                caption: "Press **Ungroup** under the list (or right-click the group ▸ \
+                caption: "Press **Ungroup** above the list (or right-click the group ▸ \
                           **Ungroup**). Its toolpaths stay, out of the group.",
                 setup: |_, _| {},
                 mark: Mark::At("button:toolpaths_ungroup"),
@@ -6877,7 +6884,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:cove_start"),
             },
             Step {
-                caption: "Press **Apply**. The flutes are laid out as vectors on the unrolled \
+                caption: "Press **Create**. The flutes are laid out as vectors on the unrolled \
                           surface, for a Profile or Fluting toolpath.",
                 setup: |app, _| apply_form(app),
                 mark: Mark::Everything,
@@ -6903,7 +6910,7 @@ pub const TOURS: &[Tour] = &[
                 mark: Mark::At("field:distance"),
             },
             Step {
-                caption: "Press **Apply**. The strands are laid out on the unrolled surface; \
+                caption: "Press **Create**. The strands are laid out on the unrolled surface; \
                           wrapped round, they are a spiral.",
                 setup: |app, _| apply_form(app),
                 mark: Mark::Everything,

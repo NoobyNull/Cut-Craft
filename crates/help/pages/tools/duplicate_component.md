@@ -3,8 +3,8 @@ reviewed: 2026-11-22
 see-also: component_properties, mirror, array_copy
 ---
 
-**Duplicate** makes a copy of a 3D component in the same place and level, just above it in the
-Components list. Move or change the copy without touching the first.
+**Duplicate** makes a copy of a 3D component in the same place and level, at the top of that
+level in the Components list. Click the copy there before you move it. Move or change the copy without touching the first.
 
 ## Steps
 
@@ -14,7 +14,7 @@ Components list. Move or change the copy without touching the first.
 
    ![Step 1](pictures/duplicate_component/step-1.png)
 
-2. Choose **Duplicate**. The copy sits in the same place, just above it in the list: move it where you want it.
+2. Choose **Duplicate**. The copy sits in the same place, at the top of its level in the list: click it there, then move it.
 
    ![Step 2](pictures/duplicate_component/step-2.png)
 

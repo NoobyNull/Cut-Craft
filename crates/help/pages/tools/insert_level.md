@@ -18,7 +18,7 @@ the bottom up, so a level on top can add to or cut into everything under it.
 
    ![Step 2](pictures/insert_level/step-2.png)
 
-3. Press **Apply**. The new level goes on top: it combines with the levels below it.
+3. Press **Create**. The new level goes on top: it combines with the levels below it.
 
    ![Step 3](pictures/insert_level/step-3.png)
 

@@ -15,7 +15,7 @@ moves with all its toolpaths.
 
    ![Step 1](pictures/arrange_toolpaths/step-1.png)
 
-2. Press **Move Up** or **Move Down** under the list, or drag the toolpath to its new place.
+2. Press **Move Up** or **Move Down** above the list, or drag the toolpath to its new place.
 
    ![Step 2](pictures/arrange_toolpaths/step-2.png)
 

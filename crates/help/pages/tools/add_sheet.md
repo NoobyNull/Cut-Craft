@@ -19,7 +19,7 @@ all fit on one.
 
    ![Step 2](pictures/add_sheet/step-2.png)
 
-3. Press **Apply**. The new sheet is listed; click it to work on it, and change its size in **Job Setup**.
+3. Press **Create**. The new sheet is listed; click it to work on it, and change its size in **Job Setup**.
 
    ![Step 3](pictures/add_sheet/step-3.png)
 

@@ -14,7 +14,7 @@ made from stay, and **Undo** brings it back.
 
    ![Step 1](pictures/delete_toolpath/step-1.png)
 
-2. Press **Delete** under the list (or the Delete key). The vectors it was made from stay.
+2. Press **Delete** above the list (or the Delete key). The vectors it was made from stay.
 
    ![Step 2](pictures/delete_toolpath/step-2.png)
 

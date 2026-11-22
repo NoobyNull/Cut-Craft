@@ -19,7 +19,7 @@ vectors on the unrolled surface for Profile toolpaths.
 
    ![Step 2](pictures/wrapped_spiral_layout/step-2.png)
 
-3. Press **Apply**. The strands are laid out on the unrolled surface; wrapped round, they are a spiral.
+3. Press **Create**. The strands are laid out on the unrolled surface; wrapped round, they are a spiral.
 
    ![Step 3](pictures/wrapped_spiral_layout/step-3.png)
 

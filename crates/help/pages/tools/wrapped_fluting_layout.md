@@ -19,7 +19,7 @@ for a Profile or Fluting toolpath; it makes no toolpaths itself.
 
    ![Step 2](pictures/wrapped_fluting_layout/step-2.png)
 
-3. Press **Apply**. The flutes are laid out as vectors on the unrolled surface, for a Profile or Fluting toolpath.
+3. Press **Create**. The flutes are laid out as vectors on the unrolled surface, for a Profile or Fluting toolpath.
 
    ![Step 3](pictures/wrapped_fluting_layout/step-3.png)
 
