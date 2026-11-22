@@ -2,7 +2,7 @@
 + by hand: grbl refuses M6, so a tool change stops the spindle and pauses (M0) for the
 + new tool, to be resumed from the sender once it is in and zeroed.
 + Rotary: Y wrapped onto A, for a cylinder along X; feeds in inverse time (G93). Needs an A axis (grblHAL built with 4 or more axes; standard GRBL 1.1 has none).
-+ Made by scripts/make_posts.py: edit its template and run it again.
++ Made from this controller's Arcs post: change the two together.
 
 + History
 + Who        When       What

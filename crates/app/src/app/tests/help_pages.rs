@@ -5,7 +5,10 @@ use super::*;
 #[test]
 fn about_lists_the_github_contributors() {
     let listed = super::actions::contributors();
-    assert!(!listed.is_empty(), "scripts/contributors has been run");
+    assert!(
+        !listed.is_empty(),
+        "crates/app/contributors.tsv lists the contributors"
+    );
     assert!(listed.iter().any(|(login, ..)| *login == "NoobyNull"));
     assert!(
         listed
@@ -1248,7 +1251,7 @@ fn every_picture_in_the_help_is_in_the_icon_set() {
     for p in &pictures {
         assert!(
             known.contains(p),
-            "{p} is not in assets/icons: run scripts/build-icons"
+            "{p} is not in assets/icons: add its PNG there"
         );
     }
     // the clearing pictures: the light step's bite, the edge pass, a channel's loops

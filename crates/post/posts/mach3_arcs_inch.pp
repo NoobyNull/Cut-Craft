@@ -1,6 +1,6 @@
 + Cut Craft's post for Mach3 (and Mach4), inches, with Mach3's tool change (T M6).
 + Arcs: G2 / G3 with I J from the arc's start.
-+ Made by scripts/make_posts.py: edit its template and run it again.
++ Made from this controller's Arcs post: change the two together.
 
 + History
 + Who        When       What

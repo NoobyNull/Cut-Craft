@@ -7,7 +7,7 @@ Behaviour comes from the clean-room spec (`re/SPEC.md`: the maker's public docum
 hands-on use of the trial). The tool-by-tool list is
 `docs/tool-inventory.md`. How commands are built is
 `docs/superpowers/specs/2026-10-23-command-architecture-design.md`. The training-course
-check is `docs/courses.md` (made by `scripts/courses-report.py`).
+check is `docs/courses.md` (made once from the course captions; the scripts were removed).
 
 Sizes: **S** a day or less, **M** a few days, **L** a week or more.
 

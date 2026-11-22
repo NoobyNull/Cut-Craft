@@ -124,16 +124,7 @@ Do this once on a new machine or a fresh clone.
    cargo run --release -p cut-craft
    ```
 
-3. Put it in the desktop's application menu. Do this once; after that the menu entry starts
-   whatever `target/release/cut-craft` holds, so a new build is all an update needs:
-
-   ```bash
-   scripts/install-launcher
-   ```
-
-   `scripts/install-launcher --remove` takes the menu entry out again.
-
-4. To run the same checks the commit hook runs, without committing:
+3. To run the same checks the commit hook runs, without committing:
 
    ```bash
    .githooks/pre-commit

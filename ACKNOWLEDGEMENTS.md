@@ -20,12 +20,8 @@ Cut Craft is an independent program:
 
 Cut Craft 0.1.0 to 0.2.1 used icons traced from Aspire's, and a few of Aspire's own dialog
 pictures, as stand-ins while the tools were being written. From 0.2.2 on, every icon Cut Craft
-ships was drawn for it:
-
-- `scripts/make_icons.py` draws the flat icons from a few shared shapes in Cut Craft's own
-  style, and `scripts/make_3d_icons.py` the shaded solids of the 3D tools.
-- `scripts/model_pictures.py` renders the 3D import pictures from STL models.
-- `scripts/draw_icons.py` draws a handful more in the same style.
+ships was drawn for it, in Cut Craft's own style: the flat icons, the shaded solids of the 3D
+tools and the 3D import pictures.
 
 The GitHub and Thingiverse logos belong to their owners and are credited, with the other
 third-party assets and libraries, under **Help ▸ Third Party Licenses**.

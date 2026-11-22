@@ -49,7 +49,7 @@ impl Area {
 /// The picture above a tip's words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Picture {
-    /// A scene drawn for this tip alone, by `scripts/make_icons.py` into `assets/icons/tips`.
+    /// A scene drawn for this tip alone, in `assets/icons/tips`.
     Scene(&'static str),
     /// A tool's button icon (by the tool's id), or another of Cut Craft's icons (by its path),
     /// so the tool can be found by it.

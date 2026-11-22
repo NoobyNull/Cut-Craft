@@ -1,4 +1,4 @@
-// Made by scripts/make_posts.py: run it again after adding a post.
+// Cut Craft's own posts: add a new one here by hand.
 
 /// Cut Craft's own posts, as (file name, text): provided, not edited (customise a copy).
 pub const BUILT_IN: [(&str, &str); 37] = [

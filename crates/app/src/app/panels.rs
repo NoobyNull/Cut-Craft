@@ -23,7 +23,7 @@ mod toolpaths_page;
 mod tools;
 mod view_3d;
 
-/// The push-pin's two drawings (`scripts/make_icons.py`).
+/// The push-pin's two drawings.
 pub(super) const PIN_ICON: &str = "view/pin.png";
 pub(super) const PINNED_ICON: &str = "view/pinned.png";
 /// How many times a button's height the 3D view's height buttons are: big enough to tell
