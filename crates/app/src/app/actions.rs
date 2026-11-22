@@ -184,6 +184,7 @@ impl CutCraftApp {
             settings_3d: None,
             rings_3d: (vec![], None),
             turn_ring: None,
+            ring_grip: None,
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
             help_search: String::new(),
@@ -6144,6 +6145,7 @@ impl CutCraftApp {
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
                 | super::placement::section_end(ui, group, params, room)
+                | super::placement::reset_end(ui, group, params)
         };
         let look = form::Look {
             units,

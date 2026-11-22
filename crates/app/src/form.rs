@@ -57,6 +57,9 @@ pub struct Field {
     /// `x-diagram`: a picture of the measurements, shown once at the top of the field's group
     /// (or above the field when it has none), each one marked with its [`Field::dim`] letter.
     pub diagram: Option<String>,
+    /// The axis a number is about, its name then drawn in that axis's colour as everywhere
+    /// else: a number keyed `x`, `y` or `z`, or one marked `x-axis`.
+    pub axis: Option<crate::axes::Axis>,
 }
 
 /// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`,
@@ -534,7 +537,11 @@ fn grid(
                             if let Some(dim) = &f.dim {
                                 dim_letter(ui, dim);
                             }
-                            hover(ui.label(&f.label), f.help.as_ref());
+                            let label = match f.axis {
+                                Some(axis) => ui.label(crate::axes::label(&f.label, axis)),
+                                None => ui.label(&f.label),
+                            };
+                            hover(label, f.help.as_ref());
                         });
                     })
                     .response
@@ -959,7 +966,15 @@ fn icon_row(
                     // the name has a fixed place under its picture: a longer one never
                     // makes its row taller and moves what is below
                     fixed_text(ui, width, NAMED_LABEL_ROWS, |ui| {
-                        ui.small(&o.label);
+                        // a choice of one axis is named in that axis's colour
+                        match crate::axes::Axis::named(&o.value) {
+                            Some(axis) => {
+                                ui.label(crate::axes::label(&o.label, axis).small());
+                            }
+                            None => {
+                                ui.small(&o.label);
+                            }
+                        }
                     });
                     r
                 })
@@ -1762,6 +1777,14 @@ fn object_fields(root: &Value, schema: &Value) -> Vec<Field> {
                 .as_str()
                 .or_else(|| resolve(root, s)["x-diagram"].as_str())
                 .map(String::from),
+            axis: s["x-axis"].as_str().map_or_else(
+                || {
+                    matches!(kind(root, s), Kind::Number { .. })
+                        .then(|| crate::axes::Axis::named(key))
+                        .flatten()
+                },
+                crate::axes::Axis::named,
+            ),
         })
         .collect()
 }

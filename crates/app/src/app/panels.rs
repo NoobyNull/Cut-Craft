@@ -999,7 +999,11 @@ impl CutCraftApp {
         let (mut activate, mut chosen) = (None, None);
         egui::Grid::new("sheets_list").striped(true).show(ui, |ui| {
             for heading in ["Name", "X", "Y", "Z"] {
-                ui.strong(heading);
+                // each axis's size in its colour, as everywhere
+                match crate::axes::Axis::named(heading) {
+                    Some(axis) => ui.label(crate::axes::label(heading, axis)),
+                    None => ui.strong(heading),
+                };
             }
             ui.end_row();
             for (i, sheet) in self.doc.sheets.iter().enumerate() {
@@ -2338,7 +2342,11 @@ impl CutCraftApp {
         delta: egui::Vec2,
         size: egui::Vec2,
     ) -> bool {
-        let (diameter, ring) = (self.doc.job.rotary.map(|r| r.diameter), self.turn_ring);
+        let (diameter, ring, grip) = (
+            self.doc.job.rotary.map(|r| r.diameter),
+            self.turn_ring,
+            self.ring_grip,
+        );
         let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") else {
             return false;
         };
@@ -2353,6 +2361,15 @@ impl CutCraftApp {
                 // a drag from a rotation ring turns about its axis, whatever Drag turns says
                 let mode = ring.or(turn["mode"].as_str()).map(str::to_owned);
                 match mode.as_deref() {
+                    // a ring held turns the model the way the drag goes round it, its own box
+                    // alone (the ring is drawn round the axis that box turns about)
+                    Some(axis @ ("x" | "y" | "z")) if ring.is_some() && grip.is_some() => {
+                        let (along, radius) = grip.unwrap_or_default();
+                        add(
+                            &mut turn[axis],
+                            crate::axes::ring_turn(delta, along, radius),
+                        );
+                    }
                     Some("x") => add(&mut turn["x"], about_x),
                     Some("y") => add(&mut turn["y"], about_z),
                     Some("z") => add(&mut turn["z"], about_z),
@@ -3048,10 +3065,13 @@ impl CutCraftApp {
             };
             let square = egui::Rect::from_center_size(at, egui::Vec2::splat(half * 2.0));
             match handle {
+                // arrows both ways along the job's X and Y as they lie on screen
                 Handle::Move => {
-                    for d in [egui::vec2(half, 0.0), egui::vec2(0.0, half)] {
-                        painter.line_segment([at - d, at + d], stroke);
-                    }
+                    let middle = bounds.center();
+                    let way = |d: Point| plane.screen(middle + d) - plane.screen(middle);
+                    let along = [way(Point::new(1.0, 0.0)), way(Point::new(0.0, 1.0))];
+                    // as big as a button, to be seen over the model
+                    super::views::move_cross(painter, at, along, edge, stroke.width);
                 }
                 Handle::Scale { x, y } if x != 0 && y != 0 => {
                     painter.rect_filled(square, 0.0, visuals.extreme_bg_color);
@@ -3061,8 +3081,9 @@ impl CutCraftApp {
                     painter.rect_filled(square, 0.0, dark);
                 }
                 Handle::Rotate { .. } => {
-                    // a ring with an arrow head on top
-                    painter.circle_stroke(at, half, egui::Stroke::new(stroke.width, dark));
+                    // a ring with an arrow head on top, blue as it turns about Z
+                    let blue = crate::axes::Axis::Z.colour();
+                    painter.circle_stroke(at, half, egui::Stroke::new(stroke.width * 1.5, blue));
                     let top = at - egui::vec2(0.0, half);
                     painter.add(egui::Shape::convex_polygon(
                         vec![
@@ -3070,7 +3091,7 @@ impl CutCraftApp {
                             top + egui::vec2(0.0, half / 2.0),
                             top - egui::vec2(0.0, half / 2.0),
                         ],
-                        dark,
+                        blue,
                         egui::Stroke::NONE,
                     ));
                 }
@@ -3513,9 +3534,15 @@ impl CutCraftApp {
     }
 
     /// The rotation handles while Orientate 3D Model shows the model in a flat job: red,
-    /// green and blue rings round it turn it about X, Y and Z, and the grey sphere in its
-    /// middle about all three (help: Import 3D Model, Initial Orientation).
+    /// green and blue rings round it turn it about X, Y and Z (the axis colours used
+    /// everywhere), and the grey sphere in its middle about all three. Each ring has arrows
+    /// both ways round where it stands out most, the + way marked (X+ and X−): dragging
+    /// along the ring that way turns the model by a positive angle in that ring's box alone.
+    /// Before any turn each ring is square to the job's own axis; turned, the Y ring tilts
+    /// with the Z turn and the X ring with the Z and Y turns, so a ring always goes round
+    /// the axis its box turns about (help: Orientate 3D Model, Turning the model).
     fn rings_3d(&mut self, ui: &egui::Ui, area: egui::Rect, fit: egui::Rect) {
+        use crate::axes::Axis;
         use cut_craft_core::glam::DVec3;
         self.rings_3d = (vec![], None);
         let model = self
@@ -3542,32 +3569,57 @@ impl CutCraftApp {
         let (middle, reach) = ((lo + hi) / 2.0, (hi - lo).max_element() * RING_SHARE);
         let painter = ui.painter_at(area);
         let width = 2.0 * ui.visuals().widgets.noninteractive.fg_stroke.width;
-        // a ring's points every few degrees, in the plane square to its axis
+        let centre = screen(middle);
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let head = ui.spacing().interact_size.y / 2.0;
+        // a ring's points every few degrees, in the plane square to its axis, in the order a
+        // positive turn about the axis goes (right-hand rule: X turns Y up towards Z, Y turns
+        // Z over towards X, Z turns X round towards Y)
         let steps = 72;
-        for (axis, colour) in [
-            ("x", egui::Color32::RED),
-            ("y", egui::Color32::GREEN),
-            ("z", egui::Color32::BLUE),
-        ] {
+        let mut looks = vec![];
+        let turns = self.form.as_ref().map_or([0.0; 3], |f| {
+            ["x", "y", "z"].map(|k| f.params["turn"][k].as_f64().unwrap_or(0.0))
+        });
+        for axis in Axis::ALL {
+            // tilted with the turns made after its own, so it goes round the axis its box
+            // turns the model about
+            let frame = crate::axes::ring_frame(turns, axis);
             let points: Vec<egui::Pos2> = (0..=steps)
                 .map(|i| {
                     let a = std::f64::consts::TAU * f64::from(i) / f64::from(steps);
                     let (c, s) = (a.cos() * reach, a.sin() * reach);
                     middle
-                        + match axis {
-                            "x" => DVec3::new(0.0, c, s),
-                            "y" => DVec3::new(c, 0.0, s),
-                            _ => DVec3::new(c, s, 0.0),
-                        }
+                        + frame
+                            * match axis {
+                                Axis::X => DVec3::new(0.0, c, s),
+                                Axis::Y => DVec3::new(s, 0.0, c),
+                                Axis::Z => DVec3::new(c, s, 0.0),
+                            }
                 })
                 .map(screen)
                 .collect();
-            let hot = self.turn_ring == Some(axis);
+            let name = axis.letter();
+            let key = match axis {
+                Axis::X => "x",
+                Axis::Y => "y",
+                Axis::Z => "z",
+            };
+            let hot = self.turn_ring == Some(key);
+            let colour = axis.colour();
             let stroke = egui::Stroke::new(if hot { 2.0 * width } else { width }, colour);
             painter.add(egui::Shape::line(points.clone(), stroke));
-            self.rings_3d.0.push((axis, points));
+            self.rings_3d.0.push((key, points));
+            looks.push((stroke, name));
         }
-        let (centre, radius) = (screen(middle), ui.spacing().interact_size.y / 2.0);
+        // each ring's + and − arrows, kept clear of each other's
+        let rings: Vec<&[egui::Pos2]> = self.rings_3d.0.iter().map(|(_, p)| p.as_slice()).collect();
+        let marks = crate::axes::rings_marks(&rings, centre, RING_MARK_GAP * head);
+        for ((points, mark), (stroke, name)) in rings.iter().zip(marks).zip(looks) {
+            if let Some((at, _)) = mark {
+                ring_arrows(&painter, points, at, centre, (stroke, head), &font, name);
+            }
+        }
+        let radius = ui.spacing().interact_size.y / 2.0;
         painter.circle(
             centre,
             radius,
@@ -3586,6 +3638,19 @@ impl CutCraftApp {
         } else if !response.dragged() {
             self.turn_ring = None;
         }
+        // while a ring is held, the way + runs round it under the pointer and how far it
+        // reaches from its middle: the drag turns the model the way it goes round the ring
+        self.ring_grip = self.turn_ring.and_then(|axis| {
+            let (_, points) = self.rings_3d.0.iter().find(|(a, _)| *a == axis)?;
+            let (centre, _) = self.rings_3d.1?;
+            let at = ui.input(|i| i.pointer.latest_pos())?;
+            let along = crate::axes::ring_tangent(points, at)?;
+            let radius = points
+                .iter()
+                .map(|p| p.distance(centre))
+                .fold(0.0, f32::max);
+            Some((along, radius))
+        });
     }
 
     /// The rotation handle within `reach` of `at` as last drawn: the sphere (`xyz`) first,
@@ -4293,22 +4358,18 @@ impl CutCraftApp {
             }
         }
         if shown.origin {
-            // X, Y and Z from the job's origin, a tenth of the job long, in the usual axis
-            // colours, at the height Z zero is: the material's top or the bed under it
+            // X, Y and Z from the job's origin, a tenth of the job long, in the axis colours
+            // used everywhere, each with an arrow head and its letter at the + end, at the
+            // height Z zero is: the material's top or the bed under it
             let o = local(
                 cut_craft_core::geometry::Point::ZERO,
                 self.origin_height_3d(surface),
             );
             let reach = size.x.max(size.y) / 10.0;
-            let width = stroke.width * 2.0;
-            for (axis, colour) in [
-                (cut_craft_core::glam::DVec3::X, egui::Color32::RED),
-                (cut_craft_core::glam::DVec3::Y, egui::Color32::GREEN),
-                (cut_craft_core::glam::DVec3::Z, egui::Color32::BLUE),
-            ] {
-                for run in in_sight(&[o, o + axis * reach]) {
-                    painter.add(egui::Shape::line(run, (width, colour)));
-                }
+            for axis in crate::axes::Axis::ALL {
+                let tip = o + axis.direction() * reach;
+                let (runs, ends) = (in_sight(&[o, tip]), (screen(o), screen(tip)));
+                origin_arrow(ui, painter, runs, ends, axis, stroke.width * 2.0);
             }
         }
     }
@@ -5602,6 +5663,78 @@ pub(super) fn importing(path: &std::path::Path) -> String {
 pub(super) fn origin_3d(job: &cut_craft_core::document::Job, unseated: Option<&Material>) -> f64 {
     job.zero_height() - unseated.map_or(0.0, |m| cut_craft_core::component::seat_shift(job, m))
 }
+
+/// One of the 3D view's origin arrows, `width` wide: its `runs` in sight on screen, in its
+/// axis's colour, with an arrow head and its letter at its + end where that end is in sight.
+fn origin_arrow(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    runs: Vec<Vec<egui::Pos2>>,
+    (from, to): (egui::Pos2, egui::Pos2),
+    axis: crate::axes::Axis,
+    width: f32,
+) {
+    let colour = axis.colour();
+    let head = ui.spacing().interact_size.y / 2.0;
+    let font = &egui::TextStyle::Body.resolve(ui.style());
+    let end_seen = runs
+        .last()
+        .and_then(|run| run.last())
+        .is_some_and(|end| end.distance(to) < 1.0);
+    for run in runs {
+        painter.add(egui::Shape::line(run, (width, colour)));
+    }
+    if end_seen {
+        crate::axes::head(painter, to, to - from, head, colour);
+        let out = (to - from).normalized() * head;
+        crate::axes::tag(painter, to + out, axis.letter(), colour, font);
+    }
+}
+
+/// A rotation ring's arrows: a short stretch of the ring round its point `outer` (where it
+/// stands out most from its middle `centre`, clear of the other rings' arrows), thicker, with an arrow head at each end, the + end marked `X+` and the
+/// other `X−` (for `name` X), so which way a drag turns it reads at a glance. `points` run
+/// the + way round; `look` is the ring's stroke and the arrow heads' size.
+fn ring_arrows(
+    painter: &egui::Painter,
+    points: &[egui::Pos2],
+    outer: usize,
+    centre: egui::Pos2,
+    look: (egui::Stroke, f32),
+    font: &egui::FontId,
+    name: &str,
+) {
+    let (stroke, head) = look;
+    // the last point is the first again
+    let n = points.len().saturating_sub(1);
+    let reach = (n / 18).max(1);
+    if n == 0 {
+        return;
+    }
+    // the point `k` along the ring from `reach` before the mark, round past the seam
+    let at = |k: usize| points[(outer + n - reach % n + k) % n];
+    let stretch: Vec<egui::Pos2> = (0..=2 * reach).map(at).collect();
+    let thick = egui::Stroke::new(stroke.width * 2.0, stroke.color);
+    painter.add(egui::Shape::line(stretch, thick));
+    // the + end, then the − end, each with the point before it on the way out
+    let ends = [(2 * reach, 2 * reach - 1, '+'), (0, 1, '\u{2212}')];
+    for (k, inner, sign) in ends {
+        let (tip, before) = (at(k), at(inner));
+        crate::axes::head(painter, tip, tip - before, head, stroke.color);
+        let out =
+            (tip - centre).normalized() * head * 1.5 + (tip - before).normalized() * head * 2.0;
+        crate::axes::tag(
+            painter,
+            tip + out,
+            &format!("{name}{sign}"),
+            stroke.color,
+            font,
+        );
+    }
+}
+
+/// How far apart the rings' arrows are kept, in arrow heads.
+const RING_MARK_GAP: f32 = 9.0;
 
 /// Whether a component is a full 3D model kept as it really is (a rotary job's), raised onto
 /// or merged with what is under it: drawn and cut from its real shape, not its heights.

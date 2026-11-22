@@ -236,6 +236,30 @@ const SCENES: &[Scene] = &[
         app.first_run = None;
         cut_craft_bug_report::open_here(ctx);
     }),
+    // Help: 3D View ▸ Which way is X, Y and Z (the view cube's arrows and the zero's)
+    ("axis-colours", |app, ctx| {
+        height_start(app, ctx);
+    }),
+    // Help: Transform ▸ Which way the handles go (the move cross along X and Y in 3D)
+    ("transform-axis-handles", |app, ctx| {
+        let medallion = app
+            .doc
+            .components
+            .iter()
+            .find(|(_, k)| k.name == "Medallion")
+            .map(|(&id, _)| id);
+        app.doc.selected_components = medallion.into_iter().collect();
+        app.view_action(ctx, "transform");
+    }),
+    // Help: Orientate 3D Model ▸ Turning the model with the rings
+    ("turn-rings", |app, ctx| {
+        app.view_tool = None;
+        import(app, ctx);
+        if let Some(form) = app.form.as_mut() {
+            form.params["turn"]["z"] = 30.0.into();
+            form.dirty = true;
+        }
+    }),
     // Help: Long jobs and the time left
     ("progress-window", progress_window),
 ];

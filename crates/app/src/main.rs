@@ -5,6 +5,7 @@
 
 mod addons;
 mod app;
+mod axes;
 mod busy;
 mod clipart;
 mod commands;
