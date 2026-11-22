@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-22
 see-also: pocket_toolpath, profile_toolpath, stepover, collisions, check_tool_numbers, check_makers_figures
 ---
 

@@ -31,7 +31,7 @@ Steps:
 
 1. Press **Import 3D Model** and pick your file. The model shows in the 3D view with the
    rings round it.
-2. Drag a ring to turn the model about that axis, or type the angle into its box.
+2. Drag a ring to turn the model about that axis, or type the angle, in degrees, into its box.
 3. Changed your mind? Press **↺ Reset rotation** at the foot of Interactive Rotation. The
    model goes back to how its file has it: its top up, every turn back to 0.
 4. Moved it with **Align in Material**, a position or Depth Below Top? Press
