@@ -80,3 +80,5 @@ rings, gizmo, gizmos, rotation rings, turn handles, rotate handles, manipulator
 axis colours, axis colors, axes, triad, xyz arrows, orientation, which way is x
 reset rotation, reset position, undo rotation, put back, native position, start over
 scale to fit, fit to material, fill the material, make it fit
+border, moulding, molding, frame, picture frame, cornice, edging
+generate, ai, artificial intelligence, gemini, google image

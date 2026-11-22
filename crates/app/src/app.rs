@@ -18,6 +18,7 @@ mod first_run;
 mod fit_import;
 mod follow;
 mod gcode_view;
+mod generate_border;
 mod gestures_2d;
 mod guide;
 #[cfg(test)]
@@ -1267,6 +1268,8 @@ struct CutCraftApp {
     immediate_output: SaveForm,
     /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
     depth_estimate: Option<crate::depth::Estimating>,
+    /// Generate Border's key, and the border it is generating.
+    border: generate_border::BorderForm,
     /// Relief from Photo's High detail tick: unset means on once the model is fetched.
     depth_high_detail: Option<bool>,
     /// The High detail model downloading, or why its last download failed.

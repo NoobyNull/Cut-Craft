@@ -39,13 +39,22 @@ pub struct Official {
 }
 
 /// The add-ons listed in the Add-ons window.
-pub const OFFICIAL: &[Official] = &[Official {
-    id: "depth",
-    name: "Depth (Relief from Photo)",
-    about: "Estimates how far away each part of a photo is, so Relief from Photo can carve \
-            it. About 100 MB.",
-    repo: "NoobyNull/CutCraft-Depth",
-}];
+pub const OFFICIAL: &[Official] = &[
+    Official {
+        id: "depth",
+        name: "Depth (Relief from Photo)",
+        about: "Estimates how far away each part of a photo is, so Relief from Photo can \
+                carve it. About 100 MB.",
+        repo: "NoobyNull/CutCraft-Depth",
+    },
+    Official {
+        id: "borders",
+        name: "Borders (Generate Border)",
+        about: "Makes repeating picture-frame borders in nine styles with your own Google \
+                key, for Generate Border. About 5 MB.",
+        repo: "Power-Whittle/CutCraft-Borders",
+    },
+];
 
 /// The repository every language pack is published on: each release carries one
 /// `language-<code>.zip` per language (and its signature), each installed on its own.
@@ -1448,5 +1457,6 @@ mod tests {
             assert!(Repo::parse(a.repo).is_ok(), "{}", a.repo);
         }
         assert!(OFFICIAL.iter().any(|a| a.id == "depth"));
+        assert!(OFFICIAL.iter().any(|a| a.id == "borders"));
     }
 }

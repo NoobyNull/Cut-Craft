@@ -76,6 +76,8 @@ impl CutCraftApp {
         self.follow_side();
         // the Depth add-on's answer, when it has one
         self.take_depth();
+        // Generate Border's border, started or made
+        self.follow_border(ui.ctx());
         self.draw_window(ui);
         // a form closed having left toolpaths out of date: recalculate them all?
         self.ask_to_recalculate(ctx);

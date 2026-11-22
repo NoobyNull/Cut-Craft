@@ -23,6 +23,8 @@ pub(super) enum Commit {
     Calculate,
     /// Changes what is already there.
     Apply,
+    /// Asks an add-on to make something new for the Library (Generate Border).
+    Generate,
 }
 
 impl Commit {
@@ -32,6 +34,7 @@ impl Commit {
             Self::Create => "commit-create",
             Self::Calculate => "commit-calculate",
             Self::Apply => "commit-apply",
+            Self::Generate => "commit-generate",
         }
     }
 
@@ -70,6 +73,9 @@ pub(super) const CREATE_FORMS: &[&str] = &[
     "wrapped_spiral_layout",
 ];
 
+/// Forms whose button asks an add-on for something new, saved to the Library.
+pub(super) const GENERATE_FORMS: &[&str] = &["generate_border"];
+
 /// Remaking forms that still show Apply once what they made follows them.
 const KEEPS_APPLY: &[&str] = &["embellish"];
 
@@ -89,6 +95,9 @@ pub(super) fn commit(id: &str, page: Page, drawing: bool, made: bool) -> Option<
     }
     if page == Page::Toolpaths && id.ends_with("_toolpath") {
         return Some(Commit::Calculate);
+    }
+    if GENERATE_FORMS.contains(&id) {
+        return Some(Commit::Generate);
     }
     if CREATE_FORMS.contains(&id) {
         return Some(Commit::Create);
