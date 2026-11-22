@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::app::help_pictures::{Mark, where_is};
-use crate::app::help_tours::TOURS;
+use crate::app::help_tours::every_tour;
 
 /// How many shards the tours are split into: one test each.
 const SHARDS: usize = 8;
@@ -16,7 +16,7 @@ const SLOW: &[&str] = &["3d_finishing_toolpath"];
 
 /// Plays every quick tour whose place in the list leaves `shard` over [`SHARDS`].
 fn play(shard: usize) {
-    let quick = TOURS.iter().filter(|t| !SLOW.contains(&t.tool));
+    let quick = every_tour().filter(|t| !SLOW.contains(&t.tool));
     play_tours(quick.skip(shard).step_by(SHARDS));
 }
 
@@ -96,7 +96,7 @@ fn tours_shard_8_ring_what_they_point_at() {
 #[test]
 fn the_slow_tours_ring_what_they_point_at() {
     for slow in SLOW {
-        assert!(TOURS.iter().any(|t| t.tool == *slow), "{slow} has no tour");
+        assert!(every_tour().any(|t| t.tool == *slow), "{slow} has no tour");
     }
-    play_tours(TOURS.iter().filter(|t| SLOW.contains(&t.tool)));
+    play_tours(every_tour().filter(|t| SLOW.contains(&t.tool)));
 }

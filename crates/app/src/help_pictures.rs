@@ -8,7 +8,7 @@
 //! into the pictures, so search finds them.
 //! What to ring is found by name ([`crate::marks`]), so the rings land right in any layout.
 
-use super::help_tours::TOURS;
+use super::help_tours::every_tour;
 use super::{CutCraftApp, View};
 use cut_craft_core::geometry::Point;
 use eframe::egui;
@@ -62,8 +62,7 @@ pub struct Tour {
 
 /// The tours to take: all of them, or those of the tools named.
 pub fn tours(only: &[String]) -> Vec<&'static Tour> {
-    TOURS
-        .iter()
+    every_tour()
         .filter(|t| only.is_empty() || only.iter().any(|o| o == t.tool))
         .collect()
 }
@@ -455,8 +454,16 @@ mod tests {
     }
 
     #[test]
+    fn no_tool_has_two_tours() {
+        let mut seen = std::collections::BTreeSet::new();
+        for tour in every_tour() {
+            assert!(seen.insert(tour.tool), "{} has two tours", tour.tool);
+        }
+    }
+
+    #[test]
     fn every_tour_is_a_tool_with_a_help_page_and_words_on_every_step() {
-        for tour in TOURS {
+        for tour in every_tour() {
             assert!(
                 cut_craft_help::page(tour.tool).is_some(),
                 "{}: no help page",
@@ -471,13 +478,14 @@ mod tests {
 
     #[test]
     fn a_tours_markdown_numbers_each_step_over_its_picture() {
-        let md = steps_markdown(&TOURS[0]);
-        let tool = TOURS[0].tool;
+        let first = every_tour().next().expect("a tour");
+        let md = steps_markdown(first);
+        let tool = first.tool;
         assert!(md.starts_with(&format!(
             "![The steps, one after another](pictures/{tool}/tour.gif)"
         )));
         assert!(
-            md.contains(&format!("1. {}", TOURS[0].steps[0].caption)),
+            md.contains(&format!("1. {}", first.steps[0].caption)),
             "{md}"
         );
         assert!(
@@ -516,7 +524,7 @@ mod tests {
 
     #[test]
     fn only_the_tours_asked_for_are_taken() {
-        assert_eq!(tours(&[]).len(), TOURS.len());
+        assert_eq!(tours(&[]).len(), every_tour().count());
         let one = tours(&["pocket_toolpath".to_owned()]);
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].tool, "pocket_toolpath");
