@@ -16835,6 +16835,47 @@ fn changing_the_tool_changer_checks_the_toolpaths_again() {
 }
 
 #[test]
+fn loading_bits_in_the_tool_database_checks_the_toolpaths_again() {
+    // the Tool Database's OK puts bits in the tool changer's slots; the checks made with
+    // the slots empty must not still say they are missing
+    use crate::files::ToolChanges;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().set_slot_count(5);
+    let unloaded = |h: &mut Harness| {
+        h.app
+            .save_checks(&plan, ToolChanges::ToolChanger)
+            .expect("checked")
+            .iter()
+            .filter(|f| f.message.contains("not loaded in the tool changer"))
+            .count()
+    };
+    assert_eq!(unloaded(&mut h), 2, "neither bit is loaded yet");
+    h.app.invoke(&h.ctx, "tool_database");
+    let changer = h
+        .app
+        .tool_manager
+        .as_mut()
+        .unwrap()
+        .changer
+        .as_mut()
+        .unwrap();
+    changer.load("6 mm End Mill", Some(1));
+    changer.load("3 mm End Mill", Some(2));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let ok = *h.texts_at("OK").last().unwrap();
+    h.click(ok, Modifiers::NONE);
+    assert_eq!(
+        h.app.machines.active().unwrap().slot_of("3 mm End Mill"),
+        Some(2)
+    );
+    assert_eq!(unloaded(&mut h), 0, "checked again for the bits now loaded");
+}
+
+#[test]
 fn a_check_started_before_the_machine_changed_never_fills_the_checks_after() {
     // Machine Configuration's Apply forgets the checks; one still running for the old
     // limits must not hand its findings to the checks asked for after
