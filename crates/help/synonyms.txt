@@ -77,3 +77,4 @@ screen reader, screen readers, narrator, nvda, jaws, orca, voiceover, accessibil
 rings, gizmo, gizmos, rotation rings, turn handles, rotate handles, manipulator
 axis colours, axis colors, axes, triad, xyz arrows, orientation, which way is x
 reset rotation, reset position, undo rotation, put back, native position, start over
+scale to fit, fit to material, fill the material, make it fit

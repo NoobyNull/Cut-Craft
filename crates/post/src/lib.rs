@@ -895,6 +895,20 @@ impl Post {
                 "this post wraps {axis} onto {letter}: set the job up as rotary in Job Setup"
             ));
         }
+        // how far the bit is held off the axis goes move by move: a list that has lost step
+        // with the moves would write each move after the first gap at another move's place
+        if let Some(t) = toolpaths
+            .iter()
+            .find(|t| !t.across.is_empty() && t.across.len() != t.moves.len())
+        {
+            return Err(format!(
+                "\"{}\" holds the bit off the turning axis, but its moves and its places across \
+                 the axis no longer match ({} moves, {} places): calculate it again before saving",
+                t.name,
+                t.moves.len(),
+                t.across.len()
+            ));
+        }
         if let Some(t) = toolpaths
             .iter()
             .find(|t| t.across.iter().any(|a| a.abs() > 1e-9))
@@ -2343,6 +2357,33 @@ begin FOOTER
     /// One side of `hundred_round` cut with A held at 90° (25 mm round): back and forth along
     /// X, 2 mm down, with the bit held 4 mm to one side of the axis and then 4 mm to the other.
     /// Its moves are where the tip cuts, as a toolpath keeps them.
+    #[test]
+    fn a_rotary_toolpath_whose_across_list_does_not_match_its_moves_is_refused() {
+        use cut_craft_core::rotary_axis::RotaryAxis;
+        // something shortened the moves and left the list of how far the bit is held off the
+        // axis as it was: every move after the first dropped one would be written with
+        // another move's place, so the post must not write it at all
+        let mut face = one_face();
+        face.across.pop();
+        let mut doc = Document {
+            job: hundred_round(),
+            ..Document::default()
+        };
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(face);
+        doc.apply(&c.finish()).unwrap();
+        let post = Post::default_for(&doc.job).with_rotary(RotaryAxis::default());
+        let file = File {
+            path: std::path::Path::new("/jobs/face.nc"),
+            job: None,
+            made: chrono::NaiveDateTime::default(),
+            slots: &[],
+            notes: &[],
+        };
+        let refused = post.render(&doc, &file).unwrap_err();
+        assert!(refused.contains("Face"), "{refused}");
+    }
+
     fn one_face() -> Toolpath {
         use cut_craft_core::rotary_axis::tip_of;
         let radius = 50.0 / std::f64::consts::PI;

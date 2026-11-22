@@ -231,6 +231,7 @@ impl CutCraftApp {
             picked_constraint: None,
             fine_3d: None,
             rough_3d: None,
+            turned_3d: None,
             model_tall: std::cell::Cell::new(None),
             notes_ui: super::notes_panel::NotesUi::default(),
             note_vars: std::cell::RefCell::new(None),
@@ -2964,6 +2965,7 @@ impl CutCraftApp {
             self.surface_gpu,
             self.rough_3d,
         ) = (None, None, None, None, None, None);
+        self.turned_3d = None;
         // the old job's preview playback, its controls and its undo go with it
         (self.playback, self.kept_playback, self.before_preview) = (None, None, None);
         (self.playing, self.playback_goal, self.playback_shown) = (false, None, None);
@@ -3692,29 +3694,10 @@ impl CutCraftApp {
         let Some(form) = &mut self.form else { return };
         let (id, mut params) = (form.id, form.params.clone());
         let sized = params["size"].is_object();
-        if sized {
-            let lock = params["size"]["lock_ratio"].as_bool().unwrap_or(false);
-            for (i, key) in SIZES.iter().enumerate() {
-                let value = params["size"][key].as_f64().unwrap_or(0.0);
-                let edited = form
-                    .shown_size
-                    .map_or(value != 0.0, |shown| value != shown[i]);
-                if edited {
-                    // locked, the size just typed sets the others
-                    if lock {
-                        form.typed_size = [None; 3];
-                    }
-                    form.typed_size[i] = (value > 0.0).then_some(value);
-                }
-            }
-            if lock {
-                let first = form.typed_size.iter().position(Option::is_some);
-                form.typed_size =
-                    std::array::from_fn(|i| form.typed_size[i].filter(|_| Some(i) == first));
-            }
-            for (key, typed) in SIZES.iter().zip(form.typed_size) {
-                params["size"][key] = Value::from(typed.unwrap_or(0.0));
-            }
+        if sized && id == "orientate_3d_model" {
+            typed_into_scale(form, &mut params, &self.doc);
+        } else if sized {
+            typed_sizes(form, &mut params);
         }
         if id == "orientate_3d_model" {
             forget_typed_alignment(form);
@@ -7259,7 +7242,138 @@ fn show_form(
     // what the pointer was on last frame; the fields note it again this frame
     form::forget_help(ui.ctx());
     let changed = form::show(ui, &open.fields, &mut open.params, look);
-    changed | align_in_material(ui, open, job, icon) | update_undercuts(ui, open)
+    changed
+        | align_in_material(ui, open, job, icon)
+        | update_undercuts(ui, open)
+        | scale_to_fit(ui, open, job)
+}
+
+/// A form's Model Size following the model's own but for the sizes the user typed: those
+/// are kept and given to the command (locked, the first typed sets the others).
+#[expect(
+    clippy::float_cmp,
+    reason = "a size is edited when not the very value shown"
+)]
+fn typed_sizes(form: &mut OpenForm, params: &mut Value) {
+    const SIZES: [&str; 3] = ["x", "y", "z"];
+    let lock = params["size"]["lock_ratio"].as_bool().unwrap_or(false);
+    for (i, key) in SIZES.iter().enumerate() {
+        let value = params["size"][key].as_f64().unwrap_or(0.0);
+        let edited = form
+            .shown_size
+            .map_or(value != 0.0, |shown| value != shown[i]);
+        if edited {
+            // locked, the size just typed sets the others
+            if lock {
+                form.typed_size = [None; 3];
+            }
+            form.typed_size[i] = (value > 0.0).then_some(value);
+        }
+    }
+    if lock {
+        let first = form.typed_size.iter().position(Option::is_some);
+        form.typed_size = std::array::from_fn(|i| form.typed_size[i].filter(|_| Some(i) == first));
+    }
+    for (key, typed) in SIZES.iter().zip(form.typed_size) {
+        params["size"][key] = Value::from(typed.unwrap_or(0.0));
+    }
+}
+
+/// Import 3D Model's sizes: a size typed scales the model once, by how much it differs
+/// from the size shown (all three alike while the ratio is locked, and always on a rotary
+/// job), kept as the model's scale so turning the model after does not size it again. The
+/// command is given the scale, never the sizes.
+#[expect(
+    clippy::float_cmp,
+    reason = "a size is edited when not the very value shown"
+)]
+fn typed_into_scale(
+    form: &mut OpenForm,
+    params: &mut Value,
+    doc: &cut_craft_core::document::Document,
+) {
+    const SIZES: [&str; 3] = ["x", "y", "z"];
+    let size = &params["size"];
+    let mut scale: [f64; 3] = serde_json::from_value(size["scale"].clone()).unwrap_or([1.0; 3]);
+    let uniform = size["lock_ratio"].as_bool().unwrap_or(false) || params["rotary"] == true;
+    // the model's size as it is now, turned as the settings now turn it, at its scale
+    let now = || {
+        let mut now = params.clone();
+        for key in SIZES {
+            now["size"][key] = Value::from(0.0);
+        }
+        let p = serde_json::from_value(now).ok()?;
+        model_size(&cmd_orientate_3d_model::preview(doc, &p).ok()??)
+    };
+    let edited =
+        |i: usize, value: f64| value > 0.0 && form.shown_size.is_none_or(|shown| value != shown[i]);
+    let typed = SIZES
+        .iter()
+        .enumerate()
+        .any(|(i, key)| edited(i, size[*key].as_f64().unwrap_or(0.0)));
+    if let Some(shown) = typed.then(now).flatten() {
+        for (i, key) in SIZES.iter().enumerate() {
+            let value = size[key].as_f64().unwrap_or(0.0);
+            if !edited(i, value) || shown[i] <= 0.0 {
+                continue;
+            }
+            let by = value / shown[i];
+            if uniform {
+                scale = scale.map(|s| s * by);
+                break;
+            }
+            scale[i] *= by;
+        }
+    }
+    form.typed_size = [None; 3];
+    form.params["size"]["scale"] = serde_json::json!(scale);
+    params["size"]["scale"] = serde_json::json!(scale);
+    for key in SIZES {
+        params["size"][key] = Value::from(0.0);
+    }
+}
+
+/// Import 3D Model's Scale to Fit Material, the form's last choice: the model scaled once
+/// to be as big as the material allows, turned as it is now, and kept at that scale while
+/// it is turned after. Greyed until Change size is ticked, so the size never changes
+/// unseen; true when clicked.
+fn scale_to_fit(
+    ui: &mut egui::Ui,
+    open: &mut OpenForm,
+    job: &cut_craft_core::document::Job,
+) -> bool {
+    if open.id != "orientate_3d_model" {
+        return false;
+    }
+    let unlocked = open.params["size"]["change_size"]
+        .as_bool()
+        .unwrap_or(false);
+    let clicked = ui
+        .add_enabled(unlocked, egui::Button::new(tr!("scale-to-fit")))
+        .on_hover_hint(tr!("scale-to-fit.tooltip"))
+        .on_disabled_hover_text(tr!("scale-to-fit.disabled"))
+        .clicked();
+    if !clicked {
+        return false;
+    }
+    let doc = cut_craft_core::document::Document {
+        job: *job,
+        ..cut_craft_core::document::Document::default()
+    };
+    let fits = serde_json::from_value(open.params.clone())
+        .map_err(|e| e.to_string())
+        .and_then(|p| cmd_orientate_3d_model::fit_scale(&doc, &p).map_err(|e| e.to_string()));
+    match fits {
+        Ok(s) => {
+            open.params["size"]["scale"] = serde_json::json!([s, s, s]);
+            open.typed_size = [None; 3];
+            true
+        }
+        Err(e) => {
+            open.error = Some(e);
+            false
+        }
+    }
 }
 
 /// Import 3D Model's alignment, as Align Objects' in the material: the model against the

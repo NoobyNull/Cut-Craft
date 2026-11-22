@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-21
 see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths
 ---
 
@@ -155,7 +155,10 @@ To take the waste off the ends, or turn the blank round before the carving, use
 ## Cut round the model as it really is
 
 A full 3D model imported into a rotary job (see [Orientate 3D Model](help:orientate_3d_model))
-is cut round as it really is, triangle by triangle, not as the heights the 3D view shows. With
+is cut round as it really is, triangle by triangle, exactly where it sits in space: the same
+model the 3D view shows. Material Setup's **Model Position in Material** is for flat jobs and
+does not move it; where the material reaches further out than the model, it is cut down to the
+model. With
 **Off centre** the side of the ball can reach under a ledge or into a hollow that a bit pointing
 at the axis would miss, and it is never let into the model. A model drawn or sculpted in Cut
 Craft, or one sunk into another, is cut from its heights as before.

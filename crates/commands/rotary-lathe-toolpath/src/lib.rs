@@ -14,7 +14,7 @@
 //! beside the cut. Where they would not let the bit down as far as it should go it stops
 //! short, and says so in red.
 
-use cut_craft_core::component::{model_shape_at_resolution, placed_model};
+use cut_craft_core::component::{Combine, model_shape_at_resolution, placed_model};
 use cut_craft_core::document::{Along, Document, Units};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
@@ -252,20 +252,53 @@ fn turned(
             return Ok((made(p, tool, vec![]), notes));
         }
         progress::stage("Placing the model");
-        let model = placed_model(doc, tool)?;
-        // where there is any model at all: elsewhere it comes down to the stub
-        let shape = model_shape_at_resolution(doc);
-        // as far out as any of the model reaches at each point along
-        let outline = outline(
-            &model,
-            &shape,
-            radius,
-            along_x,
-            (length, circumference),
+        let origin = doc.job.area().min;
+        // full 3D models as they really are in space; the rest from their heights, placed
+        // in the material where Material Setup puts them
+        let real = |k: &cut_craft_core::component::Component| {
+            !k.solid.is_empty() && matches!(k.combine, Combine::Add | Combine::Merge)
+        };
+        let solids: Vec<[DVec3; 3]> = doc
+            .components
+            .values()
+            .filter(|k| k.visible && real(k))
+            .flat_map(cut_craft_core::component::Component::solid_triangles)
+            .collect();
+        let rest = Document {
+            components: doc
+                .components
+                .iter()
+                .filter(|(_, k)| !real(k))
+                .map(|(id, k)| (*id, k.clone()))
+                .collect(),
+            ..doc.clone()
+        };
+        let count = target.radii.len();
+        let mut reach = solid_outline(
+            &solids,
+            if along_x { origin.x } else { origin.y },
+            count,
             cell,
-            doc.job.area().min,
         );
-        for (t, r) in target.radii.iter_mut().zip(outline) {
+        if !rest.components.is_empty() {
+            let model = placed_model(&rest, tool)?;
+            // where there is any model at all: elsewhere it comes down to the stub
+            let shape = model_shape_at_resolution(&rest);
+            // as far out as any of the model reaches at each point along
+            let heights = outline(
+                &model,
+                &shape,
+                radius,
+                along_x,
+                (length, circumference),
+                cell,
+                origin,
+            );
+            for (r, h) in reach.iter_mut().zip(heights) {
+                *r = r.max(h);
+            }
+        }
+        for (t, r) in target.radii.iter_mut().zip(reach) {
             if r.is_finite() {
                 *t = (r + p.allowance.max(0.0)).max(stub);
             }
@@ -487,10 +520,59 @@ fn outline(
         .collect()
 }
 
+/// How far out from the axis full 3D models `triangles` (in their own frame: along the
+/// job's axis from `from`, then across and up from the axis) reach at each of `count`
+/// points `cell` apart along it, the middles of its cells: where the slice there cuts them,
+/// and their corners within the cell. Minus infinity where none is.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "cell counts are small"
+)]
+fn solid_outline(triangles: &[[DVec3; 3]], from: f64, count: usize, cell: f64) -> Vec<f64> {
+    let mut reach = vec![f64::NEG_INFINITY; count];
+    let out = |v: DVec3| v.y.hypot(v.z);
+    let index = |along: f64| ((along - from) / cell).floor();
+    for t in triangles {
+        // its corners, in their own cells
+        for &v in t {
+            let i = index(v.x);
+            if i >= 0.0 && (i as usize) < count {
+                let r = &mut reach[i as usize];
+                *r = r.max(out(v));
+            }
+        }
+        // its slices at the cells' middles: as far out as a line across it goes is at
+        // one of its ends
+        let (lo, hi) = t
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
+                (lo.min(v.x), hi.max(v.x))
+            });
+        let first = ((lo - from) / cell - 0.5).ceil().max(0.0) as usize;
+        let last = ((hi - from) / cell - 0.5).floor();
+        if last < 0.0 {
+            continue;
+        }
+        let upto = (last as usize).min(count.saturating_sub(1));
+        for (i, r) in reach.iter_mut().enumerate().take(upto + 1).skip(first) {
+            let at = from + (i as f64 + 0.5) * cell;
+            for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
+                if (a.x - at) * (b.x - at) > 0.0 || (a.x - b.x).abs() < 1e-12 {
+                    continue;
+                }
+                *r = r.max(out(a.lerp(b, (at - a.x) / (b.x - a.x))));
+            }
+        }
+    }
+    reach
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cut_craft_core::component::{Combine, Component};
+    use cut_craft_core::component::Component;
     use cut_craft_core::document::{Blank, Job};
     use cut_craft_core::toolpath::MoveKind;
 
@@ -758,6 +840,62 @@ mod tests {
             .map(|c| 20.0 + c.z)
             .fold(f64::INFINITY, f64::min);
         assert!((lowest - 6.5).abs() < 0.3, "{lowest}");
+    }
+
+    #[test]
+    fn a_full_model_is_turned_down_to_where_it_really_is() {
+        // a 16 by 16 bar from 20 to 80 along the axis of a 40 bar, kept as its real shape:
+        // its corners reach 11.3 out. Its unrolled heights (9) and Material Setup's flat-job
+        // position do not move it
+        let mut doc = round_job(100.0, 40.0);
+        let (lo, hi) = (DVec3::new(20.0, -8.0, -8.0), DVec3::new(80.0, 8.0, 8.0));
+        let at = |i: usize| {
+            DVec3::new(
+                if i & 1 == 1 { hi.x } else { lo.x },
+                if i & 2 == 2 { hi.y } else { lo.y },
+                if i & 4 == 4 { hi.z } else { lo.z },
+            )
+        };
+        let triangles: Vec<[DVec3; 3]> = [
+            [0, 2, 3, 1],
+            [4, 5, 7, 6],
+            [0, 1, 5, 4],
+            [2, 6, 7, 3],
+            [0, 4, 6, 2],
+            [1, 3, 7, 5],
+        ]
+        .iter()
+        .flat_map(|&[a, b, c, d]| [[at(a), at(b), at(c)], [at(a), at(c), at(d)]])
+        .collect();
+        let mut model = Component::from_fn("Bar", Combine::Add, doc.job.area(), 0.5, |p| {
+            (20.0..80.0).contains(&p.x).then_some(9.0)
+        });
+        model.set_solid(&triangles);
+        let mut c = Change::builder(&doc);
+        c.add_new_component(model);
+        doc.apply(&c.finish()).unwrap();
+        let reach = 8.0_f64.hypot(8.0);
+        for gap in [0.0, 3.0] {
+            doc.job.model_position.gap = gap;
+            let p = Params {
+                operation: Operation::Turn,
+                allowance: 0.0,
+                ..Params::default()
+            };
+            let (cuts, _) = cuts_of(&doc, &p);
+            let over: Vec<f64> = cuts
+                .iter()
+                .filter(|c| (25.0..75.0).contains(&c.x))
+                .map(|c| 20.0 + c.z)
+                .collect();
+            assert!(!over.is_empty(), "the bar is turned down to");
+            let lowest = over.iter().copied().fold(f64::INFINITY, f64::min);
+            assert!(lowest >= reach - 1e-6, "gap {gap}: {lowest} into the bar");
+            assert!(
+                lowest - reach < 0.3,
+                "gap {gap}: {lowest}, short of {reach}"
+            );
+        }
     }
 
     #[test]
