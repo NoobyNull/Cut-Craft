@@ -1142,11 +1142,11 @@ mod tests {
     fn a_generated_border_from_the_library_comes_in_at_its_recipes_size() {
         let dir = std::env::temp_dir().join(format!("cut-craft-border-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let (w, h) = (60, 20);
+        let (wide, high) = (60, 20);
         // a ridge along the middle, 0 at the top and bottom edges
-        let depth: Vec<f32> = (0..w * h)
-            .map(|k| {
-                let y = f32::from(u16::try_from(k / w).unwrap());
+        let depth: Vec<f32> = (0..wide * high)
+            .map(|at| {
+                let y = f32::from(u16::try_from(at / wide).unwrap());
                 1.0 - (y - 9.5).abs() / 9.5
             })
             .collect();
@@ -1154,24 +1154,32 @@ mod tests {
             &dir,
             "Rope",
             &depth,
-            w,
-            h,
+            wide,
+            high,
             &one_pixel_bmp(),
             &cut_craft_border_tile::Recipe::new("rope", "3:1", 90.0, 30.0, 4.0),
         )
         .unwrap();
-        let p = Params {
+        let params = Params {
             file: dir.join("Rope.png").display().to_string(),
             ..Params::default()
         };
         let mut doc = Document::default();
-        let change = Orientate3dModel::run(&doc, &p).unwrap();
+        let change = Orientate3dModel::run(&doc, &params).unwrap();
         doc.apply(&change).unwrap();
-        let k = doc.components.values().next().unwrap();
-        let size = |n: usize| f64::from(u32::try_from(n).unwrap()) * k.cell;
-        let (x, y) = (size(k.columns), size(k.rows));
-        assert!((x - 90.0).abs() < 2.0 * k.cell && (y - 30.0).abs() < 2.0 * k.cell, "{x} {y}");
-        let top = k.heights.iter().copied().filter(|v| v.is_finite()).fold(0.0, f64::max);
+        let model = doc.components.values().next().unwrap();
+        let size = |n: usize| f64::from(u32::try_from(n).unwrap()) * model.cell;
+        let (x, y) = (size(model.columns), size(model.rows));
+        assert!(
+            (x - 90.0).abs() < 2.0 * model.cell && (y - 30.0).abs() < 2.0 * model.cell,
+            "{x} {y}"
+        );
+        let top = model
+            .heights
+            .iter()
+            .copied()
+            .filter(|v| v.is_finite())
+            .fold(0.0, f64::max);
         assert!((top - 4.0).abs() < 0.3, "{top}");
         let _ = std::fs::remove_dir_all(&dir);
     }

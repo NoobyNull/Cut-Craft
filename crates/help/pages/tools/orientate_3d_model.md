@@ -1,7 +1,13 @@
 ---
-reviewed: 2026-11-21
-see-also: import_component_3d_model, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath, rotary_lathe_toolpath
+reviewed: 2026-11-22
+see-also: import_component_3d_model, generate_border, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath, rotary_lathe_toolpath
 ---
+
+## Borders from the Library
+
+A border made with [Generate Border](help:generate_border) comes in here too, like a 3D model:
+double-click it in the Library under **Generated ▸ Borders**. It arrives at the length,
+height and depth it was made at, shown in your job's units, ready to turn, size and place.
 
 ## Turning the model with the rings
 

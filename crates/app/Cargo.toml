@@ -9,6 +9,7 @@ license-file.workspace = true
 chrono.workspace = true
 cut-craft-core.workspace = true
 cut-craft-border-tile.workspace = true
+keyring = { version = "3.6", features = ["apple-native", "windows-native", "async-secret-service", "async-io", "crypto-rust"] }
 cut-craft-vtdb = { path = "../vtdb" }
 cut-craft-tool-database = { path = "../tool-database" }
 cut-craft-bug-report = { path = "../bug-report" }
@@ -168,6 +169,7 @@ cmd-create-component-from-visible-model = { path = "../commands/create-component
 cmd-bake-components = { path = "../commands/bake-components" }
 cmd-create-component-from-bitmap = { path = "../commands/create-component-from-bitmap" }
 cmd-relief-from-photo = { path = "../commands/relief-from-photo" }
+cmd-generate-border = { path = "../commands/generate-border" }
 cmd-scale-model-z-height = { path = "../commands/scale-model-z-height" }
 cmd-add-zero-plane = { path = "../commands/add-zero-plane" }
 cmd-space-vertically = { path = "../commands/space-vertically" }

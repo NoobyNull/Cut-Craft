@@ -5,6 +5,10 @@
 //! the way a 3D model from the Library does. A tile repeats left to right, so its two ends
 //! are made to meet.
 
+#![expect(
+    clippy::many_single_char_names,
+    reason = "a picture's width and height are w and h, its pixels x and y"
+)]
 use cut_craft_core::glam::DVec3;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -42,7 +46,7 @@ pub struct Recipe {
     pub depth: f64,
     /// How it was shaped after it came back (see [`Shaping`]).
     pub shaping: Shaping,
-    /// Where its depth came from: "google" (asked of the picture) or "depth_add_on".
+    /// Where its depth came from: `google` (asked of the picture) or `depth_add_on`.
     pub depth_from: String,
     /// When it was made, as the computer's clock said (RFC 3339).
     #[serde(default)]
@@ -160,7 +164,14 @@ pub fn free_name(folder: &Path, base: &str) -> String {
     if !taken(clean) {
         return clean.to_owned();
     }
-    (2..).map(|k| format!("{clean} {k}")).find(|n| !taken(n)).expect("a free name")
+    let mut k = 2_u64;
+    loop {
+        let name = format!("{clean} {k}");
+        if !taken(&name) {
+            return name;
+        }
+        k += 1;
+    }
 }
 
 /// The depth map `depth` (`w` by `h`, rows from the top, 0 lowest to 1 highest) shaped as
@@ -215,7 +226,9 @@ pub fn shape(depth: &[f32], w: usize, h: usize, s: &Shaping) -> Vec<f32> {
     // stretched to fill 0 to 1, so the depth asked for is the depth made
     let (lo, hi) = d
         .iter()
-        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &v| (lo.min(v), hi.max(v)));
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &v| {
+            (lo.min(v), hi.max(v))
+        });
     if hi - lo > 1e-6 {
         for v in &mut d {
             *v = (*v - lo) / (hi - lo);
@@ -233,7 +246,7 @@ fn box_blur(d: &[f32], w: usize, h: usize, r: usize) -> Vec<f32> {
     for y in 0..h {
         let row = &d[y * w..(y + 1) * w];
         let at = |x: isize| {
-            #[expect(clippy::cast_possible_wrap, clippy::cast_sign_loss, reason = "a pixel")]
+            #[expect(clippy::cast_possible_wrap, reason = "a pixel")]
             let i = x.rem_euclid(w as isize) as usize;
             row[i]
         };
@@ -272,7 +285,11 @@ pub fn greys(bytes: &[u8]) -> Result<(Vec<f32>, usize, usize), String> {
     let img = image::load_from_memory(bytes).map_err(|e| format!("not a picture: {e}"))?;
     let g = img.to_luma16();
     let (w, h) = (g.width() as usize, g.height() as usize);
-    let d = g.into_raw().into_iter().map(|v| f32::from(v) / 65535.0).collect();
+    let d = g
+        .into_raw()
+        .into_iter()
+        .map(|v| f32::from(v) / 65535.0)
+        .collect();
     Ok((d, w, h))
 }
 
@@ -289,7 +306,8 @@ pub fn save(
     recipe: &Recipe,
 ) -> Result<Files, String> {
     let f = files(folder, name);
-    std::fs::create_dir_all(folder).map_err(|e| format!("cannot make {}: {e}", folder.display()))?;
+    std::fs::create_dir_all(folder)
+        .map_err(|e| format!("cannot make {}: {e}", folder.display()))?;
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -317,8 +335,7 @@ pub fn save(
 
 /// The recipe in `path`.
 pub fn read_recipe(path: &Path) -> Result<Recipe, String> {
-    let text =
-        std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let r: Recipe = serde_json::from_str(&text)
         .map_err(|e| format!("{}: not a border tile's recipe: {e}", path.display()))?;
     if r.format != FORMAT_NAME || r.version > VERSION {
@@ -338,7 +355,10 @@ pub fn read_recipe(path: &Path) -> Result<Recipe, String> {
 /// same steps as an STL from the Library.
 pub fn triangles(depth: &Path) -> Result<Vec<[DVec3; 3]>, String> {
     let f = of_depth_map(depth).ok_or_else(|| {
-        format!("{}: its recipe ({RECIPE_SUFFIX}) is missing", depth.display())
+        format!(
+            "{}: its recipe ({RECIPE_SUFFIX}) is missing",
+            depth.display()
+        )
     })?;
     let recipe = read_recipe(&f.recipe)?;
     let bytes = std::fs::read(depth).map_err(|e| format!("{}: {e}", depth.display()))?;
@@ -368,7 +388,12 @@ pub fn surface(d: &[f32], w: usize, h: usize, recipe: &Recipe) -> Vec<[DVec3; 3]
         for i in 0..cols - 1 {
             // rows run down the picture, so each cell's corners go round anticlockwise
             // seen from above as (i, j+1), (i+1, j+1), (i+1, j), (i, j)
-            let (a, b, c, e) = (point(i, j + 1), point(i + 1, j + 1), point(i + 1, j), point(i, j));
+            let (a, b, c, e) = (
+                point(i, j + 1),
+                point(i + 1, j + 1),
+                point(i + 1, j),
+                point(i, j),
+            );
             out.push([a, b, c]);
             out.push([a, c, e]);
         }
@@ -408,11 +433,18 @@ mod tests {
         let d = shape(&ramp(w, h), w, h, &s);
         for y in 0..h {
             let row = &d[y * w..(y + 1) * w];
-            assert!((row[0] - row[w - 1]).abs() < 1e-5, "{} {}", row[0], row[w - 1]);
+            assert!(
+                (row[0] - row[w - 1]).abs() < 1e-5,
+                "{} {}",
+                row[0],
+                row[w - 1]
+            );
             // the middle is left as it was, only stretched
             assert!(row[50] > 0.3 && row[50] < 0.7);
         }
-        let (lo, hi) = d.iter().fold((1.0f32, 0.0f32), |(l, h), &v| (l.min(v), h.max(v)));
+        let (lo, hi) = d
+            .iter()
+            .fold((1.0f32, 0.0f32), |(l, h), &v| (l.min(v), h.max(v)));
         assert!(lo.abs() < 1e-6 && (hi - 1.0).abs() < 1e-6);
     }
 
@@ -434,7 +466,10 @@ mod tests {
         };
         let d = shape(&stairs, w, h, &s);
         let col: Vec<f32> = (0..h).map(|y| d[y * w + 5]).collect();
-        let biggest_jump = col.windows(2).map(|p| (p[1] - p[0]).abs()).fold(0.0, f32::max);
+        let biggest_jump = col
+            .windows(2)
+            .map(|p| (p[1] - p[0]).abs())
+            .fold(0.0, f32::max);
         assert!(biggest_jump < 0.05, "{biggest_jump}");
     }
 
@@ -442,7 +477,16 @@ mod tests {
     fn the_depth_curve_lifts_or_lowers_the_middle_greys() {
         let mid = |curve| {
             let d = vec![0.0, 0.5, 1.0];
-            shape(&d, 3, 1, &Shaping { curve, smooth: 0.0, seam: 0.0 })[1]
+            shape(
+                &d,
+                3,
+                1,
+                &Shaping {
+                    curve,
+                    smooth: 0.0,
+                    seam: 0.0,
+                },
+            )[1]
         };
         assert!(mid(0.5) > 0.6 && mid(2.0) < 0.3 && (mid(1.0) - 0.5).abs() < 1e-6);
     }
@@ -453,7 +497,10 @@ mod tests {
         let (w, h) = (40, 20);
         let mut photo = Vec::new();
         image::RgbImage::from_pixel(8, 4, image::Rgb([200, 150, 90]))
-            .write_to(&mut std::io::Cursor::new(&mut photo), image::ImageFormat::Png)
+            .write_to(
+                &mut std::io::Cursor::new(&mut photo),
+                image::ImageFormat::Png,
+            )
             .unwrap();
         let recipe = Recipe::new("victorian_carved", "2:1", 100.0, 50.0, 6.0);
         let name = free_name(&dir, "Victorian: carved?");
@@ -471,7 +518,10 @@ mod tests {
             hi = hi.max(*p);
         }
         assert!(lo.abs().max_element() < 1e-6, "{lo}");
-        assert!((hi - DVec3::new(100.0, 50.0, 6.0)).abs().max_element() < 1e-3, "{hi}");
+        assert!(
+            (hi - DVec3::new(100.0, 50.0, 6.0)).abs().max_element() < 1e-3,
+            "{hi}"
+        );
         // facing up
         let [a, b, c] = tris[0];
         assert!((b - a).cross(c - a).z > 0.0);

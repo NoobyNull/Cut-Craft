@@ -9,6 +9,8 @@ commit-calculate = Calculate
     .tooltip-again = Work out this toolpath again with these settings
 commit-apply = Apply
     .tooltip = Make these changes
+commit-generate = Generate
+    .tooltip = Ask for a new one with these settings, and save it in your Library
 
 # Where a form with no commit button would have one: why it has none.
 commit-none-canvas = Use it on the canvas: each change shows as you make it

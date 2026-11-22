@@ -100,6 +100,31 @@ depth-addon-install = Install Depth Add-on
     .tooltip = Downloads it from GitHub once; Gadgets ▸ Add-ons updates it
     .disabled = Cut Craft has no settings folder to put it in
 
+# Generate Border: a repeating border made with the Borders add-on and the person's own Google key.
+border-google-title = Your Google key
+border-sent-to-google = Generate sends the style and your Details to Google, which draws the border and bills it to your own Google account. Nothing else from your job is sent.
+border-key = Google key
+    .tooltip = Your own Google AI Studio API key. It is kept in this computer's password store, never in your jobs or settings
+border-save-key = Save Key
+    .tooltip = Keep this key in this computer's password store for next time
+border-key-saved = Key saved in this computer's password store.
+border-key-saved-file = This computer has no password store, so the key is saved in a private file in Cut Craft's settings folder.
+border-key-kept = Your Google key is saved on this computer.
+border-forget-key = Forget Key
+    .tooltip = Remove the key from this computer. You can type it in again at any time
+border-get-key = Get a free Google key
+border-needs-key = Type your Google key above and press Save Key first. Get one free from Google AI Studio.
+border-needs-addon = Generate Border needs the free Borders add-on (about 5 MB, downloaded once).
+border-needs-depth-addon = Depth from is set to the Depth add-on, which is not installed. Install it from Gadgets ▸ Add-ons, or set Depth from to Google.
+border-no-documents = This computer has no Documents folder to save the border in.
+border-addon-install = Install Borders Add-on
+    .tooltip = Downloads it from GitHub once; Gadgets ▸ Add-ons updates it
+border-addon-installing = Installing the Borders add-on...
+border-asking-picture = Asking Google to draw the border... (about half a minute)
+border-asking-depth = Working out its depth...
+border-saving = Saving it in your Library...
+border-saved = Saved "{ $name }" in your Library under Generated ▸ Borders. Double-click it there to place it in your drawing.
+
 # Help ▸ Keyboard Shortcuts.
 shortcuts-change = Change Shortcuts…
     .tooltip = Set your own keys, or the mouse's thumb buttons and wheel click, in Options ▸ Mouse and Shortcuts

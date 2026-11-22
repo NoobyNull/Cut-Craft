@@ -1,0 +1,18 @@
+[package]
+name = "cmd-generate-border"
+description = "Generate Border: a repeating length of picture-frame moulding made with the Borders add-on and saved to the Library"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

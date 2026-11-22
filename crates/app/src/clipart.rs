@@ -237,12 +237,10 @@ pub enum ToLevel {
 /// Whether `files` can go onto a level: 3D clipart only, which comes in as components. A
 /// drawing or picture comes in as vectors or a picture on the current layer, with no level.
 pub fn takes_a_level(files: &[PathBuf]) -> bool {
-    files
-        .iter()
-        .all(|f| {
-            preview::MODELS.contains(&preview::extension(f).as_str())
-                || cut_craft_border_tile::of_depth_map(f).is_some()
-        })
+    files.iter().all(|f| {
+        preview::MODELS.contains(&preview::extension(f).as_str())
+            || cut_craft_border_tile::of_depth_map(f).is_some()
+    })
 }
 
 /// `change` with the components it adds or remakes on `level`.
@@ -1247,8 +1245,9 @@ fn enlarged(
     let edge = ui.spacing().interact_size.y * LARGE_ROWS;
     let square = egui::vec2(edge, edge);
     let extension = preview::extension(&entry.file);
-    let picture = BITMAPS.contains(&extension.as_str());
-    let model = preview::MODELS.contains(&extension.as_str());
+    // a generated border's depth map is a model shown by its own picture
+    let picture = BITMAPS.contains(&extension.as_str()) && entry.picture.is_none();
+    let model = preview::MODELS.contains(&extension.as_str()) || entry.picture.is_some();
     if DRAWN.contains(&extension.as_str()) {
         let uri = format!("file://{}", entry.file.display());
         let (rect, _) = ui.allocate_exact_size(square, egui::Sense::hover());
@@ -1408,8 +1407,9 @@ fn thumbnail(
         let image = egui::Image::new(format!("file://{}", entry.file.display()));
         return (pictured(ui, image, size, chosen), None);
     }
-    let model = preview::MODELS.contains(&extension.as_str());
-    let picture = BITMAPS.contains(&extension.as_str());
+    // a generated border's depth map is a model shown by its own picture
+    let model = preview::MODELS.contains(&extension.as_str()) || entry.picture.is_some();
+    let picture = BITMAPS.contains(&extension.as_str()) && entry.picture.is_none();
     let on_screen = ui.is_rect_visible(egui::Rect::from_min_size(ui.cursor().min, size));
     let kind = if model {
         "3D".into()
@@ -1801,7 +1801,10 @@ mod tests {
         let dir = folder("border");
         let mut photo = Vec::new();
         image::RgbImage::new(4, 2)
-            .write_to(&mut std::io::Cursor::new(&mut photo), image::ImageFormat::Png)
+            .write_to(
+                &mut std::io::Cursor::new(&mut photo),
+                image::ImageFormat::Png,
+            )
             .unwrap();
         let recipe = cut_craft_border_tile::Recipe::new("gothic_pewter", "2:1", 80.0, 40.0, 5.0);
         let f =

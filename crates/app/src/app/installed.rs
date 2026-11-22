@@ -13,6 +13,7 @@ impl CutCraftApp {
     /// The add-ons folder, and what is installed there.
     pub(super) fn load_addons(&mut self) {
         self.addons = crate::addons::Addons::new(crate::depth::addons_dir());
+        self.border.keys = Some(crate::borders::KeyStore::system());
         self.refresh_installed();
         let pack = self.options.language.pack.clone();
         if !pack.is_empty() {
