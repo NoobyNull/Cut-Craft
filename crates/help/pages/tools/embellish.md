@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-22
-see-also: decorative_relief, vector_texture, celtic_weave
+see-also: decorative_relief, vector_texture, celtic_weave, generate_border
 ---
 
 ## Steps
