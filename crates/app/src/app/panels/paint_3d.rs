@@ -741,11 +741,12 @@ impl CutCraftApp {
     }
 
     /// The height of the 3D view's origin arrows: the machine's Z zero. While Import 3D Model
-    /// shows its model whole, the model sits on its own zero plane at 0 and the material's
-    /// outline is drawn from there up to its thickness, so zero is measured from that top.
+    /// shows its model (whole or, past the preview faces, as its component), the model sits
+    /// on its own zero plane at 0 and the material's outline is drawn from there up to its
+    /// thickness, so zero is measured from that top.
     pub(in super::super) fn origin_height_3d(&self) -> f64 {
         let importing =
-            self.importing_whole() && self.simulation.is_none() && self.playback.is_none();
+            self.importing_model() && self.simulation.is_none() && self.playback.is_none();
         origin_3d(&self.doc.job, importing)
     }
 

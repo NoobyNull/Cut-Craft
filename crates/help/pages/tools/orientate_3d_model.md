@@ -76,6 +76,13 @@ the model in the board drawn to scale.
 
 ![Bottom on material bottom: everything round the model is cut down to the board's bottom](pictures/model-bottom-on-bottom.png)
 
+While the form is open, the model sits on the **modeling plane** (the light blue sheet)
+inside the material's outline, and the red, green and blue **X, Y, Z arrows** show your Z
+zero: on the outline's top for **Material Surface**, on the modeling plane for **Machine
+Bed**. A very big model (more faces than **Options ▸ Model preview faces**) is drawn the same
+way: the surface it makes, on the plane, with only its out-of-reach faces marked in red.
+See [the 3D view](help:view_3d) for the arrows' colours.
+
 Press **Apply** and the 3D view shows the model where the toolpaths will cut it: inside
 the board, with what is round it cut down to the model's base. A toolpath preview carves
 the same place.
