@@ -1,6 +1,6 @@
 + Cut Craft's post for FluidNC with an automatic tool changer (M6), millimetres.
 + Rotary: X wrapped onto A, for a cylinder along Y; feeds in units a minute. Needs an A axis.
-+ Made by scripts/make_posts.py: edit its template and run it again.
++ Made from this controller's Arcs post: change the two together.
 
 + History
 + Who        When       What

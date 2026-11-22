@@ -140,7 +140,7 @@ say "not implemented yet".
   and for FluidNC ATC, GRBL (tool changes pause with M0) and Mach3 (`.tap`; T M6, G91.1
   arcs), in mm and inches: Arcs, Straight, and Rotary A, cylinder along X / Y with or without
   G93 (GRBL's named grblHAL; machines' old "Wrap Y / X to A" names are renamed on loading); all
-  written for Cut Craft (`scripts/make_posts.py` makes the variants from three templates).
+  written for Cut Craft (the variants were made from three templates; edit them together).
   Package machines list GRBL Arcs and Straight in mm and inches, Arcs in their units first.
   A machine's Firmware (GRBL 1.1, grblHAL, FluidNC, Mach3 / Mach4, Other; not picked, read
   from its Controller text, unknown = standard GRBL) decides whether it can have a 4th axis:

@@ -23,9 +23,9 @@ const FACES_PICTURE_ROWS: f32 = 4.0;
 /// interactive height; narrower side pages draw it smaller.
 // ponytail: fixed ratio until a preferences dialog exists
 const DIAGRAM_ROWS: f32 = 7.0;
-/// A measurements picture's width over its height (`scripts/make_icons.py` draws them 112 x 56).
+/// A measurements picture's width over its height (they are drawn 112 x 56).
 const DIAGRAM_ASPECT: f32 = 2.0;
-/// The callout letters' colour: the pictures' orange accent (`scripts/make_icons.py`'s `ACC`).
+/// The callout letters' colour: the pictures' orange accent.
 const DIM_COLOUR: egui::Color32 = egui::Color32::from_rgb(0xef, 0x8f, 0x2a);
 /// A field's own picture beside its label (small width / radius pictures), in rows
 /// of the theme's interactive height.

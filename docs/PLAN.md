@@ -20,7 +20,7 @@ The same cycle for each item, one at a time, nothing pushed until asked.
    results (node counts, distances between outlines, areas), and tune until they agree.
    The test inputs and its results stay outside git (`re/extracted/`); our tests
    assert the agreed numbers. See section 4.
-3. **Write tests first**, then the code: a command crate per command (`scripts/new-command`),
+3. **Write tests first**, then the code: a command crate per command,
    pure functions in `cut-craft-core` where several commands share them.
 4. **Gate:** `.githooks/pre-commit` (fmt, clippy pedantic with `-D warnings`, every test);
    no real dialogs or programs from tests (`on_the_desktop` fails them).

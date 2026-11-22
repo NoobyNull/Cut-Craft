@@ -1,6 +1,6 @@
 + Cut Craft's post for FluidNC with an automatic tool changer (M6), inches.
 + Arcs: G2 / G3 with I J from the arc's start.
-+ Made by scripts/make_posts.py: edit its template and run it again.
++ Made from this controller's Arcs post: change the two together.
 
 + History
 + Who        When       What

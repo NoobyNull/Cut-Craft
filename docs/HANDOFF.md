@@ -107,7 +107,7 @@ The sections below this heading are from 2026-10-24 and kept for their working n
   - `80dc5a9`, `d5644a2`, `adaee4f`: 3D Finishing and Roughing. Shared zigzag, every move
     checked for overcut.
 - `f2b4dcc`: renamed to **Cut Craft**. `.ccjob` job files; old `.ajob` files still open.
-- `ce5cb7e`: desktop launcher `scripts/install-launcher` (release build + `.desktop` + icon
+- `ce5cb7e`: desktop launcher (release build + `.desktop` + icon
   `assets/cut-craft.svg`), app id `cut-craft`.
 - Startup and Job Setup:
   - `045885e`: startup sequence (start page, recent files, Close).
@@ -145,7 +145,6 @@ The sections below this heading are from 2026-10-24 and kept for their working n
      Help windows.
    - Update the inventory as items land.
 4. **Small open points:**
-   - The menu launcher runs a stale release build. Re-run `scripts/install-launcher` locally.
    - Hover fly-out feel, wheel zoom and the datum picker haven't been tried by hand; they're
      only tested with synthetic events.
 
@@ -158,10 +157,8 @@ The sections below this heading are from 2026-10-24 and kept for their working n
   - **Push only when asked.**
   - The user steers with screenshots of the reference program; match what they show.
 - **Commands:**
-  - One crate per command. Scaffold with
-    `scripts/new-command <name> "Label" "Group" [icon]`; it also registers the command in
-    `crates/app`. The type name breaks for names starting with a digit; rename it, as done for
-    `3d-*`.
+  - One crate per command, registered in `crates/app/src/commands.rs`. Start from a
+    small existing command crate.
   - Contract: params in, `Change` out. Every crate runs `contract_tests!(Type[, doc_fn])`;
     test documents live in `cut_craft_core::testing` (`sample_document`, `two_layers`,
     `domed`, `with_toolpath`, …).
@@ -170,8 +167,8 @@ The sections below this heading are from 2026-10-24 and kept for their working n
 - **GUI code:** no hardcoded values. Derive from the theme; when unavoidable, use a named
   constant with a `ponytail:` comment.
 - **Clean room:** the reference program's material never goes in git.
-  - `re/extracted/` is gitignored. Since 0.2.2 every icon is an original drawing made by
-    `scripts/build-icons`, kept in `assets/icons/` in git and built into the binary
+  - `re/extracted/` is gitignored. Since 0.2.2 every icon is an original drawing, kept in
+    `assets/icons/` in git and built into the binary
     (`crates/app/build.rs`); only the Icons8 GitHub / Thingiverse link PNGs are third-party.
 - **Tooling quirks:**
   - The shell is zsh: unquoted variables don't word-split; use `xargs -0` or arrays.

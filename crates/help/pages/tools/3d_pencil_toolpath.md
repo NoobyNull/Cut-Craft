@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-22
 see-also: 3d_finishing_toolpath, 3d_roughing_toolpath
 ---
 

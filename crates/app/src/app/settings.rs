@@ -476,8 +476,8 @@ pub(super) const TOOL_SHANK: egui::Color32 = egui::Color32::from_rgb(168, 172, 1
 pub(super) const RECENT_FILE_ICON: &str = "file/new.png";
 /// This version's changes, one `- ` line each, shown on the start page.
 pub(super) const WHATS_NEW: &str = include_str!("../../whats-new.md");
-/// The repository's contributors on GitHub (login, commits, profile), as
-/// `scripts/contributors` last wrote them; Help ▸ About lists them.
+/// The repository's contributors on GitHub (login, commits, profile), one a line in
+/// `contributors.tsv`; Help ▸ About lists them.
 pub(super) const CONTRIBUTORS: &str = include_str!("../../contributors.tsv");
 /// Machine ▸ Search for Machine Online: the machine packages in Cut Craft's repository.
 pub(super) const MACHINES_ONLINE: &str =
@@ -618,8 +618,8 @@ pub(super) const SECTION_PICTURE_ROWS: f32 = 3.0;
 // ponytail: fixed share until there is a preferences dialog
 pub(super) const SPLASH_SHARE: f32 = 1.0 / 3.0;
 pub(super) const APP_NAME: &str = "Cut Craft";
-/// How the desktop knows the window: the same name as the launcher, `cut-craft.desktop`
-/// (see `scripts/install-launcher`), so the taskbar shows its icon.
+/// How the desktop knows the window: the same name as the launcher, `cut-craft.desktop`,
+/// so the taskbar shows its icon.
 pub(super) const APP_ID: &str = "cut-craft";
 /// Tool icon edge, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists

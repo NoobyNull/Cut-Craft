@@ -199,7 +199,7 @@ These pictures are made by the app itself and can be made again at any time (see
 | Linux (x86-64), Flatpak | Download `cut-craft-…-x86_64.flatpak` and install it with `flatpak install --user cut-craft-…-x86_64.flatpak` (Flathub's freedesktop runtime comes with it). Inside its sandbox Report a Bug can't reach `gh`, so reports are kept on disk. |
 | Linux (x86-64), Ubuntu, Debian, Mint | Download `cut-craft_…_amd64.deb` and open it, or run `sudo apt install ./cut-craft_…_amd64.deb`. Your package manager looks after it, so Help ▸ Check for Updates tells you about new versions but doesn't replace it. |
 | Linux (x86-64), Fedora, openSUSE | Download `cut-craft-…-1.x86_64.rpm` and run `sudo dnf install ./cut-craft-…-1.x86_64.rpm` (openSUSE: `sudo zypper install`). Updated the same way as the .deb. |
-| Linux (x86-64), archive | Download `cut-craft-…-linux-x86_64.tar.gz`, unpack it and run `./cut-craft`. Or [build from source](#building-from-source); `scripts/install-launcher` adds it to the desktop's application menu. |
+| Linux (x86-64), archive | Download `cut-craft-…-linux-x86_64.tar.gz`, unpack it and run `./cut-craft`. Or [build from source](#building-from-source). |
 | Windows (x86-64) | Download `cut-craft-…-windows-x86_64.zip`, unpack it and run `cut-craft.exe`. It isn't signed, so SmartScreen may ask first: **More info ▸ Run anyway**. Not tested much yet. |
 
 Each release has all of them, and each run of **Builds (Linux)**, **Builds (Windows)** and
@@ -342,17 +342,13 @@ It sets up each scene, waits for it to settle, saves it, and quits. It reads non
 settings and saves nothing.
 
 Help ▸ About lists the repository's contributors on GitHub, built in from
-`crates/app/contributors.tsv`; `scripts/contributors` writes that file again from GitHub
-(through `gh`), so run it before a release.
+`crates/app/contributors.tsv`; update that file by hand when someone new contributes.
 
 ### Icons
 
 The icons are drawn for Cut Craft and kept in `assets/icons` as transparent PNGs, built into
-the program so nothing has to travel beside it. `scripts/build-icons` draws them all again:
-`scripts/make_icons.py` holds the flat drawings, `scripts/make_3d_icons.py` the shaded solids of
-the 3D tools, and `scripts/model_pictures.py` renders the Orientate 3D Model pictures from two
-STL models given on the command line (the models are not kept here). It needs `python3` with
-`numpy`, and `rsvg-convert`.
+the program so nothing has to travel beside it. A new icon is added to that folder as a PNG
+like the others.
 
 `CUT_CRAFT_ICON_DIR` points Cut Craft at a folder instead while icons are being worked on; an
 icon that is missing leaves its button showing its name, and everything still works. The
@@ -380,15 +376,14 @@ crates/machines/          machines, tool changers, the post-processor library
 crates/bug-report/        Report a Bug Here… and GitHub issues
 crates/vtdb/              .vtdb tool database reading
 crates/app/               the desktop app (the cut-craft binary)
-scripts/                  new-command scaffolding, the launcher, the macOS DMG, Linux packages
+scripts/                  release, CI and packaging scripts (the macOS DMG, Linux packages)
 packaging/linux/          the AppImage launcher, the Flatpak manifest, the desktop entry
 docs/                     design notes, the tool inventory, screenshots
 ```
 
 Commands are plain data in, a change out: each takes its settings (which also generate its
 form) and returns an invertible change to the document, so undo, redo and recalculation work
-the same for every tool. `scripts/new-command` scaffolds a new one with tests that fail until
-it is written. What every tool is built from, and what is still to build:
+the same for every tool. What every tool is built from, and what is still to build:
 [`docs/tool-inventory.md`](docs/tool-inventory.md).
 
 ## License

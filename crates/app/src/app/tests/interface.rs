@@ -942,8 +942,8 @@ fn every_label_character_has_a_glyph() {
         .collect();
     assert!(
         missing.is_empty(),
-        "no glyph in egui's fonts, so these draw as empty boxes; draw an icon \
-         (scripts/make_icons.py) or pick a character they have:\n{}",
+        "no glyph in egui's fonts, so these draw as empty boxes; use an icon \
+         (assets/icons) or pick a character they have:\n{}",
         missing.join("\n")
     );
 }

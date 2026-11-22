@@ -2,8 +2,7 @@
 //! the windows show the window library's stand-in. The same `.ico` is built into
 //! `cut-craft.exe` on Windows (`build.rs`), so Explorer and shortcuts show it too.
 
-/// The app icon at each size Windows asks for, each a PNG, made from `assets/cut-craft.svg`
-/// by `scripts/windows-icon`.
+/// The app icon at each size Windows asks for, each a PNG, made from `assets/cut-craft.svg`.
 pub(super) const ICO: &[u8] = include_bytes!("../../../../assets/windows/cut-craft.ico");
 
 /// The pictures in an `.ico`: each one's width in pixels and its bytes, as stored.

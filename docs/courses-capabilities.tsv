@@ -1,5 +1,5 @@
 # Capabilities the vendor's YouTube courses teach, and whether Cut Craft has them.
-# Read by scripts/courses-report.py, which writes docs/courses.md. Tab-separated columns:
+# The capability list behind docs/courses.md. Tab-separated columns:
 #   key, capability, status (yes / partly / no / out), Cut Craft evidence or what is missing,
 #   title pattern (a video whose title matches teaches it), transcript pattern (a video whose
 #   captions match it uses it), GitHub issue for a gap. Patterns are Python

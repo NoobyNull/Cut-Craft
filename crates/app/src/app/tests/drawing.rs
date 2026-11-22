@@ -153,7 +153,7 @@ fn every_measurement_picture_is_in_the_icon_set() {
     for p in &pictures {
         assert!(
             known.contains(p),
-            "{p} is not in assets/icons: run scripts/build-icons"
+            "{p} is not in assets/icons: add its PNG there"
         );
     }
     assert!(

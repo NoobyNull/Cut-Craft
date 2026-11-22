@@ -548,33 +548,6 @@ mod tests {
         doc
     }
 
-    /// The help page's picture data: the model, what a 6 mm ball leaves, what the pencil
-    /// leaves after it, and the pencil's cuts, as JSON in `$PENCIL_PICTURE` (drawn by
-    /// `scripts/pencil_help_picture.py`).
-    #[test]
-    #[ignore = "makes the help picture's data"]
-    fn help_picture_data() {
-        let doc = valleys_job();
-        let params = Params::default();
-        let (toolpath, notes) = made(&doc, &params);
-        assert!(notes.is_empty(), "{notes:?}");
-        let surface = placed_model(&doc, &params.tool).unwrap();
-        let finished = surface.left_by(&params.bits_before[0]);
-        let mut cleaned = finished.clone();
-        cleaned.cut(&toolpath);
-        let json = serde_json::json!({
-            "columns": surface.columns,
-            "rows": surface.rows,
-            "cell": surface.cell,
-            "model": surface.heights,
-            "finished": finished.heights,
-            "cleaned": cleaned.heights,
-            "cuts": toolpath.moves.iter().map(|m| [m.to.x, m.to.y, m.to.z, f64::from(u8::from(m.kind == MoveKind::Cut))]).collect::<Vec<_>>(),
-        });
-        let out = std::env::var("PENCIL_PICTURE").unwrap_or_else(|_| "pencil-picture.json".into());
-        std::fs::write(out, json.to_string()).unwrap();
-    }
-
     #[test]
     fn the_valleys_between_domes_and_at_the_foot_of_a_wall_get_passes() {
         let doc = valleys_job();
