@@ -738,7 +738,7 @@ fn coarser_surfaces_are_made_from_the_fine_one_on_another_thread_and_kept() {
         job,
         wrap: None,
         sides: true,
-        importing: false,
+        importing: (false, false),
         cells: 120,
     };
     let mut kept = super::SurfaceGpu::new(key);

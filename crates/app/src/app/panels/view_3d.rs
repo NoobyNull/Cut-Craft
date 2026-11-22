@@ -66,7 +66,7 @@ impl CutCraftApp {
             revision: self.history.revision(),
             job: self.doc.job,
             cells,
-            importing: self.importing_whole(),
+            importing: (self.importing_model(), self.importing_whole()),
         };
         if self.rough_3d.as_ref().is_none_or(|(kept, _)| *kept != key) {
             let shape = self.model_shape(cells);
@@ -133,6 +133,13 @@ impl CutCraftApp {
                 (placed, false)
             })
             .collect()
+    }
+
+    /// Whether Import 3D Model shows a model: whole, or (past Options ▸ Model preview faces)
+    /// as its component with the faces out of reach over it. Either way it sits on its
+    /// modeling plane at 0 inside the material's outline, not seated in the block.
+    pub(in super::super) fn importing_model(&self) -> bool {
+        self.form.as_ref().is_some_and(|f| f.model.is_some())
     }
 
     /// Whether an imported model is shown whole, in place of its component.
@@ -276,7 +283,7 @@ impl CutCraftApp {
         self.simulation.is_none()
             && self.playback.is_none()
             && self.doc.job.rotary.is_none()
-            && !self.importing_whole()
+            && !self.importing_model()
     }
 
     /// The SpaceMouse's moves since the last frame, turning, panning and zooming the 3D view
@@ -723,7 +730,7 @@ impl CutCraftApp {
             framing,
             fit,
             look,
-            importing: self.importing_whole(),
+            importing: (self.importing_model(), self.importing_whole()),
         };
         if let Some((kept, mesh)) = &self.fine_3d
             && *kept == key
@@ -893,7 +900,7 @@ impl CutCraftApp {
             job: self.doc.job,
             wrap,
             sides,
-            importing: self.importing_whole(),
+            importing: (self.importing_model(), self.importing_whole()),
             cells: self.options.view_3d.still_cells(),
         }
     }

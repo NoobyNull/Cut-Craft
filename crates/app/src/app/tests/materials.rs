@@ -743,3 +743,47 @@ fn the_3d_origin_sits_on_the_material_outline_while_a_model_is_imported() {
     h.app.doc.job.z_zero = ZZero::MaterialSurface;
     assert!(h.app.origin_height_3d().abs() < 1e-9, "the top");
 }
+
+/// A model past Options ▸ Model preview faces is shown as its component, only its faces out
+/// of reach drawn over it: still on its modeling plane at 0 in the material's outline, as a
+/// model shown whole is, never sunk into the block under the plane, the outline and the red
+/// marks, with the arrows under it.
+#[test]
+fn a_big_model_being_imported_sits_on_the_modeling_plane_with_the_origin() {
+    use cut_craft_core::document::ZZero;
+    let mut h = Harness::new();
+    h.app.doc.job.thickness = 18.0;
+    h.app.doc.job.z_zero = ZZero::MachineBed;
+    h.app.options.import.preview_faces = 4;
+    let file = pyramid_stl("big-import");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    assert!(
+        !h.app.importing_whole(),
+        "past the limit: the component shows"
+    );
+    assert!(!h.app.model_on_material(), "not seated in the block");
+    assert!(
+        h.app.origin_height_3d().abs() < 1e-9,
+        "Machine Bed: on the modeling plane, the outline's bottom, {}",
+        h.app.origin_height_3d()
+    );
+    let surface = h.app.surface_3d().expect("a model").into_owned();
+    let (lo, hi) = surface
+        .heights
+        .iter()
+        .filter(|z| z.is_finite())
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &z| {
+            (lo.min(z), hi.max(z))
+        });
+    assert!(
+        lo > -1e-6 && hi > 1e-6,
+        "on the plane, up from it: {lo}..{hi}"
+    );
+    h.app.doc.job.z_zero = ZZero::MaterialSurface;
+    assert!(
+        (h.app.origin_height_3d() - 18.0).abs() < 1e-9,
+        "Material Surface: the outline's top"
+    );
+    let _ = std::fs::remove_file(file);
+}

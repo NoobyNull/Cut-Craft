@@ -144,8 +144,9 @@ struct FineKey {
     framing: view3d::Framing,
     fit: egui::Rect,
     look: view3d::Look,
-    /// Whether the imported model is shown whole, in place of its component.
-    importing: bool,
+    /// Whether Import 3D Model shows a model (on its modeling plane, not seated), and
+    /// whether whole, in place of its component.
+    importing: (bool, bool),
 }
 
 /// What the vectors on the clipboard belonged to where they were copied, so a pasted word is
@@ -192,7 +193,7 @@ struct GeometryKey {
     job: cut_craft_core::document::Job,
     wrap: Option<view3d::Wrap>,
     sides: bool,
-    importing: bool,
+    importing: (bool, bool),
     cells: usize,
 }
 
@@ -304,8 +305,9 @@ struct RoughKey {
     revision: u64,
     job: cut_craft_core::document::Job,
     cells: usize,
-    /// Whether the imported model is shown whole, in place of its component.
-    importing: bool,
+    /// Whether Import 3D Model shows a model (on its modeling plane, not seated), and
+    /// whether whole, in place of its component.
+    importing: (bool, bool),
 }
 
 /// The imported model's faces on the GPU, and the model they were made from (kept, so no
