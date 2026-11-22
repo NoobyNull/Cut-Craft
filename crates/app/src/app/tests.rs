@@ -2473,7 +2473,7 @@ fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
     let params = h.app.form.as_ref().unwrap().params.clone();
     let refused = h.app.apply("profile_toolpath", &params).unwrap_err();
     assert!(
-        refused.starts_with(super::actions::KEEP_OUT_REFUSED),
+        refused.starts_with(super::toolpath_output::KEEP_OUT_REFUSED),
         "{refused}"
     );
     assert!(refused.contains("\"Clamp 1\""), "names the zone: {refused}");
@@ -15018,28 +15018,28 @@ fn the_status_bar_and_a_pocket_form_count_the_selected_vectors() {
 
 #[test]
 fn an_on_the_line_profile_leaves_no_open_vector_out() {
-    assert!(actions::closed_only_toolpath(
+    assert!(form_panel::closed_only_toolpath(
         "pocket_toolpath",
         &serde_json::json!({})
     ));
-    assert!(actions::closed_only_toolpath(
+    assert!(form_panel::closed_only_toolpath(
         "profile_toolpath",
         &serde_json::json!({ "side": "outside" })
     ));
-    assert!(!actions::closed_only_toolpath(
+    assert!(!form_panel::closed_only_toolpath(
         "profile_toolpath",
         &serde_json::json!({ "side": "on" })
     ));
-    assert!(!actions::closed_only_toolpath(
+    assert!(!form_panel::closed_only_toolpath(
         "quick_engrave_toolpath",
         &serde_json::json!({})
     ));
     // a texture fills closed vectors, but follows any vector used as the pattern
-    assert!(actions::closed_only_toolpath(
+    assert!(form_panel::closed_only_toolpath(
         "texture_toolpath",
         &serde_json::json!({ "use_selected_vectors_as_pattern": false })
     ));
-    assert!(!actions::closed_only_toolpath(
+    assert!(!form_panel::closed_only_toolpath(
         "texture_toolpath",
         &serde_json::json!({ "use_selected_vectors_as_pattern": true })
     ));
@@ -15050,7 +15050,7 @@ fn the_texture_form_says_when_it_will_texture_the_whole_material() {
     use cut_craft_core::document::VectorCount;
     let filled = serde_json::json!({ "use_selected_vectors_as_pattern": false });
     let note = |closed, open| {
-        actions::texture_area_note("texture_toolpath", &filled, VectorCount { closed, open })
+        form_panel::texture_area_note("texture_toolpath", &filled, VectorCount { closed, open })
     };
     assert!(note(0, 0).is_some_and(|n| n.contains("whole material")));
     let open_only = note(0, 2).unwrap();
@@ -15061,7 +15061,7 @@ fn the_texture_form_says_when_it_will_texture_the_whole_material() {
     assert_eq!(note(1, 2), None, "the closed one is textured");
     let pattern = serde_json::json!({ "use_selected_vectors_as_pattern": true });
     assert_eq!(
-        actions::texture_area_note(
+        form_panel::texture_area_note(
             "texture_toolpath",
             &pattern,
             VectorCount { closed: 0, open: 0 }
@@ -15143,8 +15143,8 @@ fn dont_ask_again_stops_the_question_but_not_the_mark() {
 
 #[test]
 fn the_recalculate_question_counts_the_toolpaths() {
-    assert!(actions::recalculate_question(1).starts_with("1 toolpath is now out of date"));
-    assert!(actions::recalculate_question(3).starts_with("3 toolpaths are now out of date"));
+    assert!(form_apply::recalculate_question(1).starts_with("1 toolpath is now out of date"));
+    assert!(form_apply::recalculate_question(3).starts_with("3 toolpaths are now out of date"));
 }
 
 #[test]
