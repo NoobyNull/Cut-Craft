@@ -1,11 +1,13 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-22
 see-also: checks_before_cutting, setup_material, material_setup
 ---
 
 # Zero set where the job says
 
 ## What it looks for
+
+![Material Setup says where Z zero and X0 Y0 are for this job](pictures/setup_material/step-4.png)
 
 Whether you looked at where this job's zero is. A new job takes its **Z zero** (on top of
 the material or on the machine bed) and its **X0 Y0** (a corner or the middle of the board)

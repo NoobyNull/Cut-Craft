@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-18
+reviewed: 2026-11-22
 see-also: addons, relief_from_photo
 ---
 
@@ -22,3 +22,11 @@ The folder is called `gadgets`, inside Cut Craft's settings folder:
 
 To get gadgets other people have published on GitHub, use [Add-ons](help:addons) instead:
 it installs them for you.
+
+## Steps
+
+![The steps, one after another](pictures/open_gadgets_folder/tour.gif)
+
+1. Gadgets you install show on the Design page under **Gadgets**. **Gadgets ▸ My Gadgets ▸ Open My Gadgets Folder** opens the folder they go in.
+
+   ![Step 1](pictures/open_gadgets_folder/step-1.png)

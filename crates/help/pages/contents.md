@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 see-also:
 ---
 
@@ -7,6 +7,8 @@ see-also:
 
 Cut Craft draws 2D vectors and 3D models on a sheet of material, then makes the toolpaths
 a CNC machine cuts them with.
+
+![The Help window: search along the top, the pages listed, related pages down the side](pictures/help-contents.png)
 
 - [Design](help:design): the page down the left. Draw and edit vectors, then model in 3D.
 - [Toolpaths](help:toolpaths): the page down the right. Turn vectors into toolpaths,

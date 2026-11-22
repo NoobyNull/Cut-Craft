@@ -1,12 +1,18 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-22
 see-also: make_construction_line, profile_toolpath
 ---
 
 ## Steps
 
-1. Select the dashed construction lines you want to carve after all.
-2. Right-click one of them and pick **Make Real Line**.
-3. They are drawn as normal vectors again, and toolpaths can cut them.
+![The steps, one after another](pictures/make_real_line/tour.gif)
+
+1. Select a construction line: the dashed ones place things but are never cut.
+
+   ![Step 1](pictures/make_real_line/step-1.png)
+
+2. Right-click and choose **Make Real Line**. It is an ordinary vector again, to cut and save.
+
+   ![Step 2](pictures/make_real_line/step-2.png)
 
 See [Construction lines](help:construction_lines).

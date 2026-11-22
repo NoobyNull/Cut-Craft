@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 see-also: add_layer, set_current_layer, show_hide, import_vectors
 ---
 
@@ -27,3 +27,19 @@ To change it:
 
 A drawing brought in from a DXF keeps the colours its layers had: see
 [Import Vectors](help:import_vectors).
+
+## Steps
+
+![The steps, one after another](pictures/layer_properties/tour.gif)
+
+1. Open **Layers** at the top of the Design page and double-click a layer's name (or click its coloured square).
+
+   ![Step 1](pictures/layer_properties/step-1.png)
+
+2. Change its **Name**, and name the **Material** its vectors are cut from.
+
+   ![Step 2](pictures/layer_properties/step-2.png)
+
+3. Tick **Own Colour** and pick a **Colour** to tell this layer's vectors apart, then press **Apply** to keep the changes.
+
+   ![Step 3](pictures/layer_properties/step-3.png)
