@@ -384,6 +384,11 @@ impl CutCraftApp {
         if let Some(form) = &mut self.form {
             form.note = None;
         }
+        // Generate Border's Generate: the add-on runs in the background, from the next frame
+        if id == super::generate_border::ID {
+            self.border.pending = Some(params.clone());
+            return Ok(());
+        }
         let editing = self.form.as_ref().and_then(|f| f.editing);
         // Calculate pressed again: kept when nothing changed, else updated in place
         match self.calculate_again(params) {

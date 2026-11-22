@@ -107,6 +107,7 @@ impl CutCraftApp {
                 job_sheet: false,
             },
             depth_estimate: None,
+            border: super::generate_border::BorderForm::default(),
             depth_high_detail: None,
             depth_detail_fetch: None,
             depth_detail_failed: None,

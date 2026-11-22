@@ -631,6 +631,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "add_zero_plane",
                 "create_component_from_bitmap",
                 "relief_from_photo",
+                "generate_border",
             ],
         ),
         group(
@@ -2709,9 +2710,9 @@ mod tests {
             shown.extend(toolbar.subtab_groups(tab));
             let n = count(shown);
             // every tool has a button somewhere (Matthew, 2026-11-10), which took the Model
-            // sub-tab past the 36 the others keep under
+            // sub-tab past the 36 the others keep under; Generate Border made it 41
             assert!(
-                n <= 40 && n * 2 < whole,
+                n <= 41 && n * 2 < whole,
                 "{}: {n} of {whole}",
                 super::DESIGN_SUBTABS[tab].name
             );
