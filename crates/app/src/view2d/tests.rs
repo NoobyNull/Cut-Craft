@@ -36,6 +36,35 @@ fn a_picture_edited_or_swapped_at_the_same_size_is_drawn_afresh() {
     assert_ne!(bitmap_texture(&ctx, EntityId(1), &dark).id(), edited.id());
 }
 
+/// A colour photo is shown in colour, not as its greys (Matthew, 2026-11-22: "it shows the
+/// photo, but in black and white").
+#[test]
+fn a_colour_picture_is_drawn_in_colour() {
+    let mut picture = cut_craft_core::bitmap::Bitmap {
+        name: "photo".into(),
+        columns: 2,
+        rows: 1,
+        grey: vec![76, 150],
+        rect: cut_craft_core::geometry::Rect::new(Point::new(0.0, 0.0), Point::new(2.0, 1.0)),
+        depth: vec![],
+        rgb: vec![255, 0, 0, 0, 255, 0],
+    };
+    let image = bitmap_image(&picture);
+    assert_eq!(
+        image.pixels,
+        [
+            egui::Color32::from_rgb(255, 0, 0),
+            egui::Color32::from_rgb(0, 255, 0)
+        ]
+    );
+    picture.rgb.clear();
+    assert_eq!(
+        bitmap_image(&picture).pixels,
+        [egui::Color32::from_gray(76), egui::Color32::from_gray(150)],
+        "a grey picture stays grey"
+    );
+}
+
 /// Points of `runs` all told.
 fn points(runs: &[Vec<Pos2>]) -> usize {
     runs.iter().map(Vec::len).sum()

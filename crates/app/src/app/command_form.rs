@@ -649,11 +649,35 @@ impl CutCraftApp {
         match result {
             Ok(()) => {
                 self.status.set_message("Depth estimated");
-                if let Some(form) = self.form.as_mut() {
-                    form.dirty = true;
-                }
+                self.relief_after_estimate(id);
             }
             Err(e) => self.status.set_message(&e),
+        }
+    }
+}
+
+impl CutCraftApp {
+    /// Once photo `estimated` has its depth: the relief Relief from Photo already made is
+    /// made again from it, and with none made yet, one is made, as Estimate Depth is the
+    /// step before it; but only while that photo is still the one the form works on.
+    fn relief_after_estimate(&mut self, estimated: cut_craft_core::document::EntityId) {
+        let made = self.drawn_shape().is_some();
+        let still_chosen = (self.doc.chosen_bitmap())
+            .zip(self.doc.bitmaps.get(&estimated))
+            .is_some_and(|(chosen, photo)| std::ptr::eq(chosen, photo));
+        let Some(form) = self.form.as_mut() else {
+            return;
+        };
+        form.dirty = true;
+        let waiting = form.id == "relief_from_photo" && form.params["depth_from"] == "estimated";
+        if waiting && made {
+            // its settings are the same, but the depth it was made from is not
+            form.applied = None;
+        }
+        if waiting && !made && still_chosen {
+            form.dirty = false;
+            let params = form.params.clone();
+            self.calculate_checked("relief_from_photo", &params);
         }
     }
 }

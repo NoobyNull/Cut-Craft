@@ -46,6 +46,10 @@ impl CutCraftApp {
         if let Some(id) = self.doc.pick(at, reach) {
             return Some(Grab::Vector(id));
         }
+        // as a click picks: a picture before the model under it
+        if let Some(id) = self.doc.pick_bitmap(at) {
+            return Some(Grab::Picture(id));
+        }
         self.doc.pick_component(at).map(Grab::Component)
     }
 
@@ -67,6 +71,7 @@ impl CutCraftApp {
                 .filter_map(|m| self.doc.vectors.get(m).cloned())
                 .collect(),
             Grab::Component(id) => vec![boxed(self.doc.components[&id].extent())],
+            Grab::Picture(id) => vec![boxed(self.doc.bitmaps[&id].rect)],
             Grab::Selection => {
                 let vectors = self
                     .doc
@@ -98,7 +103,7 @@ impl CutCraftApp {
             self.select_move_by(drag, axis, reach),
         );
         let models: Vec<EntityId> = match grab {
-            Grab::Vector(_) => vec![],
+            Grab::Vector(_) | Grab::Picture(_) => vec![],
             Grab::Component(id) => vec![id],
             Grab::Selection => self.doc.selected_components.iter().copied().collect(),
         };
@@ -159,6 +164,10 @@ impl CutCraftApp {
                 self.doc.selection.clear();
                 self.doc.selected_components = [id].into();
             }
+            Grab::Picture(id) => {
+                let by = self.select_move_by(drag, shift || drag.constrain, reach);
+                return self.move_picture(id, by);
+            }
             Grab::Selection => {}
         }
         let by = self.select_move_by(drag, shift || drag.constrain, reach);
@@ -167,6 +176,21 @@ impl CutCraftApp {
         if let Err(e) = self.apply("move", &params) {
             self.status.set_message(&e);
         }
+    }
+
+    /// Picture `id` dragged by `by` (one undo), and picked on its own, as a click picks it.
+    fn move_picture(&mut self, id: EntityId, by: Point) {
+        self.select([], false);
+        self.doc.selected_components.clear();
+        self.doc.selected_bitmaps = [id].into();
+        let Some(picture) = self.doc.bitmaps.get(&id) else {
+            return;
+        };
+        let mut moved = picture.clone();
+        moved.rect = Rect::new(picture.rect.min + by, picture.rect.max + by);
+        let mut c = Change::builder(&self.doc);
+        c.replace_bitmap(id, moved);
+        self.record(Ok(c.finish()), "Moved the picture");
     }
 
     /// Transform mode: a drag from a handle transforms the selection, any other drag

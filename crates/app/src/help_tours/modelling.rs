@@ -372,7 +372,7 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:relief_from_photo"),
             },
             Step {
-                caption: "Choose how high the subject stands and how much detail to keep, then press **Create**.",
+                caption: "Drag your photo onto the job, then press **Estimate Depth**. When it finishes, the relief is made and the 3D view opens to show it.",
                 setup: |app, ctx| app.invoke(ctx, "relief_from_photo"),
                 mark: Mark::None,
             },

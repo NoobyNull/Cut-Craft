@@ -337,6 +337,8 @@ enum Grab {
     Selection,
     Vector(EntityId),
     Component(EntityId),
+    /// An imported picture, moved on its own
+    Picture(EntityId),
 }
 
 use crate::file_filters::{Dialog, VECTOR_EXPORTERS};

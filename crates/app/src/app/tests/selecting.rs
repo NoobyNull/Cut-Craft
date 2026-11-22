@@ -312,6 +312,42 @@ fn right_clicking_a_vector_picks_it_unless_it_is_already_selected() {
     assert_eq!(h.app.doc.selection, all);
 }
 
+/// A picture is moved by dragging it, as a shape is (Matthew, 2026-11-22: "you can't grab
+/// it with the mouse").
+#[test]
+fn dragging_a_picture_moves_it() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    let rect = Rect::new(Point::new(20.0, 20.0), Point::new(120.0, 120.0));
+    let id = c.add_bitmap(Bitmap {
+        name: "b".into(),
+        columns: 1,
+        rows: 1,
+        grey: vec![0],
+        rect,
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.frame(vec![]);
+    let outlines = h.app.grabbed_outlines(super::Grab::Picture(id));
+    assert_eq!(outlines.len(), 1, "the drag shows the picture's box moving");
+    h.drag(h.at(70.0, 70.0), h.at(100.0, 50.0));
+    let moved = h.app.doc.bitmaps[&id].rect;
+    assert!((moved.min.x - 50.0).abs() < 1.0, "{moved:?}");
+    assert!((moved.min.y - 0.0).abs() < 1.0, "{moved:?}");
+    assert!((moved.size().x - 100.0).abs() < 1e-9, "same size");
+    assert_eq!(
+        h.app.doc.selected_bitmaps,
+        [id].into(),
+        "picked as it is dragged"
+    );
+    assert!(h.app.history.undo(&mut h.app.doc));
+    assert_eq!(h.app.doc.bitmaps[&id].rect, rect, "one undo puts it back");
+}
+
 #[test]
 fn dragging_an_unselected_grouped_vector_moves_its_whole_group() {
     let mut h = Harness::new();

@@ -76,12 +76,20 @@ pub(super) const CREATE_FORMS: &[&str] = &[
 /// Forms whose button asks an add-on for something new, saved to the Library.
 pub(super) const GENERATE_FORMS: &[&str] = &["generate_border"];
 
+/// Live forms that make nothing until asked: Create makes their piece once, and from then
+/// on it follows the form. Relief from Photo waits for a picture with its depth, so making
+/// it as the form opens would only say what is missing.
+const CREATE_FIRST: &[&str] = &["relief_from_photo"];
+
 /// Remaking forms that still show Apply once what they made follows them.
 const KEEPS_APPLY: &[&str] = &["embellish"];
 
 /// The commit button form `id` shows, if any. `drawing`: the tool can be drawn with the
 /// mouse; `made`: what the form made still follows its settings.
 pub(super) fn commit(id: &str, page: Page, drawing: bool, made: bool) -> Option<Commit> {
+    if CREATE_FIRST.contains(&id) {
+        return (!made).then_some(Commit::Create);
+    }
     if GESTURE_TOOLS.contains(&id) || LIVE_FORMS.contains(&id) {
         return None;
     }
@@ -146,8 +154,17 @@ mod tests {
             }
         }
         for id in LIVE_FORMS {
-            assert_eq!(commit(id, Page::Design, false, false), None, "{id}");
+            assert_eq!(commit(id, Page::Design, true, true), None, "{id}");
         }
+    }
+
+    /// Relief from Photo made nothing at all: with no button and nothing made yet, its
+    /// settings had nothing to follow (Matthew, 2026-11-22: "nothing happens after I import").
+    #[test]
+    fn relief_from_photo_offers_create_until_its_relief_follows_the_form() {
+        let c = |made| commit("relief_from_photo", Page::Design, false, made);
+        assert_eq!(c(false), Some(Commit::Create));
+        assert_eq!(c(true), None, "the relief already follows the form");
     }
 
     #[test]

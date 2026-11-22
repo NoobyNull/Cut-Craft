@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-14
-see-also: transform, node_edit
+reviewed: 2026-11-22
+see-also: transform, node_edit, bitmap_properties
 ---
 
 ## Steps
@@ -18,5 +18,9 @@ see-also: transform, node_edit
 3. Hold **Shift** and click another shape to add it. Dragging a box round shapes selects them all; click empty space to select nothing.
 
    ![Step 3](pictures/select/step-3.png)
+
+A picture you brought in (a photo or scan) is picked and moved the same way: click it to
+select it, or drag it to move it. Press **Undo** to put it back. To place a picture exactly,
+use [Bitmap Properties](help:bitmap_properties).
 
 To move, size or turn what you selected exactly, use [Transform](help:transform).

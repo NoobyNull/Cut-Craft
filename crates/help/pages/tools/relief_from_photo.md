@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 see-also: create_component_from_bitmap, emboss, photo_vcarve_toolpath, addons
 ---
 
@@ -15,9 +15,20 @@ see-also: create_component_from_bitmap, emboss, photo_vcarve_toolpath, addons
 
    ![Step 2](pictures/relief_from_photo/step-2.png)
 
-3. Choose how high the subject stands and how much detail to keep, then press **Create**.
+3. Drag your photo onto the job, then press **Estimate Depth**. When it finishes, the relief is made and the 3D view opens to show it.
 
    ![Step 3](pictures/relief_from_photo/step-3.png)
+
+4. Change **Max height**, **Smoothness** and the other settings. The relief changes as you
+   change them, so you can watch the effect in the 3D view.
+
+## Create
+
+Until a relief has been made, the form has a **Create** button. Use it when the depth is
+already there: a picture set to **Depth from: Picture**, or a photo you estimated earlier.
+If you press **Create** on a photo that has no depth yet, the form says so in red: press
+**Estimate Depth** first. Once the relief is made, **Create** goes away and the relief
+follows the form. To make a second relief, close the form and open it again.
 
 ## The Depth add-on
 
