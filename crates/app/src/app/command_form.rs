@@ -643,11 +643,27 @@ impl CutCraftApp {
         match result {
             Ok(()) => {
                 self.status.set_message("Depth estimated");
-                if let Some(form) = self.form.as_mut() {
-                    form.dirty = true;
-                }
+                self.relief_after_estimate();
             }
             Err(e) => self.status.set_message(&e),
+        }
+    }
+}
+
+impl CutCraftApp {
+    /// Once a photo has its depth: the relief Relief from Photo already made follows it,
+    /// and with none made yet, one is made, as Estimate Depth is the step before it.
+    fn relief_after_estimate(&mut self) {
+        let made = self.drawn_shape().is_some();
+        let Some(form) = self.form.as_mut() else {
+            return;
+        };
+        form.dirty = true;
+        let waiting = form.id == "relief_from_photo" && form.params["depth_from"] == "estimated";
+        if waiting && !made {
+            form.dirty = false;
+            let params = form.params.clone();
+            self.calculate_checked("relief_from_photo", &params);
         }
     }
 }

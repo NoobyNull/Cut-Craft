@@ -110,6 +110,71 @@ fn relief_from_photo_follows_its_settings_as_one_relief() {
     assert!(top(&h) > before + 5.0, "{before} -> {}", top(&h));
 }
 
+/// Relief from Photo's Create makes the relief and shows it in 3D; from then on it follows
+/// the form. Before, the form had no button and nothing made the first relief, so nothing
+/// ever happened (Matthew, 2026-11-22).
+#[test]
+fn relief_from_photos_create_button_makes_the_relief_and_shows_it_in_3d() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    c.add_bitmap(Bitmap {
+        name: "map".into(),
+        columns: 4,
+        rows: 4,
+        grey: vec![0, 0, 0, 0, 0, 120, 255, 0, 0, 180, 220, 0, 0, 0, 0, 0],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(40.0, 40.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    assert!(
+        h.app.doc.components.is_empty(),
+        "nothing made before Create"
+    );
+    let create = h.text_at("Create").expect("a Create button");
+    h.click(create, egui::Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.len(), 1, "Create made the relief");
+    assert_eq!(h.app.view, super::View::ThreeD, "shown in 3D");
+    assert!(h.text_at("Create").is_none(), "it now follows the form");
+}
+
+/// A colour photo with no depth yet: Create says what to do first, on the form.
+#[test]
+fn relief_from_photo_without_depth_says_to_estimate_it_first() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    c.add_bitmap(Bitmap {
+        name: "photo".into(),
+        columns: 2,
+        rows: 1,
+        grey: vec![30, 220],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(20.0, 10.0)),
+        depth: Vec::new(),
+        rgb: vec![10, 20, 30, 200, 210, 220],
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    let create = h.text_at("Create").expect("a Create button");
+    h.click(create, egui::Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.doc.components.is_empty());
+    let error = h
+        .app
+        .form
+        .as_ref()
+        .and_then(|f| f.error.clone())
+        .unwrap_or_default();
+    assert!(error.contains("Estimate Depth"), "{error}");
+}
+
 /// Estimate Depth with a stand-in add-on (a shell script that answers with a fixed depth
 /// map): the photo gets its depth, undoably, and Relief from Photo can then use it.
 #[cfg(unix)]
@@ -188,6 +253,73 @@ fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
         h.app.doc.bitmaps[&id].depth.is_empty(),
         "not given to another picture"
     );
+    std::fs::remove_dir_all(addons).unwrap();
+}
+
+/// Estimate Depth on a colour photo, nothing made yet: the relief is made as soon as the
+/// depth comes back, and shown in 3D, so the button does what its name promises.
+#[cfg(unix)]
+#[test]
+fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    use std::os::unix::fs::PermissionsExt;
+    let addons = std::env::temp_dir().join(format!("cutcraft-addons-make-{}", std::process::id()));
+    let dir = addons.join(crate::depth::ADDON_ID);
+    std::fs::create_dir_all(&dir).unwrap();
+    let answer = dir.join("answer.png");
+    image::ImageBuffer::<image::Luma<u16>, _>::from_raw(2, 2, vec![0_u16, 65_535, 30_000, 50_000])
+        .unwrap()
+        .save(&answer)
+        .unwrap();
+    let program = dir.join(crate::depth::program_name());
+    std::fs::write(
+        &program,
+        format!("#!/bin/sh\ncp '{}' \"$3\"\n", answer.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::write(dir.join(crate::depth::WEIGHTS), b"").unwrap();
+
+    let mut h = Harness::new();
+    h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
+    h.app.addons.ask_to_run = |_| true;
+    let mut c = Change::builder(&h.app.doc);
+    c.add_bitmap(Bitmap {
+        name: "photo".into(),
+        columns: 2,
+        rows: 2,
+        grey: vec![30, 220, 90, 160],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(20.0, 20.0)),
+        depth: Vec::new(),
+        rgb: vec![30, 30, 30, 220, 220, 220, 90, 90, 90, 160, 160, 160],
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["background_cut_off"] = 0.0.into();
+    form.params["depth_cut_off"] = 0.0.into();
+    let id = *h.app.doc.bitmaps.keys().next().unwrap();
+    let installed = crate::depth::find(&addons).expect("installed");
+    let photo = h.app.doc.bitmaps[&id].clone();
+    h.app.depth_estimate =
+        Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
+    for _ in 0..200 {
+        if h.app.depth_estimate.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.frame(vec![]);
+    }
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.doc.bitmaps[&id].depth.len(),
+        4,
+        "the photo has its depth"
+    );
+    assert_eq!(h.app.doc.components.len(), 1, "and the relief is made");
+    assert_eq!(h.app.view, super::View::ThreeD, "shown in 3D");
     std::fs::remove_dir_all(addons).unwrap();
 }
 

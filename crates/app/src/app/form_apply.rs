@@ -410,6 +410,7 @@ impl CutCraftApp {
         }
         let before = self.entity_ids();
         let same = self.form.as_ref().and_then(|f| f.applied.as_ref()) == Some(params);
+        let first = self.drawn_shape().is_none();
         match self.drawn_shape() {
             // the shape already follows these settings: nothing to do again
             Some(_) if same => return Ok(()),
@@ -422,6 +423,10 @@ impl CutCraftApp {
         self.remember_drawn(&before);
         if let Some(form) = &mut self.form {
             form.applied = form.drawn.map(|_| params.clone());
+        }
+        // a relief is a 3D model: the first one made is shown where it can be seen
+        if first && id == "relief_from_photo" && self.drawn_shape().is_some() {
+            self.view = super::View::ThreeD;
         }
         Ok(())
     }

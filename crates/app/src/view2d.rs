@@ -993,14 +993,23 @@ fn bitmap_texture(
     {
         return texture;
     }
-    let image = egui::ColorImage::from_gray([bitmap.columns, bitmap.rows], &bitmap.grey);
     let texture = ctx.load_texture(
         format!("bitmap {}", id.0),
-        fitting(ctx, image),
+        fitting(ctx, bitmap_image(bitmap)),
         egui::TextureOptions::LINEAR,
     );
     ctx.data_mut(|d| d.insert_temp(key, (stamp, texture.clone())));
     texture
+}
+
+/// `bitmap`'s pixels as shown: its colours when it has them, else its greys.
+fn bitmap_image(bitmap: &cut_craft_core::bitmap::Bitmap) -> egui::ColorImage {
+    let size = [bitmap.columns, bitmap.rows];
+    if bitmap.rgb.len() == 3 * bitmap.grey.len() {
+        egui::ColorImage::from_rgb(size, &bitmap.rgb)
+    } else {
+        egui::ColorImage::from_gray(size, &bitmap.grey)
+    }
 }
 
 /// What tells one picture's pixels from another's, cheaply enough for every frame: its size,
@@ -1008,8 +1017,15 @@ fn bitmap_texture(
 fn pixels_stamp(bitmap: &cut_craft_core::bitmap::Bitmap) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    (bitmap.columns, bitmap.rows, bitmap.grey.len()).hash(&mut h);
+    (
+        bitmap.columns,
+        bitmap.rows,
+        bitmap.grey.len(),
+        bitmap.rgb.len(),
+    )
+        .hash(&mut h);
     bitmap.grey.as_ptr().hash(&mut h);
+    bitmap.rgb.as_ptr().hash(&mut h);
     bitmap.grey.iter().step_by(251).for_each(|v| v.hash(&mut h));
     h.finish()
 }

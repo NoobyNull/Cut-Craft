@@ -22,6 +22,8 @@ is. Use it to line a traced or modelled picture up with your drawing.
 
    ![Step 3](pictures/bitmap_properties/step-3.png)
 
+To move a picture roughly, you don't need this form: drag the picture in the 2D view.
+
 ## Settings
 
 - **Name**: what the picture is called.
