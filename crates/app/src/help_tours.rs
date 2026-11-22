@@ -4480,6 +4480,43 @@ pub const TOURS: &[Tour] = &[
         ],
     },
     Tour {
+        tool: "generate_border",
+        steps: &[
+            Step {
+                caption: "Generate Border makes one repeating length of picture-frame moulding in a style you pick, ready to carve. It needs the free Borders add-on and a Google key of your own.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    borders_installed(app);
+                },
+                mark: Mark::None,
+            },
+            Step {
+                caption: "On the Design page, under **Model**, press **Generate Border**.",
+                setup: |app, _| on_design_tab(app, 3),
+                mark: Mark::At("tool:generate_border"),
+            },
+            Step {
+                caption: "Pick a **Style**, type anything to add under **Details**, and set the border's **Length** and **Depth**.",
+                setup: |app, ctx| app.invoke(ctx, "generate_border"),
+                mark: Mark::At("field:style"),
+            },
+            Step {
+                caption: "Type your Google key, press **Save Key**, then press **Generate**. It takes about half a minute.",
+                setup: |_, _| {},
+                mark: Mark::At("button:Generate"),
+            },
+            Step {
+                caption: "The border is saved in your **Library**, under **Generated ▸ Borders**, its photo on its tile. Double-click it, or drag it onto the job, to place it like any 3D model.",
+                setup: |app, ctx| {
+                    app.form = None;
+                    sample_border(app);
+                    app.invoke(ctx, "clipart_library");
+                },
+                mark: Mark::None,
+            },
+        ],
+    },
+    Tour {
         tool: "sculpt",
         steps: &[
             Step {
@@ -7195,6 +7232,46 @@ fn depth_installed(app: &mut CutCraftApp) {
     );
     app.addons = crate::addons::Addons::new(Some(dir));
     app.refresh_installed();
+}
+
+/// The Borders add-on, as if installed (a stand-in program, never run in a tour).
+fn borders_installed(app: &mut CutCraftApp) {
+    let dir = std::env::temp_dir().join("cut-craft-help-pictures-addons");
+    let borders = dir.join(crate::borders::ADDON_ID);
+    let _ = std::fs::create_dir_all(&borders);
+    let _ = std::fs::write(
+        borders.join("addon.toml"),
+        "id = \"borders\"\nname = \"Borders (Generate Border)\"\nkind = \"tool\"\nversion = \"0.1.0\"",
+    );
+    let _ = std::fs::write(borders.join(crate::borders::program_name()), b"");
+    let _ = std::fs::write(
+        borders.join("installed.json"),
+        r#"{"repo":{"owner":"Power-Whittle","name":"CutCraft-Borders"},"tag":"v0.1.0","version":"0.1.0","signed":false}"#,
+    );
+    // a key box of its own, empty: never the computer's password store
+    let key = dir.join("google-key");
+    let _ = std::fs::remove_file(&key);
+    app.border.keys = Some(crate::borders::KeyStore::File(key));
+    app.addons = crate::addons::Addons::new(Some(dir));
+    app.refresh_installed();
+}
+
+/// A border as Generate saves it, in a Library of its own (not the user's): the hand-drawn
+/// sample from `scripts/border_sample_picture.py`.
+fn sample_border(app: &mut CutCraftApp) {
+    let root = std::env::temp_dir().join("cut-craft-help-pictures-library");
+    let folder = crate::borders::folder(&root);
+    let files = cut_craft_border_tile::files(&folder, "Classical Baroque");
+    let _ = std::fs::create_dir_all(&folder);
+    let _ = std::fs::write(&files.depth, include_bytes!("../samples/border-depth.png"));
+    let _ = std::fs::write(&files.picture, include_bytes!("../samples/border.jpg"));
+    let recipe = cut_craft_border_tile::Recipe::new("classical_baroque", "16:9", 160.0, 90.0, 6.0);
+    if let Ok(json) = serde_json::to_string_pretty(&recipe) {
+        let _ = std::fs::write(&files.recipe, json);
+    }
+    app.clipart = crate::clipart::Clipart::default();
+    app.clipart.folders = vec![root];
+    app.clipart.choose(Some(folder));
 }
 
 fn on_design_tab(app: &mut CutCraftApp, tab: usize) {

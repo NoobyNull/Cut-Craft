@@ -2428,7 +2428,12 @@ mod tests {
 
     /// Numbers with no unit that are measurements of something other than the job's
     /// lengths, each with why it does not change with mm / inches.
-    const UNITLESS_BY_FORM: [(&str, &str, &str); 10] = [
+    const UNITLESS_BY_FORM: [(&str, &str, &str); 11] = [
+        (
+            "generate_border",
+            "depth_curve",
+            "a power the heights are raised to",
+        ),
         ("arrange_toolpaths", "order", "toolpath ids, not lengths"),
         ("rotary_machining_toolpath", "faces", "a count of sides"),
         ("rotary_machining_toolpath", "tilts", "a count of angles"),

@@ -356,6 +356,7 @@ impl CutCraftApp {
             "draw_text" => self.spelling(ui),
             "job_setup" => self.setup_material_extras(ui),
             "set_size" => self.link_set_size(),
+            super::generate_border::ID => self.border_section(ui),
             "relief_from_photo" => {
                 self.depth_section(ui);
                 self.bit_note(ui);
