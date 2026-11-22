@@ -13,8 +13,8 @@ use glam::DAffine2;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
-mod builder;
 mod apply;
+mod builder;
 use apply::*;
 
 /// The order spaced objects are laid out in, from the low end (left, bottom) of the span.
