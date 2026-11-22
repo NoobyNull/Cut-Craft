@@ -16779,6 +16779,78 @@ fn the_tool_changer_is_offered_only_for_a_machine_with_one_and_warned_about_with
 }
 
 #[test]
+fn saving_warns_about_a_tool_changer_the_machine_does_not_have() {
+    // the checks Save Toolpaths runs, not only the test-only `preflight`, warn: without it
+    // the file changes tools with M6 on a machine that has no changer
+    use crate::files::ToolChanges;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
+    let warned = |h: &mut Harness, changes| {
+        h.app
+            .save_checks(&plan, changes)
+            .expect("checked")
+            .iter()
+            .any(|f| f.message.contains("no tool changer"))
+    };
+    assert!(warned(&mut h, ToolChanges::ToolChanger));
+    assert!(!warned(&mut h, ToolChanges::SeparateFiles));
+}
+
+#[test]
+fn changing_the_tool_changer_checks_the_toolpaths_again() {
+    // the checks are kept per plan, job and machine; a holder or slot change on the same
+    // machine must not keep the results worked out for the slots before it
+    use crate::files::ToolChanges;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().set_slot_count(4);
+    let warned = |h: &mut Harness| {
+        h.app
+            .save_checks(&plan, ToolChanges::ToolChanger)
+            .expect("checked")
+            .iter()
+            .any(|f| f.message.contains("no tool changer"))
+    };
+    assert!(!warned(&mut h));
+    h.app.machines.active_mut().unwrap().set_slot_count(0);
+    h.app.tool_changer_changed();
+    assert!(warned(&mut h), "checked again for the slots now set");
+}
+
+#[test]
+fn a_check_started_before_the_machine_changed_never_fills_the_checks_after() {
+    // Machine Configuration's Apply forgets the checks; one still running for the old
+    // limits must not hand its findings to the checks asked for after
+    use crate::files::ToolChanges;
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
+    h.app.machines.add();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    // started with no slots, so it would warn that there is no tool changer
+    let _ = h.app.save_checks(&plan, ToolChanges::ToolChanger);
+    h.app.machines.active_mut().unwrap().set_slot_count(4);
+    h.app.forget_save_checks();
+    let stale = h
+        .app
+        .save_checks(&plan, ToolChanges::ToolChanger)
+        .is_some_and(|found| found.iter().any(|f| f.message.contains("no tool changer")));
+    assert!(!stale, "the old check's findings were thrown away");
+    h.app.wait_before_showing = std::time::Duration::from_mins(10);
+    if let Some(running) = h.app.busy.take() {
+        running.finish(&mut h.app);
+    }
+    let found = h
+        .app
+        .save_checks(&plan, ToolChanges::ToolChanger)
+        .expect("checked");
+    assert!(!found.iter().any(|f| f.message.contains("no tool changer")));
+}
+
+#[test]
 fn a_machines_file_that_cannot_be_read_is_said_kept_aside_and_never_saved_over() {
     let mut h = Harness::new();
     let dir = std::env::temp_dir().join(format!("cut-craft-bad-machines-{}", std::process::id()));
@@ -18813,6 +18885,40 @@ fn save_anyway_is_asked_in_the_window_not_by_a_dialog_that_can_hide_behind_it() 
     h.app.checks_accepted = true;
     assert!(h.app.ready_to_save(&form, false).is_some(), "agreed to");
     assert!(!h.app.checks_accepted, "only for that save");
+}
+
+#[test]
+fn save_anyway_counts_only_for_the_save_it_answered() {
+    // an answer left over from a save that stopped early (refused, or the checks still
+    // running) must not let a later save skip its question
+    let mut h = ready_for_output();
+    let form = one_file_form();
+    let post = h.app.form_post(&form).unwrap();
+    let (plan, revision, machine) = (
+        h.app.plan(&form, &post).unwrap(),
+        h.app.history.revision(),
+        h.app.machines.active,
+    );
+    let checks = |severity, message: &str| {
+        vec![super::SaveChecks {
+            plan: plan.clone(),
+            changes: form.changes,
+            revision,
+            machine,
+            found: Some(vec![cut_craft_core::preflight::Finding {
+                severity,
+                message: message.to_owned(),
+                check: cut_craft_core::preflight::Check::AirCutting,
+            }]),
+        }]
+    };
+    h.app.save_checks = checks(cut_craft_core::preflight::Severity::Error, "Too deep");
+    h.app.checks_accepted = true;
+    assert!(h.app.ready_to_save(&form, false).is_none(), "refused");
+    assert!(!h.app.checks_accepted, "used up by the save it was for");
+    h.app.save_checks = checks(cut_craft_core::preflight::Severity::MustAsk, "Collet hits");
+    assert!(h.app.ready_to_save(&form, false).is_none(), "asks again");
+    assert!(h.app.save_anyway.is_some());
 }
 
 #[test]
