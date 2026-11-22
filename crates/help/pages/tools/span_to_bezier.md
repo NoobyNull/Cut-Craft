@@ -35,7 +35,8 @@ where they are.
   Edit.
 - A straight side becomes a curve that still looks straight: its handles sit a third of the
   way along it, on the line. It only bends once you drag a handle.
-- An arc becomes one or more curves that trace it exactly, each with its own two handles.
+- An arc becomes one or more curves that follow it so closely you can't see the difference,
+  each with its own two handles.
 
 ## Settings
 

@@ -23,8 +23,12 @@ see-also: span_to_bezier, node_edit, move_node, smooth_point
 - At a smooth corner (made with [Smooth Point](help:smooth_point)) the handles either side
   line up. Dragging one turns the other the opposite way, keeping its length, so the corner
   stays smooth. At a sharp corner the other handle stays where it is.
-- If a handle sits right on its corner, a drag there moves the corner; drag the handle out
-  from somewhere just beside it instead, or use [Node Position](help:move_node).
+- If a handle sits right on its corner, a drag there always moves the corner. To get the
+  handle back out, right-click the span, pick [Convert Span to Line](help:span_to_line), then
+  [Convert Span to Bezier](help:span_to_bezier) again: the handles return to a third of the
+  way along.
+- Snapping never pulls a handle drag onto a nearby node: press on the round dot and it is the
+  handle that moves.
 - Undo (Ctrl+Z) takes back a drag.
 
 ## Settings

@@ -3025,8 +3025,28 @@ impl CutCraftApp {
         }
     }
 
+    /// How far `at` is from the nearest Bézier handle of the selected, editable vectors,
+    /// when that handle is nearer than every node of them (a tie goes to the node).
+    pub(super) fn nearest_handle(&self, at: Point) -> Option<f64> {
+        let editable = || {
+            self.doc
+                .selection
+                .iter()
+                .filter(|id| self.doc.editable(**id))
+                .map(|id| &self.doc.vectors[id])
+        };
+        let d = editable()
+            .flat_map(cut_craft_core::nodes::handles)
+            .map(|h| h.at.distance(at))
+            .min_by(f64::total_cmp)?;
+        let node_nearer = editable()
+            .flat_map(cut_craft_core::nodes::nodes)
+            .any(|q| q.distance(at) <= d);
+        (!node_nearer).then_some(d)
+    }
+
     /// Move Handle's params when `drag` starts on a selected vector's Bézier handle (nearer
-    /// it than to any node, so a handle lying on its node leaves the node draggable).
+    /// it than to any node: a tie goes to the node, so a handle lying on its node leaves the node draggable).
     pub(super) fn handle_move(&self, drag: Drag, reach: f64) -> Option<Value> {
         use cut_craft_core::nodes::{handle_near, nodes};
         let (vector, d) = self
@@ -3042,7 +3062,7 @@ impl CutCraftApp {
         let node_nearer = self.doc.selection.iter().any(|id| {
             nodes(&self.doc.vectors[id])
                 .iter()
-                .any(|q| q.distance(drag.start) < d)
+                .any(|q| q.distance(drag.start) <= d)
         });
         if node_nearer {
             return None;
@@ -3094,7 +3114,12 @@ impl CutCraftApp {
     /// round nodes of the selected vectors picks them (Shift adds); any other drag selects,
     /// as with the Select tool.
     pub(super) fn node_drop(&mut self, drag: Drag, shift: bool, reach: f64) {
-        if let Some(params) = self.picked_drag(drag, reach) {
+        // the same order as the preview in `node_overlay`: a handle first
+        if let Some(params) = self.handle_move(drag, reach) {
+            if let Err(e) = self.apply("move_handle", &params) {
+                self.status.set_message(&e);
+            }
+        } else if let Some(params) = self.picked_drag(drag, reach) {
             let by = drag.end - drag.start;
             match self.apply("move_nodes", &params) {
                 Ok(()) => {
@@ -3103,10 +3128,6 @@ impl CutCraftApp {
                     }
                 }
                 Err(e) => self.status.set_message(&e),
-            }
-        } else if let Some(params) = self.handle_move(drag, reach) {
-            if let Err(e) = self.apply("move_handle", &params) {
-                self.status.set_message(&e);
             }
         } else if let Some(params) = self.node_move(drag, reach) {
             self.picked_nodes.clear();
@@ -3260,8 +3281,18 @@ impl CutCraftApp {
         let mut marker = None;
         // where a point was placed on a snap: kept there once drawn
         let mut placed = vec![];
+        // in Node Edit, a press on a Bézier handle stays on the handle: snapping it onto a
+        // nearby node would turn the handle drag into a node drag
+        let handle_at = |at: Point| -> Option<f64> {
+            (self.view_tool == Some(ViewTool::NodeEdit))
+                .then(|| self.nearest_handle(at))
+                .flatten()
+        };
         let mut snap = |mut drag: Drag| {
-            let first = find(last, drag.start);
+            let mut first = find(last, drag.start);
+            if handle_at(drag.start).is_some_and(|d| d <= reach) {
+                first = None;
+            }
             drag.start = to(first, drag.start);
             let hit = find(drawing.then_some(drag.start), drag.end);
             drag.end = to(hit, drag.end);
