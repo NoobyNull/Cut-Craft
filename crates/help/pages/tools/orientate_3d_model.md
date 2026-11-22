@@ -39,6 +39,10 @@ Steps:
    back to where it came in: centred on the material, sitting on the zero plane (on a
    rotary job, back on the axis).
 
+**Import** is greyed until the model shows in the 3D view. If the file holds nothing that
+can be placed, or a setting stops it from showing, the foot of the form says why in red:
+change that setting, or press **Cancel**. Hover the greyed button to see why it waits.
+
 Nothing is imported until you press **Import**, so the reset buttons need no **Undo**. Undo
 takes back an import that is already made. Each reset button is greyed while there is
 nothing to put back.

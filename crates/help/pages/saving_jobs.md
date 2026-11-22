@@ -41,6 +41,9 @@ you save or close the job.
   one's work. This works on network and other shared settings folders too.
 - If the settings folder can't be written at all, the status bar warns that no copy is
   being kept: save often.
+- If one copy can't be written (a full disk, a network folder that dropped out), the
+  status bar says so and Cut Craft tries again at the next interval, even if you have not
+  changed anything since.
 
 A recovery copy is a safety net, not a save: press **Save** for a file you can open,
 copy and keep.
