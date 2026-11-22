@@ -767,6 +767,34 @@ fn cancelled_checks_say_so_and_check_again_runs_them() {
 }
 
 #[test]
+fn checks_waiting_on_other_work_say_so_rather_than_cancelled() {
+    let mut h = analysing();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    h.app.in_background(
+        "Calculating Slow Toolpath",
+        "test:slow",
+        move || {
+            wait.recv_timeout(std::time::Duration::from_secs(30)).ok();
+        },
+        |_, ()| {},
+    );
+    // the job changed: the checks must run again, once the slow work is done
+    h.app.save_checks.clear();
+    h.frame(vec![]);
+    assert!(
+        h.text_at("The checks start once the work running now is done")
+            .is_some(),
+        "waiting, not cancelled"
+    );
+    assert!(h.text_at("Check Again").is_none(), "nothing to run again");
+    go.send(()).ok();
+    until_not_busy(&mut h);
+}
+
+#[test]
 fn save_toolpaths_waits_for_cancelled_checks_rather_than_saving_unchecked() {
     let mut h = analysing();
     let form = SaveForm {

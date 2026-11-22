@@ -38,6 +38,7 @@ panels-single-step = Single Step
 panels-stop-the-preview-here-keeping = Stop the preview here, keeping what is cut so far (Esc)
 panels-stop = Stop
 panels-the-checks-were-cancelled-so = The checks were cancelled, so nothing has been checked yet
+panels-the-checks-wait-for-the-work-running = The checks start once the work running now is done
 panels-tilt = Tilt
 panels-toolpath-list = Toolpath List
 panels-vectors = Vectors

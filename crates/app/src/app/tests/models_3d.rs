@@ -1299,22 +1299,21 @@ fn esc_on_import_3d_model_cancels_the_import() {
 /// worked, and the form stays open with what went wrong, for Cancel or new settings.
 #[test]
 fn import_waits_for_a_model_that_was_placed() {
-    let file =
-        std::env::temp_dir().join(format!("cut-craft-unplaceable-{}.stl", std::process::id()));
+    let dir = fresh_dir("unplaceable");
+    let file = dir.join("nothing.stl");
     std::fs::write(&file, "solid nothing\nendsolid nothing\n").unwrap();
     let mut h = Harness::new();
     h.app.import_file(&file);
     h.frame(vec![]);
     h.frame(vec![]);
-    let _ = std::fs::remove_file(&file);
+    let _ = std::fs::remove_dir_all(&dir);
     let form = h.app.form.as_ref().expect("the import form is open");
     assert_eq!(form.id, "orientate_3d_model");
     assert!(form.error.is_some(), "it says what went wrong");
     assert!(h.app.doc.components.is_empty());
-    if let Some(at) = h.text_at("Import") {
-        h.click(at, Modifiers::NONE);
-        h.frame(vec![]);
-    }
+    let at = h.text_at("Import").expect("an Import button, greyed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
     assert!(
         !h.app.status.message.contains("Model imported"),
         "{}",
