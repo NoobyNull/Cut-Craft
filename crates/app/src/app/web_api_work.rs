@@ -537,9 +537,7 @@ impl CutCraftApp {
             .with_picked(gcode, |app| app.plan(&form, &post))
             .map_err(|e| ApiError::refused(capital(&e)))?;
         let mut found: Vec<Finding> = found.into_values().flatten().collect();
-        if form.changes == files::ToolChanges::ToolChanger && !self.has_tool_changer() {
-            found.push(Self::no_tool_changer());
-        }
+        found.extend(self.no_tool_changer_for(form.changes));
         if let Some(refused) = Self::refused(&found) {
             return Err(ApiError::refused(refused));
         }

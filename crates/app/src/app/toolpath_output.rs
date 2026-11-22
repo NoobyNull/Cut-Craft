@@ -359,6 +359,8 @@ impl CutCraftApp {
         form: &SaveForm,
         sending: bool,
     ) -> Option<cut_craft_post::Post> {
+        // a Save Anyway answer is for this save only, whichever way it ends
+        let accepted = std::mem::take(&mut self.checks_accepted);
         let post = match self.form_post(form) {
             Ok(post) => post,
             Err(e) => {
@@ -393,12 +395,11 @@ impl CutCraftApp {
             .any(|f| f.severity == cut_craft_core::preflight::Severity::MustAsk);
         let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
         let ask = must_ask || !ticked;
-        if !problems.is_empty() && ask && !std::mem::take(&mut self.checks_accepted) {
+        if !problems.is_empty() && ask && !accepted {
             // asked over the window: the answer saves (or sends) again
             self.ask_save_anyway(form, problems, sending);
             return None;
         }
-        self.checks_accepted = false;
         Some(post)
     }
 
@@ -566,6 +567,7 @@ impl CutCraftApp {
             let doc = self.doc.clone();
             let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
             let limits = self.check_limits(&ids, changes);
+            let no_changer = self.no_tool_changer_for(changes);
             let started = key.clone();
             self.in_background(
                 super::CHECKING,
@@ -573,7 +575,9 @@ impl CutCraftApp {
                 move || {
                     let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
                         ids.iter().filter_map(|id| doc.toolpaths.get(id)).collect();
-                    cut_craft_core::preflight::check(&doc, &toolpaths, &limits)
+                    let mut found = cut_craft_core::preflight::check(&doc, &toolpaths, &limits);
+                    found.extend(no_changer);
+                    found
                 },
                 move |app, found| {
                     if let Some(checks) = app.save_checks.iter_mut().find(|c| c.same(&started)) {
@@ -597,6 +601,17 @@ impl CutCraftApp {
             .is_some_and(|b| b.what() == super::CHECKING)
     }
 
+    /// Forgets the checks before cutting, as the machine they used changed: those made, and
+    /// one still running, whose findings were for the machine as it was.
+    pub(super) fn forget_save_checks(&mut self) {
+        if self.checking()
+            && let Some(running) = self.busy.take()
+        {
+            running.cancel();
+        }
+        self.save_checks.clear();
+    }
+
     /// Runs the cancelled checks before cutting again, next time they are asked for.
     pub(super) fn check_again(&mut self) {
         self.save_checks.retain(|c| c.found.is_some());
@@ -617,10 +632,18 @@ impl CutCraftApp {
             .collect();
         let limits = self.check_limits(&ids, changes);
         let mut found = cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits);
-        if changes == files::ToolChanges::ToolChanger && !self.has_tool_changer() {
-            found.push(Self::no_tool_changer());
-        }
+        found.extend(self.no_tool_changer_for(changes));
         found
+    }
+
+    /// The warning that the tool changer is chosen in `changes` but the active machine has
+    /// none set up, if it is.
+    pub(super) fn no_tool_changer_for(
+        &self,
+        changes: files::ToolChanges,
+    ) -> Option<cut_craft_core::preflight::Finding> {
+        (changes == files::ToolChanges::ToolChanger && !self.has_tool_changer())
+            .then(Self::no_tool_changer)
     }
 
     /// The warning when the tool changer is chosen but the machine has none set up.
