@@ -17,6 +17,6 @@ see-also: decorative_relief, vector_texture, celtic_weave, generate_border
 
 3. Pick a style and its settings. Warnings appear in red at the foot of the form.
    If a setting can't be made (a raise height of 0, say), the ornament you had stays as
-   it was and the status bar says why: fix the setting and it is made again in its place.
+   it was and the form says why, in red: fix the setting and it is made again in its place.
 
    ![Step 3](pictures/embellish/step-3.png)
