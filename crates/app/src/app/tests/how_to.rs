@@ -48,7 +48,7 @@ fn play_tours<'a>(tours: impl Iterator<Item = &'a crate::app::help_pictures::Tou
     }
     assert!(
         lost.is_empty(),
-        "these tour steps find nothing to ring (crates/app/src/help_tours.rs):\n{}",
+        "these tour steps find nothing to ring (crates/app/src/help_tours/):\n{}",
         lost.join("\n")
     );
 }

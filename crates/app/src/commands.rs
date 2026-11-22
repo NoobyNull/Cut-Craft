@@ -419,8 +419,12 @@ mod tests {
         let mut files = Vec::new();
         walk(&src, &mut files);
         let mut found = Vec::new();
-        // a file's tests, in its own tests.rs or after its `#[cfg(test)]`, may name them
-        for file in files.iter().filter(|f| !f.ends_with("tests.rs")) {
+        // a file's tests, in its own tests.rs (and the tests/ folder beside it) or after its
+        // `#[cfg(test)]`, may name them
+        let is_tests = |f: &&std::path::PathBuf| {
+            f.ends_with("tests.rs") || f.components().any(|c| c.as_os_str() == "tests")
+        };
+        for file in files.iter().filter(|f| !is_tests(f)) {
             let source = std::fs::read_to_string(file).unwrap();
             // A file's own tests start at its `#[cfg(test)]`.
             let source = source.split("#[cfg(test)]").next().unwrap_or_default();
