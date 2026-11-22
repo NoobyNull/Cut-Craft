@@ -1,6 +1,6 @@
 //! Guide lines in the 2D view.
 
-use super::*;
+use super::{Deserialize, Point, Serialize};
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
 /// y = `at`. A locked guide cannot be dragged.

@@ -1,6 +1,6 @@
 //! Advanced settings: how hard Cut Craft works, sealed so a hand edit is noticed.
 
-use super::*;
+use super::{Deserialize, JsonSchema, Options, Serialize};
 
 /// Settings that change how hard Cut Craft works the computer, or how exactly it cuts: listed
 /// only once Show advanced settings is ticked, and put back to their defaults when the file

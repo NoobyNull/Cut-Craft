@@ -1,6 +1,6 @@
 //! The job: its units, material, zero, rotary setup, model position and home.
 
-use super::*;
+use super::{Deserialize, Point, Rect, Serialize};
 
 /// Display units. The document always stores millimetres.
 #[derive(

@@ -20,11 +20,22 @@ mod guide;
 mod run;
 pub use run::*;
 mod tool_sections;
-use tool_sections::*;
+#[cfg(test)]
+use tool_sections::{KNIFE_LINE, held_name, tool_line};
+use tool_sections::{
+    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, is_laser_form,
+    put_listed, rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
+};
 mod dialogs;
-use dialogs::*;
+use dialogs::{
+    DIALOG_FOLDER, DIALOG_PARENT, brush_dialog, file_dialog, filtered_dialog, form_settings_dialog,
+    job_dialog, message_dialog, on_the_desktop, saving_path, template_dialog, texture_dialog,
+    toolpath_template_dialog,
+};
 mod readouts;
-use readouts::*;
+use readouts::{
+    hms, inspected, inspected_rows, length, measured, measured_rows, sheet_length, summary_table,
+};
 mod settings;
 pub use settings::*;
 #[cfg(test)]

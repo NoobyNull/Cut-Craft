@@ -1,6 +1,9 @@
 //! A toolpath form's Tool, Clearing, Selector and Rest sections.
 
-use super::*;
+use super::{
+    Align, HoverHint, Layout, Tool, ToolDatabase, Units, Value, egui, form, passes, reach,
+    surfacing, tabs, tr,
+};
 
 /// What a toolpath form's Tool section asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

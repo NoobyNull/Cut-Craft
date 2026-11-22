@@ -1,6 +1,6 @@
 //! The 3D view and the ways to move it: mouse, keys and the SpaceMouse.
 
-use super::*;
+use super::{Deserialize, JsonSchema, Serialize, egui};
 
 /// What the 3D view draws when Cut Craft starts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]

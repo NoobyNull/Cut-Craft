@@ -11,7 +11,7 @@ mod context_menus;
 mod menu_bar;
 pub use context_menus::*;
 mod tool_groups;
-use tool_groups::*;
+use tool_groups::{drawing_groups, modeling_groups, toolpath_groups};
 
 /// Drawing tab layout: groups of command ids. Implemented commands supply their own label and
 /// icon; the rest show their humanized id, disabled.

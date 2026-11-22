@@ -1,6 +1,6 @@
 //! A tool: its shape, sizes and cutting data.
 
-use super::*;
+use super::{Deserialize, JsonSchema, Serialize, pass_depths};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

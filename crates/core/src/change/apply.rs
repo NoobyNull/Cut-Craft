@@ -1,6 +1,9 @@
 //! Applying a change to a document, and putting it back when an edit fails partway.
 
-use super::*;
+use super::{
+    ApplyError, BTreeMap, Bitmap, Change, Component, DAffine2, Document, Edit, EntityId, Level,
+    Path, Point, Sheet, SheetObjects, Toolpath,
+};
 
 /// What [`Document::apply`] puts back when an edit fails partway: the document apart from
 /// its heavy maps, and of those maps (models, pictures, toolpaths, the other sheets' objects)

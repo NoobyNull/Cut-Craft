@@ -1,6 +1,6 @@
 //! The Drawing, Modeling and Toolpaths tabs' tool groups, in order.
 
-use super::*;
+use super::{ToolGroup, group};
 
 /// The Drawing tab. Group names and which tool sits in which group follow the help
 /// topics and the trial (see `re/SPEC.md`). Ids match

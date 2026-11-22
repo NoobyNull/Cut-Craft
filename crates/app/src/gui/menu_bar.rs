@@ -1,6 +1,6 @@
 //! The menu bar: every menu and its items, and the menus without a job open.
 
-use super::*;
+use super::{COMMUNITY, Menu, MenuItem, MenuSystem, SpaceH, SpaceV};
 
 impl MenuSystem {
     /// The main menu (see `re/SPEC.md`, Menus), minus vendor web links and licensing.

@@ -1,6 +1,9 @@
 //! Laying the moves along the line: the ramps, leads and tabs of each pass.
 
-use super::*;
+use super::{
+    DVec3, Entry, EntryMode, EntrySettings, Fallback, Lead, Line, Move, MoveKind, Out, PER_TURN,
+    Point, Ramp, RampBy, SHORTEST_LEG, SHORTEST_LEG_MM, SMALLEST_HELIX, Tabs, room_along,
+};
 
 impl Out<'_> {
     pub(super) fn push(&mut self, kind: MoveKind, p: Point, z: f64) {

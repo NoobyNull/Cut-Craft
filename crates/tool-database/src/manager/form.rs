@@ -1,6 +1,9 @@
 //! The Tool Database's tool form: each section of a tool's settings.
 
-use super::*;
+use super::{
+    BTreeMap, Changer, CuttingData, HoverHint, INCH, Look, NOTES_ROWS, Number, RateUnits, Tool,
+    ToolShape, Units, egui, tool_type,
+};
 
 /// Which slot of the tool changer `tool` is loaded in, to change: the slot picked (0 for
 /// taking it out), if one was.

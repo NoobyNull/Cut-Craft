@@ -1,6 +1,9 @@
 //! Starting Cut Craft: the window, the graphics and each frame handed to the app.
 
-use super::*;
+use super::{
+    APP_ID, CutCraftApp, DIALOG_FOLDER, DIALOG_PARENT, app_icon, egui, files, help_pictures, mac,
+    readable, screenshots, view3d,
+};
 
 impl eframe::App for CutCraftApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {

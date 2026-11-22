@@ -1,6 +1,8 @@
 //! The view cube in the 3D view's corner: its faces, and turning the view to one.
 
-use super::*;
+use super::{
+    Align2, Color32, DVec3, EDGE_ON, FontId, Orbit, Painter, Pos2, Rect, Shape, Vec2, Visuals,
+};
 
 /// The view cube in a corner of the 3D view: a cube turned with the view whose faces, edges
 /// and corners each turn the view to look from there (View Controller).

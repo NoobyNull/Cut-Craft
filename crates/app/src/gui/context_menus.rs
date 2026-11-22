@@ -1,6 +1,9 @@
 //! The right-click menus: toolpaths, tools, levels, groups, models, sheets and layers.
 
-use super::*;
+use super::{
+    Combine, Command, Component, Document, EntityId, Group, Items, Layer, Level, MenuItem, Mirror,
+    Toolpath, delete, show_hide,
+};
 
 /// The toolpath menu for toolpath `id`. Right-clicking a toolpath selects it,
 /// so Recalculate ▸ This and Preview act on it.

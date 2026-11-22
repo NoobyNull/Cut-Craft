@@ -1,6 +1,6 @@
 //! The words the app shows for sizes, measurements, inspected points, times and the summary.
 
-use super::*;
+use super::{EntityId, HoverHint, Path, Point, Summary, SummaryRow, egui, tr};
 
 /// A sheet's size in the Sheets List: one decimal in mm, three in inches.
 pub(super) fn sheet_length(mm: f64, units: cut_craft_core::document::Units) -> String {

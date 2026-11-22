@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 mod apply;
 mod builder;
-use apply::*;
+use apply::{shadowed, shift_of, shifted_text};
 
 /// The order spaced objects are laid out in, from the low end (left, bottom) of the span.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

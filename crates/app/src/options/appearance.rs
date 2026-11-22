@@ -1,6 +1,6 @@
 //! How Cut Craft looks: themes, the canvas colours, its lines and the language.
 
-use super::*;
+use super::{Deserialize, JsonSchema, Serialize, egui, rgb};
 
 /// How Cut Craft looks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]

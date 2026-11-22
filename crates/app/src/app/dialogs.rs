@@ -1,6 +1,6 @@
 //! The file and message dialogs, each starting in its own folder and kept over the window.
 
-use super::*;
+use super::{APP_NAME, Dialog, files};
 
 /// Job templates, starting in Cut Craft's `templates` folder.
 /// A file dialog opening in one of the user's settings folders (made if need be).

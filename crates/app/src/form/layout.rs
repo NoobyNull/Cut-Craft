@@ -1,6 +1,9 @@
 //! Laying a form out: its tabs, plain rows, grids, diagram and hover help.
 
-use super::*;
+use super::{
+    DIAGRAM_ASPECT, DIAGRAM_ROWS, DIM_COLOUR, FIELD_PICTURE_ROWS, Field, HoverHint, Kind, Look,
+    Number, TOOL_LISTS, Units, Value, Widget, edit, egui, round, tr,
+};
 
 /// [`show`] for `params` somewhere inside the form, whose top-level parameters are `top`.
 pub(super) fn show_within(

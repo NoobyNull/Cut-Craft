@@ -1,6 +1,6 @@
 //! The Tool Database: the shared tools, in their groups, that toolpaths copy.
 
-use super::*;
+use super::{CuttingData, Deserialize, Serialize, Tool, ToolShape};
 
 /// The shared tools. A toolpath copies its tool, so editing the database never changes
 /// toolpaths already made.

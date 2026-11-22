@@ -1,7 +1,7 @@
 //! The app's fixed values (sizes, timings, built-in names, links and services) and the small
 //! records its state keeps.
 
-use super::*;
+use super::{EntityId, Material, Units, egui, files, shortcut, view3d};
 
 /// Model ▸ Model Resolution's items, the resolution each sets and its name.
 /// Edit ▸ Units' items: action, units and name.

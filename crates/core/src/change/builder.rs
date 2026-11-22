@@ -1,6 +1,10 @@
 //! Building a change: [`ChangeBuilder`]'s edits, each tracked against the document as the change has left it.
 
-use super::*;
+use super::{
+    BTreeMap, Bitmap, Change, ChangeBuilder, Component, DAffine2, Document, Edit, EntityId, Guide,
+    Job, Layer, LayerId, Level, Path, Point, Selection, Sheet, SheetObjects, StoredVector,
+    Toolpath, shadowed, shift_of, shifted_text,
+};
 
 impl ChangeBuilder<'_> {
     /// Adds a copy of each of `originals` under each of `transforms`, on its original's

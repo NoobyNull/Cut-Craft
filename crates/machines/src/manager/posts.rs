@@ -1,6 +1,10 @@
 //! Machine Configuration's post-processors: the list, the editor and its fixes.
 
-use super::*;
+use super::{
+    Capabilities, CapabilityDb, Entry, Family, Filter, HoverHint, Library, Look, Machine,
+    MachineOutcome, Moves, PathBuf, Source, change_log, dialog_size, egui, icon_button, text_view,
+    view, viewer,
+};
 
 /// Associated Post-Processors: the machine's posts (the default marked), Add and Remove, and
 /// a right-click for View and Make Default.

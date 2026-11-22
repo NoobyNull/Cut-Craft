@@ -1,6 +1,8 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
-use super::*;
+use super::{
+    Deserialize, Display, FileDialogDefault, JsonSchema, Serialize, WindowLayout, egui, on,
+};
 
 /// Toolpath settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]

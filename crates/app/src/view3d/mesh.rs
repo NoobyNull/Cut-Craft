@@ -1,6 +1,9 @@
 //! The material as triangles to draw: its faces, sides, underside and edges.
 
-use super::*;
+use super::{
+    Camera, Color32, DVec3, Framing, Look, Material, Mesh, Orbit, Pos2, Rect, Wrap, brightness,
+    lit, paint_of, shaded, shadow_map, shadowed_brightness, wrapped_quads,
+};
 
 /// The material seen from `orbit`, placed by [`screen_of`] and drawn far to near.
 #[expect(clippy::cast_precision_loss, reason = "cell indices fit f64")]

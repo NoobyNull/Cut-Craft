@@ -1,6 +1,6 @@
 //! The settings for the services Cut Craft talks to: updates, the web API and bug reports.
 
-use super::*;
+use super::{Deserialize, JsonSchema, Serialize, on, yes};
 
 /// Help ▸ Check for Updates, and the check at startup.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]

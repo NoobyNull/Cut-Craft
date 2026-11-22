@@ -1,6 +1,6 @@
 //! Every tip's words, in the order startup shows them.
 
-use super::*;
+use super::{Area, Tip, icon, scene, tool};
 
 /// Every tip, in the order startup shows them: the first few are what a beginner needs on day
 /// one, the rest make the work quicker, safer or easier to find. Each is true of Cut Craft as

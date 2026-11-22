@@ -1,6 +1,10 @@
 //! Each kind of setting's input: numbers, choices, icon rows, corners, faces, lists and seeds.
 
-use super::*;
+use super::{
+    CORNER_PICKER_ROWS, Choice, FACES_PICTURE_ROWS, HoverHint, Kind, Look, MOST_RADIOS, Number,
+    Value, Widget, blank, decimals, egui, feel, hover, icon_path, named, next_seed, note_help,
+    offered, pick_material, sequence, show, shown_in, slide, store, tr,
+};
 
 /// Edits `value`; `around` holds the fields beside it, for pictures named by them. `name` is
 /// the setting's label, what a screen reader calls its box.
