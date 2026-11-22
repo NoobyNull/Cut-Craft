@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-21
+reviewed: 2026-11-22
 see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths
 ---
 
