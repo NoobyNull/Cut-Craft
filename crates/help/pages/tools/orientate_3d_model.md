@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-22
-see-also: import_component_3d_model, generate_border, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath, rotary_lathe_toolpath
+see-also: import_component_3d_model, generate_border, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath, rotary_lathe_toolpath, view_controls
 ---
 
 ## Borders from the Library
