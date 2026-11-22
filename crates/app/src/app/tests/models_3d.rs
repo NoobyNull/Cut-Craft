@@ -305,14 +305,7 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
     let photo = h.app.doc.bitmaps[&id].clone();
     h.app.depth_estimate =
         Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
-    for _ in 0..200 {
-        if h.app.depth_estimate.is_none() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        h.frame(vec![]);
-    }
-    h.frame(vec![]);
+    wait_for_depth(&mut h);
     assert_eq!(
         h.app.doc.bitmaps[&id].depth.len(),
         4,
@@ -331,14 +324,7 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
     let photo = h.app.doc.bitmaps[&id].clone();
     h.app.depth_estimate =
         Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
-    for _ in 0..200 {
-        if h.app.depth_estimate.is_none() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        h.frame(vec![]);
-    }
-    h.frame(vec![]);
+    wait_for_depth(&mut h);
     assert_eq!(h.app.doc.components.len(), 1, "made again in place");
     assert_ne!(shape(&h), first, "the relief follows the new depth");
 
@@ -364,6 +350,17 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
     h.app.depth_estimate =
         Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
     h.app.doc.selected_bitmaps = [other].into();
+    wait_for_depth(&mut h);
+    assert!(
+        h.app.doc.components.is_empty(),
+        "not made from the other picture"
+    );
+    std::fs::remove_dir_all(addons).unwrap();
+}
+
+/// Frames until the Depth add-on has answered, and one more for what follows from it.
+#[cfg(unix)]
+fn wait_for_depth(h: &mut Harness) {
     for _ in 0..200 {
         if h.app.depth_estimate.is_none() {
             break;
@@ -372,11 +369,6 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
         h.frame(vec![]);
     }
     h.frame(vec![]);
-    assert!(
-        h.app.doc.components.is_empty(),
-        "not made from the other picture"
-    );
-    std::fs::remove_dir_all(addons).unwrap();
 }
 
 #[test]
