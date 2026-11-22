@@ -239,7 +239,10 @@ pub enum ToLevel {
 pub fn takes_a_level(files: &[PathBuf]) -> bool {
     files
         .iter()
-        .all(|f| preview::MODELS.contains(&preview::extension(f).as_str()))
+        .all(|f| {
+            preview::MODELS.contains(&preview::extension(f).as_str())
+                || cut_craft_border_tile::of_depth_map(f).is_some()
+        })
 }
 
 /// `change` with the components it adds or remakes on `level`.
@@ -661,7 +664,16 @@ fn list(folder: &Path, importable: &Importable, greys: &mut Greys) -> Listing {
         .filter(|p| is(p, &preview::PICTURES))
         .filter_map(|p| Some((stem(p)?, p)))
         .collect();
+    // a generated border (its depth map with a recipe beside it) is a model, its picture
+    // the one saved with it
+    let tiles: HashMap<&PathBuf, PathBuf> = (files.iter())
+        .filter(|p| is(p, &["png"]))
+        .filter_map(|p| Some((p, cut_craft_border_tile::of_depth_map(p)?.picture)))
+        .collect();
     let picture_of = |p: &Path| {
+        if let Some(picture) = tiles.get(&p.to_path_buf()) {
+            return files.iter().find(|f| *f == picture);
+        }
         is(p, &preview::MODELS)
             .then(|| pictures.get(&stem(p)?).copied())
             .flatten()
@@ -672,7 +684,7 @@ fn list(folder: &Path, importable: &Importable, greys: &mut Greys) -> Listing {
         .map(|file| {
             let picture = picture_of(file).cloned();
             let stamp = preview::stamp(picture.as_deref().unwrap_or(file)).unwrap_or(0);
-            let kind = if is(file, &preview::MODELS) {
+            let kind = if is(file, &preview::MODELS) || tiles.contains_key(file) {
                 Kind::Model
             } else if is(file, &BITMAPS) {
                 let grey = match greys.get(file) {
@@ -1780,6 +1792,29 @@ mod tests {
         assert!(!takes_a_level(&files(&["logo.svg"])));
         assert!(!takes_a_level(&files(&["relief.png"])));
         assert!(!takes_a_level(&files(&["eagle.stl", "plan.dxf"])));
+    }
+
+    /// A generated border is one 3D tile, its picture the one saved with it; the picture and
+    /// recipe are not tiles of their own.
+    #[test]
+    fn a_generated_border_is_one_model_with_its_own_picture() {
+        let dir = folder("border");
+        let mut photo = Vec::new();
+        image::RgbImage::new(4, 2)
+            .write_to(&mut std::io::Cursor::new(&mut photo), image::ImageFormat::Png)
+            .unwrap();
+        let recipe = cut_craft_border_tile::Recipe::new("gothic_pewter", "2:1", 80.0, 40.0, 5.0);
+        let f =
+            cut_craft_border_tile::save(&dir, "Gothic", &[0.5; 8], 4, 2, &photo, &recipe).unwrap();
+        let mut clipart = Clipart::default();
+        let all = importable(&["stl", "png", "jpg"]);
+        let listing = list(&dir, &all, &mut clipart.greys);
+        assert_eq!(listing.entries.len(), 1, "{:?}", listing.entries);
+        let e = &listing.entries[0];
+        assert_eq!((&e.file, e.picture.as_ref()), (&f.depth, Some(&f.picture)));
+        assert_eq!(clipart.kind(e), Kind::Model);
+        assert!(takes_a_level(std::slice::from_ref(&f.depth)));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// Each file is a kind the Show filter picks: a greyscale picture, or one tagged so, is

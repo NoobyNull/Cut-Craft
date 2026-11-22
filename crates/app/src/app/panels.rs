@@ -5305,6 +5305,8 @@ fn confirm_delete(doomed: &[std::path::PathBuf]) -> bool {
 fn is_model(path: &std::path::Path) -> bool {
     path.extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("stl") || e.eq_ignore_ascii_case("obj"))
+        // a generated border: its depth map, read as a model at its recipe's size
+        || cut_craft_border_tile::of_depth_map(path).is_some()
 }
 
 /// `change` (an import) with what it adds moved to be centred on `at`.
