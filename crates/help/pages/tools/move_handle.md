@@ -26,7 +26,7 @@ see-also: span_to_bezier, node_edit, move_node, smooth_point
 - If a handle sits right on its corner, a drag there always moves the corner. To get the
   handle back out, right-click the span, pick [Convert Span to Line](help:span_to_line), then
   [Convert Span to Bezier](help:span_to_bezier) again: the handles return to a third of the
-  way along.
+  way along. This undoes any bend that side had, so shape it again afterwards.
 - Snapping never pulls a handle drag onto a nearby node: press on the round dot and it is the
   handle that moves.
 - Undo (Ctrl+Z) takes back a drag.

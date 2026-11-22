@@ -1375,6 +1375,9 @@ struct CutCraftApp {
     /// The handle a drag started on, which the drag then turns the model about (`xyz`: the
     /// sphere, all three axes).
     turn_ring: Option<&'static str>,
+    /// While a ring is held: the way + runs round it under the pointer, on screen, and how
+    /// far it reaches from its middle, points.
+    ring_grip: Option<(egui::Vec2, f32)>,
     /// An open Help window.
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.
@@ -1842,6 +1845,7 @@ fn summary_fields() -> [crate::form::Field; 2] {
             tab: None,
             dim: None,
             diagram: None,
+            axis: None,
         },
         crate::form::Field {
             key: "scale_factor".into(),
@@ -1866,6 +1870,7 @@ fn summary_fields() -> [crate::form::Field; 2] {
             tab: None,
             dim: None,
             diagram: None,
+            axis: None,
         },
     ]
 }

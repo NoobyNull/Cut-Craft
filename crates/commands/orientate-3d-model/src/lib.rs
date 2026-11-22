@@ -114,7 +114,7 @@ pub struct Orientation {
     /// Then a turn about the upright axis, in degrees
     #[schemars(
         title = "Rotation about Z Axis",
-        extend("x-unit" = "deg"),
+        extend("x-unit" = "deg", "x-axis" = "z"),
         extend("x-steps" = [-180, -90, 0, 90, 180])
     )]
     pub rotation: f64,

@@ -1789,8 +1789,44 @@ impl ViewCube {
                 painter.galley(at, galley, text);
             }
         }
+        self.paint_axes(painter, orbit, font);
+    }
+
+    /// The job's X, Y and Z along the cube's edges from its front-left-bottom corner, a
+    /// little past the cube, in the axis colours used everywhere, each with an arrow head
+    /// and its letter: which way each axis runs, whichever way the view is turned.
+    fn paint_axes(self, painter: &Painter, orbit: Orbit, font: &FontId) {
+        use crate::axes::Axis;
+        let corner = DVec3::splat(-1.0);
+        let from = self.screen(orbit, corner);
+        let width = (self.half / 8.0).max(2.0);
+        let head = self.half / 2.5;
+        // the letters a little bigger than the faces' names, to be read at a glance
+        let font = &FontId::new(font.size * 1.25, font.family.clone());
+        for axis in Axis::ALL {
+            let to = self.screen(orbit, corner + axis.direction() * AXIS_REACH);
+            let colour = axis.colour();
+            if from.distance(to) < head {
+                // looking straight along it: its letter alone, over the corner
+                crate::axes::tag(painter, to, axis.letter(), colour, font);
+                continue;
+            }
+            crate::axes::arrow(
+                painter,
+                from,
+                to,
+                eframe::egui::Stroke::new(width, colour),
+                head,
+            );
+            let out = (to - from).normalized() * head;
+            crate::axes::tag(painter, to + out, axis.letter(), colour, font);
+        }
     }
 }
+
+/// How far the view cube's axis arrows reach from its corner, in half edges: a little past
+/// the cube's far side.
+const AXIS_REACH: f64 = 2.4;
 
 /// The material's surface round the axis as quads, each with its brightness: lit by its own
 /// facing, darker deeper, and closed across the seam where the circumference meets itself.
