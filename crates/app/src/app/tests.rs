@@ -1044,6 +1044,122 @@ fn node_editing_drags_a_corner_and_offers_its_menu() {
 }
 
 #[test]
+fn a_span_made_a_bezier_shows_handles_that_drag_to_bend_it() {
+    use cut_craft_core::geometry::Segment;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let id = *h.app.doc.selection.iter().next().unwrap();
+    h.app.invoke(&h.ctx, "node_edit");
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.snap_to_grid = false;
+    // right-click the bottom side, Convert Span to Bezier
+    let target = h
+        .app
+        .node_target(Point::new(20.0, 10.0), 1.0)
+        .expect("the bottom side");
+    let menu = gui::node_menu(&h.app.doc, &target);
+    let convert = leaf(&menu, &["Convert Span to Bezier"]);
+    h.app.invoke(&h.ctx, &convert.action);
+    assert!(
+        h.app.doc.selection.contains(&id),
+        "still the one being edited"
+    );
+    let crate::view2d::Overlay::Nodes { handles, .. } = h.app.node_overlay(None, 1.0) else {
+        panic!("the node overlay")
+    };
+    assert_eq!(
+        handles.len(),
+        2,
+        "one at each end of the curve: {handles:?}"
+    );
+    // drag the handle nearest the left corner down: the side bends, the corners stay
+    let (_, handle) = handles
+        .iter()
+        .copied()
+        .min_by(|a, b| a.1.x.total_cmp(&b.1.x))
+        .unwrap();
+    let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+    let (from, to) = (h.at(handle.x, handle.y), h.at(handle.x, handle.y - 6.0));
+    h.drag(from, to);
+    let path = &h.app.doc.vectors[&id];
+    assert_eq!(
+        cut_craft_core::nodes::nodes(path),
+        corners,
+        "the corners stay"
+    );
+    let pulled = path.segments.iter().any(|s| {
+        matches!(s, Segment::Cubic { c1, c2, .. }
+            if c1.y < 7.0 || c2.y < 7.0)
+    });
+    assert!(
+        pulled,
+        "a handle went down with the drag: {:?}",
+        path.segments
+    );
+}
+
+#[test]
+fn a_handle_beside_its_corner_drags_with_snapping_on_and_one_on_its_corner_moves_the_corner() {
+    use cut_craft_core::geometry::Segment;
+    use cut_craft_core::nodes::{handles, move_handle, nodes, span_to_bezier};
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let id = *h.app.doc.selection.iter().next().unwrap();
+    h.app.invoke(&h.ctx, "node_edit");
+    // the bottom side a curve, the handle at its left pulled in close beside the corner,
+    // well inside the snapping radius of the corner (snapping is on, as it is by default)
+    let path = h.app.doc.vectors[&id].clone();
+    let k = cut_craft_core::nodes::span_near(&path, Point::new(20.0, 10.0), 1.0).unwrap();
+    let curved = span_to_bezier(&path, k);
+    let left = handles(&curved)
+        .into_iter()
+        .find(|g| g.span == k && g.node.x < 15.0)
+        .unwrap();
+    let beside = left.node + Point::new(0.8, 0.0);
+    h.app
+        .doc
+        .vectors
+        .insert(id, move_handle(&curved, left.span, left.second, beside));
+    let corners = nodes(&h.app.doc.vectors[&id]);
+    // let go well away from anything the end could snap to
+    h.drag(
+        h.at(beside.x, beside.y),
+        h.at(beside.x + 4.0, beside.y - 15.0),
+    );
+    let path = &h.app.doc.vectors[&id];
+    assert_eq!(
+        nodes(path),
+        corners,
+        "the press on the handle did not snap to the corner"
+    );
+    assert!(
+        handles(path).iter().any(|g| g.at.y < 0.0),
+        "the handle went down: {:?}",
+        path.segments
+    );
+    // a handle lying on its corner: the corner wins
+    let on = handles(path).into_iter().find(|g| g.at.y < 0.0).unwrap();
+    let flat = move_handle(path, on.span, on.second, on.node);
+    h.app.doc.vectors.insert(id, flat);
+    h.app.options.snapping.smart_snapping = false;
+    h.drag(
+        h.at(on.node.x, on.node.y),
+        h.at(on.node.x + 20.0, on.node.y - 25.0),
+    );
+    let moved = nodes(&h.app.doc.vectors[&id]);
+    assert!(
+        moved
+            .iter()
+            .any(|q| q.distance(on.node + Point::new(20.0, -25.0)) < 0.5),
+        "the corner moved: {moved:?}"
+    );
+    assert!(matches!(
+        h.app.doc.vectors[&id].segments[on.span],
+        Segment::Cubic { .. }
+    ));
+}
+
+#[test]
 fn a_template_opens_as_a_new_unsaved_job() {
     let dir = std::env::temp_dir().join(format!("cut-craft-template-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

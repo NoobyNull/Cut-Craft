@@ -131,6 +131,9 @@ pub fn ruler_ticks(lo: f64, hi: f64, step: f64) -> Vec<f64> {
 /// A node handle's edge, as a share of the theme's interactive row height.
 // ponytail: fixed share until a preferences dialog sizes handles
 pub const NODE_HANDLE_SHARE: f32 = 0.35;
+/// A Bézier handle's round dot (its radius), as a share of half a node box: round so it
+/// reads as different from the square nodes, and big enough to grab.
+pub const HANDLE_DOT_SHARE: f32 = 0.9;
 /// How big the circle on an open vector's end is (its radius), as a share of a row: big
 /// enough to see and click, smaller than a node handle's box.
 pub const OPEN_END_SHARE: f32 = 0.25;
@@ -207,6 +210,9 @@ pub enum Overlay {
         /// Nodes picked with a box, drawn filled: a drag of one moves them all.
         picked: Vec<Point>,
         moving: Vec<Path>,
+        /// Bézier handles: each node and the handle pulling from it, drawn as a line out to
+        /// a round dot that drags to bend the curve.
+        handles: Vec<(Point, Point)>,
     },
     /// A selection box in job coordinates; crossing boxes are drawn dashed.
     Window {
@@ -763,8 +769,19 @@ impl Canvas {
                     painter.add(Shape::line(screen(path), selected));
                 }
             }
-            Overlay::Nodes { at, picked, moving } => {
+            Overlay::Nodes {
+                at,
+                picked,
+                moving,
+                handles,
+            } => {
                 let half = ui.spacing().interact_size.y * NODE_HANDLE_SHARE / 2.0;
+                // under the nodes: a thin line from each node out to its round handle
+                for (node, handle) in handles {
+                    let (a, b) = (t.to_screen(*node), t.to_screen(*handle));
+                    painter.line_segment([a, b], Stroke::new(datum.width, selected.color));
+                    painter.circle(b, half * HANDLE_DOT_SHARE, selected.color, selected);
+                }
                 for q in at {
                     let r = Rect::from_center_size(t.to_screen(*q), egui::vec2(half, half) * 2.0);
                     let fill = if picked.iter().any(|p| p.distance(*q) < 1e-9) {

@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-17
-see-also: move_node, insert_point, smooth_point
+reviewed: 2026-11-21
+see-also: move_node, move_handle, span_to_bezier, insert_point, smooth_point
 ---
 
 ## Steps
@@ -15,6 +15,6 @@ see-also: move_node, insert_point, smooth_point
 
    ![Step 2](pictures/node_edit/step-2.png)
 
-3. Drag a node to move it. Right-click a node or a span for more: add or delete nodes, make a span straight or curved.
+3. Drag a node (a square) to move it. Right-click a node or a span for more: add or delete nodes, make a span straight or curved. A curved span shows round handles: drag one to bend it ([Convert Span to Bezier](help:span_to_bezier), [Move Handle](help:move_handle)).
 
    ![Step 3](pictures/node_edit/step-3.png)

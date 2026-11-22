@@ -316,6 +316,128 @@ pub fn span_to_bezier(path: &Path, k: usize) -> Path {
     out
 }
 
+/// One Bézier handle of a path: the control point of span `span` next to its start node
+/// (`second` false) or next to its end node (`second` true), and the node it pulls from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Handle {
+    pub span: usize,
+    pub second: bool,
+    /// Where the handle is
+    pub at: Point,
+    /// The node it belongs to: drawn joined to it by a line
+    pub node: Point,
+}
+
+/// Every Bézier handle of `path`, two for each Bézier span.
+pub fn handles(path: &Path) -> Vec<Handle> {
+    let mut out = vec![];
+    for (k, s) in path.segments.iter().enumerate() {
+        if let Segment::Cubic { c1, c2, to } = *s {
+            let from = span_start(path, k);
+            out.push(Handle {
+                span: k,
+                second: false,
+                at: c1,
+                node: from,
+            });
+            out.push(Handle {
+                span: k,
+                second: true,
+                at: c2,
+                node: to,
+            });
+        }
+    }
+    out
+}
+
+/// The handle of `path` nearest `at`, if one is within `reach`.
+pub fn handle_near(path: &Path, at: Point, reach: f64) -> Option<Handle> {
+    handles(path)
+        .into_iter()
+        .map(|h| (h, h.at.distance(at)))
+        .filter(|(_, d)| *d <= reach)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(h, _)| h)
+}
+
+/// `path` with handle `second` of span `span` moved to `to`. A smooth node stays smooth:
+/// when the handle on the node's other side lies opposite (as Smooth Point leaves it), it
+/// turns to stay opposite, keeping its length. A span that is not a Bézier is left alone.
+#[must_use]
+pub fn move_handle(path: &Path, span: usize, second: bool, to: Point) -> Path {
+    let mut out = path.clone();
+    let n = path.segments.len();
+    let Some(Segment::Cubic { c1, c2, to: end }) = path.segments.get(span).copied() else {
+        return out;
+    };
+    let (node, old) = if second {
+        (end, c2)
+    } else {
+        (span_start(path, span), c1)
+    };
+    out.segments[span] = if second {
+        Segment::Cubic {
+            c1,
+            c2: to,
+            to: end,
+        }
+    } else {
+        Segment::Cubic {
+            c1: to,
+            c2,
+            to: end,
+        }
+    };
+    // the span on the node's other side, if it is a Bézier
+    let other = if second {
+        (span + 1 < n)
+            .then_some(span + 1)
+            .or(path.closed.then_some(0))
+    } else {
+        span.checked_sub(1).or(path.closed.then(|| n - 1))
+    };
+    let Some(o) = other.filter(|&o| o != span) else {
+        return out;
+    };
+    let Segment::Cubic {
+        c1: o1,
+        c2: o2,
+        to: o_end,
+    } = out.segments[o]
+    else {
+        return out;
+    };
+    let opposite = if second { o1 } else { o2 };
+    let (was, mine) = (
+        (opposite - node).normalize_or_zero(),
+        (old - node).normalize_or_zero(),
+    );
+    let now = (to - node).normalize_or_zero();
+    if was == Point::ZERO
+        || mine == Point::ZERO
+        || now == Point::ZERO
+        || (was + mine).length() > 1e-6
+    {
+        return out; // a corner: the other handle stays where it is
+    }
+    let turned = node - now * opposite.distance(node);
+    out.segments[o] = if second {
+        Segment::Cubic {
+            c1: turned,
+            c2: o2,
+            to: o_end,
+        }
+    } else {
+        Segment::Cubic {
+            c1: o1,
+            c2: turned,
+            to: o_end,
+        }
+    };
+    out
+}
+
 /// `path` with span `k` an arc: through a Bézier's middle, or bowed out an eighth of a
 /// line's length to its left.
 // ponytail: the line's bow is our own choice [inf]; the is not documented
@@ -540,5 +662,77 @@ mod tests {
         let curvy =
             insert_node(&Path::circle(Point::ZERO, 10.0), Point::new(0.0, 11.0), 2.0).unwrap();
         assert!((nodes(&curvy)[1] - Point::new(0.0, 10.0)).length() < 1e-9);
+    }
+    #[test]
+    fn a_line_made_a_bezier_has_two_handles_at_its_thirds() {
+        let curved = span_to_bezier(&square(), 0);
+        let h = handles(&curved);
+        assert_eq!(h.len(), 2, "{h:?}");
+        assert!(h[0].at.distance(Point::new(10.0 / 3.0, 0.0)) < 1e-9);
+        assert_eq!(h[0].node, Point::new(0.0, 0.0));
+        assert!(h[1].at.distance(Point::new(20.0 / 3.0, 0.0)) < 1e-9);
+        assert_eq!(h[1].node, Point::new(10.0, 0.0));
+        assert!(handles(&square()).is_empty(), "straight lines have none");
+    }
+
+    #[test]
+    fn an_arc_made_beziers_has_handles_for_each_piece() {
+        let arc = Path {
+            start: Point::new(10.0, 0.0),
+            segments: vec![Segment::Arc {
+                to: Point::new(-10.0, 0.0),
+                center: Point::ZERO,
+                ccw: true,
+            }],
+            closed: false,
+        };
+        let curved = span_to_bezier(&arc, 0);
+        let h = handles(&curved);
+        assert_eq!(h.len(), 2 * curved.segments.len());
+        assert!(h.len() >= 2);
+    }
+
+    #[test]
+    fn dragging_a_handle_bends_the_span_and_leaves_the_nodes() {
+        let curved = span_to_bezier(&square(), 0);
+        let h = handle_near(&curved, Point::new(3.5, 0.2), 1.0).expect("the first handle");
+        assert!(!h.second);
+        let bent = move_handle(&curved, h.span, h.second, Point::new(3.0, -4.0));
+        assert_eq!(nodes(&bent), nodes(&curved));
+        let Segment::Cubic { c1, c2, .. } = bent.segments[0] else {
+            panic!("still a Bézier")
+        };
+        assert_eq!(c1, Point::new(3.0, -4.0));
+        assert!(
+            c2.distance(Point::new(20.0 / 3.0, 0.0)) < 1e-9,
+            "the other handle stays"
+        );
+        assert!(handle_near(&curved, Point::new(5.0, 5.0), 1.0).is_none());
+    }
+
+    #[test]
+    fn a_smooth_node_stays_smooth_when_one_handle_moves() {
+        let smooth = smooth_node(&square(), 1).unwrap();
+        let node = Point::new(10.0, 0.0);
+        let at_node: Vec<_> = handles(&smooth)
+            .into_iter()
+            .filter(|h| h.node.distance(node) < 1e-9)
+            .collect();
+        assert_eq!(at_node.len(), 2);
+        let h = at_node[0];
+        let moved = move_handle(&smooth, h.span, h.second, node + Point::new(0.0, -5.0));
+        let after: Vec<_> = handles(&moved)
+            .into_iter()
+            .filter(|h| h.node.distance(node) < 1e-9)
+            .collect();
+        let (a, b) = (
+            (after[0].at - node).normalize(),
+            (after[1].at - node).normalize(),
+        );
+        assert!((a + b).length() < 1e-9, "still opposite: {a} {b}");
+        assert!(
+            (after[1].at.distance(node) - at_node[1].at.distance(node)).abs() < 1e-9,
+            "the other keeps its length"
+        );
     }
 }
