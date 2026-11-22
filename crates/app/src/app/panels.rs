@@ -1984,7 +1984,7 @@ impl CutCraftApp {
     }
 
     /// Whether an imported model is shown whole, in place of its component.
-    fn importing_whole(&self) -> bool {
+    pub(super) fn importing_whole(&self) -> bool {
         self.form
             .as_ref()
             .is_some_and(|f| f.model.is_some() && f.model_whole)
@@ -4083,15 +4083,13 @@ impl CutCraftApp {
         }
     }
 
-    /// The height of the origin arrows over the 3D view's `surface`: a model being imported
-    /// is shown unseated, on its own zero plane.
-    fn origin_height_3d(&self, surface: &Material) -> f64 {
-        let unseated = (self.importing_whole()
-            && self.doc.job.rotary.is_none()
-            && self.simulation.is_none()
-            && self.playback.is_none())
-        .then_some(surface);
-        origin_3d(&self.doc.job, unseated)
+    /// The height of the 3D view's origin arrows: the machine's Z zero. While Import 3D Model
+    /// shows its model whole, the model sits on its own zero plane at 0 and the material's
+    /// outline is drawn from there up to its thickness, so zero is measured from that top.
+    pub(super) fn origin_height_3d(&self) -> f64 {
+        let importing =
+            self.importing_whole() && self.simulation.is_none() && self.playback.is_none();
+        origin_3d(&self.doc.job, importing)
     }
 
     /// The vectors, modeling plane and origin over the 3D view's (unwrapped) `surface`, each
@@ -4195,7 +4193,7 @@ impl CutCraftApp {
             // colours, at the height Z zero is: the material's top or the bed under it
             let o = local(
                 cut_craft_core::geometry::Point::ZERO,
-                self.origin_height_3d(surface),
+                self.origin_height_3d(),
             );
             let reach = size.x.max(size.y) / 10.0;
             let width = stroke.width * 2.0;
@@ -4204,7 +4202,12 @@ impl CutCraftApp {
                 (cut_craft_core::glam::DVec3::Y, egui::Color32::GREEN),
                 (cut_craft_core::glam::DVec3::Z, egui::Color32::BLUE),
             ] {
-                for run in in_sight(&[o, o + axis * reach]) {
+                // faint where the material hides it (all of X and Y on the bed under a
+                // centre datum), bold where it is in sight
+                let arrow = [o, o + axis * reach];
+                let behind = (width / 2.0, colour.gamma_multiply(0.5));
+                painter.add(egui::Shape::line(arrow.map(&screen).to_vec(), behind));
+                for run in in_sight(&arrow) {
                     painter.add(egui::Shape::line(run, (width, colour)));
                 }
             }
@@ -5494,9 +5497,9 @@ pub(super) fn importing(path: &std::path::Path) -> String {
 }
 
 /// The height of the 3D view's origin arrows: the machine's Z zero, on the material's top or
-/// (Job Setup ▸ Z Zero Position ▸ Machine Bed) on the bed under it. With the material's top
-/// at 0, except an `unseated` model (one being imported), shown on its own zero plane: there
-/// the top is where seating it would move 0 to.
-pub(super) fn origin_3d(job: &cut_craft_core::document::Job, unseated: Option<&Material>) -> f64 {
-    job.zero_height() - unseated.map_or(0.0, |m| cut_craft_core::component::seat_shift(job, m))
+/// (Job Setup ▸ Z Zero Position ▸ Machine Bed) on the bed under it, a height from the
+/// material's top at 0. While a model is being `imported` the frame has the bed at 0 and the
+/// top a thickness up, as the material's outline is drawn there.
+pub(super) fn origin_3d(job: &cut_craft_core::document::Job, imported: bool) -> f64 {
+    job.zero_height() + if imported { job.thickness } else { 0.0 }
 }

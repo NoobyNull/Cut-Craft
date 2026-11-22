@@ -19997,33 +19997,59 @@ fn the_3d_origin_moves_to_the_bed_with_the_z_zero() {
         thickness: 24.5,
         ..Job::default()
     };
-    assert!(
-        panels::origin_3d(&job, None).abs() < 1e-12,
-        "on top by default"
-    );
+    assert!(panels::origin_3d(&job, false).abs() < 1e-12, "on top");
     job.z_zero = ZZero::MachineBed;
     assert!(
-        (panels::origin_3d(&job, None) + 24.5).abs() < 1e-12,
+        (panels::origin_3d(&job, false) + 24.5).abs() < 1e-12,
         "on the bed, 24.5 mm under the top"
     );
-    // a model being imported is shown unseated, on its zero plane: with its bottom on the
-    // material's bottom that plane is the bed, and the top 24.5 mm above
-    job.model_position = cut_craft_core::document::ModelPosition {
-        from: cut_craft_core::document::GapFrom::Below,
-        gap: 0.0,
-    };
-    let mut model = cut_craft_core::simulation::Material::new(&job, 4);
-    // 10 mm tall on half the job, its zero plane (nothing there) on the other half
-    for (i, h) in model.heights.iter_mut().enumerate() {
-        *h = if i % 4 < 2 { 10.0 } else { f64::NAN };
-    }
+}
+
+/// While Import 3D Model is open the model sits on its zero plane at 0, and the material's
+/// outline is drawn from 0 up to its thickness: the arrows go on that outline's top, or on
+/// its bottom for Machine Bed, never off the outline.
+#[test]
+fn the_3d_origin_sits_on_the_material_outline_while_a_model_is_imported() {
+    use cut_craft_core::document::ZZero;
+    let mut h = Harness::new();
+    h.app.doc.job.thickness = 18.0;
+    let file = pyramid_stl("origin-import");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    assert!(h.app.importing_whole(), "the model is shown whole");
     assert!(
-        panels::origin_3d(&job, Some(&model)).abs() < 1e-9,
-        "the bed"
+        (h.app.origin_height_3d() - 18.0).abs() < 1e-9,
+        "Material Surface: the outline's top, {}",
+        h.app.origin_height_3d()
     );
-    job.z_zero = ZZero::MaterialSurface;
+    h.app.doc.job.z_zero = ZZero::MachineBed;
     assert!(
-        (panels::origin_3d(&job, Some(&model)) - 24.5).abs() < 1e-9,
-        "the material's top, over the model's plane"
+        h.app.origin_height_3d().abs() < 1e-9,
+        "Machine Bed: the outline's bottom, {}",
+        h.app.origin_height_3d()
+    );
+    // the form closed, the material's top is back at 0
+    h.app.form = None;
+    assert!((h.app.origin_height_3d() + 18.0).abs() < 1e-9, "the bed");
+    h.app.doc.job.z_zero = ZZero::MaterialSurface;
+    assert!(h.app.origin_height_3d().abs() < 1e-9, "the top");
+}
+
+/// A rotary job's Machine Bed is the turning axis: half the blank under its top, and on the
+/// outline's middle while a model is imported unwrapped.
+#[test]
+fn a_rotary_jobs_3d_origin_is_on_the_axis_for_machine_bed() {
+    use cut_craft_core::document::{Along, Job, ZZero};
+    let job = Job {
+        z_zero: ZZero::MachineBed,
+        ..Job::rotary(300.0, 40.0, Along::X)
+    };
+    assert!(
+        (panels::origin_3d(&job, false) + 20.0).abs() < 1e-9,
+        "20 mm under the top of a 40 mm blank"
+    );
+    assert!(
+        panels::origin_3d(&job, true).abs() < 1e-9,
+        "the outline's bottom, its top being the blank's radius up"
     );
 }

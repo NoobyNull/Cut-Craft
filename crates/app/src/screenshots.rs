@@ -9,7 +9,7 @@
 use super::{CutCraftApp, Split, View};
 use crate::options::WindowLayout;
 use cut_craft_core::component::{Combine, Component};
-use cut_craft_core::document::{GapFrom, ModelPosition};
+use cut_craft_core::document::{Datum, GapFrom, ModelPosition, ZZero};
 use cut_craft_core::geometry::Point;
 use eframe::egui;
 use std::path::PathBuf;
@@ -102,6 +102,16 @@ const SCENES: &[Scene] = &[
     }),
     ("model-sticks-out", |app, ctx| {
         model_position(app, ctx, GapFrom::Below, 15.0, false);
+    }),
+    // Help: 3D View ▸ Where zero is
+    ("z-zero-top", |app, ctx| {
+        z_zero(app, ctx, ZZero::MaterialSurface, Datum::BottomLeft);
+    }),
+    ("z-zero-bed", |app, ctx| {
+        z_zero(app, ctx, ZZero::MachineBed, Datum::BottomLeft);
+    }),
+    ("z-zero-bed-centre", |app, ctx| {
+        z_zero(app, ctx, ZZero::MachineBed, Datum::Centre);
     }),
     // Help: Notes (the four steps make notes-steps.gif)
     ("notes-step-1", |app, ctx| {
@@ -491,6 +501,22 @@ fn model_position(
         }
     }
     app.view = View::ThreeD;
+}
+
+/// The medallion in the 3D view with Job Setup's Z Zero Position and XY datum as given: the
+/// origin arrows on the material's top or on the bed.
+fn z_zero(app: &mut CutCraftApp, ctx: &egui::Context, z_zero: ZZero, datum: Datum) {
+    app.updates = crate::update::Updates::default();
+    app.form = None;
+    (app.simulation, app.playback) = (None, None);
+    app.doc = cut_craft_core::document::Document::default();
+    (app.doc.job.z_zero, app.doc.job.datum) = (z_zero, datum);
+    model(app, ctx);
+    app.form = None;
+    app.doc.selection.clear();
+    app.doc.selected_components.clear();
+    app.view = View::ThreeD;
+    app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, ZOOM_3D);
 }
 
 /// A Profile toolpath calculated, then Calculate pressed again with nothing changed: the

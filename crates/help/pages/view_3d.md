@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-21
 see-also: job_setup, check_zeroing, 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
 ---
 
@@ -29,13 +29,32 @@ spot where you will zero the bit on your machine. They sit at the **XY zero** yo
 [Job Setup](help:job_setup), at the height its **Z Zero Position** says:
 
 - **Material Surface**: on the top of the material.
-- **Machine Bed**: on the bottom of the material, where it lies on the bed. On a
-  [rotary job](help:rotary_firmware) this choice is the turning axis instead: half the
-  cylinder's width under its top (20 mm under for a 40 mm cylinder).
+
+  ![Material Surface: the arrows start on the material's top corner](pictures/z-zero-top.png)
+
+- **Machine Bed**: on the bottom of the material, where it lies on the bed.
+
+  ![Machine Bed: the arrows start on the bottom corner, where the material meets the bed](pictures/z-zero-bed.png)
 
 Switch it and press **Apply**, and the arrows move. Your model stays where it is in the
-material: only the Z numbers the machine is told change. To hide the arrows, untick
-**Show Origin** in Edit ▸ Options ▸ 3D View.
+material: only the Z numbers the machine is told change.
+
+Where the material hides part of an arrow, that part is drawn thin and faint, so you can
+still see it. With Machine Bed and the XY zero in the **Centre**, the arrows start inside
+the block, under the middle of the material: X and Y show faint, and the blue Z arrow pokes
+up through the top.
+
+![Machine Bed with the XY zero in the centre: faint arrows inside the block, under its middle](pictures/z-zero-bed-centre.png)
+
+**On a [rotary job](help:rotary_firmware)**, Machine Bed is the turning axis instead: the
+middle of the blank, half its thickness under its top (20 mm under for a 40 mm blank).
+The arrows are not drawn while the job is wrapped round its axis: untick View ▸
+**Auto-Wrapping View** to see the job flat, with the arrows on it.
+
+While [Import 3D Model](help:import_component_3d_model) is open, the arrows sit on the material's
+outline drawn round the model: on its top, or on its bottom for Machine Bed.
+
+To hide the arrows, untick View ▸ **Draw Origin**.
 
 ## Changing a model's height
 
