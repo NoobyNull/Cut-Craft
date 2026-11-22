@@ -77,8 +77,9 @@ add-on leaves My Gadgets at once; a removed gadget leaves the menu when Cut Craf
 
 When one of Cut Craft's own add-ons moves to a new home on GitHub (the Depth add-on and the
 language packs are moving to the Power-Whittle organisation), you don't need to do anything.
-Cut Craft knows both addresses: your copy keeps updating, and its next update quietly
-records the new address. You never need to remove it and install it again.
+Cut Craft knows both addresses and looks in Power-Whittle first, falling back to the old
+address while the new one is still empty. Your copy keeps updating, and its next update
+quietly records the new address. You never need to remove it and install it again.
 
 ## Your own gadgets
 
