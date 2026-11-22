@@ -201,6 +201,8 @@ impl CutCraftApp {
                     && machine.slots != changer.slots
                 {
                     machine.slots = changer.slots;
+                    // the checks made so far used the slots just changed
+                    self.forget_save_checks();
                     self.machines_changed(&format!(
                         "Tool database saved; {} loaded",
                         changer.machine
