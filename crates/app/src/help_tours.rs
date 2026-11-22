@@ -5276,14 +5276,8 @@ fn sample_border(app: &mut CutCraftApp) {
     let folder = crate::borders::folder(&root);
     let files = cut_craft_border_tile::files(&folder, "Classical Baroque");
     let _ = std::fs::create_dir_all(&folder);
-    let _ = std::fs::write(
-        &files.depth,
-        include_bytes!("../../help/pictures/generate_border/sample-depth.png"),
-    );
-    let _ = std::fs::write(
-        &files.picture,
-        include_bytes!("../../help/pictures/generate_border/sample.jpg"),
-    );
+    let _ = std::fs::write(&files.depth, include_bytes!("../samples/border-depth.png"));
+    let _ = std::fs::write(&files.picture, include_bytes!("../samples/border.jpg"));
     let recipe = cut_craft_border_tile::Recipe::new("classical_baroque", "16:9", 160.0, 90.0, 6.0);
     if let Ok(json) = serde_json::to_string_pretty(&recipe) {
         let _ = std::fs::write(&files.recipe, json);

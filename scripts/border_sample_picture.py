@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Draws the sample border Generate Border's help shows: one repeat of a carved moulding as a
 depth map (16-bit greys, white highest) and as a lit photo, the pair the Borders add-on
-saves, written to crates/help/pictures/generate_border/ (sample-depth.png, sample.jpg) with
-depth-and-photo.png, the two side by side for the help page.
+saves, written to crates/app/samples/ (border-depth.png, border.jpg: the tour's Library
+border), and depth-and-photo.png, the two side by side, to
+crates/help/pictures/generate_border/ for the help page.
 
-    python3 -I scripts/border_sample_picture.py [OUT_DIR]
+    python3 -I scripts/border_sample_picture.py
 
 Needs Pillow and NumPy. Made by hand, not by Google, so the help has no generated picture
 in it and runs offline.
 """
 
 import os
-import sys
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -61,12 +61,13 @@ def photo(d):
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "crates/help/pictures/generate_border"
+    samples, out = "crates/app/samples", "crates/help/pictures/generate_border"
+    os.makedirs(samples, exist_ok=True)
     os.makedirs(out, exist_ok=True)
     d = depth()
-    Image.fromarray((d * 65535).round().astype(np.uint16)).save(os.path.join(out, "sample-depth.png"))
+    Image.fromarray((d * 65535).round().astype(np.uint16)).save(os.path.join(samples, "border-depth.png"))
     rgb = (photo(d) * 255).round().astype(np.uint8)
-    Image.fromarray(rgb).save(os.path.join(out, "sample.jpg"), quality=85)
+    Image.fromarray(rgb).save(os.path.join(samples, "border.jpg"), quality=85)
     # the help page's pair: depth map and photo side by side, no words in the picture
     small = (W // 2, H // 2)
     grey = Image.fromarray((d * 255).round().astype(np.uint8)).convert("RGB").resize(small)
