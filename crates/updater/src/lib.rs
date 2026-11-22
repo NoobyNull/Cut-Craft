@@ -343,6 +343,56 @@ fn download(asset: &Asset, progress: &dyn Fn(u64)) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
 
+    /// A repository moved to another owner (`NoobyNull` to `Power-Whittle`) answers its old
+    /// address with a redirect; checks and downloads must follow it, or every add-on
+    /// installed before the move stops updating.
+    #[test]
+    fn checks_and_downloads_follow_a_moved_repository_s_redirect() {
+        use std::io::{BufRead as _, BufReader, Write as _};
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = server.local_addr().unwrap().port();
+        let serving = std::thread::spawn(move || {
+            for _ in 0..4 {
+                let (stream, _) = server.accept().unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                // the rest of the request, up to its blank line
+                let mut header = String::new();
+                while reader.read_line(&mut header).unwrap() > 2 {
+                    header.clear();
+                }
+                let reply = if line.contains("/old/") {
+                    let to = line
+                        .split_whitespace()
+                        .nth(1)
+                        .unwrap()
+                        .replace("/old/", "/new/");
+                    format!(
+                        "HTTP/1.1 301 Moved Permanently\r\nLocation: http://127.0.0.1:{port}{to}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nmoved"
+                        .to_owned()
+                };
+                (&stream).write_all(reply.as_bytes()).unwrap();
+            }
+        });
+        let base = format!("http://127.0.0.1:{port}");
+        assert_eq!(
+            get_text(&format!("{base}/old/releases/latest")).unwrap(),
+            "moved"
+        );
+        let asset = Asset {
+            name: "depth.zip".into(),
+            url: format!("{base}/old/depth.zip"),
+            size: 5,
+            digest: None,
+        };
+        assert_eq!(download(&asset, &|_| {}).unwrap(), b"moved");
+        serving.join().unwrap();
+    }
+
     fn release(assets: &[(&str, Option<&str>)]) -> Release {
         Release {
             tag: "v0.5.0".into(),

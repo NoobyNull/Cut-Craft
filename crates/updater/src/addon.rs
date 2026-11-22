@@ -45,7 +45,7 @@ pub const OFFICIAL: &[Official] = &[
         name: "Depth (Relief from Photo)",
         about: "Estimates how far away each part of a photo is, so Relief from Photo can \
                 carve it. About 100 MB.",
-        repo: "NoobyNull/CutCraft-Depth",
+        repo: "Power-Whittle/CutCraft-Depth",
     },
     Official {
         id: "borders",
@@ -58,7 +58,79 @@ pub const OFFICIAL: &[Official] = &[
 
 /// The repository every language pack is published on: each release carries one
 /// `language-<code>.zip` per language (and its signature), each installed on its own.
-pub const TRANSLATIONS: &str = "NoobyNull/CutCraft-Translations";
+pub const TRANSLATIONS: &str = "Power-Whittle/CutCraft-Translations";
+
+/// Repositories known by more than one address, because they moved from `NoobyNull` to the
+/// Power-Whittle organisation. Each list is one repository: an add-on installed from any of
+/// its addresses is the same add-on, so it keeps updating, and Cut Craft's own add-ons stay
+/// its own. The address in [`OFFICIAL`] or [`TRANSLATIONS`] (Power-Whittle) is preferred
+/// ([`current_address`]); the others are asked, in order, only while it has no release, so
+/// downloads work before and after the move ([`first_answer`]).
+pub const SAME_REPOSITORY: &[&[&str]] = &[
+    &["NoobyNull/CutCraft-Depth", "Power-Whittle/CutCraft-Depth"],
+    &[
+        "NoobyNull/CutCraft-Translations",
+        "Power-Whittle/CutCraft-Translations",
+    ],
+];
+
+/// The addresses `repo` is known by, itself included.
+fn addresses_of(repo: &Repo) -> Vec<Repo> {
+    let full = repo.to_string();
+    SAME_REPOSITORY
+        .iter()
+        .find(|group| group.iter().any(|a| a.eq_ignore_ascii_case(&full)))
+        .map_or_else(
+            || vec![repo.clone()],
+            |group| group.iter().filter_map(|a| Repo::parse(a).ok()).collect(),
+        )
+}
+
+/// Whether `a` and `b` are one repository: the same address (in any case), or two addresses
+/// of a repository that moved.
+pub fn same_home(a: &Repo, b: &Repo) -> bool {
+    let same = |a: &Repo, b: &Repo| {
+        a.owner.eq_ignore_ascii_case(&b.owner) && a.name.eq_ignore_ascii_case(&b.name)
+    };
+    addresses_of(a).iter().any(|x| same(x, b))
+}
+
+/// The address Cut Craft downloads `repo`'s add-ons from now: for a repository that moved,
+/// the one in [`OFFICIAL`] or [`TRANSLATIONS`]; any other is itself.
+pub fn current_address(repo: &Repo) -> Repo {
+    let now: Vec<&str> = OFFICIAL
+        .iter()
+        .map(|a| a.repo)
+        .chain([TRANSLATIONS])
+        .collect();
+    addresses_of(repo)
+        .into_iter()
+        .find(|a| now.iter().any(|n| n.eq_ignore_ascii_case(&a.to_string())))
+        .unwrap_or_else(|| repo.clone())
+}
+
+/// Asks `get` for `url` at `repo`'s preferred address, then at each of its other addresses
+/// while the answer is that there is no such release or repository, and gives back the
+/// address that answered with what it said. Any other failure (offline, too many checks)
+/// is said at once.
+fn first_answer(
+    repo: &Repo,
+    url: &dyn Fn(&Repo) -> String,
+    get: &dyn Fn(&str) -> Result<String, String>,
+) -> Result<(Repo, String), String> {
+    let preferred = current_address(repo);
+    let mut tries = vec![preferred.clone()];
+    tries.extend(addresses_of(repo).into_iter().filter(|a| *a != preferred));
+    let mut last = None;
+    for address in tries {
+        match get(&url(&address)) {
+            Ok(text) => return Ok((address, text)),
+            Err(e) if e.contains("no releases") => last = Some(e),
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last.unwrap_or_default())
+}
 
 /// The zip a language's pack is in, on [`TRANSLATIONS`]' releases.
 pub fn language_zip(code: &str) -> String {
@@ -81,7 +153,7 @@ pub fn languages_in(release: &Release) -> Vec<String> {
 /// Asks GitHub which languages [`TRANSLATIONS`]' newest release has packs for.
 pub fn languages_offered() -> Result<Vec<String>, String> {
     let repo = Repo::parse(TRANSLATIONS)?;
-    let json = crate::get_text(&repo.latest_url()).map_err(|e| {
+    let (_, json) = first_answer(&repo, &Repo::latest_url, &crate::get_text).map_err(|e| {
         if e.contains("no releases") {
             "No language packs are published yet.".to_owned()
         } else {
@@ -399,7 +471,10 @@ impl Offer {
 /// without blaming the person; for any other, it points at the likely typo.
 pub fn no_release(repo: &Repo) -> String {
     let full = repo.to_string();
-    match OFFICIAL.iter().find(|a| a.repo.eq_ignore_ascii_case(&full)) {
+    let official = OFFICIAL
+        .iter()
+        .find(|a| Repo::parse(a.repo).is_ok_and(|r| same_home(&r, repo)));
+    match official {
         Some(official) => format!(
             "The {} add-on is not available to download yet. Nothing is wrong on your \
              computer: try again after the next Cut Craft update.",
@@ -414,20 +489,22 @@ pub fn no_release(repo: &Repo) -> String {
 
 /// Asks GitHub for `repo`'s newest release, as an add-on for this computer, or as the zip
 /// called `named` in it.
+/// One of Cut Craft's own add-ons that moved is asked for at its preferred address first.
 pub fn find(repo: &Repo, named: Option<&str>) -> Result<Offer, String> {
-    let json = crate::get_text(&repo.latest_url()).map_err(|e| {
+    let (from, json) = first_answer(repo, &Repo::latest_url, &crate::get_text).map_err(|e| {
         if e.contains("no releases") {
             no_release(repo)
         } else {
             e
         }
     })?;
-    Offer::pick(repo.clone(), Release::parse(&json)?, &platform(), named)
+    Offer::pick(from, Release::parse(&json)?, &platform(), named)
 }
 
 /// The newest release of the installed add-on `id`, if it is newer.
 pub fn update_for(addons: &Path, id: &str) -> Result<Option<Offer>, String> {
     let record = installed(addons, id).ok_or("that add-on is not installed")?;
+    // from where Cut Craft prefers it now, so one installed before a move moves too
     let offer = find(&record.repo, record.zip.as_deref())?;
     Ok(offer.is_newer_than(&record).then_some(offer))
 }
@@ -585,7 +662,8 @@ pub fn fetch_optional(
     progress: &dyn Fn(u64, u64),
 ) -> Result<(), String> {
     let record = installed(addons, id).ok_or("that add-on is not installed")?;
-    let json = crate::get_text(&record.repo.tag_url(&record.tag))?;
+    let tag = |r: &Repo| r.tag_url(&record.tag);
+    let (_, json) = first_answer(&record.repo, &tag, &crate::get_text)?;
     fetch_optional_with(
         addons,
         id,
@@ -639,13 +717,11 @@ fn fetch_optional_with(
 
 /// Whether `repo`'s add-on may go in the folder its manifest names: never in place of one
 /// of Cut Craft's own add-ons (which come only from their own repositories), nor of an
-/// add-on installed from another repository. An update from the same repository may.
+/// add-on installed from another repository. An update from the same repository may, at
+/// any of its addresses ([`same_home`]).
 fn owns_its_id(addons: &Path, manifest: &Manifest, repo: &Repo) -> Result<(), String> {
-    let same = |a: &Repo, b: &Repo| {
-        a.owner.eq_ignore_ascii_case(&b.owner) && a.name.eq_ignore_ascii_case(&b.name)
-    };
     if let Some(own) = OFFICIAL.iter().find(|o| o.id == manifest.id)
-        && Repo::parse(own.repo).is_ok_and(|r| !same(&r, repo))
+        && Repo::parse(own.repo).is_ok_and(|r| !same_home(&r, repo))
     {
         return Err(format!(
             "Not installed: {repo}'s add-on uses the name \"{}\", which belongs to Cut \
@@ -655,7 +731,7 @@ fn owns_its_id(addons: &Path, manifest: &Manifest, repo: &Repo) -> Result<(), St
         ));
     }
     if let Some(record) = installed(addons, &manifest.id)
-        && !same(&record.repo, repo)
+        && !same_home(&record.repo, repo)
     {
         return Err(format!(
             "Not installed: {repo}'s add-on uses the name \"{}\", the same as the add-on \
@@ -1199,7 +1275,7 @@ mod tests {
         let e = depth_release(false)
             .install_from(fork.clone(), &addons, &platform())
             .unwrap_err();
-        assert!(e.contains("NoobyNull/CutCraft-Depth"), "{e}");
+        assert!(e.contains("Power-Whittle/CutCraft-Depth"), "{e}");
         assert!(installed(&addons, "depth").is_none());
         // installed from its repository, it is kept: the fork does not replace it
         depth_release(true).install(&addons, &platform()).unwrap();
@@ -1210,6 +1286,160 @@ mod tests {
         assert_eq!(installed(&addons, "depth").unwrap().repo, repo());
         // the same repository again is an update, as before
         depth_release(true).install(&addons, &platform()).unwrap();
+        fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn an_official_add_on_answers_to_its_old_and_new_address() {
+        let r = |s: &str| Repo::parse(s).unwrap();
+        for name in ["CutCraft-Depth", "CutCraft-Translations"] {
+            let (old, new) = (
+                r(&format!("NoobyNull/{name}")),
+                r(&format!("Power-Whittle/{name}")),
+            );
+            assert!(same_home(&old, &new), "{name}");
+            assert!(same_home(&new, &old), "{name}");
+            assert!(same_home(
+                &r(&format!("noobynull/{}", name.to_lowercase())),
+                &new
+            ));
+            // both lead to the address Cut Craft downloads it from now
+            assert_eq!(current_address(&old), current_address(&new), "{name}");
+        }
+        assert_eq!(
+            current_address(&repo()).to_string(),
+            "Power-Whittle/CutCraft-Depth"
+        );
+        assert_eq!(
+            current_address(&r("Power-Whittle/CutCraft-Translations")).to_string(),
+            TRANSLATIONS
+        );
+        // anyone else's repository is only itself
+        let fork = r("someone/CutCraft-Depth");
+        assert!(!same_home(&fork, &repo()));
+        assert!(!same_home(&r("Power-Whittle/CutCraft-Depth-fork"), &repo()));
+        assert_eq!(current_address(&fork), fork);
+    }
+
+    #[test]
+    fn a_moved_add_on_is_fetched_from_power_whittle_first_and_noobynull_until_it_moves() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        let old = Repo::parse("NoobyNull/CutCraft-Depth").unwrap();
+        let new = Repo::parse("Power-Whittle/CutCraft-Depth").unwrap();
+        // before the move: Power-Whittle has nothing yet, so NoobyNull answers
+        let before = |url: &str| {
+            asked.borrow_mut().push(url.to_owned());
+            if url.contains("/NoobyNull/") {
+                Ok("old".to_owned())
+            } else {
+                Err("GitHub has no releases of Cut Craft yet".to_owned())
+            }
+        };
+        assert_eq!(
+            first_answer(&old, &Repo::latest_url, &before).unwrap(),
+            (old.clone(), "old".to_owned())
+        );
+        assert!(
+            asked.borrow()[0].contains("/Power-Whittle/"),
+            "{:?}",
+            asked.borrow()
+        );
+        // after it: Power-Whittle answers, and NoobyNull is never asked
+        asked.borrow_mut().clear();
+        let after = |url: &str| {
+            asked.borrow_mut().push(url.to_owned());
+            Ok("new".to_owned())
+        };
+        assert_eq!(
+            first_answer(&old, &Repo::latest_url, &after).unwrap(),
+            (new.clone(), "new".to_owned())
+        );
+        assert_eq!(asked.borrow().len(), 1);
+        // being offline is said at once, not hidden behind the other address
+        asked.borrow_mut().clear();
+        let offline = |url: &str| -> Result<String, String> {
+            asked.borrow_mut().push(url.to_owned());
+            Err("Could not reach GitHub".to_owned())
+        };
+        assert!(first_answer(&new, &Repo::latest_url, &offline).is_err());
+        assert_eq!(asked.borrow().len(), 1);
+        // anyone else's repository is asked only at its own address
+        asked.borrow_mut().clear();
+        let fork = Repo::parse("someone/fork").unwrap();
+        let none = |url: &str| -> Result<String, String> {
+            asked.borrow_mut().push(url.to_owned());
+            Err("GitHub has no releases of Cut Craft yet".to_owned())
+        };
+        assert!(first_answer(&fork, &Repo::latest_url, &none).is_err());
+        assert_eq!(asked.borrow().len(), 1);
+    }
+
+    #[test]
+    fn every_moved_repository_has_one_address_cut_craft_uses_now() {
+        let now: Vec<&str> = OFFICIAL
+            .iter()
+            .map(|a| a.repo)
+            .chain([TRANSLATIONS])
+            .collect();
+        for group in SAME_REPOSITORY {
+            let current = group
+                .iter()
+                .filter(|a| now.iter().any(|n| n.eq_ignore_ascii_case(a)))
+                .count();
+            assert_eq!(current, 1, "{group:?}");
+            for a in *group {
+                assert!(Repo::parse(a).is_ok(), "{a}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_add_on_installed_from_the_old_address_updates_from_the_new_one() {
+        let new = Repo::parse("Power-Whittle/CutCraft-Depth").unwrap();
+        // installed before the move, from NoobyNull: the update comes from Power-Whittle
+        let addons = scratch("moved");
+        depth_release(true).install(&addons, &platform()).unwrap();
+        depth_release(true)
+            .install_from(new.clone(), &addons, &platform())
+            .unwrap();
+        // and the add-on now says where it came from: the new address
+        assert_eq!(installed(&addons, "depth").unwrap().repo, new);
+        // a fresh install from the new address is Cut Craft's own add-on too
+        fs::remove_dir_all(&addons).unwrap();
+        depth_release(true)
+            .install_from(new.clone(), &addons, &platform())
+            .unwrap();
+        // and a copy from the old address is still the same add-on
+        depth_release(true).install(&addons, &platform()).unwrap();
+        fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn a_language_pack_installed_from_the_old_address_updates_from_the_new_one() {
+        let addons = scratch("moved-language");
+        let old = Repo::parse("NoobyNull/CutCraft-Translations").unwrap();
+        fs::create_dir_all(addons.join("language-ru")).unwrap();
+        let record = Record {
+            repo: old,
+            tag: "v1.0.2".into(),
+            version: "1.0.2".into(),
+            signed: true,
+            zip: Some(language_zip("ru")),
+        };
+        fs::write(
+            addons.join("language-ru").join(RECORD),
+            serde_json::to_string(&record).unwrap(),
+        )
+        .unwrap();
+        let manifest = Manifest::parse(
+            "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\nlanguage = \"ru\"\nversion = \"1.0.3\"\n",
+        )
+        .unwrap();
+        let new = Repo::parse("Power-Whittle/CutCraft-Translations").unwrap();
+        owns_its_id(&addons, &manifest, &new).unwrap();
+        // someone else's repository still may not replace it
+        let other = Repo::parse("someone/CutCraft-Translations").unwrap();
+        assert!(owns_its_id(&addons, &manifest, &other).is_err());
         fs::remove_dir_all(addons).unwrap();
     }
 
