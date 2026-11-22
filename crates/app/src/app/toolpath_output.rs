@@ -378,6 +378,8 @@ impl CutCraftApp {
         let Some(found) = self.save_checks(&plan, form.changes).map(<[_]>::to_vec) else {
             self.status.set_message(if self.checking() {
                 "Still checking the toolpaths before cutting: save again once the checks finish"
+            } else if self.busy.is_some() {
+                "The toolpaths are checked before cutting once the work running now is done: save again then"
             } else {
                 "The checks before cutting were cancelled: press Check Again, then save"
             });
@@ -395,7 +397,9 @@ impl CutCraftApp {
             .any(|f| f.severity == cut_craft_core::preflight::Severity::MustAsk);
         let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
         let ask = must_ask || !ticked;
-        if !problems.is_empty() && ask && !accepted {
+        // Save Anyway answered for these problems, every one of them shown then
+        let answered = problems.iter().all(|p| accepted.contains(p));
+        if !problems.is_empty() && ask && !answered {
             // asked over the window: the answer saves (or sends) again
             self.ask_save_anyway(form, problems, sending);
             return None;
@@ -559,6 +563,12 @@ impl CutCraftApp {
             found: None,
         };
         if !self.save_checks.iter().any(|c| c.same(&key)) {
+            // one job at a time: other work (or the other place's checks, as the Analyse
+            // tab's and Save Toolpaths' can both ask in one frame) is not waited on here,
+            // on the window's thread; these start when asked again once it is done
+            if self.busy.is_some() {
+                return None;
+            }
             // the Analyse tab's and Save Toolpaths' can both be showing: keep one for each
             if self.save_checks.len() >= super::KEPT_CHECKS {
                 self.save_checks.remove(0);

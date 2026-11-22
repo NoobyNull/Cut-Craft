@@ -453,16 +453,19 @@ impl CutCraftApp {
     /// Once a frame: unsaved work copied to the recovery file as often as Options says,
     /// on a thread of its own so a big job does not stall the window.
     pub(super) fn autosave(&mut self, ctx: &egui::Context) {
-        if let Some(writing) = self.autosave.take() {
+        if let Some((revision, writing)) = self.autosave.take() {
             if writing.is_finished() {
                 let outcome = writing
                     .join()
                     .unwrap_or_else(|_| Err("the recovery copy could not be written".into()));
-                if let Err(e) = outcome {
-                    self.status.set_message(&e);
+                match outcome {
+                    // kept: no copy again until something changes
+                    Ok(()) => self.autosaved.0 = revision,
+                    // tried again once the interval is up
+                    Err(e) => self.status.set_message(&e),
                 }
             } else {
-                self.autosave = Some(writing);
+                self.autosave = Some((revision, writing));
             }
         }
         let now = ctx.input(|i| i.time);
@@ -474,18 +477,20 @@ impl CutCraftApp {
             && self.autosave.is_none()
             && let Some(path) = self.recovery_path.clone()
         {
-            self.autosaved = (self.history.revision(), now);
+            // the time of the try spaces out the next; the revision counts once written
+            self.autosaved.1 = now;
             let doc = self.doc.clone();
-            self.autosave = Some(std::thread::spawn(move || {
+            let writing = std::thread::spawn(move || {
                 cut_craft_core::file::write_atomic(&path, &cut_craft_core::file::save_job(&doc))
                     .map_err(|e| format!("could not keep a recovery copy: {e}"))
-            }));
+            });
+            self.autosave = Some((self.history.revision(), writing));
         }
     }
 
     /// The work is saved or let go on purpose: nothing is left to recover.
     pub(super) fn clear_recovery(&mut self) {
-        if let Some(writing) = self.autosave.take() {
+        if let Some((_, writing)) = self.autosave.take() {
             let _ = writing.join();
         }
         if let Some(path) = &self.recovery_path {
@@ -590,6 +595,8 @@ impl CutCraftApp {
     /// Back to nothing: no job, no form, no preview.
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
+        // a form kept behind a placing tool was the last job's
+        self.form_behind = None;
         self.picked_constraint = None;
         self.picked_outline = None;
         self.job_epoch += 1;
@@ -619,7 +626,7 @@ impl CutCraftApp {
         self.save_anyway = None;
         self.save_after = None;
         self.form_back = None;
-        self.checks_accepted = false;
+        self.checks_accepted.clear();
         self.clear_recovery();
     }
 

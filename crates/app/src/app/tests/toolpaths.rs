@@ -379,6 +379,23 @@ fn a_texture_toolpaths_texture_saves_to_a_file_and_loads_into_another_form() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+/// Load Texture replaces the texture's own settings; what the form holds besides them, such as
+/// its Vector Selector, stays.
+#[test]
+fn load_texture_keeps_the_forms_vector_selector() {
+    let dir = fresh_dir("texture-selector");
+    let path = dir.join("scallops.vtexture");
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "texture_toolpath");
+    h.app.save_texture(&path).unwrap();
+    let selector = serde_json::json!({ "open": false, "closed": true });
+    h.app.form.as_mut().unwrap().params["selector"] = selector.clone();
+    h.app.load_texture(&path).unwrap();
+    let form = h.app.form.as_ref().unwrap();
+    std::fs::remove_dir_all(dir).unwrap();
+    assert_eq!(form.params["selector"], selector);
+}
+
 #[test]
 fn a_profile_never_cuts_a_selected_construction_line() {
     let mut h = Harness::new();

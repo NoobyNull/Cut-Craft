@@ -477,7 +477,7 @@ impl CutCraftApp {
         }
         if let Some(p) = apply {
             // the last frame's step of this drag taken back first, so the drag is one undo
-            if dragged == Some(self.history.undo_depth()) {
+            if dragged == Some(self.history.revision()) {
                 self.history.undo(&mut self.doc);
             }
             let before = self.history.undo_depth();
@@ -485,9 +485,9 @@ impl CutCraftApp {
             if let Err(e) = self.apply("component_properties", &params) {
                 self.status.set_message(&e);
             }
-            let depth = self.history.undo_depth();
-            if let (true, Some(s)) = (pressed && depth > before, self.settings_3d.as_mut()) {
-                s.dragged = Some(depth);
+            let (made, revision) = (self.history.undo_depth() > before, self.history.revision());
+            if let (true, Some(s)) = (pressed && made, self.settings_3d.as_mut()) {
+                s.dragged = Some(revision);
             }
         }
     }

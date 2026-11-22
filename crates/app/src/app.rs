@@ -447,9 +447,9 @@ struct Settings3d {
     component: EntityId,
     params: cmd_component_properties::Params,
     dirty: bool,
-    /// While a value is dragged, the undo depth after its last step: the next step takes it
-    /// back first.
-    dragged: Option<usize>,
+    /// While a value is dragged, the history's revision after its last step: the next step
+    /// takes it back first, if nothing has changed the history since.
+    dragged: Option<u64>,
     /// Where it opened on screen.
     at: egui::Pos2,
     /// Its combine-mode radios, where they were drawn last frame.
@@ -540,9 +540,10 @@ struct OpenForm {
     /// has been done or picked since, a change of settings takes them back and makes them
     /// again.
     remade: Option<(u64, cut_craft_core::selection::Selection, Value)>,
-    /// While a value is dragged, the undo depth after its last step and the shape and
-    /// settings from before that step: the next step takes it back first.
-    dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
+    /// While a value is dragged, the history's revision after its last step and the shape
+    /// and settings from before that step: the next step takes it back first, if nothing
+    /// (an Undo, another edit) has changed the history since.
+    dragged: Option<(u64, Option<EntityId>, Option<Value>)>,
     /// How many changes could be undone when it opened: Cancel undoes back to there, then
     /// makes again the changes in `list_steps`.
     undo_from: usize,
@@ -746,8 +747,9 @@ struct CutCraftApp {
     save_after: Option<gcode_view::SaveAfter>,
     /// Save Toolpaths' form, opened again once its save has asked all it asks.
     form_back: Option<SaveForm>,
-    /// Save Anyway was answered: the next save goes on despite what the checks found.
-    checks_accepted: bool,
+    /// The problems Save Anyway was answered for: the next save goes on despite them, and
+    /// asks again if the checks find any not among them. Empty when not answered.
+    checks_accepted: Vec<String>,
     /// The warnings of the checks before cutting ticked as read, by what they say: Save
     /// and Send to Machine wait until each one found is ticked.
     acknowledged: std::collections::BTreeSet<String>,
@@ -1075,10 +1077,11 @@ struct CutCraftApp {
     /// Held while this run lasts: marks `recovery_path` as this window's, so another window
     /// does not take it for a crash's.
     recovery_lock: Option<std::fs::File>,
-    /// The history revision and input time (seconds) of the last recovery copy.
+    /// The history revision of the last recovery copy written, and the input time (seconds)
+    /// of the last try at one.
     autosaved: (u64, f64),
-    /// A recovery copy being written.
-    autosave: Option<std::thread::JoinHandle<Result<(), String>>>,
+    /// A recovery copy being written, and the history revision it holds.
+    autosave: Option<(u64, std::thread::JoinHandle<Result<(), String>>)>,
     /// Window title last sent to the viewport.
     title: String,
     /// Whether the window opened with the desktop's title bar. A Mac keeps the window it opened

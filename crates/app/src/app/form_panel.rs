@@ -186,6 +186,12 @@ impl CutCraftApp {
     fn import_buttons(&mut self, ui: &mut egui::Ui) {
         let Some(open) = &self.form else { return };
         let page = open.page;
+        // only a model that was placed can be kept: after a failed placement the form stays,
+        // saying what went wrong, for new settings or Cancel
+        let placed = open.error.is_none()
+            && open
+                .drawn
+                .is_some_and(|id| self.doc.components.contains_key(&id));
         let (mut import, mut cancel) = (false, false);
         ui.horizontal(|ui| {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -194,14 +200,15 @@ impl CutCraftApp {
                     .on_hover_hint(tr!("import-model-cancel.tooltip"))
                     .clicked();
                 import = ui
-                    .button(tr!("import-model-import"))
+                    .add_enabled(placed, egui::Button::new(tr!("import-model-import")))
                     .on_hover_hint(tr!("import-model-import.tooltip"))
+                    .on_disabled_hover_text(tr!("import-model-import.waiting"))
                     .clicked();
             });
         });
         if cancel {
             self.cancel_form();
-        } else if import {
+        } else if import && placed {
             self.form = None;
             self.pages.done_with(page);
             self.status.set_message("Model imported");
