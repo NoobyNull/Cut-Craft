@@ -1,10 +1,12 @@
 ---
 reviewed: 2026-11-22
-see-also: node_edit, insert_point, span_to_bezier
+see-also: node_edit, insert_point, span_to_bezier, move_handle
 ---
 
-**Smooth Point** makes the node you right-click smooth: its two spans become curves whose handles
-lie on one line there, so the outline flows through it with no corner. It is on node editing's right-click menu.
+**Smooth Point** (node editing's right-click menu) turns the two sides meeting at a node into
+curves whose round handles lie on one straight line through it. Drag either handle in
+[Node Edit](help:node_edit) to reshape the bend: the other turns with it, so the node stays
+smooth ([Move Handle](help:move_handle)).
 
 ## Steps
 

@@ -1,2 +1,4 @@
-- The 3D view's origin arrows now sit on the bed when Job Setup's Z Zero is Machine Bed (on the axis for rotary jobs)
-- The arrows stay in the right place while a 3D model is being imported
+- Saved Indexed and Sides, then details rotary files now cut exactly what the preview shows (save 0.7.0 to 0.7.2 files again)
+- A rotary job's 3D model is shown and cut as it really is; Scale to Fit scales once
+- X red, Y green, Z blue everywhere, with both-way arrows and reset buttons on Import 3D Model
+- The toolpath preview draws in tiles, at the detail the screen shows
