@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-22
-see-also: pocket_toolpath, profile_toolpath, stepover, collisions, check_tool_numbers, check_makers_figures
+see-also: first_time_setup, pocket_toolpath, profile_toolpath, stepover, collisions, check_tool_numbers, check_makers_figures
 ---
 
 ## Steps

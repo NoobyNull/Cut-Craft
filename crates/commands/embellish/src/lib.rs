@@ -1090,4 +1090,5 @@ mod tests;
 /// cmd-embellish pictures --run-ignored only` (and `EMBELLISH_SHAPE`, a JSON list of
 /// `[x, y]`, for a drawn shape).
 #[cfg(test)]
+#[path = "tests/pictures.rs"]
 mod pictures;

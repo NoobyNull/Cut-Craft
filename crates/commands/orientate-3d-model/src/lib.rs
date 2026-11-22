@@ -1059,6 +1059,7 @@ fn bounds(tris: &[[DVec3; 3]]) -> Option<(DVec3, DVec3)> {
 mod tests;
 
 #[cfg(test)]
+#[path = "tests/rotary.rs"]
 mod rotary;
 
 #[cfg(test)]
