@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 see-also: find_tool, tips, getting_started, keyboard_shortcuts
 icon: view/zoom_selected.png
 ---
