@@ -234,6 +234,13 @@ impl SurfaceGpu {
     }
 }
 
+/// A rotary job's full 3D models as the 3D view draws them, kept by the change and the
+/// import (its faces' address) they show.
+type TurnedModels = (
+    (u64, Option<usize>),
+    std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
+);
+
 /// The GPU's surface (and, with `solid`, walls and bottom) of `surface`.
 fn level_of(
     surface: &Material,
@@ -1458,6 +1465,9 @@ struct CutCraftApp {
     /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
     /// made once a change, not every frame.
     rough_3d: Option<(RoughKey, Material)>,
+    /// A rotary job's full 3D models as the view draws them round the axis, kept by the
+    /// change and the import they show.
+    turned_3d: Option<TurnedModels>,
     /// What the collet nut, spindle or shank hit in the last preview, by toolpath: the
     /// toolpath list marks them ⚠ in red and the 3D view shows the stock in the way red.
     collisions: std::collections::BTreeMap<EntityId, Collided>,

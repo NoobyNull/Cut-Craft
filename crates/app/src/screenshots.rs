@@ -45,6 +45,10 @@ const SCENES: &[Scene] = &[
     ("ribbon-layout", ribbon),
     ("ribbon-layout-dark", |_, _| {}),
     ("rotary-import", rotary_import),
+    // Help: Orientate 3D Model ▸ Changing the model's size
+    ("rotary-import-scale-to-fit", |_, _| {}),
+    // Help: Orientate 3D Model ▸ On a rotary job (after Import, as it really is)
+    ("rotary-imported-as-it-is", |app, _| app.form = None),
     // Help: Toolpaths ▸ Previewing a rotary job
     ("rotary-turning-preview", rotary_turning),
     // Help: Toolpaths ▸ Looking at the G-code
@@ -837,6 +841,21 @@ fn rotary_import(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.doc.job =
         cut_craft_core::document::Job::rotary(200.0, 90.0, cut_craft_core::document::Along::X);
     import(app, ctx);
+    // Change size ticked and Scale to Fit Material pressed, as a person would
+    if let Some(form) = app.form.as_mut() {
+        form.params["size"]["change_size"] = serde_json::Value::Bool(true);
+        let doc = cut_craft_core::document::Document {
+            job: app.doc.job,
+            ..cut_craft_core::document::Document::default()
+        };
+        if let Ok(fits) = serde_json::from_value(form.params.clone())
+            .map_err(|e| e.to_string())
+            .and_then(|p| cmd_orientate_3d_model::fit_scale(&doc, &p).map_err(|e| e.to_string()))
+        {
+            form.params["size"]["scale"] = serde_json::json!([fits, fits, fits]);
+        }
+        form.dirty = true;
+    }
     app.framing = crate::view3d::Framing::default();
 }
 

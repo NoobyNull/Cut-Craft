@@ -19,7 +19,7 @@
 //! material and of the chuck and tailstock: where they would not fit it leaves the material,
 //! and says so in red.
 
-use cut_craft_core::component::{Combine, model, placed_model};
+use cut_craft_core::component::{Combine, placed_model};
 use cut_craft_core::document::{Along, Document};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
@@ -318,7 +318,7 @@ struct Solid {
     /// The bit grown by the allowance all round.
     cutter: Cutter,
     allowance: f64,
-    /// How far out the model was moved to sit in the material where Material Setup puts it.
+    /// How far out the models are moved from where they really are: none.
     out: f64,
     /// Where the material starts along the axis in the job's X or Y: the models are kept
     /// along the job as it is, the toolpath works from the material's start.
@@ -948,50 +948,38 @@ const CELLS: usize = 120_000_000;
 /// How many cells of material a ring must find to be worth cutting for detail.
 const DETAIL: usize = 3;
 
-/// The model in two parts: the rest as heights (`None` when there is none), and full 3D
-/// models cut round as they really are, each moved as the whole model was (`surface`) to
-/// sit in the material.
+/// The model in two parts: the rest as heights placed in the material where Material
+/// Setup puts them (`None` when there is none), and the full 3D models cut round exactly
+/// where they really are in space: Material Setup's model position is a flat job's, and
+/// never moves them.
 fn parts(
     doc: &Document,
     tool: &Tool,
     allowance: f64,
-    radius: f64,
-    surface: Material,
-) -> (Option<Material>, Option<Solid>) {
-    // full 3D models are cut round as they really are; the rest from their heights, moved
-    // as the whole model was to sit in the material
-    let shift = {
-        let raw = model(doc, surface.columns.max(surface.rows));
-        let top = |m: &Material| m.heights.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        top(&surface) - top(&raw)
-    };
+) -> Result<(Option<Material>, Option<Solid>), CommandError> {
     let corner = doc.job.area().min;
     let along_from = match doc.job.rotary.map(|r| r.along) {
         Some(Along::Y) => corner.y,
         _ => corner.x,
     };
-    let solid = Solid::of(doc, tool, allowance, radius + shift, along_from);
-    let rest = if solid.is_some() {
-        let rest = Document {
-            components: doc
-                .components
-                .iter()
-                .filter(|(_, k)| !takes_solid(k))
-                .map(|(id, k)| (*id, k.clone()))
-                .collect(),
-            ..doc.clone()
-        };
-        (!rest.components.is_empty()).then(|| {
-            let mut m = model(&rest, surface.columns.max(surface.rows));
-            for h in &mut m.heights {
-                *h += shift;
-            }
-            m
-        })
-    } else {
-        Some(surface)
+    let Some(solid) = Solid::of(doc, tool, allowance, 0.0, along_from) else {
+        return Ok((Some(placed_model(doc, tool)?), None));
     };
-    (rest, solid)
+    let rest = Document {
+        components: doc
+            .components
+            .iter()
+            .filter(|(_, k)| !takes_solid(k))
+            .map(|(id, k)| (*id, k.clone()))
+            .collect(),
+        ..doc.clone()
+    };
+    let rest = if rest.components.is_empty() {
+        None
+    } else {
+        Some(placed_model(&rest, tool)?)
+    };
+    Ok((rest, Some(solid)))
 }
 
 /// How far into the material the bit must go for a point to count as cutting, mm.
@@ -1289,9 +1277,12 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
     };
     let radius = rotary.diameter / 2.0;
     progress::stage("Placing the model");
-    let surface = placed_model(doc, tool)?;
-    let cell = (tool.diameter / 16.0).max(surface.cell);
-    let (rest, solid) = parts(doc, tool, p.allowance, radius, surface);
+    let (rest, solid) = parts(doc, tool, p.allowance)?;
+    // as fine as the model's own cells (as placing the model makes them), or the bit's
+    let cell = (tool.diameter / 16.0).max(
+        rest.as_ref()
+            .map_or((tool.diameter / 20.0).max(doc.job.model_cell()), |m| m.cell),
+    );
     let turned = Turned::of(
         rest.as_ref(),
         radius,
@@ -1941,6 +1932,39 @@ mod tests {
                 on += usize::from(rests > 1.0);
             }
             assert!(on > 100, "{strategy:?}: the box is cut round ({on})");
+        }
+    }
+
+    #[test]
+    fn a_full_model_is_cut_where_it_really_is_whatever_material_setup_says() {
+        // the box's unrolled heights short of the surface, and Material Setup's flat-job
+        // gap: neither moves the real model, which is cut exactly where it sits in space
+        for (heights, gap) in [(12.0, 0.0), (20.0, 3.0), (12.0, 4.0)] {
+            let mut doc = boxed();
+            for k in doc.components.values_mut() {
+                k.heights.fill(heights);
+            }
+            doc.job.model_position.gap = gap;
+            let mesh = Mesh::new(doc.components.values().next().unwrap().solid_triangles());
+            let p = Params {
+                tool: ball(6.0),
+                ..Params::default()
+            };
+            let cutter = Cutter::new(&p.tool);
+            let toolpath = machine(&doc, &p).unwrap();
+            let mut on = 0;
+            for (along, turn, height, across) in poses(&toolpath) {
+                let rests = mesh
+                    .drop_every(&cutter, along, across, turn)
+                    .unwrap_or(0.0)
+                    .clamp(0.0, 20.0);
+                assert!(
+                    (height - rests).abs() < 1e-6,
+                    "heights {heights}, gap {gap}: at {along}, {turn}: {height} against {rests}"
+                );
+                on += usize::from(rests > 1.0);
+            }
+            assert!(on > 100, "the box is cut round ({on})");
         }
     }
 
