@@ -268,3 +268,16 @@ See [content-packs.md](content-packs.md) (PR #200). A pack's zip carries `addon.
 the same window into `addons/<id>/`. The Library lists `addons/*/` folders whose kind is
 `content`, checks each with `Pack::parse` and `Pack::verify`, and shows any that fail as
 broken.
+
+## Moving an add-on's repository
+
+An installed add-on remembers the repository it came from (`installed.json`), and Cut Craft
+trusts its own add-ons only from their own repositories. Before an official repository moves
+(as Depth and the language packs are moving from NoobyNull to Power-Whittle), list both
+addresses in `SAME_REPOSITORY` in `crates/updater/src/addon.rs` and ship that release
+first. Every Cut Craft with the list then treats both addresses as one repository, so
+copies installed from either keep updating. Then transfer the repository on GitHub: older
+versions reach it through GitHub's redirect, which checks and downloads follow. Finally,
+change the address in `OFFICIAL` (or `TRANSLATIONS`) to the new one; each installed copy
+records the new address at its next update. Never make a new repository with the old name,
+because that ends GitHub's redirect.

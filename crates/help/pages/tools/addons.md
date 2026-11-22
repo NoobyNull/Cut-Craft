@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 see-also: relief_from_photo, open_gadgets_folder, settings, language
 ---
 
@@ -74,6 +74,11 @@ add-on from someone else's GitHub repository. It still installs and works, but:
 Open **Add-ons...** again: an add-on with a newer release shows an **Update** button.
 **Remove** asks first, because you would have to download it again to use it. A removed
 add-on leaves My Gadgets at once; a removed gadget leaves the menu when Cut Craft restarts.
+
+When one of Cut Craft's own add-ons moves to a new home on GitHub (the Depth add-on and the
+language packs are moving to the Power-Whittle organisation), you don't need to do anything.
+Cut Craft knows both addresses: your copy keeps updating, and its next update quietly
+records the new address. You never need to remove it and install it again.
 
 ## Your own gadgets
 
