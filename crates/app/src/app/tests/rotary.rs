@@ -79,9 +79,28 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     // the placing is on the same page, Center model left to the alignment buttons
     assert!(h.scroll_to(over, "Depth Below Top").is_some());
     assert!(h.text_at("Center model").is_none());
+    // Scale to Fit Material sits in Model Size, just under the Change size tick that
+    // unlocks it, before the next section starts
     let fit = h.scroll_to(over, "Scale to Fit Material").unwrap();
-    let undercuts = h.text_at("Update Undercuts").unwrap();
-    assert!(fit.y > undercuts.y, "the last choice on the form");
+    let tick = h.text_at("Change size").unwrap();
+    let next = h.text_at("Position relative to Modeling Plane").unwrap();
+    assert!(
+        tick.y < fit.y && fit.y < next.y,
+        "beside Change size: {tick:?} {fit:?} {next:?}"
+    );
+    // greyed while the size is locked: a click there leaves the size alone
+    let scale = |h: &Harness| h.app.form.as_ref().unwrap().params["size"]["scale"].clone();
+    let before = scale(&h);
+    h.click(fit, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(scale(&h), before, "locked until Change size is ticked");
+    // ticked, the same button scales the model to the material once
+    h.app.form.as_mut().unwrap().params["size"]["change_size"] = Value::Bool(true);
+    h.frame(vec![]);
+    let fit = h.text_at("Scale to Fit Material").unwrap();
+    h.click(fit, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_ne!(scale(&h), before, "scaled to fit the material");
     for label in ["Imported model type", "Offered"] {
         assert_eq!(h.text_at(label), None, "{label} is not shown");
     }

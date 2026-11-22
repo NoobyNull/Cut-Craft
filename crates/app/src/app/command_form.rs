@@ -101,7 +101,10 @@ impl CutCraftApp {
             }
         };
         let stock = form_stock(&self.doc, &open.params, units, bed(&self.machines));
+        // Scale to Fit Material is pressed inside Model Size, and worked out once it is drawn
+        let fit_asked = std::cell::Cell::new(false);
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
+            fit_asked.set(fit_asked.get() | scale_to_fit_button(ui, group, params));
             super::tabs::group_end(ui, group, params, stock)
                 | super::placement::section_end(ui, group, params, room)
                 | super::placement::reset_end(ui, group, params)
@@ -119,6 +122,9 @@ impl CutCraftApp {
         // Trace Bitmap's settings are in its trace window, beside the preview
         if open.id != "trace_bitmap" {
             open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
+            if fit_asked.get() {
+                open.dirty |= scale_to_fit(open, &self.doc.job);
+            }
         }
         open.dirty |= listed.get();
         self.form_extras(ui, form_id);
@@ -680,33 +686,37 @@ pub(super) fn show_form(
     // what the pointer was on last frame; the fields note it again this frame
     form::forget_help(ui.ctx());
     let changed = form::show(ui, &open.fields, &mut open.params, look);
-    changed
-        | align_in_material(ui, open, job, icon)
-        | update_undercuts(ui, open)
-        | scale_to_fit(ui, open, job)
+    changed | align_in_material(ui, open, job, icon) | update_undercuts(ui, open)
 }
 
-/// Import 3D Model's Scale to Fit Material, the form's last choice: the model scaled once
-/// to be as big as the material allows, turned as it is now, and kept at that scale while
-/// it is turned after. Greyed until Change size is ticked, so the size never changes
-/// unseen; true when clicked.
-pub(super) fn scale_to_fit(
-    ui: &mut egui::Ui,
-    open: &mut OpenForm,
-    job: &cut_craft_core::document::Job,
-) -> bool {
-    if open.id != "orientate_3d_model" {
+/// The Model Size section that holds Import 3D Model's Scale to Fit Material.
+pub(super) const SIZE_SECTION: &str = "Model Size";
+
+/// Import 3D Model's Scale to Fit Material, at the foot of Model Size just under the
+/// Change size tick that unlocks it. Greyed until Change size is ticked, so the size never
+/// changes unseen; true when clicked, for [`scale_to_fit`] to do once the form is drawn.
+pub(super) fn scale_to_fit_button(ui: &mut egui::Ui, section: &str, params: &Value) -> bool {
+    if section != SIZE_SECTION {
         return false;
     }
-    let unlocked = open.params["size"]["change_size"]
-        .as_bool()
-        .unwrap_or(false);
-    let clicked = ui
-        .add_enabled(unlocked, egui::Button::new(tr!("scale-to-fit")))
+    let Some(unlocked) = params
+        .get("size")
+        .and_then(|s| s.get("change_size"))
+        .and_then(Value::as_bool)
+    else {
+        return false;
+    };
+    ui.add_enabled(unlocked, egui::Button::new(tr!("scale-to-fit")))
         .on_hover_hint(tr!("scale-to-fit.tooltip"))
         .on_disabled_hover_text(tr!("scale-to-fit.disabled"))
-        .clicked();
-    if !clicked {
+        .clicked()
+}
+
+/// Import 3D Model's Scale to Fit Material, once its button is pressed: the model scaled
+/// once to be as big as the material allows, turned as it is now, and kept at that scale
+/// while it is turned after. True when the size changed.
+pub(super) fn scale_to_fit(open: &mut OpenForm, job: &cut_craft_core::document::Job) -> bool {
+    if open.id != "orientate_3d_model" {
         return false;
     }
     let doc = cut_craft_core::document::Document {

@@ -101,19 +101,20 @@ Material button again to go back to lining it up.
 A model comes in at the size its file says. Its size is **locked**, so turning it or
 nudging a setting never resizes it without you knowing:
 
-1. Under **Model Size**, tick **Change size**. Until you do, X, Y, Z and **Lock XYZ
-   ratio** are greyed out, and so is the button at the foot of the form.
+1. Under **Model Size**, tick **Change size**. Until you do, X, Y, Z, **Lock XYZ ratio**
+   and the **Scale to Fit Material** button just under the tick are greyed out (point at
+   the button and it says to tick Change size first).
 2. Either type a new **X**, **Y** or **Z** (with Lock XYZ ratio ticked the other two
-   follow), or press **Scale to Fit Material**, the last button on the form. It makes the
-   model as big as the material allows (on a rotary job, as long as the job and out to
-   the material's radius), turned the way it is now.
+   follow), or press **Scale to Fit Material**, right under **Change size** in the same
+   box. It makes the model as big as the material allows (on a rotary job, as long as the
+   job and out to the material's radius), turned the way it is now.
 3. Untick **Change size** to lock the new size in.
 
 Either way the model is scaled **once**. Turn it afterwards with **Interactive Rotation**
 and it keeps that size: it is not fitted again at every step of the turn. If a turn makes
 it poke out of the material, press **Scale to Fit Material** again.
 
-![A rotary import: Change size ticked under Model Size and the model scaled to fit, shown round the axis inside the material](pictures/rotary-import-scale-to-fit.png)
+![A rotary import: Change size ticked under Model Size, Scale to Fit Material just under it, and the model scaled to fit, shown round the axis inside the material](pictures/rotary-import-scale-to-fit.png)
 
 ## When it doesn't fit
 
@@ -135,8 +136,8 @@ largest gap that fits.
 
 On a [rotary](help:job_setup) job, a **Full** 3D model is a real 3D shape in space: its
 length along the job's axis, the axis through its middle (move it off with **Rotation Axis
-Movement**). It comes in at its file's size; press **Scale to Fit Material** (above) to fill
-the material.
+Movement**). It comes in at its file's size; press **Scale to Fit Material** under **Model Size**
+(above) to fill the material.
 
 The 3D view always shows it exactly as it is, both while you import it and after you press
 **Import**: the same model, in the same place, inside the outline of the material.
