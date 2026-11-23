@@ -186,7 +186,13 @@ fn the_files_hold_the_g_code_of_each_part_of_the_plan() {
     let path = PathBuf::from("sign.nc");
     let texts = f.output().texts(&visible, &post, &path, made, &[]).unwrap();
     let names: Vec<String> = texts.iter().map(|(p, _)| p.display().to_string()).collect();
-    assert_eq!(names.len(), 2, "{names:?}");
+    // one file for each tool: the End Mill's and the V-Bit's
+    let count = |tool: &str| names.iter().filter(|n| n.contains(tool)).count();
+    assert_eq!(
+        (names.len(), count("End_Mill"), count("V-Bit")),
+        (2, 1, 1),
+        "{names:?}"
+    );
     // each file holds the cuts of its own toolpaths and no others
     let cuts_to = |text: &str, x: &str| {
         text.lines()
