@@ -18,7 +18,7 @@ impl CutCraftApp {
     /// new version.
     pub(super) fn check_for_updates_at_startup(&mut self, ctx: &egui::Context) {
         let o = &self.options.updates;
-        if o.check_this_start() && self.updates.checks_at_startup() {
+        if o.check_at_startup && self.updates.checks_at_startup() {
             self.updates.check(ctx, false, o.skipped_version.clone());
         }
     }

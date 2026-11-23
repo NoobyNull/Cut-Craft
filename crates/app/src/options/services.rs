@@ -10,7 +10,8 @@ pub struct Updates {
     #[serde(default = "on")]
     #[schemars(title = "Check for updates when Cut Craft starts")]
     pub check_at_startup: bool,
-    /// When GitHub was last asked, in seconds since 1970.
+    /// When GitHub was last asked, in seconds since 1970: a record only (every start asks),
+    /// kept to tell when an update was last looked for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub last_check: Option<u64>,
@@ -18,14 +19,6 @@ pub struct Updates {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub skipped_version: Option<String>,
-}
-
-impl Updates {
-    /// Whether this start asks GitHub: every start while the setting is on, however
-    /// recently the last check was, so a release made since is offered straight away.
-    pub fn check_this_start(&self) -> bool {
-        self.check_at_startup
-    }
 }
 
 impl Default for Updates {
@@ -143,23 +136,4 @@ pub enum CrashLogs {
     /// Don't open a report: the crash log is kept in Cut Craft's settings folder
     #[schemars(title = "Don't send crash logs")]
     DontSend,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Updates;
-
-    #[test]
-    fn every_start_checks_even_just_after_a_check() {
-        let just_checked = Updates {
-            last_check: Some(u64::MAX),
-            ..Updates::default()
-        };
-        assert!(just_checked.check_this_start());
-        let off = Updates {
-            check_at_startup: false,
-            ..Updates::default()
-        };
-        assert!(!off.check_this_start());
-    }
 }
