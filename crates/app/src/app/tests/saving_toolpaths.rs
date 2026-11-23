@@ -1062,6 +1062,33 @@ fn view_gcode_shows_what_saving_would_write_without_saving_a_file() {
 }
 
 #[test]
+fn view_gcode_lists_what_the_checks_found_without_stopping_anything() {
+    use super::panels::VIEW_GCODE;
+    let mut h = ready_for_output();
+    // out of date: a warning, shown in amber over the G-code
+    h.app.doc.toolpaths.values_mut().next().unwrap().stale = true;
+    h.click(h.text_at(VIEW_GCODE).unwrap(), Modifiers::NONE);
+    for _ in 0..200 {
+        h.frame(vec![]);
+        if !h.app.checking() && h.texts().iter().any(|t| t.starts_with("⚠ ")) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let warned = h.texts();
+    assert!(
+        warned
+            .iter()
+            .any(|t| t.starts_with("⚠ ") && t.contains("out of date")),
+        "{warned:?}"
+    );
+    assert!(h.text_at("What the checks before cutting found. It is your call what to change: viewing saves nothing.").is_some());
+    // the G-code is still there to read and copy
+    assert!(h.texts().iter().any(|t| t.starts_with("G1")), "{warned:?}");
+    assert!(h.text_at("Copy All").is_some());
+}
+
+#[test]
 fn view_gcode_lists_each_file_when_saving_would_make_several() {
     let mut h = ready_for_output();
     h.rectangle(70.0, 10.0, 20.0, 20.0);

@@ -6,7 +6,7 @@
 
 use super::{CutCraftApp, Split, View, files, view3d};
 use cut_craft_core::document::EntityId;
-use cut_craft_core::preflight::{Finding, Severity};
+use cut_craft_core::preflight::Finding;
 use cut_craft_web_api::{Answer, ApiError, Call, Gcode, Look, Pending, Picture, Shown, Which, job};
 use eframe::egui;
 use serde_json::{Value, json};
@@ -533,42 +533,30 @@ impl CutCraftApp {
         let post = self
             .form_post(&form)
             .map_err(|e| no_post(&e, &self.post_choices()))?;
-        let plan = self
-            .with_picked(gcode, |app| app.plan(&form, &post))
+        // the toolpaths picked are there to save
+        self.with_picked(gcode, |app| app.plan(&form, &post))
             .map_err(|e| ApiError::refused(capital(&e)))?;
         let mut found: Vec<Finding> = found.into_values().flatten().collect();
         found.extend(self.no_tool_changer_for(form.changes));
-        if let Some(refused) = super::output::refused(&found) {
-            return Err(ApiError::refused(refused));
-        }
-        let mut warnings: Vec<String> = (found.iter())
-            .filter(|f| matches!(f.severity, Severity::Warning | Severity::MustAsk))
-            .map(|f| f.message.clone())
-            .collect();
-        let stale: Vec<&str> = (plan.iter().flatten())
-            .filter_map(|id| self.doc.toolpaths.get(id))
-            .filter(|t| t.stale)
-            .map(|t| t.name.as_str())
-            .collect();
-        if !stale.is_empty() {
-            warnings.insert(
-                0,
-                format!(
-                    "Out of date: {} changed since they were made. Recalculate before \
-                     cutting (POST {}calculate)",
-                    stale.join(", "),
-                    cut_craft_web_api::PREFIX
-                ),
-            );
-        }
-        // as Save Toolpaths: every warning, the collet or spindle hitting the material too,
-        // is asked about
-        if !warnings.is_empty() && !gcode.accept_warnings {
-            return Err(ApiError::refused(format!(
-                "The checks before cutting found: {}. Put them right, or send \
-                 \"accept_warnings\": true to make the G-code anyway (as Save Anyway).",
-                warnings.join("; ")
-            )));
+        // as Save Toolpaths decides: an error stops it; every warning (the collet or
+        // spindle hitting the material too) is asked about, and "accept_warnings" is the
+        // Save Anyway answer. Nothing is ticked as read through the Web API.
+        let warnings: Vec<String> = found.iter().map(|f| f.message.clone()).collect();
+        let accepted = if gcode.accept_warnings {
+            warnings.as_slice()
+        } else {
+            &[]
+        };
+        match super::output::verdict(&found, &std::collections::BTreeSet::default(), accepted) {
+            super::output::Verdict::Refused(refused) => return Err(ApiError::refused(refused)),
+            super::output::Verdict::Ask(problems) => {
+                return Err(ApiError::refused(format!(
+                    "The checks before cutting found: {}. Put them right, or send \
+                     \"accept_warnings\": true to make the G-code anyway (as Save Anyway).",
+                    problems.join("; ")
+                )));
+            }
+            super::output::Verdict::Go => {}
         }
         let saving = gcode.save_to.as_deref().map(std::path::PathBuf::from);
         let path = match &saving {
@@ -580,19 +568,32 @@ impl CutCraftApp {
             .with_picked(gcode, |app| app.toolpath_texts(&form, &post, &path, made))
             .map_err(|e| ApiError::refused(capital(&e)))?;
         if saving.is_some() {
-            if !gcode.replace
-                && let Some((there, _)) = texts.iter().find(|(p, _)| p.exists())
-            {
+            // an earlier save there (the same names, or the tile, numbered and side files
+            // an earlier layout left) is written over only when asked, and then as Save
+            // Toolpaths does: archived or replaced as Options say (Replace when they ask)
+            let mut earlier = crate::files::earlier_save(&path);
+            for (there, _) in texts.iter().filter(|(p, _)| p.exists()) {
+                if !earlier.contains(there) {
+                    earlier.push(there.clone());
+                }
+            }
+            if let Some(there) = earlier.first().filter(|_| !gcode.replace) {
                 return Err(ApiError::refused(format!(
-                    "{} is there already: send \"replace\": true to write over it, or save \
-                     somewhere else.",
+                    "{} is there already: send \"replace\": true to write over it (archived \
+                     or replaced as Options say), or save somewhere else.",
                     there.display()
                 )));
             }
-            for (path, text) in &texts {
-                files::write_text(path, text).map_err(ApiError::refused)?;
+            let written = if earlier.is_empty() {
+                super::output::write(&texts)
+            } else {
+                let archiving = self.options.confirmations.earlier_gcode
+                    == crate::options::EarlierGcode::Archive;
+                let texts = texts.clone();
+                super::output::write_over(|| Ok(texts), &path, &earlier, archiving, made)
+                    .map(|over| over.written)
             }
-            let written: Vec<std::path::PathBuf> = texts.iter().map(|(p, _)| p.clone()).collect();
+            .map_err(ApiError::refused)?;
             let said = self.output().saved_message(&written, &path);
             self.status.set_message(&format!("{said} (Web API)"));
         }
