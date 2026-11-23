@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-23
 see-also: circular_copy, copy_along_vectors, array_copy_toolpath
 ---
 

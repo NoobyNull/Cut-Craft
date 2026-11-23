@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: select_vectors_inside, select_all_vectors, unselect_all
 ---
 
