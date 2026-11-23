@@ -2,7 +2,7 @@
 //! the material its vectors are cut from, and the colour they are drawn in.
 
 use cut_craft_core::document::{Document, Layer, LayerId};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing_layer};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_named, existing_layer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -74,6 +74,7 @@ impl Command for LayerProperties {
             group: "Layers",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

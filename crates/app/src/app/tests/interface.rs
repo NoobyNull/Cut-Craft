@@ -1153,7 +1153,11 @@ fn canvas_only_tools_have_no_commit_button() {
             assert!(h.text_at(label).is_none(), "{id}: {label}");
         }
         assert!(h.text_at("Close").is_some(), "{id}");
-        assert!(h.text_at(&commit::live_note(id, true)).is_some(), "{id}");
+        assert!(
+            h.text_at(&commit::live_note(cut_craft_core::Form::Gesture, true))
+                .is_some(),
+            "{id}"
+        );
         h.app.form = None;
     }
     assert_eq!(h.app.doc.vectors.len(), before, "nothing trimmed or drawn");

@@ -6,7 +6,7 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
 use cut_craft_core::toolpath::{Tool, cut_points, follow, made_by, project_onto_model};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -165,6 +165,7 @@ impl Command for FlutingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/fluting_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

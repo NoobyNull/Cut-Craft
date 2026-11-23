@@ -4,7 +4,7 @@
 
 use cut_craft_core::component::{model_component, model_shape_at_resolution, shown_components};
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +39,7 @@ impl Command for OffsetModel {
             group: "Modeling",
             icon: "modeling/offset_model.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

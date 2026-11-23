@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::toolpath::Toolpath;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_named, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -57,6 +57,7 @@ impl Command for GroupToolpaths {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
@@ -114,6 +115,7 @@ impl Command for RenameToolpathGroup {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
@@ -170,6 +172,7 @@ impl Command for UngroupToolpaths {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

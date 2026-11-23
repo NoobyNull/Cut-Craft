@@ -5,7 +5,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::font::{self, Align, Font};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::glam::DAffine2;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
@@ -62,6 +62,7 @@ impl Command for AutoLayoutText {
             group: "Create Vectors",
             icon: "drawing/create_vectors/auto_layout_text.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

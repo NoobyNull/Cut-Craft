@@ -5,7 +5,7 @@
 //! group (stepped into it) makes the new group there.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 use std::collections::BTreeSet;
 
 pub struct Group;
@@ -20,6 +20,7 @@ impl Command for Group {
             group: "Edit",
             icon: "drawing/create_vectors/group.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

@@ -7,7 +7,7 @@ use cut_craft_core::entry::{Ways, contour_ways};
 use cut_craft_core::geometry::{Path, winding};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, cut_points, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -247,6 +247,7 @@ impl Command for ChamferToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/chamfer_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

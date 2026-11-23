@@ -5,7 +5,7 @@
 
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::{Change, Command, CommandError, Meta, existing};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -95,6 +95,7 @@ impl Command for EditPicture {
             group: "Edit Objects",
             icon: "drawing/edit_objects/edit_picture.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

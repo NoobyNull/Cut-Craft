@@ -8,7 +8,7 @@
 use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::font::{self, Align};
 use cut_craft_core::geometry::{Path, Point, Rect};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use fmt_cut_list::Part;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
@@ -97,6 +97,7 @@ impl Command for EngravePartNames {
             group: "Offset and Layout",
             icon: "drawing/weld_and_offset/engrave_part_names.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

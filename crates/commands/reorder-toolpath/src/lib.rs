@@ -5,7 +5,7 @@
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::toolpath::Toolpath;
-use cut_craft_core::{Change, Command, CommandError, Meta, existing};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -87,6 +87,7 @@ impl Command for ReorderToolpath {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
@@ -196,6 +197,7 @@ impl Command for ArrangeToolpaths {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

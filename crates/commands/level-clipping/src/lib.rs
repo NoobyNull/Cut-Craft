@@ -3,7 +3,7 @@
 //! made from); Remove takes the clipping off.
 
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +40,7 @@ impl Command for LevelClipping {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

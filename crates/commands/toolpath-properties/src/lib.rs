@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::toolpath::{PREVIEW_COLOUR, SUMMARY_NOTES, Toolpath};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_named, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +64,7 @@ impl Command for ToolpathProperties {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
