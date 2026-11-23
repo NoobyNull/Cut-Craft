@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: web_api, contents, settings
 ---
 
 # Updates
 
-Cut Craft keeps itself up to date in one click. About once a day, when it starts, it asks
+Cut Craft keeps itself up to date in one click. Every time it starts, it asks
 GitHub whether there is a new version. If there is, it asks you:
 
 **A new version (0.6.14) is available. Download, install and relaunch?**
