@@ -79,13 +79,13 @@ impl CutCraftApp {
             .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())
     }
 
-    /// The available tools whose names contain `text` (any case), in group order.
+    /// The available tools offered on the active machine whose names contain `text` (any case), in group order.
     pub(super) fn search_matches(&self, text: &str) -> Vec<(&'static str, String)> {
         let text = text.trim().to_lowercase();
         self.all_groups()
             .iter()
             .flat_map(|g| g.tools.iter().copied())
-            .filter(|id| self.available(id))
+            .filter(|id| self.available(id) && self.offered(id))
             .map(|id| (id, self.tool_label(id)))
             .filter(|(_, label)| label.to_lowercase().contains(&text))
             .collect()

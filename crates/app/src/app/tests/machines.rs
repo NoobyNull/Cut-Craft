@@ -710,3 +710,58 @@ fn a_rotary_jobs_3d_origin_is_on_the_axis_for_machine_bed() {
         "the outline's bottom, its top being the blank's radius up"
     );
 }
+
+/// Laser and rotary toolpaths are offered only on a machine with a laser fitted or a 4th
+/// axis (Matthew, 2026-11-23: "like the ATC"); one opened anyway says, in red at its foot,
+/// how to fit the machine for it.
+#[test]
+fn laser_and_rotary_toolpaths_show_only_on_a_machine_that_has_them() {
+    let mut h = Harness::new();
+    let found = |h: &Harness, text: &str| {
+        h.app
+            .search_matches(text)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect::<Vec<_>>()
+    };
+    assert!(found(&h, "laser").is_empty(), "no machine: no laser");
+    assert!(!found(&h, "rotary").contains(&"rotary_lathe_toolpath"));
+    assert!(found(&h, "pocket").contains(&"pocket_toolpath"));
+    h.app.machines.add();
+    assert!(
+        found(&h, "laser").is_empty(),
+        "a machine with no laser fitted"
+    );
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.laser = true;
+    machine.controller = "grblHAL".into();
+    machine.rotary = true;
+    assert_eq!(
+        found(&h, "laser"),
+        ["laser_cut_fill_toolpath", "laser_picture_toolpath"]
+    );
+    assert!(found(&h, "rotary").contains(&"rotary_lathe_toolpath"));
+    // on the Toolpaths page too
+    crate::marks::switch_on(&h.ctx);
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    let shown = |h: &mut Harness, id: &str| {
+        let mark = format!("tool:{id}");
+        crate::marks::forget(&h.ctx, &mark);
+        h.frame(vec![]);
+        h.frame(vec![]);
+        crate::marks::get(&h.ctx, &mark).is_some()
+    };
+    assert!(shown(&mut h, "laser_picture_toolpath"));
+    assert!(shown(&mut h, "rotary_machining_toolpath"));
+    h.app.machines.active_mut().unwrap().laser = false;
+    assert!(!shown(&mut h, "laser_picture_toolpath"));
+    assert!(shown(&mut h, "pocket_toolpath"));
+    // a laser toolpath opened on a machine without one is said to be so, never refused
+    let lacks = crate::app::machine_fit::lacks(None, cut_craft_core::Needs::Laser).unwrap();
+    h.app.invoke(&h.ctx, "laser_cut_fill_toolpath");
+    h.frame(vec![]);
+    assert!(h.text_at(lacks).is_some(), "said in red");
+    h.app.machines.active_mut().unwrap().laser = true;
+    h.frame(vec![]);
+    assert!(h.text_at(lacks).is_none());
+}

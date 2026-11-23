@@ -259,7 +259,7 @@ impl Command for TextureToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/texture_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

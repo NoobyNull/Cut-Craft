@@ -56,6 +56,7 @@ impl CutCraftApp {
             .contains(&open.id);
         let suggested = open.suggested.clone();
         let form_id = open.id;
+        let laser = open.kind.needs() == cut_craft_core::Needs::Laser;
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
                 let (changed, ask) = super::clearing_section(
@@ -84,7 +85,9 @@ impl CutCraftApp {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong(tr!("actions-tool"));
-                asked.set(tool_picker(ui, form_id, params, tools, &slots, units));
+                asked.set(tool_picker(
+                    ui, form_id, laser, params, tools, &slots, units,
+                ));
                 if let Some(line) = &reach {
                     super::reach::show(ui, line);
                 }

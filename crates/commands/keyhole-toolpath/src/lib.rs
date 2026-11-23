@@ -139,7 +139,7 @@ impl Command for KeyholeToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/keyhole_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

@@ -141,9 +141,15 @@ impl CutCraftApp {
     }
 
     /// A toolpath form's Select…: the Tool Database as Select Tool, on `current`; its Select
-    /// gives the form the tool shown, with its own feeds, speeds and pass depth.
+    /// gives the form the tool shown, with its own feeds, speeds and pass depth. A toolpath
+    /// form's offers only lasers for a laser toolpath, and only bits for any other.
     pub(super) fn select_tool(&mut self, current: &str) {
-        let manager = cut_craft_tool_database::Manager::selecting(&self.tools, current);
+        let mut manager = cut_craft_tool_database::Manager::selecting(&self.tools, current);
+        manager.lasers = self
+            .form
+            .as_ref()
+            .filter(|f| f.kind.is_toolpath())
+            .map(|f| f.kind.needs() == cut_craft_core::Needs::Laser);
         self.open_tool_manager(manager);
         self.picking = None;
     }

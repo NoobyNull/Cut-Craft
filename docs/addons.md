@@ -209,6 +209,12 @@ function run(s)
 end
 ```
 
+- **How its form behaves:** the `gadget` table may say `form = "create"` (each press
+  makes another, the button says **Create**) or `form = "toolpath"` (the button says
+  **Calculate**, and construction lines are left out). Left out, it is `"apply"`: it
+  changes what is there. A toolpath gadget may add `needs = "laser"` or `needs = "rotary"`,
+  so it shows only for a machine with a laser fitted or a 4th axis, as Cut Craft's own laser
+  and rotary toolpaths do. Anything else is a mistake, reported when the gadget loads.
 - **Setting types:** `integer`, `number`, `length` (in mm, shown in the job's units),
   `boolean`, `text`, and `choice` (with `choices = { "a", "b" }`). Cut Craft draws the
   form, so a gadget never draws UI.

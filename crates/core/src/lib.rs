@@ -65,7 +65,7 @@ pub use glam;
 
 pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Sequence, Step, UnitGuess};
 pub use command::{
-    Command, CommandError, Drag, DynCommand, EMPTY_MODEL, Form, Interactive, Meta, NoParams,
+    Command, CommandError, Drag, DynCommand, EMPTY_MODEL, Form, Interactive, Meta, Needs, NoParams,
     Registry, SELECT_FIRST, ensure_named, ensure_positive, existing, existing_layer, gone,
     sentence, tool_does_not_fit,
 };

@@ -285,7 +285,7 @@ impl CutCraftApp {
             });
         }
         // what a toolpath (or the Vector Selector) will be made from, and what it leaves out
-        if open.kind == Form::Toolpath || open.id == "vector_selector" {
+        if open.kind.is_toolpath() || open.id == "vector_selector" {
             let count = self.doc.selected_vector_count();
             if let Some(text) = count.text() {
                 ui.weak(text)
@@ -331,7 +331,7 @@ impl CutCraftApp {
     /// when the toolpath is not Drilling.
     fn drill_sideways(form: &super::OpenForm) -> Option<String> {
         let tool = form.params.get("tool")?;
-        if form.kind != Form::Toolpath || tool.get("drill_only") != Some(&Value::Bool(true)) {
+        if !form.kind.is_toolpath() || tool.get("drill_only") != Some(&Value::Bool(true)) {
             return None;
         }
         let tool = cut_craft_core::toolpath::Tool {
@@ -345,12 +345,12 @@ impl CutCraftApp {
     /// The warning for a toolpath form whose tool is the wrong kind: a router bit on a laser
     /// toolpath, or a laser on a router's (as soon as it is picked; never refused).
     fn wrong_kind_of_tool(form: &super::OpenForm) -> Option<String> {
-        if form.kind != Form::Toolpath {
+        if !form.kind.is_toolpath() {
             return None;
         }
         let tool: cut_craft_core::toolpath::Tool =
             serde_json::from_value(form.params.get("tool")?.clone()).ok()?;
-        let laser_form = super::is_laser_form(form.id);
+        let laser_form = form.kind.needs() == cut_craft_core::Needs::Laser;
         if laser_form && !tool.is_laser() {
             Some(format!(
                 "{} is not a laser: this toolpath takes its diameter as the kerf and its feed \
@@ -474,6 +474,10 @@ impl CutCraftApp {
         // a router bit on a laser toolpath, or a laser on a router's: said as it is picked
         if let Some(wrong) = Self::wrong_kind_of_tool(form) {
             ui.colored_label(ui.visuals().error_fg_color, wrong);
+        }
+        // a laser or rotary toolpath on a machine without one (one already in the job)
+        if let Some(lacks) = self.machine_lacks(form.kind.needs()) {
+            ui.colored_label(ui.visuals().error_fg_color, lacks);
         }
         // tiles that, with their overlap, will not fit the machine: said as they are set
         if let Some(past) = self.tiles_past_bed(form) {

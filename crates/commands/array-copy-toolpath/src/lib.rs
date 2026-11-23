@@ -152,7 +152,7 @@ impl Command for ArrayCopyToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/array_copy_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

@@ -148,7 +148,7 @@ impl Command for InlayToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/inlay_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

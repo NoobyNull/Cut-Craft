@@ -33,8 +33,9 @@ pub enum Form {
     /// Makes something new from its settings, another with each press: **Create**.
     Create,
     /// Works out a toolpath from the selected vectors: **Calculate**. A toolpath never cuts
-    /// along a construction line, however it was picked.
-    Toolpath,
+    /// along a construction line, however it was picked. `needs`: what the machine must have
+    /// for it to be offered.
+    Toolpath { needs: Needs },
     /// Asks an add-on to make something new for the Library: **Generate**.
     Generate,
     /// Used only on the canvas (a stroke, a click, a drag): the form holds settings for the
@@ -48,6 +49,38 @@ pub enum Form {
     /// `keeps_apply`: it still offers **Apply** once made, for changes to be seen to go on
     /// the one there.
     Remake { keeps_apply: bool },
+}
+
+impl Form {
+    /// A toolpath strategy's form, needing nothing of the machine past a spindle.
+    pub const TOOLPATH: Self = Self::Toolpath {
+        needs: Needs::Nothing,
+    };
+
+    /// Whether it works out a toolpath ([`Self::Toolpath`]).
+    pub fn is_toolpath(self) -> bool {
+        matches!(self, Self::Toolpath { .. })
+    }
+
+    /// What the machine must have for the command to be offered.
+    pub fn needs(self) -> Needs {
+        match self {
+            Self::Toolpath { needs } => needs,
+            _ => Needs::Nothing,
+        }
+    }
+}
+
+/// What a toolpath needs the machine to have, past a spindle. Without it, the toolpath is
+/// not offered (as the tool changer's settings are not without one); one already in a job
+/// stays, with a red warning.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Needs {
+    Nothing,
+    /// A laser on the head (Machine Configuration's Laser fitted).
+    Laser,
+    /// A 4th axis turning the material (Machine Configuration's 4th axis).
+    Rotary,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -227,7 +260,7 @@ pub struct NoParams {}
 
 /// Whether a command with `meta` makes toolpaths, and so never sees construction lines.
 pub fn makes_toolpaths(meta: &Meta) -> bool {
-    meta.form == Form::Toolpath
+    meta.form.is_toolpath()
 }
 
 /// What a toolpath says when only construction lines were selected for it: they are left

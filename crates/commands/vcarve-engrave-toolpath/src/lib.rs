@@ -149,7 +149,7 @@ impl Command for VcarveEngraveToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/vcarve_engrave_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

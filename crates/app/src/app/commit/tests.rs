@@ -9,7 +9,7 @@ fn declared() -> BTreeMap<String, Vec<&'static str>> {
     let mut kinds = BTreeMap::<String, Vec<_>>::new();
     for c in crate::commands::registry().commands() {
         let kind = c.meta().form;
-        if kind != Form::Apply && kind != Form::Toolpath {
+        if kind != Form::Apply && !kind.is_toolpath() {
             kinds.entry(format!("{kind:?}")).or_default().push(c.id());
         }
     }
@@ -67,7 +67,7 @@ fn a_remaking_form_creates_once_then_follows_its_settings() {
 #[test]
 fn toolpaths_calculate_on_the_toolpaths_page() {
     assert_eq!(
-        commit(Form::Toolpath, Page::Toolpaths, false, false),
+        commit(Form::TOOLPATH, Page::Toolpaths, false, false),
         Some(Commit::Calculate)
     );
     assert_eq!(
@@ -143,7 +143,7 @@ fn every_command_declares_the_form_it_had() {
 #[test]
 fn every_toolpath_strategy_and_only_those_calculate() {
     for c in crate::commands::registry().commands() {
-        let toolpath = c.meta().form == Form::Toolpath;
+        let toolpath = c.meta().form.is_toolpath();
         let edits_list = [
             "delete_toolpath",
             "duplicate_toolpath",

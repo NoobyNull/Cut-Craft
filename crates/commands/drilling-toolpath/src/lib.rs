@@ -90,7 +90,7 @@ impl Command for DrillingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/drilling_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

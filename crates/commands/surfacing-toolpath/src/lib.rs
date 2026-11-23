@@ -182,7 +182,7 @@ impl Command for SurfacingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/surfacing_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

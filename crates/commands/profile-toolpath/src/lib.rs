@@ -263,7 +263,7 @@ impl Command for ProfileToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/profile_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

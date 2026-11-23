@@ -124,7 +124,7 @@ impl CutCraftApp {
             .form
             .as_mut()
             .filter(|f| f.id == id && f.page == crate::pages::Page::Toolpaths)
-            .filter(|f| f.kind == cut_craft_core::Form::Toolpath)
+            .filter(|f| f.kind.is_toolpath())
         else {
             return;
         };

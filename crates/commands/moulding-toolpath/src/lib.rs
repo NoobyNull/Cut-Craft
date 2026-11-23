@@ -199,7 +199,7 @@ impl Command for MouldingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/moulding_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

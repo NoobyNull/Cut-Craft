@@ -247,7 +247,7 @@ impl Command for ChamferToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/chamfer_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

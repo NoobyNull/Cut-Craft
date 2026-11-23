@@ -358,7 +358,7 @@ impl Command for DragKnifeToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/drag_knife_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 
