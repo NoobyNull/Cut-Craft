@@ -758,6 +758,9 @@ struct CutCraftApp {
     /// The errors (Must fix) the save under way was answered Save Anyway for: said at the
     /// top of each file it writes. Set as each save starts, never kept for the next.
     saving_errors: Vec<String>,
+    /// The job revision and machine the save under way was checked for: a change while it
+    /// waits on a question (the Web API can make one) stops it, to be checked again.
+    saving_checked: Option<(u64, usize)>,
     /// The warnings of the checks before cutting ticked as read, by what they say: Save
     /// and Send to Machine wait until each one found is ticked.
     acknowledged: std::collections::BTreeSet<String>,

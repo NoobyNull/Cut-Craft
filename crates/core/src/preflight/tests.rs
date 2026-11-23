@@ -827,7 +827,7 @@ fn cutting_above_the_material_is_air_cutting() {
 }
 
 #[test]
-fn toolpaths_that_cannot_cut_are_errors() {
+fn toolpaths_that_cannot_cut_are_errors_and_empty_ones_left_out() {
     let mut empty = slot("Empty", 50.0, 20.0, 180.0, 3.0);
     empty.moves.clear();
     let mut still = slot("Still", 80.0, 20.0, 180.0, 3.0);
@@ -835,19 +835,25 @@ fn toolpaths_that_cannot_cut_are_errors() {
     still.tool.plunge_rate = 0.0;
     let found = check(&job(), &[&empty, &still], &Limits::default());
     let errors = messages(&found, Severity::Error);
-    assert_eq!(errors.len(), 3, "{found:?}");
-    assert!(errors[0].contains("Empty has no moves"), "{errors:?}");
-    assert!(errors[1].contains("no feed rate"), "{errors:?}");
-    assert!(errors[2].contains("no plunge rate"), "{errors:?}");
+    assert_eq!(errors.len(), 2, "{found:?}");
+    assert!(errors[0].contains("no feed rate"), "{errors:?}");
+    assert!(errors[1].contains("no plunge rate"), "{errors:?}");
+    // nothing is written for a toolpath with no moves: a warning that it is left out
+    let warnings = messages(&found, Severity::Warning);
+    assert!(
+        warnings.iter().any(|w| w.contains("Empty has no moves")),
+        "{warnings:?}"
+    );
 }
 
 #[test]
 fn errors_come_before_warnings() {
     let mut stale = slot("Stale", 50.0, 20.0, 180.0, 3.0);
     stale.stale = true;
-    let mut empty = slot("Empty", 80.0, 20.0, 180.0, 3.0);
-    empty.moves.clear();
-    let found = check(&job(), &[&stale, &empty], &Limits::default());
+    // no feed rate: an error, though it comes second
+    let mut still = slot("Still", 80.0, 20.0, 180.0, 3.0);
+    still.tool.feed_rate = 0.0;
+    let found = check(&job(), &[&stale, &still], &Limits::default());
     assert_eq!(
         found.iter().map(|f| f.severity).collect::<Vec<_>>(),
         vec![Severity::Error, Severity::Warning],

@@ -547,7 +547,10 @@ impl CutCraftApp {
         let saving = gcode.save_to.as_deref().map(std::path::PathBuf::from);
         let path = match &saving {
             Some(path) => files::with_extension_added(path, &post.extension),
-            None => std::path::PathBuf::from(self.output().file_name(&form, &post)),
+            // named as the toolpaths picked, not the window's selection
+            None => self.with_picked(gcode, |app| {
+                std::path::PathBuf::from(app.output().file_name(&form, &post))
+            }),
         };
         let made = chrono::Local::now().naive_local();
         let texts = self

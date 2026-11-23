@@ -305,6 +305,13 @@ impl CutCraftApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
         }
+        // the checks ran on the moves thinned as they were: checked again as now saved
+        let (new, old) = (&options.toolpaths, &self.options.toolpaths);
+        if (new.tolerance_2d, new.tolerance_3d, new.tolerance_vcarve)
+            != (old.tolerance_2d, old.tolerance_3d, old.tolerance_vcarve)
+        {
+            self.forget_save_checks();
+        }
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
             self.playback_speed = options.toolpaths.preview_speed();
         }

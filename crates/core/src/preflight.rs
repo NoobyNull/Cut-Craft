@@ -214,12 +214,13 @@ fn told_apart(toolpaths: &[&Toolpath]) -> Vec<Option<Toolpath>> {
 /// What one toolpath's own settings will not cut with.
 fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Vec<Finding>) {
     let (name, tool) = (&toolpath.name, &toolpath.tool);
+    // nothing written for it (left out of the files), so nothing harmful: said as a warning
     if toolpath.moves.is_empty() {
-        found.push(Finding::error(
+        found.push(Finding::warning(
             Check::CanCut,
             format!(
-                "{name} has no moves: recalculate it, or untick it in the toolpath list so it \
-             is not saved"
+                "{name} has no moves, so it is left out of the files: recalculate it, or \
+             untick it in the toolpath list"
             ),
         ));
         return;

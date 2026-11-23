@@ -243,6 +243,9 @@ impl CutCraftApp {
         path: &std::path::Path,
         earlier: &[std::path::PathBuf],
     ) {
+        if let Err(e) = self.still_as_checked() {
+            return self.status.set_message(&e);
+        }
         let archiving = choice == crate::options::EarlierGcode::Archive;
         let made = chrono::Local::now().naive_local();
         let vars = self.note_variables();
@@ -319,6 +322,7 @@ impl CutCraftApp {
         // a Save Anyway answer is for this save only, whichever way it ends
         let accepted = std::mem::take(&mut self.checks_accepted);
         self.saving_errors.clear();
+        self.saving_checked = None;
         let post = match self.form_post(form) {
             Ok(post) => post,
             Err(e) => {
@@ -352,6 +356,7 @@ impl CutCraftApp {
             output::Verdict::Go => {
                 // answered Save Anyway for these: the files say so at the top
                 self.saving_errors = output::errors(&found);
+                self.saving_checked = Some((self.history.revision(), self.machines.active));
                 Some(post)
             }
         }
@@ -586,9 +591,23 @@ impl CutCraftApp {
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, String> {
+        self.still_as_checked()?;
         let made = chrono::Local::now().naive_local();
         let texts = self.toolpath_texts(form, post, path, made)?;
         output::write(&output::marked(texts, &self.saving_errors))
+    }
+
+    /// Whether the job and machine are still as the save under way was checked for: an
+    /// error, and nothing written, when they changed while it waited on a question.
+    fn still_as_checked(&self) -> Result<(), String> {
+        match self.saving_checked {
+            Some(checked) if checked != (self.history.revision(), self.machines.active) => Err(
+                "Nothing saved: the job changed while saving. Save again, so the checks \
+                     before cutting look at it as it is now"
+                    .to_owned(),
+            ),
+            _ => Ok(()),
+        }
     }
 
     /// The files the form's plan makes through `post` at `path`, with their G-code as made

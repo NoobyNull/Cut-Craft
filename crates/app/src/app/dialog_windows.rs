@@ -264,8 +264,10 @@ impl CutCraftApp {
                     egui::Button::new(tr!("views-send-to-machine")),
                 )
                 .on_hover_hint(tr!("views-save-the-files-straight-onto"));
-            send = if reachable {
+            send = if reachable && unticked {
                 response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
+            } else if reachable {
+                response.clicked()
             } else {
                 response
                     .on_disabled_hover_text(super::send::NO_MACHINE_FOLDER)

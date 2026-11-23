@@ -28,14 +28,15 @@ fn job() -> (Document, Vec<EntityId>) {
                 ..Default::default()
             },
             vectors: vec![],
+            // down at (10, 10), then a cut across to (20, 10)
             moves: [
-                (MoveKind::Rapid, 5.0),
-                (MoveKind::Plunge, -1.0),
-                (MoveKind::Cut, -1.0),
+                (MoveKind::Rapid, 10.0, 5.0),
+                (MoveKind::Plunge, 10.0, -1.0),
+                (MoveKind::Cut, 20.0, -1.0),
             ]
-            .map(|(kind, z)| Move {
+            .map(|(kind, x, z)| Move {
                 kind,
-                to: cut_craft_core::glam::DVec3::new(10.0, 10.0, z),
+                to: cut_craft_core::glam::DVec3::new(x, 10.0, z),
             })
             .to_vec(),
             visible: true,
@@ -185,11 +186,15 @@ fn the_files_hold_the_g_code_of_each_part_of_the_plan() {
     let texts = f.output().texts(&visible, &post, &path, made, &[]).unwrap();
     let names: Vec<String> = texts.iter().map(|(p, _)| p.display().to_string()).collect();
     assert_eq!(names.len(), 2, "{names:?}");
-    assert!(
-        texts
-            .iter()
-            .all(|(_, text)| text.contains("M30") || !text.is_empty())
-    );
+    // each file cuts: a feed move to its toolpath's cut
+    for (path, text) in &texts {
+        assert!(
+            text.lines()
+                .any(|l| l.starts_with("G1") && l.contains("X20")),
+            "{}: {text}",
+            path.display()
+        );
+    }
 }
 
 #[test]
@@ -263,6 +268,13 @@ fn files_saved_past_errors_say_so_at_the_top() {
             .unwrap()
             .starts_with("(SAVED WITH ERRORS")
     );
+    // a post ending its lines with CR alone keeps them so
+    let cr = vec![(PathBuf::from("a.nc"), "; Header\rG21\rM30\r".to_owned())];
+    let text = &marked(cr, &errors)[0].1;
+    assert!(!text.contains('\n'), "{text:?}");
+    let lines: Vec<&str> = text.split('\r').collect();
+    assert!(lines[1].starts_with("; SAVED WITH ERRORS"), "{text:?}");
+    assert_eq!(lines[3], "G21", "{text:?}");
     // nothing said when saved without errors
     assert_eq!(marked(semicolons.clone(), &[]), semicolons);
 }
@@ -283,6 +295,17 @@ fn a_toolpath_with_no_moves_is_left_out_and_said() {
         .unwrap();
     assert_eq!(texts.len(), 1, "the V-Bit's file had nothing in it");
     assert!(!texts[0].1.contains("Text"));
+    // nothing left at all: no files, and why, so an earlier save is kept
+    for id in &ids[..2] {
+        f.doc.toolpaths.get_mut(id).unwrap().moves.clear();
+    }
+    let why = (f.output())
+        .texts(&visible, &post, Path::new("sign.nc"), made, &[])
+        .unwrap_err();
+    assert!(
+        why.starts_with("Nothing saved: Pocket, Drill, Text have no moves"),
+        "{why}"
+    );
     assert_eq!(
         with_left_out("Saved sign.nc".into(), &["Text".to_owned()]),
         "Saved sign.nc. Left out, as it has no moves to cut: Text"

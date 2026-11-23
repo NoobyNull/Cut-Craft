@@ -182,6 +182,16 @@ impl Output<'_> {
             })
             .filter(|file| !file.is_empty())
             .collect();
+        // nothing left to cut: no files, and an earlier save is kept as it was
+        if plan.is_empty() {
+            let left = self.left_out(form, post);
+            let has = if left.len() == 1 { "has" } else { "have" };
+            return Err(format!(
+                "Nothing saved: {} {has} no moves to cut. Recalculate, or untick in the \
+                 toolpath list what is not to be saved",
+                left.join(", "),
+            ));
+        }
         let thinned = self.tolerances.thinned(self.doc);
         let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
             if self.doc.bottom_side {
@@ -332,8 +342,16 @@ pub(super) fn marked(texts: Vec<(PathBuf, String)>, errors: &[String]) -> Vec<(P
     .collect();
     (texts.into_iter())
         .map(|(path, text)| {
-            let ending = if text.contains("\r\n") { "\r\n" } else { "\n" };
-            let semicolon = (text.lines())
+            // the post's own line ending: CR LF, LF, or CR alone
+            let ending = if text.contains("\r\n") {
+                "\r\n"
+            } else if text.contains('\r') && !text.contains('\n') {
+                "\r"
+            } else {
+                "\n"
+            };
+            let last = ending.chars().last().unwrap_or('\n');
+            let semicolon = (text.split(last))
                 .map(str::trim_start)
                 .find(|l| l.starts_with('(') || l.starts_with(';'))
                 .is_some_and(|l| l.starts_with(';'));
@@ -349,7 +367,7 @@ pub(super) fn marked(texts: Vec<(PathBuf, String)>, errors: &[String]) -> Vec<(P
             }
             // after the header's own comments, before the first command
             let mut at = 0;
-            for line in text.split_inclusive('\n') {
+            for line in text.split_inclusive(last) {
                 let t = line.trim();
                 if !(t.starts_with('(') || t.starts_with(';') || t.is_empty()) {
                     break;

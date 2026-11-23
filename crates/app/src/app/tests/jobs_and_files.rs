@@ -915,6 +915,18 @@ fn saving_past_an_error_ticks_each_one_and_the_files_say_so() {
     let text = std::fs::read_to_string(&written[0]).unwrap();
     assert!(text.contains("SAVED WITH ERRORS"), "{text}");
     assert!(text.contains("no feed rate"), "{text}");
+    // the job changed before the files were written (the Web API can, while a question
+    // waits): nothing written, saved again once checked as it is now
+    h.app.checks_accepted = vec![error.to_owned()];
+    let post = h.app.ready_to_save(&form, false).unwrap();
+    h.rectangle(300.0, 20.0, 10.0, 10.0);
+    let later = dir.join("later.nc");
+    let why = h
+        .app
+        .write_toolpath_files(&form, &post, &later)
+        .unwrap_err();
+    assert!(why.contains("the job changed while saving"), "{why}");
+    assert!(!later.exists());
     let _ = std::fs::remove_dir_all(dir);
 }
 
