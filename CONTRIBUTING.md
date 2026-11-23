@@ -17,6 +17,9 @@ a header, then says in steps, with pictures where a beginner needs them, how to 
 
 `see-also` and every `help:` link in the words make the help's link graph: a tool's page lists
 the pages it names **and** the pages that name it, so links work both ways from one list.
+Every page names at least one related page (tests fail otherwise); they show in its side bar
+under Related, with its tool group under Other tools like this. When people search with a word
+the help doesn't use, add it to `crates/help/synonyms.txt`.
 
 **The help rule.** At the end of every piece of work, go back and update the help for every
 tool or setting you added or changed: its steps, pictures and settings, and links to the pages

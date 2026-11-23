@@ -80,10 +80,37 @@ else
   fi
 fi
 
+# The README's pictures (docs/screenshots) are taken again only when something the app shows
+# changed since they were last taken: its screens and their code, its English words, its icons.
+# Tests and help pages don't show in them.
+taken=$(git log -1 --format=%H -- docs/screenshots)
+shown='^(crates/app/src/|crates/commands/[^/]+/src/|crates/i18n/locales/en/|assets/)'
+not_shown='(^|/)tests?(/|\.rs$)|_tests?\.rs$'
+if [[ -n $taken ]]; then
+  stale=$(git diff --name-only "$taken" HEAD | grep -E "$shown" | grep -Ev "$not_shown" || true)
+else
+  stale="(never taken)"
+fi
+if [[ -n $stale ]]; then
+  count=$(wc -l <<<"$stale")
+  echo "The README pictures are out of date: what the app shows changed since they were taken"
+  echo "(docs/screenshots, BUILDING.md step 4):"
+  head -15 <<<"$stale" | sed 's/^/  /'
+  ((count > 15)) && echo "  ... and $((count - 15)) more"
+  pictures=" and docs/screenshots"
+  retake="
+1b. Take the README pictures again (BUILDING.md, step 4) and look them over."
+else
+  echo "The README pictures still match what the app shows: skip taking them again."
+  pictures=""
+  retake=""
+fi
+echo
+
 cat <<EOF
 Next:
-1. Write crates/app/whats-new.md.
-2. Commit Cargo.toml, Cargo.lock and crates/app/whats-new.md on a branch, and open a pull
-   request titled "chore: version $next".
+1. Write crates/app/whats-new.md.$retake
+2. Commit Cargo.toml, Cargo.lock and crates/app/whats-new.md$pictures on a branch, and
+   open a pull request titled "chore: version $next".
 3. When CI is green, merge it. Release tag tags v$next and Builds publishes the release.
 EOF
