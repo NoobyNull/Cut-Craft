@@ -13,15 +13,12 @@ fn now() -> u64 {
 }
 
 impl CutCraftApp {
-    /// About once a day, unless Options ▸ Updates says not to or a package manager looks
-    /// after this copy: asks GitHub in the background,
-    /// and says something only when there is a new version.
+    /// Every start, unless Options ▸ Updates says not to or a package manager looks after
+    /// this copy: asks GitHub in the background, and says something only when there is a
+    /// new version.
     pub(super) fn check_for_updates_at_startup(&mut self, ctx: &egui::Context) {
         let o = &self.options.updates;
-        if o.check_at_startup
-            && self.updates.checks_at_startup()
-            && cut_craft_updater::due(o.last_check, now())
-        {
+        if o.check_at_startup && self.updates.checks_at_startup() {
             self.updates.check(ctx, false, o.skipped_version.clone());
         }
     }
