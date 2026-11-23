@@ -13,11 +13,11 @@ fn job() -> (Document, Vec<EntityId>) {
     let mut doc = Document::default();
     let mut c = Change::builder(&doc);
     let ids = [
-        ("Pocket", "End Mill"),
-        ("Drill", "End Mill"),
-        ("Text", "V-Bit"),
+        ("Pocket", "End Mill", 20.0),
+        ("Drill", "End Mill", 30.0),
+        ("Text", "V-Bit", 40.0),
     ]
-    .map(|(name, tool)| {
+    .map(|(name, tool, end)| {
         c.add_toolpath(Toolpath {
             name: name.into(),
             strategy: "profile_toolpath".into(),
@@ -28,11 +28,12 @@ fn job() -> (Document, Vec<EntityId>) {
                 ..Default::default()
             },
             vectors: vec![],
-            // down at (10, 10), then a cut across to (20, 10)
+            // down at (10, 10), then a cut across to its own end (Pocket
+            // X20, Drill X30, Text X40), so each file shows whose cuts it holds
             moves: [
                 (MoveKind::Rapid, 10.0, 5.0),
                 (MoveKind::Plunge, 10.0, -1.0),
-                (MoveKind::Cut, 20.0, -1.0),
+                (MoveKind::Cut, end, -1.0),
             ]
             .map(|(kind, x, z)| Move {
                 kind,
@@ -186,14 +187,23 @@ fn the_files_hold_the_g_code_of_each_part_of_the_plan() {
     let texts = f.output().texts(&visible, &post, &path, made, &[]).unwrap();
     let names: Vec<String> = texts.iter().map(|(p, _)| p.display().to_string()).collect();
     assert_eq!(names.len(), 2, "{names:?}");
-    // each file cuts: a feed move to its toolpath's cut
+    // each file holds the cuts of its own toolpaths and no others
+    let cuts_to = |text: &str, x: &str| {
+        text.lines()
+            .any(|l| l.starts_with("G1") && l.split_whitespace().any(|w| w == format!("{x}.000")))
+    };
     for (path, text) in &texts {
-        assert!(
-            text.lines()
-                .any(|l| l.starts_with("G1") && l.contains("X20")),
-            "{}: {text}",
-            path.display()
-        );
+        let shown = path.display().to_string();
+        let ends: Vec<&str> = ["X20", "X30", "X40"]
+            .into_iter()
+            .filter(|x| cuts_to(text, x))
+            .collect();
+        let expected: &[&str] = if shown.contains("V-Bit") {
+            &["X40"]
+        } else {
+            &["X20", "X30"]
+        };
+        assert_eq!(ends, expected, "{shown}: {text}");
     }
 }
 
