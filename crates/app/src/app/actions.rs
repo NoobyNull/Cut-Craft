@@ -445,7 +445,11 @@ impl CutCraftApp {
 
     /// Menu items, tool buttons and shortcuts all end up here: built-in actions first, then
     /// the command registry.
-    #[expect(clippy::too_many_lines, reason = "the one dispatch of every action")]
+    #[expect(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        reason = "the one dispatch of every action; to be split by the action table work"
+    )]
     pub(super) fn invoke(&mut self, ctx: &egui::Context, id: &str) {
         // the log says which tool was used, so a crash's log shows what led up to it
         cut_craft_bug_report::logs::step(&format!("Tool: {} ({id})", self.tool_label(id)));
