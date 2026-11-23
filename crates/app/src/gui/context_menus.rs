@@ -75,16 +75,19 @@ pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<M
     ]
 }
 
-/// A toolpath's Group submenu: this toolpath or the shown ones into a new group, a new empty
-/// group, this toolpath into another group, or out of its group.
+/// A toolpath's Group submenu: this toolpath into a new group (inside the group it is in),
+/// the shown ones into a new group, a new empty group, this toolpath into another group, or
+/// out of its group one level.
 pub(super) fn group_items(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
     use cmd_toolpath_group::{GroupParams, GroupToolpaths};
-    let into = |name: &str, toolpaths: Vec<EntityId>, group: &str| {
+    let at = toolpath.group.clone().unwrap_or_default();
+    let into = |name: &str, toolpaths: Vec<EntityId>, group: &str, inside: &str| {
         MenuItem::run::<GroupToolpaths>(
             name,
             &GroupParams {
                 toolpaths,
                 group: group.to_owned(),
+                inside: inside.to_owned(),
             },
         )
     };
@@ -99,14 +102,20 @@ pub(super) fn group_items(doc: &Document, id: EntityId, toolpath: &Toolpath) -> 
         .toolpath_groups_in_use()
         .iter()
         .filter(|g| toolpath.group.as_ref() != Some(g))
-        .map(|g| into(g, vec![id], g))
+        .map(|g| into(&doc.toolpath_group_path(g).join(" ▸ "), vec![id], g, ""))
         .collect();
+    // out of its group: into the group that one sits in, if any
+    let up = toolpath
+        .group
+        .as_deref()
+        .and_then(|g| doc.toolpath_group_parent(g))
+        .unwrap_or_default();
     vec![
-        into("Group This", vec![id], &new),
-        into("Group Visible", shown, &new),
-        into("Create Empty Group", vec![], &new),
+        into("Group This", vec![id], &new, &at),
+        into("Group Visible", shown, &new, ""),
+        into("Create Empty Group", vec![], &new, ""),
         MenuItem::submenu("Move to Group", others.clone()).enabled(!others.is_empty()),
-        into("Remove from Group", vec![id], "").enabled(toolpath.group.is_some()),
+        into("Remove from Group", vec![id], &up, "").enabled(toolpath.group.is_some()),
     ]
 }
 
