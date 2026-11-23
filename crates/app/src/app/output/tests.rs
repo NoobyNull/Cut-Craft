@@ -313,13 +313,33 @@ fn a_toolpath_with_no_moves_is_left_out_and_said() {
         .texts(&visible, &post, Path::new("sign.nc"), made, &[])
         .unwrap_err();
     assert!(
-        why.starts_with("Nothing saved: Pocket, Drill, Text have no moves"),
+        why.starts_with("Nothing to save: Pocket, Drill, Text have no moves"),
         "{why}"
     );
     assert_eq!(
         with_left_out("Saved sign.nc".into(), &["Text".to_owned()]),
         "Saved sign.nc. Left out, as it has no moves to cut: Text"
     );
+}
+
+#[test]
+fn a_tiled_job_with_nothing_in_any_tile_saves_nothing() {
+    let (mut f, ids) = Fixture::new();
+    f.doc.tiling = Some(cut_craft_core::tiling::Tiling::default());
+    // one move each: something in the plan, but no cut for any tile to hold
+    for id in &ids {
+        f.doc.toolpaths.get_mut(id).unwrap().moves.truncate(1);
+    }
+    let visible = form(SaveMode::VisibleToOneFile, ToolChanges::SeparateFiles);
+    let post = f.output().post(&visible).unwrap();
+    let made = chrono::NaiveDate::from_ymd_opt(2026, 11, 23)
+        .unwrap()
+        .and_hms_opt(9, 0, 0)
+        .unwrap();
+    let why = (f.output())
+        .texts(&visible, &post, Path::new("sign.nc"), made, &[])
+        .unwrap_err();
+    assert!(why.starts_with("Nothing to save: no tile"), "{why}");
 }
 
 #[test]

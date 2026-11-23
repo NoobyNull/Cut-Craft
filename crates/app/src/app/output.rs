@@ -187,7 +187,7 @@ impl Output<'_> {
             let left = self.left_out(form, post);
             let has = if left.len() == 1 { "has" } else { "have" };
             return Err(format!(
-                "Nothing saved: {} {has} no moves to cut. Recalculate, or untick in the \
+                "Nothing to save: {} {has} no moves to cut. Recalculate, or untick in the \
                  toolpath list what is not to be saved",
                 left.join(", "),
             ));
@@ -233,6 +233,14 @@ impl Output<'_> {
                 let text = files::render_through(post, &slots, part, path, job, made, &notes)?;
                 texts.push((path.clone(), text));
             }
+        }
+        // every tile empty: no files, and an earlier save is kept as it was
+        if texts.is_empty() {
+            return Err(
+                "Nothing to save: no tile has anything to cut. Recalculate the \
+                        toolpaths, or check the tiles cover the cuts"
+                    .to_owned(),
+            );
         }
         Ok(texts)
     }
