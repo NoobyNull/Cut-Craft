@@ -45,6 +45,8 @@ everything = [
 nothing = [
   "*.md",
   "LICENSE",
+  "about.toml",
+  "about.hbs",
   "docs/**",
   "re/**",
   "packaging/**",
@@ -192,6 +194,8 @@ rest = true
 modules = ["app::tests::web_api"]
 # the web API's tests drive the app with the whole-app tests' Harness
 paths = ["assets/**", "crates/app/src/app/tests.rs"]
+# Help ▸ Credits builds these in
+checks = ["credits/**"]
 affects = ["help", "how-to", "workflows"]
 
 [suites.workflows]

@@ -7,8 +7,8 @@
 use super::{
     BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Dialog, Document, EXPORT_LEVEL,
     EntityId, History, Icons, Info, PLAYBACK_SPEED, Page, Pages, SELECT_LEVEL, SaveForm, Screen,
-    Session, Shown, THIRD_PARTY, TOP_BAR_TOGGLES, ToolDatabase, Value, View, brush_dialog,
-    commands, dialog_size, egui, files, filtered_dialog, gui, saving_path, summary_table, view3d,
+    Session, Shown, TOP_BAR_TOGGLES, ToolDatabase, Value, View, brush_dialog, commands,
+    dialog_size, egui, files, filtered_dialog, gui, saving_path, summary_table, view3d,
 };
 use cut_craft_i18n::tr;
 
@@ -188,6 +188,7 @@ impl CutCraftApp {
             help_history: cut_craft_help::wiki::History::default(),
             tip: None,
             tips_cache: egui_commonmark::CommonMarkCache::default(),
+            credits: crate::credits::Window::default(),
             sketch_areas: None,
             carve_area: None,
             reach_found: None,
@@ -679,12 +680,8 @@ impl CutCraftApp {
             | "print" => {
                 self.clipboard_or_file_action(ctx, id);
             }
-            "keyboard_shortcuts"
-            | "third_party_licenses"
-            | "toolpath_summary"
-            | "about_cut_craft"
-            | "help_contents"
-            | "snap_options" => self.open_window(id),
+            "keyboard_shortcuts" | "credits" | "toolpath_summary" | "about_cut_craft"
+            | "help_contents" | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
             // F1: the open form's help page, else the contents
             "tool_help" => {
@@ -1152,7 +1149,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The Help windows: About, Keyboard Shortcuts, Third Party Licenses.
+    /// The Help windows: About, Keyboard Shortcuts, Credits.
     pub(super) fn info_window(&mut self, ctx: &egui::Context) {
         let Some(info) = self.info else { return };
         if let Info::Help(topic) = info {
@@ -1163,7 +1160,7 @@ impl CutCraftApp {
         let title = match info {
             Info::About => "About Cut Craft".to_owned(),
             Info::Shortcuts => "Keyboard Shortcuts".to_owned(),
-            Info::Licenses => "Third Party Licenses".to_owned(),
+            Info::Credits => "Credits".to_owned(),
             Info::Summary => "Toolpath Summary".to_owned(),
             Info::Help(_) => unreachable!("returned above"),
         };
@@ -1181,6 +1178,8 @@ impl CutCraftApp {
             .active()
             .map(|m| (m.name.clone(), m.acceleration));
         let summary = &mut self.summary;
+        let credits = &mut self.credits;
+        let mut open_credits = false;
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
@@ -1188,7 +1187,7 @@ impl CutCraftApp {
             Info::Summary => {
                 noted = summary_table(ui, &rows, total, summary, units, machine.clone());
             }
-            Info::About => about(ui),
+            Info::About => open_credits = about(ui),
             Info::Shortcuts => {
                 if ui
                     .button(tr!("shortcuts-change"))
@@ -1209,15 +1208,7 @@ impl CutCraftApp {
                         });
                     });
             }
-            Info::Licenses => {
-                egui::Grid::new("licenses").striped(true).show(ui, |ui| {
-                    for (name, licence) in THIRD_PARTY {
-                        ui.label(name);
-                        ui.label(licence);
-                        ui.end_row();
-                    }
-                });
-            }
+            Info::Credits => crate::credits::show(ui, credits),
         });
         // Apply under the summary's notes keeps them with their toolpath
         if let Some((id, notes)) = noted
@@ -1235,6 +1226,9 @@ impl CutCraftApp {
         if !open {
             self.info = None;
         }
+        if open_credits {
+            self.info = Some(Info::Credits);
+        }
         if change_shortcuts {
             self.info = None;
             self.options_window = true;
@@ -1243,8 +1237,9 @@ impl CutCraftApp {
     }
 }
 
-/// The About window: what Cut Craft is, its license, thanks and contributors.
-fn about(ui: &mut egui::Ui) {
+/// The About window: what Cut Craft is, its license, thanks and contributors. Gives whether
+/// Credits was clicked.
+fn about(ui: &mut egui::Ui) -> bool {
     ui.heading(tr!("about-name"));
     ui.label(tr!("about-version", version = env!("CARGO_PKG_VERSION")));
     ui.label(tr!("about-what"));
@@ -1258,6 +1253,10 @@ fn about(ui: &mut egui::Ui) {
     ui.separator();
     ui.strong(tr!("about-acknowledgements"));
     ui.label(ACKNOWLEDGEMENT);
+    let credits = ui
+        .button(tr!("about-credits"))
+        .on_hover_text(tr!("about-credits.tooltip"))
+        .clicked();
     ui.separator();
     ui.strong(tr!("about-contributors"));
     for (login, commits, url) in contributors() {
@@ -1270,13 +1269,16 @@ fn about(ui: &mut egui::Ui) {
             };
         });
     }
+    credits
 }
 
 /// The About window's plain summary of Cut Craft's own license (the top of LICENSE).
 pub(super) const LICENCE_SUMMARY: &str = "Cut Craft is source-available, not open source. \
-It is licensed under the PolyForm Noncommercial License 1.0.0: you may use, change and share it \
-free of charge for noncommercial purposes only, not for any commercial purpose such as making \
-things to sell. The LICENSE file is what applies.";
+It is licensed under the PolyForm Strict License 1.0.0 with an extra permission: people and \
+one-person businesses may use it free of charge for any purpose, including making and selling \
+things with it. Larger businesses may use it for noncommercial purposes only. Nobody may share, \
+sell or change Cut Craft itself, except to offer changes back to the project. The LICENSE file \
+is what applies.";
 
 /// The About window's thanks to the program that inspired Cut Craft (ACKNOWLEDGEMENTS.md in full).
 pub(super) const ACKNOWLEDGEMENT: &str = "Thank you to Vectric Ltd. Cut Craft was inspired by Vectric Aspire, \

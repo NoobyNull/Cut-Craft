@@ -56,11 +56,13 @@ fn about_states_cut_craft_s_own_licence() {
     assert!(h.text_at("License").is_some());
     let licence = super::actions::LICENCE_SUMMARY;
     assert!(licence.contains("not open source"), "{licence}");
-    assert!(licence.contains("noncommercial"), "{licence}");
     assert!(
-        licence.contains("PolyForm Noncommercial License 1.0.0"),
+        licence.contains("PolyForm Strict License 1.0.0"),
         "{licence}"
     );
+    assert!(licence.contains("one-person businesses"), "{licence}");
+    assert!(licence.contains("making and selling things"), "{licence}");
+    assert!(licence.contains("Nobody may share"), "{licence}");
 }
 
 /// FNV-1a, so the test needs no hashing crate.
@@ -74,13 +76,13 @@ fn fnv1a(text: &str) -> u64 {
 fn licence_file_keeps_the_polyform_text_word_for_word() {
     let licence = include_str!("../../../../../LICENSE");
     let start = licence
-        .find("# PolyForm Noncommercial License 1.0.0")
+        .find("# PolyForm Strict License 1.0.0")
         .expect("the PolyForm text is in LICENSE");
     // a Windows checkout may turn line ends into CR LF
     let polyform = licence[start..].replace('\r', "");
     // the official text, from github.com/polyformproject/polyform-licenses at tag 1.0.0:
     // Cut Craft's own terms go above it, never into it
-    assert_eq!(polyform.len(), 4_563, "the PolyForm text was changed");
+    assert_eq!(polyform.len(), 3_593, "the PolyForm text was changed");
     assert_eq!(
         fnv1a(&polyform),
         POLYFORM_FNV1A,
@@ -88,17 +90,27 @@ fn licence_file_keeps_the_polyform_text_word_for_word() {
     );
 }
 
-const POLYFORM_FNV1A: u64 = 0xcf71_f592_48dd_cd09;
+const POLYFORM_FNV1A: u64 = 0x7c09_e7bf_377a_4bc9;
 
 #[test]
-fn licence_file_is_plain_polyform_noncommercial_with_the_credit_line() {
+fn licence_file_is_polyform_strict_with_the_credit_line_and_the_extra_permission() {
     let licence = include_str!("../../../../../LICENSE").replace('\r', "");
     let ours = &licence[..licence.find("# PolyForm").unwrap()];
-    // nothing but the credit line goes above the PolyForm text: no extra terms
-    assert_eq!(
-        ours.trim(),
-        "Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)"
-    );
+    assert!(ours.starts_with(
+        "Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)\n"
+    ));
+    // the permission only adds to Strict's permitted purposes: any purpose for people and
+    // one-person businesses, never sharing, selling or changing Cut Craft itself
+    for words in [
+        "# Cut Craft Additional Permission",
+        "in addition to the PolyForm Strict License 1.0.0 terms below",
+        "run by that individual alone with no employees, any purpose is a permitted purpose",
+        "designing, making and selling products",
+        "does not allow you to distribute, sell, rent or sublicense the software",
+        "only to offer them to the licensor for inclusion",
+    ] {
+        assert!(ours.contains(words), "{words:?} in LICENSE");
+    }
 }
 
 #[test]
@@ -127,12 +139,61 @@ fn rail_and_ribbon_show_the_hovered_tools_guidance_in_a_tip_box() {
 }
 
 #[test]
+fn about_s_credits_button_opens_the_credits_window() {
+    let mut h = Harness::new();
+    h.app.info = Some(Info::About);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    click_button(&mut h, "Credits…");
+    assert_eq!(h.app.info, Some(Info::Credits));
+}
+
+#[test]
+fn the_credits_window_thanks_lists_and_searches_every_credit() {
+    let total = crate::credits::all().len();
+    let mut h = Harness::new();
+    h.app.info = Some(Info::Credits);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("Cut Craft is built with free libraries"))
+    );
+    assert!(
+        h.text_at(&format!("Showing {total} of {total}")).is_some(),
+        "{:?}",
+        h.texts()
+    );
+    h.app.credits.search = "usvg".to_owned();
+    h.frame(vec![]);
+    // usvg is under MIT in one version and the MPL in older ones
+    assert!(
+        h.text_at(&format!("Showing 2 of {total}")).is_some(),
+        "{:?}",
+        h.texts()
+    );
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("Mozilla Public License 2.0: "))
+    );
+    h.app.credits.search = "no-such-library".to_owned();
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("Nothing matches \"no-such-library\""))
+    );
+}
+
+#[test]
 fn help_items_open_their_windows() {
     let mut h = Harness::new();
     for (id, info) in [
         ("about_cut_craft", Info::About),
         ("keyboard_shortcuts", Info::Shortcuts),
-        ("third_party_licenses", Info::Licenses),
+        ("credits", Info::Credits),
         ("toolpath_summary", Info::Summary),
     ] {
         h.app.invoke(&h.ctx, id);

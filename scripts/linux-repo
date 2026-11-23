@@ -73,7 +73,7 @@ sudo dnf install cut-craft</pre>
 sudo zypper install cut-craft</pre>
 <h2>Arch, CachyOS, Manjaro</h2>
 <pre>paru -S cut-craft-bin    # or: yay -S cut-craft-bin</pre>
-<p>Cut Craft is free for noncommercial use under the PolyForm Noncommercial 1.0.0 licence.
+<p>Cut Craft is free for people and one-person businesses, even to make things to sell, under the PolyForm Strict 1.0.0 licence with an extra permission (see its LICENSE).
 <a href="https://github.com/NoobyNull/Cut-Craft">Source and releases</a>.</p>
 </body></html>
 HTML

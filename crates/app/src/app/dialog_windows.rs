@@ -99,7 +99,7 @@ impl CutCraftApp {
     pub(super) fn open_window(&mut self, id: &str) {
         self.info = match id {
             "keyboard_shortcuts" => Some(Info::Shortcuts),
-            "third_party_licenses" => Some(Info::Licenses),
+            "credits" => Some(Info::Credits),
             "toolpath_summary" => Some(Info::Summary),
             "about_cut_craft" => Some(Info::About),
             "help_contents" => Some(Info::Help("contents")),
