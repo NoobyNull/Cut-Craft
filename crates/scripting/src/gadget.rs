@@ -6,18 +6,47 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
 use cut_craft_core::{Change, CommandError, Drag, DynCommand, Meta, Registry};
 use serde_json::{Map, Value, json};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// A loaded gadget, ready to join the [`Registry`] with [`Registry::add_dyn`].
 pub struct GadgetCommand {
     id: &'static str,
+    /// What reading the file found: its name, form and settings. Set when it is loaded, or,
+    /// for a [`waiting_gadget`], once it is opened.
+    read: Arc<OnceLock<Read>>,
+    /// Its name until it is read: the file's own name.
+    file_label: &'static str,
+    file_name: String,
+    source: Arc<str>,
+    /// The commands the gadget may run (gadgets cannot run other gadgets).
+    commands: Arc<Registry>,
+}
+
+/// A gadget file as read: what its `gadget` and `settings` tables say.
+struct Read {
     meta: Meta,
     schema: Value,
     defaults: Value,
+}
+
+/// Opens a [`waiting_gadget`]: reads its file (running the code at its top) so it is named,
+/// has its form and can run. Only once the user has said its code may run.
+pub struct Waiting {
+    read: Arc<OnceLock<Read>>,
     file_name: String,
-    source: String,
-    /// The commands the gadget may run (gadgets cannot run other gadgets).
-    commands: Arc<Registry>,
+    source: Arc<str>,
+}
+
+impl Waiting {
+    /// Reads the gadget, once: its name, or why it cannot be used. Opening it again gives
+    /// the same name, running nothing.
+    pub fn open(&self) -> Result<&'static str, ScriptError> {
+        if let Some(read) = self.read.get() {
+            return Ok(read.meta.label);
+        }
+        let read = read_gadget(&self.file_name, &self.source)?;
+        Ok(self.read.get_or_init(|| read).meta.label)
+    }
 }
 
 /// Reads the gadget in `source` (from the file `file_name`), checking its `settings`, so a
@@ -27,6 +56,43 @@ pub fn load_gadget(
     source: &str,
     commands: Arc<Registry>,
 ) -> Result<GadgetCommand, ScriptError> {
+    let (gadget, waiting) = waiting_gadget(file_name, source, commands);
+    waiting.open()?;
+    Ok(gadget)
+}
+
+/// The gadget in `source` (from the file `file_name`) as a command none of whose code has run:
+/// named after its file, with no settings, refusing to run until [`Waiting::open`] reads it.
+/// For unsigned code, which runs only once the user has said yes.
+pub fn waiting_gadget(
+    file_name: &str,
+    source: &str,
+    commands: Arc<Registry>,
+) -> (GadgetCommand, Waiting) {
+    let stem = file_name.strip_suffix(".lua").unwrap_or(file_name);
+    // a gadget is loaded once, when the app starts, and lives as long as the app
+    let id: &'static str = Box::leak(format!("gadget_{}", slug(stem)).into_boxed_str());
+    let file_label: &'static str = Box::leak(file_name.to_owned().into_boxed_str());
+    let read = Arc::new(OnceLock::new());
+    let source: Arc<str> = source.into();
+    let gadget = GadgetCommand {
+        id,
+        read: Arc::clone(&read),
+        file_label,
+        file_name: file_name.to_owned(),
+        source: Arc::clone(&source),
+        commands,
+    };
+    let waiting = Waiting {
+        read,
+        file_name: file_name.to_owned(),
+        source,
+    };
+    (gadget, waiting)
+}
+
+/// What the gadget in `source` says about itself, read by running the code at its top.
+fn read_gadget(file_name: &str, source: &str) -> Result<Read, ScriptError> {
     let (about, settings) = describe(file_name, source)?;
     let stem = file_name.strip_suffix(".lua").unwrap_or(file_name);
     let label = about["name"]
@@ -36,23 +102,23 @@ pub fn load_gadget(
     if let Some(description) = about["description"].as_str() {
         schema["description"] = description.into();
     }
-    // a gadget is loaded once, when the app starts, and lives as long as the app
-    let id: &'static str = Box::leak(format!("gadget_{}", slug(stem)).into_boxed_str());
+    // read once, when the user first may use it, and kept as long as the app runs
     let label: &'static str = Box::leak(label.into_boxed_str());
-    Ok(GadgetCommand {
-        id,
-        meta: Meta {
-            label,
-            group: "Gadgets",
-            icon: "",
-            shortcut: "",
-        },
+    Ok(Read {
+        meta: gadget_meta(label),
         schema,
         defaults,
-        file_name: file_name.to_owned(),
-        source: source.to_owned(),
-        commands,
     })
+}
+
+/// A gadget's place in the menus: under Gadgets, called `label`.
+fn gadget_meta(label: &'static str) -> Meta {
+    Meta {
+        label,
+        group: "Gadgets",
+        icon: "",
+        shortcut: "",
+    }
 }
 
 /// The JSON schema of the form, and the settings it starts with, from a gadget's `settings`
@@ -170,25 +236,39 @@ fn slug(name: &str) -> String {
         .collect()
 }
 
+impl GadgetCommand {
+    /// Its settings as read; none while it waits to be opened.
+    fn defaults(&self) -> Value {
+        self.read
+            .get()
+            .map_or_else(|| json!({}), |r| r.defaults.clone())
+    }
+}
+
 impl DynCommand for GadgetCommand {
     fn id(&self) -> &'static str {
         self.id
     }
 
     fn meta(&self) -> Meta {
-        self.meta
+        self.read
+            .get()
+            .map_or_else(|| gadget_meta(self.file_label), |r| r.meta)
     }
 
     fn schema(&self) -> Value {
-        self.schema.clone()
+        self.read.get().map_or_else(
+            || json!({ "type": "object", "properties": {} }),
+            |r| r.schema.clone(),
+        )
     }
 
     fn default_params(&self) -> Value {
-        self.defaults.clone()
+        self.defaults()
     }
 
     fn initial_params(&self, _doc: &Document) -> Value {
-        self.defaults.clone()
+        self.defaults()
     }
 
     fn params_from(&self, _path: &Path, _current: &Value) -> Option<Value> {
@@ -196,6 +276,13 @@ impl DynCommand for GadgetCommand {
     }
 
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError> {
+        // unsigned code the user has not said yes to never runs, however it is reached
+        if self.read.get().is_none() {
+            return Err(CommandError::Failed(format!(
+                "\u{201c}{}\u{201d} is unsigned and has not been allowed to run",
+                self.file_label
+            )));
+        }
         run_gadget(
             &self.file_name,
             &self.source,
@@ -214,7 +301,7 @@ impl DynCommand for GadgetCommand {
     fn drag_params(&self, _drag: Drag, _current: &Value) -> Result<Value, CommandError> {
         Err(CommandError::Failed(format!(
             "{} cannot be drawn with the mouse",
-            self.meta.label
+            self.meta().label
         )))
     }
 }

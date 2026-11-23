@@ -179,6 +179,10 @@ impl CutCraftApp {
 
     /// Runs a registered command: straight away if it has no settings, else opens its form.
     pub(super) fn start_command(&mut self, id: &str) {
+        // unsigned code runs only once the user has said yes to it, however it is started
+        if !self.may_run_gadget(id) {
+            return;
+        }
         self.import_level = None;
         // a new job's setup is accepted, as OK would, before another form takes its place:
         // the new-job screen shows only that form, so it would be left bare (issue #17)

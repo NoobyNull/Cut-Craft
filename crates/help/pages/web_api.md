@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: updates, smooth_selected_components, component_properties
+reviewed: 2026-11-23
+see-also: updates, smooth_selected_components, component_properties, addons
 ---
 
 # Web API
@@ -41,6 +41,19 @@ laptop) drive Cut Craft. Then every call, from any computer, must send the **acc
   different program already uses it.
 - **Make New Token** stops the old token working, for example if someone you did not mean
   to have it does.
+
+## Unsigned gadgets and add-ons
+
+A script can't say yes to unsigned code for you. Calling a gadget that is **not official**
+(see [Add-ons](help:addons)) is refused, with a message saying what to do, until you have
+said yes to it in the Cut Craft window:
+
+1. In Cut Craft, pick the gadget in **Gadgets ▸ My Gadgets**.
+2. Choose **Run and Remember** (scripts can use it from then on, until it changes) or **Run
+   This Time** (until Cut Craft closes).
+3. Run your script again.
+
+Cut Craft's own gadgets, and signed ones, need no answer.
 
 ## The status bar
 
