@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-23
 see-also: updates, smooth_selected_components, component_properties
 ---
 

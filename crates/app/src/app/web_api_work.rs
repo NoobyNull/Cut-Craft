@@ -538,7 +538,7 @@ impl CutCraftApp {
             .map_err(|e| ApiError::refused(capital(&e)))?;
         let mut found: Vec<Finding> = found.into_values().flatten().collect();
         found.extend(self.no_tool_changer_for(form.changes));
-        if let Some(refused) = Self::refused(&found) {
+        if let Some(refused) = super::output::refused(&found) {
             return Err(ApiError::refused(refused));
         }
         let mut warnings: Vec<String> = (found.iter())
@@ -573,11 +573,7 @@ impl CutCraftApp {
         let saving = gcode.save_to.as_deref().map(std::path::PathBuf::from);
         let path = match &saving {
             Some(path) => files::with_extension_added(path, &post.extension),
-            None => std::path::PathBuf::from(format!(
-                "{}.{}",
-                cut_craft_machines::send::safe_name(&self.output_name(&form), false),
-                post.extension
-            )),
+            None => std::path::PathBuf::from(self.output().file_name(&form, &post)),
         };
         let made = chrono::Local::now().naive_local();
         let texts = self
@@ -597,7 +593,7 @@ impl CutCraftApp {
                 files::write_text(path, text).map_err(ApiError::refused)?;
             }
             let written: Vec<std::path::PathBuf> = texts.iter().map(|(p, _)| p.clone()).collect();
-            let said = Self::saved_message(&written, &path, self.doc.tiling.is_some());
+            let said = self.output().saved_message(&written, &path);
             self.status.set_message(&format!("{said} (Web API)"));
         }
         cut_craft_bug_report::logs::step("Web API made G-code");

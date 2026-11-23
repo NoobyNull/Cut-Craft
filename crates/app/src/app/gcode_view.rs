@@ -118,8 +118,7 @@ impl CutCraftApp {
             .as_ref()
             .map_or_else(|_| String::new(), |p| p.name.clone());
         let files = post.and_then(|post| {
-            let named = cut_craft_machines::send::safe_name(&self.output_name(&form), false);
-            let name = format!("{named}.{}", post.extension);
+            let name = self.output().file_name(&form, &post);
             let folder = self
                 .session
                 .path
