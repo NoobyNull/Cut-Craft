@@ -93,6 +93,7 @@ impl Updates {
     }
 
     /// Whether the Updates window is showing.
+    #[cfg(test)]
     pub fn is_open(&self) -> bool {
         self.open
     }
