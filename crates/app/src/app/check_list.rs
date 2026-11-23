@@ -189,21 +189,25 @@ impl CutCraftApp {
             ui.horizontal(|ui| {
                 ui.add_space(STATUS_WIDTH + ui.spacing().item_spacing.x);
                 ui.vertical(|ui| {
-                    if f.severity == Severity::Error {
-                        ui.colored_label(
-                            visuals.error_fg_color,
-                            tr!("check-list-must-fix-message", message = f.message.clone()),
-                        );
-                        return;
-                    }
                     let mut ticked = self.acknowledged.contains(&f.message);
-                    let text = egui::RichText::new(format!("⚠ {}", f.message))
-                        .color(visuals.warn_fg_color);
-                    if ui
-                        .checkbox(&mut ticked, text)
-                        .on_hover_hint(tr!("check-list-tick-to-say-you-have"))
-                        .changed()
-                    {
+                    // an error is ticked like a warning, in red: the operator decides
+                    let (text, hint) = if f.severity == Severity::Error {
+                        (
+                            egui::RichText::new(tr!(
+                                "check-list-must-fix-message",
+                                message = f.message.clone()
+                            ))
+                            .color(visuals.error_fg_color),
+                            tr!("check-list-tick-to-save-with-error"),
+                        )
+                    } else {
+                        (
+                            egui::RichText::new(format!("⚠ {}", f.message))
+                                .color(visuals.warn_fg_color),
+                            tr!("check-list-tick-to-say-you-have"),
+                        )
+                    };
+                    if ui.checkbox(&mut ticked, text).on_hover_hint(hint).changed() {
                         if ticked {
                             self.acknowledged.insert(f.message.clone());
                         } else {

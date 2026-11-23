@@ -103,8 +103,8 @@ Saving again where an earlier save left G-code (the file itself, or the numbered
 side files saved beside it) asks first. Replace deletes all of them, so an old file for a
 toolpath you have since removed is not left to run by mistake. Archive moves them into a
 dated folder under Archive beside them (a second one saved in the same second gets its own
-folder), then adds the new ones. If the new files cannot be saved (a toolpath crossing a
-keep-out zone, say), the earlier ones are put back as they were. Tick Do this every time to
+folder), then adds the new ones. If the new files cannot be saved (no toolpath
+shown, say), the earlier ones are put back as they were. Tick Do this every time to
 stop being asked; Edit ▸ Options ▸ Confirmation Choices ▸ G-code from an earlier save changes it.
 Send to Machine asks the same of an earlier send's files in the project's folder on the
 machine (old tile files from another layout too): Replace sends the new files and deletes

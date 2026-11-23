@@ -819,7 +819,7 @@ pub(super) fn immediate_output(
 
 /// Why Save Toolpaths and Send to Machine are greyed while a warning is not ticked.
 pub(super) const TICK_TO_SAVE: &str =
-    "Tick each ⚠ under Checks before cutting to say you have read it, then save";
+    "Tick each ✖ and ⚠ under Checks before cutting to say you have read it, then save";
 
 /// Save Toolpaths' tool changes: a file for each tool, the tool changer (when the machine
 /// has one), or a pause to change the tool by hand.

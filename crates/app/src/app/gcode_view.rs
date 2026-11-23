@@ -165,7 +165,12 @@ impl SaveAfter {
 /// Save Toolpaths held for the question about what the checks before cutting found.
 pub(super) struct SaveAnyway {
     form: SaveForm,
-    problems: Vec<String>,
+    /// What the checks found: every problem, the errors among them, and those errors that
+    /// leave a job that will not run.
+    pub(super) asking: super::output::Asking,
+    /// The errors ticked as read here; Save Anyway waits for every one. Never kept: each
+    /// save asks again.
+    pub(super) ticked: std::collections::BTreeSet<String>,
     /// Asked for Send to Machine rather than Save.
     sending: bool,
 }
@@ -355,54 +360,76 @@ impl CutCraftApp {
     pub(super) fn ask_save_anyway(
         &mut self,
         form: &SaveForm,
-        problems: Vec<String>,
+        asking: super::output::Asking,
         sending: bool,
     ) {
+        // ticked under Checks before cutting counts here too
+        let ticked = (asking.errors.iter())
+            .filter(|e| self.acknowledged.contains(*e))
+            .cloned()
+            .collect();
         self.save_anyway = Some(SaveAnyway {
             form: form.clone(),
-            problems,
+            asking,
+            ticked,
             sending,
         });
     }
 
-    /// The question [`Self::ask_save_anyway`] asks: Save Anyway, or Don't Save.
+    /// The question [`Self::ask_save_anyway`] asks: Save Anyway, or Don't Save (Go Back when
+    /// the job will not run as saved). Each error is shown in red with a tick of its own,
+    /// and Save Anyway waits until every one is ticked.
     pub(super) fn save_anyway_question(&mut self, ctx: &egui::Context) {
-        let Some(ask) = self.save_anyway.as_ref() else {
+        let Some(ask) = self.save_anyway.as_mut() else {
             return;
         };
         let mut answer = None;
         egui::Modal::new(egui::Id::unique("save_anyway")).show(ctx, |ui| {
             ui.set_width(ui.spacing().interact_size.x * 11.0);
             ui.heading(tr!("gcode-view-check-before-cutting"));
-            // a long list scrolls, so the buttons under it stay in reach
-            egui::ScrollArea::vertical()
-                .max_height(ui.ctx().content_rect().height() * 0.5)
-                .show(ui, |ui| {
-                    for problem in &ask.problems {
-                        ui.label(format!("• {problem}"));
-                    }
-                });
+            let error = ui.visuals().error_fg_color;
+            // said once: the errors under it say why
+            if !ask.asking.wont_run.is_empty() {
+                ui.colored_label(error, tr!("gcode-view-will-not-run"));
+            }
+            problems_asked(ui, ask);
             ui.add_space(ui.spacing().item_spacing.y);
-            ui.strong(tr!("gcode-view-save-the-toolpaths-anyway"));
+            let errors = !ask.asking.errors.is_empty();
+            ui.strong(if errors {
+                tr!("gcode-view-save-with-these-errors")
+            } else {
+                tr!("gcode-view-save-the-toolpaths-anyway")
+            });
             ui.separator();
+            let all_ticked = ask.asking.errors.iter().all(|e| ask.ticked.contains(e));
             ui.horizontal(|ui| {
-                if ui
-                    .button(if ask.sending {
-                        tr!("gcode-view-send-anyway")
+                let anyway = ui
+                    .add_enabled(
+                        all_ticked,
+                        egui::Button::new(if ask.sending {
+                            tr!("gcode-view-send-anyway")
+                        } else {
+                            tr!("gcode-view-save-anyway")
+                        }),
+                    )
+                    .on_hover_hint(if errors {
+                        tr!("gcode-view-go-ahead-with-errors")
                     } else {
-                        tr!("gcode-view-save-anyway")
+                        tr!("gcode-view-go-ahead-you-have-read")
                     })
-                    .on_hover_hint(tr!("gcode-view-go-ahead-you-have-read"))
-                    .clicked()
-                {
+                    .on_disabled_hover_text(tr!("gcode-view-tick-each-error"));
+                if anyway.clicked() {
                     answer = Some(true);
                 }
+                let back = if !ask.asking.wont_run.is_empty() {
+                    tr!("gcode-view-go-back")
+                } else if ask.sending {
+                    tr!("gcode-view-don-t-send")
+                } else {
+                    tr!("gcode-view-don-t-save")
+                };
                 if ui
-                    .button(if ask.sending {
-                        tr!("gcode-view-don-t-send")
-                    } else {
-                        tr!("gcode-view-don-t-save")
-                    })
+                    .button(back)
                     .on_hover_hint(tr!("gcode-view-save-nothing-to-put-the"))
                     .clicked()
                 {
@@ -425,7 +452,7 @@ impl CutCraftApp {
             return;
         }
         // agreed to the problems shown, and no others
-        self.checks_accepted = ask.problems;
+        self.checks_accepted = ask.asking.problems;
         if ask.sending {
             self.send_toolpaths(&ask.form);
         } else {
@@ -434,6 +461,37 @@ impl CutCraftApp {
         // only for that save, whatever stopped it short
         self.checks_accepted.clear();
     }
+}
+
+/// Save Anyway's list of `ask`'s problems: warnings as they are, each error in red with a
+/// tick of its own.
+fn problems_asked(ui: &mut egui::Ui, ask: &mut SaveAnyway) {
+    let error = ui.visuals().error_fg_color;
+    // a long list scrolls, so the buttons under it stay in reach
+    egui::ScrollArea::vertical()
+        .max_height(ui.ctx().content_rect().height() * 0.5)
+        .show(ui, |ui| {
+            for problem in &ask.asking.problems {
+                if !ask.asking.errors.contains(problem) {
+                    ui.label(format!("• {problem}"));
+                    continue;
+                }
+                let mut ticked = ask.ticked.contains(problem);
+                let text = egui::RichText::new(tr!("gcode-view-error", message = problem.clone()))
+                    .color(error);
+                if ui
+                    .checkbox(&mut ticked, text)
+                    .on_hover_hint(tr!("gcode-view-tick-each-error"))
+                    .changed()
+                {
+                    if ticked {
+                        ask.ticked.insert(problem.clone());
+                    } else {
+                        ask.ticked.remove(problem);
+                    }
+                }
+            }
+        });
 }
 
 #[cfg(test)]

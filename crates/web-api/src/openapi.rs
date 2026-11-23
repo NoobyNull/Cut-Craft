@@ -405,8 +405,9 @@ fn more_paths(
     paths.insert("/gcode".into(), json!({ "post": {
         "summary": "Make the G-code",
         "description": "The G-code Save Toolpaths would write, each file's name and text, \
-            after the same checks before cutting. An error stops it (nothing is made); \
-            warnings stop it too until \"accept_warnings\": true, as Save Anyway. With \
+            after the same checks before cutting. An error stops it until \"accept_errors\": true \
+            (the files then say so at the top), and warnings until \"accept_warnings\": true, \
+            as Save Anyway. A toolpath with no moves is left out. With \
             \"save_to\", the files are saved there as well; an earlier save there is written \
             over only with \"replace\": true, archived or replaced as Options say. Nothing is sent to the machine: \
             Cut Craft is not a G-code sender.",
@@ -420,6 +421,7 @@ fn more_paths(
                 "save_to": { "type": "string", "description": "Save the files here too" },
                 "replace": { "type": "boolean", "description": "Write over an earlier save there (archived or replaced as Options say)" },
                 "accept_warnings": { "type": "boolean", "description": "Go ahead though the checks found warnings" },
+                "accept_errors": { "type": "boolean", "description": "Go ahead though the checks found errors (Must fix); the files say so at the top" },
             },
         }), examples(&[
             ("shown", "Every shown toolpath, in one file", json!({})),

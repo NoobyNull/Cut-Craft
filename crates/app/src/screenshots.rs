@@ -157,6 +157,7 @@ const SCENES: &[Scene] = &[
             app.acknowledged.insert(f.message);
         }
     }),
+    ("save-anyway-errors", save_anyway_errors),
     ("tool-number-taken", tool_number_taken),
     // Help: Post-Processor Management (the filters, then Edit Capabilities)
     ("post-filters", |app, ctx| post_window(app, ctx, false)),
@@ -504,6 +505,27 @@ fn checks_found(app: &mut CutCraftApp, ctx: &egui::Context) {
     // the pretend run before is let go, so the real checks run
     app.save_checks.clear();
     checks_job(app, ctx);
+}
+
+/// Save Anyway asking about a job saved past errors: one that will not run, one ticked in
+/// the list already, and a warning to read.
+fn save_anyway_errors(app: &mut CutCraftApp, _: &egui::Context) {
+    let form = app
+        .save_form
+        .take()
+        .unwrap_or_else(|| app.default_save_form());
+    app.gcode_view = None;
+    let wont_run = "Profile: End Mill has no feed rate, so the machine would not move while \
+                    cutting. Set the feed rate in the toolpath's tool settings";
+    let clamp = "Pocket cuts into the keep-out zone Clamp 1";
+    let warning = "Pocket is out of date: recalculate it so it cuts what the design shows now";
+    app.acknowledged.insert(clamp.to_owned());
+    let asking = super::output::Asking {
+        problems: [wont_run, clamp, warning].map(str::to_owned).to_vec(),
+        errors: [wont_run, clamp].map(str::to_owned).to_vec(),
+        wont_run: vec![wont_run.to_owned()],
+    };
+    app.ask_save_anyway(&form, asking, false);
 }
 
 /// The Tool Database: a bit given a tool number another bit has.

@@ -5,7 +5,7 @@ use super::*;
 use crate::files::{SaveMode, ToolChanges};
 use cut_craft_core::Change;
 use cut_craft_core::preflight::{Check, Finding, Severity};
-use cut_craft_core::toolpath::{Tool, Toolpath};
+use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath};
 use std::collections::BTreeSet;
 
 /// A job with three shown toolpaths (End Mill, End Mill, V-Bit), each with a cut.
@@ -28,7 +28,16 @@ fn job() -> (Document, Vec<EntityId>) {
                 ..Default::default()
             },
             vectors: vec![],
-            moves: vec![],
+            moves: [
+                (MoveKind::Rapid, 5.0),
+                (MoveKind::Plunge, -1.0),
+                (MoveKind::Cut, -1.0),
+            ]
+            .map(|(kind, z)| Move {
+                kind,
+                to: cut_craft_core::glam::DVec3::new(10.0, 10.0, z),
+            })
+            .to_vec(),
             visible: true,
             power: vec![],
             stale: false,
@@ -184,17 +193,100 @@ fn the_files_hold_the_g_code_of_each_part_of_the_plan() {
 }
 
 #[test]
-fn errors_refuse_and_say_each_fix() {
+fn errors_are_asked_about_every_time_each_ticked_on_its_own() {
     let found = [
         finding(Severity::Error, "Pocket has no feed rate"),
         finding(Severity::Warning, "Text is out of date"),
         finding(Severity::Error, "Drill would crash"),
     ];
+    let problems: Vec<String> = found.iter().map(|f| f.message.clone()).collect();
+    let errors = vec![
+        "Pocket has no feed rate".to_owned(),
+        "Drill would crash".to_owned(),
+    ];
+    let asking = Asking {
+        problems: problems.clone(),
+        errors: errors.clone(),
+        wont_run: vec![],
+    };
+    // nothing is refused: asked, the errors among the problems
     assert_eq!(
         verdict(&found, &BTreeSet::new(), &[]),
-        Verdict::Refused("Not saved: Pocket has no feed rate; Drill would crash".into())
+        Verdict::Ask(asking.clone())
     );
-    assert_eq!(refused(&found[1..2]), None);
+    // ticked as read is not enough for an error: every save asks again
+    let ticked: BTreeSet<String> = problems.iter().cloned().collect();
+    assert_eq!(verdict(&found, &ticked, &[]), Verdict::Ask(asking));
+    // Save Anyway answered for each one shown
+    assert_eq!(verdict(&found, &ticked, &problems), Verdict::Go);
+    assert_eq!(super::errors(&found), errors);
+}
+
+#[test]
+fn a_job_that_will_not_run_says_so() {
+    let found = [
+        Finding {
+            severity: Severity::Error,
+            message: "Pocket has no feed rate".into(),
+            check: Check::CanCut,
+        },
+        finding(Severity::Error, "Drill would crash"),
+    ];
+    let Verdict::Ask(asking) = verdict(&found, &BTreeSet::new(), &[]) else {
+        panic!("errors are asked about");
+    };
+    assert_eq!(asking.wont_run, ["Pocket has no feed rate"]);
+}
+
+#[test]
+fn files_saved_past_errors_say_so_at_the_top() {
+    let errors = ["Drill would crash into Clamp 1".to_owned()];
+    let semicolons = vec![(
+        PathBuf::from("a.nc"),
+        "; Made by Cut Craft\n; Job: sign\nG21\nG0 X0 Y0\nM30\n".to_owned(),
+    )];
+    let marked_text = &marked(semicolons.clone(), &errors)[0].1;
+    let lines: Vec<&str> = marked_text.lines().collect();
+    assert_eq!(lines[..2], ["; Made by Cut Craft", "; Job: sign"]);
+    assert!(lines[2].starts_with("; SAVED WITH ERRORS"), "{marked_text}");
+    assert_eq!(lines[3], "; Drill would crash into Clamp 1");
+    assert_eq!(lines[4], "G21", "before the first command");
+    // brackets where the post comments in brackets
+    let brackets = vec![(
+        PathBuf::from("a.nc"),
+        "(Made by Cut Craft)\nG21\n".to_owned(),
+    )];
+    let text = &marked(brackets, &errors)[0].1;
+    assert!(
+        text.lines()
+            .nth(1)
+            .unwrap()
+            .starts_with("(SAVED WITH ERRORS")
+    );
+    // nothing said when saved without errors
+    assert_eq!(marked(semicolons.clone(), &[]), semicolons);
+}
+
+#[test]
+fn a_toolpath_with_no_moves_is_left_out_and_said() {
+    let (mut f, ids) = Fixture::new();
+    f.doc.toolpaths.get_mut(&ids[2]).unwrap().moves.clear();
+    let visible = form(SaveMode::VisibleToOneFile, ToolChanges::SeparateFiles);
+    let post = f.output().post(&visible).unwrap();
+    assert_eq!(f.output().left_out(&visible, &post), ["Text"]);
+    let made = chrono::NaiveDate::from_ymd_opt(2026, 11, 23)
+        .unwrap()
+        .and_hms_opt(9, 0, 0)
+        .unwrap();
+    let texts = (f.output())
+        .texts(&visible, &post, Path::new("sign.nc"), made, &[])
+        .unwrap();
+    assert_eq!(texts.len(), 1, "the V-Bit's file had nothing in it");
+    assert!(!texts[0].1.contains("Text"));
+    assert_eq!(
+        with_left_out("Saved sign.nc".into(), &["Text".to_owned()]),
+        "Saved sign.nc. Left out, as it has no moves to cut: Text"
+    );
 }
 
 #[test]
@@ -206,7 +298,10 @@ fn warnings_are_asked_about_unless_ticked_or_answered() {
     let problems: Vec<String> = found.iter().map(|f| f.message.clone()).collect();
     assert_eq!(
         verdict(&found, &BTreeSet::new(), &[]),
-        Verdict::Ask(problems.clone())
+        Verdict::Ask(Asking {
+            problems: problems.clone(),
+            ..Asking::default()
+        })
     );
     // ticked as read in Save Toolpaths: that was the asking
     let ticked: BTreeSet<String> = problems.iter().cloned().collect();

@@ -65,7 +65,9 @@ impl CutCraftApp {
             });
             return;
         }
-        self.status.set_message(&result.unwrap_or_else(|e| e));
+        let left_out = self.left_out(form);
+        let said = result.map(|said| super::output::with_left_out(said, &left_out));
+        self.status.set_message(&said.unwrap_or_else(|e| e));
     }
 
     /// Writes the form's files through `post` (and the job sheet) and sends them to the

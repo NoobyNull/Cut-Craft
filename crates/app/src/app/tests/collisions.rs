@@ -945,8 +945,19 @@ fn the_keep_out_check_at_saving_checks_the_moves_that_are_saved() {
     h.app.options.toolpaths.tolerance_2d = 0.1;
     let plan = vec![vec![id]];
     assert_eq!(h.app.not_kept_out(&h.app.doc, &plan), [] as [String; 0]);
-    let why = h.app.thinned_for_saving(&plan).unwrap_err();
-    assert!(why.contains("keep-out zone"), "{why}");
+    // the checks before cutting check the moves as saved, thinned: Must fix
+    let found = h
+        .app
+        .preflight(&plan, crate::files::ToolChanges::SeparateFiles);
+    let keep_out = found
+        .iter()
+        .find(|f| f.check == cut_craft_core::check_list::Check::KeepOut)
+        .expect("the thinned cut enters the clamp's zone");
+    assert_eq!(
+        keep_out.severity,
+        cut_craft_core::preflight::Severity::Error
+    );
+    assert!(keep_out.message.contains("Clamp 1"), "{}", keep_out.message);
 }
 
 #[test]

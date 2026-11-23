@@ -1262,3 +1262,44 @@ fn component_properties_leaves_the_settings_a_script_leaves_out_as_they_are() {
     assert_eq!(p.combine, Combine::Subtract);
     assert!(p.visible);
 }
+
+#[test]
+fn a_script_makes_g_code_past_errors_only_when_it_says_so() {
+    let (mut h, at, _) = with_a_toolpath();
+    h.app
+        .doc
+        .toolpaths
+        .values_mut()
+        .next()
+        .unwrap()
+        .tool
+        .feed_rate = 0.0;
+    // an error is not answered by accepting the warnings
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "accept_warnings": true })),
+    );
+    assert_eq!(status, 409, "{e}");
+    let said = e["error"].as_str().unwrap();
+    assert!(said.contains("accept_errors"), "{e}");
+    assert!(said.contains("will not run as saved"), "{e}");
+    assert!(said.contains("no feed rate"), "{e}");
+    let (status, made) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "accept_errors": true, "accept_warnings": true })),
+    );
+    assert_eq!(status, 200, "{made}");
+    let errors = made["errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1, "{made}");
+    assert_eq!(made["left_out"], json!([]), "{made}");
+    // the file says what it was saved past, at the top
+    let gcode = made["files"][0]["gcode"].as_str().unwrap();
+    assert!(gcode.contains("SAVED WITH ERRORS"), "{gcode}");
+    assert!(gcode.contains("no feed rate"), "{gcode}");
+}

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-23
 see-also: checks_before_cutting
 ---
 
@@ -24,6 +24,7 @@ Move the part or the zone, then recalculate the toolpath. To have toolpaths lift
 the zones and leave what is under them uncut, tick **Edit ▸ Options ▸ Toolpath Settings ▸
 Clip toolpaths at keep-out zones**.
 
-This is a **Must fix**: the toolpaths are not saved while a cut goes into a zone.
+This is a **Must fix**: Save asks every time while a cut goes into a zone, and you tick it
+to save anyway. See [Saving with errors](help:checks_before_cutting).
 
 See also [Checks before cutting](help:checks_before_cutting).

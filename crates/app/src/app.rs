@@ -755,6 +755,9 @@ struct CutCraftApp {
     /// The problems Save Anyway was answered for: the next save goes on despite them, and
     /// asks again if the checks find any not among them. Empty when not answered.
     checks_accepted: Vec<String>,
+    /// The errors (Must fix) the save under way was answered Save Anyway for: said at the
+    /// top of each file it writes. Set as each save starts, never kept for the next.
+    saving_errors: Vec<String>,
     /// The warnings of the checks before cutting ticked as read, by what they say: Save
     /// and Send to Machine wait until each one found is ticked.
     acknowledged: std::collections::BTreeSet<String>,
