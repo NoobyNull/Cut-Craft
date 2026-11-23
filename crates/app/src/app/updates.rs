@@ -62,7 +62,8 @@ impl CutCraftApp {
 
     /// The job file the new version opens: the open job's, when it has one on disk.
     pub(super) fn job_to_reopen(&self) -> Option<std::path::PathBuf> {
-        if matches!(self.screen, super::Screen::Start) {
+        // the kept copy opens instead, unsaved
+        if matches!(self.screen, super::Screen::Start) || self.handed_off {
             return None;
         }
         self.session.path.clone().filter(|p| p.is_file())

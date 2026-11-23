@@ -49,6 +49,15 @@ impl Session {
         }
     }
 
+    /// [`Session::unsaved`], for work that belongs to the job file `path` (kept for
+    /// recovery, or across an update): saving goes back to it.
+    pub fn unsaved_at(path: Option<PathBuf>) -> Self {
+        Self {
+            path,
+            ..Self::unsaved()
+        }
+    }
+
     pub fn save(&mut self, doc: &Document, history: &History, path: &Path) -> Result<(), String> {
         write_atomic(path, &save_job(doc))
             .map_err(|e| crate::messages::could_not_save(path, &e))?;
@@ -333,10 +342,10 @@ fn claim_recovery_locking(
     std::fs::create_dir_all(dir).ok()?;
     for entry in std::fs::read_dir(dir).ok()?.flatten() {
         let path = entry.path();
-        let stale = path.extension().is_some_and(|e| e == "lock")
+        let stale = path.extension().is_some_and(|e| e == "lock" || e == "json")
             && is_recovery(&path)
             && !path.with_extension("ccjob").exists()
-            && !recovery_in_use(&path);
+            && !recovery_in_use(&path.with_extension("lock"));
         if stale {
             let _ = std::fs::remove_file(&path);
         }
@@ -350,7 +359,9 @@ fn claim_recovery_locking(
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_millis());
-        let _ = std::fs::rename(&own, dir.join(format!("recovery-{run}-{stamp}.ccjob")));
+        let aside = dir.join(format!("recovery-{run}-{stamp}.ccjob"));
+        let _ = std::fs::rename(own.with_extension("json"), aside.with_extension("json"));
+        let _ = std::fs::rename(&own, aside);
     }
     Some((own, lock))
 }
@@ -383,6 +394,33 @@ fn process_running(pid: u32) -> bool {
     cfg!(target_os = "linux") && Path::new(&format!("/proc/{pid}")).exists()
 }
 
+/// What a recovery copy `recovery-<run>.ccjob` says about itself, in `recovery-<run>.json`
+/// beside it: the job file its work belongs to, and whether an update left it for the new
+/// version (rather than a crash). A copy with no note (an older version's) has neither.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RecoveryNote {
+    /// The job's own file, if it has been saved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<PathBuf>,
+    /// Kept by Install Now for the new version to open, not left by a crash.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub after_update: bool,
+}
+
+/// The note beside the recovery copy `copy`; an empty one if there is none to read.
+pub fn recovery_note(copy: &Path) -> RecoveryNote {
+    std::fs::read(copy.with_extension("json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+/// Writes `note` beside the recovery copy `copy`.
+pub fn write_recovery_note(copy: &Path, note: &RecoveryNote) -> std::io::Result<()> {
+    let json = serde_json::to_vec_pretty(note).map_err(std::io::Error::other)?;
+    write_atomic(&copy.with_extension("json"), &json)
+}
+
 /// A recovery copy in `dir` left by a run that ended without saving or closing its job (a
 /// crash), the newest first; not `own`, and not one a window still running keeps. A copy
 /// with no lock (an older version's `recovery.ccjob`) counts as left behind.
@@ -392,7 +430,9 @@ pub fn orphaned_recovery(dir: &Path, own: &Path) -> Option<PathBuf> {
         .flatten()
         .map(|e| e.path())
         .filter(|p| p != own && p.extension().is_some_and(|e| e == "ccjob") && is_recovery(p))
-        .filter(|p| !recovery_in_use(&p.with_extension("lock")))
+        // work handed to the new version by an update is left for it, even before the old
+        // version has quite closed
+        .filter(|p| !recovery_in_use(&p.with_extension("lock")) || recovery_note(p).after_update)
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
 }
 

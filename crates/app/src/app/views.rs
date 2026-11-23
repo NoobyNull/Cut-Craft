@@ -352,7 +352,13 @@ impl CutCraftApp {
         doc.selected_bitmaps
             .retain(|id| doc.bitmaps.contains_key(id));
         if ctx.input(|i| i.viewport().close_requested()) {
-            if self.confirm_discard() {
+            if self.restart_after_close.is_some() && self.hand_off_for_update() {
+                // the work goes to the new version as it is, unsaved: nothing to ask
+                if !self.handed_off {
+                    self.clear_recovery();
+                }
+                self.restart_into_update();
+            } else if self.confirm_discard() {
                 // asked once: a repeated close request must not ask again
                 self.session.discard_changes(&self.history);
                 self.clear_recovery();
