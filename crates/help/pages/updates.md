@@ -58,6 +58,8 @@ computers empty that folder when they restart. It stays until you save or close 
 so if anything goes wrong while the new version starts, the next start opens it again (see
 [the recovery copy](help:saving_jobs)).
 
+**Relaunch Now** keeps your work the same way.
+
 If the copy can't be written (a full disk, for example), you are asked whether to save
 first, as when you close Cut Craft yourself. If you press **Cancel** there, Cut Craft stays
 open and the Updates window offers **Relaunch Now** (when you are ready) or **Relaunch

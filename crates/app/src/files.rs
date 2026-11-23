@@ -407,6 +407,22 @@ pub struct RecoveryNote {
     pub after_update: bool,
 }
 
+/// Writes the recovery copy `copy`: the job's `bytes`, then `note` beside it.
+pub fn write_recovery(copy: &Path, bytes: &[u8], note: &RecoveryNote) -> std::io::Result<()> {
+    write_atomic(copy, bytes)?;
+    write_recovery_note(copy, note)
+}
+
+/// Removes the recovery copy `copy` and everything kept beside it: its note and, with
+/// `lock`, its lock file.
+pub fn remove_recovery(copy: &Path, lock: bool) {
+    let _ = std::fs::remove_file(copy);
+    let _ = std::fs::remove_file(copy.with_extension("json"));
+    if lock {
+        let _ = std::fs::remove_file(copy.with_extension("lock"));
+    }
+}
+
 /// The note beside the recovery copy `copy`; an empty one if there is none to read.
 pub fn recovery_note(copy: &Path) -> RecoveryNote {
     std::fs::read(copy.with_extension("json"))
@@ -416,7 +432,7 @@ pub fn recovery_note(copy: &Path) -> RecoveryNote {
 }
 
 /// Writes `note` beside the recovery copy `copy`.
-pub fn write_recovery_note(copy: &Path, note: &RecoveryNote) -> std::io::Result<()> {
+fn write_recovery_note(copy: &Path, note: &RecoveryNote) -> std::io::Result<()> {
     let json = serde_json::to_vec_pretty(note).map_err(std::io::Error::other)?;
     write_atomic(&copy.with_extension("json"), &json)
 }

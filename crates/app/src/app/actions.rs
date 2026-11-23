@@ -293,7 +293,7 @@ impl CutCraftApp {
             recent_path: None,
             recovery_path: None,
             recovery_lock: None,
-            handed_off: false,
+            work_kept_for_update: false,
             autosaved: (0, 0.0),
             autosave: None,
             title: String::new(),
