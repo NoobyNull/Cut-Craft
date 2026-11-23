@@ -71,8 +71,8 @@ app struct is split into parts of about 40 fields or fewer.
 
 ### 4. Every issue and PR decided
 
-**Done when** every open issue sits in either a "1.0" or an "After 1.0" milestone and no PR is
-more than a week old.
+**Done when** every open issue is closed or sits in the "After 1.0" milestone, and every open PR
+is merged or closed.
 
 | # | Item | State |
 | --- | --- | --- |
