@@ -250,8 +250,11 @@ say "not implemented yet".
   matches GitHub's SHA-256 checksum, swaps the program in
   (the old one kept as `.old` until the next start; a version-named AppImage takes the new
   version's name, its `~/.local/bin` links and menu entries following it), then closes
-  straight away, asking to save first, and opens the new version on the same job. Cancel at
-  the save question leaves Relaunch Now / Later. Flatpak, .deb/.rpm/AUR, macOS, other
+  straight away without asking to save: unsaved work goes to the recovery copy with its
+  job file's name and the new version opens it unsaved (the file itself untouched); only if
+  that copy can't be written is "Save changes?" asked, and Cancel there leaves Relaunch Now /
+  Later. Right-clicking the version at the far right of the status bar offers Check for
+  Updates and About. Flatpak, .deb/.rpm/AUR, macOS, other
   processors and builds from the source code are told how to update by hand instead, with
   the commands to copy. Skip This Version quiets the startup check for that version.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
