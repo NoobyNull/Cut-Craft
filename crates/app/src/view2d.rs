@@ -29,11 +29,15 @@ pub struct ViewTransform {
 
 impl ViewTransform {
     /// Fits a `width` × `height` job inside `area` with `margin` pixels to spare, centred.
-    /// Fits the material, wherever the datum puts it, into the middle of `area`.
+    /// Fits the material, wherever the datum puts it, into the middle of `area`. An area
+    /// too small for the margin spares less, so the job is never drawn turned inside out.
     pub fn fit(area: Rect, margin: f32, job: JobRect) -> Self {
+        let margin = margin.min(0.25 * area.width().min(area.height())).max(0.0);
         let inner = area.shrink(margin);
         let size = job.size();
-        let scale = (inner.width() / to_f32(size.x)).min(inner.height() / to_f32(size.y));
+        let scale = (inner.width() / to_f32(size.x))
+            .min(inner.height() / to_f32(size.y))
+            .max(f32::MIN_POSITIVE);
         let (c, middle) = (inner.center(), job.center());
         Self {
             origin: pos2(
