@@ -28,8 +28,8 @@ keeps it to one row on a 1920-wide screen.
 ## Choosing which tools show
 
 In a group's list, each tool has a pin. A pinned tool shows as an icon on the Ribbon; an
-unpinned one stays in the list only. Click the pin to change it. Your choice is kept
-between runs.
+unpinned one stays in the list only, with either Ribbon icons choice. Click the pin to
+change it. Your choice is kept between runs.
 
 If the window is too narrow for every group on a tab, the groups carry on along a second
 row, in the same order. Nothing is hidden: unpin tools you rarely use to keep the Ribbon

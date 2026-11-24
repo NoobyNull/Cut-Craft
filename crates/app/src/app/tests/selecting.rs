@@ -1364,12 +1364,15 @@ fn every_tool_on_the_ribbon_is_a_setting_compact_by_default() {
     let (groups, _) = h.app.ribbon_groups();
     let last = groups.last().unwrap().name;
     let compact = h.text_at(&format!("{last} ▾")).unwrap().y;
-    // every tool: the groups need more room, so the last goes further down
+    // every tool: the groups need more room, so the last goes further down, or out of
+    // sight where the Ribbon, kept to 40% of the window, scrolls
     h.app.options.general.ribbon_icons = RibbonIcons::EveryTool;
     h.frame(vec![]);
     h.frame(vec![]);
-    let full = h.text_at(&format!("{last} ▾")).unwrap().y;
-    assert!(full > compact, "{full} below {compact}");
+    let full = h.text_at(&format!("{last} ▾")).map(|p| p.y);
+    assert!(full.is_none_or(|y| y > compact), "{full:?} below {compact}");
+    let first = h.text_at(&format!("{} ▾", groups[0].name)).unwrap().y;
+    assert!(first < 0.4 * h.window.y, "the first row shows");
 }
 
 #[test]

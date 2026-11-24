@@ -488,10 +488,48 @@ impl CutCraftApp {
             })
             .collect();
         let widths: Vec<f32> = plans.iter().map(|(_, w)| w + gap).collect();
-        let line = ui.visuals().widgets.noninteractive.bg_stroke;
         // two rows of icons, the same height in every group, so the names line up
         let icons_height = 2.0 * (cell.y + spacing.item_spacing.y);
-        for (n, row) in wrap_rows(&widths, room).into_iter().enumerate() {
+        // never more than 40% of the window, so very large text never pushes the job
+        // view away: further rows scroll
+        let most = 0.4 * ui.ctx().content_rect().height();
+        // inside a top panel the area otherwise starts short: size it to its rows
+        let rows = f32::from(u16::try_from(wrap_rows(&widths, room).len()).unwrap_or(u16::MAX));
+        let row = icons_height + spacing.interact_size.y + 3.0 * spacing.item_spacing.y + 1.0;
+        egui::ScrollArea::vertical()
+            .max_height(most)
+            .min_scrolled_height((rows * row).min(most))
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                self.ribbon_wrapped(
+                    ui,
+                    &groups,
+                    &plans,
+                    &widths,
+                    room,
+                    (gap, icons_height),
+                    page,
+                    edge,
+                );
+            });
+    }
+
+    /// The rows of [`Self::ribbon_rows`]: each group whole, a line after each.
+    #[allow(clippy::too_many_arguments)]
+    fn ribbon_wrapped(
+        &mut self,
+        ui: &mut egui::Ui,
+        groups: &[gui::ToolGroup],
+        plans: &[(Vec<&'static str>, f32)],
+        widths: &[f32],
+        room: f32,
+        (gap, icons_height): (f32, f32),
+        page: Page,
+        edge: f32,
+    ) {
+        let spacing = ui.spacing().clone();
+        let line = ui.visuals().widgets.noninteractive.bg_stroke;
+        for (n, row) in wrap_rows(widths, room).into_iter().enumerate() {
             if n > 0 {
                 ui.separator();
             }
