@@ -132,6 +132,37 @@ fn the_card_is_owed_its_rest_until_its_time_whoever_asks_next() {
     );
 }
 
+/// A sleep shorter than a millisecond costs more than it rests on some systems, so rests too
+/// short to sleep are not dropped but added up, and slept once they come to a millisecond.
+#[test]
+fn rests_too_short_to_sleep_add_up_until_they_are_worth_it() {
+    let t0 = Instant::now();
+    let us = Duration::from_micros;
+    let limit = Limit {
+        on: true,
+        share: 80,
+    };
+    let mut rests = work::Rests::default();
+    rests.worked(t0, t0 + us(2000), limit);
+    assert_eq!(rests.owed(t0 + us(2000)), us(500));
+    assert_eq!(
+        rests.due(t0 + us(2000)),
+        Duration::ZERO,
+        "too short to sleep yet"
+    );
+    // the next piece starts without its rest: what it was owed is carried on
+    rests.worked(t0 + us(2000), t0 + us(4000), limit);
+    assert_eq!(rests.owed(t0 + us(4000)), us(1000));
+    assert_eq!(rests.due(t0 + us(4000)), us(1000), "worth a sleep now");
+    // time the card was left alone pays the rest off
+    rests.worked(t0 + us(9000), t0 + us(11_000), limit);
+    assert_eq!(
+        rests.owed(t0 + us(11_000)),
+        us(500),
+        "nothing carried after a pause"
+    );
+}
+
 #[test]
 fn paced_pieces_run_in_order_resting_between_and_owing_the_last_rest() {
     let piece = Duration::from_millis(100);

@@ -28,6 +28,10 @@ pub struct Limit {
     pub share: u8,
 }
 
+/// The shortest rest worth a sleep: a shorter sleep can cost more than it asks for (on a
+/// Mac a test of 2,000 tiny pieces ran nine times as long), so shorter rests add up first.
+pub const LEAST_REST: Duration = Duration::from_millis(1);
+
 /// When the graphics card, which draws the desktop too, is free for calculations again:
 /// after each piece of work it rests as the limit asks ([`Limit::rest_after`]). The rest is
 /// owed to whoever hands it work next, so a calculation that sends one short job after
@@ -44,16 +48,26 @@ impl Rests {
             .map_or(Duration::ZERO, |until| until.saturating_duration_since(now))
     }
 
-    /// Notes a piece that kept the card busy from `start` to `end`, under `limit`.
-    pub fn worked(&mut self, start: Instant, end: Instant, limit: Limit) {
-        self.until = Some(end + limit.rest_after(end.saturating_duration_since(start)));
+    /// The rest worth sleeping at `now`: what is owed once it comes to [`LEAST_REST`], else
+    /// nothing yet (it is kept and added to).
+    pub fn due(&self, now: Instant) -> Duration {
+        Some(self.owed(now))
+            .filter(|&owed| owed >= LEAST_REST)
+            .unwrap_or_default()
     }
 
-    /// Runs `each` on every piece in turn, each after the rest owed before it.
+    /// Notes a piece that kept the card busy from `start` to `end`, under `limit`; a rest
+    /// still owed when it started is carried on after it.
+    pub fn worked(&mut self, start: Instant, end: Instant, limit: Limit) {
+        let carried = self.owed(start);
+        self.until = Some(end + carried + limit.rest_after(end.saturating_duration_since(start)));
+    }
+
+    /// Runs `each` on every piece in turn, each after the rest due before it.
     pub fn paced<I: IntoIterator>(&mut self, pieces: I, mut each: impl FnMut(I::Item)) {
         let limit = limit();
         for piece in pieces {
-            std::thread::sleep(self.owed(Instant::now()));
+            std::thread::sleep(self.due(Instant::now()));
             let start = Instant::now();
             each(piece);
             self.worked(start, Instant::now(), limit);
