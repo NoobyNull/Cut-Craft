@@ -65,14 +65,13 @@ pub struct ToolpathSettings {
     #[serde(default = "change_by_changer")]
     #[schemars(title = "Bit change by tool changer", extend("x-unit" = "min"), range(min = 0))]
     pub change_by_changer: f64,
-    /// Off: a G-code file's name keeps its spaces, as typed ("My Sign_01_End Mill.nc").
-    /// On: every space becomes an underscore ("My_Sign_01_End_Mill.nc"), for controllers
-    /// and USB readers that cannot open names with spaces
+    /// Off: a G-code file's name keeps its spaces, as typed. On: every space becomes an
+    /// underscore, for controllers and USB readers that cannot open names with spaces
     #[serde(default)]
     #[schemars(title = "Underscores for spaces in G-code file names")]
     pub file_name_underscores: bool,
     /// When toolpaths are saved to multiple files, each file's name says the bit to fit as
-    /// well as the toolpath ("sign_02_Pocket_6mm End Mill.nc")
+    /// well as the toolpath
     #[serde(default = "on")]
     #[schemars(title = "Bit name in multiple file names")]
     pub bit_in_file_names: bool,
