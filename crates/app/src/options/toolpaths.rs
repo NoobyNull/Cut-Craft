@@ -65,6 +65,16 @@ pub struct ToolpathSettings {
     #[serde(default = "change_by_changer")]
     #[schemars(title = "Bit change by tool changer", extend("x-unit" = "min"), range(min = 0))]
     pub change_by_changer: f64,
+    /// Off: a G-code file's name keeps its spaces, as typed. On: every space becomes an
+    /// underscore, for controllers and USB readers that cannot open names with spaces
+    #[serde(default)]
+    #[schemars(title = "Underscores for spaces in G-code file names")]
+    pub file_name_underscores: bool,
+    /// When toolpaths are saved to multiple files, each file's name says the bit to fit as
+    /// well as the toolpath
+    #[serde(default = "on")]
+    #[schemars(title = "Bit name in multiple file names")]
+    pub bit_in_file_names: bool,
 }
 
 /// Two minutes to stop, change a bit by hand and zero it again.
@@ -82,6 +92,14 @@ pub(super) fn preview_speed() -> f64 {
 }
 
 impl ToolpathSettings {
+    /// How saved G-code files are named.
+    pub fn file_names(&self) -> crate::files::FileNames {
+        crate::files::FileNames {
+            underscores: self.file_name_underscores,
+            bit_names: self.bit_in_file_names,
+        }
+    }
+
     /// The preview's starting speed, times the machine's, kept to the slider's range.
     pub fn preview_speed(&self) -> f64 {
         self.preview_multiplier.clamp(0.25, 1000.0)

@@ -197,6 +197,8 @@ impl Default for Options {
                 clip_at_keep_out_zones: false,
                 change_by_hand: change_by_hand(),
                 change_by_changer: change_by_changer(),
+                file_name_underscores: false,
+                bit_in_file_names: true,
             },
             language: Language::default(),
             performance: Performance::default(),
