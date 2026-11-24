@@ -876,6 +876,15 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
             // once both are loaded into another job (at other ids)
             if let Some(params) = t.params.as_object_mut() {
                 params.insert(TEMPLATE_ID.into(), serde_json::json!(id.0));
+                // a group inside another: the groups holding it too, so it comes back
+                // nested (an older version reads the toolpath's own group only)
+                let path = t
+                    .group
+                    .as_deref()
+                    .map_or_else(Vec::new, |g| doc.toolpath_group_path(g));
+                if path.len() > 1 {
+                    params.insert(TEMPLATE_GROUP_PATH.into(), serde_json::json!(path));
+                }
             }
             t
         })
@@ -885,6 +894,36 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
 
 /// The key a template keeps each toolpath's id under, in its settings.
 const TEMPLATE_ID: &str = "template_id";
+
+/// The key a template keeps the groups holding each toolpath under, in its settings:
+/// outermost first, its own group last; only for a group inside another.
+const TEMPLATE_GROUP_PATH: &str = "template_group_path";
+
+/// The groups a template's toolpaths came with, added to `doc`'s: each group the job
+/// doesn't have yet joins the list, inside the group holding it in the template; a group
+/// the job has stays where it is.
+fn template_groups(c: &mut cut_craft_core::ChangeBuilder, doc: &Document, paths: &[Vec<String>]) {
+    let had = doc.toolpath_groups_in_use();
+    let mut groups = doc.toolpath_groups.clone();
+    let mut parents = doc.toolpath_group_parents.clone();
+    for path in paths {
+        for (i, group) in path.iter().enumerate() {
+            if had.contains(group) {
+                continue;
+            }
+            if !groups.contains(group) {
+                groups.push(group.clone());
+            }
+            if let Some(parent) = i.checked_sub(1).map(|p| &path[p]) {
+                parents
+                    .entry(group.clone())
+                    .or_insert_with(|| parent.clone());
+            }
+        }
+    }
+    c.set_toolpath_groups(groups);
+    c.set_toolpath_group_parents(parents);
+}
 
 /// Each id in `params` naming another toolpath: a Merged toolpath's `sources`, and an
 /// Array Copy's `sources` and `only` (the one it copies).
@@ -915,12 +954,22 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
     // the template's ids, and where those toolpaths are now
     let mut moved = std::collections::BTreeMap::new();
     let mut added = vec![];
+    let mut paths = vec![];
     for mut t in toolpaths {
         let was = t
             .params
             .as_object_mut()
             .and_then(|p| p.remove(TEMPLATE_ID))
             .and_then(|id| id.as_u64());
+        let path: Option<Vec<String>> = t
+            .params
+            .as_object_mut()
+            .and_then(|p| p.remove(TEMPLATE_GROUP_PATH))
+            .and_then(|p| serde_json::from_value(p).ok());
+        // only a path ending in the toolpath's own group
+        if let Some(path) = path.filter(|p| p.last() == t.group.as_ref()) {
+            paths.push(path);
+        }
         added.push((c.add_toolpath(t.clone()), t));
         if let Some(was) = was {
             moved.insert(was, added.last().map(|(id, _)| *id).expect("just added"));
@@ -960,6 +1009,7 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
         }
         c.replace_toolpath(id, t);
     }
+    template_groups(&mut c, doc, &paths);
     Ok(c.finish())
 }
 

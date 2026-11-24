@@ -223,6 +223,66 @@ fn a_template_s_merged_toolpath_merges_the_template_s_own_toolpaths() {
 }
 
 #[test]
+fn a_template_keeps_groups_inside_groups_but_never_moves_the_jobs_own_groups() {
+    use cut_craft_core::document::EntityId;
+    // 1 in Outside, 2 in Tabs inside Outside, 3 in none
+    let mut saved = cut_craft_core::testing::three_toolpaths();
+    for t in saved.toolpaths.values_mut() {
+        t.params = serde_json::json!({ "name": t.name });
+    }
+    saved.toolpath_groups = vec!["Outside".into(), "Tabs".into()];
+    saved
+        .toolpath_group_parents
+        .insert("Tabs".into(), "Outside".into());
+    saved.toolpaths.get_mut(&EntityId(1)).unwrap().group = Some("Outside".into());
+    saved.toolpaths.get_mut(&EntityId(2)).unwrap().group = Some("Tabs".into());
+    let ids: Vec<EntityId> = saved.toolpaths.keys().copied().collect();
+    let bytes = super::toolpath_template(&saved, &ids);
+    // an older version reads the same list of toolpaths
+    let plain: Vec<cut_craft_core::toolpath::Toolpath> = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(plain.len(), 3);
+
+    // a job without those groups: they come back nested
+    let mut doc = Document::default();
+    doc.apply(&super::load_toolpath_template(&doc, &bytes).unwrap())
+        .unwrap();
+    assert_eq!(doc.toolpath_group_path("Tabs"), ["Outside", "Tabs"]);
+    assert!(
+        doc.toolpaths
+            .values()
+            .all(|t| t.params.get("template_group_path").is_none()),
+        "the path is not left in the settings"
+    );
+    let groups: Vec<_> = doc.toolpaths.values().map(|t| t.group.clone()).collect();
+    assert_eq!(groups, [Some("Outside".into()), Some("Tabs".into()), None]);
+
+    // a job that already has Tabs at the top: it stays there
+    let mut doc = Document {
+        toolpath_groups: vec!["Tabs".into()],
+        ..Document::default()
+    };
+    doc.apply(&super::load_toolpath_template(&doc, &bytes).unwrap())
+        .unwrap();
+    assert_eq!(doc.toolpath_group_parent("Tabs"), None);
+    assert!(doc.toolpath_groups_in_use().contains(&"Outside".to_owned()));
+
+    // an older template (no paths) loads flat, as before
+    let mut old: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+    for t in &mut old {
+        t["params"]
+            .as_object_mut()
+            .unwrap()
+            .remove("template_group_path");
+    }
+    let mut doc = Document::default();
+    let old = serde_json::to_vec(&old).unwrap();
+    doc.apply(&super::load_toolpath_template(&doc, &old).unwrap())
+        .unwrap();
+    assert!(doc.toolpath_group_parents.is_empty());
+    assert_eq!(doc.toolpaths_in_group("Tabs").len(), 1);
+}
+
+#[test]
 fn templates_and_saved_settings_leave_out_the_picture_a_toolpath_was_made_from() {
     // a Photo V-Carve made from picture 7 of its job
     let mut doc = cut_craft_core::testing::with_toolpath();
