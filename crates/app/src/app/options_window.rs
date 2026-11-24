@@ -300,7 +300,7 @@ impl CutCraftApp {
         // the Preview tab's detail stays as it was moved, unless the default changed
         let now = self.display.detail;
         options.apply_to(&mut self.display);
-        if options.view_3d.preview_detail == self.options.view_3d.preview_detail {
+        if options.performance.preview_detail == self.options.performance.preview_detail {
             self.display.detail = now;
         }
         ctx.set_theme(options.appearance.theme.preference());

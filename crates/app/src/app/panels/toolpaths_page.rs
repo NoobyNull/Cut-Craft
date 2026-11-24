@@ -838,6 +838,10 @@ impl CutCraftApp {
                 if self.web_api_indicator(ui) {
                     ui.separator();
                 }
+                // while a calculation runs, how briskly: Crawl, Walk, Run or Sprint
+                if self.pace_indicator(ui) {
+                    ui.separator();
+                }
                 if self.screen == Screen::Job {
                     // the job's units, and the one-click way to swap them
                     let (unit, hint) = match self.doc.job.units {
@@ -861,7 +865,7 @@ impl CutCraftApp {
                     ui.label(count).on_hover_hint(SELECTION_COUNT_HINT);
                     ui.separator();
                 }
-                if self.screen == Screen::Job && self.options.view_3d.show_frame_rate {
+                if self.screen == Screen::Job && self.options.performance.show_frame_rate {
                     ui.weak(self.frame_rate_note())
                         .on_hover_hint(tr!("panels-how-finely-the-3d-view"));
                     ui.separator();

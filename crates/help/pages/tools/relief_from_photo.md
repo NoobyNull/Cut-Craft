@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-23
-see-also: create_component_from_bitmap, emboss, photo_vcarve_toolpath, addons
+reviewed: 2026-11-24
+see-also: create_component_from_bitmap, emboss, photo_vcarve_toolpath, addons, performance
 ---
 
 ## Steps

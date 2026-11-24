@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also:
 ---
 
@@ -33,6 +33,8 @@ a CNC machine cuts them with.
   switch it on in Options.
 - [How long the job takes to cut](help:cutting_time): what the machining time counts, and
   the machine settings that make it match your machine.
+- [Keeping the computer responsive](help:performance): how much of the computer
+  calculations use, and the status bar's Crawl, Walk, Run and Sprint.
 - [Long jobs and the time left](help:progress): the progress window, how its "about 2
   minutes left" is worked out, and Cancel.
 - [Using Cut Craft in another language](help:language): install a language pack and
@@ -89,10 +91,9 @@ there is nothing to update; see **Machine ▸ Post-Processor Management**.
 
 ## Updates
 
-Every time Cut Craft starts, it asks GitHub whether there is a new version. If there is, it
+Cut Craft asks GitHub about once a day, when it starts, whether there is a new version, and
 asks you: "A new version is available. Download, install and relaunch?" **Install Now**
-downloads it, checks it is genuine, installs it, and reopens Cut Craft on your job, with
-any unsaved changes kept as they were. **Help ▸ Check for Updates**, or right-clicking the
-version number in the bottom-right corner, asks straight away. See
+downloads it, checks it is genuine, installs it, and reopens Cut Craft on your job, asking
+you to save any changes first. **Help ▸ Check for Updates** asks straight away. See
 [Updates](help:updates) for every step, what to do if it goes wrong, and how copies
 installed with apt, dnf or Flatpak are updated.
