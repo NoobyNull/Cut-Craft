@@ -1081,6 +1081,8 @@ struct CutCraftApp {
     /// Held while this run lasts: marks `recovery_path` as this window's, so another window
     /// does not take it for a crash's.
     recovery_lock: Option<std::fs::File>,
+    /// Install Now kept the unsaved work in the recovery copy for the new version to open.
+    work_kept_for_update: bool,
     /// The history revision of the last recovery copy written, and the input time (seconds)
     /// of the last try at one.
     autosaved: (u64, f64),

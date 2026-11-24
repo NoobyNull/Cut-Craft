@@ -91,7 +91,8 @@ there is nothing to update; see **Machine ▸ Post-Processor Management**.
 
 Every time Cut Craft starts, it asks GitHub whether there is a new version. If there is, it
 asks you: "A new version is available. Download, install and relaunch?" **Install Now**
-downloads it, checks it is genuine, installs it, and reopens Cut Craft on your job, asking
-you to save any changes first. **Help ▸ Check for Updates** asks straight away. See
+downloads it, checks it is genuine, installs it, and reopens Cut Craft on your job, with
+any unsaved changes kept as they were. **Help ▸ Check for Updates**, or right-clicking the
+version number in the bottom-right corner, asks straight away. See
 [Updates](help:updates) for every step, what to do if it goes wrong, and how copies
 installed with apt, dnf or Flatpak are updated.

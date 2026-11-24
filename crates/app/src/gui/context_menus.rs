@@ -629,3 +629,12 @@ pub fn layer_menu(doc: &Document, layer: &Layer) -> Vec<MenuItem> {
         .enabled(!doc.selection.is_empty()),
     ]
 }
+
+/// The version's menu, at the far right of the status bar: Help ▸ Check for Updates and
+/// About, where the version is.
+pub fn version_menu() -> Vec<MenuItem> {
+    vec![
+        MenuItem::with_action("Check for Updates...", "check_for_updates"),
+        MenuItem::new("About Cut Craft", ""),
+    ]
+}
