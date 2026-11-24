@@ -243,15 +243,18 @@ say "not implemented yet".
   beside the picture is not drawn; Overcut Distance is not offered.]
 - Help: About, Keyboard Shortcuts, Third Party Licenses, Check for Updates (crate
   `crates/updater`). Asks GitHub's releases (never a mirror) for a newer stable version,
-  at startup about once a day (Options ▸ Updates turns that off) and from the menu. "A new
+  at every startup (Options ▸ Updates turns that off) and from the menu. "A new
   version (X) is available. Download, install and relaunch?" Install Now downloads the release's file for this install (Windows .zip, Linux .tar.gz or
   AppImage), refuses it unless it carries a minisign signature from the release key built
   into the app (`crates/updater/release-key.pub`, its trusted comment naming the file) and
   matches GitHub's SHA-256 checksum, swaps the program in
   (the old one kept as `.old` until the next start; a version-named AppImage takes the new
   version's name, its `~/.local/bin` links and menu entries following it), then closes
-  straight away, asking to save first, and opens the new version on the same job. Cancel at
-  the save question leaves Relaunch Now / Later. Flatpak, .deb/.rpm/AUR, macOS, other
+  straight away without asking to save: unsaved work goes to the recovery copy with its
+  job file's name and the new version opens it unsaved (the file itself untouched); only if
+  that copy can't be written is "Save changes?" asked, and Cancel there leaves Relaunch Now /
+  Later. Right-clicking the version at the far right of the status bar offers Check for
+  Updates and About. Flatpak, .deb/.rpm/AUR, macOS, other
   processors and builds from the source code are told how to update by hand instead, with
   the commands to copy. Skip This Version quiets the startup check for that version.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
@@ -939,8 +942,8 @@ implemented yet" listed.)
   spindle); the laser toolpath forms pick one with Select… like any other tool.
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (not described in the help), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
-  (`docs/ROADMAP.md`, section 6).
-- Not tried by hand: the 2026-11-01 batch (`docs/ROADMAP.md`, section 5) and earlier work
+  (`docs/feature-status-2026-11-01.md`, section 6).
+- Not tried by hand: the 2026-11-01 batch (`docs/feature-status-2026-11-01.md`, section 5) and earlier work
   listed in `docs/hand-test-3d.md`.
 
 ## Differences from Aspire 12 seen on screen

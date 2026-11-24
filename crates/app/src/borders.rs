@@ -355,17 +355,19 @@ impl Generating {
         let stage = Arc::new(AtomicU8::new(0));
         let (send, answer) = mpsc::channel();
         let (shared, ctx) = (stage.clone(), ctx.clone());
-        std::thread::Builder::new()
-            .name("generate border".into())
-            .spawn(move || {
-                let made = make(&job, &run_program, &|s| {
-                    shared.store(s as u8, Ordering::Relaxed);
-                    ctx.request_repaint();
-                });
-                let _ = send.send(made);
+        cut_craft_core::work::background("generate border", move || {
+            // the add-on's own program does the calculating; this thread only waits on it
+            let waited = |program: &Path, args: &[OsString], key: Option<&str>| {
+                cut_craft_core::work::waiting(|| run_program(program, args, key))
+            };
+            let made = make(&job, &waited, &|s| {
+                shared.store(s as u8, Ordering::Relaxed);
                 ctx.request_repaint();
-            })
-            .map_err(|e| e.to_string())?;
+            });
+            let _ = send.send(made);
+            ctx.request_repaint();
+        })
+        .map_err(|e| e.to_string())?;
         Ok(Self { stage, answer })
     }
 

@@ -5,7 +5,7 @@
 use cut_craft_core::component::{self, Combine, Component, Shaping};
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_named, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -217,6 +217,7 @@ impl Command for ComponentProperties {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

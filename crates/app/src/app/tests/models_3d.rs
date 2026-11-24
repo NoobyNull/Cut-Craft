@@ -202,7 +202,7 @@ fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
 
     let mut h = Harness::new();
     h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
-    h.app.addons.ask_to_run = |_| true;
+    h.app.trust.ask = |_| crate::trust::Answer::RunThisTime;
     let mut c = Change::builder(&h.app.doc);
     c.add_bitmap(Bitmap {
         name: "photo".into(),
@@ -283,7 +283,7 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
 
     let mut h = Harness::new();
     h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
-    h.app.addons.ask_to_run = |_| true;
+    h.app.trust.ask = |_| crate::trust::Answer::RunThisTime;
     let mut c = Change::builder(&h.app.doc);
     c.add_bitmap(Bitmap {
         name: "photo".into(),

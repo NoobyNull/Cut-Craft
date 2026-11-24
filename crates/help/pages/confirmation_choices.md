@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: settings, checks_before_cutting, check_missed_spots, vector_validator, save_toolpaths
+reviewed: 2026-11-23
+see-also: settings, checks_before_cutting, check_missed_spots, vector_validator, save_toolpaths, addons
 ---
 
 # Confirmation Choices
@@ -57,3 +57,14 @@ Saving toolpaths where an earlier save of the same name left G-code:
 
 Like every page of Options, changes here wait for **Apply**: see
 [Changing settings](help:settings).
+
+## Unsigned gadgets and add-ons
+
+When you choose **Run and Remember** for a gadget or add-on that is **not official**, Cut
+Craft runs it without asking from then on, until its code changes (see
+[Running unsigned code](help:addons)). This page says how many you have told to run that
+way.
+
+**Forget These Answers** makes every one of them ask again before it next runs. It happens
+straight away: you don't need to press Apply. The button is greyed out while there is
+nothing to forget.

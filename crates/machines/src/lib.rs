@@ -7,6 +7,7 @@ pub mod catalogue;
 pub mod library;
 pub mod machine;
 pub mod manager;
+pub mod post_choice;
 pub mod send;
 pub mod webdav;
 
@@ -17,3 +18,4 @@ pub use machine::{Firmware, Machine, Machines, NO_A_AXIS};
 pub use manager::{
     FolderFor, Look, MachineManager, MachineOutcome, PostManager, PostOutcome, tool_changer,
 };
+pub use post_choice::{post_choices, post_for, wraps_for};

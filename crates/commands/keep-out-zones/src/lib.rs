@@ -6,7 +6,7 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::keep_out::{KeepOutZone, names};
 use cut_craft_core::polygon::{Corners, offset};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -79,6 +79,7 @@ impl Command for KeepOutZones {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

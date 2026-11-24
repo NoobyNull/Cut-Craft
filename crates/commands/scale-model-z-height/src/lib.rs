@@ -4,7 +4,7 @@
 
 use cut_craft_core::component::{Combine, model_at_resolution, shown_components};
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +46,7 @@ impl Command for ScaleModelZHeight {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

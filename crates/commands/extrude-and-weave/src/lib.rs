@@ -10,7 +10,7 @@ use cmd_two_rail_sweep::{Section, height as section_height};
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, Rect};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -171,6 +171,7 @@ impl Command for ExtrudeAndWeave {
             group: "Modeling",
             icon: "modeling/extrude_and_weave.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

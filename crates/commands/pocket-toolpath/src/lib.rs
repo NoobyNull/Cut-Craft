@@ -13,7 +13,9 @@ use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
     Move, MoveKind, Tool, cut_points, hatch_lines, made_by, project_onto_model,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive, tool_does_not_fit};
+use cut_craft_core::{
+    Change, Command, CommandError, Form, Meta, ensure_positive, tool_does_not_fit,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -214,6 +216,7 @@ impl Command for PocketToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/pocket_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

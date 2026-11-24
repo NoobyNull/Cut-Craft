@@ -11,7 +11,7 @@
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::DAffine2;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -172,6 +172,7 @@ impl Command for NestParts {
             group: "Offset and Layout",
             icon: "drawing/weld_and_offset/vector_texture_fill.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

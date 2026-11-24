@@ -407,7 +407,8 @@ fn more_paths(
         "description": "The G-code Save Toolpaths would write, each file's name and text, \
             after the same checks before cutting. An error stops it (nothing is made); \
             warnings stop it too until \"accept_warnings\": true, as Save Anyway. With \
-            \"save_to\", the files are saved there as well. Nothing is sent to the machine: \
+            \"save_to\", the files are saved there as well; an earlier save there is written \
+            over only with \"replace\": true, archived or replaced as Options say. Nothing is sent to the machine: \
             Cut Craft is not a G-code sender.",
         "requestBody": body(json!({
             "type": "object",
@@ -417,7 +418,7 @@ fn more_paths(
                 "each": { "type": "boolean", "description": "Each shown toolpath in a file of its own" },
                 "post": { "type": "string", "description": "A post from GET posts; the machine's default if left out" },
                 "save_to": { "type": "string", "description": "Save the files here too" },
-                "replace": { "type": "boolean", "description": "Write over a file already there" },
+                "replace": { "type": "boolean", "description": "Write over an earlier save there (archived or replaced as Options say)" },
                 "accept_warnings": { "type": "boolean", "description": "Go ahead though the checks found warnings" },
             },
         }), examples(&[

@@ -9,7 +9,7 @@ use cut_craft_core::document::{Along, Document, Layer};
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::params::Xy;
 use cut_craft_core::trace::{self, Fit};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -91,6 +91,7 @@ impl Command for VectorUnwrapper {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

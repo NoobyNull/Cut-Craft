@@ -8,7 +8,7 @@ use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
 use cut_craft_core::toolpath::Tool;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use shape::{Grid, Shaping};
@@ -114,6 +114,7 @@ impl Command for ReliefFromPhoto {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Live { create_first: true },
         }
     }
 

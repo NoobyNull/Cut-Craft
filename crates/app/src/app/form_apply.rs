@@ -3,12 +3,12 @@
 
 use super::toolpath_output::CLIP_SETTING;
 use super::{
-    APP_NAME, Change, CutCraftApp, Dialog, EntityId, LIVE_FORMS, OpenForm, REMAKE_FORMS,
-    TOOL_ICON_ROWS, VECTOR_EXPORTERS, Value, egui, files, filtered_dialog, message_dialog,
-    on_the_desktop,
+    APP_NAME, Change, CutCraftApp, Dialog, EntityId, OpenForm, TOOL_ICON_ROWS, VECTOR_EXPORTERS,
+    Value, egui, files, filtered_dialog, message_dialog, on_the_desktop,
 };
 use crate::options::IntersectionCheck;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_core::Form;
 use cut_craft_i18n::tr;
 
 impl CutCraftApp {
@@ -405,7 +405,7 @@ impl CutCraftApp {
             self.edit_in_background(id, toolpath, params);
             return Ok(());
         }
-        if REMAKE_FORMS.contains(&id) {
+        if matches!(self.form_kind(id), Form::Remake { .. }) {
             return self.remake(id, params);
         }
         let before = self.entity_ids();
@@ -486,7 +486,13 @@ impl CutCraftApp {
     /// Whether form `id` makes one shape or model that it goes on to change: the drawing
     /// tools, and the forms whose model follows them as they change.
     pub(super) fn makes_one(&self, id: &str) -> bool {
-        self.drawing_tool() == Some(id) || LIVE_FORMS.contains(&id)
+        self.drawing_tool() == Some(id) || matches!(self.form_kind(id), Form::Live { .. })
+    }
+
+    /// How command `id`'s form behaves, as the command says ([`Form`]); Apply for an id that
+    /// is no command.
+    pub(super) fn form_kind(&self, id: &str) -> Form {
+        self.registry.get(id).map_or(Form::Apply, |c| c.meta().form)
     }
 
     /// Once a frame: a form's shape or model made again with its settings once they have

@@ -2,7 +2,7 @@
 status: read
 created: 2026-10-24
 updated: 2026-11-01
-focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
+focus: Hand test the 2026-11-01 batch, then docs/feature-status-2026-11-01.md section 9
 ---
 
 ## Update 2026-11-01 (version 0.4.2, `4659eb6`…`ec83b2b`, pushed with tag `v0.4.2`)
@@ -20,7 +20,7 @@ focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
   has, so they were greyed; they now run Texture Area, Add Draft, Offset Model, Slice,
   Split and Emboss. Found by a probe: run every menu item and list those that say "not
   implemented yet".
-- **Read first:** `docs/ROADMAP.md` (state, fixes pending, missing, decisions),
+- **Read first:** `docs/feature-status-2026-11-01.md` (state, fixes pending, missing, decisions),
   `docs/tool-inventory.md`, `docs/hand-test-3d.md`.
 
 ## Update 2026-10-26 (Windows PC "cad", `0ed6bf2`…`2f15811`, pushed to PR #1's branch)

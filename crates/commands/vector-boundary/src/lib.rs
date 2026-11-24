@@ -6,7 +6,7 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, winding};
 use cut_craft_core::polygon::{Corners, TOLERANCE, offset, union};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +50,7 @@ impl Command for VectorBoundary {
             group: "Create Vectors",
             icon: "drawing/create_vectors/vector_boundary.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

@@ -35,9 +35,10 @@ use tool_sections::{
     put_listed, rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
 };
 mod dialogs;
+pub(crate) use dialogs::message_dialog;
 use dialogs::{
     DIALOG_FOLDER, DIALOG_PARENT, brush_dialog, file_dialog, filtered_dialog, form_settings_dialog,
-    job_dialog, message_dialog, on_the_desktop, saving_path, template_dialog, texture_dialog,
+    job_dialog, on_the_desktop, saving_path, template_dialog, texture_dialog,
     toolpath_template_dialog,
 };
 mod readouts;
@@ -66,6 +67,8 @@ mod node_editing;
 mod notes_panel;
 mod options_apply;
 mod options_window;
+mod output;
+mod pace;
 mod page_layout;
 mod panels;
 mod passes;
@@ -267,12 +270,14 @@ impl SurfaceGpu {
             return;
         }
         let (wrap, sides, ctx) = (self.key.wrap, self.key.sides, ctx.clone());
-        let job = std::thread::spawn(move || {
+        let job = cut_craft_core::work::background("3d view detail", move || {
             let level = level_of(&view3d::coarse(&fine, cells), cells, wrap, sides, solid);
             ctx.request_repaint();
             level
         });
-        self.making.push((cells, job));
+        if let Ok(job) = job {
+            self.making.push((cells, job));
+        }
     }
 }
 
@@ -499,6 +504,9 @@ struct OpenForm {
     id: &'static str,
     label: &'static str,
     icon: &'static str,
+    /// How it behaves, as its command says: what its button says, and whether what it made
+    /// follows it.
+    kind: cut_craft_core::Form,
     fields: Vec<Field>,
     params: Value,
     error: Option<String>,
@@ -539,7 +547,7 @@ struct OpenForm {
     beyond: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
-    /// A form that remakes what it made ([`REMAKE_FORMS`]): the history's revision and the selection
+    /// A form that remakes what it made ([`Form::Remake`](cut_craft_core::Form::Remake)): the history's revision and the selection
     /// just after its pieces were made, and the settings it was made with. While nothing else
     /// has been done or picked since, a change of settings takes them back and makes them
     /// again.
@@ -770,12 +778,11 @@ struct CutCraftApp {
     installed_addons: Vec<(String, Option<&'static str>, bool)>,
     /// Rail: the Gadgets list is open.
     rail_gadgets: bool,
-    /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
-    unsigned_gadgets: std::collections::HashMap<String, String>,
-    /// The unsigned gadgets the user has said yes to running this session.
-    unsigned_gadgets_allowed: std::collections::HashSet<String>,
-    /// Asks whether to run the unsigned gadget with this label (a dialog; tests answer).
-    unsigned_gadget_ok: fn(&str) -> bool,
+    /// Gadgets from the My Gadgets folder or unsigned add-ons, not from Cut Craft's own
+    /// signed builds, by command id.
+    unsigned_gadgets: std::collections::HashMap<String, crate::gadgets::Unsigned>,
+    /// The one check before unsigned code runs: gadgets and add-on programs alike.
+    trust: crate::trust::Trust,
     /// A SpaceMouse's moves, once the app is running (not in tests or screenshots).
     space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
@@ -986,6 +993,8 @@ struct CutCraftApp {
     /// Picks the 3D view's detail while it moves from how quickly frames come (Options ▸
     /// Adjust detail to keep the view smooth).
     pacer: crate::frame_rate::Pacer,
+    /// How briskly a calculation is going, for the status bar's Crawl / Walk / Run / Sprint.
+    gauge: cut_craft_core::work::Gauge,
     /// The detail the 3D view draws at this frame, and whether it is moving; the frame
     /// (`egui::Context::cumulative_pass_nr`) that was judged.
     detail_3d: (crate::options::Detail, bool),
@@ -1081,6 +1090,8 @@ struct CutCraftApp {
     /// Held while this run lasts: marks `recovery_path` as this window's, so another window
     /// does not take it for a crash's.
     recovery_lock: Option<std::fs::File>,
+    /// Install Now kept the unsaved work in the recovery copy for the new version to open.
+    work_kept_for_update: bool,
     /// The history revision of the last recovery copy written, and the input time (seconds)
     /// of the last try at one.
     autosaved: (u64, f64),

@@ -2,7 +2,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::nodes::NodeAt;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 
 pub struct ReverseDirection;
 
@@ -16,6 +16,7 @@ impl Command for ReverseDirection {
             group: "Node Editing",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
