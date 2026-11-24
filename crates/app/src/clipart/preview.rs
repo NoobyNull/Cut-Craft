@@ -465,7 +465,7 @@ impl Default for Previews {
 impl Previews {
     /// Tiles' previews, [`SIZE`] pixels across.
     pub fn new(cache: Option<PathBuf>) -> Self {
-        let threads = cut_craft_core::simulation::cores().saturating_sub(1).max(1);
+        let threads = cut_craft_core::work::cores().saturating_sub(1).max(1);
         Self::sized(cache, SIZE, super::limits::keep(), threads)
     }
 
@@ -519,9 +519,9 @@ impl Previews {
             self.workers += 1;
             let (jobs, send, cache) = (self.jobs.clone(), self.send.clone(), self.cache.clone());
             let size = self.size;
-            let spawned = std::thread::Builder::new()
-                .name("clipart previews".into())
-                .spawn(move || work(&jobs, &send, cache.as_deref(), size));
+            let spawned = cut_craft_core::work::background("clipart previews", move || {
+                work(&jobs, &send, cache.as_deref(), size);
+            });
             if spawned.is_err() {
                 self.workers -= 1;
             }
@@ -679,7 +679,8 @@ fn work(jobs: &Jobs, send: &Sender<Made>, cache: Option<&Path>, size: u32) {
             if let Some(job) = waiting.jobs.pop() {
                 break job;
             }
-            waiting = match jobs.ready.wait(waiting) {
+            // waiting for a preview to make is not calculating
+            waiting = match cut_craft_core::work::waiting(|| jobs.ready.wait(waiting)) {
                 Ok(w) => w,
                 Err(_) => return,
             };

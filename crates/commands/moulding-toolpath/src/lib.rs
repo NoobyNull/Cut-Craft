@@ -9,7 +9,7 @@ use cut_craft_core::geometry::{Path, Point, winding};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, cut_points, follow, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -199,6 +199,7 @@ impl Command for MouldingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/moulding_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

@@ -60,13 +60,14 @@ pub mod tool_names;
 pub mod toolpath;
 pub mod trace;
 pub mod vfont;
+pub mod work;
 
 pub use glam;
 
 pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Sequence, Step, UnitGuess};
 pub use command::{
-    Command, CommandError, Drag, DynCommand, EMPTY_MODEL, Interactive, Meta, NoParams, Registry,
-    SELECT_FIRST, ensure_named, ensure_positive, existing, existing_layer, gone, sentence,
-    tool_does_not_fit,
+    Command, CommandError, Drag, DynCommand, EMPTY_MODEL, Form, Interactive, Meta, NoParams,
+    Registry, SELECT_FIRST, ensure_named, ensure_positive, existing, existing_layer, gone,
+    sentence, tool_does_not_fit,
 };
 pub use formats::{ExportEntry, Exporter, FileFormat, ImportEntry, Importer};

@@ -10,7 +10,7 @@
 use cut_craft_core::component::Combine;
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::texture_area::{Texture, Tiling, tiled};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -88,6 +88,7 @@ impl Command for TextureArea {
             group: "Modeling",
             icon: "modeling/create_texture_area.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

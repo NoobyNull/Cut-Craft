@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::nodes::{self, NodeAt};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 
 pub struct SmoothPoint;
 
@@ -17,6 +17,7 @@ impl Command for SmoothPoint {
             group: "Node Editing",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

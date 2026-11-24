@@ -31,6 +31,7 @@ mod tool_database;
 mod toolpath_list;
 mod toolpaths;
 mod unsigned_code;
+mod updating;
 mod view_3d;
 
 /// A headless frame's output: no renderer takes its texture changes, so they are let go.
@@ -721,7 +722,7 @@ fn status_text(h: &Harness, part: &str) -> Option<(Pos2, usize)> {
 /// (the harness's frames are a tenth of a second apart: ten a second, slower than wanted).
 fn turned_slowly(adjust: bool, frames: usize) -> Harness {
     let mut h = Harness::new();
-    h.app.options.view_3d.adjust_to_frame_rate = adjust;
+    h.app.options.performance.adjust_to_frame_rate = adjust;
     h.app.doc = cut_craft_core::testing::domed();
     h.app.view = View::ThreeD;
     for _ in 0..frames {

@@ -180,10 +180,14 @@ Toolpaths page's buttons, each with its progress window as usual.
     `"each": true` puts each shown toolpath in a file of its own.
   - `"post": "GRBL (mm)"` uses that post processor (from **GET posts**).
   - `"save_to": "/home/me/sign.nc"` saves the files there as well. Give the whole path,
-    with its folder. A file already there is kept unless you send `"replace": true`.
-  - An error the checks find stops it: nothing is made. A warning (or a toolpath out of
-    date) stops it too, as **Save Toolpaths** asks you, until you send
-    `"accept_warnings": true`, which is like answering **Save Anyway**.
+    with its folder. An earlier save there (the same file, or the tile, numbered and side
+    files it made) is kept unless you send `"replace": true`. Then it is archived or
+    replaced just as **Save Toolpaths** does, as **Edit ▸ Options ▸ Confirmation Choices**
+    say (replaced when they say to ask), and put back if the new files can't be written.
+  - An error the checks find stops it: nothing is made. A warning (a toolpath out of date
+    is one) stops it too, as **Save Toolpaths** asks you, until you send
+    `"accept_warnings": true`, which is like answering **Save Anyway**. Each warning is
+    listed once, word for word as **Save Toolpaths** shows it.
 
   The G-code is only made and saved: it is never sent to your machine.
 - **POST job/new** `{"settings": {"size": {"width": 300, "height": 150, "thickness": 12}}}`:

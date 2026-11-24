@@ -20,6 +20,34 @@ pub struct Meta {
     /// Icon path relative to the icon directory, e.g. `drawing/create_vectors/draw_circle.png`.
     pub icon: &'static str,
     pub shortcut: &'static str,
+    /// How its form behaves: what its button says, and whether what it made follows it.
+    pub form: Form,
+}
+
+/// How a command's form behaves. The command says it, so the app needs no list of names to
+/// know which button a form shows; an add-on's command says it the same way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Form {
+    /// Changes what is already there (the selection, a layer, the job): **Apply**.
+    Apply,
+    /// Makes something new from its settings, another with each press: **Create**.
+    Create,
+    /// Works out a toolpath from the selected vectors: **Calculate**. A toolpath never cuts
+    /// along a construction line, however it was picked.
+    Toolpath,
+    /// Asks an add-on to make something new for the Library: **Generate**.
+    Generate,
+    /// Used only on the canvas (a stroke, a click, a drag): the form holds settings for the
+    /// next one and has nothing to press.
+    Gesture,
+    /// Makes its piece or model and then follows its settings as they change, with nothing to
+    /// press. `create_first`: it waits for **Create** to make it once (it needs something
+    /// picked first, such as a photo with its depth).
+    Live { create_first: bool },
+    /// Makes many pieces once with **Create**, then remakes them as its settings change.
+    /// `keeps_apply`: it still offers **Apply** once made, for changes to be seen to go on
+    /// the one there.
+    Remake { keeps_apply: bool },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -149,6 +177,12 @@ pub trait Command: 'static {
         None
     }
 
+    /// Whether the form, opened now, works on something it made earlier (the selection is
+    /// one it made), so pressing it changes that one rather than making another.
+    fn reopens(_doc: &Document) -> bool {
+        false
+    }
+
     fn run(doc: &Document, params: &Self::Params) -> Result<Change, CommandError>;
 }
 
@@ -191,12 +225,9 @@ pub trait Interactive: Command {
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct NoParams {}
 
-/// The menu groups whose commands make toolpaths from the selected vectors.
-pub const TOOLPATH_GROUPS: [&str; 2] = ["Toolpath Operations", "3D Toolpaths"];
-
 /// Whether a command with `meta` makes toolpaths, and so never sees construction lines.
 pub fn makes_toolpaths(meta: &Meta) -> bool {
-    TOOLPATH_GROUPS.contains(&meta.group)
+    meta.form == Form::Toolpath
 }
 
 /// What a toolpath says when only construction lines were selected for it: they are left
@@ -225,6 +256,10 @@ pub trait DynCommand: Send + Sync {
     /// [`Command::params_from`], as JSON; `current` is the form's settings.
     fn params_from(&self, path: &crate::geometry::Path, current: &Value) -> Option<Value>;
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError>;
+    /// [`Command::reopens`].
+    fn reopens(&self, _doc: &Document) -> bool {
+        false
+    }
     /// Whether the command can be drawn with the mouse.
     fn interactive(&self) -> bool;
     /// The params a drag describes; an error for commands that are not interactive.
@@ -280,6 +315,10 @@ impl<C: Command> DynCommand for Erased<C> {
             return C::run(&doc.for_cutting(), &params).map_err(|e| only_construction(doc, e));
         }
         C::run(doc, &params)
+    }
+
+    fn reopens(&self, doc: &Document) -> bool {
+        C::reopens(doc)
     }
 
     fn interactive(&self) -> bool {

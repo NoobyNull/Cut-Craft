@@ -10,7 +10,7 @@ use cmd_vector_texture::{Ornament, ornament_pieces};
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::{Document, Units};
 use cut_craft_core::geometry::{Path, Point, Rect};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -88,6 +88,7 @@ impl Command for DecorativeRelief {
             group: "Modeling",
             icon: "modeling/decorative_relief.png",
             shortcut: "",
+            form: Form::Remake { keeps_apply: false },
         }
     }
 

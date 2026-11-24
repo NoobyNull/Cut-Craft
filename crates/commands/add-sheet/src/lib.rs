@@ -2,7 +2,7 @@
 //! right-clicked) or else as the active one, which stays active.
 
 use cut_craft_core::document::{Document, Sheet};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_named};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +37,7 @@ impl Command for AddSheet {
             group: "Sheets",
             icon: "",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

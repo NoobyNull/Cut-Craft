@@ -82,4 +82,7 @@ reset rotation, reset position, undo rotation, put back, native position, start 
 scale to fit, fit to material, fill the material, make it fit
 border, moulding, molding, frame, picture frame, cornice, edging
 generate, ai, artificial intelligence, gemini, google image
+sub-group, subgroup, sub group, nested group, nested groups, group inside a group, groups of groups, folder in a folder
+grip, drag handle, hamburger, hamburger icon, drag to reorder, cut order, toolpath order
 unsigned, not official, unofficial, untrusted, trust, trusted, signed, signature, run anyway, security warning
+performance, slow computer, lag, laggy, stutter, stuttering, freezes, cpu, processor, cores, threads, priority, resources, responsive

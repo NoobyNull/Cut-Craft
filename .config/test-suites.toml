@@ -57,7 +57,7 @@ nothing = [
 
 [suites.core]
 title = "Core geometry"
-packages = ["cut-craft-core"]
+packages = ["cut-craft-core", "cut-craft-priority"]
 # everything is built on it
 affects = ["rotary", "toolpaths", "design", "model", "display", "files", "help", "how-to", "languages", "app", "workflows"]
 

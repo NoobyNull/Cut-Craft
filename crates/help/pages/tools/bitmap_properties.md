@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: import_vectors_bitmap, crop_bitmap, trace_bitmap
 ---
 

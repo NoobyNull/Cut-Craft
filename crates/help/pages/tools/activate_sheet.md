@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: add_sheet, sheet_properties, send_to_sheet, delete_sheet
 ---
 

@@ -1,6 +1,6 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
-use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, Registry};
+use cut_craft_core::{Change, Command, CommandError, Drag, Form, Interactive, Meta, Registry};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +29,7 @@ impl Command for AddSquare {
             group: "Test",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
@@ -258,6 +259,7 @@ impl Command for CountVectors {
             group: "Test",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

@@ -8,7 +8,7 @@ use cut_craft_core::geometry::{Path, Point, Rect, polyline_distance, winding};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, cut_points, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -182,6 +182,7 @@ impl Command for SurfacingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/surfacing_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

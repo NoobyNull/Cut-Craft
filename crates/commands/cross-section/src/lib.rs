@@ -6,7 +6,7 @@ use cut_craft_core::component::model_at_resolution;
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta};
+use cut_craft_core::{Change, Command, CommandError, Drag, Form, Interactive, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +38,7 @@ impl Command for CrossSection {
             group: "Modeling",
             icon: "modeling/create_cross_section_vector.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

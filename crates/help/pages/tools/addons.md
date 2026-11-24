@@ -33,7 +33,10 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
 
 ## Languages
 
-Under **Languages**, each language with a pack has its own **Install** button. A language
+Under **Languages**, each language with a pack has its own **Install** button. Each is
+**Official, community supported**: checked and signed, but translated by volunteers (see
+[Using Cut Craft in another language](help:language)). An installed pack also says who
+translated it and how much is done. A language
 pack doesn't appear in My Gadgets. Pick it in **Edit ▸ Options ▸ Language** instead (see
 [Using Cut Craft in another language](help:language)).
 

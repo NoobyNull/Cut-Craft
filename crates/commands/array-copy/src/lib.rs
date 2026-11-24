@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use glam::DAffine2;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -111,6 +111,7 @@ impl Command for ArrayCopy {
             group: "Array Objects",
             icon: "drawing/create_vectors/array_copy.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

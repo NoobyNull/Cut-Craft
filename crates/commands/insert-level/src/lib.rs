@@ -2,7 +2,7 @@
 
 use cut_craft_core::component::Level;
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_named};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,7 @@ impl Command for InsertLevel {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

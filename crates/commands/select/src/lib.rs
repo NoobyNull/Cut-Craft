@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::Path;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 fn meta(label: &'static str, shortcut: &'static str) -> Meta {
     Meta {
@@ -12,6 +12,7 @@ fn meta(label: &'static str, shortcut: &'static str) -> Meta {
         group: "Edit",
         icon: "",
         shortcut,
+        form: Form::Apply,
     }
 }
 
