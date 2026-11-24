@@ -321,6 +321,9 @@ pub enum WindowLayout {
     /// A column of tool groups on the left, each opening its list of tools by name; the
     /// open tool's settings on the right
     Rail,
+    /// The whole window is the drawing: the tools, the open tool's settings and your
+    /// sheets, layers and toolpaths float over it
+    Canvas,
     /// The Design page of tool icons on the left, the Toolpaths page on the right, and
     /// tabs down the sides
     Classic,
@@ -328,7 +331,7 @@ pub enum WindowLayout {
 
 impl WindowLayout {
     /// Every layout, in the order offered.
-    pub const ALL: [Self; 3] = [Self::Ribbon, Self::Rail, Self::Classic];
+    pub const ALL: [Self; 4] = [Self::Ribbon, Self::Rail, Self::Canvas, Self::Classic];
 
     /// The layout options saved before the setting existed had: Classic.
     pub fn before_the_setting() -> Self {

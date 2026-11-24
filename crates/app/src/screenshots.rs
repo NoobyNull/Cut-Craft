@@ -44,6 +44,8 @@ const SCENES: &[Scene] = &[
     ("rail-layout-dark", |_, _| {}),
     ("ribbon-layout", ribbon),
     ("ribbon-layout-dark", |_, _| {}),
+    ("canvas-layout", canvas),
+    ("canvas-layout-dark", |_, _| {}),
     ("rotary-import", rotary_import),
     // Help: Orientate 3D Model ▸ Changing the model's size
     ("rotary-import-scale-to-fit", |_, _| {}),
@@ -917,6 +919,26 @@ fn ribbon(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.ribbon_tab = 2;
     app.inspector_tab = 4;
     app.invoke(ctx, "pocket_toolpath");
+}
+
+/// The Canvas layout on its Design tab: the Create Vectors list flown out beside the
+/// palette, Draw Circle's form floating on the right, and the Layers list open over the
+/// chips.
+fn canvas(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.form = None;
+    app.options.general.layout = WindowLayout::Canvas;
+    app.ribbon_tab = 0;
+    app.canvas.group = app
+        .canvas_groups()
+        .iter()
+        .position(|g| g.name == "Create Vectors");
+    app.canvas.chip = super::INSPECTOR_TABS.iter().position(|t| *t == "Layers");
+    app.invoke(ctx, "draw_circle");
+    // the pick closes the list; the picture shows it open
+    app.canvas.group = app
+        .canvas_groups()
+        .iter()
+        .position(|g| g.name == "Create Vectors");
 }
 
 /// A full 3D model imported into a rotary job: shown turned round the axis in the stock.

@@ -97,6 +97,7 @@ impl CutCraftApp {
             flyout_rect: None,
             buttons_across: std::cell::Cell::new(0.0),
             ribbon_tab: 0,
+            canvas: super::canvas_layout::CanvasState::default(),
             options_path: None,
             words_path: None,
             job_times_path: None,

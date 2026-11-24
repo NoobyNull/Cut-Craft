@@ -33,7 +33,7 @@ Cut Craft works in two steps:
 
 In the [Ribbon layout](help:layout_ribbon) Cut Craft starts in, these are the **Design** and
 **Toolpaths** tabs across the top, with **Model** between them for 3D parts. The
-[Rail](help:layout_rail) and [Classic](help:layout_classic) layouts group the same tools
+[Rail](help:layout_rail), [Canvas](help:layout_canvas) and [Classic](help:layout_classic) layouts group the same tools
 differently, but the two steps are the same.
 
 ![In the Classic layout: Design down the left to draw, Toolpaths down the right to say how to cut it](pictures/basics/design_then_toolpaths.png)
