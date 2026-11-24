@@ -9,6 +9,7 @@ use super::{
 impl Post {
     #[expect(
         clippy::too_many_lines,
+        clippy::cognitive_complexity,
         reason = "one pass writing every toolpath in order"
     )]
     pub fn render(&self, doc: &Document, file: &File) -> Result<String, String> {

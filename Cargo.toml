@@ -51,6 +51,9 @@ missing_panics_doc = "allow"
 # exact float equality is deliberate in the tests (values built to be exact); newer clippy
 # flags assert_eq! on floats too
 float_cmp = "allow"
+# a function too tangled to follow in one read (if, match and loop nesting) fails CI; split it
+# into named steps, or give it an #[expect] with the reason it reads better as one
+cognitive_complexity = "warn"
 
 # geometry-heavy code (toolpaths, simulation) is far too slow unoptimised, in tests and runs;
 # line tables keep panics and backtraces readable at a fraction of full debug info's size

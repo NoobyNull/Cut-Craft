@@ -123,6 +123,10 @@ struct End {
     at: Point,
 }
 
+#[expect(
+    clippy::cognitive_complexity,
+    reason = "one design, read top to bottom as its sketch was; to be split into named steps"
+)]
 pub fn design(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
     let g = s.gap;
     let (det, den, sc) = (s.detail, s.density, s.scale);
@@ -424,6 +428,10 @@ fn random_inside(gn: &mut Gen, m: f64) -> Option<Point> {
 
 /// The vine: the middle line between the shape's two farthest ends, smoothed, its ends
 /// rolled into curls, and scrolls branching off it.
+#[expect(
+    clippy::cognitive_complexity,
+    reason = "the vine, its curls and its scrolls in one pass; to be split into named steps"
+)]
 fn vine(gn: &mut Gen, ii: f64, ws: f64, sc: f64, den: f64) {
     let field = gn.field;
     let (g, dm) = (gn.s.gap, field.dmax);
