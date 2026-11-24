@@ -141,6 +141,9 @@ impl Document {
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
             Edit::SetConstraints { after, .. } => self.constraints.clone_from(after),
             Edit::SetToolpathGroups { after, .. } => self.toolpath_groups.clone_from(after),
+            Edit::SetToolpathGroupParents { after, .. } => {
+                self.toolpath_group_parents.clone_from(after);
+            }
             Edit::SetTiling {
                 after, kept_after, ..
             } => {
@@ -333,6 +336,7 @@ impl Document {
             | Edit::SetGuides { .. }
             | Edit::SetConstraints { .. }
             | Edit::SetToolpathGroups { .. }
+            | Edit::SetToolpathGroupParents { .. }
             | Edit::SetTiling { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
             Edit::SetPartName { group, after, .. } => match after {

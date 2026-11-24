@@ -19,6 +19,7 @@ mod handles_3d;
 mod layers;
 mod paint_3d;
 mod playback;
+mod toolpath_tree;
 mod toolpaths_page;
 mod tools;
 mod view_3d;
@@ -44,9 +45,9 @@ pub(super) const SELECTION_COUNT_HINT: &str = "A closed vector goes all the way 
 /// Each toolpath's place in the cut order.
 type Places = std::collections::BTreeMap<EntityId, usize>;
 
-/// A toolpath's row in the list: its tick, its preview swatch (given its place and the
-/// material's colour, when the preview takes toolpath colours) and its name, indented in a
-/// group, marked ⚠ in red with what its collet or spindle hits (`collided`) when the last
+/// A toolpath's row in the list, after its grip and place in the tree: its tick, its
+/// preview swatch (given its place and the material's colour, when the preview takes
+/// toolpath colours) and its name, marked ⚠ in red with what its collet or spindle hits (`collided`) when the last
 /// preview found that. The name's response, the tick's new state if changed, and the colour
 /// picked if any.
 fn toolpath_row(
@@ -54,14 +55,10 @@ fn toolpath_row(
     toolpath: &cut_craft_core::toolpath::Toolpath,
     (selected, collided): (bool, Option<&str>),
     swatch: Option<(usize, [u8; 3])>,
-    indented: bool,
 ) -> (egui::Response, Option<bool>, Option<[u8; 3]>) {
     let (mut ticked, mut rgb) = (None, None);
     let label = ui
-        .horizontal(|ui| {
-            if indented {
-                ui.add_space(ui.spacing().indent);
-            }
+        .scope(|ui| {
             let mut visible = toolpath.visible;
             if ui
                 .checkbox(&mut visible, "")

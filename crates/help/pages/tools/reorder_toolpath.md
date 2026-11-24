@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: arrange_toolpaths, group_toolpaths, toolpath_summary
 ---
 
@@ -24,5 +24,7 @@ is the order the toolpaths are cut and saved in, top first.
 
 ## Good to know
 
-- Dragging a toolpath in the list moves it too: see
+- Inside a group, a toolpath moves only inside that group; it steps past a whole group inside
+  it in one press.
+- Dragging a toolpath in the list by its grip (≡) moves it too: see
   [Arrange Toolpaths](help:arrange_toolpaths).

@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-17
-see-also: toolpaths, web_api, contents
+reviewed: 2026-11-24
+see-also: toolpaths, web_api, contents, performance
 ---
 
 # Long jobs and the time left
@@ -20,6 +20,10 @@ From the top, the window shows:
    and "Working…" instead.
 4. **The time so far and the time left**, such as "12 s so far, about 2 minutes left".
 5. **Cancel** (or **Esc**) stops the job. Nothing in your job changes.
+
+Meanwhile the status bar says how briskly it is going: **Crawl**, **Walk**, **Run** or
+**Sprint**. Click it to choose how much of the computer calculations may use (see
+[Keeping the computer responsive](help:performance)).
 
 ## How the time left is worked out
 
