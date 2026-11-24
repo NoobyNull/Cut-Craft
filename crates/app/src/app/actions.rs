@@ -292,6 +292,7 @@ impl CutCraftApp {
             capture: None,
             shortcut_search: String::new(),
             split: None,
+            split_layout: super::split_views::SplitLayout::default(),
             clipart: crate::clipart::Clipart::default(),
             import_queue: std::collections::VecDeque::new(),
             import_after_setup: None,

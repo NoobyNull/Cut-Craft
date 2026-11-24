@@ -85,6 +85,7 @@ mod send;
 mod setup_material;
 mod shortcuts_page;
 mod snapping;
+mod split_views;
 mod surfacing;
 mod tabs;
 #[cfg(test)]
@@ -409,6 +410,8 @@ enum Split {
     Stacked,
     /// 2D left of 3D
     SideBySide,
+    /// The view picked fills the room, the other in a corner of it
+    Picture,
 }
 
 /// The picked components' outlines, with the components and revision they were traced for.
@@ -1090,6 +1093,8 @@ struct CutCraftApp {
     shortcut_search: String,
     /// Both views shown at once.
     split: Option<Split>,
+    /// How the two views share the room while both show.
+    split_layout: split_views::SplitLayout,
     /// The Library tab.
     clipart: crate::clipart::Clipart,
     /// Files from the Library waiting to be added, one after another, each with the level
