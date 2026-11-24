@@ -327,12 +327,17 @@ pub struct Post {
     spin_up: f64,
 }
 
+/// The block written after `SPINDLE_ON` at a bit change: the spin-up wait, when the tool
+/// change leaves starting the spindle to `SPINDLE_ON`. Not a name a post file can use.
+pub(crate) const AFTER_SPINDLE_ON: &str = "+SPIN_UP";
+
 /// The spindle's time to come up to speed after a pause Cut Craft writes, seconds.
 pub const DEFAULT_SPIN_UP: f64 = 3.0;
 
 /// The note before the wait for the spindle after a pause, saying how long it is in
 /// seconds whatever units the dwell prints in.
-const SPIN_UP_NOTE: &str = "(Waits [SPINUP_SECONDS] s for the spindle to come up to speed)";
+pub(crate) const SPIN_UP_NOTE: &str =
+    "(Waits [SPINUP_SECONDS] s for the spindle to come up to speed)";
 
 /// `value` seconds as a note says them: to a tenth, without a trailing `.0`.
 pub(crate) fn seconds(value: f64) -> String {
@@ -595,22 +600,36 @@ impl Post {
         let Some(lines) = post.blocks.get_mut("TOOLCHANGE") else {
             return post;
         };
+        let mut after_start = false;
         if timed {
+            // the wait follows the spindle starting again after the stop: a wait there is
+            // replaced, else one is added after the start, else (the start left to
+            // SPINDLE_ON) it is written after that block
             let after = stop.unwrap_or(0);
-            let wait = "G4 [SPINUP]".to_owned();
-            if let Some(at) = lines.iter().skip(after).position(|l| is(l, &["G4", "G04"])) {
-                lines[after + at] = wait;
-                if lines.get(after + at - 1).map(String::as_str) != Some(SPIN_UP_NOTE) {
-                    lines.insert(after + at, SPIN_UP_NOTE.to_owned());
+            let start = lines
+                .iter()
+                .skip(after)
+                .position(|l| is(l, &["M3", "M03", "M4", "M04"]))
+                .map(|at| after + at);
+            match start {
+                Some(start) => {
+                    let wait = lines
+                        .iter()
+                        .skip(start)
+                        .position(|l| is(l, &["G4", "G04"]))
+                        .map(|at| start + at);
+                    let at = if let Some(wait) = wait {
+                        lines.remove(wait);
+                        wait
+                    } else {
+                        start + 1
+                    };
+                    lines.insert(at, "G4 [SPINUP]".to_owned());
+                    if lines.get(at - 1).map(String::as_str) != Some(SPIN_UP_NOTE) {
+                        lines.insert(at, SPIN_UP_NOTE.to_owned());
+                    }
                 }
-            } else {
-                let on = lines
-                    .iter()
-                    .skip(after)
-                    .position(|l| is(l, &["M3", "M03", "M4", "M04"]))
-                    .map_or(lines.len(), |at| after + at + 1);
-                lines.insert(on, wait);
-                lines.insert(on, SPIN_UP_NOTE.to_owned());
+                None => after_start = true,
             }
         }
         let park = pause.park.filter(|_| self.wrap.is_none());
@@ -621,14 +640,25 @@ impl Post {
             lines.insert(across, "G0 [PARKX] [PARKY]".to_owned());
             lines.insert(up, "G0 [PARKZ]".to_owned());
             for (label, axis) in [("PARKX", "X"), ("PARKY", "Y"), ("PARKZ", "Z")] {
-                let mut format = self.formats.get(axis).cloned().unwrap_or_else(|| Format {
-                    prefix: axis.to_owned(),
-                    ..Format::default_for(axis)
-                });
+                let mut format = self
+                    .formats
+                    .get(axis)
+                    .cloned()
+                    .unwrap_or_else(|| Format::default_for(axis));
+                // a post that writes the letter in its own lines (`X[X]`) has no prefix
+                if format.prefix.is_empty() {
+                    axis.clone_into(&mut format.prefix);
+                }
                 format.only_changes = false;
                 post.formats.insert(label.to_owned(), format);
             }
             post.park = Some(park);
+        }
+        if after_start {
+            post.blocks.insert(
+                AFTER_SPINDLE_ON.to_owned(),
+                vec![SPIN_UP_NOTE.to_owned(), "G4 [SPINUP]".to_owned()],
+            );
         }
         if timed {
             post.spin_up_as_dwell();
@@ -649,6 +679,10 @@ impl Post {
                 decimals: 1,
                 ..Format::default()
             });
+        // a post that writes the letter in its own dwell line (`G4 P[DWELL]`) has none
+        if format.prefix.is_empty() {
+            "P".clone_into(&mut format.prefix);
+        }
         format.only_changes = false;
         self.formats.insert("SPINUP".to_owned(), format);
     }

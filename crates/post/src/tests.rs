@@ -467,6 +467,84 @@ fn the_spin_up_after_a_pause_is_in_the_units_the_post_gives_its_dwells() {
 }
 
 #[test]
+fn after_the_change_position_the_next_move_says_both_x_and_y() {
+    // the last toolpath ends at X25.4 Y25.4 and the next starts at X0 Y0; a post that only
+    // prints what changed must not leave out X or Y the head is no longer at
+    let job = cut_craft_core::document::Job::default();
+    let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+    let grbl = Post::parse(include_str!("../posts/grbl_arcs_mm.pp")).unwrap();
+    let pause = Pause {
+        spin_up: None,
+        park: Some([0.0, 250.0, 60.0]),
+    };
+    let lines = render_with(&grbl.with_pauses(pause), job, two());
+    let stop = lines.iter().position(|l| l == "M0").expect("a stop");
+    let across = lines[stop..]
+        .iter()
+        .find(|l| l.starts_with("G0") && (l.contains('X') || l.contains('Y')))
+        .unwrap_or_else(|| panic!("a rapid across: {lines:#?}"));
+    assert!(
+        across.contains("X0.000") && across.contains("Y0.000"),
+        "{lines:#?}"
+    );
+}
+
+#[test]
+fn a_post_writing_its_own_letters_still_gets_them_at_a_pause() {
+    // `X[X]` and `G4 P[DWELL]` posts give their formats no letter
+    let job = cut_craft_core::document::Job::default();
+    let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+    let bare = Post::parse(
+        "POST_NAME = \"Bare (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
+         VAR X_POSITION = [X|C||1.3]\nVAR Y_POSITION = [Y|C||1.3]\nVAR Z_POSITION = [Z|C||1.3]\n\
+         VAR DWELL_TIME = [DWELL|A||1.1]\n\
+         begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 X[X] Y[Y] Z[Z]\"\n\
+         begin FEED_MOVE\n\"G1 X[X] Y[Y] Z[Z]\"\n",
+    )
+    .unwrap();
+    let pause = Pause {
+        spin_up: Some(2.0),
+        park: Some([5.0, 6.0, 40.0]),
+    };
+    let lines = render_with(&bare.with_pauses(pause), job, two());
+    assert!(lines.iter().any(|l| l == "G0 Z40.000"), "{lines:#?}");
+    assert!(lines.iter().any(|l| l == "G0 X5.000 Y6.000"), "{lines:#?}");
+    assert!(lines.iter().any(|l| l == "G4 P2.0"), "{lines:#?}");
+}
+
+#[test]
+fn the_spin_up_waits_after_spindle_on_when_the_tool_change_does_not_start_it() {
+    let job = cut_craft_core::document::Job::default();
+    let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+    let post = Post::parse(
+        "POST_NAME = \"Own pause (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
+         VAR SPINDLE_SPEED = [S|A|S|1.0]\n\
+         begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\n\
+         begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n\
+         begin TOOLCHANGE\n\"M5\"\n\"(change to [TOOLNAME])\"\n\"M0\"\n\
+         begin SPINDLE_ON\n\"[S] M3\"\n",
+    )
+    .unwrap();
+    assert!(post.pauses_for_tools());
+    let pause = Pause {
+        spin_up: Some(5.0),
+        park: None,
+    };
+    let lines = render_with(&post.with_pauses(pause), job, two());
+    let stop = lines.iter().position(|l| l == "M0").expect("a stop");
+    let on = stop
+        + lines[stop..]
+            .iter()
+            .position(|l| l.ends_with("M3"))
+            .expect("starts");
+    let wait = lines
+        .iter()
+        .position(|l| l.starts_with("G4"))
+        .expect("waits");
+    assert!(on < wait, "waits once the spindle turns: {lines:#?}");
+}
+
+#[test]
 fn inch_posts_convert_positions_and_feeds() {
     let post = BASIC
         .replace(r#"UNITS = "MM""#, r#"UNITS = "INCHES""#)

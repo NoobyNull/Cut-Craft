@@ -85,6 +85,9 @@ impl Post {
                 Some(t) if t != toolpath.tool.name => {
                     out.block("TOOLCHANGE", &v);
                     out.block("SPINDLE_ON", &v);
+                    // a pause whose tool change leaves starting the spindle to SPINDLE_ON
+                    // waits for it here, once it is turning
+                    out.block(super::AFTER_SPINDLE_ON, &v);
                     // the new bit has just been zeroed by hand, so the machine's height is
                     // unknown: print every value again, Z above all, rather than leave the
                     // first rapid to travel sideways at whatever height the bit was left
@@ -101,6 +104,12 @@ impl Post {
                     out.value("X", &v);
                     out.value("Y", &v);
                     out.block("RAPID_MOVE", &v);
+                    // the pause took the head to the change position, not where the last
+                    // toolpath ended: the next move prints X and Y whatever they were
+                    if self.park.is_some() {
+                        out.last.remove("X");
+                        out.last.remove("Y");
+                    }
                 }
                 Some(_) => {
                     out.block("NEW_SEGMENT", &v);

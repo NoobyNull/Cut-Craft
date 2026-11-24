@@ -61,8 +61,10 @@ Under **Tool Changes**, Save Toolpaths offers three ways to save a job that uses
   pauses (`M0`) at each change. Change the bit, set Z zero, then resume. Standard GRBL cannot
   jog while paused, so use separate files there.
 
-The toolpaths are cut in the order they are listed. A new file (or a pause) starts each time
-the bit changes, so toolpaths next to each other that use the same bit share it.
+The toolpaths are cut in the order they are listed, unless **Group by bit** is on for the
+machine: then each bit's toolpaths are cut together, and the checks before cutting list the new
+order for you to look over before cutting. A new file (or a pause) starts each time the bit
+changes, so toolpaths next to each other that use the same bit share it.
 
 What Save Toolpaths starts on, where a pause takes the head, how long the spindle gets to come
 up to speed, and **Group by bit** (cut each bit's toolpaths together) are set for each machine
