@@ -184,7 +184,7 @@ pub fn save_plan(
         .collect();
     let plan = match mode {
         SaveMode::Selected => match (selected_group, selected) {
-            (Some(name), _) => match doc.toolpaths_in_group(name) {
+            (Some(name), _) => match doc.toolpaths_under_group(name) {
                 ids if ids.is_empty() => return Err(format!("{name} has no toolpaths")),
                 ids => vec![ids],
             },

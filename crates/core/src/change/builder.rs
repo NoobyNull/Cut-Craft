@@ -618,6 +618,16 @@ impl ChangeBuilder<'_> {
         }
     }
 
+    /// Replaces which toolpath group each sub-group sits in.
+    pub fn set_toolpath_group_parents(&mut self, after: BTreeMap<String, String>) {
+        if self.doc.toolpath_group_parents != after {
+            self.edits.push(Edit::SetToolpathGroupParents {
+                before: self.doc.toolpath_group_parents.clone(),
+                after,
+            });
+        }
+    }
+
     /// Replaces the sheet list and which sheet is active (as it stands, not its setup: see
     /// [`Self::activate_sheet`]).
     pub fn set_sheets(&mut self, after: Vec<Sheet>, active: usize) {

@@ -749,8 +749,8 @@ impl CutCraftApp {
                 if let Some(id) = self.selected_toolpath {
                     self.preview_toolpath(id);
                 } else if let Some(group) = &self.selected_group {
-                    // a picked group: its toolpaths in list order, as one preview
-                    self.preview_ids(&self.doc.toolpaths_in_group(group));
+                    // a picked group: its toolpaths (its sub-groups' too) in list order, as one preview
+                    self.preview_ids(&self.doc.toolpaths_under_group(group));
                 }
             }
             "job_sheet_editor" => self.job_sheet_window = true,
