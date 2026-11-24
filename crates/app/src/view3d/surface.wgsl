@@ -42,6 +42,9 @@ struct Camera {
     // 1: a flat surface's cells the light cannot reach are drawn in shadow (View ▸ Use
     // Shadow Shading); `surface` is then its highest point
     shadows: u32,
+    // drawn round an axis, uncut square or board material: its half width across and half
+    // thickness up at A=0, out to which it reaches where nothing has cut it (0: round)
+    outline: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> camera: Camera;
@@ -51,6 +54,8 @@ struct Camera {
 
 const EMPTY: f32 = -1.0e30;
 const TAU: f32 = 6.283185307179586;
+// how far under the surface a height still counts as uncut (UNCUT in view3d.rs)
+const UNCUT: f32 = 1.0e-3;
 
 struct Placed {
     p: vec3<f32>,
@@ -109,11 +114,19 @@ fn place(p: vec3<f32>) -> vec3<f32> {
         return p;
     }
     let along_x = camera.wrap == 1u;
-    let out = max(camera.radius + p.z - camera.surface, 0.0);
     let round = f32(select(camera.columns, camera.rows, along_x)) * camera.cell;
     let across = select(p.x, p.y, along_x);
     let along = select(p.y, p.x, along_x);
     let angle = across / round * TAU;
+    var out = max(camera.radius + p.z - camera.surface, 0.0);
+    // uncut: out to a square's or board's faces (as Wrap::out in view3d.rs)
+    if camera.outline.x > 0.0 && p.z >= camera.surface - UNCUT {
+        let reach = min(
+            camera.outline.y / max(abs(cos(angle)), 1.0e-6),
+            camera.outline.x / max(abs(sin(angle)), 1.0e-6),
+        );
+        out = max(out, reach);
+    }
     let side = out * sin(angle);
     let up = out * cos(angle);
     if along_x {

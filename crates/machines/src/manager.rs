@@ -617,7 +617,7 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                         .on_hover_hint(format!(
                             "From work zero across to the turning axis, in {across}. 0 when you \
                          zero {across} on the axis, as is usual. (Its height comes from Job \
-                         Setup: Z zero on the axis or on the cylinder's top)"
+                         Setup: Z zero on the turning axis or on the material's top)"
                         ));
                     let mut v = axis.centre_across / per;
                     if ui

@@ -64,6 +64,48 @@ pub struct Field {
     /// The axis a number is about, its name then drawn in that axis's colour as everywhere
     /// else: a number keyed `x`, `y` or `z`, or one marked `x-axis`.
     pub axis: Option<crate::axes::Axis>,
+    /// `x-titles`: other names it takes while another choice says so (`{ "key": { "value":
+    /// "title" } }`), as a rotary blank's size is its Diameter, Side or Thickness.
+    pub titles: Option<Titles>,
+}
+
+/// A field's other names, one for each value of another choice ([`Field::titles`]).
+#[derive(Debug, PartialEq)]
+pub struct Titles {
+    pub key: String,
+    pub by: Vec<(String, String)>,
+}
+
+impl Titles {
+    fn from_schema(s: &Value) -> Option<Self> {
+        let (key, by) = s.get("x-titles")?.as_object()?.iter().next()?;
+        let by = by
+            .as_object()?
+            .iter()
+            .filter_map(|(value, title)| Some((value.clone(), title.as_str()?.to_owned())))
+            .collect();
+        Some(Self {
+            key: key.clone(),
+            by,
+        })
+    }
+}
+
+impl Field {
+    /// Its name as the form's settings stand: its own section's (`local`) first, then the
+    /// form's top-level ones (`top`), as [`When::judged`] reads them.
+    pub fn label_for(&self, local: &Value, top: &Value) -> &str {
+        self.titles
+            .as_ref()
+            .and_then(|t| {
+                let setting = local.get(&t.key).unwrap_or(&top[&t.key]);
+                let value = value_text(setting)?;
+                t.by.iter()
+                    .find(|(v, _)| *v == value)
+                    .map(|(_, title)| title.as_str())
+            })
+            .unwrap_or(&self.label)
+    }
 }
 
 /// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`,
@@ -757,6 +799,7 @@ fn object_fields(root: &Value, schema: &Value) -> Vec<Field> {
                 },
                 crate::axes::Axis::named,
             ),
+            titles: Titles::from_schema(s),
         })
         .collect()
 }

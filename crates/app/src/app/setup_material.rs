@@ -65,18 +65,27 @@ pub(super) fn summary(job: &Job) -> String {
     let units = job.units;
     let length = |mm: f64| super::trimmed(mm / units.per());
     let (size, kind) = match job.rotary {
-        Some(r) => (
-            format!(
-                "{} {u} long, {} {u} across",
-                length(match r.along {
-                    cut_craft_core::document::Along::X => job.width,
-                    cut_craft_core::document::Along::Y => job.height,
-                }),
-                length(r.diameter),
-                u = units.suffix()
-            ),
-            "rotary",
-        ),
+        Some(r) => {
+            use cut_craft_core::document::Blank;
+            let u = units.suffix();
+            let across = match r.blank {
+                Blank::Round => format!("{} {u} across", length(r.diameter)),
+                Blank::Square => format!("{} {u} square", length(r.diameter)),
+                Blank::Board { width } => {
+                    format!("{} × {} {u} board", length(width), length(r.diameter))
+                }
+            };
+            (
+                format!(
+                    "{} {u} long, {across}",
+                    length(match r.along {
+                        cut_craft_core::document::Along::X => job.width,
+                        cut_craft_core::document::Along::Y => job.height,
+                    }),
+                ),
+                "rotary",
+            )
+        }
         None => (
             format!(
                 "{} × {} × {} {}",
@@ -95,8 +104,8 @@ pub(super) fn summary(job: &Job) -> String {
     let z = match (job.z_zero, job.rotary.is_some()) {
         (ZZero::MaterialSurface, false) => "Z zero on top",
         (ZZero::MachineBed, false) => "Z zero on the bed",
-        (ZZero::MaterialSurface, true) => "Z zero on the cylinder's top",
-        (ZZero::MachineBed, true) => "Z zero on the axis",
+        (ZZero::MaterialSurface, true) => "Z zero on the material's top",
+        (ZZero::MachineBed, true) => "Z zero on the turning axis",
     };
     let datum = match job.datum {
         Datum::BottomLeft => "bottom left",
@@ -244,7 +253,24 @@ mod tests {
         );
         assert_eq!(
             summary(&Job::rotary(300.0, 50.0, Along::X)),
-            "300 mm long, 50 mm across, rotary, Z zero on the cylinder's top, X0 Y0 bottom left"
+            "300 mm long, 50 mm across, rotary, Z zero on the material's top, X0 Y0 bottom left"
+        );
+        let shaped = |blank| {
+            let mut job = Job::rotary(300.0, 50.0, Along::X);
+            job.rotary = job
+                .rotary
+                .map(|r| cut_craft_core::document::Rotary { blank, ..r });
+            job.z_zero = ZZero::MachineBed;
+            summary(&job)
+        };
+        assert_eq!(
+            shaped(cut_craft_core::document::Blank::Square),
+            "300 mm long, 50 mm square, rotary, Z zero on the turning axis, X0 Y0 bottom left"
+        );
+        assert_eq!(
+            shaped(cut_craft_core::document::Blank::Board { width: 150.0 }),
+            "300 mm long, 150 × 50 mm board, rotary, Z zero on the turning axis, X0 Y0 bottom \
+             left"
         );
     }
 }

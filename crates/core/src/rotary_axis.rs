@@ -16,7 +16,7 @@ pub struct RotaryAxis {
     pub centre_set: bool,
     /// Across the bed from work zero to the turning axis, mm: Y for a rotary along X, X for
     /// one along Y. 0 when work zero is set on the axis, as is usual. (Its height is the
-    /// job's: Job Setup's Z zero, on the axis or on the cylinder's top.)
+    /// job's: Job Setup's Z zero, on the turning axis or on the material's top.)
     pub centre_across: f64,
     /// +A turns clockwise, seen from the chuck end.
     pub clockwise: bool,

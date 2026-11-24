@@ -671,9 +671,9 @@ fn z_origin(job: &Job) -> &'static str {
     match (job.z_zero, job.rotary) {
         (ZZero::MaterialSurface, None) => "Material Surface",
         (ZZero::MachineBed, None) => "Machine Bed",
-        // an unrolled cylinder's top is its surface, and under it is its axis
-        (ZZero::MaterialSurface, Some(_)) => "Cylinder Surface",
-        (ZZero::MachineBed, Some(_)) => "Cylinder Axis",
+        // as Job Setup names them: the top of the material at A=0, or the axis it turns on
+        (ZZero::MaterialSurface, Some(_)) => "Material Top",
+        (ZZero::MachineBed, Some(_)) => "Turning Axis",
     }
 }
 
