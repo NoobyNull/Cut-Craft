@@ -18,3 +18,5 @@ see-also: add_sheet, cut_list, profile_toolpath
 3. Set the bit's width and the gap to leave, and the corner to start from, then press **Apply**.
 
    ![Step 3](pictures/nest_parts/step-3.png)
+
+**Bit diameter** is the width of the bit that cuts the parts out: the least gap left between them.

@@ -31,3 +31,5 @@ libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
 18:57:56.749 INFO  cut_craft::app::background: Laser Picture: settings {"name":"Laser Picture","power":60.0,"passes":1,"strategy":"raster","dither_image":false,"line_spacing":10.0,"line_angle":0.0,"tool":{"name":"Laser (0.15 mm kerf)","shape":"end_mill","tip_radius":1.0,"angle":90.0,"diameter":0.15,"pass_depth":3.0,"stepover":0.4,"feed_rate":1500.0,"plunge_rate":1500.0,"spindle_speed":0.0,"taper":0.0,"shank_diameter":0.0,"flute_length":0.0,"flutes":2,"rate_units":"mm…
 18:57:56.753 INFO  cut_craft::app::background: Laser Picture: done, changed 1 toolpath, 32452 moves
 18:57:56.753 INFO  cut_craft::trace: Finished: Calculating Laser Picture in 0.00 s
+
+A tile's file leaves out a toolpath with nothing to cut in that tile, along with its bit change and spindle start.

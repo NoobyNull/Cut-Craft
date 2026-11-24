@@ -84,3 +84,5 @@ largest gap that fits.
   Import tools, whose form has the same setting
 - [3D View ▸ Changing a model's height](help:view_3d): the height buttons on a picked
   model, to change the model itself rather than where it sits
+
+Throughout the forms, the **bit** is what is in the spindle; the tools are the buttons you press.

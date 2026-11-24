@@ -105,3 +105,4 @@ red circle. Toolpaths lift the bit that much higher before A turns, so it never 
 them, and the [Rotary set up](help:check_rotary_setup) check sees that they clear the
 spoilboard and the bit.
 
+Throughout the forms, the **bit** is what is in the spindle; the tools are the buttons you press.

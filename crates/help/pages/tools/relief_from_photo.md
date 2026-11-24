@@ -63,3 +63,5 @@ You do not need the add-on if your picture is already a depth map (a grey pictur
 white is nearest). Set **Depth from** to **Picture**, and the picture is used as the heights
 directly. Tick **Invert** if its black is nearest instead. A ready-made depth map can also
 go straight into [Create Component from Bitmap](help:create_component_from_bitmap).
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

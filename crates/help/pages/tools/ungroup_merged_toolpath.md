@@ -22,3 +22,5 @@ the toolpaths it was made from are shown again.
 
 - Make a merged toolpath with **Toolpaths ▸ Merge Visible Toolpaths**: see
   [Merged Toolpath](help:merged_toolpath).
+
+A merged toolpath holds toolpaths that all use the same bit; ungrouping gives each one back as it was.
