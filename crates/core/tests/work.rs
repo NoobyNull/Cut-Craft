@@ -140,9 +140,11 @@ fn paced_pieces_run_in_order_resting_between_and_owing_the_last_rest() {
         share: 50,
     });
     let (mut rests, mut done, start) = (work::Rests::default(), vec![], Instant::now());
+    let mut ended = start;
     rests.paced(0..3, |i| {
         std::thread::sleep(piece);
         done.push(i);
+        ended = Instant::now();
     });
     let took = start.elapsed();
     assert_eq!(done, [0, 1, 2], "every piece, in order");
@@ -151,7 +153,7 @@ fn paced_pieces_run_in_order_resting_between_and_owing_the_last_rest() {
         "a rest as long as each piece between them: {took:?}"
     );
     assert!(
-        rests.owed(Instant::now()) > piece / 2,
+        rests.owed(ended) >= piece,
         "the last piece's rest is left owed, not slept"
     );
     work::set_limit(Limit::default());
