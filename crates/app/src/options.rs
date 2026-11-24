@@ -16,6 +16,8 @@ mod toolpaths;
 pub use toolpaths::*;
 mod view;
 pub use view::*;
+mod performance;
+pub use performance::*;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Options {
@@ -25,6 +27,9 @@ pub struct Options {
     pub toolpaths: ToolpathSettings,
     #[schemars(title = "General Settings", extend("x-section" = true))]
     pub general: General,
+    #[serde(default)]
+    #[schemars(title = "Performance", extend("x-section" = true))]
+    pub performance: Performance,
     /// The language Cut Craft's words are in: English, built in, or a language pack
     /// installed from Gadgets ▸ Add-ons.
     #[serde(default)]
@@ -168,17 +173,11 @@ impl Default for Options {
                 image_file_path: String::new(),
                 anti_aliasing: AntiAliasing::default(),
                 simplify_while_moving: false,
-                still_detail: Detail::default(),
-                moving_detail: MovingDetail::default(),
-                adjust_to_frame_rate: true,
-                target_fps: TARGET_FPS,
-                show_frame_rate: false,
                 rotation: Rotation::default(),
                 click_reach: click_reach(),
                 perspective_angle: perspective_angle(),
                 settle_seconds: settle_seconds(),
                 spin_speed: SPIN_SPEED,
-                preview_detail: preview_detail(),
             },
             toolpaths: ToolpathSettings {
                 auto_open_3d_view: d.auto_open_3d,
@@ -195,6 +194,7 @@ impl Default for Options {
                 change_by_changer: change_by_changer(),
             },
             language: Language::default(),
+            performance: Performance::default(),
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
                     .expect("a small count"),
@@ -233,8 +233,10 @@ impl Default for Options {
 }
 
 impl Options {
-    /// Hands the settings that code outside the app reads (cores, importing) to it.
+    /// Hands the settings that code outside the app reads (the calculation limit,
+    /// importing) to it.
     pub fn apply(&self) {
+        self.performance.apply();
         self.advanced.apply();
         self.import.apply();
     }
@@ -314,6 +316,7 @@ impl Options {
                 }
             }
         }
+        carry_over(&mut file);
         let (mut options, unread) = match serde_json::from_value::<Self>(file.clone()) {
             Ok(options) => (options, vec![]),
             Err(_) => Self::read_each(file),
@@ -412,7 +415,7 @@ impl Options {
         d.solid_previews = t.solid_2d_previews;
         d.solid_colour = t.solid_2d_preview_color;
         d.keep_out_labels = t.keep_out_labels;
-        d.detail = v.preview_detail.min(100);
+        d.detail = self.performance.preview_detail.min(100);
     }
 
     /// How many recent files are kept.

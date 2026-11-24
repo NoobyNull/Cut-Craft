@@ -508,7 +508,7 @@ impl CutCraftApp {
             return Err(no_toolpath(id));
         }
         if let Some(name) = &gcode.group
-            && self.doc.toolpaths_in_group(name).is_empty()
+            && self.doc.toolpaths_under_group(name).is_empty()
         {
             return Err(ApiError::not_found(format!(
                 "There is no toolpath group \"{name}\" with toolpaths in it."

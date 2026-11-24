@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
+reviewed: 2026-11-24
+see-also: performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
 # Changing settings
@@ -58,6 +58,13 @@ opens. Left off, Cut Craft opens straight to a blank job and New makes another.
 
 **Reset to defaults** on this page puts back Cut Craft's own starting job: 600 × 400 × 20 mm,
 single sided, Z zero on top, X0 Y0 at the bottom left.
+
+## Performance: keeping the computer responsive
+
+The **Performance** page sets how much of the computer calculations may use (80% of the
+processor's cores to start with, at a priority that gives way to your other programs), and
+holds the speed-or-detail choices for previews and the 3D view. See
+[Keeping the computer responsive](help:performance).
 
 ## Snapping Options, Machine Configuration and the Tool Database
 

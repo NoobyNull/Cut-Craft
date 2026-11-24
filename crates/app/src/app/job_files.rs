@@ -469,7 +469,9 @@ impl CutCraftApp {
             }
         }
         let now = ctx.input(|i| i.time);
+        // once kept for the new version, that copy stays as it is
         let unsaved = self.screen == Screen::Job
+            && !self.work_kept_for_update
             && self.session.is_dirty(&self.history)
             && self.history.revision() != self.autosaved.0;
         if unsaved
@@ -480,8 +482,13 @@ impl CutCraftApp {
             // the time of the try spaces out the next; the revision counts once written
             self.autosaved.1 = now;
             let doc = self.doc.clone();
+            // the job's own file goes with it, so recovered work saves back there
+            let note = files::RecoveryNote {
+                path: self.session.path.clone(),
+                after_update: false,
+            };
             let writing = std::thread::spawn(move || {
-                cut_craft_core::file::write_atomic(&path, &cut_craft_core::file::save_job(&doc))
+                files::write_recovery(&path, &cut_craft_core::file::save_job(&doc), &note)
                     .map_err(|e| format!("could not keep a recovery copy: {e}"))
             });
             self.autosave = Some((self.history.revision(), writing));
@@ -494,9 +501,43 @@ impl CutCraftApp {
             let _ = writing.join();
         }
         if let Some(path) = &self.recovery_path {
-            let _ = std::fs::remove_file(path);
+            files::remove_recovery(path, false);
         }
         self.autosaved.0 = self.history.revision();
+    }
+
+    /// Install Now is closing Cut Craft to start the new version: unsaved work is written to
+    /// this run's recovery copy, with a note of the job's own file, for the new version to
+    /// open just as it was, still unsaved; the job's own file is not touched. Nothing is
+    /// written when nothing is unsaved, and the work is not kept when the copy cannot be
+    /// written (closing then asks "Save changes?" as before).
+    pub(super) fn hand_off_for_update(&mut self) -> HandOff {
+        if self.screen != Screen::Job || !self.session.is_dirty(&self.history) {
+            return HandOff::NothingUnsaved;
+        }
+        let Some(path) = self.recovery_path.clone() else {
+            return HandOff::NotKept;
+        };
+        // a copy still being written would finish over this one
+        if let Some((_, writing)) = self.autosave.take() {
+            let _ = writing.join();
+        }
+        let note = files::RecoveryNote {
+            path: self.session.path.clone(),
+            after_update: true,
+        };
+        match files::write_recovery(&path, &cut_craft_core::file::save_job(&self.doc), &note) {
+            Ok(()) => {
+                self.work_kept_for_update = true;
+                // let go now: the new version may start before this one has closed
+                self.recovery_lock = None;
+                HandOff::Kept
+            }
+            Err(e) => {
+                log::warn!("could not keep the work for the new version: {e}");
+                HandOff::NotKept
+            }
+        }
     }
 
     /// At startup: this window's recovery copy claimed in the settings folder, and a crashed
@@ -565,6 +606,7 @@ impl CutCraftApp {
         else {
             return false;
         };
+        let note = files::recovery_note(&left);
         let Some((bytes, doc)) = std::fs::read(&left).ok().and_then(|bytes| {
             let doc = cut_craft_core::file::load_job(&bytes).ok()?;
             Some((bytes, doc))
@@ -574,21 +616,33 @@ impl CutCraftApp {
         self.reset_job();
         // kept as this run's copy, so the work is still there if this run ends badly too
         // before anything is changed (autosave writes it again then)
-        match cut_craft_core::file::write_atomic(&own, &bytes) {
-            Ok(()) => {
-                let _ = std::fs::remove_file(&left);
-                let _ = std::fs::remove_file(left.with_extension("lock"));
-            }
+        let kept_note = files::RecoveryNote {
+            after_update: false,
+            ..note.clone()
+        };
+        match files::write_recovery(&own, &bytes, &kept_note) {
+            Ok(()) => files::remove_recovery(&left, true),
             Err(e) => self
                 .status
                 .set_message(&format!("could not keep the recovery copy: {e}")),
         }
         self.doc = doc;
-        self.session = Session::unsaved();
+        self.session = Session::unsaved_at(note.path);
         self.screen = Screen::Job;
-        self.status.set_message(
-            "Recovered unsaved work from the last run: save it (File ▸ Save As) or close it",
-        );
+        if note.after_update {
+            self.status
+                .set_message(&super::tr!("update-your-unsaved-work-is-back"));
+        } else {
+            // Save goes back to the job's own file when it had one
+            let save = if self.session.path.is_some() {
+                "Save"
+            } else {
+                "Save As"
+            };
+            self.status.set_message(&format!(
+                "Recovered unsaved work from the last run: save it (File ▸ {save}) or close it"
+            ));
+        }
         true
     }
 
@@ -844,4 +898,15 @@ pub(super) fn starter_tool(params: &mut Value) {
     if let Some(tool) = params.get_mut("tool").filter(|t| **t == bare) {
         *tool = serde_json::to_value(Tool::starter()).expect("tools serialize");
     }
+}
+
+/// What [`CutCraftApp::hand_off_for_update`] did with the open job's unsaved work.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum HandOff {
+    /// Nothing was unsaved: the job opens again from its own file.
+    NothingUnsaved,
+    /// Kept in the recovery copy for the new version to open, still unsaved.
+    Kept,
+    /// The copy could not be written: closing asks "Save changes?" as before.
+    NotKept,
 }

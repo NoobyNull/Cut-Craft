@@ -533,3 +533,122 @@ fn cancel_with_only_a_list_change_since_the_form_opened_has_nothing_to_take_back
     h.app.cancel_form();
     assert_eq!(h.app.doc.toolpaths[&EntityId(2)].name, "Pocket");
 }
+
+/// `named_toolpaths` with Pocket in group Outside and Drill in group Holes, the list
+/// noting where its grips and arrows are.
+fn grouped_toolpaths() -> Harness {
+    let mut h = named_toolpaths();
+    crate::marks::switch_on(&h.ctx);
+    for (id, group) in [(1, "Outside"), (2, "Holes")] {
+        let params = serde_json::json!({ "toolpaths": [id], "group": group });
+        h.app.apply("group_toolpaths", &params).unwrap();
+    }
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h
+}
+
+fn mark(h: &Harness, name: &str) -> egui::Pos2 {
+    crate::marks::get(&h.ctx, name)
+        .unwrap_or_else(|| panic!("{name} drawn"))
+        .center()
+}
+
+/// Drags from `from` to `to` in small steps, as a hand does.
+fn drag_slowly(h: &mut Harness, from: egui::Pos2, to: egui::Pos2) {
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    for k in 1..=8_u8 {
+        h.frame(vec![Event::PointerMoved(from.lerp(to, f32::from(k) / 8.0))]);
+    }
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+}
+
+#[test]
+fn a_toolpath_dragged_by_its_grip_goes_just_before_the_row_it_is_dropped_on() {
+    let mut h = named_toolpaths();
+    crate::marks::switch_on(&h.ctx);
+    h.frame(vec![]);
+    let from = mark(&h, "toolpath_grip:Cut Out");
+    let to = h.text_at("Pocket").unwrap();
+    drag_slowly(&mut h, from, to);
+    assert_eq!(toolpath_names(&h), ["Cut Out", "Pocket", "Drill"]);
+}
+
+#[test]
+fn a_group_dragged_onto_another_groups_name_goes_inside_it_with_its_toolpaths() {
+    let mut h = grouped_toolpaths();
+    let from = mark(&h, "toolpath_grip:Holes");
+    let to = *h.texts_at("Outside").last().unwrap();
+    drag_slowly(&mut h, from, to);
+    assert_eq!(
+        h.app.doc.toolpath_group_parent("Holes").as_deref(),
+        Some("Outside")
+    );
+    assert_eq!(
+        h.app.doc.toolpaths[&EntityId(2)].group.as_deref(),
+        Some("Holes"),
+        "Drill stays in Holes"
+    );
+    // shown inside Outside: indented further, while the grips stay in one column
+    h.frame(vec![]);
+    let tick = |h: &Harness, g: &str| mark(h, &format!("toolpath_group_tick:{g}"));
+    assert!(tick(&h, "Holes").x > tick(&h, "Outside").x + 10.0);
+    let grip = |h: &Harness, g: &str| mark(h, &format!("toolpath_grip:{g}"));
+    assert!((grip(&h, "Holes").x - grip(&h, "Outside").x).abs() < 0.5);
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(h.app.doc.toolpath_group_parent("Holes"), None, "one Undo");
+}
+
+#[test]
+fn a_groups_arrow_closes_it_to_its_name_and_count_without_an_undo_step() {
+    let mut h = grouped_toolpaths();
+    assert!(h.text_at("Pocket").is_some());
+    let steps = h.app.history.undo_depth();
+    let arrow = mark(&h, "toolpath_arrow:Outside");
+    h.click(arrow, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at("Pocket").is_none(), "closed");
+    assert!(h.text_at("1 toolpath").is_some(), "its count shows");
+    assert!(h.app.doc.toolpath_groups_closed.contains("Outside"));
+    assert_eq!(h.app.history.undo_depth(), steps, "not a change to undo");
+    let arrow = mark(&h, "toolpath_arrow:Outside");
+    h.click(arrow, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at("Pocket").is_some(), "open again");
+}
+
+#[test]
+fn a_groups_tick_hides_everything_inside_it_in_one_undo_step() {
+    let mut h = grouped_toolpaths();
+    let tick = mark(&h, "toolpath_group_tick:Outside");
+    h.click(tick, Modifiers::NONE);
+    assert!(!h.app.doc.toolpaths[&EntityId(1)].visible);
+    assert!(h.app.doc.toolpaths[&EntityId(2)].visible, "Holes untouched");
+    h.app.invoke(&h.ctx, "undo");
+    assert!(h.app.doc.toolpaths[&EntityId(1)].visible);
+}
+
+#[test]
+fn group_with_a_group_picked_puts_it_inside_a_new_group() {
+    let mut h = grouped_toolpaths();
+    // the list's own "Holes" (another word on the page may say it too)
+    let name = |h: &Harness, g: &str| *h.texts_at(g).last().expect("listed");
+    h.click(name(&h, "Holes"), Modifiers::NONE);
+    assert_eq!(h.app.selected_group.as_deref(), Some("Holes"));
+    let group = h.text_at("Group").unwrap();
+    h.click(group, Modifiers::NONE);
+    let made = h
+        .app
+        .doc
+        .toolpath_group_parent("Holes")
+        .expect("inside a new group");
+    assert!(h.app.doc.toolpath_groups.contains(&made));
+    // Ungroup takes that one level apart: Holes is back at the top
+    h.frame(vec![]);
+    h.click(name(&h, &made), Modifiers::NONE);
+    let ungroup = h.text_at("Ungroup").unwrap();
+    h.click(ungroup, Modifiers::NONE);
+    assert_eq!(h.app.doc.toolpath_group_parent("Holes"), None);
+}

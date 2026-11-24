@@ -12,7 +12,7 @@ impl CutCraftApp {
         let playback = self.playback.as_ref()?;
         let key = (
             self.shown_revision(playback),
-            self.options.view_3d.still_cells(),
+            self.options.performance.still_cells(),
             self.history.revision(),
         );
         if let Some((kept, surface)) = &self.playback_view
@@ -37,7 +37,7 @@ impl CutCraftApp {
     /// there is one, else the model (kept until it changes: it is asked for several times a
     /// frame, and a big model takes long to mix).
     pub(in super::super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
-        let cells = self.options.view_3d.moving_cells();
+        let cells = self.options.performance.moving_cells();
         if self.playback.is_some() {
             return self.playback_surface().map(Cow::Owned);
         }
@@ -724,7 +724,7 @@ impl CutCraftApp {
     ) -> egui::Mesh {
         let key = FineKey {
             revision: self.history.revision(),
-            cells: self.options.view_3d.still_cells(),
+            cells: self.options.performance.still_cells(),
             job: self.doc.job,
             orbit,
             framing,
@@ -746,7 +746,7 @@ impl CutCraftApp {
     /// The preview's material, or the model's shape, at its own detail up to Options' detail
     /// when still.
     pub(in super::super) fn fine_surface(&mut self) -> Material {
-        let most = self.options.view_3d.still_cells();
+        let most = self.options.performance.still_cells();
         if let Some(material) = &self.simulation {
             return self.painted(view3d::on_sheet(material, self.doc.job.area(), most));
         }
@@ -773,7 +773,7 @@ impl CutCraftApp {
         // while a handle drags the model about, the quick surface, kept by the change it
         // shows, so the fine one is made once the drag ends
         let dragging = self.drag_base.is_some();
-        let still = self.options.view_3d.still_cells();
+        let still = self.options.performance.still_cells();
         let cells = if dragging {
             self.moving_cells()
         } else {
@@ -783,7 +783,7 @@ impl CutCraftApp {
             self.solid_gpu = None;
             let key = (
                 self.shown_revision(playback),
-                self.options.view_3d.still_cells(),
+                self.options.performance.still_cells(),
                 self.history.revision(),
                 wrap,
                 sides,
@@ -901,7 +901,7 @@ impl CutCraftApp {
             wrap,
             sides,
             importing: (self.importing_model(), self.importing_whole()),
-            cells: self.options.view_3d.still_cells(),
+            cells: self.options.performance.still_cells(),
         }
     }
 
@@ -950,7 +950,7 @@ impl CutCraftApp {
     /// Mesh cells along the job's longer side while the model or the view moves: as the
     /// frame rate allows when Options says so, else Options' detail while moving.
     pub(in super::super) fn moving_cells(&self) -> usize {
-        let view = &self.options.view_3d;
+        let view = &self.options.performance;
         if view.adjust_to_frame_rate {
             self.detail_3d.0.min(view.still_detail).cells()
         } else {
@@ -961,7 +961,7 @@ impl CutCraftApp {
     /// Mesh cells the GPU draws the model at while the view turns: as the frame rate allows
     /// when Options says so, else the detail when still (the card turns it unchanged).
     pub(in super::super) fn turning_cells(&self) -> usize {
-        let view = &self.options.view_3d;
+        let view = &self.options.performance;
         if view.adjust_to_frame_rate {
             self.detail_3d.0.min(view.still_detail).cells()
         } else {
@@ -979,8 +979,9 @@ impl CutCraftApp {
         }
         self.paced_pass = pass;
         let (now, seconds) = ctx.input(|i| (i.time, f64::from(i.unstable_dt)));
-        let view = &self.options.view_3d;
-        let (settle, still, fps) = (view.settle(), view.still_detail, view.fps_wanted());
+        let speed = &self.options.performance;
+        let settle = self.options.view_3d.settle();
+        let (still, fps) = (speed.still_detail, speed.fps_wanted());
         let since = now - self.moved_3d;
         let moving = since < settle
             || (self.playing && self.playback.is_some())
