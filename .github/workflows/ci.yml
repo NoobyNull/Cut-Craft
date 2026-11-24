@@ -11,6 +11,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # the merge queue tests each pull request on top of the ones queued before it, so two that
+  # pass on their own can't break main together
+  merge_group:
   schedule:
     # every night, every suite on every system: 09:00 UTC is 1 or 2 AM in California
     - cron: "0 9 * * *"
@@ -38,7 +41,7 @@ jobs:
       - name: Suites this change needs
         id: pick
         run: |
-          if [[ "${{ github.event_name }}" == pull_request ]]; then
+          if [[ "${{ github.event_name }}" == pull_request || "${{ github.event_name }}" == merge_group ]]; then
             scripts/pick-suites --github HEAD^1
           else
             scripts/pick-suites --github --all
@@ -121,5 +124,5 @@ jobs:
         run: echo "Nothing this change touches has tests; Format and Clippy passed."
 
       - name: Every test is in a suite
-        if: github.event_name != 'pull_request' && runner.os == 'Linux'
+        if: github.event_name != 'pull_request' && github.event_name != 'merge_group' && runner.os == 'Linux'
         run: scripts/pick-suites --check

@@ -942,8 +942,8 @@ implemented yet" listed.)
   spindle); the laser toolpath forms pick one with Select… like any other tool.
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (not described in the help), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
-  (`docs/ROADMAP.md`, section 6).
-- Not tried by hand: the 2026-11-01 batch (`docs/ROADMAP.md`, section 5) and earlier work
+  (`docs/feature-status-2026-11-01.md`, section 6).
+- Not tried by hand: the 2026-11-01 batch (`docs/feature-status-2026-11-01.md`, section 5) and earlier work
   listed in `docs/hand-test-3d.md`.
 
 ## Differences from Aspire 12 seen on screen

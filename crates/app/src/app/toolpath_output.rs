@@ -167,22 +167,7 @@ impl CutCraftApp {
     /// The posts of the active machine that suit this job (flat, or wrapping its side), for
     /// Save Toolpaths to choose from; none without a machine (Cut Craft's own is used).
     pub(super) fn post_choices(&self) -> Vec<String> {
-        let wraps = self.doc.job.rotary.map(|r| match r.along {
-            cut_craft_core::document::Along::X => "Y",
-            cut_craft_core::document::Along::Y => "X",
-        });
-        self.machines.active().map_or_else(Vec::new, |machine| {
-            machine
-                .posts
-                .iter()
-                .filter(|name| {
-                    self.posts.load(name).is_ok_and(|p| {
-                        p.wraps() == wraps && (wraps.is_none() || machine.has_rotary())
-                    })
-                })
-                .cloned()
-                .collect()
-        })
+        cut_craft_machines::post_choices(self.machines.active(), &self.doc.job, &self.posts)
     }
 
     /// Save Toolpaths' Save: the checks before cutting, a file name (the dialog opening in
@@ -497,13 +482,12 @@ impl CutCraftApp {
     /// its tool changes made pauses when the form says to pause, or tools are changed by
     /// hand between files on a machine without a tool changer.
     pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
-        if let Some(why) = self.no_a_axis() {
-            return Err(why);
-        }
-        let post = match form.post.as_deref() {
-            Some(name) => self.posts.load(name).map(|p| self.on_machine(p)),
-            None => self.output_post(),
-        }?;
+        let post = cut_craft_machines::post_for(
+            self.machines.active(),
+            &self.doc.job,
+            &self.posts,
+            form.post.as_deref(),
+        )?;
         let changer = self.has_tool_changer();
         Ok(match form.changes {
             files::ToolChanges::Pause => post.with_pauses(),
@@ -795,84 +779,10 @@ impl CutCraftApp {
         Ok(texts)
     }
 
-    /// Why a rotary job can't be saved for the active machine: its firmware has no A axis
-    /// (standard GRBL, also what unknown firmware is taken for), whatever its posts and 4th
-    /// axis tick. `None` for a flat job, no machine, or firmware with an A axis.
-    fn no_a_axis(&self) -> Option<String> {
-        let machine = self.machines.active()?;
-        (self.doc.job.rotary.is_some() && !machine.firmware().has_a_axis()).then(|| {
-            format!(
-                "{} cannot cut this rotary job. {} If its controller runs other firmware, pick \
-                 it under Firmware in Machine Configuration",
-                machine.name,
-                cut_craft_machines::NO_A_AXIS
-            )
-        })
-    }
-
-    /// The post toolpaths are saved through: the active machine's default when it suits the
-    /// job, else the machine's first post that does: a flat one for a flat job, and for a
-    /// rotary job (on a machine with a 4th axis) one wrapping the side that goes round, Y
-    /// for a cylinder along X and X for one along Y. Without a machine, Cut Craft's
-    /// `FluidNC` post for this kind of job.
+    /// The post toolpaths are saved through when none is picked: the active machine's
+    /// choice for this job (see [`cut_craft_machines::post_for`]).
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
-        self.output_post_as_written().map(|p| self.on_machine(p))
-    }
-
-    /// `post` writing for the active machine: a rotary post winds A as its rotary allows
-    /// (Machine Configuration ▸ Rotary), with its backlash and top speed.
-    fn on_machine(&self, post: cut_craft_post::Post) -> cut_craft_post::Post {
-        match self.machines.active() {
-            Some(m) if m.has_rotary() && post.wraps().is_some() => post.with_rotary(m.rotary_axis),
-            _ => post,
-        }
-    }
-
-    /// [`Self::output_post`] as its file is written, not yet told the machine's rotary.
-    fn output_post_as_written(&self) -> Result<cut_craft_post::Post, String> {
-        use cut_craft_core::document::Along;
-        if let Some(why) = self.no_a_axis() {
-            return Err(why);
-        }
-        let Some(machine) = self.machines.active().filter(|m| !m.posts.is_empty()) else {
-            return Ok(cut_craft_post::Post::default_for(&self.doc.job));
-        };
-        let wraps = self.doc.job.rotary.map(|r| match r.along {
-            Along::X => "Y",
-            Along::Y => "X",
-        });
-        if wraps.is_some() && !machine.has_rotary() {
-            return Err(format!(
-                "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
-                 Configuration",
-                machine.name
-            ));
-        }
-        // the default first: one that will not load says so rather than being passed over
-        let default = machine
-            .post()
-            .map(|name| self.posts.load(name))
-            .transpose()?;
-        if let Some(post) = default.filter(|p| p.wraps() == wraps) {
-            return Ok(post);
-        }
-        machine
-            .posts
-            .iter()
-            .filter_map(|name| self.posts.load(name).ok())
-            .find(|p| p.wraps() == wraps)
-            .ok_or_else(|| match wraps {
-                Some(axis) => format!(
-                    "{} has no post for this rotary job: add a Rotary A, cylinder along {} \
-                     post in Machine Configuration",
-                    machine.name,
-                    if axis == "Y" { "X" } else { "Y" }
-                ),
-                None => format!(
-                    "{} has only rotary posts: add a flat one in Machine Configuration",
-                    machine.name
-                ),
-            })
+        cut_craft_machines::post_for(self.machines.active(), &self.doc.job, &self.posts, None)
     }
 
     /// What the active machine can do, for the checks before cutting; nothing is checked

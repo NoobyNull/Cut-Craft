@@ -294,9 +294,19 @@ impl CutCraftApp {
                 .pick_files()
                 .unwrap_or_default()
         };
+        // in a language pack, a wrong or missing word goes to its translators
+        let translation = || {
+            let dir = self.addons.dir()?;
+            let chosen = &self.options.language.pack;
+            let in_use =
+                (crate::languages::installed(dir).into_iter()).find(|p| p.id == *chosen)?;
+            let url = crate::languages::wording_issues(&in_use);
+            Some((in_use.name, url))
+        };
         let host = cut_craft_bug_report::Host {
             state: &state,
             pick_pictures: &pick,
+            translation: &translation,
         };
         let message = reporter.frame(ctx, &host);
         self.reporter = reporter;

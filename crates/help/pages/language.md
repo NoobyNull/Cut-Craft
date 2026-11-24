@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-22
-see-also: settings, addons
+reviewed: 2026-11-24
+see-also: settings, addons, bug_reports
 ---
 
 # Using Cut Craft in another language
@@ -16,17 +16,39 @@ A pack never comes with Cut Craft itself.
    its own install, so you only get the ones you pick.
 3. When it's done, the window says to pick it in **Edit ▸ Options ▸ Language**.
 
-The packs are published together on GitHub, but each one downloads on its own. A pack
-signed with Cut Craft's release key is **official**. One that isn't still works, but it is
-marked **⚠ not official**, the same as any other [add-on](help:addons).
+The packs are published together on GitHub, but each one downloads on its own. Each pack
+says **Official, community supported**, then who translated it and how much is done, such
+as **Translated by Ivan · 92% translated**.
+
+## Official, community supported
+
+- **Official**: Cut Craft checked the pack and signed it with its release key. A pack holds
+  only words, so it can't run anything or change your files.
+- **Community supported**: volunteers write the words and keep them up to date, not Cut
+  Craft's author. So a pack can have the odd wrong word, and new parts of Cut Craft show in
+  English until its translators catch up.
+
+A pack that isn't signed still works, but it is marked **⚠ not official**, the same as any
+other [add-on](help:addons).
+
+## Report a wrong or missing word
+
+Tell the pack's translators, not Cut Craft:
+
+- In **Edit ▸ Options ▸ Language**, with the pack picked, press **Report a wrong or missing
+  word**. It opens the pack's page on GitHub, where you can describe it.
+- In the **Report a Bug** form while you use a pack, the line at the top has **Tell its
+  translators**, which goes to the same page. Use the form itself for anything else that
+  goes wrong (see [Reporting a bug](help:bug_reports)).
 
 ## Switch language
 
-![Edit ▸ Options ▸ Language, with English built in](pictures/options-language.png)
+![Edit ▸ Options ▸ Language, with a pack picked: "Official, community supported", who translated it, how much is done, and where to report a wrong word](pictures/options-language.png)
 
 1. Open **Edit ▸ Options** and pick the **Language** page.
-2. Pick the language. Beside each pack it says how much of Cut Craft it translates, such
-   as **40% translated**.
+2. Pick the language. Beside each pack it says who translated it and how much of Cut
+   Craft it covers, such as **Official, community supported · Translated by Ivan · 40%
+   translated**.
 3. Press **Apply**. Like every Options page, nothing changes until then (see
    [Changing settings](help:settings)).
 
@@ -52,4 +74,6 @@ instead of coming from a language file.
 ## Making a pack
 
 Anyone can translate Cut Craft. See **docs/translating.md** in Cut Craft's source on
-GitHub. It shows how to copy the English files, translate them, and test your pack.
+GitHub. It shows how to copy the English files, translate them, test your pack, and put
+your name on it. A pack that passes the automatic checks is signed and published without
+anyone reading it first.

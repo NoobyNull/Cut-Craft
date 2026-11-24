@@ -74,6 +74,9 @@ pub struct Addons {
     languages: Languages,
     /// The languages with a pack to download, once asked: each its own install.
     offered: Option<Result<Vec<String>, String>>,
+    /// How much of Cut Craft each installed language pack covers, by id, with the version it
+    /// was worked out for: read once, not every frame.
+    coverage: std::cell::RefCell<HashMap<String, (String, u32)>>,
 }
 
 impl Addons {
@@ -90,6 +93,7 @@ impl Addons {
             find: addon::find,
             languages: addon::languages_offered,
             offered: None,
+            coverage: std::cell::RefCell::default(),
             install: |dir, offer, progress| addon::install(dir, offer, &usable, progress),
             newer: addon::update_for,
             allowed: std::collections::HashSet::new(),
@@ -516,21 +520,38 @@ impl Addons {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong(pack.map_or_else(|| language_name(&code), |p| p.name.clone()));
-                match pack {
-                    Some(pack) => {
-                        let had = dir.and_then(|d| addon::installed(d, &pack.id));
-                        self.row(ui, &pack.id, addon::TRANSLATIONS, had.as_ref(), busy, press);
+                if let Some(pack) = pack {
+                    let percent = dir.map(|d| self.coverage_of(d, pack));
+                    for line in crate::languages::support_lines(pack, percent) {
+                        ui.weak(line);
                     }
-                    None => {
-                        if ui
-                            .add_enabled(!busy, egui::Button::new(tr!("addons-install")))
-                            .clicked()
-                        {
-                            *press = Press::InstallLanguage(code.clone());
-                        }
+                    let had = dir.and_then(|d| addon::installed(d, &pack.id));
+                    self.row(ui, &pack.id, addon::TRANSLATIONS, had.as_ref(), busy, press);
+                } else {
+                    // every pack published with Cut Craft's translations is signed
+                    ui.weak(tr!("language-community-supported"));
+                    if ui
+                        .add_enabled(!busy, egui::Button::new(tr!("addons-install")))
+                        .clicked()
+                    {
+                        *press = Press::InstallLanguage(code.clone());
                     }
                 }
             });
+        }
+    }
+
+    /// How much of Cut Craft `pack` (installed in `dir`) covers, worked out once for each
+    /// version of it.
+    fn coverage_of(&self, dir: &Path, pack: &crate::languages::Pack) -> u32 {
+        let mut known = self.coverage.borrow_mut();
+        match known.get(&pack.id) {
+            Some((version, percent)) if *version == pack.version => *percent,
+            _ => {
+                let percent = crate::languages::coverage(dir, pack);
+                known.insert(pack.id.clone(), (pack.version.clone(), percent));
+                percent
+            }
         }
     }
 

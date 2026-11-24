@@ -527,7 +527,7 @@ pub fn carvable(heights: &Grid, cell: f64, relief: f64, bit: &Tool) -> Grid {
     // smooth ground only the bit's tip is ever looked at.
     let highest = within(&heights.values, columns, most, |a, b| a >= b);
     let mut tip = vec![0.0_f32; heights.values.len()];
-    cut_craft_core::simulation::by_rows(&mut tip, columns, |first, band| {
+    cut_craft_core::work::by_rows(&mut tip, columns, |first, band| {
         for (i, out) in band.iter_mut().enumerate() {
             let at_cell = first * columns + i;
             let (column, row) = ((i % columns) as isize, (first + i / columns) as isize);
@@ -544,7 +544,7 @@ pub fn carvable(heights: &Grid, cell: f64, relief: f64, bit: &Tool) -> Grid {
     // what is left: the lowest the bit's surface came over each cell
     let lowest = within(&tip, columns, most, |a, b| a <= b);
     let mut left = vec![0.0_f32; tip.len()];
-    cut_craft_core::simulation::by_rows(&mut left, columns, |first, band| {
+    cut_craft_core::work::by_rows(&mut left, columns, |first, band| {
         for (i, out) in band.iter_mut().enumerate() {
             let at_cell = first * columns + i;
             let (column, row) = ((i % columns) as isize, (first + i / columns) as isize);
