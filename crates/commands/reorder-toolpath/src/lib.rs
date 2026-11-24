@@ -166,7 +166,7 @@ fn followed(
 }
 
 /// Puts the toolpaths in a new cut order at once, as dragging one in the toolpath list or
-/// moving a whole group does: one step to undo.
+/// moving a whole group does, and moves groups into other groups: one step to undo.
 pub struct ArrangeToolpaths;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -176,6 +176,10 @@ pub struct ArrangeParams {
     /// The group each toolpath named here goes in (empty: none); the others keep theirs
     #[serde(default)]
     pub groups: std::collections::BTreeMap<EntityId, String>,
+    /// The group each toolpath group named here goes inside (empty: the top of the list);
+    /// the others stay where they are
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub parents: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for ArrangeParams {
@@ -183,8 +187,36 @@ impl Default for ArrangeParams {
         Self {
             order: [2, 1, 3, 4].map(EntityId).to_vec(),
             groups: std::collections::BTreeMap::new(),
+            parents: std::collections::BTreeMap::new(),
         }
     }
+}
+
+/// The groups' parents after `moves` (group to the group it goes inside, empty: the top).
+/// Refused when a group would go inside itself or a group inside it.
+fn moved_parents(
+    doc: &Document,
+    moves: &std::collections::BTreeMap<String, String>,
+) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
+    let mut parents = doc.toolpath_group_parents.clone();
+    for (group, parent) in moves {
+        let parent = parent.trim();
+        if parent.is_empty() {
+            parents.remove(group);
+            continue;
+        }
+        if doc
+            .toolpath_group_and_subgroups(group)
+            .iter()
+            .any(|g| g == parent)
+        {
+            return Err(CommandError::Failed(format!(
+                "{group} can't go inside {parent}: it is {group} or sits inside it"
+            )));
+        }
+        parents.insert(group.clone(), parent.to_owned());
+    }
+    Ok(parents)
 }
 
 impl Command for ArrangeToolpaths {
@@ -214,7 +246,19 @@ impl Command for ArrangeToolpaths {
                 Ok((id, toolpath))
             })
             .collect::<Result<Vec<_>, CommandError>>()?;
-        arranged(doc, &order)
+        let parents = moved_parents(doc, &p.parents)?;
+        let mut c = Change::builder(doc);
+        // a group named only here (made to hold another) joins the list
+        let mut groups = doc.toolpath_groups_in_use();
+        for name in p.parents.iter().flat_map(|(g, at)| [g, at]) {
+            let name = name.trim();
+            if !name.is_empty() && !groups.iter().any(|g| g == name) {
+                groups.push(name.to_owned());
+            }
+        }
+        c.set_toolpath_groups(groups);
+        c.set_toolpath_group_parents(parents);
+        Ok(arranged(doc, &order)?.then(c.finish()))
     }
 }
 
@@ -304,6 +348,7 @@ mod tests {
             let p = ArrangeParams {
                 order: [3, 1, 4, 2].map(EntityId).to_vec(),
                 groups: [(EntityId(3), "Outside".to_owned())].into(),
+                parents: std::collections::BTreeMap::new(),
             };
             run_on::<ArrangeToolpaths>(&mut doc, &p);
             assert_eq!(names(&doc), ["C", "A", "Merged", "B"]);
@@ -326,9 +371,34 @@ mod tests {
                 let p = ArrangeParams {
                     order: order.into_iter().map(EntityId).collect(),
                     groups: std::collections::BTreeMap::new(),
+                    parents: std::collections::BTreeMap::new(),
                 };
                 assert!(ArrangeToolpaths::run(&doc, &p).is_err());
             }
+        }
+
+        #[test]
+        fn a_group_moves_inside_another_but_never_inside_itself() {
+            let mut doc = listed();
+            doc.toolpath_groups = vec!["Outside".into(), "Tabs".into()];
+            let into = |group: &str, parent: &str| ArrangeParams {
+                order: [1, 2, 3, 4].map(EntityId).to_vec(),
+                groups: std::collections::BTreeMap::new(),
+                parents: [(group.to_owned(), parent.to_owned())].into(),
+            };
+            run_on::<ArrangeToolpaths>(&mut doc, &into("Tabs", "Outside"));
+            assert_eq!(
+                doc.toolpath_group_parent("Tabs").as_deref(),
+                Some("Outside")
+            );
+            assert!(ArrangeToolpaths::run(&doc, &into("Outside", "Tabs")).is_err());
+            assert!(ArrangeToolpaths::run(&doc, &into("Outside", "Outside")).is_err());
+            run_on::<ArrangeToolpaths>(&mut doc, &into("Tabs", ""));
+            assert_eq!(doc.toolpath_group_parent("Tabs"), None, "back to the top");
+            // a new group made to hold one joins the list
+            run_on::<ArrangeToolpaths>(&mut doc, &into("Tabs", "Edge"));
+            assert_eq!(doc.toolpath_groups, ["Outside", "Tabs", "Edge"]);
+            assert_eq!(doc.toolpath_group_path("Tabs"), ["Edge", "Tabs"]);
         }
     }
 }

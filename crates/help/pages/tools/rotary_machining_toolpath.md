@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-23
-see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths
+reviewed: 2026-11-24
+see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, performance
 ---
 
 **4-Axis Rotary Machining** finishes a 3D model all the way round a turning cylinder. The bit
@@ -177,3 +177,10 @@ the start of the next ring is set once for the machine, under **A can turn** in
   controllers place A less finely so far out.
 - **Up to N turns each way** with **Cut both ways**: the next ring is cut back the other way.
 - **Up to N turns each way** with **Lift and spin back**: A spins back before the next ring.
+
+## While it calculates
+
+A rotary toolpath works out a great many drops and can take a while. It shares the
+processor with your other programs as [Options ▸ Performance](help:performance) says, so
+a video or the browser stays smooth meanwhile; the status bar shows how briskly it is
+going. Untick the limit there to calculate on every core at full speed.

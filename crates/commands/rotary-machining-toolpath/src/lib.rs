@@ -874,38 +874,7 @@ struct Outcome {
     tilts: Vec<f64>,
 }
 
-/// How many threads to work out drops on.
-fn cores() -> usize {
-    std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
-}
-
-/// `f` of each of `0..count`, in order, worked out over every core.
-fn parallel<T: Send>(count: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
-    let threads = cores().min(count).max(1);
-    if threads == 1 {
-        return (0..count).map(f).collect();
-    }
-    let f = &f;
-    let mut parts: Vec<Vec<(usize, T)>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = (0..threads)
-            .map(|t| {
-                scope.spawn(move || {
-                    (t..count)
-                        .step_by(threads)
-                        .map(|i| (i, f(i)))
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().expect("a drop never panics"))
-            .collect()
-    });
-    let mut all: Vec<(usize, T)> = parts.drain(..).flatten().collect();
-    all.sort_by_key(|(i, _)| *i);
-    all.into_iter().map(|(_, t)| t).collect()
-}
+use cut_craft_core::work::{cores, parallel};
 
 /// How a pass of bulk to fine detail decides whether a point cuts anything.
 struct Check {

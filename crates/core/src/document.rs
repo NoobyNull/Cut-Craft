@@ -9,6 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 mod guide;
+mod toolpath_groups;
 pub use guide::*;
 mod job;
 pub use job::*;
@@ -280,6 +281,14 @@ pub struct Document {
     /// is only here; each toolpath names its own group.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub toolpath_groups: Vec<String>,
+    /// The toolpath group each sub-group sits in, by name (added with groups inside
+    /// toolpath groups). A group not here sits at the top of the list.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub toolpath_group_parents: BTreeMap<String, String>,
+    /// The toolpath groups closed in the list (their ▶ arrow), so only their names show.
+    /// Saved with the job, but view state: changing it is not a step to undo.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub toolpath_groups_closed: std::collections::BTreeSet<String>,
     /// Part names (Name Part, Import Cut List), by vector group: what the cut list and part
     /// labels call the part the group belongs to (added with part labels).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -332,6 +341,8 @@ impl Default for Document {
             remaking: None,
             guides: vec![],
             toolpath_groups: vec![],
+            toolpath_group_parents: BTreeMap::new(),
+            toolpath_groups_closed: std::collections::BTreeSet::new(),
             part_names: BTreeMap::new(),
             constraints: vec![],
             material_checked: false,
@@ -1030,29 +1041,6 @@ fn ring_area(ring: &[Point]) -> f64 {
 }
 
 impl Document {
-    /// The toolpath groups in list order, then any a toolpath names that the list lacks (a
-    /// template brings its toolpaths' groups in).
-    #[must_use]
-    pub fn toolpath_groups_in_use(&self) -> Vec<String> {
-        let mut groups = self.toolpath_groups.clone();
-        for name in self.toolpaths.values().filter_map(|t| t.group.as_ref()) {
-            if !groups.contains(name) {
-                groups.push(name.clone());
-            }
-        }
-        groups
-    }
-
-    /// The toolpaths in `group`, in list order.
-    #[must_use]
-    pub fn toolpaths_in_group(&self, group: &str) -> Vec<EntityId> {
-        self.toolpaths
-            .iter()
-            .filter(|(_, t)| t.group.as_deref() == Some(group))
-            .map(|(&id, _)| id)
-            .collect()
-    }
-
     /// A name no toolpath group has yet: Group 1, Group 2…
     #[must_use]
     pub fn next_toolpath_group_name(&self) -> String {

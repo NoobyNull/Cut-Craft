@@ -2,8 +2,8 @@
 //! changers) and writing the files.
 
 use super::{
-    Change, CutCraftApp, Dialog, Document, EntityId, SaveChecks, SaveForm, Value, file_name, files,
-    filtered_dialog,
+    Change, CutCraftApp, Dialog, EntityId, SaveChecks, SaveForm, Value, file_name, files,
+    filtered_dialog, output,
 };
 
 impl CutCraftApp {
@@ -43,41 +43,23 @@ impl CutCraftApp {
     }
 
     /// The toolpaths of `plan` in `doc` that pass over a keep-out zone, by name.
-    pub(super) fn not_kept_out(&self, doc: &Document, plan: &[Vec<EntityId>]) -> Vec<String> {
-        plan.iter()
-            .flatten()
-            .filter_map(|id| doc.toolpaths.get(id))
-            .filter(|t| !self.zones_entered(t).is_empty())
-            .map(|t| t.name.clone())
-            .collect()
+    #[cfg(test)]
+    pub(super) fn not_kept_out(
+        &self,
+        doc: &super::Document,
+        plan: &[Vec<EntityId>],
+    ) -> Vec<String> {
+        self.output().not_kept_out(doc, plan)
     }
 
     /// The job with its toolpaths thinned to their tolerances, as they are saved; refused
     /// when a toolpath of `plan`, as saved, would cut into a keep-out zone.
-    pub(super) fn thinned_for_saving(&self, plan: &[Vec<EntityId>]) -> Result<Document, String> {
-        let thinned = self.options.toolpaths.thinned(&self.doc);
-        // a toolpath that cannot abide by the keep-out zones is not saved; checked on the
-        // moves saved, which the tolerance may have straightened
-        let crossing = self.not_kept_out(&thinned, plan);
-        if !crossing.is_empty() {
-            let clippable = plan
-                .iter()
-                .flatten()
-                .filter_map(|id| thinned.toolpaths.get(id))
-                .any(|t| crossing.contains(&t.name) && can_clip(t));
-            let way = if clippable {
-                format!(", or turn on clipping ({CLIP_SETTING}) and recalculate")
-            } else {
-                " (laser and drill bank toolpaths are not clipped: move the part or the zone)"
-                    .to_owned()
-            };
-            return Err(format!(
-                "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
-                 their clearance are right{way}",
-                crossing.join(", ")
-            ));
-        }
-        Ok(thinned)
+    #[cfg(test)]
+    pub(super) fn thinned_for_saving(
+        &self,
+        plan: &[Vec<EntityId>],
+    ) -> Result<super::Document, String> {
+        self.output().thinned(plan)
     }
 
     /// The names of the keep-out zones `toolpath` cuts into (its cutter's edge reaching
@@ -86,11 +68,21 @@ impl CutCraftApp {
         &self,
         toolpath: &cut_craft_core::toolpath::Toolpath,
     ) -> Vec<String> {
-        let radius = toolpath.tool.diameter / 2.0;
-        cut_craft_core::keep_out::entered(self.doc.named_keep_out(), &toolpath.moves, radius)
-            .into_iter()
-            .map(|z| format!("\"{}\"", z.name))
-            .collect()
+        output::zones_entered(&self.doc, toolpath)
+    }
+
+    /// The job and machine as they are now, for toolpath output: what every way of saving
+    /// toolpaths works from.
+    pub(super) fn output(&self) -> output::Output<'_> {
+        output::Output {
+            doc: &self.doc,
+            machine: self.machines.active(),
+            posts: &self.posts,
+            selected_toolpath: self.selected_toolpath,
+            selected_group: self.selected_group.as_deref(),
+            job_path: self.session.path.as_deref(),
+            tolerances: &self.options.toolpaths,
+        }
     }
 
     /// Why `change` may not be made: a toolpath it makes would cut into a keep-out zone,
@@ -167,22 +159,7 @@ impl CutCraftApp {
     /// The posts of the active machine that suit this job (flat, or wrapping its side), for
     /// Save Toolpaths to choose from; none without a machine (Cut Craft's own is used).
     pub(super) fn post_choices(&self) -> Vec<String> {
-        let wraps = self.doc.job.rotary.map(|r| match r.along {
-            cut_craft_core::document::Along::X => "Y",
-            cut_craft_core::document::Along::Y => "X",
-        });
-        self.machines.active().map_or_else(Vec::new, |machine| {
-            machine
-                .posts
-                .iter()
-                .filter(|name| {
-                    self.posts.load(name).is_ok_and(|p| {
-                        p.wraps() == wraps && (wraps.is_none() || machine.has_rotary())
-                    })
-                })
-                .cloned()
-                .collect()
-        })
+        cut_craft_machines::post_choices(self.machines.active(), &self.doc.job, &self.posts)
     }
 
     /// Save Toolpaths' Save: the checks before cutting, a file name (the dialog opening in
@@ -199,8 +176,7 @@ impl CutCraftApp {
             extension: &extension,
         };
         let mut dialog = filtered_dialog(which, &self.registry);
-        let named = cut_craft_machines::send::safe_name(&self.output_name(form), false);
-        dialog = dialog.set_file_name(format!("{named}.{extension}"));
+        dialog = dialog.set_file_name(self.output().file_name(form, &post));
         let (key, name) = self.project();
         let programs = self
             .machines
@@ -227,7 +203,7 @@ impl CutCraftApp {
     ) {
         let earlier = files::earlier_save(&path);
         if earlier.is_empty() {
-            self.finish_save(form, &post, &path, "");
+            self.finish_save(form, &post, &path);
             return;
         }
         match self.options.confirmations.earlier_gcode {
@@ -268,10 +244,7 @@ impl CutCraftApp {
         self.save_with(choice, &ask.form, &ask.post, &ask.path, &ask.earlier);
     }
 
-    /// Replaces (deletes) or archives `earlier`, then saves. They are moved aside first
-    /// (into the archive, or a hidden folder for Replace) so the new files never mix with
-    /// them, and put back if the new files cannot be written: a failed save never leaves
-    /// the user with no G-code at all.
+    /// Replaces (deletes) or archives `earlier`, then saves: see [`output::write_over`].
     fn save_with(
         &mut self,
         choice: crate::options::EarlierGcode,
@@ -280,62 +253,46 @@ impl CutCraftApp {
         path: &std::path::Path,
         earlier: &[std::path::PathBuf],
     ) {
-        use crate::options::EarlierGcode;
-        let archiving = choice == EarlierGcode::Archive;
-        let moved = if archiving {
-            files::archive(earlier, path, chrono::Local::now().naive_local())
-        } else {
-            files::set_aside(earlier, path)
-        };
-        let folder = match moved {
-            Ok(folder) => folder,
-            Err(e) => {
-                let doing = if archiving { "archive" } else { "replace" };
-                return self
-                    .status
-                    .set_message(&format!("Not saved: could not {doing} {e}"));
+        let archiving = choice == crate::options::EarlierGcode::Archive;
+        let made = chrono::Local::now().naive_local();
+        let vars = self.note_variables();
+        let output = self.output();
+        let texts = || output.texts(form, post, path, made, &vars);
+        match output::write_over(texts, path, earlier, archiving, made) {
+            Ok(over) => {
+                let after = over.archived.map_or_else(String::new, |folder| {
+                    format!("; the earlier files are in {}", folder.display())
+                });
+                self.saved(form, path, &over.written, &after);
             }
-        };
-        let done = if archiving {
-            format!("; the earlier files are in {}", folder.display())
-        } else {
-            String::new()
-        };
-        if self.finish_save(form, post, path, &done) {
-            if !archiving {
-                let _ = std::fs::remove_dir_all(&folder);
-            }
-            return;
+            Err(e) => self.status.set_message(&e),
         }
-        let kept = match files::put_back(earlier, &folder, path) {
-            Ok(()) => "; the earlier files were left as they were".to_owned(),
-            Err(e) => format!(
-                "; the earlier files are in {} (could not put back {e})",
-                folder.display()
-            ),
-        };
-        let message = format!("{}{kept}", self.status.message);
-        self.status.set_message(&message);
     }
 
-    /// Writes the files (and the job sheet) and says what was saved, then `after`; whether
-    /// the G-code files were written.
+    /// Writes the files (and the job sheet) and says what was saved.
     fn finish_save(
         &mut self,
         form: &SaveForm,
         post: &cut_craft_post::Post,
         path: &std::path::Path,
+    ) {
+        match self.write_toolpath_files(form, post, path) {
+            Ok(written) => self.saved(form, path, &written, ""),
+            Err(e) => self.status.set_message(&e),
+        }
+    }
+
+    /// Once the G-code files `written` are saved at `path`: the job sheet beside them when
+    /// the form says so, and the status bar saying what was saved, then `after`.
+    fn saved(
+        &mut self,
+        form: &SaveForm,
+        path: &std::path::Path,
+        written: &[std::path::PathBuf],
         after: &str,
-    ) -> bool {
+    ) {
         let (_, name) = self.project();
-        let written = match self.write_toolpath_files(form, post, path) {
-            Ok(written) => written,
-            Err(e) => {
-                self.status.set_message(&e);
-                return false;
-            }
-        };
-        let done = Self::saved_message(&written, path, self.doc.tiling.is_some());
+        let done = self.output().saved_message(written, path);
         let result = if form.job_sheet {
             let folder = path.parent().unwrap_or(std::path::Path::new("."));
             let outputs = (written.iter())
@@ -348,7 +305,6 @@ impl CutCraftApp {
         };
         self.status
             .set_message(&result.map_or_else(|e| e, |done| format!("{done}{after}")));
-        true
     }
 
     /// Save Toolpaths' post and the checks before cutting, asked about when they find
@@ -385,40 +341,18 @@ impl CutCraftApp {
             });
             return None;
         };
-        if let Some(refused) = Self::refused(&found) {
-            self.status.set_message(&refused);
-            return None;
+        match output::verdict(&found, &self.acknowledged, &accepted) {
+            output::Verdict::Refused(refused) => {
+                self.status.set_message(&refused);
+                None
+            }
+            output::Verdict::Ask(problems) => {
+                // asked over the window: the answer saves (or sends) again
+                self.ask_save_anyway(form, problems, sending);
+                None
+            }
+            output::Verdict::Go => Some(post),
         }
-        // every one ticked as read in Save Toolpaths: that was the asking, but for the
-        // collet or spindle hitting the material, which is always asked about
-        let ticked = self.all_acknowledged(&found);
-        let must_ask = found
-            .iter()
-            .any(|f| f.severity == cut_craft_core::preflight::Severity::MustAsk);
-        let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
-        let ask = must_ask || !ticked;
-        // Save Anyway answered for these problems, every one of them shown then
-        let answered = problems.iter().all(|p| accepted.contains(p));
-        if !problems.is_empty() && ask && !answered {
-            // asked over the window: the answer saves (or sends) again
-            self.ask_save_anyway(form, problems, sending);
-            return None;
-        }
-        Some(post)
-    }
-
-    /// The name the form's file is saved under (before its extension): a group's own name,
-    ///, the selected toolpath's when saving only it, else the project's.
-    pub(super) fn output_name(&self, form: &SaveForm) -> String {
-        let selected = (form.mode == files::SaveMode::Selected)
-            .then(|| {
-                self.selected_group.clone().or_else(|| {
-                    let id = self.selected_toolpath?;
-                    Some(self.doc.toolpaths.get(&id)?.name.clone())
-                })
-            })
-            .flatten();
-        selected.unwrap_or_else(|| self.project().1)
     }
 
     /// The project, as its folders for G-code are kept: by its file ("" before it is saved)
@@ -471,7 +405,7 @@ impl CutCraftApp {
         path: &std::path::Path,
     ) -> Result<String, String> {
         let plan = self.plan(form, post)?;
-        match Self::refused(&self.preflight(&plan, form.changes)) {
+        match output::refused(&self.preflight(&plan, form.changes)) {
             Some(refused) => Err(refused),
             None => self.write_toolpaths(form, post, path),
         }
@@ -480,7 +414,7 @@ impl CutCraftApp {
     /// The active machine has a tool changer (slots in Machine Configuration); with no
     /// machine set up there is none.
     pub(super) fn has_tool_changer(&self) -> bool {
-        self.machines.active().is_some_and(|m| !m.slots.is_empty())
+        self.output().has_tool_changer()
     }
 
     /// How tools are changed unless the form says otherwise: by the tool changer when the
@@ -493,56 +427,18 @@ impl CutCraftApp {
         }
     }
 
-    /// The post the form saves through: the one picked, else the machine's default, with
-    /// its tool changes made pauses when the form says to pause, or tools are changed by
-    /// hand between files on a machine without a tool changer.
+    /// The post the form saves through: see [`output::Output::post`].
     pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
-        if let Some(why) = self.no_a_axis() {
-            return Err(why);
-        }
-        let post = match form.post.as_deref() {
-            Some(name) => self.posts.load(name).map(|p| self.on_machine(p)),
-            None => self.output_post(),
-        }?;
-        let changer = self.has_tool_changer();
-        Ok(match form.changes {
-            files::ToolChanges::Pause => post.with_pauses(),
-            // changed by hand between files: no tool changer call (M6) for the first tool
-            files::ToolChanges::SeparateFiles if !changer => post.with_pauses(),
-            _ => post,
-        })
+        self.output().post(form)
     }
 
-    /// The form's toolpaths, file by file: a file for each tool in turn unless the tool
-    /// changer or pauses change them (and the post can).
+    /// The form's toolpaths, file by file: see [`output::Output::plan`].
     pub(super) fn plan(
         &self,
         form: &SaveForm,
         post: &cut_craft_post::Post,
     ) -> Result<Vec<Vec<EntityId>>, String> {
-        let plan = files::save_plan(
-            &self.doc,
-            form.mode,
-            self.selected_toolpath,
-            self.selected_group.as_deref(),
-            form.group,
-        )?;
-        Ok(if Self::by_tool(form, post) {
-            files::by_tool(&self.doc, plan)
-        } else {
-            plan
-        })
-    }
-
-    /// Whether each tool gets files of its own: chosen, or the post cannot change tools.
-    fn by_tool(form: &SaveForm, post: &cut_craft_post::Post) -> bool {
-        form.changes == files::ToolChanges::SeparateFiles || !post.changes_tools()
-    }
-
-    /// Whether files are split per tool (not by the form's Multiple Files), and so named
-    /// after their tool.
-    pub(super) fn split_for(form: &SaveForm, post: &cut_craft_post::Post) -> bool {
-        Self::by_tool(form, post) && form.mode != files::SaveMode::VisibleToMultipleFiles
+        self.output().plan(form, post)
     }
 
     /// The checks before cutting for `plan` (Save Toolpaths', or the Analyse tab's), worked
@@ -652,32 +548,7 @@ impl CutCraftApp {
         &self,
         changes: files::ToolChanges,
     ) -> Option<cut_craft_core::preflight::Finding> {
-        (changes == files::ToolChanges::ToolChanger && !self.has_tool_changer())
-            .then(Self::no_tool_changer)
-    }
-
-    /// The warning when the tool changer is chosen but the machine has none set up.
-    pub(super) fn no_tool_changer() -> cut_craft_core::preflight::Finding {
-        cut_craft_core::preflight::Finding {
-            severity: cut_craft_core::preflight::Severity::Warning,
-            message: "Tool changer (ATC) is chosen, but the machine has no tool changer set \
-                      up: the file changes tools with M6, which a machine without one stops \
-                      on or ignores, cutting on with the wrong bit. Choose Separate file for \
-                      each tool, or add the tool changer's slots in Machine Configuration"
-                .into(),
-            check: cut_craft_core::preflight::Check::ToolChanger,
-        }
-    }
-
-    /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when
-    /// there are none.
-    pub(super) fn refused(found: &[cut_craft_core::preflight::Finding]) -> Option<String> {
-        let errors: Vec<&str> = found
-            .iter()
-            .filter(|f| f.severity == cut_craft_core::preflight::Severity::Error)
-            .map(|f| f.message.as_str())
-            .collect();
-        (!errors.is_empty()).then(|| format!("Not saved: {}", errors.join("; ")))
+        self.output().no_tool_changer_for(changes)
     }
 
     /// Writes the form's plan through `post` at `path`: each file, or each tile of each file
@@ -689,36 +560,8 @@ impl CutCraftApp {
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<String, String> {
-        Ok(Self::saved_message(
-            &self.write_toolpath_files(form, post, path)?,
-            path,
-            self.doc.tiling.is_some(),
-        ))
-    }
-
-    /// What the status bar says once `written` are saved, beside `path`; `tiled` while
-    /// Toolpath Tiling is on, which names the files by tile.
-    pub(super) fn saved_message(
-        written: &[std::path::PathBuf],
-        path: &std::path::Path,
-        tiled: bool,
-    ) -> String {
-        let saved = match written {
-            [one] => format!("Saved toolpaths to {}", one.display()),
-            _ => format!(
-                "Saved {} toolpath files beside {}",
-                written.len(),
-                path.display()
-            ),
-        };
-        if tiled {
-            format!(
-                "{saved}, one for each tile with something to cut: Toolpath Tiling is on \
-                 (Toolpaths ▸ Toolpath Tiling to turn it off)"
-            )
-        } else {
-            saved
-        }
+        let written = self.write_toolpath_files(form, post, path)?;
+        Ok(self.output().saved_message(&written, path))
     }
 
     /// Writes the form's plan through `post` at `path` (and beside it); the files written,
@@ -730,18 +573,11 @@ impl CutCraftApp {
         path: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, String> {
         let made = chrono::Local::now().naive_local();
-        let texts = self.toolpath_texts(form, post, path, made)?;
-        let mut written = vec![];
-        for (path, text) in texts {
-            files::write_text(&path, &text)?;
-            written.push(path);
-        }
-        Ok(written)
+        output::write(&self.toolpath_texts(form, post, path, made)?)
     }
 
-    /// The files the form's plan makes through `post` at `path` (and beside it), with the
-    /// G-code each holds as made at `made`, in the order they are run: what Save Toolpaths
-    /// writes and View G-code shows.
+    /// The files the form's plan makes through `post` at `path`, with their G-code as made
+    /// at `made`: see [`output::Output::texts`].
     pub(super) fn toolpath_texts(
         &self,
         form: &SaveForm,
@@ -749,130 +585,14 @@ impl CutCraftApp {
         path: &std::path::Path,
         made: chrono::NaiveDateTime,
     ) -> Result<Vec<(std::path::PathBuf, String)>, String> {
-        let plan = self.plan(form, post)?;
-        let thinned = self.thinned_for_saving(&plan)?;
-        let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
-            if self.doc.bottom_side {
-                "Bottom"
-            } else {
-                "Top"
-            },
-        );
-        let job = self.session.path.as_deref();
-        let slots = self.slots();
-        let per_tool = Self::split_for(form, post);
-        let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
-        // the notes' variables are the whole job's, not one file's; the post is the one
-        // these files are made through, whichever the machine has first
-        let mut vars = (*self.note_variables()).clone();
-        if let Some(v) = vars.iter_mut().find(|v| v.key == "machine.post") {
-            v.value.clone_from(&post.name);
-        }
-        let notes = cut_craft_core::notes::gcode_lines(&self.doc.notes, &vars);
-        let mut texts = vec![];
-        for (path, part) in &parts {
-            // one file per tile, each tile moved to the job's corner
-            if let Some(tiling) = self.doc.tiling {
-                let tiles = tiling.tiles(self.doc.job.area());
-                for (n, &tile) in tiles.iter().enumerate() {
-                    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-                    let extension = path.extension().unwrap_or_default().to_string_lossy();
-                    let named = path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
-                    let in_tile = tiling.tiled(part, tile);
-                    // nothing to cut there: no file to change tools and start the spindle for
-                    if in_tile.toolpaths.is_empty() {
-                        continue;
-                    }
-                    let text =
-                        files::render_through(post, &slots, &in_tile, &named, job, made, &notes)?;
-                    texts.push((named, text));
-                }
-            } else {
-                let text = files::render_through(post, &slots, part, path, job, made, &notes)?;
-                texts.push((path.clone(), text));
-            }
-        }
-        Ok(texts)
+        let vars = self.note_variables();
+        self.output().texts(form, post, path, made, &vars)
     }
 
-    /// Why a rotary job can't be saved for the active machine: its firmware has no A axis
-    /// (standard GRBL, also what unknown firmware is taken for), whatever its posts and 4th
-    /// axis tick. `None` for a flat job, no machine, or firmware with an A axis.
-    fn no_a_axis(&self) -> Option<String> {
-        let machine = self.machines.active()?;
-        (self.doc.job.rotary.is_some() && !machine.firmware().has_a_axis()).then(|| {
-            format!(
-                "{} cannot cut this rotary job. {} If its controller runs other firmware, pick \
-                 it under Firmware in Machine Configuration",
-                machine.name,
-                cut_craft_machines::NO_A_AXIS
-            )
-        })
-    }
-
-    /// The post toolpaths are saved through: the active machine's default when it suits the
-    /// job, else the machine's first post that does: a flat one for a flat job, and for a
-    /// rotary job (on a machine with a 4th axis) one wrapping the side that goes round, Y
-    /// for a cylinder along X and X for one along Y. Without a machine, Cut Craft's
-    /// `FluidNC` post for this kind of job.
+    /// The post toolpaths are saved through when none is picked: the active machine's
+    /// choice for this job (see [`cut_craft_machines::post_for`]).
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
-        self.output_post_as_written().map(|p| self.on_machine(p))
-    }
-
-    /// `post` writing for the active machine: a rotary post winds A as its rotary allows
-    /// (Machine Configuration ▸ Rotary), with its backlash and top speed.
-    fn on_machine(&self, post: cut_craft_post::Post) -> cut_craft_post::Post {
-        match self.machines.active() {
-            Some(m) if m.has_rotary() && post.wraps().is_some() => post.with_rotary(m.rotary_axis),
-            _ => post,
-        }
-    }
-
-    /// [`Self::output_post`] as its file is written, not yet told the machine's rotary.
-    fn output_post_as_written(&self) -> Result<cut_craft_post::Post, String> {
-        use cut_craft_core::document::Along;
-        if let Some(why) = self.no_a_axis() {
-            return Err(why);
-        }
-        let Some(machine) = self.machines.active().filter(|m| !m.posts.is_empty()) else {
-            return Ok(cut_craft_post::Post::default_for(&self.doc.job));
-        };
-        let wraps = self.doc.job.rotary.map(|r| match r.along {
-            Along::X => "Y",
-            Along::Y => "X",
-        });
-        if wraps.is_some() && !machine.has_rotary() {
-            return Err(format!(
-                "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
-                 Configuration",
-                machine.name
-            ));
-        }
-        // the default first: one that will not load says so rather than being passed over
-        let default = machine
-            .post()
-            .map(|name| self.posts.load(name))
-            .transpose()?;
-        if let Some(post) = default.filter(|p| p.wraps() == wraps) {
-            return Ok(post);
-        }
-        machine
-            .posts
-            .iter()
-            .filter_map(|name| self.posts.load(name).ok())
-            .find(|p| p.wraps() == wraps)
-            .ok_or_else(|| match wraps {
-                Some(axis) => format!(
-                    "{} has no post for this rotary job: add a Rotary A, cylinder along {} \
-                     post in Machine Configuration",
-                    machine.name,
-                    if axis == "Y" { "X" } else { "Y" }
-                ),
-                None => format!(
-                    "{} has only rotary posts: add a flat one in Machine Configuration",
-                    machine.name
-                ),
-            })
+        cut_craft_machines::post_for(self.machines.active(), &self.doc.job, &self.posts, None)
     }
 
     /// What the active machine can do, for the checks before cutting; nothing is checked
@@ -942,12 +662,9 @@ impl CutCraftApp {
         )
     }
 
-    /// Whether every warning in `found` was ticked as read in the checks before cutting.
+    /// Whether every warning in `found` was ticked as read.
     pub(super) fn all_acknowledged(&self, found: &[cut_craft_core::preflight::Finding]) -> bool {
-        found
-            .iter()
-            .filter(|f| f.severity != cut_craft_core::preflight::Severity::Error)
-            .all(|f| self.acknowledged.contains(&f.message))
+        output::all_acknowledged(found, &self.acknowledged)
     }
 
     /// How the active machine holds its bits, for the collet and holder checks (the usual

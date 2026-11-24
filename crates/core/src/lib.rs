@@ -60,6 +60,7 @@ pub mod tool_names;
 pub mod toolpath;
 pub mod trace;
 pub mod vfont;
+pub mod work;
 
 pub use glam;
 

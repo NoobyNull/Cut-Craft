@@ -106,7 +106,7 @@ impl CutCraftApp {
         earlier: &dyn Fn(&[String]) -> Option<EarlierGcode>,
     ) -> Result<String, String> {
         // made safe before it is written here too: Windows refuses `:` and the like
-        let base = safe_name(&self.output_name(form), short);
+        let base = safe_name(&self.output().output_name(form), short);
         let stem = format!("{base}.{}", post.extension);
         let written = self.write_toolpath_files(form, post, &staging.join(stem))?;
         // each file as it goes on the card, in the order they are run

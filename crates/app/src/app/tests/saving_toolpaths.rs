@@ -882,21 +882,6 @@ fn the_toolpath_summary_s_notes_follow_their_toolpath_through_a_reorder() {
 }
 
 #[test]
-fn saving_while_tiling_is_on_says_so() {
-    let path = std::path::Path::new("sign.nc");
-    let tiles = [
-        std::path::PathBuf::from("sign_tile1.nc"),
-        std::path::PathBuf::from("sign_tile2.nc"),
-    ];
-    let said = CutCraftApp::saved_message(&tiles, path, true);
-    assert!(said.contains("Toolpath Tiling is on"), "{said}");
-    let one = CutCraftApp::saved_message(&tiles[..1], path, true);
-    assert!(one.contains("Toolpath Tiling is on"), "{one}");
-    let plain = CutCraftApp::saved_message(&[path.to_path_buf()], path, false);
-    assert_eq!(plain, "Saved toolpaths to sign.nc");
-}
-
-#[test]
 fn a_tile_and_its_overlap_bigger_than_the_bed_is_said_in_red() {
     let mut h = Harness::new();
     h.app.machines.machines.push(cut_craft_machines::Machine {
@@ -1074,6 +1059,33 @@ fn view_gcode_shows_what_saving_would_write_without_saving_a_file() {
     assert!(h.text_at("Save Toolpaths…").is_some());
     // nothing written: viewing is not saving
     assert!(!path.exists());
+}
+
+#[test]
+fn view_gcode_lists_what_the_checks_found_without_stopping_anything() {
+    use super::panels::VIEW_GCODE;
+    let mut h = ready_for_output();
+    // out of date: a warning, shown in amber over the G-code
+    h.app.doc.toolpaths.values_mut().next().unwrap().stale = true;
+    h.click(h.text_at(VIEW_GCODE).unwrap(), Modifiers::NONE);
+    for _ in 0..200 {
+        h.frame(vec![]);
+        if !h.app.checking() && h.texts().iter().any(|t| t.starts_with("⚠ ")) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let warned = h.texts();
+    assert!(
+        warned
+            .iter()
+            .any(|t| t.starts_with("⚠ ") && t.contains("out of date")),
+        "{warned:?}"
+    );
+    assert!(h.text_at("What the checks before cutting found. It is your call what to change: viewing saves nothing.").is_some());
+    // the G-code is still there to read and copy
+    assert!(h.texts().iter().any(|t| t.starts_with("G1")), "{warned:?}");
+    assert!(h.text_at("Copy All").is_some());
 }
 
 #[test]

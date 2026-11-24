@@ -64,5 +64,28 @@ for bad in major 2 --minor; do
   [[ $(version_now) == 0.6.1 ]] || fail "\"$bad\" changed the version to $(version_now)"
 done
 
+# The README's pictures: stale when something the app shows changed since they were taken
+mkdir -p "$repo/docs/screenshots" "$repo/crates/app/src/app" "$repo/crates/help/pages"
+echo png >"$repo/docs/screenshots/01-start-page.png"
+g add docs && g commit -qm "chore: retake the README pictures"
+echo "fn panel() {}" >"$repo/crates/app/src/panel.rs"
+g add crates && g commit -qm "feat: a new panel (#310)"
+out=$(run)
+[[ $(version_now) == 0.6.2 ]] || fail "pictures: version is $(version_now), want 0.6.2"
+[[ $out == *"README pictures are out of date"* ]] || fail "a changed screen doesn't mark the pictures stale: $out"
+[[ $out == *"crates/app/src/panel.rs"* ]] || fail "the stale note doesn't name the changed file: $out"
+[[ $out == *"docs/screenshots"* ]] || fail "the steps don't say to commit the retaken pictures: $out"
+g commit -qam "chore: version 0.6.2 (#311)" && g tag -a v0.6.2 -m "Cut Craft 0.6.2"
+
+# retaken, then only tests and help changed: nothing a picture shows, so the step is skipped
+echo png2 >"$repo/docs/screenshots/01-start-page.png"
+g commit -qam "chore: retake the README pictures"
+echo "#[test] fn t() {}" >"$repo/crates/app/src/app/tests.rs"
+echo "# Help" >"$repo/crates/help/pages/panel.md"
+g add crates && g commit -qm "fix: a test and a help page (#312)"
+out=$(run)
+[[ $out == *"README pictures still match"* ]] || fail "unchanged screens still mark the pictures stale: $out"
+[[ $out != *"docs/screenshots"* ]] || fail "the steps ask for pictures nothing changed: $out"
+
 [[ $failed == 0 ]] && echo "release-version: all tests pass"
 exit $failed

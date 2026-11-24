@@ -205,6 +205,7 @@ fn they_load_back_as_saved_and_fill_gaps_with_defaults() {
             "3D View Settings",
             "Toolpath Settings",
             "General Settings",
+            "Performance",
             "Language",
             "Job Defaults",
             "Confirmation Choices",
@@ -928,4 +929,76 @@ fn a_colour_that_contrasts_is_found_for_any_sheet() {
             );
         }
     }
+}
+
+#[test]
+fn calculations_are_limited_to_80_percent_unless_options_say_otherwise() {
+    let o = Options::default();
+    assert!(o.performance.limit_calculations);
+    assert_eq!(o.performance.share, 80);
+    assert_eq!(
+        o.performance.limit(),
+        cut_craft_core::work::Limit::default()
+    );
+    let mut off = o.performance.clone();
+    off.limit_calculations = false;
+    assert!(!off.limit().on, "unticked: no limit at all");
+    off.share = 0;
+    off.limit_calculations = true;
+    assert_eq!(off.limit().share, 1, "kept to the slider's range");
+}
+
+#[test]
+fn options_saved_before_the_performance_page_keep_their_detail_and_cores() {
+    // an older file: detail settings on the 3D View page, cores among the advanced ones
+    #[derive(Serialize)]
+    struct Before {
+        wayland_native: bool,
+        cores: u32,
+    }
+    let all = cut_craft_core::work::all_cores();
+    for (cores, wanted) in [
+        (0, cut_craft_core::work::Limit::default()),
+        (1, cut_craft_core::work::Limit::from_old_cores(1, all)),
+    ] {
+        let before = Before {
+            wayland_native: false,
+            cores,
+        };
+        let mut file = serde_json::to_value(Options::default()).unwrap();
+        file.as_object_mut().unwrap().remove("performance");
+        let view = file["view_3d"].as_object_mut().unwrap();
+        view.insert("preview_detail".into(), 70.into());
+        view.insert("adjust_to_frame_rate".into(), false.into());
+        view.insert("target_fps".into(), 45.0.into());
+        view.insert("still_detail".into(), "low".into());
+        view.insert("show_frame_rate".into(), true.into());
+        file["advanced"] = serde_json::to_value(&before).unwrap();
+        file[SEAL] = seal_of(&serde_json::to_vec(&before).unwrap()).into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(!tampered, "an upgrade is not an edit");
+        let p = &back.performance;
+        assert_eq!(p.preview_detail, 70);
+        assert!(!p.adjust_to_frame_rate);
+        assert_eq!(p.target_fps, 45.0);
+        assert_eq!(p.still_detail, Detail::Low);
+        assert!(p.show_frame_rate);
+        assert_eq!(p.limit(), wanted, "{cores} cores");
+        assert_eq!(
+            p.limit().cores_of(all),
+            if cores == 0 { wanted.cores_of(all) } else { 1 }
+        );
+    }
+}
+
+#[test]
+fn the_performance_page_once_saved_is_not_carried_over_again() {
+    let mut o = Options::default();
+    o.performance.share = 30;
+    o.performance.preview_detail = 10;
+    let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+    // an old setting left in the file by hand changes nothing
+    file["view_3d"]["preview_detail"] = 90.into();
+    let (back, _) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+    assert_eq!(back.performance, o.performance);
 }

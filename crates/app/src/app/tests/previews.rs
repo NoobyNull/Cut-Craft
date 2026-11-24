@@ -372,7 +372,7 @@ fn a_paused_preview_is_not_rebuilt_for_the_3d_view_every_frame() {
 #[test]
 fn a_playing_preview_is_drawn_at_full_detail_and_redrawn_a_few_times_a_second() {
     let mut h = playing_preview();
-    h.app.options.view_3d.adjust_to_frame_rate = false;
+    h.app.options.performance.adjust_to_frame_rate = false;
     // a test's frames are slow: the redraws are kept well apart to see them kept
     h.app.playback_redraw = std::time::Duration::from_secs(3600);
     h.frame(vec![]);
@@ -380,7 +380,7 @@ fn a_playing_preview_is_drawn_at_full_detail_and_redrawn_a_few_times_a_second() 
     let ((_, cells, _), _) = h.app.playback_view.as_ref().expect("drawn");
     assert_eq!(
         *cells,
-        h.app.options.view_3d.still_cells(),
+        h.app.options.performance.still_cells(),
         "as sharp as when still, not the moving detail"
     );
     // frames straight after one another: the cut so far is kept, not made again each one
@@ -937,7 +937,10 @@ fn a_small_part_on_a_big_sheet_is_previewed_finely_where_it_is_cut() {
     assert_eq!(h.app.display.checked("preview_quality_1"), Some(false));
     // Reset Preview: the slider back to Options' default
     h.app.invoke(&h.ctx, "reset_preview");
-    assert_eq!(h.app.display.detail, h.app.options.view_3d.preview_detail);
+    assert_eq!(
+        h.app.display.detail,
+        h.app.options.performance.preview_detail
+    );
 }
 
 #[test]

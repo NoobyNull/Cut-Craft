@@ -25,4 +25,5 @@ List.
 ## Good to know
 
 - Name a group for what it cuts, so the list reads like your plan.
+- Groups inside it stay inside it under its new name.
 - See [Group Toolpaths](help:group_toolpaths).
