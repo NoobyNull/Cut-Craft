@@ -574,7 +574,7 @@ impl CutCraftApp {
             ui.separator();
             ui.weak(tr!("layouts-ribbon-pins-note"));
             if let Some(id) = pin {
-                self.invoke(ui.ctx(), &format!("{}{id}", gui::RIBBON_PIN));
+                self.invoke(ui.ctx(), &[gui::RIBBON_PIN, id].concat());
             }
         });
         response
