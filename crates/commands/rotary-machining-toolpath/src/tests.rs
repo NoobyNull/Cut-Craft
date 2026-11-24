@@ -463,11 +463,24 @@ fn a_flat_job_is_asked_to_be_rotary() {
 /// A rotary job 40 mm across, 60 long along X, holding a box off to one side of the
 /// axis as a full 3D model kept as it really is, heights and all.
 fn boxed() -> Document {
+    boxed_at(0.0)
+}
+
+/// [`boxed`] on a job whose X0 Y0 is `offset` in from the material's corner both ways, the
+/// box kept where it is on the material.
+fn boxed_at(offset: f64) -> Document {
     let mut doc = Document {
-        job: Job::rotary(60.0, 40.0, Along::X),
+        job: Job {
+            offset: cut_craft_core::geometry::Point::new(offset, offset),
+            ..Job::rotary(60.0, 40.0, Along::X)
+        },
         ..Document::default()
     };
-    let (lo, hi) = (DVec3::new(10.0, -6.0, -8.0), DVec3::new(50.0, 12.0, 10.0));
+    let along = doc.job.area().min.x;
+    let (lo, hi) = (
+        DVec3::new(along + 10.0, -6.0, -8.0),
+        DVec3::new(along + 50.0, 12.0, 10.0),
+    );
     let at = |i: usize| {
         DVec3::new(
             if i & 1 == 1 { hi.x } else { lo.x },
@@ -796,4 +809,32 @@ fn nothing_is_cut_where_the_tailstock_holds_the_material_however_far_out() {
             .any(|n| n.contains("No room for the registration mark")),
         "{notes:?}"
     );
+}
+
+#[test]
+fn how_near_the_tailstock_the_model_ends_is_said_the_same_wherever_x0_y0_is() {
+    let p = Params {
+        tool: Tool {
+            stickout: 40.0,
+            flute_length: 25.0,
+            ..ball(6.0)
+        },
+        strategy: Strategy::SidesThenDetails,
+        faces: 2,
+        tilts: 0,
+        surroundings: Some(Surroundings {
+            tailstock: 15.0,
+            ..Surroundings::default()
+        }),
+        ..Params::default()
+    };
+    for offset in [0.0, 30.0, -12.5] {
+        let (_, notes) = made(&boxed_at(offset), &p).unwrap();
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.contains("The model ends 10.0 mm from the job's end")),
+            "X0 Y0 {offset} in: {notes:?}"
+        );
+    }
 }

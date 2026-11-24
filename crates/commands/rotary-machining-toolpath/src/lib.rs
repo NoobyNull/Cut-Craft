@@ -1155,10 +1155,14 @@ fn angles(typed: &str) -> (Option<Vec<f64>>, Option<String>) {
     ((!good.is_empty()).then_some(good), note)
 }
 
-/// Where along the part the model is: from its first point to its last.
+/// Where along the part the model is, from the material's start: its first point to its
+/// last.
 fn model_along(work: &Work) -> Option<(f64, f64)> {
-    if let Some((lo, hi)) = work.solid.and_then(|s| s.mesh.bounds()) {
-        return Some((lo.x, hi.x));
+    // the full models are kept in the job's own X and Y: counted from the material's start
+    if let Some(solid) = work.solid
+        && let Some((lo, hi)) = solid.mesh.bounds()
+    {
+        return Some((lo.x - solid.along_from, hi.x - solid.along_from));
     }
     let t = work.turned;
     let mut found: Option<(f64, f64)> = None;
