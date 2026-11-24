@@ -1,4 +1,5 @@
-- Relief from Photo makes its relief again, with pictures in colour that you can drag
-- Estimate Depth remakes the relief from the estimated photo only
-- Scale to Fit Material now sits under Change size in Model Size
-- A big model stays on the modeling plane with the origin while it is imported
+- New installs open in the Ribbon layout; Interface Layout picks Ribbon, Rail or Classic
+- The toolpath list is a tree you can drag, with groups inside groups, and templates keep them
+- Calculations no longer hog the computer, on the processor or the graphics card
+- Laser and rotary toolpaths show only for a machine that has them
+- Rotary: the 3D view shows square and board material as it really is
