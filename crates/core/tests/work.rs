@@ -316,7 +316,7 @@ fn calculations_start_their_threads_in_one_place() {
         if !rust || name.ends_with("tests.rs") || !name.contains("/src/") {
             continue;
         }
-        // a Windows checkout may end its lines with \r\n, which the splits below must not miss
+        // Windows checkouts end lines with \r\n
         let text = std::fs::read_to_string(&path)
             .unwrap()
             .replace("\r\n", "\n");
