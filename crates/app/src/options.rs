@@ -96,6 +96,11 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[schemars(skip)]
     pub first_run_done: bool,
+    /// Whether the window layout question was answered (or closed), in first-time setup or
+    /// once after updating to a version that asks it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[schemars(skip)]
+    pub layout_asked: bool,
     /// The Did You Know? tip shown at the next start, so each start shows another.
     #[serde(default, skip_serializing_if = "is_zero")]
     #[schemars(skip)]
@@ -222,6 +227,7 @@ impl Default for Options {
             web_api: WebApi::default(),
             default_job: None,
             first_run_done: false,
+            layout_asked: false,
             next_tip: 0,
             favourites: Favourites::default(),
             design_sections: vec![],
@@ -317,6 +323,16 @@ impl Options {
             }
         }
         carry_over(&mut file);
+        // options saved before the layout setting had the Classic window: said here, so a
+        // file read setting by setting keeps it too
+        if let Some(general) = file
+            .get_mut("general")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            general.entry("layout").or_insert_with(|| {
+                serde_json::to_value(WindowLayout::before_the_setting()).expect("layout serialises")
+            });
+        }
         let (mut options, unread) = match serde_json::from_value::<Self>(file.clone()) {
             Ok(options) => (options, vec![]),
             Err(_) => Self::read_each(file),

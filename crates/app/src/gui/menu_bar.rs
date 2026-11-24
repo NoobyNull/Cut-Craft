@@ -330,12 +330,12 @@ impl MenuSystem {
                         sub(
                             "Window Layout",
                             vec![
+                                MenuItem::with_action("Ribbon", "layout_ribbon"),
+                                MenuItem::with_action("Rail", "layout_rail"),
                                 MenuItem::with_action(
                                     "Classic (Design and Toolpaths pages)",
                                     "layout_classic",
                                 ),
-                                MenuItem::with_action("Rail and Inspector", "layout_rail"),
-                                MenuItem::with_action("Ribbon", "layout_ribbon"),
                             ],
                         ),
                     ],

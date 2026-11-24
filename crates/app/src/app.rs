@@ -60,6 +60,7 @@ mod installed;
 mod job_files;
 mod keyboard;
 mod language_page;
+mod layout_choice;
 mod layouts;
 mod mac;
 mod machine_fit;
@@ -726,6 +727,8 @@ struct CutCraftApp {
     machine_window: Option<cut_craft_machines::MachineManager>,
     /// First-time setup's questions, while they are shown.
     first_run: Option<first_run::Setup>,
+    /// The window layout question, while it is open.
+    layout_question: Option<layout_choice::LayoutQuestion>,
     post_window: Option<cut_craft_machines::PostManager>,
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).

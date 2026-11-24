@@ -164,9 +164,10 @@ impl CutCraftApp {
         self.save_options();
     }
 
-    /// First-time setup, then the tip, while open.
+    /// First-time setup, the layout question, then the tip, while open.
     pub(super) fn welcome_windows(&mut self, ctx: &egui::Context) {
         self.first_run_window(ctx);
+        self.layout_window(ctx);
         self.tips_window(ctx);
     }
 
