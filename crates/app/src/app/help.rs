@@ -663,7 +663,7 @@ fn concept_title(id: &str) -> String {
 }
 
 /// Hands the help's pictures to the window's picture loader, once.
-fn load_pictures(ctx: &egui::Context) {
+pub(super) fn load_pictures(ctx: &egui::Context) {
     let done = egui::Id::unique("help-pictures-loaded");
     if ctx.data(|d| d.get_temp::<bool>(done).unwrap_or(false)) {
         return;

@@ -402,7 +402,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "interface_layout",
-        "Switch Layout: swaps between the layout for drawing and the layout for making toolpaths",
+        "Interface Layout: pick how the window is arranged: Ribbon, Rail or Classic",
     ),
     (
         "layout_classic",

@@ -140,6 +140,9 @@ fn fitted(app: &mut CutCraftApp, needs: cut_craft_core::Needs) {
 
 fn fresh_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
+    // the pictures are taken in the Classic window, where every group shows its tools; to
+    // be taken again in Ribbon, the layout a new install starts in
+    app.options.general.layout = crate::options::WindowLayout::Classic;
     // the last tour's windows closed, so none is left in the next tour's pictures
     (app.tool_manager, app.info, app.part_labels_window) = (None, None, false);
     // the Design tab down the left (not Sheets, Layers or the Library)

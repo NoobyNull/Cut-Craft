@@ -127,19 +127,58 @@ fn out_of_bounds_parts_are_five_percent_red_unless_the_options_say_otherwise() {
 }
 
 #[test]
-fn the_window_layout_is_classic_unless_the_options_say_otherwise() {
-    assert_eq!(Options::default().general.layout, WindowLayout::Classic);
+fn a_new_install_starts_in_ribbon_and_older_options_keep_classic() {
+    assert_eq!(Options::default().general.layout, WindowLayout::Ribbon);
     let mut o = Options::default();
     o.general.layout = WindowLayout::Rail;
     let text = serde_json::to_string(&o).unwrap();
     assert!(text.contains("\"layout\":\"rail\""));
     let back: Options = serde_json::from_str(&text).unwrap();
     assert_eq!(back.general.layout, WindowLayout::Rail);
-    // options saved before the setting existed
+    // options saved before the setting existed had the Classic window
     let mut old: serde_json::Value = serde_json::to_value(&o).unwrap();
     old["general"].as_object_mut().unwrap().remove("layout");
     let old: Options = serde_json::from_value(old).unwrap();
     assert_eq!(old.general.layout, WindowLayout::Classic);
+}
+
+#[test]
+fn an_older_file_read_setting_by_setting_still_keeps_classic() {
+    let mut file = serde_json::to_value(Options::default()).unwrap();
+    let general = file["general"].as_object_mut().unwrap();
+    general.remove("layout");
+    // a setting this version cannot read, so the file is read setting by setting
+    general.insert("autosave_seconds".into(), "often".into());
+    let read = Options::read_bytes(&serde_json::to_vec(&file).unwrap());
+    assert_eq!(read.unread, ["general ▸ autosave_seconds"]);
+    assert_eq!(read.options.general.layout, WindowLayout::Classic);
+}
+
+#[test]
+fn layouts_are_listed_ribbon_rail_classic() {
+    assert_eq!(
+        WindowLayout::ALL,
+        [
+            WindowLayout::Ribbon,
+            WindowLayout::Rail,
+            WindowLayout::Classic
+        ]
+    );
+    let schema = serde_json::to_string(&schemars::schema_for!(WindowLayout)).unwrap();
+    let at = |name: &str| schema.find(name).unwrap();
+    assert!(at("\"ribbon\"") < at("\"rail\"") && at("\"rail\"") < at("\"classic\""));
+}
+
+#[test]
+fn the_layout_question_is_unasked_until_answered_and_then_kept() {
+    let o = Options::default();
+    assert!(!o.layout_asked);
+    let text = serde_json::to_string(&o).unwrap();
+    assert!(!text.contains("layout_asked"), "left out while false");
+    let mut o = o;
+    o.layout_asked = true;
+    let back: Options = serde_json::from_str(&serde_json::to_string(&o).unwrap()).unwrap();
+    assert!(back.layout_asked);
 }
 
 #[test]

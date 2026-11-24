@@ -1,11 +1,11 @@
-//! First-time setup: four questions asked on the first run (which machine, millimetres or
-//! inches, the material usually cut, and whether crash logs may be sent) that add the
-//! machine, set the job new files start with, put the starter tools in those units first and
-//! keep the crash-log answer in Options ▸ Bug Reports. Cut Craft's own (see
+//! First-time setup: five questions asked on the first run (which machine, millimetres or
+//! inches, the material usually cut, whether crash logs may be sent, and the window layout)
+//! that add the machine, set the job new files start with, put the starter tools in those
+//! units first, keep the crash-log answer in Options ▸ Bug Reports and arrange the window. Cut Craft's own (see
 //! `re/SPEC.md`, First-time setup). Help ▸ Run First-Time Setup Again asks them again.
 
 use super::CutCraftApp;
-use crate::options::CrashLogs;
+use crate::options::{CrashLogs, WindowLayout};
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{Job, Units};
 use cut_craft_core::toolpath::ToolDatabase;
@@ -58,6 +58,8 @@ pub(super) struct Setup {
     pub sheet: [f64; 3],
     /// Whether a crash's log may be offered to send (`Ask` until answered).
     pub crash_logs: CrashLogs,
+    /// The window layout (Ribbon until another is picked).
+    pub layout: WindowLayout,
     /// The job new files start with now: asked again, only its size, thickness and units
     /// change, so the rest set in Job Setup (Set as Default) is kept.
     pub base: Job,
@@ -74,6 +76,7 @@ impl Setup {
             inches: false,
             sheet: [BED_MM[0], BED_MM[1], THICKNESS_MM],
             crash_logs: CrashLogs::Ask,
+            layout: WindowLayout::default(),
             base: Job::default(),
         }
     }
@@ -103,6 +106,7 @@ impl Setup {
             setup.sheet = [job.width, job.height, job.thickness];
         }
         setup.crash_logs = options.bug_reports.crash_logs;
+        setup.layout = options.general.layout;
         setup
     }
 
@@ -279,8 +283,11 @@ impl CutCraftApp {
         }
         self.options_path = crate::options::Options::path();
         self.options.apply_to(&mut self.display);
-        if wanted(&self.options, &self.machines) {
+        let first_run = wanted(&self.options, &self.machines);
+        if first_run {
             self.open_first_run();
+        } else if super::layout_choice::asks_after_update(&self.options, first_run) {
+            self.ask_layout_after_update();
         }
         self.tip_at_startup();
     }
@@ -297,10 +304,20 @@ impl CutCraftApp {
             return;
         };
         let mut finish = None;
+        // the layout question's pictures
+        super::help::load_pictures(ctx);
         egui::Modal::new(egui::Id::unique("first_run")).show(ctx, |ui| {
             cut_craft_bug_report::mark(ui, "First-time setup");
-            ui.set_width(ui.spacing().interact_size.x * 9.0);
-            finish = Self::first_run_questions(ui, &mut setup);
+            ui.set_width(ui.spacing().interact_size.x * 14.0);
+            // five questions and the layouts' pictures: they scroll on a short screen, and
+            // Start and Skip stay in sight under them
+            let tall = 0.75 * ui.ctx().content_rect().height();
+            egui::ScrollArea::vertical()
+                .max_height(tall)
+                .min_scrolled_height(tall)
+                .show(ui, |ui| Self::first_run_questions(ui, &mut setup));
+            ui.separator();
+            finish = Self::first_run_buttons(ui, &setup);
         });
         match finish {
             Some(Finish::Done) => self.finish_first_run(&setup),
@@ -309,7 +326,7 @@ impl CutCraftApp {
         }
     }
 
-    fn first_run_questions(ui: &mut egui::Ui, setup: &mut Setup) -> Option<Finish> {
+    fn first_run_questions(ui: &mut egui::Ui, setup: &mut Setup) {
         ui.heading(tr!("first-run-welcome-to-cut-craft"));
         ui.label(tr!("first-run-a-few-quick-questions-so"));
         ui.add_space(ui.spacing().item_spacing.y);
@@ -360,7 +377,14 @@ impl CutCraftApp {
             );
         });
         ui.weak(tr!("first-run-crash-logs-note"));
-        ui.separator();
+        ui.add_space(ui.spacing().item_spacing.y);
+        ui.strong(tr!("first-run-5-how-should-the-window"));
+        super::layout_choice::layout_choices(ui, &mut setup.layout);
+        ui.weak(tr!("first-run-layout-note"));
+    }
+
+    /// Start using Cut Craft, or Skip for Now.
+    fn first_run_buttons(ui: &mut egui::Ui, setup: &Setup) -> Option<Finish> {
         let mut finish = None;
         ui.horizontal(|ui| {
             let start = ui
@@ -487,6 +511,7 @@ impl CutCraftApp {
         }
         self.options.default_job = Some(job);
         self.options.bug_reports.crash_logs = setup.crash_logs;
+        super::layout_choice::answer(&mut self.options, Some(setup.layout));
         self.options.first_run_done = true;
         self.save_options();
         let units = if setup.inches { "in" } else { "mm" };
@@ -561,6 +586,8 @@ impl CutCraftApp {
 
     /// Skip for now: today's start (no machine, Cut Craft's usual job), not asked again.
     pub(super) fn skip_first_run(&mut self) {
+        // the layout in use (Ribbon on a new install) is kept, and not asked again
+        super::layout_choice::answer(&mut self.options, None);
         self.options.first_run_done = true;
         self.save_options();
         self.status.set_message(

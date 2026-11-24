@@ -128,6 +128,7 @@ impl CutCraftApp {
             posts: cut_craft_machines::Library::new(None),
             machine_window: None,
             first_run: None,
+            layout_question: None,
             post_window: None,
             tools: ToolDatabase::starter(),
             tools_path: None,
@@ -736,7 +737,7 @@ impl CutCraftApp {
             "show_toolpaths_tab" => self.pages.open(Page::Toolpaths),
             "design_layout" => self.pages = Pages::design_layout(),
             "machining_layout" => self.pages = Pages::machining_layout(),
-            "interface_layout" => self.pages.switch_layout(),
+            "interface_layout" => self.open_layout_picker(),
             "pan" | "zoom_box" | "zoom_to_job" | "zoom_to_drawing" | "zoom_selected"
             | "node_edit" | "measure_inspect" | "transform" => {
                 self.view_action(ctx, id);

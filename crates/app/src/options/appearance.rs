@@ -298,17 +298,31 @@ impl Theme {
     }
 }
 
-/// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`).
+/// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`,
+/// `docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowLayout {
-    /// Design page left, Toolpaths page right, side tabs
+    /// Tabs of tool groups across the top; your sheets, layers and toolpaths on the left,
+    /// the open tool's settings on the right
     #[default]
-    Classic,
-    /// A rail of tool groups on the left opening a list of tools; an inspector on the right
-    Rail,
-    /// Tabs of tool groups across the top; the browser left, the form right
     Ribbon,
+    /// A column of tool groups on the left, each opening its list of tools by name; the
+    /// open tool's settings on the right
+    Rail,
+    /// The Design page of tool icons on the left, the Toolpaths page on the right, and
+    /// tabs down the sides
+    Classic,
+}
+
+impl WindowLayout {
+    /// Every layout, in the order offered.
+    pub const ALL: [Self; 3] = [Self::Ribbon, Self::Rail, Self::Classic];
+
+    /// The layout options saved before the setting existed had: Classic.
+    pub fn before_the_setting() -> Self {
+        Self::Classic
+    }
 }
 
 // ponytail: the third choice, a folder remembered for each kind of operation, is left out

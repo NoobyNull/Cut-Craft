@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-24
 see-also: design, toolpaths, setup_material, finding_help, first_time_setup
 icon: file/new.png
 ---
@@ -24,17 +24,19 @@ The sample is a new, unsaved job: change anything you like, it harms nothing.
 
 ## Two steps: Design, then Toolpaths
 
-![Design down the left to draw; Toolpaths down the right to say how to cut it](pictures/basics/design_then_toolpaths.png)
-
 Cut Craft works in two steps:
 
-1. **Design** (down the left) is where you draw **what** you want: shapes, text and 3D
-   models. See [Design page](help:design).
-2. **Toolpaths** (down the right) is where you tell the machine **how** to cut it: which
-   bit, how deep, and which side of the line. See [Toolpaths page](help:toolpaths).
+1. **Design** is where you draw **what** you want: shapes, text and 3D models. See
+   [Design page](help:design).
+2. **Toolpaths** is where you tell the machine **how** to cut it: which bit, how deep, and
+   which side of the line. See [Toolpaths page](help:toolpaths).
 
-In the Rail and Ribbon layouts the same tools are grouped differently, but the two steps
-are the same.
+In the [Ribbon layout](help:layout_ribbon) Cut Craft starts in, these are the **Design** and
+**Toolpaths** tabs across the top, with **Model** between them for 3D parts. The
+[Rail](help:layout_rail) and [Classic](help:layout_classic) layouts group the same tools
+differently, but the two steps are the same.
+
+![In the Classic layout: Design down the left to draw, Toolpaths down the right to say how to cut it](pictures/basics/design_then_toolpaths.png)
 
 ## Your own first job, step by step
 

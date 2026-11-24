@@ -13,9 +13,9 @@ use cut_craft_i18n::tr;
 
 /// View ▸ Window Layout's items and the layouts they pick.
 const LAYOUTS: [(&str, WindowLayout); 3] = [
-    ("layout_classic", WindowLayout::Classic),
-    ("layout_rail", WindowLayout::Rail),
     ("layout_ribbon", WindowLayout::Ribbon),
+    ("layout_rail", WindowLayout::Rail),
+    ("layout_classic", WindowLayout::Classic),
 ];
 
 impl CutCraftApp {

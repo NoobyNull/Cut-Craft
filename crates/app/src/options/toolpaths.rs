@@ -254,9 +254,10 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "File dialog default")]
     pub file_dialog_default: FileDialogDefault,
-    /// How the window is arranged: the Design and Toolpaths pages with side tabs, a rail of
-    /// tool groups with an inspector, or a ribbon of tabs over the view
-    #[serde(default)]
+    /// How the window is arranged: a ribbon of tabs over the view, a rail of tool groups
+    /// down the left, or the Classic Design and Toolpaths pages with side tabs. Every tool
+    /// is in every layout
+    #[serde(default = "WindowLayout::before_the_setting")]
     #[schemars(title = "Window layout")]
     pub layout: WindowLayout,
     /// How often unsaved work is copied, so it can be opened again after a crash or a power
