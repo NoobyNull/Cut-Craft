@@ -84,8 +84,14 @@ impl CutCraftApp {
             ui.weak(tr!("panels-make-a-toolpath-or-tick"));
             return;
         }
+        // checked the way Save Toolpaths saves them by default for this machine
+        let shown = if self.machines.active().is_some_and(|m| m.group_by_bit) {
+            crate::files::by_first_use(&self.doc, &shown)
+        } else {
+            shown
+        };
         let plan = [shown];
-        let changes = crate::files::ToolChanges::SeparateFiles;
+        let changes = self.default_changes();
         let found = self.save_checks(&plan, changes).map(<[_]>::to_vec);
         let skipped = self.not_checked(&plan, changes);
         if self.check_list(ui, found.as_deref(), &skipped) {

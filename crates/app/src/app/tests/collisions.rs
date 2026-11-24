@@ -466,8 +466,8 @@ fn tool_changes_go_to_files_of_their_own_the_tool_changer_or_a_pause() {
     // Cut Craft's own post has a tool changer: separate files still splits by tool
     let done = save(&h, ToolChanges::SeparateFiles, "apart.nc");
     assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
-    assert!(dir.join("apart_1_6_mm_End_Mill.nc").exists());
-    let gcode = std::fs::read_to_string(dir.join("apart_2_3_mm_End_Mill.nc")).unwrap();
+    assert!(dir.join("apart_1_6 mm End Mill.nc").exists());
+    let gcode = std::fs::read_to_string(dir.join("apart_2_3 mm End Mill.nc")).unwrap();
     assert!(!gcode.contains("M6"), "no tool change in a file: {gcode}");
     // the tool changer: one file, M6
     save(&h, ToolChanges::ToolChanger, "atc.nc");

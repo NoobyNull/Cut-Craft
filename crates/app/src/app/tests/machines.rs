@@ -140,7 +140,9 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
         h.app.output_post().is_ok(),
         "kept in the custom posts, not read from where it was"
     );
-    // the Machine menu opens its windows; the online ones stay greyed
+    // the Machine menu opens its windows; the online ones stay greyed (on a screen tall
+    // enough for the whole of Machine Configuration, so its posts are drawn)
+    h.window.y = 1100.0;
     for id in [
         "machine_configuration",
         "post_processor_management",
@@ -316,7 +318,7 @@ fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
         .save_toolpaths_to(&form, &plain, &dir.join("sign.nc"))
         .unwrap();
     assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
-    for name in ["sign_1_6_mm_End_Mill.nc", "sign_2_3_mm_End_Mill.nc"] {
+    for name in ["sign_1_6 mm End Mill.nc", "sign_2_3 mm End Mill.nc"] {
         assert!(dir.join(name).exists(), "{name}");
     }
     let _ = std::fs::remove_dir_all(dir);

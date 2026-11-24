@@ -24,6 +24,9 @@ pub enum Check {
     ToolChanger,
     /// No two bits sharing a tool number (0, changed by hand, may be shared).
     ToolNumbers,
+    /// Bit changes by hand planned: Z zero set again for each bit, a pause the controller
+    /// can be zeroed at, and the cutting order when Group by bit changes it.
+    BitChanges,
     /// No cutting into the keep-out zones (clamps).
     KeepOut,
     /// A rotary job's rotary set up: its centre line found, lying the job's way.
@@ -105,7 +108,7 @@ impl Phase {
 
 impl Check {
     /// Every check, in the order they are listed.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 24] = [
         Self::CanCut,
         Self::UpToDate,
         Self::Zeroing,
@@ -115,6 +118,7 @@ impl Check {
         Self::SpindleRange,
         Self::ToolChanger,
         Self::ToolNumbers,
+        Self::BitChanges,
         Self::KeepOut,
         Self::RotarySetup,
         Self::Rapids,
@@ -144,6 +148,7 @@ impl Check {
             Self::SpindleRange => "Spindle speeds the spindle can turn",
             Self::ToolChanger => "Bits loaded in the tool changer",
             Self::ToolNumbers => "Each bit its own tool number",
+            Self::BitChanges => "Bit changes you can make",
             Self::KeepOut => "Keeps out of keep-out zones",
             Self::RotarySetup => "Rotary set up",
             Self::Rapids => "Rapid moves clear of the material",
@@ -205,6 +210,12 @@ impl Check {
                 "No two different bits share a tool number, so a tool changer never picks up \
                  the wrong bit. Tool number 0 means the bit is changed by hand, and any \
                  number of bits may share it"
+            }
+            Self::BitChanges => {
+                "When bits are changed by hand, you are reminded to set Z zero again with \
+                 each new bit, warned when the controller cannot jog while paused to do so, \
+                 and shown the new cutting order when Group by bit changes it, so the \
+                 second bit does not cut at the first bit's height or in the wrong order"
             }
             Self::KeepOut => {
                 "No cut goes into a keep-out zone, so the bit does not hit a clamp or \
@@ -282,6 +293,7 @@ impl Check {
             Self::SpindleRange => "check_spindle_range",
             Self::ToolChanger => "check_tool_changer",
             Self::ToolNumbers => "check_tool_numbers",
+            Self::BitChanges => "check_bit_changes",
             Self::KeepOut => "check_keep_out",
             Self::RotarySetup => "check_rotary_setup",
             Self::Rapids => "check_rapids",
@@ -308,6 +320,7 @@ impl Check {
             | Self::ZTravel
             | Self::KeepOut
             | Self::ToolNumbers
+            | Self::BitChanges
             | Self::RotarySetup => Phase::Machine,
             Self::Rapids | Self::AirCutting => Phase::Cutting,
             Self::Collisions => Phase::Collisions,

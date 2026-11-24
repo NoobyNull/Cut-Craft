@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: toolpaths, save_toolpaths
 ---
 
@@ -68,6 +68,7 @@ back, it stays ticked; a new or changed warning needs a new tick.
 - [Spindle speeds the spindle can turn](help:check_spindle_range)
 - [Bits loaded in the tool changer](help:check_tool_changer)
 - [Each bit its own tool number](help:check_tool_numbers)
+- [Bit changes you can make](help:check_bit_changes)
 - [Keeps out of keep-out zones](help:check_keep_out)
 - [Rotary set up](help:check_rotary_setup)
 

@@ -108,9 +108,23 @@ fn save_toolpaths_opens_its_form_and_saves_each_shown_toolpath_to_a_file_of_its_
         .save_toolpaths_to(&form, &post, &dir.join("job.nc"))
         .unwrap();
     assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
-    for name in ["job_1_First.nc", "job_2_Second.nc"] {
-        let gcode = std::fs::read_to_string(dir.join(name)).unwrap();
-        assert!(gcode.contains(&name[6..name.len() - 3]), "{gcode}");
+    // each named after its toolpath and the bit to fit
+    for (n, toolpath) in [(1, "First"), (2, "Second")] {
+        let bit = &h
+            .app
+            .doc
+            .toolpaths
+            .values()
+            .find(|t| t.name == toolpath)
+            .unwrap()
+            .tool
+            .name;
+        let name = format!(
+            "job_{n}_{toolpath}_{}.nc",
+            h.app.options.toolpaths.file_names().part(bit)
+        );
+        let gcode = std::fs::read_to_string(dir.join(&name)).unwrap();
+        assert!(gcode.contains(toolpath), "{name}: {gcode}");
     }
     // hidden toolpaths stay out of a one-file save
     let first = *h.app.doc.toolpaths.keys().next().unwrap();
