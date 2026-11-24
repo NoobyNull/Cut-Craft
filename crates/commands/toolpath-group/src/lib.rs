@@ -280,6 +280,7 @@ impl Command for ShowToolpathGroup {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
