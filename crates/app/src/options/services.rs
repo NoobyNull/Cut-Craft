@@ -5,12 +5,13 @@ use super::{Deserialize, JsonSchema, Serialize, on, yes};
 /// Help ▸ Check for Updates, and the check at startup.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Updates {
-    /// About once a day, when Cut Craft starts, ask GitHub whether there is a new version,
+    /// Every time Cut Craft starts, ask GitHub whether there is a new version,
     /// and say so if there is. Nothing is downloaded or installed until you choose Install Now
     #[serde(default = "on")]
     #[schemars(title = "Check for updates when Cut Craft starts")]
     pub check_at_startup: bool,
-    /// When GitHub was last asked, in seconds since 1970.
+    /// When GitHub was last asked, in seconds since 1970: a record only (every start asks),
+    /// kept to tell when an update was last looked for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub last_check: Option<u64>,

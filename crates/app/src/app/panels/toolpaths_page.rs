@@ -734,9 +734,15 @@ impl CutCraftApp {
             Layout::right_to_left(Align::Center),
             |ui| {
                 ui.set_height(row);
-                // the version, at the far right, as Help ▸ About gives it
-                ui.weak(tr!("panels-version", version = env!("CARGO_PKG_VERSION")))
+                // the version, at the far right, as Help ▸ About gives it; right-click it to
+                // check for a newer one
+                let version = ui
+                    .weak(tr!("panels-version", version = env!("CARGO_PKG_VERSION")))
+                    .interact(egui::Sense::click())
                     .on_hover_hint(tr!("panels-cut-craft-s-version-help"));
+                if let Some(action) = self.popup(&version, gui::version_menu) {
+                    self.invoke(ui.ctx(), &action);
+                }
                 ui.separator();
                 // the Web API's state, once it is switched on, in a slot of its own width
                 if self.web_api_indicator(ui) {
