@@ -44,40 +44,6 @@ pub struct View3d {
     #[serde(default)]
     #[schemars(title = "Simplify the model while the view moves")]
     pub simplify_while_moving: bool,
-    /// How finely the model is drawn once the view is still: higher shows more detail and
-    /// takes longer to draw after each change
-    #[serde(default)]
-    #[schemars(title = "Detail when still")]
-    pub still_detail: Detail,
-    /// How finely the model is drawn while it or the view moves (turning the view, dragging
-    /// a handle): lower keeps it smooth on a slower computer. Never finer than the detail
-    /// when still. A playing preview keeps the detail when still
-    #[serde(default)]
-    #[schemars(
-        title = "Detail while moving",
-        extend("x-hide-when" = {"adjust_to_frame_rate": "true"})
-    )]
-    pub moving_detail: MovingDetail,
-    /// While the view moves, draw the model as finely as this computer can keep smooth:
-    /// coarser when frames come slowly, finer again when they come quickly, never finer
-    /// than the detail when still
-    #[serde(default = "yes")]
-    #[schemars(title = "Adjust detail to keep the view smooth")]
-    pub adjust_to_frame_rate: bool,
-    /// How many pictures a second the 3D view aims for while it moves: higher is smoother
-    /// and coarser, lower sharper and choppier. 30 suits most; films run at 24
-    #[serde(default = "target_fps")]
-    #[schemars(
-        title = "Smoothness to aim for",
-        extend("x-unit" = "frames/s", "x-show-when" = {"adjust_to_frame_rate": "true"}),
-        range(min = 10, max = 120)
-    )]
-    pub target_fps: f64,
-    /// Show the 3D view's detail and frames a second at the foot of the window, to see what
-    /// the setting above does
-    #[serde(default)]
-    #[schemars(title = "Show detail and frame rate in the status bar")]
-    pub show_frame_rate: bool,
     /// How dragging turns the view: about the job's vertical with its up kept up, or any
     /// way without stops
     #[serde(default)]
@@ -110,17 +76,6 @@ pub struct View3d {
         range(min = 2, max = 90)
     )]
     pub spin_speed: f64,
-    /// How finely a toolpath preview is worked out to start with: toward Performance is
-    /// quicker and uses less memory, toward Detail shows small corners, holes and thin
-    /// walls truer (about 0.5 mm between points at 0%, 0.1 mm at 50%, 0.025 mm at 100%).
-    /// The Preview tab has the same slider for now; Reset Preview goes back to this
-    #[serde(default = "preview_detail")]
-    #[schemars(
-        title = "Preview detail",
-        extend("x-unit" = "%", "x-widget" = "slider"),
-        range(min = 0, max = 100)
-    )]
-    pub preview_detail: u8,
 }
 
 pub(super) fn preview_detail() -> u8 {
@@ -173,33 +128,9 @@ impl View3d {
         self.settle_seconds.clamp(0.05, 2.0)
     }
 
-    /// Frames a second wanted while moving, kept to the setting's range.
-    pub fn fps_wanted(&self) -> f64 {
-        self.target_fps.clamp(10.0, 120.0)
-    }
-
     /// Auto-rotate's degrees a second, kept to the setting's range.
     pub fn spin_speed(&self) -> f64 {
         self.spin_speed.clamp(2.0, 90.0)
-    }
-
-    /// Mesh cells along the job's longer side once the view is still, at most.
-    pub fn still_cells(&self) -> usize {
-        self.still_detail.cells()
-    }
-
-    /// Mesh cells along the job's longer side while the model or the view moves.
-    pub fn moving_cells(&self) -> usize {
-        let still = self.still_detail;
-        let level = match self.moving_detail {
-            MovingDetail::OneStepLower => still.lower(1),
-            MovingDetail::TwoStepsLower => still.lower(2),
-            MovingDetail::Low => Detail::Low,
-            MovingDetail::Medium => Detail::Medium,
-            MovingDetail::High => Detail::High,
-            MovingDetail::VeryHigh => Detail::VeryHigh,
-        };
-        level.min(still).cells()
     }
 }
 

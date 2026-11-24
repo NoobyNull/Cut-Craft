@@ -4,7 +4,7 @@
 //! into curves.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 /// Ungroup onto the original object layers (U).
 pub struct Ungroup;
@@ -72,6 +72,7 @@ impl Command for UngroupOntoCurrentLayer {
             group: "Edit",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
@@ -90,6 +91,7 @@ impl Command for Ungroup {
             group: "Edit",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

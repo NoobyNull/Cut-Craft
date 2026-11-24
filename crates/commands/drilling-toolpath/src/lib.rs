@@ -9,7 +9,7 @@ use cut_craft_core::checks;
 use cut_craft_core::document::Document;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -90,6 +90,7 @@ impl Command for DrillingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/drilling_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

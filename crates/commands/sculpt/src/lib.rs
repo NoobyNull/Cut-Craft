@@ -7,7 +7,9 @@ use cut_craft_core::component::{Component, chosen_or_baked, height_or};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
+use cut_craft_core::{
+    Change, Command, CommandError, Drag, Form, Interactive, Meta, ensure_positive,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -205,6 +207,7 @@ impl Command for Sculpt {
             group: "Modeling",
             icon: "modeling/sculpting.png",
             shortcut: "",
+            form: Form::Gesture,
         }
     }
 

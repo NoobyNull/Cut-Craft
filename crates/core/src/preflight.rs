@@ -8,8 +8,9 @@ pub use crate::check_list::{Check, Phase};
 use crate::checks::{LEFT, problems_by_check};
 use crate::document::{Along, Document};
 use crate::progress;
-use crate::simulation::{Material, each};
+use crate::simulation::Material;
 use crate::toolpath::{MoveKind, Tool, ToolShape, Toolpath};
+use crate::work::each;
 use glam::DVec3;
 
 /// How deep a rapid move may seem to go into the material before it is a crash, mm: the
@@ -162,6 +163,7 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
         keep_out(doc, toolpaths, &mut found);
         tool_numbers(toolpaths, &mut found);
         rotary_setup(doc, toolpaths, limits, &mut found);
+        support_last(doc, toolpaths, &mut found);
     }
     if doc.job.rotary.is_none() && !progress::cancelled() {
         progress::stage(&Phase::Cutting.stage(""));
@@ -231,6 +233,13 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
                 "{name} is out of date: what it was made from has changed since. Recalculate it \
              so it cuts what the design shows now"
             ),
+        ));
+    }
+    // what it could not cut, as it said when it was made: easily missed once its form closed
+    for note in toolpath.made_notes() {
+        found.push(Finding::warning(
+            Check::MissedSpots,
+            format!("{name}: {note}"),
         ));
     }
     let has = |kind| toolpath.moves.iter().any(|m| m.kind == kind);
@@ -534,6 +543,34 @@ fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
 /// Past this many turns one way, a controller keeping A as a single-precision number places
 /// it no finer than about a hundredth of a degree, and it gets coarser from there.
 pub const MOST_FREE_TURNS: f64 = 500.0;
+
+/// On a rotary job, a toolpath cutting after one that cuts away the centre stock (Cut Away
+/// the Support): by then the part is held at its joined end alone, or not at all.
+fn support_last(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
+    if doc.job.rotary.is_none() {
+        return;
+    }
+    let away = |t: &Toolpath| t.params["cut_support"].as_bool() == Some(true);
+    let Some(first) = toolpaths.iter().position(|t| away(t)) else {
+        return;
+    };
+    let later: Vec<&str> = toolpaths[first + 1..]
+        .iter()
+        .filter(|t| !away(t))
+        .map(|t| t.name.as_str())
+        .collect();
+    if !later.is_empty() {
+        found.push(Finding::warning(
+            Check::RotarySetup,
+            format!(
+                "{} has Cut Away the Support ticked, but {} cut after it, when the part is \
+                 held less firmly or not at all: move it to the end of the toolpath list",
+                toolpaths[first].name,
+                later.join(", ")
+            ),
+        ));
+    }
+}
 
 fn rotary_setup(
     doc: &Document,

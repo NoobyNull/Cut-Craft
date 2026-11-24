@@ -1,6 +1,7 @@
 # The pre-commit gate (.githooks/pre-commit) on Linux, Windows and macOS, each on its own (one
 # failing stops none of the others), so all three keep building and passing their tests, and
 # on pull requests the help rule: a changed tool's help page changes too (scripts/help-touched).
+# On Linux it also checks Help ▸ Credits still matches Cargo.lock (scripts/credits).
 #
 # Tests run by area (.config/test-suites.toml). A pull request runs only the suites its changes
 # reach, and the suites those affect; Format and Clippy always cover the whole workspace. Main,
@@ -105,6 +106,17 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
+      # Help ▸ Credits lists every library's licence from the committed credits/libraries.md:
+      # a Cargo.lock change must remake it (scripts/credits). Same cargo-about version as there.
+      - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
+        with:
+          tool: cargo-about@0.9.3
+
+      - name: Credits match Cargo.lock
+        if: runner.os == 'Linux'
+        run: scripts/credits --check
 
       - name: Format
         run: cargo fmt --all -- --check

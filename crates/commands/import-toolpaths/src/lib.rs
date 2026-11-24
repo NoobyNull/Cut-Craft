@@ -11,7 +11,7 @@
 use cut_craft_core::document::{Document, Job, ZZero};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +64,7 @@ impl Command for ImportToolpaths {
             group: "Toolpath Operations",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

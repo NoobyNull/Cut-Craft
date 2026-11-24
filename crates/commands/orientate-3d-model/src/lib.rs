@@ -8,7 +8,7 @@ use cut_craft_core::document::{Along, Document, Job, ModelPosition, Rotary};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::{DMat3, DVec3};
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, EMPTY_MODEL, Meta};
+use cut_craft_core::{Change, Command, CommandError, EMPTY_MODEL, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -448,6 +448,9 @@ impl Command for Orientate3dModel {
             group: "Modeling",
             icon: "modeling/import_component_3d_model.png",
             shortcut: "",
+            form: Form::Live {
+                create_first: false,
+            },
         }
     }
 

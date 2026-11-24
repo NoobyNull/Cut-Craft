@@ -8,7 +8,7 @@
 use cmd_job_setup::{DatumPosition, JobSetup, RapidGaps, RotaryZZero};
 use cmd_scale_model_z_height::{ScaleModelZHeight, model_height};
 use cut_craft_core::document::{Document, Home, Job, ModelPosition, ZZero};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -108,6 +108,7 @@ impl Command for MaterialSetup {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

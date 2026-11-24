@@ -5,7 +5,7 @@
 
 use cut_craft_core::document::Document;
 pub use cut_craft_core::selector::{Circles, ClosedKind, Layers, Selector as Params};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 
 pub struct VectorSelector;
 
@@ -19,6 +19,7 @@ impl Command for VectorSelector {
             group: "Edit",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
