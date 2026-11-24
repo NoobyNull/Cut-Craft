@@ -1,5 +1,5 @@
+- New installs open in the Ribbon layout; Interface Layout picks Ribbon, Rail or Classic
 - The toolpath list is a tree you can drag, with groups inside groups, and templates keep them
 - Calculations no longer hog the computer, on the processor or the graphics card
 - Laser and rotary toolpaths show only for a machine that has them
 - Rotary: the 3D view shows square and board material as it really is
-- Cut Craft checks for updates every time it starts
