@@ -166,7 +166,7 @@ axis; **Options ▸ Importing and Exporting** can offer the flat, top-only impor
 
 ![Importing a 3D model](docs/screenshots/09-import-3d-model.png)
 
-The window can be laid out three ways (**Options ▸ General ▸ Window layout**, or **View ▸
+The window can be laid out four ways (**Options ▸ General ▸ Window layout**, or **View ▸
 Window Layout**), and each comes in a light and a dark theme (**Options ▸ Appearance ▸
 Theme**, or follow the desktop's own). Each picture below shows the light theme on the left
 and the dark theme on the right.
@@ -186,6 +186,12 @@ Ribbon puts Design, Model and Toolpaths tabs of tool groups across the top, the 
 the left and the open form on the right. **Ctrl+K** finds a tool by name in any layout.
 
 ![The Ribbon layout, light and dark](docs/screenshots/13-ribbon-layout-light-and-dark.png)
+
+Canvas gives the whole window to the drawing. A palette of tool groups floats down the left,
+the open form floats on the right, the sheets, layers and toolpaths open from chips along
+the foot, and a box in the header finds a tool by name.
+
+![The Canvas layout, light and dark](docs/screenshots/15-canvas-layout-light-and-dark.png)
 
 These pictures are made by the app itself and can be made again at any time (see
 [Screenshots](#screenshots)).

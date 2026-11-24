@@ -1,4 +1,4 @@
-//! Choosing the window layout: the same three choices, each with a picture, wherever it is
+//! Choosing the window layout: the same choices, each with a picture, wherever it is
 //! asked. First-time setup asks it, installs that had Cut Craft before ask it once after
 //! updating, and the Interface Layout button (under 2D View Control) opens it any time
 //! (`docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
@@ -39,6 +39,7 @@ pub(super) fn picture(layout: WindowLayout) -> &'static str {
     match layout {
         WindowLayout::Ribbon => "layouts/ribbon-light-and-dark.png",
         WindowLayout::Rail => "layouts/rail-light-and-dark.png",
+        WindowLayout::Canvas => "layouts/canvas-light-and-dark.png",
         WindowLayout::Classic => "layouts/classic-light-and-dark.png",
     }
 }
@@ -48,6 +49,7 @@ pub(super) fn name(layout: WindowLayout) -> String {
     match layout {
         WindowLayout::Ribbon => tr!("layout-choice-ribbon"),
         WindowLayout::Rail => tr!("layout-choice-rail"),
+        WindowLayout::Canvas => tr!("layout-choice-canvas"),
         WindowLayout::Classic => tr!("layout-choice-classic"),
     }
 }
@@ -57,17 +59,19 @@ fn about(layout: WindowLayout) -> String {
     match layout {
         WindowLayout::Ribbon => tr!("layout-choice-ribbon-about"),
         WindowLayout::Rail => tr!("layout-choice-rail-about"),
+        WindowLayout::Canvas => tr!("layout-choice-canvas-about"),
         WindowLayout::Classic => tr!("layout-choice-classic-about"),
     }
 }
 
-/// The three layouts side by side, each its picture, name and what it is like; a click
+/// The layouts side by side, each its picture, name and what it is like; a click
 /// on any part picks it.
 pub(super) fn layout_choices(ui: &mut egui::Ui, chosen: &mut WindowLayout) {
-    // three across, each as wide as fits, up to fourteen rows of text
+    // all across, each as wide as fits, up to fourteen rows of text
     // each card's margins and border, and the gaps between them
-    let gaps = 2.0 * ui.spacing().item_spacing.x + 3.0 * 14.0;
-    let width = ((ui.available_width() - gaps) / 3.0).min(14.0 * ui.spacing().interact_size.y);
+    let across = f32::from(u8::try_from(WindowLayout::ALL.len()).unwrap_or(u8::MAX));
+    let gaps = (across - 1.0) * ui.spacing().item_spacing.x + across * 14.0;
+    let width = ((ui.available_width() - gaps) / across).min(14.0 * ui.spacing().interact_size.y);
     ui.horizontal_top(|ui| {
         for layout in WindowLayout::ALL {
             let picked = *chosen == layout;

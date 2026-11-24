@@ -97,6 +97,7 @@ impl CutCraftApp {
             flyout_rect: None,
             buttons_across: std::cell::Cell::new(0.0),
             ribbon_tab: 0,
+            canvas: super::canvas_layout::CanvasState::default(),
             options_path: None,
             words_path: None,
             job_times_path: None,
@@ -574,6 +575,7 @@ impl CutCraftApp {
                         .unwrap_or_default(),
                 );
                 self.pages.open(Page::Design);
+                self.show_inspector_tab("Library");
             }
             // the Components tab, as its Component Levels icon shows
             "component_levels" => {
@@ -584,6 +586,7 @@ impl CutCraftApp {
                         .unwrap_or_default(),
                 );
                 self.pages.open(Page::Design);
+                self.show_inspector_tab("Components");
             }
             "delete_all_guides" => self.set_guides(vec![]),
             // the current layer becomes the selected vectors' (the first picked)
@@ -734,7 +737,10 @@ impl CutCraftApp {
                 }
             }
             "job_size_and_position" => self.start_command("job_setup"),
-            "show_toolpaths_tab" => self.pages.open(Page::Toolpaths),
+            "show_toolpaths_tab" => {
+                self.pages.open(Page::Toolpaths);
+                self.show_inspector_tab("Toolpaths");
+            }
             "design_layout" => self.pages = Pages::design_layout(),
             "machining_layout" => self.pages = Pages::machining_layout(),
             "interface_layout" => self.open_layout_picker(),

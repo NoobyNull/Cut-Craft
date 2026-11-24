@@ -9,6 +9,7 @@ mod accessibility;
 mod web_api;
 
 mod calculating;
+mod canvas;
 mod collisions;
 mod drawing;
 mod help_pages;
