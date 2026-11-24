@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: checks_before_cutting, profile_toolpath, pocket_toolpath, collisions, rotary_machining_toolpath
 ---
 
@@ -47,3 +47,32 @@ every point it has. Its file is bigger, and it is exactly what the turning previ
 
 Files saved with **Indexed** or **Sides, then details** in versions 0.7.0 to 0.7.2 lost that
 match and can cut into the model: save them again with this version before cutting.
+
+## File names
+
+When the toolpaths go into more than one file, each file's name is the name you typed, then
+its number in cutting order, then what it holds:
+
+| Saved as | Example |
+|---|---|
+| A separate file for each bit | `sign_1_6mm End Mill.nc`, `sign_2_90 V-Bit.nc` |
+| Multiple Files (one per toolpath) | `sign_1_Pocket_6mm End Mill.nc`, `sign_2_Text_90 V-Bit.nc` |
+| Two-sided, with the side added | `sign_1_Pocket_6mm End Mill_Top.nc` |
+| Tiled | `sign_1_Pocket_6mm End Mill_tile2.nc` |
+
+- Run the files in number order. With ten or more, the numbers start with a 0 (`01`, `02` …
+  `12`) so your file list and the controller show them in that order.
+- Characters Windows will not save (`< > : " / \ | ? *`) become `_`, and each part is kept to
+  64 characters. Spaces are kept as you typed them.
+- One file only is saved under the name you typed, with nothing added.
+
+Two settings in **Edit ▸ Options ▸ Toolpaths** change this:
+
+- **Underscores for spaces in G-code file names**: turn it on if your controller or its USB
+  reader cannot open names with spaces (`My_Sign_1_End_Mill.nc`). Off by default.
+- **Bit name in multiple file names**: on by default, so a Multiple Files name says which bit
+  to fit. Turn it off for the toolpath's name alone (`sign_1_Pocket.nc`).
+
+Saving again under the same name finds the files the earlier save made (numbered, sided and
+tiled ones too) and asks whether to **Replace** them or **Archive** them in a dated folder
+under `Archive`. See [Confirmation Choices](help:confirmation_choices) to answer once for good.

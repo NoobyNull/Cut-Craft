@@ -393,12 +393,13 @@ fn a_post_without_tool_changes_gets_a_file_for_each_tool_in_turn() {
     let path = Path::new("/out/sign.nc");
     let job = cut_craft_core::document::Job::default();
     let plan = vec![vec![ids[0], ids[1]], vec![ids[2]]];
-    let files = save_files(&Post::default_for(&job), &doc, &plan, path, None, true).unwrap();
-    let names: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
+    let names = FileNames::default();
+    let files = save_files(&Post::default_for(&job), &doc, &plan, path, None, true, names);
+    let names: Vec<_> = files.unwrap().into_iter().map(|(p, _)| p).collect();
     assert_eq!(
         names,
         [
-            path.with_file_name("sign_1_End_Mill.nc"),
+            path.with_file_name("sign_1_End Mill.nc"),
             path.with_file_name("sign_2_V-Bit.nc")
         ]
     );
@@ -411,7 +412,11 @@ fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tool
     let changer = Post::default_for(&job);
     let path = Path::new("/out/widget.nc");
     let plan = vec![vec![ids[0], ids[1]], vec![ids[2]]];
-    let files = save_files(&changer, &doc, &plan, path, Some("Top"), false).unwrap();
+    let bare = FileNames {
+        bit_names: false,
+        ..FileNames::default()
+    };
+    let files = save_files(&changer, &doc, &plan, path, Some("Top"), false, bare).unwrap();
     // compared as paths: Windows joins the folder and name with a backslash
     let names: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
     assert_eq!(
@@ -423,7 +428,8 @@ fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tool
     );
     assert_eq!(files[0].1.toolpaths.len(), 2);
     assert!(files[1].1.toolpaths.contains_key(&ids[2]));
-    let one = save_files(&changer, &doc, &[ids[..3].to_vec()], path, None, false).unwrap();
+    let one = save_files(&changer, &doc, &[ids[..3].to_vec()], path, None, false, bare);
+    let one = one.unwrap();
     assert_eq!(one[0].0, path);
     // a post without tool changes refuses a file mixing end mill and V-bit
     let no_changes = Post::parse(
@@ -432,9 +438,97 @@ fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tool
              begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n",
     )
     .unwrap();
-    let why = save_files(&no_changes, &doc, &[ids[..3].to_vec()], path, None, false).unwrap_err();
+    let why = save_files(&no_changes, &doc, &[ids[..3].to_vec()], path, None, false, bare);
+    let why = why.unwrap_err();
     assert!(why.contains("different tools"), "{why}");
-    assert!(save_files(&no_changes, &doc, &[ids[..2].to_vec()], path, None, false).is_ok());
+    let two = save_files(&no_changes, &doc, &[ids[..2].to_vec()], path, None, false, bare);
+    assert!(two.is_ok());
+}
+
+/// The names `plan` of `doc` is saved under at `path`, file name only.
+fn names_of(
+    doc: &Document,
+    plan: &[Vec<EntityId>],
+    path: &Path,
+    per_tool: bool,
+    names: FileNames,
+) -> Vec<String> {
+    let job = cut_craft_core::document::Job::default();
+    save_files(&Post::default_for(&job), doc, plan, path, None, per_tool, names)
+        .unwrap()
+        .into_iter()
+        .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn file_numbers_are_padded_so_ten_or_more_files_sort_in_cutting_order() {
+    let (doc, ids) = four_toolpaths();
+    let plan: Vec<Vec<EntityId>> = (0..12).map(|n| vec![ids[n % 4]]).collect();
+    let names = names_of(&doc, &plan, Path::new("/out/sign.nc"), true, FileNames::default());
+    assert_eq!(names[0], "sign_01_End Mill.nc");
+    assert_eq!(names[11], "sign_12_End Mill.nc");
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(sorted, names, "a file list sorts them in the order they are cut");
+    // fewer than ten keep their single digit, as they always were
+    let few = names_of(&doc, &plan[..3], Path::new("/out/sign.nc"), true, FileNames::default());
+    assert_eq!(few[0], "sign_1_End Mill.nc");
+}
+
+#[test]
+fn every_part_of_a_file_name_is_cleaned_by_the_same_rule_and_kept_short() {
+    let (mut doc, ids) = four_toolpaths();
+    let first = doc.toolpaths.get_mut(&ids[0]).unwrap();
+    first.name = format!("Pocket: \"lid\"   {}", "x".repeat(100));
+    first.tool.name = "6.35mm End Mill".into();
+    let plan = vec![vec![ids[0]], vec![ids[2]]];
+    let path = Path::new("/out/My Sign.nc");
+    let names = FileNames::default();
+    let by_bit = names_of(&doc, &plan, path, true, names);
+    // spaces and dots kept, as in the name typed; only what Windows refuses is replaced
+    assert_eq!(by_bit, ["My Sign_1_6.35mm End Mill.nc", "My Sign_2_V-Bit.nc"]);
+    let by_toolpath = names_of(&doc, &plan, path, false, names);
+    let label = by_toolpath[0]
+        .strip_prefix("My Sign_1_")
+        .and_then(|n| n.strip_suffix(".nc"))
+        .unwrap();
+    assert!(label.starts_with("Pocket_ _lid_ x"), "{label}");
+    assert!(label.chars().count() <= 64, "a long toolpath name is cut short: {label}");
+    let underscores = FileNames {
+        underscores: true,
+        ..names
+    };
+    let by_bit = names_of(&doc, &plan, path, true, underscores);
+    assert_eq!(by_bit, ["My_Sign_1_6.35mm_End_Mill.nc", "My_Sign_2_V-Bit.nc"]);
+    assert!(!names_of(&doc, &plan[..1], path, false, underscores)[0].contains(' '));
+}
+
+#[test]
+fn multiple_files_names_say_the_bit_to_fit_unless_turned_off() {
+    let (doc, ids) = four_toolpaths();
+    let plan = vec![vec![ids[0]], vec![ids[2]]];
+    let path = Path::new("/out/sign.nc");
+    assert_eq!(
+        names_of(&doc, &plan, path, false, FileNames::default()),
+        ["sign_1_Pocket_End Mill.nc", "sign_2_Text_V-Bit.nc"]
+    );
+    let bare = FileNames {
+        bit_names: false,
+        ..FileNames::default()
+    };
+    assert_eq!(
+        names_of(&doc, &plan, path, false, bare),
+        ["sign_1_Pocket.nc", "sign_2_Text.nc"]
+    );
+}
+
+#[test]
+fn an_earlier_save_with_underscores_for_spaces_is_still_found() {
+    assert!(of_earlier_save("My_Sign_01_End_Mill.nc", "My Sign", "nc"));
+    assert!(of_earlier_save("My_Sign.nc", "My Sign", "nc"));
+    assert!(of_earlier_save("My Sign_2_V-Bit.nc", "My Sign", "nc"));
+    assert!(!of_earlier_save("My_Signs.nc", "My Sign", "nc"));
 }
 
 use super::*;

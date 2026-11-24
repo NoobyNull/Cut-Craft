@@ -187,7 +187,15 @@ impl Output<'_> {
         );
         let slots = self.slots();
         let per_tool = split_for(form, post);
-        let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
+        let parts = files::save_files(
+            post,
+            &thinned,
+            &plan,
+            path,
+            side,
+            per_tool,
+            self.tolerances.file_names(),
+        )?;
         // the notes' variables are the whole job's, not one file's; the post is the one
         // these files are made through, whichever the machine has first
         let mut vars = note_variables.to_vec();
