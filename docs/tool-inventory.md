@@ -168,7 +168,7 @@ say "not implemented yet".
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
-  `x-hide-when`). Rotary Z Zero reads Cylinder Surface / Cylinder Axis, with its own
+  `x-hide-when`). Rotary Z Zero reads Material Top / Turning Axis, with its own
   pictures (Material Setup too), and the post's `[Z_ORIGIN]` and the job sheet name them
   the same; Flip design is not done.
 - Save Toolpaths (a form, as Aspire's): the machine and its posts suiting the job (the

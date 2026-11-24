@@ -1338,7 +1338,8 @@ fn file_name(path: &std::path::Path) -> String {
 }
 
 /// How the 3D view wraps `surface` round a rotary job's axis, when Auto-Wrapping is `on`: a
-/// preview's surface is at 0, the model placed as Material Setup says.
+/// preview's surface is at 0, its uncut material out to a square's or board's own faces;
+/// the model placed as Material Setup says.
 fn wrap_for(
     job: &cut_craft_core::document::Job,
     on: bool,
@@ -1348,6 +1349,7 @@ fn wrap_for(
     job.rotary.filter(|_| on).map(|r| view3d::Wrap {
         along_x: r.along == cut_craft_core::document::Along::X,
         radius: r.diameter / 2.0,
+        outline: view3d::outline_of(&r).filter(|_| previewing),
         surface: if previewing {
             0.0
         } else {

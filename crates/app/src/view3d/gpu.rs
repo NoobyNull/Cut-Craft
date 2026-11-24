@@ -21,7 +21,7 @@ use std::sync::Arc;
 /// The window's depth buffer: the view's faces are sorted by it.
 pub const DEPTH_BITS: u8 = 32;
 /// The camera uniform's size: as `Camera` in `surface.wgsl` lays it out.
-const UNIFORM_BYTES: usize = 224;
+const UNIFORM_BYTES: usize = 240;
 /// A height meaning no model there (the grid's NaN, which shaders cannot be trusted with).
 const EMPTY: f32 = -1.0e30;
 /// Numbers a model's face takes in its buffer: three corners and a mark.
@@ -354,6 +354,9 @@ impl Draw {
                 u32::from(shadows),
             ],
         );
+        // a square's or board's half width and thickness (0 for round material), padded
+        let outline = wrap.and_then(|w| w.outline).unwrap_or_default();
+        floats(&mut uniform, &[outline.x, outline.y, 0.0, 0.0]);
         debug_assert_eq!(uniform.len(), UNIFORM_BYTES);
         Self { geometry, uniform }
     }
@@ -1091,6 +1094,7 @@ mod tests {
             along_x: true,
             radius: 20.0,
             surface: 0.0,
+            outline: None,
         };
         let g = surface(&m, Some(wrap), true);
         // along the axis the quads stop; round it they meet themselves; no sides
@@ -1312,6 +1316,34 @@ mod tests {
         );
         let words = u32s(&model_draw.uniform);
         assert_eq!((words[23], words[52]), (1, 1), "a model, its backs culled");
+        assert_eq!(&f32s(&model_draw.uniform)[56..58], &[0.0, 0.0], "round");
+    }
+
+    #[test]
+    fn a_square_or_board_s_outline_reaches_the_shader() {
+        let m = slotted();
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let wrap = Wrap {
+            along_x: true,
+            radius: 20.0,
+            surface: 0.0,
+            outline: Some(cut_craft_core::glam::DVec2::new(60.0, 20.0)),
+        };
+        let camera = Camera::new(&m, Orbit::default(), Framing::default(), area, Some(wrap));
+        let look = Look {
+            wrap: Some(wrap),
+            ..look()
+        };
+        let draw = Draw::new(
+            Arc::new(surface(&m, Some(wrap), true)),
+            &camera,
+            area,
+            DVec3::ZERO,
+            &look,
+            Color32::RED,
+        );
+        assert_eq!(draw.uniform.len(), UNIFORM_BYTES);
+        assert_eq!(&f32s(&draw.uniform)[56..58], &[60.0, 20.0]);
     }
 
     /// `cargo test --release -p cut-craft -- --ignored gpu_timing --nocapture`: what a frame

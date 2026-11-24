@@ -343,7 +343,9 @@ impl CutCraftApp {
         let job = self.shown_job().area().size();
         let length = if wrap.along_x { job.x } else { job.y };
         let stroke = egui::Stroke::new(ui.visuals().widgets.noninteractive.fg_stroke.width, mark);
-        for [a, b] in view3d::cylinder_edges(wrap.along_x, wrap.radius, 0.0, length) {
+        // the material as Job Setup describes it: round, square or a board
+        let outline = self.doc.job.rotary.as_ref().and_then(view3d::outline_of);
+        for [a, b] in view3d::stock_edges(wrap.along_x, wrap.radius, outline, 0.0, length) {
             painter.line_segment([screen(a), screen(b)], stroke);
         }
     }

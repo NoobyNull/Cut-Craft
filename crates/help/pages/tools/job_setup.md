@@ -51,15 +51,24 @@ Choose **Rotary** under **Job Type** to carve material turned by a 4th axis (see
 
 1. Type the **Length (L)** of material between the chuck and the tailstock.
 2. Pick its **Shape**, seen down the axis:
-   - **Round**: a dowel, a turned spindle or a log. **Diameter (D)** is across it.
-   - **Square**: a face flat on top at A=0. **Diameter (D)** is its side.
+   - **Round**: a dowel, a turned spindle or a log. Type its **Diameter (D)**.
+   - **Square**: a face flat on top at A=0. Type its **Side (D)**.
    - **Board**: a flat board lying flat at A=0, for carving both faces with A turning it over.
-     **Diameter (D)** is its thickness, and **Board Width (W)** how wide it is.
+     Type its **Thickness (D)**, and **Board Width (W)**, how wide it is.
+
+   The size's name changes with the shape you pick. Whatever its name, it is the
+   material's size straight up through the axis at A=0.
 
    ![Round, square and board seen down the axis: D straight up through the axis, and the circle each swings through](pictures/job_setup/rotary_shapes.png)
 
 3. Pick the **Orientation**: whether the axis runs along X or along Y.
-4. Pick where **Z zero** is: on top of the material, or on the turning axis.
+4. Pick where **Z zero** is: **Material Top** (touch the bit off on the top of the
+   material at A=0) or **Turning Axis** (on the axis the rotary turns it round).
+
+The 3D view shows the material as you described it: a round blank, a square or a board, seen
+round its axis. A toolpath preview cuts into that same shape, so a shallow cut takes a
+square's corners off just as it will on the machine. Depths are measured down from the round
+that touches a square's or board's flat faces, the same round the design is wrapped onto.
 
 5. Under **Holding the Part**, say what of the material is left to hold the part while it is
    cut (see below). Leave **Keep Joined At** on **Neither** and **Centre Stock Diameter** at 0

@@ -46,17 +46,19 @@ pub enum Shape {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RotaryZZero {
-    /// The tool is zeroed on the top of the cylinder: touch the bit off on the highest point
-    /// of the blank. Cut depths go below zero, so a 3 mm deep cut is Z -3. Easiest when the
-    /// blank is round and true; set zero again for each new blank
+    /// The tool is zeroed on the top of the material at A=0: touch the bit off on the
+    /// highest point of a round blank, or the middle of a square's or board's top face. Cut
+    /// depths go below zero, so a 3 mm deep cut is Z -3. Easiest when the blank is true; set
+    /// zero again for each new blank
     #[default]
-    #[schemars(title = "Cylinder Surface")]
+    #[schemars(title = "Material Top")]
     CylinderSurface,
-    /// The tool is zeroed on the cylinder's centre line, the rotary axis (touch off on the
-    /// axis, not on the machine bed or the rotary's base). Every Z is a distance from the
-    /// axis, so on a 50 mm blank a 3 mm deep cut is Z 22. Zero stays put when you change
-    /// blanks, and an out-of-round blank still cuts to the right finished size
-    #[schemars(title = "Cylinder Axis")]
+    /// The tool is zeroed on the turning axis, the centre line the rotary spins the material
+    /// round (touch off on the axis, not on the machine bed or the rotary's base). Every Z is
+    /// a distance from the axis, so on a 50 mm blank a 3 mm deep cut is Z 22. Zero stays put
+    /// when you change blanks, and an out-of-round blank still cuts to the right finished
+    /// size
+    #[schemars(title = "Turning Axis")]
     CylinderAxis,
 }
 
@@ -121,7 +123,11 @@ pub struct Size {
     /// blank's diameter, a square's side, a board's thickness
     #[schemars(
         title = "Diameter (D)",
-        extend("x-unit" = "mm", "x-show-when" = {"job_type": "rotary"}),
+        extend(
+            "x-unit" = "mm",
+            "x-show-when" = {"job_type": "rotary"},
+            "x-titles" = {"shape": {"square": "Side (D)", "board": "Thickness (D)"}}
+        ),
         range(min = 0)
     )]
     pub diameter: f64,
@@ -953,7 +959,7 @@ mod form_tests {
                 "{round}"
             );
         }
-        // Z zero reads as the cylinder's axis or surface on a rotary job, never the bed
+        // Z zero reads as the material's top or the turning axis on a rotary job, never the bed
         assert_eq!(
             rule(&schema["properties"]["z_zero"], "x-hide-when").as_deref(),
             Some("\"rotary\"")
@@ -966,7 +972,7 @@ mod form_tests {
             .iter()
             .filter_map(|v| v["title"].as_str())
             .collect();
-        assert_eq!(titles, ["Cylinder Surface", "Cylinder Axis"]);
+        assert_eq!(titles, ["Material Top", "Turning Axis"]);
         let orientation = &schema["properties"]["orientation"];
         assert_eq!(
             rule(orientation, "x-show-when").as_deref(),

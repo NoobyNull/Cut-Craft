@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-19
+reviewed: 2026-11-24
 see-also: job_setup, material_setup, new, settings
 ---
 
@@ -31,7 +31,7 @@ see-also: job_setup, material_setup, new, settings
 
 Setup Material asks only what changes from one job to the next: what kind of job it is and
 how big the material is. A **Double Sided** job also asks how the board is turned over, and a
-**Rotary** job asks which way the cylinder lies and where its Z zero is, because getting
+**Rotary** job asks its shape, which way it lies and where its Z zero is, because getting
 those wrong spoils the part.
 
 Everything else (Z zero, X0 Y0, the rapid heights, home, the material and its colour) comes
@@ -52,8 +52,9 @@ look at the thickness and where to zero the bit once more for this job. If you n
 
 - **Job type**: Single Sided, Double Sided or Rotary.
 - **Width (X)**, **Height (Y)**, **Thickness (Z)**: the board's size. Rotary jobs give the
-  **Length** and **Diameter** of the blank instead.
+  blank's **Length** and its **Shape** instead: Round with its **Diameter**, Square with its
+  **Side**, or Board with its **Thickness** and **Board Width**. The 3D view shows that shape.
 - **Units**: millimetres or inches, for this job.
 - Double Sided: how the board is **turned over** (along X or Y).
-- Rotary: which way the **cylinder lies**, and where **Z zero** is (on top of the cylinder or
-  on its axis).
+- Rotary: which way the **material lies**, and where **Z zero** is (**Material Top** or
+  **Turning Axis**).

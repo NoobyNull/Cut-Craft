@@ -642,7 +642,7 @@ fn selecting_a_post_that_does_not_suit_the_open_job_says_which_post_it_saves_thr
 }
 
 #[test]
-fn a_rotary_job_s_z_zero_reads_cylinder_axis_not_machine_bed() {
+fn a_rotary_job_s_z_zero_reads_turning_axis_not_machine_bed() {
     use cut_craft_core::document::{Along, Job};
     for form in ["material_setup", "job_setup"] {
         let mut h = Harness::new();
@@ -651,7 +651,7 @@ fn a_rotary_job_s_z_zero_reads_cylinder_axis_not_machine_bed() {
         for _ in 0..3 {
             h.frame(vec![]);
         }
-        assert!(h.text_at("Cylinder Axis").is_some(), "{form}");
+        assert!(h.text_at("Turning Axis").is_some(), "{form}");
         assert!(h.text_at("Machine Bed").is_none(), "{form}");
         // a flat job keeps the bed
         h.app.form = None;
@@ -661,7 +661,7 @@ fn a_rotary_job_s_z_zero_reads_cylinder_axis_not_machine_bed() {
             h.frame(vec![]);
         }
         assert!(h.text_at("Machine Bed").is_some(), "{form}");
-        assert!(h.text_at("Cylinder Axis").is_none(), "{form}");
+        assert!(h.text_at("Turning Axis").is_none(), "{form}");
     }
 }
 
