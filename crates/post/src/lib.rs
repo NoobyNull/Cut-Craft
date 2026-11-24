@@ -76,6 +76,9 @@ const NUMBERS: &[&str] = &[
     "XH",
     "YH",
     "ZH",
+    "PARKX",
+    "PARKY",
+    "PARKZ",
     "XLENGTH",
     "YLENGTH",
     "ZLENGTH",
@@ -119,6 +122,9 @@ const LENGTHS: &[&str] = &[
     "XH",
     "YH",
     "ZH",
+    "PARKX",
+    "PARKY",
+    "PARKZ",
     "XLENGTH",
     "YLENGTH",
     "ZLENGTH",
@@ -152,6 +158,9 @@ const THREE_PLACES: &[&str] = &[
     "XH",
     "YH",
     "ZH",
+    "PARKX",
+    "PARKY",
+    "PARKZ",
     "XLENGTH",
     "YLENGTH",
     "ZLENGTH",
@@ -307,6 +316,31 @@ pub struct Post {
     /// between the first two (`VAR DRILL_LIST = [DL|prefix|separator|first separator]`).
     drill_list: (String, String, String),
     blocks: HashMap<String, Vec<String>>,
+    /// Where a pause for a bit change takes the head ([`Pause::park`]); printed as `[PARKX]`
+    /// `[PARKY]` `[PARKZ]`.
+    park: Option<[f64; 3]>,
+}
+
+/// The spindle's time to come up to speed after a pause Cut Craft writes, seconds.
+pub const DEFAULT_SPIN_UP: f64 = 3.0;
+
+/// `value` seconds as a dwell prints them: to a tenth, without a trailing `.0`.
+fn seconds(value: f64) -> String {
+    let text = format!("{:.1}", value.max(0.0));
+    text.strip_suffix(".0")
+        .map_or_else(|| text.clone(), str::to_owned)
+}
+
+/// How [`Post::with_pauses`] stops for a bit to be changed by hand.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Pause {
+    /// The spindle's time to come up to speed once resumed, seconds; `None` keeps the
+    /// post's own wait.
+    pub spin_up: Option<f64>,
+    /// Where the head waits for the change: X and Y from the job's X0 Y0, and Z above the
+    /// top of the material (never lower than the safe Z), mm. `None` stays where the bit
+    /// lifted to the safe Z. A post that wraps onto a rotary axis always stays.
+    pub park: Option<[f64; 3]>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -480,13 +514,14 @@ impl Post {
 
     /// This post with each tool change a stop to change the tool by hand: its own tool
     /// change when it already pauses, else one that lifts to the safe Z, stops the spindle,
-    /// names the next tool, stops (`M0`) and starts the spindle again, using only the
-    /// variables the post has. The header's tool change (`M6`) becomes a note to fit the
-    /// first tool before starting.
+    /// names the next tool, stops (`M0`), starts the spindle again and waits for it, using
+    /// only the variables the post has. Either way `pause` adds the trip to the change
+    /// position and sets the wait ([`Self::paused_as`]). The header's tool change (`M6`)
+    /// becomes a note to fit the first tool before starting.
     #[must_use]
-    pub fn with_pauses(&self) -> Self {
+    pub fn with_pauses(&self, pause: Pause) -> Self {
         if self.pauses_for_tools() {
-            return self.clone();
+            return self.paused_as(pause);
         }
         let has = |label: &str| self.formats.contains_key(label);
         let mut lines = vec![];
@@ -503,7 +538,7 @@ impl Post {
         lines.push("M0".to_owned());
         lines.push(if has("S") { "[S] M3" } else { "M3" }.to_owned());
         // the spindle's time to come up to speed
-        lines.push("G4 P3".to_owned());
+        lines.push(format!("G4 P{}", seconds(DEFAULT_SPIN_UP)));
         let mut post = self.clone();
         post.blocks.insert("TOOLCHANGE".to_owned(), lines);
         // the first tool is fitted by hand before starting, not loaded by the changer
@@ -517,6 +552,60 @@ impl Post {
                     line.clone_from(&fitted);
                 }
             }
+        }
+        post.paused_as(pause)
+    }
+
+    /// This pausing post with `pause` made in its tool change: the head lifted to the
+    /// change position's Z and taken to its X Y around the spindle stopping (`M5`, else just
+    /// before the stop), and the wait after the spindle starts again (`G4`) set to
+    /// `pause`'s spin-up. A rotary (wrapping) post keeps the head where it lifted, as its
+    /// position would print as an angle.
+    fn paused_as(&self, pause: Pause) -> Self {
+        let mut post = self.clone();
+        let Some(lines) = post.blocks.get_mut("TOOLCHANGE") else {
+            return post;
+        };
+        let words = |line: &str| -> Vec<String> {
+            line.split_whitespace()
+                .map(str::to_ascii_uppercase)
+                .collect()
+        };
+        let is =
+            |line: &str, codes: &[&str]| words(line).iter().any(|w| codes.contains(&w.as_str()));
+        let stop = lines
+            .iter()
+            .position(|l| is(l, &["M0", "M00", "M1", "M01"]));
+        if let Some(seconds_wanted) = pause.spin_up {
+            let after = stop.unwrap_or(0);
+            let wait = format!("G4 P{}", seconds(seconds_wanted));
+            if let Some(at) = lines.iter().skip(after).position(|l| is(l, &["G4", "G04"])) {
+                lines[after + at] = wait;
+            } else {
+                let on = lines
+                    .iter()
+                    .skip(after)
+                    .position(|l| is(l, &["M3", "M03", "M4", "M04"]))
+                    .map_or(lines.len(), |at| after + at + 1);
+                lines.insert(on, wait);
+            }
+        }
+        let park = pause.park.filter(|_| self.wrap.is_none());
+        if let (Some(park), Some(stop)) = (park, stop) {
+            let off = lines[..stop].iter().position(|l| is(l, &["M5", "M05"]));
+            // lift where the bit is, stop the spindle, then cross to the change position
+            let (up, across) = off.map_or((stop, stop), |at| (at, at + 1));
+            lines.insert(across, "G0 [PARKX] [PARKY]".to_owned());
+            lines.insert(up, "G0 [PARKZ]".to_owned());
+            for (label, axis) in [("PARKX", "X"), ("PARKY", "Y"), ("PARKZ", "Z")] {
+                let mut format = self.formats.get(axis).cloned().unwrap_or_else(|| Format {
+                    prefix: axis.to_owned(),
+                    ..Format::default_for(axis)
+                });
+                format.only_changes = false;
+                post.formats.insert(label.to_owned(), format);
+            }
+            post.park = Some(park);
         }
         post
     }
@@ -555,6 +644,7 @@ impl Post {
             formats: HashMap::new(),
             drill_list: (String::new(), ",".into(), ",".into()),
             blocks: HashMap::new(),
+            park: None,
         };
         let mut block: Option<String> = None;
         for line in text.lines().map(str::trim) {

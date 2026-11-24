@@ -571,6 +571,12 @@ impl Post {
         ] {
             v.numbers.insert(label, value);
         }
+        // a bit change's position: never below the safe Z, so going there clears the work
+        if let Some([x, y, z]) = self.park {
+            v.numbers.insert("PARKX", x);
+            v.numbers.insert("PARKY", y);
+            v.numbers.insert("PARKZ", job.machine_z(z).max(safe));
+        }
         let text = |s: Option<&std::ffi::OsStr>| s.map(|s| s.to_string_lossy().into_owned());
         let shown = |p: Option<&Path>| p.map(|p| p.display().to_string());
         for (label, value) in [

@@ -66,10 +66,12 @@ impl Output<'_> {
             form.post.as_deref(),
         )?;
         let changer = self.has_tool_changer();
+        // where the machine's pauses take the head, and the spindle's time to speed
+        let pause = self.machine.map_or_else(Default::default, Machine::pause);
         Ok(match form.changes {
-            files::ToolChanges::Pause => post.with_pauses(),
+            files::ToolChanges::Pause => post.with_pauses(pause),
             // changed by hand between files: no tool changer call (M6) for the first tool
-            files::ToolChanges::SeparateFiles if !changer => post.with_pauses(),
+            files::ToolChanges::SeparateFiles if !changer => post.with_pauses(pause),
             _ => post,
         })
     }
@@ -84,6 +86,13 @@ impl Output<'_> {
             self.selected_group,
             form.group,
         )?;
+        // Group by bit: each bit's toolpaths cut together, before the files are split
+        let plan = if self.machine.is_some_and(|m| m.group_by_bit) {
+            let merge = form.group && form.mode == files::SaveMode::VisibleToMultipleFiles;
+            files::grouped_by_bit(self.doc, &plan, merge)
+        } else {
+            plan
+        };
         Ok(if by_tool(form, post) {
             files::by_tool(self.doc, plan)
         } else {

@@ -316,7 +316,7 @@ fn the_first_rapid_after_a_tool_change_always_says_its_height() {
         .iter()
         .filter(|(name, _)| !name.contains("wrap"))
         .map(|(_, text)| Post::parse(text).unwrap())
-        .flat_map(|p| [p.with_pauses(), p])
+        .flat_map(|p| [p.with_pauses(Pause::default()), p])
         .collect();
     for post in &posts {
         let lines = render_with(post, job, two());
@@ -346,7 +346,7 @@ fn pausing_for_tools_swaps_a_tool_changer_for_a_stop_to_change_by_hand() {
     let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
     let atc = Post::parse(include_str!("../posts/fluidnc_atc_mm.pp")).unwrap();
     assert!(!atc.pauses_for_tools(), "an ATC post changes tools itself");
-    let paused = atc.with_pauses();
+    let paused = atc.with_pauses(Pause::default());
     assert!(paused.pauses_for_tools());
     let lines = render_with(&paused, job, two());
     assert!(!lines.iter().any(|l| l.contains("M6")), "{lines:#?}");
@@ -359,7 +359,7 @@ fn pausing_for_tools_swaps_a_tool_changer_for_a_stop_to_change_by_hand() {
     // a post that already pauses keeps its own tool change
     let grbl = Post::parse(include_str!("../posts/grbl_straight_mm.pp")).unwrap();
     assert!(grbl.pauses_for_tools());
-    assert_eq!(grbl.with_pauses().blocks, grbl.blocks);
+    assert_eq!(grbl.with_pauses(Pause::default()).blocks, grbl.blocks);
     // one without any tool change gets one
     let plain = Post::parse(
         "POST_NAME = \"Plain (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
@@ -368,10 +368,61 @@ fn pausing_for_tools_swaps_a_tool_changer_for_a_stop_to_change_by_hand() {
     )
     .unwrap();
     assert!(!plain.changes_tools());
-    let paused = plain.with_pauses();
+    let paused = plain.with_pauses(Pause::default());
     assert!(paused.changes_tools() && paused.pauses_for_tools());
     let lines = render_with(&paused, job, two());
     assert_eq!(lines.iter().filter(|l| *l == "M0").count(), 1, "{lines:#?}");
+}
+
+#[test]
+fn a_pause_can_take_the_head_to_the_change_position_and_wait_as_long_as_asked() {
+    let job = cut_craft_core::document::Job::default();
+    let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+    let pause = Pause {
+        spin_up: Some(7.5),
+        park: Some([10.0, 250.0, 60.0]),
+    };
+    // Cut Craft's own pause, and a GRBL post's that already pauses, both get them
+    let atc = Post::parse(include_str!("../posts/fluidnc_atc_mm.pp")).unwrap();
+    let grbl = Post::parse(include_str!("../posts/grbl_arcs_mm.pp")).unwrap();
+    for post in [atc.with_pauses(pause), grbl.with_pauses(pause)] {
+        let lines = render_with(&post, job, two());
+        let stop = lines.iter().position(|l| l == "M0").expect("a stop");
+        let up = lines[..stop]
+            .iter()
+            .rposition(|l| l.starts_with("G0 Z60"))
+            .unwrap_or_else(|| panic!("lifts to the change height: {lines:#?}"));
+        let over = lines[..stop]
+            .iter()
+            .rposition(|l| l.starts_with("G0 X10") && l.contains("Y250"))
+            .unwrap_or_else(|| panic!("goes to the change position: {lines:#?}"));
+        assert!(up < over, "lifts before moving across: {lines:#?}");
+        assert!(
+            lines[stop..].iter().any(|l| l == "G4 P7.5"),
+            "waits 7.5 s: {lines:#?}"
+        );
+        assert!(!lines[stop..].iter().any(|l| l == "G4 P3"), "{lines:#?}");
+    }
+    // never lower than the safe Z, so the trip there clears the work
+    let low = Pause {
+        spin_up: None,
+        park: Some([0.0, 0.0, 0.5]),
+    };
+    let lines = render_with(&grbl.with_pauses(low), job, two());
+    assert!(
+        !lines.iter().any(|l| l.starts_with("G0 Z0.5")),
+        "{lines:#?}"
+    );
+    // no position, no own wait: the post's pause as it was
+    assert_eq!(grbl.with_pauses(Pause::default()).blocks, grbl.blocks);
+    // a rotary post would print Y as an angle: it stays where it lifted
+    let wrap = Post::parse(include_str!("../posts/grbl_wrap_x_a_mm.pp")).unwrap();
+    let paused = wrap.with_pauses(pause);
+    assert!(
+        !paused.blocks["TOOLCHANGE"]
+            .iter()
+            .any(|l| l.contains("PARK"))
+    );
 }
 
 #[test]

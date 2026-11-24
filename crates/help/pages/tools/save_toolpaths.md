@@ -48,6 +48,28 @@ every point it has. Its file is bigger, and it is exactly what the turning previ
 Files saved with **Indexed** or **Sides, then details** in versions 0.7.0 to 0.7.2 lost that
 match and can cut into the model: save them again with this version before cutting.
 
+## Jobs with more than one bit
+
+Under **Tool Changes**, Save Toolpaths offers three ways to save a job that uses several bits:
+
+- **Separate file for each tool**: the default on a machine without a tool changer. Each
+  bit gets its own file, numbered in cutting order. Run them in turn, changing the bit and
+  setting Z zero between files.
+- **Tool changer (ATC)**: one file, and the tool changer swaps the bits. You can only pick
+  it when the machine has a tool changer set up in Machine Configuration.
+- **One file, pause to change the tool**: one file that lifts the bit, stops the spindle and
+  pauses (`M0`) at each change. Change the bit, set Z zero, then resume. Standard GRBL cannot
+  jog while paused, so use separate files there.
+
+The toolpaths are cut in the order they are listed. A new file (or a pause) starts each time
+the bit changes, so toolpaths next to each other that use the same bit share it.
+
+What Save Toolpaths starts on, where a pause takes the head, how long the spindle gets to come
+up to speed, and **Group by bit** (cut each bit's toolpaths together) are set for each machine
+in **Machine ▸ Machine Configuration ▸ Bit Changes**. See
+[Bit changes you can make](help:check_bit_changes) for each setting and for what the checks
+remind you about.
+
 ## File names
 
 When the toolpaths go into more than one file, each file's name is the name you typed, then

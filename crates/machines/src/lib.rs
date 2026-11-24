@@ -14,7 +14,7 @@ pub mod webdav;
 pub use capabilities::{Capabilities, CapabilityDb, Family, Filter, Moves};
 pub use catalogue::{Controller, catalogue, makers};
 pub use library::{Entry, Library};
-pub use machine::{Firmware, Machine, Machines, NO_A_AXIS};
+pub use machine::{ChangePosition, Firmware, HandChanges, Machine, Machines, NO_A_AXIS};
 pub use manager::{
     FolderFor, Look, MachineManager, MachineOutcome, PostManager, PostOutcome, tool_changer,
 };
