@@ -85,3 +85,4 @@ generate, ai, artificial intelligence, gemini, google image
 sub-group, subgroup, sub group, nested group, nested groups, group inside a group, groups of groups, folder in a folder
 grip, drag handle, hamburger, hamburger icon, drag to reorder, cut order, toolpath order
 performance, slow computer, lag, laggy, stutter, stuttering, freezes, cpu, processor, cores, threads, priority, resources, responsive
+layout, window layout, workspace, interface, arrangement, ribbon, rail, classic

@@ -1236,11 +1236,13 @@ pub(in super::super) const TIPS: &[Tip] = &[
          name, and press Enter to open the first match.",
         "find_tool",
     ),
-    tool(
+    scene(
         Area::Program,
+        "tips/three_layouts.png",
+        "Cut Craft can arrange its window three ways: **Ribbon**, **Rail** or **Classic**. Press \
+         **Interface Layout** (under 2D View Control) to see each and pick one. Every tool is in \
+         every layout.",
         "interface_layout",
-        "**View ▸ Window Layout** offers Classic (Design and Toolpaths pages), Rail and \
-         Inspector, or Ribbon: pick whichever suits your screen.",
     ),
     icon(
         Area::Program,

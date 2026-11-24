@@ -103,19 +103,13 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
 }
 
 #[test]
-fn f11_designs_f12_machines_and_switch_layout_swaps() {
+fn f11_designs_and_f12_machines() {
     let mut h = Harness::new();
     assert_eq!(h.app.pages, Pages::design_layout());
     h.frame(vec![key(Key::F12)]);
     assert_eq!(h.app.pages, Pages::machining_layout());
     h.frame(vec![key(Key::F11)]);
     assert_eq!(h.app.pages, Pages::design_layout());
-    h.app.invoke(&h.ctx, "interface_layout");
-    assert_eq!(
-        h.app.pages,
-        Pages::machining_layout(),
-        "the Switch Layout button"
-    );
 }
 
 #[test]

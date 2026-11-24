@@ -1,10 +1,10 @@
 //! The window itself: menus, pages, side panels, tool buttons, options and layout.
 
 use super::*;
+use crate::options::WindowLayout;
 
 #[test]
 fn the_window_layout_menu_picks_and_ticks_a_layout() {
-    use crate::options::WindowLayout;
     let mut h = Harness::new();
     assert_eq!(h.app.layout_checked("layout_classic"), Some(true));
     assert_eq!(h.app.layout_checked("zoom_box"), None);
@@ -1403,4 +1403,54 @@ fn while_a_calculation_runs_the_status_bar_says_how_briskly_and_opens_performanc
         paces.iter().all(|p| h.text_at(p).is_none()),
         "gone once it ends"
     );
+}
+
+#[test]
+fn interface_layout_opens_the_layout_picker_and_use_this_layout_switches() {
+    let mut h = Harness::new();
+    assert_eq!(h.app.options.general.layout, WindowLayout::Classic);
+    h.app.invoke(&h.ctx, "interface_layout");
+    // a window is sized on its first frame and drawn on the next
+    h.frame(vec![]);
+    h.frame(vec![]);
+    for name in [
+        "Window Layout",
+        "Ribbon",
+        "Rail",
+        "Classic",
+        "Use This Layout",
+        "Cancel",
+    ] {
+        assert!(h.text_at(name).is_some(), "{name}: {:?}", h.texts());
+    }
+    click_button(&mut h, "Rail");
+    click_button(&mut h, "Use This Layout");
+    assert_eq!(h.app.options.general.layout, WindowLayout::Rail);
+    assert!(h.app.layout_question.is_none());
+}
+
+#[test]
+fn cancel_on_the_layout_picker_changes_nothing() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "interface_layout");
+    // a window is sized on its first frame and drawn on the next
+    h.frame(vec![]);
+    h.frame(vec![]);
+    click_button(&mut h, "Ribbon");
+    click_button(&mut h, "Cancel");
+    assert_eq!(h.app.options.general.layout, WindowLayout::Classic);
+    assert!(h.app.layout_question.is_none());
+    assert!(!h.app.options.layout_asked);
+}
+
+#[test]
+fn after_updating_the_question_offers_ribbon_and_keep_leaves_the_layout() {
+    let mut h = Harness::new();
+    h.app.ask_layout_after_update();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.app.layout_question.unwrap().chosen, WindowLayout::Ribbon);
+    click_button(&mut h, "Keep Classic");
+    assert_eq!(h.app.options.general.layout, WindowLayout::Classic);
+    assert!(h.app.options.layout_asked);
 }

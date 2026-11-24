@@ -17,21 +17,20 @@ hunting through every group for them.
 
 ## Showing your favourites
 
-Where they show depends on your window layout (**View ▸ Window Layout**):
+Where they show depends on your [window layout](help:interface_layout):
 
+- **Ribbon**: open the **Favourites** tab.
+- **Rail**: click the **★** button at the foot of the column of group icons.
 - **Classic**: right-click the **Design** or **Toolpaths** side tab and pick **Show
   Favourites**. That page then shows only your favourites. **Show All Tools** brings every
   tool back.
-- **Rail**: click the **★** button at the foot of the column of group icons.
-- **Ribbon**: open the **Favourites** tab.
 
 ## Changing them
 
 - To take a tool off, right-click it and pick **Remove from Favourites**.
-- In Classic and Ribbon, right-click a favourite and pick **Move Earlier** or **Move
+- In Ribbon and Classic, right-click a favourite and pick **Move Earlier** or **Move
   Later** to change their order.
 
 Favourites are kept between runs and are the same in every layout. In the Ribbon, a group
-holding a favourite is never folded away when the window is narrow. To move whole panels
-about, or save an arrangement of your own, use [Interface Layout](help:interface_layout);
-see [Changing settings](help:settings) for the three layouts side by side.
+holding a favourite is never folded away when the window is narrow. To pick another layout,
+use [Interface Layout](help:interface_layout).

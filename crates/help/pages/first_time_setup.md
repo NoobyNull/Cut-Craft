@@ -1,18 +1,18 @@
 ---
-reviewed: 2026-11-20
-see-also: getting_started, settings, setup_material, bug_reports, post_processor_management
+reviewed: 2026-11-24
+see-also: getting_started, interface_layout, settings, setup_material, bug_reports, post_processor_management
 icon: file/setup_material.png
 ---
 
 # First-Time Setup
 
-The first time Cut Craft starts, it asks four quick questions so your first job matches
+The first time Cut Craft starts, it asks five quick questions so your first job matches
 your machine. **Help ▸ Run First-Time Setup Again** asks them again: for a new machine,
 or if you set it up wrong the first time.
 
 ![First-Time Setup: your machine, millimetres or inches, your usual material, and crash reports](pictures/basics/first-time-setup.png)
 
-## The four questions
+## The five questions
 
 1. **Which machine do you have?** Pick its **Maker**, then its **Model**. Not in the list?
    Pick **Mine is not listed** and type its **Working area width (X)** and **length
@@ -27,12 +27,17 @@ or if you set it up wrong the first time.
    each time** or **No**. A crash report says what Cut Craft was doing when it closed;
    your user name, folders and file names are left out of it. See
    [Reporting a bug](help:bug_reports).
+5. **How should the window be laid out?** Click **Ribbon**, **Rail** or **Classic**. Each
+   shows a picture of it. Ribbon is picked to start with and suits most people. Change it
+   any time with [Interface Layout](help:interface_layout).
 
 Press **Start using Cut Craft**. It adds the machine and makes it the one you use, sets
 the job every new file starts with, and puts the starter bits in your units at the top of
-the Tool Database. The status bar says what was set up.
+the Tool Database, and arranges the window as picked. The status bar says what was set
+up.
 
-**Skip for now** starts with Cut Craft's usual 600 × 400 × 20 mm job and no machine.
+**Skip for now** starts with Cut Craft's usual 600 × 400 × 20 mm job, no machine and the
+Ribbon layout.
 
 ## Asking again
 

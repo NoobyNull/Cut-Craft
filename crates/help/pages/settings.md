@@ -95,28 +95,19 @@ moving the views: see [Moving the views](help:view_controls).
 
 ## How the window looks: three layouts, light or dark
 
-Cut Craft can arrange its tools three ways. Pick one in **Options ▸ General ▸ Window
-layout** (or **View ▸ Window Layout**) and press **Apply**. Every tool is in every layout;
-only where the buttons sit changes. **Ctrl+K** finds a tool by name whichever you use.
+Cut Craft can arrange its tools three ways: **Ribbon** (the one it starts with), **Rail** and
+**Classic**. Press [Interface Layout](help:interface_layout) under 2D View Control to see
+each and pick one, or use **View ▸ Window Layout** or **Options ▸ General ▸ Window layout**.
+Every tool is in every layout; only where the buttons sit changes. **Ctrl+K** finds a tool by
+name whichever you use.
 
 Each layout also comes light or dark: **Options ▸ Appearance ▸ Theme** picks **Light**,
 **Dark**, or **System** to follow your desktop. In the pictures below the light theme is on
 the left and the dark theme on the right.
 
-**Classic** (the one Cut Craft starts with): the Design page with its tool groups down the
-left, tabs down the side for Sheets, Layers, Components and Library, and the Toolpaths page
-on the right.
-
-![The Classic layout, light theme on the left and dark on the right](pictures/layouts/classic-light-and-dark.png)
-
-**Rail**: one icon for each tool group down the far left. Click one and that group's tools
-are listed by name beside it. The open tool's form sits in the inspector on the right.
-
-![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
-
-**Ribbon**: Design, Model and Toolpaths tabs across the top, each a row of tool groups, the
-sheets, layers and toolpath list on the left, and the open form on the right. A fourth tab,
-**Favourites**, holds the tools you keep at hand.
+**[Ribbon](help:layout_ribbon)**: Design, Model and Toolpaths tabs across the top, each a row
+of tool groups, the sheets, layers and toolpath list on the left, and the open form on the
+right. A **Favourites** tab holds the tools you keep at hand.
 
 When the window is too narrow for every group on a Ribbon tab, Cut Craft folds some groups
 into one button, such as **Align Objects ▾**. Click it to list that group's tools by name.
@@ -125,6 +116,18 @@ of your favourites (see **Favourites** below), so the tools you use stay in
 sight. Widen the window and the groups open again.
 
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
+
+**[Rail](help:layout_rail)**: one icon for each tool group down the far left. Click one and
+that group's tools are listed by name beside it. The open tool's form sits in the inspector
+on the right.
+
+![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
+
+**[Classic](help:layout_classic)**: the Design page with its tool groups down the left, tabs
+down the side for Sheets, Layers, Components and Library, and the Toolpaths page on the
+right.
+
+![The Classic layout, light theme on the left and dark on the right](pictures/layouts/classic-light-and-dark.png)
 
 In Rail and Ribbon, the panel that lists sheets, layers, components, the library and the
 toolpaths has a **Checks** tab too. It runs the same
@@ -144,11 +147,10 @@ Ribbon.
 ## Favourites: the tools you keep at hand
 
 Right-click any tool button and pick **Add to Favourites**, then show just your favourites:
-in Classic from the Design or Toolpaths side tab's right-click menu, in Rail with **★**,
-and in Ribbon on the **Favourites** tab. See [Favourites](help:favourites) for every step.
+in Ribbon on the **Favourites** tab, in Rail with **★**, and in Classic from the Design or
+Toolpaths side tab's right-click menu. See [Favourites](help:favourites) for every step.
 
-To move panels about within a layout, or save an arrangement of your own, use
-[Interface Layout](help:interface_layout).
+To pick another layout, use [Interface Layout](help:interface_layout).
 
 See also: [Web API](help:web_api), [3D View](help:view_3d), [Did You Know?](help:tips),
 [Interface Layout](help:interface_layout).
