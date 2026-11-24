@@ -109,12 +109,16 @@ impl Release {
 /// The newest of `releases` with a signed download ending `suffix`: the newest release for
 /// that kind of computer. Each computer's builds are attached to a release as they finish
 /// (Linux, Windows and macOS are built apart), so a release only counts for a computer once
-/// its own file and signature are there.
+/// its own file and signature are there. Of two the same version (one release on two
+/// repositories), the first listed.
 pub fn newest_for<'a>(releases: &'a [Release], suffix: &str) -> Option<&'a Release> {
     releases
         .iter()
         .filter(|r| r.has_signed(suffix))
-        .max_by(|a, b| a.version.cmp(&b.version))
+        .fold(None, |best: Option<&Release>, r| match best {
+            Some(b) if b.version >= r.version => Some(b),
+            _ => Some(r),
+        })
 }
 
 /// The version a tag names: `v0.4.3` or `0.4.3`.
