@@ -110,6 +110,25 @@ The **How-to tours** suite plays every tool's tour (`crates/app/src/help_tours.r
 headless, step by step, and fails when a step can no longer find the button, field or tab it
 rings, so the help pictures never point at something that moved.
 
+## Keep Power-Whittle up to date
+
+Cut Craft is moving to the [Power-Whittle](https://github.com/Power-Whittle) organisation. Until
+it has moved, every pull request keeps that side current too (the pull request template has the
+boxes to tick):
+
+- **The timeline.** Put the pull request, or the issue it fixes, on the
+  [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) with a start date
+  and a target date, and keep its status right. When it merges, mark it done. The board needs
+  write access; without it, ask a maintainer in the pull request to add or update it for you.
+- **The release mirror.** Power-Whittle/Cut-Craft is a read-only copy for releases. Once the
+  release workflow's mirror step lands (it pushes each release's tag and `main` there and adds
+  the same files), never commit to the mirror's `main` by hand: the next release could no longer
+  push `main` there. Change its description, rulesets or settings when a
+  change here makes them wrong (for example a new release step or a renamed branch).
+- **The add-ons and the org.** When a change touches where add-ons, updates or links point
+  (the updater's homes, add-on repositories, links shown in the app), check the matching
+  Power-Whittle repository and the organisation settings still agree.
+
 ## Pull request titles and versions
 
 Cut Craft's version is **0.MINOR.PATCH**, and it only changes when a release is cut, one step at
