@@ -233,6 +233,13 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
             ),
         ));
     }
+    // what it could not cut, as it said when it was made: easily missed once its form closed
+    for note in toolpath.made_notes() {
+        found.push(Finding::warning(
+            Check::MissedSpots,
+            format!("{name}: {note}"),
+        ));
+    }
     let has = |kind| toolpath.moves.iter().any(|m| m.kind == kind);
     if has(MoveKind::Cut)
         && let Some(drill) = drill_sideways(&toolpath.strategy, tool)

@@ -1022,3 +1022,21 @@ fn a_fine_stepover_is_not_air_cutting() {
     let found = check(&job(), &[&raster], &Limits::default());
     assert_eq!(found, vec![]);
 }
+
+#[test]
+fn what_a_toolpath_said_it_could_not_cut_when_made_is_said_again_before_cutting() {
+    let mut rough = slot("Rotary", 150.0, 20.0, 180.0, 3.0);
+    rough.params = serde_json::json!({
+        crate::toolpath::MADE_NOTES: ["Some of the model is left rough between 40 mm and 260 mm."]
+    });
+    let found: Vec<_> = check(&job(), &[&rough], &Limits::default())
+        .into_iter()
+        .filter(|f| f.check == Check::MissedSpots)
+        .collect();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].severity, Severity::Warning, "to read and tick");
+    assert_eq!(
+        found[0].message,
+        "Rotary: Some of the model is left rough between 40 mm and 260 mm."
+    );
+}

@@ -1217,6 +1217,7 @@ fn too_near(work: &Work, head: &Head, around: &Surroundings, length: f64) -> Vec
 /// along the part, and what would reach it.
 fn left_note(
     outcome: &Outcome,
+    tool: &Tool,
     around: &Surroundings,
     units: cut_craft_core::document::Units,
 ) -> Option<String> {
@@ -1235,10 +1236,22 @@ fn left_note(
         let list: Vec<String> = outcome.tilts.iter().map(|a| format!("{a:.0}°")).collect();
         format!(" (A locked at {} for the details)", list.join(", "))
     };
+    // the reach was taken, not given: the likeliest thing to put right
+    let (stickout, guessed) = cut_craft_core::collision::stickout(tool);
+    let guess = if guessed {
+        format!(
+            " The Tool Database doesn't say how far this bit sticks out of the collet, so {} \
+             was taken: set its stick-out there if it sticks out further.",
+            units.length(stickout, 0)
+        )
+    } else {
+        String::new()
+    };
     Some(format!(
         "The collet nut ({} across) and spindle can't get down to some of the model at any \
          angle tried{tilts}: it is left rough between {} and {} along the part. A bit that \
-         sticks out further, a slimmer holder, or the model sliced into parts would reach it.",
+         sticks out further, a slimmer holder, or the model sliced into parts would reach it.\
+         {guess}",
         units.length(around.holder.nut_diameter, 0),
         units.length(from, 1),
         units.length(to, 1),
@@ -1321,6 +1334,8 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
     };
     let plain = |passes: Vec<Pass>| passes.into_iter().map(|p| (p, false)).collect();
     let mut notes = vec![];
+    // what of the model it can't cut: kept with the toolpath, for the checks before cutting
+    let mut kept: Vec<String> = vec![];
     // the holder, chuck and tailstock, where the toolpath keeps clear of them
     let mut kept_clear: Option<Head> = None;
     // each pass, and whether the bit can come down to it at the rapid rate
@@ -1340,9 +1355,9 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
                     angles: typed,
                     head: Head::new(tool, &around, length, stock.swing()),
                 };
-                notes.extend(too_near(&work, &details.head, &around, length));
+                kept.extend(too_near(&work, &details.head, &around, length));
                 let (passes, outcome) = work.sides_then_details(&stock, &details)?;
-                notes.extend(left_note(&outcome, &around, doc.job.units));
+                kept.extend(left_note(&outcome, tool, &around, doc.job.units));
                 kept_clear = Some(details.head);
                 passes
             }
@@ -1391,6 +1406,10 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
     let mut toolpath =
         made_by::<RotaryMachiningToolpath>(p, p.name.clone(), tool.clone(), vec![], moves);
     toolpath.across = across;
+    if !kept.is_empty() {
+        toolpath.params[cut_craft_core::toolpath::MADE_NOTES] = kept.clone().into();
+    }
+    notes.extend(kept);
     Ok((toolpath, notes))
 }
 

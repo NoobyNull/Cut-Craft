@@ -838,3 +838,47 @@ fn how_near_the_tailstock_the_model_ends_is_said_the_same_wherever_x0_y0_is() {
         );
     }
 }
+
+#[test]
+fn what_is_left_rough_is_kept_with_the_toolpath_and_a_guessed_stick_out_is_said() {
+    // a bit whose stick-out the Tool Database doesn't know: 25 mm is taken, too short to
+    // get the nut down beside the box
+    let unknown = Tool {
+        stickout: 0.0,
+        flute_length: 0.0,
+        ..ball(6.0)
+    };
+    let around = Surroundings {
+        tailstock: 15.0,
+        ..Surroundings::default()
+    };
+    let (toolpath, notes) = detailed(unknown, around, 0, "");
+    let kept = toolpath.made_notes();
+    assert!(kept.iter().any(|n| n.contains("left rough")), "{kept:?}");
+    assert!(kept.iter().any(|n| n.contains("tailstock")), "{kept:?}");
+    assert!(
+        kept.iter().all(|n| notes.contains(n)),
+        "said in the form too"
+    );
+    assert!(
+        kept.iter().any(|n| n.contains(
+            "The Tool Database doesn't say how far this bit sticks out of the collet, so 25 mm \
+             was taken"
+        )),
+        "{kept:?}"
+    );
+    // a stick-out given is not called a guess
+    let (toolpath, _) = detailed(
+        Tool {
+            stickout: 8.0,
+            flute_length: 6.0,
+            ..ball(6.0)
+        },
+        Surroundings::default(),
+        0,
+        "",
+    );
+    let kept = toolpath.made_notes();
+    assert!(kept.iter().any(|n| n.contains("left rough")), "{kept:?}");
+    assert!(!kept.iter().any(|n| n.contains("was taken")), "{kept:?}");
+}
