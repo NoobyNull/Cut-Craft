@@ -122,25 +122,13 @@ fn named_as_its_tool(item: &MenuItem) -> bool {
 /// A menu item's name in the language in use: its tool's name when it is named as that
 /// tool, else its own words. A recent file or a gadget shows its own name.
 pub fn menu_item_name(item: &MenuItem) -> String {
-    if item.action.starts_with("open_recent:") {
+    if item.action.starts_with("open_recent:") || item.action.starts_with("gadget_") {
         return item.name.clone();
     }
     if named_as_its_tool(item) {
         return tr(&tool_key(&item.action));
     }
     tr_or(&menu_item_key(&item.name), &item.name)
-}
-
-/// The English names that need a key of their own in `menu-items.ftl`: every named item of
-/// `items` and their submenus, but for those named as their tool.
-#[cfg(test)]
-pub fn menu_item_names(items: &[MenuItem], out: &mut Vec<String>) {
-    for item in items {
-        if !item.name.is_empty() && !named_as_its_tool(item) && !out.contains(&item.name) {
-            out.push(item.name.clone());
-        }
-        menu_item_names(&item.children, out);
-    }
 }
 
 #[cfg(test)]

@@ -337,7 +337,7 @@ impl CutCraftApp {
             ));
         }
         self.view_tool = None;
-        "Select".clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label("select");
     }
 
     /// What open forms mark in the 2D view: Draw Text's arc handles, Sketch Carving's areas,

@@ -696,38 +696,38 @@ impl CutCraftApp {
 
     /// Zoom and pan: the 2D view controls.
     pub(super) fn view_action(&mut self, ctx: &egui::Context, id: &str) {
-        let label = match id {
+        let tool = match id {
             "pan" => {
                 self.view_tool = Some(ViewTool::Pan);
-                "Pan"
+                "pan"
             }
             "measure_inspect" => {
                 self.view_tool = Some(ViewTool::Measure);
-                "Measure"
+                "measure_inspect"
             }
             "transform" => {
                 self.rotating = false;
                 if self.view_tool == Some(ViewTool::Transform) {
                     self.view_tool = None;
-                    "Select"
+                    "select"
                 } else {
                     self.view_tool = Some(ViewTool::Transform);
-                    "Transform"
+                    "transform"
                 }
             }
             "node_edit" => {
                 self.node_mirror = [false, false];
                 if self.view_tool == Some(ViewTool::NodeEdit) {
                     self.view_tool = None;
-                    "Select"
+                    "select"
                 } else {
                     self.view_tool = Some(ViewTool::NodeEdit);
-                    "Node Edit"
+                    "node_edit"
                 }
             }
             "zoom_box" => {
                 self.view_tool = Some(ViewTool::ZoomBox);
-                "Zoom Box"
+                "zoom_box"
             }
             "zoom_selected" => {
                 let margin = ctx.global_style().spacing.interact_size.y;
@@ -745,7 +745,7 @@ impl CutCraftApp {
                 return;
             }
         };
-        label.clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label(tool);
     }
 }
 

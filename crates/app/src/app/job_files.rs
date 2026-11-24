@@ -695,7 +695,7 @@ impl CutCraftApp {
         self.reset_job();
         self.view = View::TwoD;
         self.screen = Screen::Job;
-        "Select".clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label("select");
     }
 
     /// What Cut Craft shows once it has started: the file named on the command line, if
@@ -767,7 +767,7 @@ impl CutCraftApp {
                 self.picked_constraint = None;
                 self.screen = Screen::Job;
                 self.status.set_message("New job created");
-                "Select".clone_into(&mut self.status.current_tool);
+                self.status.current_tool = self.tool_label("select");
                 if let Some(path) = self.import_after_setup.take() {
                     self.import_file(&path);
                 }
@@ -782,7 +782,7 @@ impl CutCraftApp {
     pub(super) fn job_setup_cancel(&mut self) {
         self.import_after_setup = None;
         self.reset_job();
-        "Select".clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label("select");
         self.screen = Screen::Start;
     }
 

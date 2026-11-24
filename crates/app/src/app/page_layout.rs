@@ -589,8 +589,9 @@ impl CutCraftApp {
     pub(super) fn toolpath_tabs(&mut self, ui: &mut egui::Ui) {
         let shown = self.pages.shown(Page::Toolpaths) != Shown::Hidden;
         let only = self.options.favourites.of(Page::Toolpaths).1;
-        let label = if only { "Toolpaths ★" } else { "Toolpaths" };
-        let tabs = side_tabs(ui, &[label], shown.then_some(0));
+        let name = page_tab_name("Toolpaths");
+        let label = if only { format!("{name} ★") } else { name };
+        let tabs = side_tabs(ui, &[label.as_str()], shown.then_some(0));
         let (hovered, clicked) = (
             tabs.iter().position(egui::Response::hovered),
             tabs.iter().position(egui::Response::clicked),

@@ -320,7 +320,8 @@ impl CutCraftApp {
             if self.pages.shown(behind.page) == Shown::Hidden {
                 self.pages.open(behind.page);
             }
-            behind.label.clone_into(&mut self.status.current_tool);
+            self.status.current_tool =
+                crate::tool_names::form_name(&self.registry, behind.id, behind.label);
             self.status
                 .set_message(&format!("Back to {}, as you left it", behind.label));
             self.form = Some(behind);

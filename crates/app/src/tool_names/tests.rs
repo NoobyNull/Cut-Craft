@@ -98,6 +98,24 @@ fn every_menu_item() -> Vec<String> {
     names
 }
 
+/// The English names that need a key of their own in `menu-items.ftl`: every named item of
+/// `items` and their submenus, but for those named as the tool they run. That is worked out
+/// from the code rather than from `tools.ftl` as built, so `write_english_names` agrees with
+/// itself in one run.
+fn menu_item_names(items: &[gui::MenuItem], out: &mut Vec<String>) {
+    let registry = crate::commands::registry();
+    let tools = every_tool();
+    let named_as_tool = |item: &gui::MenuItem| {
+        tools.contains(&item.action.as_str()) && english_name(&registry, &item.action) == item.name
+    };
+    for item in items {
+        if !item.name.is_empty() && !named_as_tool(item) && !out.contains(&item.name) {
+            out.push(item.name.clone());
+        }
+        menu_item_names(&item.children, out);
+    }
+}
+
 /// What is wrong with `key`'s English words, which should say `want`.
 fn mismatch(key: &str, want: &str) -> Option<String> {
     match english().words(key, None) {
@@ -213,9 +231,11 @@ fn a_menu_item_named_as_its_tool_shares_the_tools_words() {
     let item = gui::MenuItem::with_action("Draw Circle", "draw_circle");
     assert!(named_as_its_tool(&item));
     assert_eq!(menu_item_name(&item), "Draw Circle");
-    // a recent file is never looked up
+    // a recent file or a gadget is never looked up
     let recent = gui::MenuItem::with_action("Save As", "open_recent:0");
     assert_eq!(menu_item_name(&recent), "Save As");
+    let gadget = gui::MenuItem::with_action("Open", "gadget_open");
+    assert_eq!(menu_item_name(&gadget), "Open");
 }
 
 #[test]
