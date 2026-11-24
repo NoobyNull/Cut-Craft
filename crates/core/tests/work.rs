@@ -345,3 +345,20 @@ fn calculations_start_their_threads_in_one_place() {
          by_rows, each), or list the file in OWN_THREADS with why it may not: {found:?}"
     );
 }
+
+#[test]
+fn a_thread_only_waiting_is_not_counted_as_running() {
+    let (during, after) = work::background("a kept worker", || {
+        let mine = work::running();
+        let during = work::waiting(work::running);
+        (mine - during, work::running() + 1 - mine)
+    })
+    .unwrap()
+    .join()
+    .unwrap();
+    assert_eq!(
+        (during, after),
+        (1, 1),
+        "uncounted while waiting, counted again after"
+    );
+}

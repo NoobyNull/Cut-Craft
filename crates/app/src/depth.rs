@@ -200,7 +200,9 @@ impl Estimating {
         let photo = bitmap.clone();
         let (installed, bitmap, ctx) = (installed.clone(), bitmap.clone(), ctx.clone());
         cut_craft_core::work::background("depth estimate", move || {
-            let _ = send.send(run(&installed, &png, &bitmap));
+            // the add-on's own program does the calculating; this thread only waits on it
+            let made = cut_craft_core::work::waiting(|| run(&installed, &png, &bitmap));
+            let _ = send.send(made);
             ctx.request_repaint();
         })
         .map_err(|e| e.to_string())?;

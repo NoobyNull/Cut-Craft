@@ -156,6 +156,14 @@ impl Drop for Waiting {
     }
 }
 
+/// `wait` run by a calculation thread that is only waiting (for work to come, or on another
+/// program that does the calculating), not counted as working meanwhile: a thread kept for
+/// work that has none is not a calculation running.
+pub fn waiting<T>(wait: impl FnOnce() -> T) -> T {
+    let _waiting = Waiting::start();
+    wait()
+}
+
 /// Starts one of a calculation's threads in `scope`: lowered while the limit is on, and
 /// counted as running until it ends. How many to start is [`cores`]'s to say.
 pub fn spawn<'scope, T: Send + 'scope>(

@@ -356,7 +356,11 @@ impl Generating {
         let (send, answer) = mpsc::channel();
         let (shared, ctx) = (stage.clone(), ctx.clone());
         cut_craft_core::work::background("generate border", move || {
-            let made = make(&job, &run_program, &|s| {
+            // the add-on's own program does the calculating; this thread only waits on it
+            let waited = |program: &Path, args: &[OsString], key: Option<&str>| {
+                cut_craft_core::work::waiting(|| run_program(program, args, key))
+            };
+            let made = make(&job, &waited, &|s| {
                 shared.store(s as u8, Ordering::Relaxed);
                 ctx.request_repaint();
             });

@@ -1371,6 +1371,9 @@ fn while_a_calculation_runs_the_status_bar_says_how_briskly_and_opens_performanc
         }
     })
     .unwrap();
+    while cut_craft_core::work::running() == 0 {
+        std::thread::yield_now();
+    }
     h.frame(vec![]);
     std::thread::sleep(cut_craft_core::work::Gauge::EVERY + std::time::Duration::from_millis(50));
     h.frame(vec![]);

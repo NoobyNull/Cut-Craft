@@ -679,7 +679,8 @@ fn work(jobs: &Jobs, send: &Sender<Made>, cache: Option<&Path>, size: u32) {
             if let Some(job) = waiting.jobs.pop() {
                 break job;
             }
-            waiting = match jobs.ready.wait(waiting) {
+            // waiting for a preview to make is not calculating
+            waiting = match cut_craft_core::work::waiting(|| jobs.ready.wait(waiting)) {
                 Ok(w) => w,
                 Err(_) => return,
             };
