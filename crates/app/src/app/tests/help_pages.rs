@@ -899,33 +899,6 @@ fn orientate_3d_models_rings_turn_the_model_about_their_axis_and_the_sphere_abou
 }
 
 #[test]
-fn an_unsigned_gadget_warns_once_before_it_runs() {
-    let mut h = Harness::new();
-    h.app.unsigned_gadgets = [("gadget_hole_pattern".to_owned(), "Hole Pattern".to_owned())].into();
-    // the user says no: nothing opens, and they are asked again next time
-    h.app.unsigned_gadget_ok = |_| false;
-    h.app.invoke(&h.ctx, "gadget_hole_pattern");
-    assert!(h.app.form.is_none(), "cancelled: no form");
-    // the user says yes: the form opens, and the gadget is not asked about again this session
-    h.app.unsigned_gadget_ok = |label| label == "Hole Pattern";
-    h.app.invoke(&h.ctx, "gadget_hole_pattern");
-    assert!(h.app.form.is_some());
-    h.app.form = None;
-    h.app.unsigned_gadget_ok = |_| panic!("asked twice");
-    h.app.invoke(&h.ctx, "gadget_hole_pattern");
-    assert!(h.app.form.is_some());
-}
-
-#[test]
-fn the_unsigned_warning_says_who_is_responsible() {
-    let text = super::actions::unsigned_warning("Star Burst");
-    assert!(text.contains("Star Burst"));
-    assert!(text.contains("not responsible"));
-    assert!(text.contains("Undo"));
-    assert!(text.contains("not an official Cut Craft gadget"), "{text}");
-}
-
-#[test]
 fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_off() {
     use crate::options::EarlierGcode;
     let mut h = Harness::new();

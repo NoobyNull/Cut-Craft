@@ -2891,6 +2891,7 @@ version = "0.7.5"
 dependencies = [
  "base64 0.21.7",
  "cut-craft-core",
+ "cut-craft-priority",
  "fontdb",
  "glam",
  "i_overlay",
@@ -2952,6 +2953,14 @@ dependencies = [
  "chrono",
  "cut-craft-core",
  "serde_json",
+]
+
+[[package]]
+name = "cut-craft-priority"
+version = "0.7.5"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: ungroup_components, component_properties, group
 ---
 

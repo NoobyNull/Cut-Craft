@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::polygon;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct SubtractVectors;
 
@@ -17,6 +17,7 @@ impl Command for SubtractVectors {
             group: "Edit Objects",
             icon: "drawing/weld_and_offset/subtract_vectors.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

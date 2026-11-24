@@ -1,7 +1,7 @@
 //! Add Layer: a new layer on top, made current so new vectors go on it.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_named};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,7 @@ impl Command for AddLayer {
             group: "Layers",
             icon: "",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

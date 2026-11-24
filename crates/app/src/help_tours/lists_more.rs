@@ -570,6 +570,31 @@ pub(super) const TOURS: &[Tour] = &[
         ],
     },
     Tour {
+        tool: "show_toolpath_group",
+        steps: &[
+            Step {
+                caption: "The tick beside a group's name shows or hides every toolpath in it, \
+                          its groups' toolpaths too.",
+                setup: |app, ctx| {
+                    two_toolpaths(app, ctx);
+                    let toolpaths = toolpath_ids(app);
+                    let params = serde_json::json!({ "toolpaths": toolpaths, "group": "Group 1" });
+                    run(app, "group_toolpaths", params);
+                },
+                mark: Mark::At("toolpath_group_tick:Group 1"),
+            },
+            Step {
+                caption: "Untick it to hide them all from the preview and from saving visible \
+                          toolpaths. A dash in the tick means only some are hidden.",
+                setup: |app, _| {
+                    let params = serde_json::json!({ "group": "Group 1", "visible": false });
+                    run(app, "show_toolpath_group", params);
+                },
+                mark: Mark::At("toolpath_group_tick:Group 1"),
+            },
+        ],
+    },
+    Tour {
         tool: "smooth_point",
         steps: &[
             Step {
@@ -867,7 +892,8 @@ pub(super) const TOURS: &[Tour] = &[
             },
             Step {
                 caption: "Press **Ungroup** above the list (or right-click the group ▸ \
-                          **Ungroup**). Its toolpaths stay, out of the group.",
+                          **Ungroup**). Its toolpaths stay, moving up one level: out of the \
+                          group, or into the group around it.",
                 setup: |_, _| {},
                 mark: Mark::At("button:toolpaths_ungroup"),
             },

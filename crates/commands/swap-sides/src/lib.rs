@@ -2,7 +2,7 @@
 //! its own vectors, components, pictures and toolpaths.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct SwapSides;
 
@@ -16,6 +16,7 @@ impl Command for SwapSides {
             group: "Edit",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

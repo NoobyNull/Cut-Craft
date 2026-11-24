@@ -10,7 +10,9 @@ use cut_craft_core::font::{self, Align};
 use cut_craft_core::geometry::{Path, Point, Segment, polyline_distance};
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
+use cut_craft_core::{
+    Change, Command, CommandError, Drag, Form, Interactive, Meta, ensure_positive,
+};
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
@@ -319,6 +321,7 @@ impl Command for Dimensions {
             group: "Create Vectors",
             icon: "drawing/create_vectors/dimensions.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

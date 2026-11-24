@@ -41,13 +41,6 @@ pub(super) const CARVE_AREA_ALPHA: f32 = 0.35;
 /// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
 pub(super) const RING_SHARE: f64 = 0.6;
 
-/// Forms whose model is made as soon as they open and then follows their settings.
-pub(super) const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
-
-/// Forms that make many pieces at once and go on remaking them as their settings change
-/// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
-pub(super) const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
-
 pub(super) const BUILT_INS: [&str; 106] = [
     "setup_material",
     "import_into_shape",

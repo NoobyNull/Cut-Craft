@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Segment};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +58,7 @@ impl Command for VectorValidator {
             group: "Edit Objects",
             icon: "drawing/create_vectors/vector_validator.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

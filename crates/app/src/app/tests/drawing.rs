@@ -591,7 +591,8 @@ fn a_drawing_tools_form_creates_until_its_shape_is_drawn() {
     assert!(h.text_at("Apply").is_none());
     assert!(h.text_at("Close").is_some() && h.text_at("Cancel").is_some());
     assert!(
-        h.text_at(&commit::live_note("draw_circle", true)).is_some(),
+        h.text_at(&commit::live_note(cut_craft_core::Form::Apply, true))
+            .is_some(),
         "says why there is no button"
     );
     let new = h.text_at("New Shape").expect("a way to type another");

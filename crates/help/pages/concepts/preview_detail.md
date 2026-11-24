@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-22
-see-also: toolpaths, view_3d, settings
+reviewed: 2026-11-24
+see-also: toolpaths, view_3d, settings, performance
 ---
 
 # Preview detail
@@ -69,7 +69,7 @@ Craft.
 ## Now and the default
 
 - The slider on the Preview tab is the detail **now**. It doesn't change the default.
-- **Edit ▸ Options ▸ 3D View ▸ Preview detail** holds the **default**: what the slider
+- **Edit ▸ Options ▸ Performance ▸ Preview detail** holds the **default**: what the slider
   starts at when Cut Craft opens. Changing it waits for **Apply**, as all
   [settings](help:settings) do.
 - **Reset Preview** puts the slider back to the default.

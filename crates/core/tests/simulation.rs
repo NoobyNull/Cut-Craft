@@ -407,33 +407,6 @@ fn hatch_lines_cross_the_regions_leaving_holes_out() {
     );
 }
 
-#[test]
-fn bands_of_rows_and_shares_of_items_cover_everything_once_in_order() {
-    use cut_craft_core::simulation::{by_rows, each};
-    // a grid 7 wide and big enough to be split across the cores
-    let mut cells = vec![0_usize; 7 * 900];
-    by_rows(&mut cells, 7, |first, band| {
-        for (i, cell) in band.iter_mut().enumerate() {
-            *cell = (first * 7 + i) * 3;
-        }
-    });
-    assert!(cells.iter().enumerate().all(|(i, &c)| c == i * 3));
-    let items: Vec<usize> = (0..1000).collect();
-    assert_eq!(
-        each(&items, |&i| i * 2),
-        items.iter().map(|i| i * 2).collect::<Vec<_>>()
-    );
-    // a small grid, one band on this thread, and nothing at all
-    let mut few = vec![0_usize; 10];
-    by_rows(&mut few, 5, |first, band| {
-        for (i, cell) in band.iter_mut().enumerate() {
-            *cell = first * 5 + i;
-        }
-    });
-    assert_eq!(few, (0..10).collect::<Vec<_>>());
-    assert_eq!(each(&Vec::<usize>::new(), |&i| i), Vec::<usize>::new());
-}
-
 /// Where two height grids first differ, bit for bit.
 fn first_difference(a: &[f64], b: &[f64]) -> Option<usize> {
     assert_eq!(a.len(), b.len());
@@ -656,18 +629,6 @@ fn a_form_tool_cuts_the_shape_of_its_vector() {
         &[Point::new(1.0, 1.0), Point::new(1.0, 5.0)],
         false
     )));
-}
-
-#[test]
-fn heavy_work_uses_no_more_cores_than_the_options_allow() {
-    use cut_craft_core::simulation::{cores, set_core_limit};
-    let all = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
-    set_core_limit(1);
-    assert_eq!(cores(), 1);
-    set_core_limit(all + 10);
-    assert_eq!(cores(), all, "never more than the computer has");
-    set_core_limit(0);
-    assert_eq!(cores(), all, "0 is every core");
 }
 
 /// A zigzag of `count` points over the material, dipping a little deeper each time.

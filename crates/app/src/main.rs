@@ -36,6 +36,7 @@ mod shortcut;
 mod spacemouse;
 mod startup;
 mod toolpath_order;
+mod trust;
 mod update;
 mod view2d;
 mod view3d;

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: select_all_vectors, move_to_layer, set_current_layer
 ---
 
