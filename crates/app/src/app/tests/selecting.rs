@@ -1305,6 +1305,7 @@ fn a_ribbon_tab_fits_in_two_rows_of_groups_and_each_name_lists_and_pins_every_to
         let (groups, _) = h.app.ribbon_groups();
         let rows: Vec<f32> = groups
             .iter()
+            .filter(|g| g.tools.iter().any(|id| h.app.offered(id)))
             .map(|g| {
                 h.text_at(&format!("{} ▾", g.name))
                     .unwrap_or_else(|| panic!("{} not shown", g.name))
@@ -1381,6 +1382,10 @@ fn at_1920_wide_every_ribbon_tab_is_one_row_of_groups() {
         h.frame(vec![]);
         h.frame(vec![]);
         let (groups, _) = h.app.ribbon_groups();
+        let groups: Vec<_> = groups
+            .iter()
+            .filter(|g| g.tools.iter().any(|id| h.app.offered(id)))
+            .collect();
         let rows: Vec<f32> = groups
             .iter()
             .filter_map(|g| h.text_at(&format!("{} ▾", g.name)).map(|p| p.y))
@@ -1391,4 +1396,29 @@ fn at_1920_wide_every_ribbon_tab_is_one_row_of_groups() {
             "tab {tab}: {rows:?}"
         );
     }
+}
+
+#[test]
+fn a_ribbon_group_with_no_tool_for_this_machine_is_left_off() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    h.window = vec2(1920.0, 1080.0);
+    h.app.ribbon_tab = 2;
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().controller = "grblHAL".into();
+    let laser = |h: &mut Harness, fitted: bool| {
+        h.app.machines.active_mut().unwrap().laser = fitted;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        h.text_at("Laser ▾").is_some()
+    };
+    assert!(
+        laser(&mut h, true),
+        "a machine with a laser has the Laser group"
+    );
+    assert!(
+        !laser(&mut h, false),
+        "one without has no empty Laser group"
+    );
+    assert!(h.text_at("Holes ▾").is_some(), "the other groups stay");
 }

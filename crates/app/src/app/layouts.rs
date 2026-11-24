@@ -437,7 +437,8 @@ impl CutCraftApp {
     /// A Ribbon tab's groups, as many to a row as fit and the rest on further rows, in order
     /// and each group whole. Each group is its icons on a tight grid two high, as wide as
     /// its name under them; it shows as many of its tools as fill that width (two columns
-    /// at least) until pinned or unpinned by hand.
+    /// at least) until pinned or unpinned by hand. A group with none of its tools on this
+    /// machine is left off.
     fn ribbon_rows(&mut self, ui: &mut egui::Ui, groups: &[gui::ToolGroup], page: Page, edge: f32) {
         let spacing = ui.spacing().clone();
         let font = egui::TextStyle::Body.resolve(ui.style());
@@ -446,6 +447,12 @@ impl CutCraftApp {
         let step = cell.x + spacing.item_spacing.x;
         // the line after each group, and the room either side of it
         let gap = 2.0 * spacing.item_spacing.x + 1.0;
+        // a group with no tool this machine has (Laser without a laser) is left off
+        let groups: Vec<gui::ToolGroup> = groups
+            .iter()
+            .copied()
+            .filter(|group| group.tools.iter().any(|id| self.offered(id)))
+            .collect();
         let plans: Vec<(Vec<&'static str>, f32)> = groups
             .iter()
             .map(|group| {
