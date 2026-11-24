@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::params::Items;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +50,7 @@ impl Command for DeleteItems {
             group: "Edit",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

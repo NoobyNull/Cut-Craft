@@ -7,7 +7,7 @@ use cut_craft_core::document::{Document, Units};
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, ToolDatabase, ToolShape, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -458,6 +458,7 @@ impl Command for ThreadMillingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/circular_pocket.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

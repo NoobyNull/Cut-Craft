@@ -37,7 +37,7 @@ its front page.
 ### Not published, and why
 
 - **Debian, Ubuntu and Fedora's own archives, Copr, Launchpad PPAs:** free-software licences
-  only; PolyForm Noncommercial is not one.
+  only; Cut Craft's licence (PolyForm Strict with an extra permission) is not one.
 - **Cloudsmith's free plan:** open-source projects only. **packagecloud:** from US$89 a month.
 - **Flathub:** builds everything from source on its own servers, and its rules for
   AI-assisted code and submissions would need a careful look first. The `.flatpak` on each

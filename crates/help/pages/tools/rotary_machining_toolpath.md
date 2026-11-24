@@ -38,7 +38,7 @@ nick the side of a narrow ridge. This one keeps the bit clear of all of it.
 
    ![Step 5](pictures/rotary_machining_toolpath/step-5.png)
 
-6. Press **Calculate** to make the toolpath: a ring round the part at each step along it.
+6. Press **Calculate**, the button this form shows, to make the toolpath: a ring round the part at each step along it.
 
    ![Step 6](pictures/rotary_machining_toolpath/step-6.png)
 

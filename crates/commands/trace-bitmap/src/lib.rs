@@ -11,7 +11,7 @@ use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::trace::{self, Fit, Grid};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -228,6 +228,7 @@ impl Command for TraceBitmap {
             group: "Create Vectors",
             icon: "drawing/create_vectors/trace_bitmap.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

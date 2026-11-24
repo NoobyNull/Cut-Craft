@@ -13,7 +13,7 @@ use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{
     Drop, Move, MoveKind, Tool, cut_points, follow, made_by, raster_lines,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use glam::DVec3;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -163,6 +163,7 @@ impl Command for RoughingToolpath3d {
             group: "3D Toolpaths",
             icon: "toolpaths/3d_roughing_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

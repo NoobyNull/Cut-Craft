@@ -6,7 +6,7 @@ use cut_craft_core::document::{
 };
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DAffine2;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -329,6 +329,7 @@ impl Command for JobSetup {
             group: "File Operations",
             icon: "file/job_setup.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

@@ -13,7 +13,7 @@ use cut_craft_core::simulation::rest_areas;
 use cut_craft_core::toolpath::{
     Drop, Tool, ToolDatabase, ToolShape, Toolpath, cut_points, follow_linked, made_by,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -108,6 +108,7 @@ impl Command for PencilToolpath3d {
             group: "3D Toolpaths",
             icon: "toolpaths/3d_pencil_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

@@ -241,7 +241,8 @@ say "not implemented yet".
   the model off the plane, up to the material's top. Every dragged value moves the model as
   it is dragged. [inf: Aspire's slider
   beside the picture is not drawn; Overcut Distance is not offered.]
-- Help: About, Keyboard Shortcuts, Third Party Licenses, Check for Updates (crate
+- Help: About, Keyboard Shortcuts, Credits (searchable, from the committed `credits` folder:
+  `scripts/credits` remakes it from Cargo.lock with cargo-about, CI checks it), Check for Updates (crate
   `crates/updater`). Asks GitHub's releases (never a mirror) for a newer stable version,
   at every startup (Options ▸ Updates turns that off) and from the menu. "A new
   version (X) is available. Download, install and relaunch?" Install Now downloads the release's file for this install (Windows .zip, Linux .tar.gz or

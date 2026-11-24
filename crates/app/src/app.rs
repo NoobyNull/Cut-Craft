@@ -35,9 +35,10 @@ use tool_sections::{
     put_listed, rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
 };
 mod dialogs;
+pub(crate) use dialogs::message_dialog;
 use dialogs::{
     DIALOG_FOLDER, DIALOG_PARENT, brush_dialog, file_dialog, filtered_dialog, form_settings_dialog,
-    job_dialog, message_dialog, on_the_desktop, saving_path, template_dialog, texture_dialog,
+    job_dialog, on_the_desktop, saving_path, template_dialog, texture_dialog,
     toolpath_template_dialog,
 };
 mod readouts;
@@ -503,6 +504,9 @@ struct OpenForm {
     id: &'static str,
     label: &'static str,
     icon: &'static str,
+    /// How it behaves, as its command says: what its button says, and whether what it made
+    /// follows it.
+    kind: cut_craft_core::Form,
     fields: Vec<Field>,
     params: Value,
     error: Option<String>,
@@ -543,7 +547,7 @@ struct OpenForm {
     beyond: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
-    /// A form that remakes what it made ([`REMAKE_FORMS`]): the history's revision and the selection
+    /// A form that remakes what it made ([`Form::Remake`](cut_craft_core::Form::Remake)): the history's revision and the selection
     /// just after its pieces were made, and the settings it was made with. While nothing else
     /// has been done or picked since, a change of settings takes them back and makes them
     /// again.
@@ -774,12 +778,11 @@ struct CutCraftApp {
     installed_addons: Vec<(String, Option<&'static str>, bool)>,
     /// Rail: the Gadgets list is open.
     rail_gadgets: bool,
-    /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
-    unsigned_gadgets: std::collections::HashMap<String, String>,
-    /// The unsigned gadgets the user has said yes to running this session.
-    unsigned_gadgets_allowed: std::collections::HashSet<String>,
-    /// Asks whether to run the unsigned gadget with this label (a dialog; tests answer).
-    unsigned_gadget_ok: fn(&str) -> bool,
+    /// Gadgets from the My Gadgets folder or unsigned add-ons, not from Cut Craft's own
+    /// signed builds, by command id.
+    unsigned_gadgets: std::collections::HashMap<String, crate::gadgets::Unsigned>,
+    /// The one check before unsigned code runs: gadgets and add-on programs alike.
+    trust: crate::trust::Trust,
     /// A SpaceMouse's moves, once the app is running (not in tests or screenshots).
     space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
@@ -829,6 +832,8 @@ struct CutCraftApp {
     tip: Option<usize>,
     /// The Did You Know? window's rendered tips.
     tips_cache: egui_commonmark::CommonMarkCache,
+    /// Help ▸ Credits: its search and rendered licence texts.
+    credits: crate::credits::Window,
     /// Sketch Carving's green areas, with the form settings, revision and selection they
     /// were found for.
     sketch_areas: Option<SketchAreas>,
