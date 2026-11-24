@@ -67,7 +67,7 @@ back, it stays ticked; a new or changed warning needs a new tick.
 - [Feeds the machine can reach](help:check_machine_speeds)
 - [Spindle speeds the spindle can turn](help:check_spindle_range)
 - [Bits loaded in the tool changer](help:check_tool_changer)
-- [Each bit its own tool number](help:check_tool_numbers)
+- [Each bit its own number](help:check_tool_numbers)
 - [Bit changes you can make](help:check_bit_changes)
 - [Keeps out of keep-out zones](help:check_keep_out)
 - [Rotary set up](help:check_rotary_setup)

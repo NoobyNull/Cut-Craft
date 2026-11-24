@@ -1,4 +1,4 @@
-//! The tool drawn from its own sizes in the Tool Database: its cutting edge, flutes, neck
+//! The tool drawn from its own sizes in the Bit Library: its cutting edge, flutes, neck
 //! and shank to scale, each size typed in a box on its own dimension line. Rather than a
 //! fixed picture with lettered sizes (D, A, R), Cut Craft draws the tool so a novice sees
 //! what each number is, and what is not set yet.

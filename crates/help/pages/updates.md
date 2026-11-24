@@ -69,7 +69,7 @@ Keeping your work without asking is done by the version you are updating **from*
 starts with updates made from version 0.7.6 or later. Updating from an older version still
 asks whether to save first.
 
-Nothing is downloaded until you press **Install Now**, and your jobs, settings, tools and
+Nothing is downloaded until you press **Install Now**, and your jobs, settings, bits and
 machines are never touched by an update.
 
 ## If something goes wrong

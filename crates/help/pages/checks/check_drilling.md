@@ -9,7 +9,7 @@ see-also: checks_before_cutting, check_plunges
 
 ## What it looks for
 
-Two things. A bit marked **Drill only** in the Tool Database used by any toolpath but
+Two things. A bit marked **Drill only** in the Bit Library used by any toolpath but
 Drilling. And for a Drilling toolpath, holes drawn bigger or smaller than the drill: a
 drill only goes straight down, so every hole comes out the drill's size.
 

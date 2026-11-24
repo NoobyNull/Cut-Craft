@@ -156,12 +156,12 @@ fn a_tool_that_does_not_fit_is_named_with_a_way_out() {
     let tool = Tool::default();
     assert_eq!(
         cut_craft_core::tool_does_not_fit(&tool, Some("cut Outside instead")).to_string(),
-        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, or \
+        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller bit, or \
          cut Outside instead."
     );
     assert_eq!(
         cut_craft_core::tool_does_not_fit(&tool, None).to_string(),
-        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, or \
+        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller bit, or \
          make the shapes bigger."
     );
     let unnamed = Tool {
@@ -172,7 +172,7 @@ fn a_tool_that_does_not_fit_is_named_with_a_way_out() {
     assert!(
         cut_craft_core::tool_does_not_fit(&unnamed, None)
             .to_string()
-            .starts_with("The 3.175 mm tool does not fit"),
+            .starts_with("The 3.175 mm bit does not fit"),
         "a tool with no name is named by its size"
     );
 }

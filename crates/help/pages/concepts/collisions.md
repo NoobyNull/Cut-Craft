@@ -38,7 +38,7 @@ The check is only as good as the sizes it knows. Measure them once with a ruler.
    **Collet nut across** (an ER20 nut is about 35 mm, a trim router's about 25 mm),
    **Collet nut height** (from the nut's bottom face up to the spindle body) and
    **Spindle across** (65 mm or 80 mm for most spindles).
-2. Open **Toolpaths ▸ Tool Database**, pick each bit you use for deep cuts, and set its
+2. Open **Toolpaths ▸ Bit Library**, pick each bit you use for deep cuts, and set its
    **Stick-out**: how far the bit pokes out below the collet nut, from its tip up to the
    nut's face, once it is tightened in.
 3. Set the bit's **Flute length** and **Shank diameter** too, so a narrow bit on a wider
@@ -53,7 +53,7 @@ uses this guess to decide how high the nut sits, so measure and set the real fig
 
 On a machine with a tool changer, each bit sits in a holder of its own. Tick
 **Holder per bit** in Machine Configuration, then open the bit's **Own holder** in the
-Tool Database and give it its own collet nut and spindle sizes. A bit without its own
+Bit Library and give it its own collet nut and spindle sizes. A bit without its own
 holder uses the machine's. With Holder per bit not ticked, every bit uses the machine's.
 
 ## Putting it right
@@ -61,7 +61,7 @@ holder uses the machine's. With Holder per bit not ticked, every bit uses the ma
 - **Clear the wood round the cut first**: a wider pocket or clearing toolpath before the
   deep one leaves room for the nut, as in the picture.
 - **Let the bit stick out further** (keep at least three quarters of the shank in the
-  collet), then set the new Stick-out in the Tool Database.
+  collet), then set the new Stick-out in the Bit Library.
 - **Use a longer bit**, or cut less deep.
 - For a shank that rubs: use a bit whose flutes are as long as the cut is deep.
 

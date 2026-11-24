@@ -627,7 +627,7 @@ impl CutCraftApp {
     }
 
     /// [`Self::limits`] for checking the toolpaths `ids` saved with `changes`: the tool
-    /// changer's slots only when it changes the tools, and the Tool Database's copy of
+    /// changer's slots only when it changes the tools, and the Bit Library's copy of
     /// each of their bits, to compare with.
     pub(super) fn check_limits(
         &self,

@@ -41,7 +41,7 @@ pub struct Machine {
     /// The one toolpaths are saved through; else the first.
     pub default_post: Option<String>,
     /// An automatic tool changer: the tool loaded in each slot by name, slot 1 first;
-    /// empty when the machine has none (tool changes are by hand).
+    /// empty when the machine has none (bit changes are by hand).
     pub slots: Vec<Option<String>>,
     /// A 4th axis (A) turning the material, for rotary jobs (2.5 axes + A): those are saved
     /// through the machine's post that wraps their side round onto A.
@@ -65,7 +65,7 @@ pub struct Machine {
     /// What holds the bits: the collet nut and the spindle above it, checked for hitting
     /// the material on deep cuts (added with collision checks).
     pub holder: cut_craft_core::collision::Holder,
-    /// Holder per bit: each bit can have a holder of its own in the Tool Database, used
+    /// Holder per bit: each bit can have a holder of its own in the Bit Library, used
     /// instead of [`Self::holder`] (a tool changer's bits each sit in their own holder).
     pub holder_per_bit: bool,
     /// How a job with several bits is saved when the machine has no tool changer: a file

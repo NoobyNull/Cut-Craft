@@ -1,4 +1,4 @@
-//! The Tool Database's tool form: each section of a tool's settings.
+//! The Bit Library's tool form: each section of a tool's settings.
 
 use super::{
     BTreeMap, Changer, CuttingData, HoverHint, INCH, Look, NOTES_ROWS, Number, RateUnits, Tool,
@@ -32,7 +32,7 @@ pub(super) fn load_slot(ui: &mut egui::Ui, changer: &Changer, tool: &str) -> Opt
                 }
             });
     });
-    ui.weak("The slot it is loaded in becomes its tool number");
+    ui.weak("The slot it is loaded in becomes its bit number");
     chosen
 }
 
@@ -73,7 +73,7 @@ pub(super) fn number(ui: &mut egui::Ui, name: &str, value: &mut f64, per: f64, u
     changed
 }
 
-/// A framed block with a heading (Tool Info, Cutting Parameters, Feeds and
+/// A framed block with a heading (Bit Info, Cutting Parameters, Feeds and
 /// Speeds).
 pub(super) fn section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
     ui.group(|ui| {
@@ -91,27 +91,27 @@ pub(super) fn tool_details(
     material: &str,
     library: Option<&cut_craft_core::material_library::MaterialLibrary>,
 ) {
-    // the drawing in a card of its own right of Tool Info, so it does not push the cutting
+    // the drawing in a card of its own right of Bit Info, so it does not push the cutting
     // data down; under it when the window is too narrow for both
     let gap = ui.spacing().item_spacing.x;
     if let Some((info, card)) = split(ui.available_width(), gap) {
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 ui.set_width(info);
-                section(ui, "Tool Info", |ui| {
+                section(ui, "Bit Info", |ui| {
                     tool_info(ui, tool, (groups, formats), look, (loaded, taken));
                 });
             });
             ui.vertical(|ui| {
                 ui.set_width(card);
-                section(ui, "Tool Shape", |ui| geometry(ui, tool));
+                section(ui, "Bit Shape", |ui| geometry(ui, tool));
             });
         });
     } else {
-        section(ui, "Tool Info", |ui| {
+        section(ui, "Bit Info", |ui| {
             tool_info(ui, tool, (groups, formats), look, (loaded, taken));
         });
-        section(ui, "Tool Shape", |ui| geometry(ui, tool));
+        section(ui, "Bit Shape", |ui| geometry(ui, tool));
     }
     // the cutting data shown is the active material's
     let own = tool
@@ -219,7 +219,7 @@ pub(super) fn name_format_buttons(
         });
     if ui
         .button("Set as Default")
-        .on_hover_hint("New tools of this type are named by this format")
+        .on_hover_hint("New bits of this type are named by this format")
         .clicked()
     {
         formats.insert(key.to_owned(), tool.name_format.clone());
@@ -234,7 +234,7 @@ pub(super) fn name_format_buttons(
     }
 }
 
-/// A form tool's row in Tool Info: Use Selected Vector takes its shape from the job's
+/// A form tool's row in Bit Info: Use Selected Vector takes its shape from the job's
 /// selected open vector, and how many points its profile has.
 pub(super) fn form_row(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
     if tool.shape != ToolShape::FormTool {
@@ -294,7 +294,7 @@ pub(super) fn tool_info(
                 .desired_width(f32::INFINITY),
         );
         ui.end_row();
-        ui.label("Tool Type");
+        ui.label("Bit Type");
         ui.horizontal(|ui| {
             tool_type(ui, tool);
             // the tool's own units beside it, whatever the job's: a 6 mm end mill reads
@@ -310,7 +310,7 @@ pub(super) fn tool_info(
                     ui.selectable_value(&mut tool.units, Units::Inch, "inches");
                 })
                 .response
-                .on_hover_hint("Units: how this tool's lengths read; the tool stays the same size");
+                .on_hover_hint("Units: how this bit's lengths read; the bit stays the same size");
             ui.checkbox(&mut tool.drill_only, "Drill only").on_hover_hint(
                 "A drill (twist or brad-point) cuts only straight down. Any toolpath but \
                  Drilling that uses it is warned of in red, as moved sideways it can snap or \
@@ -333,18 +333,18 @@ pub(super) fn tool_info(
                 }
             });
         ui.end_row();
-        ui.label("Tool Number")
-            .on_hover_hint("The post's [T] for this tool without a tool changer, and its holder for Load by Tool Number; 0 for none");
+        ui.label("Bit Number")
+            .on_hover_hint("The post's [T] for this bit without a tool changer, and its holder for Load by Bit Number; 0 for none");
         // a tool in a tool changer is numbered by its slot: change the slot, not the number
         match loaded {
             Some((machine, slot)) => {
                 ui.horizontal(|ui| {
-                    ui.add_enabled(false, Number::new(&mut tool.number).name("Tool Number"));
+                    ui.add_enabled(false, Number::new(&mut tool.number).name("Bit Number"));
                     ui.weak(format!("from slot T{slot} of {machine}'s tool changer"));
                 });
             }
             None => {
-                ui.add(Number::new(&mut tool.number).range(0..=999).name("Tool Number"));
+                ui.add(Number::new(&mut tool.number).range(0..=999).name("Bit Number"));
             }
         }
         ui.end_row();
@@ -385,7 +385,7 @@ pub fn sharing_number(tools: &[Tool], i: usize) -> Vec<String> {
         .collect()
 }
 
-/// The red note under Tool Number when other tools have it: a tool changer picks bits by
+/// The red note under Bit Number when other tools have it: a tool changer picks bits by
 /// number, so it would pick up the wrong one.
 pub fn number_taken(number: u32, taken: &[String]) -> Option<String> {
     let (first, more) = taken.split_first()?;
@@ -395,20 +395,20 @@ pub fn number_taken(number: u32, taken: &[String]) -> Option<String> {
         n => format!(" and {n} more"),
     };
     Some(format!(
-        "Tool number {number} is also {first}'s{also}. A tool changer would pick up the \
+        "Bit number {number} is also {first}'s{also}. A tool changer would pick up the \
          wrong bit: give this one a number of its own, or 0 if you change it by hand"
     ))
 }
 
-/// The narrowest Tool Info beside the drawing's card.
+/// The narrowest Bit Info beside the drawing's card.
 pub(super) const INFO_MIN: f32 = 420.0;
 /// The drawing's card: its share of the width, between these.
 pub(super) const SHAPE_SHARE: f32 = 0.45;
 pub(super) const SHAPE_MIN: f32 = 380.0;
 pub(super) const SHAPE_MAX: f32 = 500.0;
 
-/// Tool Info's and the drawing card's widths side by side in `width` (`gap` between),
-/// or `None` when both do not fit and the card goes under Tool Info.
+/// Bit Info's and the drawing card's widths side by side in `width` (`gap` between),
+/// or `None` when both do not fit and the card goes under Bit Info.
 pub(super) fn split(width: f32, gap: f32) -> Option<(f32, f32)> {
     let card = (width * SHAPE_SHARE).clamp(SHAPE_MIN, SHAPE_MAX);
     let info = width - card - gap;
@@ -530,7 +530,7 @@ pub(super) fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
     }
     ui.end_row();
     ui.label("Tooth Offset")
-        .on_hover_hint("From the bottom of the tool up to the tip of the tooth");
+        .on_hover_hint("From the bottom of the bit up to the tip of the tooth");
     length(ui, "Tooth Offset", &mut tool.tooth_offset, tool.units);
     ui.end_row();
 }

@@ -1,7 +1,7 @@
 //! 3D Finishing Toolpath: a ball nose rasters over the model, as low as it can go at each
 //! point without cutting into it. The model's top sits at the material surface. With several
-//! tools it makes a toolpath for each (rest machining): each later one cuts only what the
-//! tools before it left.
+//! bits it makes a toolpath for each (rest machining): each later one cuts only what the
+//! bits before it left.
 
 use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_model};
 use cut_craft_core::document::Document;
@@ -33,22 +33,22 @@ pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,
     /// In the order they run, a toolpath each: the first finishes all it can, each later one
-    /// only what the tools before it left (rest machining). A ball nose follows curves best;
+    /// only what the bits before it left (rest machining). A ball nose follows curves best;
     /// its stepover spaces the raster lines. Editing a toolpath changes its own bit; to add a
     /// smaller one after it, make the toolpath again with both here
     #[serde(default)]
     pub tools: Vec<Tool>,
-    /// With two tools or more, each later tool cuts only what the tools before it left:
+    /// With two bits or more, each later bit cuts only what the bits before it left:
     /// areas left smaller across than this are left alone
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Rest Machining", "x-hide-when" = {"tools.count": [0, 1], "after.count": 0}))]
     pub minimum_detail: f64,
-    /// With two tools or more: how far each area a later tool cuts reaches past what the
-    /// tools before it left, so its cuts overlap theirs and leave no step
+    /// With two bits or more: how far each area a later bit cuts reaches past what the
+    /// bits before it left, so its cuts overlap theirs and leave no step
     #[schemars(title = "Rest overlap", extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Rest Machining", "x-hide-when" = {"tools.count": [0, 1], "after.count": 0}))]
     pub boundary_offset: f64,
-    /// Where the tool's tip may go
+    /// Where the bit's tip may go
     #[serde(default)]
     #[schemars(title = "Machining Limit Boundary")]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
@@ -63,7 +63,7 @@ pub struct Params {
     #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary_offset: f64,
-    /// The pattern the tool follows over the model
+    /// The pattern the bit follows over the model
     #[serde(default)]
     #[schemars(extend("x-group" = "Strategy"))]
     pub strategy: Strategy,
@@ -76,12 +76,12 @@ pub struct Params {
     #[schemars(extend("x-group" = "Strategy"))]
     pub raster_angle: f64,
     /// Lift off the surface by this between offset rings, which can leave fewer marks where
-    /// the tool steps over
+    /// the bit steps over
     #[serde(default)]
     #[schemars(extend("x-unit" = "mm", "x-show-when" = {"strategy": "offset"}), range(min = 0))]
     #[schemars(extend("x-group" = "Strategy"))]
     pub stepover_retract: f64,
-    /// One toolpath of a set (and every toolpath saved before the tool list): its tool, which
+    /// One toolpath of a set (and every toolpath saved before the bit list): its bit, which
     /// finishes after `after`
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
@@ -100,7 +100,7 @@ impl Default for Params {
                     .tools
                     .into_iter()
                     .find(|t| t.shape == ToolShape::BallNose)
-                    .expect("the starter tools include a ball nose"),
+                    .expect("the starter bits include a ball nose"),
             ],
             // ponytail: our own defaults; a millimetre each
             minimum_detail: 1.0,
@@ -118,9 +118,9 @@ impl Default for Params {
 }
 
 impl Params {
-    /// A toolpath's own params for each tool: that tool after the ones before it, so each
+    /// A toolpath's own params for each bit: that bit after the ones before it, so each
     /// recalculates on its own. Several are named `[1]`, `[2]`... in running order.
-    /// Each keeps its tool as its Tools list, so Edit shows it there and a bit picked there
+    /// Each keeps its bit as its Bits list, so Edit shows it there and a bit picked there
     /// is used (one saved with only `tool` uses that until a bit is picked).
     fn each_tool(&self) -> Vec<(Tool, Params)> {
         if let (Some(tool), true) = (&self.tool, self.tools.is_empty()) {
@@ -166,7 +166,7 @@ impl Command for FinishingToolpath3d {
         let each = p.each_tool();
         if each.is_empty() {
             return Err(CommandError::InvalidParams(
-                "choose at least one tool".into(),
+                "choose at least one bit".into(),
             ));
         }
         let mut c = Change::builder(doc);
@@ -192,11 +192,11 @@ fn finish_within(
     p: &Params,
     gouge: f64,
 ) -> Result<Toolpath, CommandError> {
-    ensure_positive("tool diameter", tool.diameter)?;
+    ensure_positive("bit diameter", tool.diameter)?;
     let stepover = tool.finishing_stepover();
     if !(stepover > 0.0 && stepover <= 1.0) {
         return Err(CommandError::InvalidParams(
-            "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
+            "the bit's finishing stepover must be more than 0% and at most 100%: set it in the Bit Library".into(),
         ));
     }
     progress::stage("Placing the model");
@@ -204,11 +204,11 @@ fn finish_within(
     // where every earlier tool left material, each worked out on its own grid
     let mut rest = vec![];
     if !p.after.is_empty() {
-        progress::stage("Finding what the earlier tools left");
+        progress::stage("Finding what the earlier bits left");
     }
     for earlier in &p.after {
         progress::stop_if_cancelled()?;
-        ensure_positive("earlier tool diameter", earlier.diameter)?;
+        ensure_positive("earlier bit diameter", earlier.diameter)?;
         let model = placed_model(doc, earlier)?;
         let left = model.left_by(earlier);
         rest.push(rest_areas(
@@ -640,7 +640,7 @@ mod tests {
         let why = FinishingToolpath3d::run(&domed(), &none)
             .err()
             .map_or_default(|e| e.to_string());
-        assert!(why.contains("tool"), "{why}");
+        assert!(why.contains("bit"), "{why}");
     }
 
     #[test]

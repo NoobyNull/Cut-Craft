@@ -66,7 +66,7 @@ a CNC machine cuts them with.
 
 ## Windows that open beside Cut Craft
 
-Some tools open in a window of their own: Did You Know?, Options, the Tool Database,
+Some tools open in a window of their own: Did You Know?, Options, the Bit Library,
 Machine Configuration, View G-code, Report a Bug and others. Each one stays in front of
 Cut Craft's main window until you close it, so clicking the main window never hides it.
 You can still use the main window while it is open. It does not cover other programs,

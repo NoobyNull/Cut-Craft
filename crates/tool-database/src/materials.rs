@@ -1,4 +1,4 @@
-//! The Materials Library window, laid out as the Tool Database: the classes, each over its
+//! The Materials Library window, laid out as the Bit Library: the classes, each over its
 //! materials softest first, on the left; the picked material's or class's settings on the
 //! right, with the bits that have feeds and speeds for it. Add Tool picks a bit with the
 //! tool selector and gives it feeds for the material. Edits are made to copies; only Apply
@@ -42,7 +42,7 @@ pub struct MaterialsWindow {
     pub tools: ToolDatabase,
     pub pick: Option<MaterialPick>,
     /// The tools as the window opened on them: what it changed is told from them, so its
-    /// OK keeps edits made in the Tool Database meanwhile.
+    /// OK keeps edits made in the Bit Library meanwhile.
     opened_on: ToolDatabase,
     /// The library as last kept (opened, or Apply): it differs while changes wait.
     saved_library: MaterialLibrary,
@@ -65,14 +65,14 @@ impl MaterialsWindow {
         }
     }
 
-    /// `now`, the tool database as it is (the Tool Database may have changed it while this
+    /// `now`, the bit library as it is (the Bit Library may have changed it while this
     /// window was open), with this window's own edits made to it: each bit's feeds for the
     /// materials and classes, and the Material list. Tools added, deleted or edited
     /// elsewhere meanwhile stay as they are.
     #[must_use]
     pub fn tools_onto(&self, now: &ToolDatabase) -> ToolDatabase {
         // the same tool here: by its name, and a catalogue's entry only by a catalogue's
-        // (a copy in My Tools shares its name)
+        // (a copy in My Bits shares its name)
         fn find<'a>(db: &'a ToolDatabase, name: &str, catalogue: bool) -> Option<&'a Tool> {
             db.tools
                 .iter()
@@ -132,7 +132,7 @@ impl MaterialsWindow {
         self.library != self.saved_library || self.tools != self.opened_on
     }
 
-    /// The Tool Database kept edits (the Add Tool picker's Select, say): the window goes
+    /// The Bit Library kept edits (the Add Bit picker's Select, say): the window goes
     /// on from `now`, its own edits still unkept on top, so Cancel still drops only those.
     pub fn rebase(&mut self, now: &ToolDatabase) {
         self.tools = self.tools_onto(now);
@@ -468,7 +468,7 @@ impl MaterialsWindow {
         }
         ui.button("Add Tool…")
             .on_hover_hint(
-                "Pick a bit with the tool selector: it gets feeds and speeds for this material",
+                "Pick a bit with the bit selector: it gets feeds and speeds for this material",
             )
             .clicked()
     }
@@ -522,7 +522,7 @@ impl MaterialsWindow {
         }
         ui.button("Add Tool…")
             .on_hover_hint(
-                "Pick a bit with the tool selector: it gets feeds and speeds for the whole class",
+                "Pick a bit with the bit selector: it gets feeds and speeds for the whole class",
             )
             .clicked()
     }
@@ -619,7 +619,7 @@ mod tests {
         let bit = w.tools.tools[0].name.clone();
         w.pick = Some(MaterialPick::Material(at(&w, "Hard Maple")));
         w.add_tool(&bit);
-        // the Tool Database, opened on its own while the library was open: a tool deleted,
+        // the Bit Library, opened on its own while the library was open: a tool deleted,
         // one added and a bit's own feed changed
         let mut now = ToolDatabase::starter();
         let gone = now.tools.remove(1).name;
@@ -634,7 +634,7 @@ mod tests {
         );
         assert!(merged.get("A New Bit").is_some(), "the added tool stays");
         let tool = merged.get(&bit).unwrap();
-        assert_eq!(tool.feed_rate, 1234.0, "the Tool Database's own edit stays");
+        assert_eq!(tool.feed_rate, 1234.0, "the Bit Library's own edit stays");
         assert!(
             tool.materials.iter().any(|d| d.material == "Hard Maple"),
             "the library's feeds are added"
@@ -647,7 +647,7 @@ mod tests {
         let again = w.tools_onto(&now);
         assert!(
             again.get(&bit).unwrap().materials.is_empty(),
-            "a later Tool Database edit is not undone by the next OK"
+            "a later Bit Library edit is not undone by the next OK"
         );
     }
 
@@ -660,7 +660,7 @@ mod tests {
         db.catalogues.push("Catalogues/Maker".into());
         db.tools.push(bit);
         let mut w = MaterialsWindow::new(&MaterialLibrary::starter(), &db);
-        // the Add Tool picker's Copy to My Tools and Select, kept as the Tool Database's
+        // the Add Bit picker's Copy to My Bits and Select, kept as the Bit Library's
         // Select keeps it
         let mut now = db.clone();
         let catalogue = now.tools.len() - 1;
@@ -673,7 +673,7 @@ mod tests {
             t.materials.iter().any(|d| d.material == "Hard Maple")
         };
         let mine = merged.get("Maker Bit").unwrap();
-        assert!(!merged.is_catalogue(mine), "the My Tools copy stays");
+        assert!(!merged.is_catalogue(mine), "the My Bits copy stays");
         assert!(has_maple(mine), "the copy has the feeds");
         assert!(
             !has_maple(&merged.tools[catalogue]),

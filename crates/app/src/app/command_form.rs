@@ -146,7 +146,7 @@ impl CutCraftApp {
         }
     }
 
-    /// A list of tools' Select…, Add a tool… or Edit…: the Tool Database, to pick a tool of
+    /// A list of tools' Select…, Add a tool… or Edit…: the Bit Library, to pick a tool of
     /// list `which` in or change one.
     pub(super) fn ask_listed(
         &mut self,

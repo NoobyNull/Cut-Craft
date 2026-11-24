@@ -179,10 +179,10 @@ pub fn filters(dialog: Dialog<'_>, registry: &Registry) -> Vec<Filter> {
         Dialog::InstallPostProcessor => vec![Filter::new("Post-processor", &["pp"])],
         Dialog::MachinePackage => vec![Filter::new("Machine package", &["json"])],
         Dialog::OpenToolDatabase => vec![Filter::new(
-            "Tool databases",
+            "Bit librarys",
             &crate::files::TOOL_FILE_EXTENSIONS,
         )],
-        Dialog::SaveToolDatabase => vec![Filter::new("Cut Craft tool database", &["json"])],
+        Dialog::SaveToolDatabase => vec![Filter::new("Cut Craft bit library", &["json"])],
         Dialog::SaveShadedImage => vec![Filter::new("PNG image", &["png"])],
         Dialog::SculptingBrush => vec![Filter::new("Sculpting brush", &["ccclip"])],
         Dialog::Texture => vec![Filter::new(

@@ -78,10 +78,10 @@ panels-layer-vectors = { $count ->
     [one] { $count } vector
    *[other] { $count } vectors
 }
-# A toolpath in the list, out of date. $tool is its tool's name.
+# A toolpath in the list, out of date. $tool is its bit's name.
 panels-toolpath-out-of-date = { $tool }
     Out of date: what it was made from has changed since. Recalculate it.
-panels-shank-guessed = ⚠ { $name } has no shank diameter set, so its shank is drawn from a guess: set it in the Tool Database
+panels-shank-guessed = ⚠ { $name } has no shank diameter set, so its shank is drawn from a guess: set it in the Bit Library
 panels-drag-to-change-the-cut-order = Drag to change the cut order: the blue line shows where it lands. Drop on a group's name to put it in that group
 panels-open-or-close-this-group = Open or close this group: closed, only its name shows
 panels-show-or-hide-this-group = Show or hide every toolpath in this group, its groups' too; Undo takes it back in one step

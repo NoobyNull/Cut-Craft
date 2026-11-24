@@ -1,5 +1,5 @@
 //! Merged Toolpath: the toolpaths shown in the toolpath list when Apply is pressed (tick the
-//! ones to merge there), all using one tool, made into one, with their cuts
+//! ones to merge there), all using one bit, made into one, with their cuts
 //! in whichever of the orders asked for leaves the least travelling between them, each
 //! part's cuts together when asked; and Ungroup, which takes a merged toolpath apart again.
 
@@ -21,8 +21,8 @@ pub struct Params {
     /// (it is marked out of date when one of them changes: recalculate it then, and the
     /// hidden ones out of date are recalculated first). Those
     /// toolpaths are then hidden, so saving the shown toolpaths does not cut them twice. They
-    /// must use one tool, and all is cut with the first one's feeds and speed: a toolpath
-    /// whose copy of that tool is set differently is warned of
+    /// must use one bit, and all is cut with the first one's feeds and speed: a toolpath
+    /// whose copy of that bit is set differently is warned of
     pub name: String,
     /// The toolpaths to merge (none: the ones shown in the toolpath list when Apply is
     /// pressed). Not on the form: tick the toolpaths to merge in the toolpath list
@@ -283,7 +283,7 @@ fn nearest_first(mut left: Vec<Cut>) -> Vec<Cut> {
     order
 }
 
-/// What the merged toolpath warns of: each source whose tool, named as `first`'s, has other
+/// What the merged toolpath warns of: each source whose bit, named as `first`'s, has other
 /// settings (feeds, speed or the bit's size), which merging replaces with `first`'s.
 fn tool_differences(first: &Toolpath, sources: &[&Toolpath]) -> Vec<String> {
     let (a, mut notes) = (&first.tool, vec![]);
@@ -305,7 +305,7 @@ fn tool_differences(first: &Toolpath, sources: &[&Toolpath]) -> Vec<String> {
         if !fields.is_empty() {
             notes.push(format!(
                 "{} uses {} with a different {}: the merged toolpath cuts it all with {}'s \
-                 settings. Edit the tool in one of them to match if that is not right",
+                 settings. Edit the bit in one of them to match if that is not right",
                 source.name,
                 b.name,
                 fields.join(", "),
@@ -371,7 +371,7 @@ impl Command for MergedToolpath {
         }
         if let Some(other) = sources.iter().find(|t| t.tool.name != first.tool.name) {
             return Err(CommandError::Failed(format!(
-                "only toolpaths with the same tool merge: {} uses {} and {} uses {}. Show only toolpaths that use one tool",
+                "only toolpaths with the same bit merge: {} uses {} and {} uses {}. Show only toolpaths that use one bit",
                 first.name, first.tool.name, other.name, other.tool.name
             )));
         }
@@ -691,7 +691,7 @@ mod tests {
         let why = MergedToolpath::run(&doc, &Params::default())
             .unwrap_err()
             .to_string();
-        assert!(why.contains("same tool"), "{why}");
+        assert!(why.contains("same bit"), "{why}");
     }
 
     fn starts(t: &Toolpath) -> Vec<(f64, f64)> {

@@ -180,11 +180,12 @@ fn turned(
         ));
     };
     let tool = &p.tool;
-    ensure_positive("tool diameter", tool.diameter)?;
+    ensure_positive("bit diameter", tool.diameter)?;
     let stepover = tool.stepover;
     if !(stepover > 0.0 && stepover <= 1.0) {
         return Err(CommandError::InvalidParams(
-            "the tool's stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
+            "the bit's stepover must be more than 0% and at most 100%: set it in the Bit Library"
+                .into(),
         ));
     }
     let along_x = rotary.along == Along::X;

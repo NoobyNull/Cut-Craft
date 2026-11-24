@@ -279,11 +279,11 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "tool_database",
-        "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it",
+        "Bit Library: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it",
     ),
     (
         "tool_changer",
-        "Tool Changer: which bit is in each slot of your machine's automatic tool changer",
+        "Tool Changer (ATC): which bit is in each slot of your machine's automatic tool changer",
     ),
     (
         "find_tool",
@@ -579,7 +579,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "job_sheet_editor",
-        "Job Setup Sheet Editor: chooses what the printed job sheet shows: the job, its tools and its toolpaths",
+        "Job Setup Sheet Editor: chooses what the printed job sheet shows: the job, its bits and its toolpaths",
     ),
     (
         "first_run_setup",
@@ -619,7 +619,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "open_application_data_folder",
-        "Open Application Data Folder: opens the folder where Cut Craft keeps your settings, tools and machines",
+        "Open Application Data Folder: opens the folder where Cut Craft keeps your settings, bits and machines",
     ),
     (
         "addons",

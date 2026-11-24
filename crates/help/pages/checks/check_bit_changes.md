@@ -31,7 +31,7 @@ Group by bit saves bit changes, but it can cut a part free before the work insid
 
 - Read the bit order, tick the warning, and set Z zero the same way as the first bit after
   each change (Job Setup says where: on top of the material or on the bed).
-- On standard GRBL, choose **Separate file for each tool** in Save Toolpaths. To make that
+- On standard GRBL, choose **Separate file for each bit** in Save Toolpaths. To make that
   the default, use **Machine ▸ Machine Configuration ▸ Bit Changes**. If your controller is
   not standard GRBL, pick its **Firmware** there instead.
 - If Group by bit puts a cut-out before the cuts inside it, turn **Group by bit** off, or

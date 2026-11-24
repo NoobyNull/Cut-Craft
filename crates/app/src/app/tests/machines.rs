@@ -74,7 +74,7 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
             .iter()
             .any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == text))
     };
-    assert!(drawn("Rest Machining") && drawn("Add a tool…"));
+    assert!(drawn("Rest Machining") && drawn("Add a bit…"));
     let mut params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("pocket_toolpath", &params).unwrap();
     // how far it cuts: a pocket links its rings at depth, so moves alone undercount it

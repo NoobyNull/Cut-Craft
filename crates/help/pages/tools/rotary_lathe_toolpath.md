@@ -60,8 +60,8 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
 
 ## Settings
 
-- **Tool**: a square end mill leaves a flat face. Its **pass depth** (in the
-  [Tool Database](help:tool_database)) is how far each level steps down, and its **stepover**
+- **Bit**: a square end mill leaves a flat face. Its **pass depth** (in the
+  [Bit Library](help:tool_database)) is how far each level steps down, and its **stepover**
   how far apart the turns are along the part.
 - **Operation**: Face, Turn or Part off (above).
 - **Start** and **End**: where along the axis it cuts, from the job's start (the chuck end).

@@ -94,7 +94,7 @@ pub fn add_group(db: &mut ToolDatabase, group: &str) -> String {
 /// A new end mill in `group`, with the defaults; its index.
 pub fn add_tool(db: &mut ToolDatabase, group: &str) -> usize {
     let mut tool = Tool {
-        name: "New Tool".into(),
+        name: "New Bit".into(),
         group: group.to_owned(),
         ..Tool::default()
     };
@@ -178,8 +178,8 @@ pub fn export_group(db: &ToolDatabase, group: &str) -> ToolDatabase {
 }
 
 /// Adds `incoming` as a read-only catalogue: inside a new group named `name` (made unique)
-/// under [`CATALOGUES`], apart from My Tools; tool names already taken get a number. Its
-/// materials join the material list. Its tools are copied into My Tools
+/// under [`CATALOGUES`], apart from My Bits; tool names already taken get a number. Its
+/// materials join the material list. Its tools are copied into My Bits
 /// ([`copy_to_mine`]) to be edited or loaded in a tool changer.
 pub fn import(db: &mut ToolDatabase, incoming: ToolDatabase, name: &str) -> String {
     for m in &incoming.materials {
@@ -208,7 +208,7 @@ pub fn import(db: &mut ToolDatabase, incoming: ToolDatabase, name: &str) -> Stri
     top
 }
 
-/// A catalogue's tool `i` copied into My Tools, to edit or load in a tool changer: in its
+/// A catalogue's tool `i` copied into My Bits, to edit or load in a tool changer: in its
 /// maker's group by type ([`Tool::own_group`], the catalogue's name standing in for a
 /// maker it does not give), under its own name (the copy is the one toolpaths use). One
 /// already copied under that name is the one given back. Its index.
@@ -291,10 +291,10 @@ mod tests {
         let b = add_tool(&mut d, "New Group");
         assert_eq!(
             (d.tools[a].name.as_str(), d.tools[b].name.as_str()),
-            ("New Tool", "New Tool 2")
+            ("New Bit", "New Bit 2")
         );
         let c = copy_tool(&mut d, a);
-        assert_eq!((c, d.tools[c].name.as_str()), (1, "New Tool (copy)"));
+        assert_eq!((c, d.tools[c].name.as_str()), (1, "New Bit (copy)"));
         assert_eq!(d.tools[c].group, "New Group");
         notes_mut(&mut d, "New Group").push_str("hello");
         assert_eq!(export_group(&d, "New Group").groups[0].notes, "hello");
@@ -313,7 +313,7 @@ mod tests {
             tools_in(&d, "Catalogues/Vendor/Metric Tools/End Mills").len(),
             tools_in(&db(), "Metric Tools/End Mills").len()
         );
-        assert_eq!(d.my_tools().count(), db().tools.len(), "My Tools unchanged");
+        assert_eq!(d.my_tools().count(), db().tools.len(), "My Bits unchanged");
         assert_eq!(import(&mut d, incoming, "Vendor"), "Catalogues/Vendor 2");
         let names: std::collections::HashSet<_> = d.tools.iter().map(|t| &t.name).collect();
         assert_eq!(names.len(), d.tools.len(), "tool names stay unique");

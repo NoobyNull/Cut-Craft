@@ -1,4 +1,4 @@
-//! Tool Database name formats (Tool Database ▸ Name Format): a tool's name made
+//! Bit Library name formats (Bit Library ▸ Name Format): a tool's name made
 //! from a template of `{Variable}` or `{Variable|Modifier}`, so `{Tool Type} {Diameter|F}`
 //! names a 1/8 inch end mill "End Mill 1/8". Modifiers: `U` and `L` upper and lower case a
 //! word, `0.00` pads and rounds a number (zeros before the point pad it, after it the

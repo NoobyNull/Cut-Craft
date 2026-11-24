@@ -555,7 +555,7 @@ fn a_form_tool_reads_in_one_line_in_the_jobs_units() {
         tool_line(&v, None, Units::Mm),
         "60° V-bit, 12.7 mm across, 2 mm a pass"
     );
-    // a metric bit kept in mm in the Tool Database reads in inches in an inch job's toolpath
+    // a metric bit kept in mm in the Bit Library reads in inches in an inch job's toolpath
     assert_eq!(
         tool_line(&v, None, Units::Inch),
         "60° V-bit, 0.5 in across, 0.079 in a pass"

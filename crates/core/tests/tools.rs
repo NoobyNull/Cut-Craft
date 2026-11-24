@@ -586,7 +586,7 @@ fn a_catalogue_tool_copied_into_my_tools_keeps_its_name_and_the_copy_is_used() {
     });
     db.tools[1].group = "Mine".into();
     db.tools[1].feed_rate = 1500.0;
-    assert_eq!(db.index_of("46171 End Mill"), Some(1), "My Tools first");
+    assert_eq!(db.index_of("46171 End Mill"), Some(1), "My Bits first");
     assert_eq!(db.get("46171 End Mill").unwrap().feed_rate, 1500.0);
     // a put changes the copy, never the catalogue
     let mut changed = db.get("46171 End Mill").unwrap().clone();
@@ -619,7 +619,7 @@ fn putting_a_catalogue_tool_back_adds_it_to_my_tools() {
     assert_eq!(db.tools[1].group, "Amana/V-Bits");
     assert!(
         !db.is_catalogue(&db.tools[1]),
-        "My Tools' Amana is not the catalogue"
+        "My Bits' Amana is not the catalogue"
     );
 }
 

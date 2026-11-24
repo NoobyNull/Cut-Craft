@@ -1,4 +1,4 @@
-//! The Tool Database: the shared tools, in their groups, that toolpaths copy.
+//! The Bit Library: the shared tools, in their groups, that toolpaths copy.
 
 use super::{CuttingData, Deserialize, Serialize, Tool, ToolShape};
 
@@ -24,10 +24,10 @@ pub struct ToolDatabase {
     /// (added with name formats)
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub name_formats: std::collections::BTreeMap<String, String>,
-    /// The groups that are read-only catalogues: tool databases imported from a maker (a
-    /// `.vtdb` or Fusion library), each under [`CATALOGUES`]. Their tools are copied into My Tools to be
+    /// The groups that are read-only catalogues: bit libraries imported from a maker (a
+    /// `.vtdb` or Fusion library), each under [`CATALOGUES`]. Their tools are copied into My Bits to be
     /// edited or loaded in a tool changer. Empty in databases saved before catalogues,
-    /// whose tools are all the user's own (added with My Tools)
+    /// whose tools are all the user's own (added with My Bits)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub catalogues: Vec<String>,
     /// Tools joined into another, by their old name: one bit listed once per material
@@ -44,10 +44,10 @@ pub struct ToolDatabase {
     pub renamed: std::collections::BTreeMap<String, String>,
 }
 
-/// The top-level group the catalogues are imported into, apart from My Tools.
+/// The top-level group the catalogues are imported into, apart from My Bits.
 pub const CATALOGUES: &str = "Catalogues";
 
-/// A Tool Database group: `/` between levels, as [`Tool::group`].
+/// A Bit Library group: `/` between levels, as [`Tool::group`].
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ToolGroup {
     pub path: String,
@@ -137,7 +137,7 @@ impl ToolDatabase {
         }
     }
 
-    /// A database from before lasers were a tool type, with no laser in My Tools: the
+    /// A database from before lasers were a tool type, with no laser in My Bits: the
     /// starter laser added (in `Metric Tools/Lasers`), so the laser toolpaths have one to
     /// pick. Whether it was added.
     pub fn add_laser_if_none(&mut self) -> bool {
@@ -169,7 +169,7 @@ impl ToolDatabase {
         })
     }
 
-    /// My Tools: the user's own tools, the ones toolpaths, tool changers and suggestions
+    /// My Bits: the user's own tools, the ones toolpaths, tool changers and suggestions
     /// take; every tool outside the catalogues.
     pub fn my_tools(&self) -> impl Iterator<Item = &Tool> {
         self.tools.iter().filter(|t| !self.is_catalogue(t))
@@ -209,7 +209,7 @@ impl ToolDatabase {
         same.then_some(now.as_str())
     }
 
-    /// Where the tool `name` is: in My Tools when it is there, else in a catalogue (a tool
+    /// Where the tool `name` is: in My Bits when it is there, else in a catalogue (a tool
     /// copied in from a catalogue keeps its name, and the copy is the one used).
     pub fn index_of(&self, name: &str) -> Option<usize> {
         let named = |i: &usize| self.tools[*i].name == name;
@@ -230,7 +230,7 @@ impl ToolDatabase {
     /// Gives each tool loaded in a tool changer its slot (counted from 1) as its tool
     /// number, so the number shown is the holder it sits in. A tool not loaded keeps its
     /// number unless a loaded tool now has it (it was displaced, or taken out and the slot
-    /// refilled): then it has none (0), so Load by Tool Number is never ambiguous.
+    /// refilled): then it has none (0), so Load by Bit Number is never ambiguous.
     /// Whether any number changed.
     pub fn number_by_slots(&mut self, slots: &[Option<String>]) -> bool {
         let slot_of = |name: &str| {
@@ -239,7 +239,7 @@ impl ToolDatabase {
                 .position(|s| s.as_deref() == Some(name))
                 .and_then(|i| u32::try_from(i + 1).ok())
         };
-        // only My Tools go in a tool changer: a catalogue's tool of the same name is not
+        // only My Bits go in a tool changer: a catalogue's tool of the same name is not
         // the one loaded
         let catalogue: Vec<bool> = self.tools.iter().map(|t| self.is_catalogue(t)).collect();
         let taken: Vec<u32> = self
@@ -378,7 +378,7 @@ impl ToolDatabase {
         }
         match self.index_of(&tool.name) {
             Some(i) if !self.is_catalogue(&self.tools[i]) => self.tools[i] = tool,
-            // a catalogue stays as it came: the changed tool joins My Tools
+            // a catalogue stays as it came: the changed tool joins My Bits
             Some(_) => {
                 tool.group = tool.own_group();
                 self.tools.push(tool);

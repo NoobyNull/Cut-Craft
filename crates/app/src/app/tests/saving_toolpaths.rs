@@ -417,7 +417,7 @@ fn the_job_time_counts_every_move_tool_changes_and_the_trip_home() {
         "getting there from home counts: {one} against {alone}"
     );
     assert!(h.app.job_minutes() > one, "so does the trip back home");
-    // the same toolpath with another bit: a tool change by hand
+    // the same toolpath with another bit: a bit change by hand
     let mut other = h.app.doc.toolpaths.values().next().unwrap().clone();
     other.tool.name = "Another bit".into();
     let id = h.app.doc.next_id();

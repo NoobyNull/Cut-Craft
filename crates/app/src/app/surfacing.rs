@@ -20,7 +20,7 @@ pub(super) const SPOILBOARD_WARNING: &str = "This cuts your spoilboard, not your
 
 /// Said under the tool when a Surfacing Toolpath cuts with a bit that isn't a surfacing bit.
 pub(super) const NOT_A_SURFACING_BIT: &str = "Not a surfacing bit: it works, but a wide \
-    surfacing bit (Tool Type Surfacing Bit) flattens in fewer rows";
+    surfacing bit (Bit Type Surfacing Bit) flattens in fewer rows";
 
 /// Whether a form's `params` flatten with `tool` that isn't a surfacing bit.
 pub(super) fn wants_surfacing_bit(params: &Value, tool: &cut_craft_core::toolpath::Tool) -> bool {

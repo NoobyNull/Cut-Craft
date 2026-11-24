@@ -85,7 +85,7 @@ impl Post {
                 Some(t) if t != toolpath.tool.name => {
                     out.block("TOOLCHANGE", &v);
                     out.block("SPINDLE_ON", &v);
-                    // a pause whose tool change leaves starting the spindle to SPINDLE_ON
+                    // a pause whose bit change leaves starting the spindle to SPINDLE_ON
                     // waits for it here, once it is turning
                     out.block(super::AFTER_SPINDLE_ON, &v);
                     // the new bit has just been zeroed by hand, so the machine's height is

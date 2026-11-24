@@ -322,7 +322,7 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
         "save_selected_toolpath_as_template",
         "Save Toolpath as Template",
-        "Save the selected toolpath's settings and tools, to make the same cut on another job",
+        "Save the selected toolpath's settings and bits, to make the same cut on another job",
     ),
     (
         "save_all_visible_toolpaths_as_template",
@@ -333,14 +333,14 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
         "create_job_sheet",
         "Save Job Sheet",
-        "Save a page for the machine: the job, the material, each toolpath's tool and how long \
+        "Save a page for the machine: the job, the material, each toolpath's bit and how long \
          it takes",
     ),
     (
         "print_job_sheet",
         "Print Job Sheet",
         "Open the job sheet in the web browser to print it: the job, the material, each \
-         toolpath's tool and how long it takes",
+         toolpath's bit and how long it takes",
     ),
     (
         "part_labels",
@@ -399,7 +399,18 @@ pub fn built_in_label(id: &str) -> Option<&'static str> {
         .iter()
         .find(|(i, _, _)| *i == id)
         .map(|(_, label, _)| *label)
+        .or_else(|| {
+            RENAMED
+                .iter()
+                .find(|(i, _)| *i == id)
+                .map(|(_, label)| *label)
+        })
 }
+
+/// Built-in tools whose names are no longer their ids in words: the Tool Database is the Bit
+/// Library, as a cutter is a bit (CONTRIBUTING.md, Tools and bits). Ids stay, so saved
+/// favourites, shortcuts and counts keep working.
+const RENAMED: &[(&str, &str)] = &[("tool_database", "Bit Library")];
 
 impl Toolbar {
     /// Every group the Design page can show: the drawing then the modeling tools.

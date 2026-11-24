@@ -50,14 +50,14 @@ match and can cut into the model: save them again with this version before cutti
 
 ## Jobs with more than one bit
 
-Under **Tool Changes**, Save Toolpaths offers three ways to save a job that uses several bits:
+Under **Bit Changes**, Save Toolpaths offers three ways to save a job that uses several bits:
 
-- **Separate file for each tool**: the default on a machine without a tool changer. Each
+- **Separate file for each bit**: the default on a machine without a tool changer. Each
   bit gets its own file, numbered in cutting order. Run them in turn, changing the bit and
   setting Z zero between files.
 - **Tool changer (ATC)**: one file, and the tool changer swaps the bits. You can only pick
   it when the machine has a tool changer set up in Machine Configuration.
-- **One file, pause to change the tool**: one file that lifts the bit, stops the spindle and
+- **One file, pause to change the bit**: one file that lifts the bit, stops the spindle and
   pauses (`M0`) at each change. Change the bit, set Z zero, then resume. Standard GRBL cannot
   jog while paused, so use separate files there.
 

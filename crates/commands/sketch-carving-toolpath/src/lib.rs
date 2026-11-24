@@ -50,7 +50,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_sketch.png"))]
     pub start_depth: f64,
-    /// Below the start depth, cut in passes no deeper than the tool's pass depth
+    /// Below the start depth, cut in passes no deeper than the bit's pass depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D"))]
@@ -309,10 +309,10 @@ struct Sketch {
 impl Sketch {
     fn new(doc: &Document, p: &Params) -> Result<Self, CommandError> {
         ensure_positive("cut depth", p.cut_depth)?;
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database".into(),
+                "set the bit's clearing stepover to more than 0% and at most 100% in the Bit Library".into(),
             ));
         }
         let cell = p.tool.stepover * p.tool.diameter;

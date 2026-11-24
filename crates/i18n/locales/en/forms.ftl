@@ -36,17 +36,17 @@ setup-material-more-tip = Show every Job Setup setting here: Z zero, X0 Y0, the 
 setup-material-defaults-tip = Edit ▸ Options ▸ Job Defaults: what every new job starts with
 job-defaults-note = Every new job starts with these. Changing them leaves the job that is open as it is: its own are in Setup Material ▸ More settings for this job…
 
-# A toolpath form's bit: picked from the Tool Database.
+# A toolpath form's bit: picked from the Bit Library.
 tool-select = Select…
-    .tooltip = Pick the bit this toolpath cuts with in the Tool Database: it brings its own feeds, speeds and pass depth
-    .tooltip-laser = Pick the laser this toolpath burns with in the Tool Database (its Lasers): it brings its own kerf and speed
-    .tooltip-another = Pick another bit for this in the Tool Database: it brings its own feeds, speeds and pass depth
-    .tooltip-another-bit = Pick another bit for this in the Tool Database
+    .tooltip = Pick the bit this toolpath cuts with in the Bit Library: it brings its own feeds, speeds and pass depth
+    .tooltip-laser = Pick the laser this toolpath burns with in the Bit Library (its Lasers): it brings its own kerf and speed
+    .tooltip-another = Pick another bit for this in the Bit Library: it brings its own feeds, speeds and pass depth
+    .tooltip-another-bit = Pick another bit for this in the Bit Library
 tool-edit = Edit…
-    .tooltip = Change this tool in the Tool Database
-    .tooltip-bit = Change this bit in the Tool Database
-tool-list-add = Add a tool…
-    .tooltip = Pick one more in the Tool Database
+    .tooltip = Change this bit in the Bit Library
+    .tooltip-bit = Change this bit in the Bit Library
+tool-list-add = Add a bit…
+    .tooltip = Pick one more in the Bit Library
 tool-list-remove = Remove
 
 # Pocket's clearing bits.
@@ -56,10 +56,10 @@ clearing-add-smaller = Add a smaller clearing bit…
     .tooltip = Another bit, between the ones above and the finishing bit, for corners too tight for them
 clearing-remove-bit = Remove this bit
 
-# Rest Machining: cutting only what earlier tools left.
+# Rest Machining: cutting only what earlier bits left.
 rest-title = Rest Machining
-    .tooltip = Cut only what the tools that ran before this one could not reach
-rest-off = Off: add the bigger tools that cut before this one to cut only what they left
+    .tooltip = Cut only what the bits that ran before this one could not reach
+rest-off = Off: add the bigger bits that cut before this one to cut only what they left
 rest-minimum-detail = Minimum detail
     .tooltip = Leave alone unmachined areas narrower than this
 rest-overlap = Overlap
@@ -81,9 +81,9 @@ selector-tolerance = Tolerance
 
 # Toolpaths ▸ Toolpath Summary.
 summary-total = Total machining time: { $time }
-    .tooltip = Every move: cutting, rapids, getting to each toolpath, tool changes and the trip back home
+    .tooltip = Every move: cutting, rapids, getting to each toolpath, bit changes and the trip back home
 summary-write-notes = Click to write its notes
-summary-each-time = Each time counts every move at the tools' feed rates and the machine's speeds, getting to it from the toolpath before and its tool change included
+summary-each-time = Each time counts every move at the bits' feed rates and the machine's speeds, getting to it from the toolpath before and its bit change included
 summary-acceleration = Machine acceleration
 summary-notes-for = Notes for { $toolpath }
 summary-save-notes = Save Notes

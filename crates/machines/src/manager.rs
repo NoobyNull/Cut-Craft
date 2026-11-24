@@ -796,8 +796,8 @@ fn shown(value: f64, unit: &str) -> String {
 const MOST_SLOTS: usize = 99;
 
 /// Automatic Tool Changer: how many slots, and what is loaded in them. Given the tool
-/// database's tools (name and tool number), each slot's Select… asks for its tool to be picked
-/// in the Tool Database, × empties it, and Load by Tool Number puts each numbered tool in its
+/// database's tools (name and bit number), each slot's Select… asks for its tool to be picked
+/// in the Bit Library, × empties it, and Load by Bit Number puts each numbered tool in its
 /// holder; else the slots are only listed. Whether anything changed, and the holder (from 1)
 /// whose Select… was clicked.
 pub fn tool_changer(
@@ -818,7 +818,7 @@ pub fn tool_changer(
             machine.set_slot_count(usize::from(has));
         }
         if !has {
-            ui.weak("Tool changes are by hand; tools are numbered in the order they are used");
+            ui.weak("Bit changes are by hand; bits are numbered in the order they are used");
             return;
         }
         let mut count = machine.slots.len();
@@ -846,8 +846,8 @@ pub fn tool_changer(
             return;
         };
         if ui
-            .button("Load by Tool Number")
-            .on_hover_hint("Each tool with a tool number goes in that holder")
+            .button("Load by Bit Number")
+            .on_hover_hint("Each bit with a bit number goes in that holder")
             .clicked()
         {
             for (name, number) in tools {
@@ -868,7 +868,7 @@ pub fn tool_changer(
                     ui.horizontal(|ui| {
                         if ui
                             .button("Select…")
-                            .on_hover_hint("Pick the tool for this holder in the Tool Database")
+                            .on_hover_hint("Pick the bit for this holder in the Bit Library")
                             .clicked()
                         {
                             select = Some(i + 1);
