@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-17
-see-also: settings, updates, contents
+reviewed: 2026-11-24
+see-also: settings, updates, contents, language
 ---
 
 # Reporting a bug
@@ -23,6 +23,13 @@ sends that log, or offers it to you in the same form, as you chose in
    to yourself (see below).
 4. Press **Submit to GitHub**. The report becomes a public issue on GitHub that the people fixing Cut
    Craft read.
+
+## A wrong word in another language
+
+While you use a [language pack](help:language), the form starts with a line such as **A
+wrong or missing word in Русский?** and a **Tell its translators** link. Language packs are
+written by volunteers, so a wrong or missing word goes to them on GitHub, not in this
+form. Anything else that goes wrong still goes in the form as usual.
 
 ## What is sent
 

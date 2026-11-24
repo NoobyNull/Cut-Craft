@@ -132,6 +132,13 @@ fn first_answer(
     Err(last.unwrap_or_default())
 }
 
+/// Where to report a wrong or missing word in a language pack from `repo`: its GitHub
+/// Issues. Language packs are community supported, so their translators answer there, not
+/// Cut Craft.
+pub fn wording_issues(repo: &Repo) -> String {
+    format!("https://github.com/{repo}/issues")
+}
+
 /// The zip a language's pack is in, on [`TRANSLATIONS`]' releases.
 pub fn language_zip(code: &str) -> String {
     format!("language-{code}.zip")
@@ -262,12 +269,21 @@ pub struct Manifest {
     /// `ru` or `pt-BR`.
     #[serde(default)]
     pub language: Option<String>,
+    /// For a language pack: the volunteers who wrote and keep up its words, as they want
+    /// to be named. Language packs are official (checked and signed) but community
+    /// supported, so the Add-ons window and Options credit them.
+    #[serde(default)]
+    pub translators: Vec<String>,
 }
 
 impl Manifest {
     pub fn parse(text: &str) -> Result<Self, String> {
-        let m: Self =
+        let mut m: Self =
             toml::from_str(text).map_err(|e| format!("the add-on's {MANIFEST} is broken: {e}"))?;
+        m.translators = (m.translators.iter())
+            .map(|n| n.trim().to_owned())
+            .filter(|n| !n.is_empty())
+            .collect();
         let id_fine = !m.id.is_empty()
             && m.id
                 .chars()
@@ -1441,6 +1457,23 @@ mod tests {
         let other = Repo::parse("someone/CutCraft-Translations").unwrap();
         assert!(owns_its_id(&addons, &manifest, &other).is_err());
         fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn a_language_pack_names_its_translators_and_where_to_report_wording() {
+        let base = "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\n\
+                    language = \"ru\"\nversion = \"1.0.0\"\n";
+        let m = Manifest::parse(&format!("{base}translators = [\"Ivan\", \"Olga\"]")).unwrap();
+        assert_eq!(m.translators, ["Ivan", "Olga"]);
+        assert!(Manifest::parse(base).unwrap().translators.is_empty());
+        // blank names say nothing, so they are left out
+        let m = Manifest::parse(&format!("{base}translators = [\" \", \"Ivan \"]")).unwrap();
+        assert_eq!(m.translators, ["Ivan"]);
+        let repo = Repo::parse("NoobyNull/CutCraft-Translations").unwrap();
+        assert_eq!(
+            wording_issues(&repo),
+            "https://github.com/NoobyNull/CutCraft-Translations/issues"
+        );
     }
 
     #[test]
