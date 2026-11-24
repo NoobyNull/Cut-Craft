@@ -36,6 +36,7 @@ mod shortcut;
 mod spacemouse;
 mod startup;
 mod tool_model;
+mod tool_names;
 mod toolpath_order;
 mod trust;
 mod update;

@@ -383,17 +383,7 @@ pub(super) const STARTUP_TASKS: [(&str, &str); 4] = [
 /// A menu's words' key (`locales/en/menus.ftl`): `menu-` and its English name, lower case and
 /// hyphenated, so a menu is still found by its English name.
 pub(crate) fn menu_key(name: &str) -> String {
-    let mut key = String::from("menu-");
-    for word in name
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-    {
-        if !key.ends_with('-') {
-            key.push('-');
-        }
-        key.push_str(&word.to_lowercase());
-    }
-    key
+    cut_craft_i18n::key_of("menu", name)
 }
 /// The top bar's split and snapping toggles.
 pub(super) const TOP_BAR_TOGGLES: [&str; 5] = [

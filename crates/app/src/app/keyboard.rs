@@ -477,7 +477,7 @@ impl CutCraftApp {
         actions.extend(
             self.registry
                 .iter()
-                .map(|c| (c.id().to_owned(), c.meta().label.to_owned())),
+                .map(|c| (c.id().to_owned(), self.tool_label(c.id()))),
         );
         for id in BUILT_INS.iter().chain(LAYOUT_KEYS.iter().map(|(id, _)| id)) {
             if !actions.iter().any(|(a, _)| a == id) {
@@ -614,9 +614,7 @@ impl CutCraftApp {
                 let label = if id == shortcut::PAN_DRAG {
                     "Pan (hold and drag)".to_owned()
                 } else {
-                    self.registry
-                        .get(&id)
-                        .map_or_else(|| gui::title_case(&id), |c| c.meta().label.to_owned())
+                    self.tool_label(&id)
                 };
                 let keys = match trigger {
                     shortcut::Trigger::Key(keys) => ctx.format_shortcut(&keys),

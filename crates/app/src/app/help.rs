@@ -311,7 +311,7 @@ impl CutCraftApp {
         let tools_page = |page: Page, intro: &str| {
             let mut md = format!("[Contents](help:contents)\n\n{intro}");
             for g in self.help_groups(page) {
-                let _ = write!(md, "\n## {}\n\n", g.name);
+                let _ = write!(md, "\n## {}\n\n", crate::tool_names::group_name(g.name));
                 for id in g.tools {
                     let icon = self
                         .help_icon_uri(id, LIST_ICON)

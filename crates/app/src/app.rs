@@ -138,6 +138,15 @@ const INSPECTOR_TABS: [&str; 6] = [
 /// The ribbon's tabs: the drawing, modeling and toolpath groups.
 /// The Ribbon's tabs; Gadgets shows only once a gadget or add-on is installed.
 const RIBBON_TABS: [&str; 5] = ["Design", "Model", "Toolpaths", "Favourites", "Gadgets"];
+/// Every page tab's English name, each with its words in `locales/en/subtabs.ftl`.
+#[cfg(test)]
+pub(crate) fn page_tabs() -> impl Iterator<Item = &'static str> {
+    DESIGN_TABS
+        .into_iter()
+        .chain(INSPECTOR_TABS)
+        .chain(RIBBON_TABS)
+        .chain(["Toolpaths"])
+}
 /// Actions the app handles itself rather than through a command.
 /// What the 3D view's fine mesh was made for: the model as at this revision, seen so.
 #[derive(Clone, Debug, PartialEq)]
@@ -1150,7 +1159,9 @@ fn menu_items(
         .iter()
         .map(|i| {
             let shortcut = (menus.shortcut_of)(&i.action).unwrap_or_else(|| i.shortcut.clone());
-            text(&i.name) + text(&shortcut_label(ui.ctx(), &shortcut)) + room
+            text(&crate::tool_names::menu_item_name(i))
+                + text(&shortcut_label(ui.ctx(), &shortcut))
+                + room
         })
         .fold(0.0, f32::max);
     for category in gui::categories(items) {
@@ -1254,15 +1265,16 @@ fn paint_focus_ring(ctx: &egui::Context) {
 }
 
 fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &mut Option<String>) {
+    let name = crate::tool_names::menu_item_name(item);
     if item.action == "recent_files" {
         ui.add_enabled_ui(!menus.recent.is_empty(), |ui| {
-            ui.menu_button(&item.name, |ui| {
+            ui.menu_button(&name, |ui| {
                 menu_items(ui, menus.recent, menus, clicked);
             });
         });
     } else if !item.children.is_empty() {
         ui.add_enabled_ui(item.is_enabled, |ui| {
-            ui.menu_button(&item.name, |ui| {
+            ui.menu_button(&name, |ui| {
                 menu_items(ui, &item.children, menus, clicked);
             });
         });
@@ -1272,9 +1284,9 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
             Some(picture) => {
                 let edge = ui.spacing().interact_size.y;
                 let picture = picture.fit_to_exact_size(egui::Vec2::splat(edge));
-                egui::Button::image_and_text(picture, &item.name)
+                egui::Button::image_and_text(picture, &name)
             }
-            None => egui::Button::new(&item.name),
+            None => egui::Button::new(&name),
         }
         .shortcut_text(shortcut_label(
             ui.ctx(),

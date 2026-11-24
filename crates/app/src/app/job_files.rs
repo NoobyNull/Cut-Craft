@@ -229,7 +229,7 @@ impl CutCraftApp {
         } else {
             fields
         };
-        meta.label.clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label(cmd.id());
         self.view_tool = None;
         if fields.is_empty() {
             if let Err(e) = self.apply(cmd.id(), &params) {
@@ -300,7 +300,7 @@ impl CutCraftApp {
         if let Some(form) = self.form.as_mut().filter(|f| f.id == variant.command) {
             form.way = variant.way;
             form.label = variant.label;
-            variant.label.clone_into(&mut self.status.current_tool);
+            self.status.current_tool = self.tool_label(variant.id);
         }
     }
 

@@ -125,7 +125,7 @@ impl CutCraftApp {
             form.fields.retain(|f| BRIEF.contains(&f.key.as_str()));
             form.label = LABEL;
             form.brief = true;
-            LABEL.clone_into(&mut self.status.current_tool);
+            self.status.current_tool = self.tool_label("setup_material");
         }
     }
 

@@ -325,7 +325,7 @@ impl CutCraftApp {
         let mut chosen = None;
         // plain sections: a heading over its tools
         for (name, tools) in sections {
-            ui.strong(*name);
+            ui.strong(crate::tool_names::group_name(name));
             if !among && !folded {
                 self.spread_tools(ui, tools, edge, &mut clicked, &mut chosen);
                 ui.add_space(ui.spacing().item_spacing.y);
@@ -423,9 +423,12 @@ impl CutCraftApp {
         let room = full - 2.0 * margin - 2.0 + spacing.x;
         let across = (room / (button + spacing.x)).floor();
         self.buttons_across.set(across);
-        let captions: Vec<&str> = clusters
+        let captions: Vec<String> = clusters
             .iter()
-            .map(|c| c.name.unwrap_or_default())
+            .map(|c| {
+                c.name
+                    .map_or_else(String::new, crate::tool_names::group_name)
+            })
             .collect();
         let widths: Vec<f32> = clusters
             .iter()
@@ -434,7 +437,7 @@ impl CutCraftApp {
                 let n = f32::from(u16::try_from(cluster.tools.len()).unwrap_or(u16::MAX));
                 let caption_width = ui
                     .painter()
-                    .layout_no_wrap((*caption).to_owned(), caption_font.clone(), caption_color)
+                    .layout_no_wrap(caption.clone(), caption_font.clone(), caption_color)
                     .size()
                     .x;
                 let icons = n * button + (n - 1.0).max(0.0) * spacing.x;
@@ -469,7 +472,7 @@ impl CutCraftApp {
                         ui.set_max_width(width - 2.0 * margin - 2.0);
                         ui.vertical(|ui| {
                             if cluster.name.is_some() {
-                                let text = egui::RichText::new(captions[i])
+                                let text = egui::RichText::new(&captions[i])
                                     .small()
                                     .color(caption_color);
                                 ui.add(
