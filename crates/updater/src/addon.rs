@@ -1465,7 +1465,10 @@ mod tests {
                     language = \"ru\"\nversion = \"1.0.0\"\n";
         let m = Manifest::parse(&format!("{base}translators = [\"Ivan\", \"Olga\"]")).unwrap();
         assert_eq!(m.translators, ["Ivan", "Olga"]);
-        assert!(Manifest::parse(base).unwrap().translators.is_empty());
+        assert_eq!(
+            Manifest::parse(base).unwrap().translators,
+            Vec::<String>::new()
+        );
         // blank names say nothing, so they are left out
         let m = Manifest::parse(&format!("{base}translators = [\" \", \"Ivan \"]")).unwrap();
         assert_eq!(m.translators, ["Ivan"]);
