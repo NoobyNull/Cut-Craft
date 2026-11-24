@@ -233,8 +233,10 @@ While it plays, the view is always drawn round the axis, even with Auto-Wrapping
 Each move takes as long as the file's feed says (most rotary posts write feeds in inverse
 time, G93), and the turning material keeps to the same point through the job as the
 Progress slider. Previewing one toolpath after others carries on from what those cut. The
-material is cut as small cells, about two million over the job, and drawn smoothed, so very
-fine detail shows only roughly. If the job can't be saved for the active machine (a machine
+material is cut as small cells and drawn smoothed. How small follows the Performance ◀ ▶
+Detail slider on the Preview tab: in the middle, about a third of a millimetre on a 300 mm by
+80 mm blank, fine enough to show a finish's passes. If the preview looks striped or stepped,
+move the slider towards Detail and preview again; towards Performance it plays faster. If the job can't be saved for the active machine (a machine
 on standard GRBL has no A axis, say), the preview plays unrolled as before, and Save
 Toolpaths says why.
 
@@ -267,17 +269,21 @@ tool changes are, or copy a few lines into a forum post. **View G-code…** on t
 (beside Machine Files), and in the Save Toolpaths window, shows the G-code saving would
 write, in a window of its own, without saving a file.
 
-![The View G-code window over the Output tab: the post-processor, the file, its lines numbered, and Copy All, Save Toolpaths… and Refresh](pictures/view-gcode.png)
+![The View G-code window over the Output tab: the post-processor, what the checks before cutting found, the file, its lines numbered, and Copy All, Save Toolpaths… and Refresh](pictures/view-gcode.png)
 
 1. Make your toolpaths and tick the ones you want in the toolpath list.
 2. Open the **Output** tab and press **View G-code…**.
 3. The window says which post-processor made it (the machine's default, or the one picked
    in Save Toolpaths), the file's name and how many lines it has. Each line is numbered.
-4. When saving would make several files (one per tool, or one per tile), pick which to read
+4. Above the G-code, the [checks before cutting](help:checks_before_cutting) list what they
+   found, the same checks Save Toolpaths runs: **✖ Must fix** lines in red, **⚠** warnings
+   in amber, or a green line when they found nothing. While they run, a spinner says so.
+   Nothing is stopped here: you decide what to change, and the G-code stays there to read.
+5. When saving would make several files (one per tool, or one per tile), pick which to read
    from **File**.
-5. **Copy All** copies the file's G-code to paste somewhere else. **Save Toolpaths…** opens
+6. **Copy All** copies the file's G-code to paste somewhere else. **Save Toolpaths…** opens
    Save Toolpaths with the same choices, to check the toolpaths and save the files.
    **Refresh** makes the G-code again after you change a toolpath.
 
-Nothing is saved, and the checks before cutting don't run, until you save. See also
-[Save Toolpaths](help:save_toolpaths) and Checks before cutting, above.
+Nothing is saved until you save. See also [Save Toolpaths](help:save_toolpaths) and
+[Checks before cutting](help:checks_before_cutting).
