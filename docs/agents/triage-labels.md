@@ -14,7 +14,7 @@ When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the 
 
 ## Creating the labels
 
-Only `wontfix` exists in the repo so far. Applying a label that doesn't exist fails, and the skills don't create labels, so create the other four once before the first triage:
+All five labels exist in the repo (added 2026-11-24). Applying a label that doesn't exist fails, and the skills don't create labels, so if one goes missing, recreate it:
 
 ```sh
 gh label create needs-triage    --repo NoobyNull/Cut-Craft --description "Maintainer needs to evaluate this issue"
@@ -23,6 +23,6 @@ gh label create ready-for-agent --repo NoobyNull/Cut-Craft --description "Fully 
 gh label create ready-for-human --repo NoobyNull/Cut-Craft --description "Requires human implementation"
 ```
 
-The GitHub connector tools can't create labels, so a project thread asks Matthew to run these (or add the labels in the repo's Labels page) if they're missing.
+The GitHub connector tools can't create labels, so a project thread asks Matthew to recreate a missing one.
 
 Edit the right-hand column to match whatever vocabulary you actually use.
