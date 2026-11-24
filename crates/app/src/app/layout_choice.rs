@@ -31,6 +31,9 @@ pub(super) fn answer(options: &mut Options, chosen: Option<WindowLayout>) {
     options.layout_asked = true;
 }
 
+/// A layout picture's height for its width (every picture is 1400 by 433).
+const PICTURE_SHAPE: f32 = 433.0 / 1400.0;
+
 /// A layout's picture in the help, light theme beside dark.
 pub(super) fn picture(layout: WindowLayout) -> &'static str {
     match layout {
@@ -78,9 +81,10 @@ pub(super) fn layout_choices(ui: &mut egui::Ui, chosen: &mut WindowLayout) {
                 .show(ui, |ui| {
                     ui.set_width(width);
                     ui.vertical(|ui| {
+                        // sized before it loads, so nothing moves when it does
                         ui.add(
                             egui::Image::new(cut_craft_help::picture_uri(picture(layout)))
-                                .max_width(width)
+                                .fit_to_exact_size(egui::vec2(width, width * PICTURE_SHAPE))
                                 .alt_text(name(layout)),
                         );
                         radio = Some(ui.radio(picked, egui::RichText::new(name(layout)).strong()));

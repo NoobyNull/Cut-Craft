@@ -309,13 +309,15 @@ impl CutCraftApp {
         egui::Modal::new(egui::Id::unique("first_run")).show(ctx, |ui| {
             cut_craft_bug_report::mark(ui, "First-time setup");
             ui.set_width(ui.spacing().interact_size.x * 14.0);
-            // five questions and the layouts' pictures: they scroll on a short screen
-            let tall = 0.85 * ui.ctx().content_rect().height();
+            // five questions and the layouts' pictures: they scroll on a short screen, and
+            // Start and Skip stay in sight under them
+            let tall = 0.75 * ui.ctx().content_rect().height();
             egui::ScrollArea::vertical()
                 .max_height(tall)
-                .show(ui, |ui| {
-                    finish = Self::first_run_questions(ui, &mut setup);
-                });
+                .min_scrolled_height(tall)
+                .show(ui, |ui| Self::first_run_questions(ui, &mut setup));
+            ui.separator();
+            finish = Self::first_run_buttons(ui, &setup);
         });
         match finish {
             Some(Finish::Done) => self.finish_first_run(&setup),
@@ -324,7 +326,7 @@ impl CutCraftApp {
         }
     }
 
-    fn first_run_questions(ui: &mut egui::Ui, setup: &mut Setup) -> Option<Finish> {
+    fn first_run_questions(ui: &mut egui::Ui, setup: &mut Setup) {
         ui.heading(tr!("first-run-welcome-to-cut-craft"));
         ui.label(tr!("first-run-a-few-quick-questions-so"));
         ui.add_space(ui.spacing().item_spacing.y);
@@ -379,7 +381,10 @@ impl CutCraftApp {
         ui.strong(tr!("first-run-5-how-should-the-window"));
         super::layout_choice::layout_choices(ui, &mut setup.layout);
         ui.weak(tr!("first-run-layout-note"));
-        ui.separator();
+    }
+
+    /// Start using Cut Craft, or Skip for Now.
+    fn first_run_buttons(ui: &mut egui::Ui, setup: &Setup) -> Option<Finish> {
         let mut finish = None;
         ui.horizontal(|ui| {
             let start = ui
