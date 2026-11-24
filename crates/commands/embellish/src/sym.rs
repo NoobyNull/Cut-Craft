@@ -151,6 +151,10 @@ impl Frame {
     }
 }
 
+#[expect(
+    clippy::cognitive_complexity,
+    reason = "one design, read top to bottom as its sketch was; to be split into named steps"
+)]
 pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<Item> {
     let g = s.gap;
     let (det, den, sc) = (s.detail, s.density, s.scale);
