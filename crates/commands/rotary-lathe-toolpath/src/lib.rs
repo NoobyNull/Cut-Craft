@@ -21,7 +21,7 @@ use cut_craft_core::glam::DVec3;
 use cut_craft_core::progress;
 use cut_craft_core::rotary_axis::Surroundings;
 use cut_craft_core::toolpath::{Move, Tool, follow, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use cut_craft_rotary::{Cutter, Head, Stock};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -101,6 +101,7 @@ impl Command for RotaryLatheToolpath {
             group: "3D Toolpaths",
             icon: "toolpaths/rotary_lathe_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

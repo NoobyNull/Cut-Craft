@@ -67,6 +67,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_toolpath_group::GroupToolpaths>();
     r.add::<cmd_toolpath_group::RenameToolpathGroup>();
     r.add::<cmd_toolpath_group::UngroupToolpaths>();
+    r.add::<cmd_toolpath_group::ShowToolpathGroup>();
     r.add::<cmd_quick_engrave_toolpath::QuickEngraveToolpath>();
     r.add::<cmd_keyhole_toolpath::KeyholeToolpath>();
     r.add::<cmd_surfacing_toolpath::SurfacingToolpath>();

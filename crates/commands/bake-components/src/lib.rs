@@ -5,7 +5,7 @@
 
 use cut_craft_core::component::{Combine, Component, level_shape_at_resolution, shown_components};
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct BakeComponents;
 
@@ -19,6 +19,7 @@ impl Command for BakeComponents {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

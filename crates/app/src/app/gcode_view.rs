@@ -78,6 +78,68 @@ fn numbered_lines(ui: &mut egui::Ui, text: &str, starts: &[usize], file: usize) 
         });
 }
 
+/// What the checks before cutting say of the G-code shown.
+#[derive(Debug, PartialEq)]
+enum Checks {
+    /// No toolpaths to check (nothing to cut, or no post).
+    None,
+    Running,
+    Cancelled,
+    Found(Vec<cut_craft_core::preflight::Finding>),
+}
+
+/// The checks' findings above the G-code: each error in red, each warning in amber, or a
+/// green line when they found nothing. Nothing is stopped: the operator decides.
+fn found_list(ui: &mut egui::Ui, checks: &Checks) {
+    use cut_craft_core::preflight::Severity;
+    let visuals = ui.visuals().clone();
+    match checks {
+        Checks::None => {}
+        Checks::Running => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.weak(tr!("gcode-view-checks-running"));
+            });
+        }
+        Checks::Cancelled => {
+            ui.colored_label(visuals.warn_fg_color, tr!("gcode-view-checks-cancelled"));
+        }
+        Checks::Found(found) if found.is_empty() => {
+            ui.colored_label(
+                egui::Color32::from_rgb(0x3c, 0xa0, 0x4a),
+                tr!("gcode-view-checks-passed"),
+            );
+        }
+        Checks::Found(found) => {
+            ui.label(tr!("gcode-view-checks-found"));
+            // errors first, as they need the operator most
+            let mut sorted: Vec<_> = found.iter().collect();
+            sorted.sort_by_key(|f| f.severity != Severity::Error);
+            let height = ui.spacing().interact_size.y * 5.0;
+            egui::ScrollArea::vertical()
+                .id_salt("gcode_findings")
+                .max_height(height)
+                .show(ui, |ui| {
+                    for f in sorted {
+                        let message = f.message.clone();
+                        if f.severity == Severity::Error {
+                            ui.colored_label(
+                                visuals.error_fg_color,
+                                tr!("gcode-view-error", message = message),
+                            );
+                        } else {
+                            ui.colored_label(
+                                visuals.warn_fg_color,
+                                tr!("gcode-view-warning", message = message),
+                            );
+                        }
+                    }
+                });
+        }
+    }
+    ui.separator();
+}
+
 /// Frames the Save Toolpaths window takes to close: not drawn the next frame, it is gone the
 /// one after.
 const FRAMES_TO_CLOSE: u8 = 2;
@@ -118,8 +180,7 @@ impl CutCraftApp {
             .as_ref()
             .map_or_else(|_| String::new(), |p| p.name.clone());
         let files = post.and_then(|post| {
-            let named = cut_craft_machines::send::safe_name(&self.output_name(&form), false);
-            let name = format!("{named}.{}", post.extension);
+            let name = self.output().file_name(&form, &post);
             let folder = self
                 .session
                 .path
@@ -149,6 +210,7 @@ impl CutCraftApp {
     /// The G-code window: which post and file, the file's lines numbered, Copy All and Save
     /// Toolpaths….
     pub(super) fn gcode_window(&mut self, ctx: &egui::Context) {
+        let checks = self.gcode_checks();
         let Some(view) = self.gcode_view.as_mut() else {
             return;
         };
@@ -175,6 +237,7 @@ impl CutCraftApp {
                     return;
                 }
             };
+            found_list(ui, &checks);
             view.shown = view.shown.min(files.len() - 1);
             ui.horizontal(|ui| {
                 ui.label(tr!("gcode-view-file"));
@@ -223,11 +286,37 @@ impl CutCraftApp {
         if !open {
             self.gcode_view = None;
         } else if refresh {
+            // cancelled checks run again with it
+            self.check_again();
             self.view_gcode(form);
         } else if save {
             // its window would sit over the file dialog the save opens
             self.gcode_view = None;
             self.save_form = Some(form);
+        }
+    }
+
+    /// What the checks before cutting found for the G-code window's toolpaths: the same
+    /// checks Save Toolpaths runs (kept, and run again only when the job or machine
+    /// changed), started in the background when they have not run.
+    fn gcode_checks(&mut self) -> Checks {
+        let Some(form) = self.gcode_view.as_ref().map(|v| v.form.clone()) else {
+            return Checks::None;
+        };
+        let Some(plan) = self
+            .form_post(&form)
+            .and_then(|post| self.plan(&form, &post))
+            .ok()
+        else {
+            return Checks::None;
+        };
+        if let Some(found) = self.save_checks(&plan, form.changes) {
+            return Checks::Found(found.to_vec());
+        }
+        if self.checking() || self.busy.is_some() {
+            Checks::Running
+        } else {
+            Checks::Cancelled
         }
     }
 

@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-22
-see-also: relief_from_photo, open_gadgets_folder, settings, language
+reviewed: 2026-11-23
+see-also: relief_from_photo, open_gadgets_folder, settings, language, confirmation_choices, web_api
 ---
 
 **Add-ons** brings in extra tools that are too big to come with Cut Craft, such as the Depth
@@ -33,7 +33,10 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
 
 ## Languages
 
-Under **Languages**, each language with a pack has its own **Install** button. A language
+Under **Languages**, each language with a pack has its own **Install** button. Each is
+**Official, community supported**: checked and signed, but translated by volunteers (see
+[Using Cut Craft in another language](help:language)). An installed pack also says who
+translated it and how much is done. A language
 pack doesn't appear in My Gadgets. Pick it in **Edit ▸ Options ▸ Language** instead (see
 [Using Cut Craft in another language](help:language)).
 
@@ -63,11 +66,35 @@ official. A copy installed before it was signed still says **not official**: pre
 Anything else is **not official**: a gadget you put in the My Gadgets folder yourself, or an
 add-on from someone else's GitHub repository. It still installs and works, but:
 
-- Cut Craft warns you before installing it, and asks before it first runs each time you
-  start Cut Craft.
+- Cut Craft warns you before installing it, and asks before its code first runs (see
+  below).
 - The Add-ons window says so beside it, such as
   **Version 0.1.0 installed, ⚠ not official (not signed)**.
 - **Gadgets ▸ My Gadgets** shows **⚠ (not official)** after its name.
+
+## Running unsigned code
+
+Nothing that is not official runs until you say so. The first time you use a gadget or
+add-on that is not official, Cut Craft asks **Do you want to run this unsigned code?** and
+explains that nobody has checked it, and that Cut Craft and its author are not responsible
+for what it does. You choose:
+
+1. **Run and Remember** runs it now, and from now on without asking, until it changes.
+2. **Run This Time** runs it now, and asks again after Cut Craft closes.
+3. **Don't Run** leaves it alone. Cut Craft asks again the next time you use it.
+
+"Until it changes" means Cut Craft remembers the code itself, not just its name. If an
+update arrives, you edit the file, or someone puts a different file in its place, you are
+asked again.
+
+A gadget you have not said yes to is listed under its file's name (such as
+**star-burst.lua ⚠ (not official)**). None of its code runs, not even to read its name,
+until you say yes. After that it shows its own name and settings.
+
+Changed your mind? **Edit ▸ Options ▸ Confirmation Choices ▸ Forget These Answers** makes
+every unsigned gadget and add-on ask again ([Confirmation Choices](help:confirmation_choices)).
+Scripts using the [Web API](help:web_api) can't answer the question for you: they can use
+unsigned code only after you have said yes in the window.
 
 ## Update or remove
 

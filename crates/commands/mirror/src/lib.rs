@@ -5,7 +5,7 @@
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::{DAffine2, DMat2};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -73,6 +73,7 @@ impl Command for Mirror {
             group: "Transform Objects",
             icon: "drawing/edit_objects/mirror.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

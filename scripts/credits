@@ -1,0 +1,42 @@
+#!/bin/bash
+# Help ▸ Credits: credits/libraries.md, every library's licence, made from Cargo.lock by
+# cargo-about (settings in about.toml, layout in about.hbs). credits/other.md is kept by hand.
+#
+#   scripts/credits            remakes credits/libraries.md; commit it with the Cargo.lock change
+#   scripts/credits --check    fails if it no longer matches Cargo.lock (CI runs this)
+#
+# Needs cargo-about at the version below, so every machine makes the same file:
+#   cargo install cargo-about --locked --features cli --version 0.9.3
+# (CI installs the same version: keep .github/workflows/ci.yml's cargo-about@ in step.)
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+version=0.9.3
+out=credits/libraries.md
+
+have=$(cargo about --version 2>/dev/null | awk '{print $2}' || true)
+if [[ $have != "$version" ]]; then
+    echo "scripts/credits needs cargo-about $version (found: ${have:-none}). Install it with:" >&2
+    echo "  cargo install cargo-about --locked --features cli --version $version" >&2
+    exit 2
+fi
+
+# cargo-about warns that Cut Craft's own crates name no licence: they are left out on purpose
+generate() {
+    cargo about generate about.hbs -o "$1" 2> >(grep -v "license field\|synthesize license" >&2)
+}
+
+if [[ ${1:-} == --check ]]; then
+    fresh=$(mktemp)
+    trap 'rm -f "$fresh"' EXIT
+    generate "$fresh"
+    if ! diff -q "$out" "$fresh" >/dev/null; then
+        echo "credits/libraries.md no longer matches Cargo.lock: the libraries changed." >&2
+        echo "Fix: run scripts/credits and commit credits/libraries.md." >&2
+        diff -u "$out" "$fresh" | head -40 >&2 || true
+        exit 1
+    fi
+    echo "credits/libraries.md matches Cargo.lock."
+else
+    generate "$out"
+    echo "Made $out."
+fi

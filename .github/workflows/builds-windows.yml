@@ -80,7 +80,7 @@ jobs:
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
           $name = "cut-craft-$version-windows-x86_64"
           New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
-          Copy-Item target/release/cut-craft.exe, README.md, LICENSE -Destination "dist/$name"
+          Copy-Item -Recurse target/release/cut-craft.exe, README.md, LICENSE, credits -Destination "dist/$name"
           Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
       - uses: actions/upload-artifact@v4
         with:

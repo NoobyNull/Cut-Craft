@@ -184,6 +184,11 @@ pub enum Edit {
         before: Vec<String>,
         after: Vec<String>,
     },
+    /// Replaces which toolpath group each sub-group sits in.
+    SetToolpathGroupParents {
+        before: BTreeMap<String, String>,
+        after: BTreeMap<String, String>,
+    },
     /// Replaces the keep-out zones.
     SetKeepOut {
         before: Vec<crate::keep_out::KeepOutZone>,
@@ -298,6 +303,10 @@ impl Edit {
                 after: before,
             },
             Self::SetToolpathGroups { before, after } => Self::SetToolpathGroups {
+                before: after,
+                after: before,
+            },
+            Self::SetToolpathGroupParents { before, after } => Self::SetToolpathGroupParents {
                 before: after,
                 after: before,
             },

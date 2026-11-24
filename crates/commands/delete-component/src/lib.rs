@@ -1,7 +1,7 @@
 //! Delete Component: removes a 3D component from the model. Undo brings it back.
 
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::{Change, Command, CommandError, Meta, existing};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,7 @@ impl Command for DeleteComponent {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

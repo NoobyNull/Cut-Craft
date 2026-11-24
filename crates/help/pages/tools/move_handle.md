@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-21
+reviewed: 2026-11-23
 see-also: span_to_bezier, node_edit, move_node, smooth_point
 ---
 

@@ -1,6 +1,6 @@
 # Cut Craft: detailed plan for the remaining work
 
-The step-by-step plan behind `docs/ROADMAP.md`. The roadmap says what is done and in what
+The step-by-step plan behind `docs/feature-status-2026-11-01.md` (archived). The roadmap says what is done and in what
 order the rest comes; this file says how each remaining item is built, what it changes,
 how it is tested and when it counts as done. Written 2026-10-25, after Phase A and the
 tracing core (`crates/core/src/trace.rs`).
@@ -28,12 +28,12 @@ The same cycle for each item, one at a time, nothing pushed until asked.
    shortcut; the unwired-menu check (section 5) shrinks.
 6. **Commit**, update `docs/tool-inventory.md`, and this file's status column.
 7. **After each milestone:** rebuild the launcher, try the milestone in the running app
-   (screenshot rules in the project memory), update `docs/ROADMAP.md`, and report.
+   (screenshot rules in the project memory), update `docs/feature-status-2026-11-01.md`, and report.
 
 ## 2. Status at a glance
 
 Updated 2026-11-01 (version 0.4.2). Every milestone below is built; what is left inside
-them, and what is not built, is in `docs/ROADMAP.md` (sections 3 and 4).
+them, and what is not built, is in `docs/feature-status-2026-11-01.md` (sections 3 and 4).
 
 | Milestone | Contents | Status |
 |---|---|---|

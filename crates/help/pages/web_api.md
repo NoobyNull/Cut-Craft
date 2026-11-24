@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: updates, smooth_selected_components, component_properties
+reviewed: 2026-11-23
+see-also: updates, smooth_selected_components, component_properties, addons
 ---
 
 # Web API
@@ -41,6 +41,19 @@ laptop) drive Cut Craft. Then every call, from any computer, must send the **acc
   different program already uses it.
 - **Make New Token** stops the old token working, for example if someone you did not mean
   to have it does.
+
+## Unsigned gadgets and add-ons
+
+A script can't say yes to unsigned code for you. Calling a gadget that is **not official**
+(see [Add-ons](help:addons)) is refused, with a message saying what to do, until you have
+said yes to it in the Cut Craft window:
+
+1. In Cut Craft, pick the gadget in **Gadgets ▸ My Gadgets**.
+2. Choose **Run and Remember** (scripts can use it from then on, until it changes) or **Run
+   This Time** (until Cut Craft closes).
+3. Run your script again.
+
+Cut Craft's own gadgets, and signed ones, need no answer.
 
 ## The status bar
 
@@ -167,10 +180,14 @@ Toolpaths page's buttons, each with its progress window as usual.
     `"each": true` puts each shown toolpath in a file of its own.
   - `"post": "GRBL (mm)"` uses that post processor (from **GET posts**).
   - `"save_to": "/home/me/sign.nc"` saves the files there as well. Give the whole path,
-    with its folder. A file already there is kept unless you send `"replace": true`.
-  - An error the checks find stops it: nothing is made. A warning (or a toolpath out of
-    date) stops it too, as **Save Toolpaths** asks you, until you send
-    `"accept_warnings": true`, which is like answering **Save Anyway**.
+    with its folder. An earlier save there (the same file, or the tile, numbered and side
+    files it made) is kept unless you send `"replace": true`. Then it is archived or
+    replaced just as **Save Toolpaths** does, as **Edit ▸ Options ▸ Confirmation Choices**
+    say (replaced when they say to ask), and put back if the new files can't be written.
+  - An error the checks find stops it: nothing is made. A warning (a toolpath out of date
+    is one) stops it too, as **Save Toolpaths** asks you, until you send
+    `"accept_warnings": true`, which is like answering **Save Anyway**. Each warning is
+    listed once, word for word as **Save Toolpaths** shows it.
 
   The G-code is only made and saved: it is never sent to your machine.
 - **POST job/new** `{"settings": {"size": {"width": 300, "height": 150, "thickness": 12}}}`:

@@ -8,8 +8,9 @@ pub use crate::check_list::{Check, Phase};
 use crate::checks::{LEFT, problems_by_check};
 use crate::document::{Along, Document};
 use crate::progress;
-use crate::simulation::{Material, each};
+use crate::simulation::Material;
 use crate::toolpath::{MoveKind, Tool, ToolShape, Toolpath};
+use crate::work::each;
 use glam::DVec3;
 
 /// How deep a rapid move may seem to go into the material before it is a crash, mm: the

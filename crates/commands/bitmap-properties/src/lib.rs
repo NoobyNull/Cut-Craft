@@ -3,7 +3,7 @@
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +55,7 @@ impl Command for BitmapProperties {
             group: "Edit",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
