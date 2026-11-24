@@ -170,7 +170,8 @@ pub enum Joined {
     /// The tailstock end (the job's end)
     #[schemars(title = "Tailstock end")]
     Tailstock,
-    /// Both ends
+    /// Both ends: the material is left whole past the model at the chuck and the
+    /// tailstock, and the part is sawn free at both
     Both,
 }
 
