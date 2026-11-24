@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-24
 see-also: preview_detail, rotary_machining_toolpath, rotary_firmware, job_setup
 ---
 
@@ -69,8 +69,8 @@ double-click a piece the preview has cut right free (a part, or the waste round 
 it away and see what is left; Undo Last Preview brings it back. Where nothing is cut free
 (uncut material, a pocket, a part held by tabs), even after another piece was taken, a
 double-click selects a component or fits the view as usual. Going back starts from the nearest point saved
-while it played, so it is quick once played through. A jump is cut across all the
-computer's cores, and the 3D view keeps its full detail while the preview plays (it is
+while it played, so it is quick once played through. A jump is cut across the
+cores [Options ▸ Performance](help:performance) allows, and the 3D view keeps its full detail while the preview plays (it is
 redrawn a few times a second; the tool moves smoothly in between). If a bit has no shank
 diameter set in the Tool Database, the preview draws a common one (1/4" for a V-bit, up
 to 1/2" for others) and says so under the controls. The preview cuts a grid of small

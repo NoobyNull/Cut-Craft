@@ -199,13 +199,11 @@ impl Estimating {
         let (send, answer) = mpsc::channel();
         let photo = bitmap.clone();
         let (installed, bitmap, ctx) = (installed.clone(), bitmap.clone(), ctx.clone());
-        std::thread::Builder::new()
-            .name("depth estimate".into())
-            .spawn(move || {
-                let _ = send.send(run(&installed, &png, &bitmap));
-                ctx.request_repaint();
-            })
-            .map_err(|e| e.to_string())?;
+        cut_craft_core::work::background("depth estimate", move || {
+            let _ = send.send(run(&installed, &png, &bitmap));
+            ctx.request_repaint();
+        })
+        .map_err(|e| e.to_string())?;
         Ok(Self {
             bitmap: id,
             photo,

@@ -86,28 +86,8 @@ pub fn raise(pieces: &[Piece], area: Rect, cell: f64, shaping: Shaping) -> Grid 
     let mut order: Vec<&Piece> = pieces.iter().collect();
     order.sort_by_key(|p| layer(p.part));
     // each piece's own shape on its own, spread over the processor's cores
-    let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
-    let shaped: Vec<Option<Shaped>> = std::thread::scope(|scope| {
-        let grid = &grid;
-        let order = &order;
-        let workers: Vec<_> = (0..threads)
-            .map(|k| {
-                scope.spawn(move || {
-                    (k..order.len())
-                        .step_by(threads)
-                        .map(|i| (i, shape(grid, order[i], shaping)))
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect();
-        let mut all: Vec<Option<Shaped>> = (0..order.len()).map(|_| None).collect();
-        for worker in workers {
-            for (i, made) in worker.join().expect("a shaping thread panicked") {
-                all[i] = made;
-            }
-        }
-        all
-    });
+    let shaped: Vec<Option<Shaped>> =
+        cut_craft_core::work::parallel(order.len(), |i| shape(&grid, order[i], shaping));
     // then laid in order, each resting on what is under it
     let mut under = vec![0.0; grid.heights.len()];
     let mut current = None;

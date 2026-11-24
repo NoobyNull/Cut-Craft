@@ -515,6 +515,25 @@ fn a_page_links_the_names_of_other_pages_in_its_words() {
 }
 
 #[test]
+fn the_performance_page_limits_calculations_with_a_share_slider() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = *h.texts_at("Performance").last().expect("a page of its own");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    for setting in [
+        "Limit calculations so other programs stay smooth",
+        "Share of the computer to use",
+        "Preview detail",
+        "Adjust detail to keep the view smooth",
+    ] {
+        assert!(h.text_at(setting).is_some(), "{setting} in {:?}", h.texts());
+    }
+}
+
+#[test]
 fn advanced_options_show_only_once_ticked_and_warn_first() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "options");
@@ -526,7 +545,7 @@ fn advanced_options_show_only_once_ticked_and_warn_first() {
     let at = *h.texts_at("Advanced").last().expect("listed once ticked");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.text_at("Processor cores to use (0 = all)").is_some());
+    assert!(h.text_at("DXF curve detail (points per span)").is_some());
     assert!(
         h.text_at(crate::options::WARNING).is_some(),
         "a warning above them"
@@ -1331,5 +1350,49 @@ fn a_language_pack_picked_in_options_is_used_once_applied() {
         h.app.status.message.contains("not installed"),
         "{}",
         h.app.status.message
+    );
+}
+
+#[test]
+fn while_a_calculation_runs_the_status_bar_says_how_briskly_and_opens_performance() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let paces = ["Crawl", "Walk", "Run", "Sprint"];
+    assert!(
+        paces.iter().all(|p| h.text_at(p).is_none()),
+        "nothing while nothing calculates"
+    );
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let busy = std::sync::Arc::clone(&stop);
+    let job = cut_craft_core::work::background("a test calculation", move || {
+        let mut x = 0u64;
+        while !busy.load(std::sync::atomic::Ordering::Relaxed) {
+            x = std::hint::black_box(x.wrapping_mul(31).wrapping_add(7));
+        }
+    })
+    .unwrap();
+    h.frame(vec![]);
+    std::thread::sleep(cut_craft_core::work::Gauge::EVERY + std::time::Duration::from_millis(50));
+    h.frame(vec![]);
+    let shown: Vec<_> = paces.iter().filter_map(|p| h.text_at(p)).collect();
+    assert_eq!(
+        shown.len(),
+        1,
+        "one pace once a second has passed: {:?}",
+        h.texts()
+    );
+    h.click(shown[0], Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Share of the computer to use").is_some(),
+        "Options ▸ Performance"
+    );
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    job.join().unwrap();
+    h.frame(vec![]);
+    assert!(
+        paces.iter().all(|p| h.text_at(p).is_none()),
+        "gone once it ends"
     );
 }

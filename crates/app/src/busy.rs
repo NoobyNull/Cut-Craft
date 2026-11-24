@@ -88,16 +88,14 @@ impl<A: 'static> Busy<A> {
         let done = Arc::new(AtomicBool::new(false));
         let (tracked, flag, wake) = (progress.clone(), Arc::clone(&done), ctx.cloned());
         let timed = kind.to_owned();
-        let spawned = std::thread::Builder::new()
-            .name("cut-craft job".into())
-            .spawn(move || {
-                let _done = Done(flag, wake);
-                let answer = tracked.track(work);
-                if answer.succeeded() && !tracked.is_cancelled() {
-                    eta::record(&timed, started.elapsed().as_secs_f64());
-                }
-                answer
-            });
+        let spawned = cut_craft_core::work::background("cut-craft job", move || {
+            let _done = Done(flag, wake);
+            let answer = tracked.track(work);
+            if answer.succeeded() && !tracked.is_cancelled() {
+                eta::record(&timed, started.elapsed().as_secs_f64());
+            }
+            answer
+        });
         // logged as started now and as finished or failed once its answer is used; a crash
         // meanwhile names it and the step it was on
         let at = progress.clone();
