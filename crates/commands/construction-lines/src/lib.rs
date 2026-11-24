@@ -3,7 +3,7 @@
 //! never cut and never exported. Make Real Line turns them back.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 /// Turns the selected vectors into construction lines.
 pub struct MakeConstructionLine;
@@ -21,6 +21,7 @@ impl Command for MakeConstructionLine {
             group: "Edit Objects",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
@@ -39,6 +40,7 @@ impl Command for MakeRealLine {
             group: "Edit Objects",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

@@ -23,6 +23,7 @@ modules:
       - install -Dm644 family.yax.CutCraft.desktop /app/share/applications/family.yax.CutCraft.desktop
       - install -Dm644 cut-craft.svg /app/share/icons/hicolor/scalable/apps/family.yax.CutCraft.svg
       - install -Dm644 LICENSE /app/share/licenses/family.yax.CutCraft/LICENSE
+      - install -Dm644 -t /app/share/licenses/family.yax.CutCraft/credits credits/*.md
     sources:
       - type: dir
         path: stage

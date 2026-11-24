@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-23
 see-also: laser_cut_fill_toolpath, photo_vcarve_toolpath
 ---
 
@@ -11,7 +11,7 @@ see-also: laser_cut_fill_toolpath, photo_vcarve_toolpath
 
    ![Step 1](pictures/laser_picture_toolpath/step-1.png)
 
-2. On the Toolpaths page, press **Laser Picture** (under Laser).
+2. On the Toolpaths page, press **Laser Picture** (under Laser). It shows once **Laser fitted** is ticked in Machine Configuration (see [Laser Cut / Fill](help:laser_cut_fill_toolpath)).
 
    ![Step 2](pictures/laser_picture_toolpath/step-2.png)
 

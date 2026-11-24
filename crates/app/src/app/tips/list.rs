@@ -1054,6 +1054,12 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     tool(
         Area::Toolpaths,
+        "laser_cut_fill_toolpath",
+        "Have a laser on your machine? Tick **Laser fitted** in **Machine ▸ Machine \
+         Configuration** and the **Laser** toolpaths show on the Toolpaths page.",
+    ),
+    tool(
+        Area::Toolpaths,
         "photo_vcarve_toolpath",
         "**Photo V-Carve Toolpath** carves a photo with nothing but a V-bit, as grooves that are \
          deeper, and so wider, where the picture is darker.",

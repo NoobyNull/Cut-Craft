@@ -2,11 +2,12 @@
 //! worked out and how the material looks.
 
 use cut_craft_core::document::{
-    Along, Blank, Datum, Document, DoubleSided, Home, Job, Resolution, Rotary, Units, ZZero,
+    Along, Blank, Datum, Document, DoubleSided, Home, Job, Resolution, Rotary, Support, Units,
+    ZZero,
 };
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DAffine2;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -206,6 +207,14 @@ pub struct Params {
         extend("x-section" = true, "x-show-when" = {"job_type": "rotary"})
     )]
     pub orientation: Along,
+    /// Rotary jobs: what of the material the rotary toolpaths leave to hold the part while
+    /// it is cut
+    #[schemars(
+        title = "Holding the Part",
+        extend("x-section" = true, "x-show-when" = {"job_type": "rotary"})
+    )]
+    #[serde(default)]
+    pub support: Support,
     /// Double-sided jobs: how the material is turned over between sides
     #[schemars(
         title = "Flip Direction Between Sides",
@@ -300,6 +309,7 @@ impl From<&Job> for Params {
                 y: job.offset.y,
             },
             orientation: rotary.along,
+            support: rotary.support,
             sides: job.double_sided.unwrap_or_default(),
             resolution: job.resolution,
             material: String::new(),
@@ -329,6 +339,7 @@ impl Command for JobSetup {
             group: "File Operations",
             icon: "file/job_setup.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
@@ -360,8 +371,19 @@ impl Command for JobSetup {
                         }
                     }
                 };
+                if !(0.0..p.size.diameter).contains(&p.support.beam) {
+                    return Err(CommandError::InvalidParams(
+                        "set Centre Stock Diameter less than the material's diameter, or 0 \
+                         to leave no centre stock"
+                            .into(),
+                    ));
+                }
                 let mut job = Job::rotary(p.size.length, p.size.diameter, p.orientation);
-                job.rotary = job.rotary.map(|r| Rotary { blank, ..r });
+                job.rotary = job.rotary.map(|r| Rotary {
+                    blank,
+                    support: p.support,
+                    ..r
+                });
                 job
             }
             JobType::SingleSided | JobType::DoubleSided => {
@@ -763,6 +785,37 @@ mod tests {
         );
         let single = after::<JobSetup>(&with(|p| p.job_type = JobType::SingleSided));
         assert!(single.job.double_sided.is_none());
+    }
+
+    #[test]
+    fn a_rotary_job_keeps_how_the_part_is_held_and_asks_for_a_beam_inside_the_material() {
+        use cut_craft_core::document::Joined;
+        let held = |joined, beam| {
+            with(|p| {
+                p.job_type = JobType::Rotary;
+                p.size.length = 300.0;
+                p.size.diameter = 80.0;
+                p.support = Support { joined, beam };
+            })
+        };
+        let doc = after::<JobSetup>(&held(Joined::Chuck, 10.0));
+        let support = doc.job.rotary.unwrap().support;
+        assert_eq!(
+            support,
+            Support {
+                joined: Joined::Chuck,
+                beam: 10.0
+            }
+        );
+        assert_eq!(Params::from(&doc.job).support, support, "shown again");
+        for beam in [80.0, -1.0] {
+            let refused = JobSetup::run(&Document::default(), &held(Joined::Neither, beam));
+            assert!(
+                matches!(&refused, Err(CommandError::InvalidParams(why)) if why.contains("Centre Stock Diameter")),
+                "{beam}: {:?}",
+                refused.err()
+            );
+        }
     }
 
     #[test]

@@ -79,6 +79,10 @@ The other windows that hold settings work the same way:
   **OK**, **Cancel** and **Apply** where they always were. **Apply** is greyed out until you
   change something, the same **● Changes not applied yet** note shows beside it while
   changes wait, and **OK** keeps them and closes.
+- In **Machine Configuration**, tick **Laser fitted** if your machine has a laser on its head,
+  and **4th axis** if it has a rotary. The [laser toolpaths](help:laser_cut_fill_toolpath)
+  and the [rotary toolpaths](help:rotary_machining_toolpath) show on the Toolpaths page only
+  for a machine that has them, so a machine without them has fewer tools to wade through.
 - Closing any of them with its own close box while changes wait asks **Apply your
   changes?** first, just as Options does.
 

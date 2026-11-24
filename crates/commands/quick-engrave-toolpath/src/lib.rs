@@ -9,7 +9,7 @@ use cut_craft_core::polygon;
 use cut_craft_core::toolpath::{
     Move, Tool, contour_moves, cut_points, hatch_lines, made_by, pass_depths,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -125,6 +125,7 @@ impl Command for QuickEngraveToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/quick_engrave.png",
             shortcut: "Ctrl+Q",
+            form: Form::TOOLPATH,
         }
     }
 

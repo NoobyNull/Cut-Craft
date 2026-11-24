@@ -11,6 +11,7 @@ mod busy;
 mod clipart;
 mod commands;
 mod compute;
+mod credits;
 mod depth;
 mod display;
 #[cfg(test)]
@@ -36,6 +37,7 @@ mod spacemouse;
 mod startup;
 mod tool_model;
 mod toolpath_order;
+mod trust;
 mod update;
 mod view2d;
 mod view3d;

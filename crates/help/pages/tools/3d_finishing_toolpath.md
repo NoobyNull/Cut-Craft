@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-24
 see-also: 3d_roughing_toolpath, create_shape, stepover
 ---
 

@@ -5,7 +5,7 @@
 use cmd_join_close_vectors::{arriving, leaving};
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Segment};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +67,7 @@ impl Command for JoinOpenEnds {
             group: "Edit Objects",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

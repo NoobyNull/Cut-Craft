@@ -614,8 +614,8 @@ pub const HINTS: &[(&str, &str)] = &[
         "About Cut Craft: its version, its licence and the people who made it",
     ),
     (
-        "third_party_licenses",
-        "Third Party Licences: the licences of the free software Cut Craft is built with",
+        "credits",
+        "Credits: the libraries, pictures and icons Cut Craft is built with, and their licences",
     ),
     (
         "open_application_data_folder",

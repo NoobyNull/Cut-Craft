@@ -8,7 +8,7 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::trace::{Fit, fit};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -158,6 +158,7 @@ impl Command for CelticWeave {
             group: "Gadgets",
             icon: "",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

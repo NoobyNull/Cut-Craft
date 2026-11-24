@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +41,7 @@ impl Command for OffsetVectors {
             group: "Offset and Layout",
             icon: "drawing/weld_and_offset/offset_vectors.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

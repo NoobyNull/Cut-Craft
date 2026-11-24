@@ -48,6 +48,8 @@ pub struct GpuCompute {
     overcut: wgpu::ComputePipeline,
     /// The most cell visits one dispatch is given: [`MOST_WORK`], less in the tests.
     most_work: f64,
+    /// When the card is free for the next share, kept from one call to the next.
+    rests: std::sync::Mutex<cut_craft_core::work::Rests>,
     /// The tests' smaller limits than the card's.
     #[cfg(test)]
     limits: Option<wgpu::Limits>,
@@ -74,6 +76,7 @@ impl GpuCompute {
             sweep: pipeline("sweep_main"),
             overcut: pipeline("overcut_main"),
             most_work: MOST_WORK,
+            rests: std::sync::Mutex::default(),
             #[cfg(test)]
             limits: None,
             device,
@@ -98,7 +101,8 @@ impl GpuCompute {
     /// (the kernel then writes the grid). Item `i` costs about `cost(i)` cell visits: the
     /// items go to the card a share at a time ([`shares`]), each share waited for before
     /// the next, so no one dispatch keeps the card (which also draws the desktop) busy for
-    /// long.
+    /// long, with a rest after each while calculations are limited
+    /// ([`cut_craft_core::work::Rests`]), owed on into the next call.
     fn run(
         &self,
         pipeline: &wgpu::ComputePipeline,
@@ -138,7 +142,12 @@ impl GpuCompute {
                 .poll(wgpu::PollType::wait_indefinitely())
                 .expect("the card finishes");
         };
-        for share in shares(count, cost, self.most_work) {
+        // each share waited for, then rested after as Options ▸ Performance asks
+        let mut rests = self
+            .rests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        rests.paced(shares(count, cost, self.most_work), |share| {
             let mut params = params.to_vec();
             params[FIRST_BYTE..FIRST_BYTE + 4]
                 .copy_from_slice(&u32::try_from(share.start).expect("fits u32").to_ne_bytes());
@@ -175,7 +184,7 @@ impl GpuCompute {
             }
             self.queue.submit([encoder.finish()]);
             wait();
-        }
+        });
         let source = read.as_ref().unwrap_or(&grid);
         let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("compute staging"),

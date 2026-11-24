@@ -5,7 +5,7 @@ use cut_craft_core::document::{Along, Document};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, Tool, follow, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -109,6 +109,7 @@ impl Command for RoundingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/rounding_toolpath.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 

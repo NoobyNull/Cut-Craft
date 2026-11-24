@@ -6,9 +6,9 @@ use cut_craft_core::glam::DVec3;
 use cut_craft_core::selector::Selector;
 use cut_craft_core::testing::{document_with, square, two_sheets};
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by};
-use cut_craft_core::{Change, Command, CommandError, History, Meta, NoParams, Registry};
+use cut_craft_core::{Change, Command, CommandError, Form, History, Meta, NoParams, Registry};
 
-/// Test strategy, in a toolpath menu group: one plunge at the centre of each selected vector.
+/// Test strategy, a toolpath: one plunge at the centre of each selected vector.
 struct Centres;
 
 impl Command for Centres {
@@ -21,6 +21,7 @@ impl Command for Centres {
             group: "Toolpath Operations",
             icon: "",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 
@@ -61,6 +62,7 @@ impl Command for Count {
             group: "Edit Objects",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

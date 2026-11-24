@@ -2,7 +2,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::polygon;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct OverlapIntersect;
 
@@ -16,6 +16,7 @@ impl Command for OverlapIntersect {
             group: "Edit Objects",
             icon: "drawing/weld_and_offset/overlap_intersect.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

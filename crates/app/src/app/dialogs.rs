@@ -70,7 +70,7 @@ pub(super) static DIALOG_FOLDER: std::sync::Mutex<Option<std::path::PathBuf>> =
     std::sync::Mutex::new(None);
 
 /// A message box from the system, as the window's own like the file dialogs.
-pub(super) fn message_dialog() -> rfd::MessageDialog {
+pub(crate) fn message_dialog() -> rfd::MessageDialog {
     on_the_desktop();
     let dialog = rfd::MessageDialog::new();
     match dialog_parent() {

@@ -32,10 +32,19 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// The newest releases, test builds among them (left out when read). Not `/releases/latest`:
-/// each computer's builds are attached as they finish, so the newest release may not have
-/// this computer's yet, and the one before it is what this computer is offered meanwhile.
-pub const RELEASES: &str = "https://api.github.com/repos/NoobyNull/Cut-Craft/releases?per_page=20";
+/// Where Cut Craft's releases are published, preferred first. Cut Craft is moving to the
+/// Power-Whittle organisation: for a while each release is published on both (the release
+/// workflow mirrors it), and later only on Power-Whittle. Both are read, so an update is
+/// found while the mirror is not made yet, falls behind, or once `NoobyNull`'s stops.
+pub const HOMES: [&str; 2] = ["Power-Whittle/Cut-Craft", "NoobyNull/Cut-Craft"];
+
+/// The newest releases of `home`, test builds among them (left out when read). Not
+/// `/releases/latest`: each computer's builds are attached as they finish, so the newest
+/// release may not have this computer's yet, and the one before it is what this computer
+/// is offered meanwhile.
+pub fn releases_url(home: &str) -> String {
+    format!("https://api.github.com/repos/{home}/releases?per_page=20")
+}
 /// Where releases are listed, for downloading by hand.
 pub const RELEASES_PAGE: &str = "https://github.com/NoobyNull/Cut-Craft/releases";
 /// The minisign public key releases are signed with (the secret key is only in the
@@ -108,8 +117,28 @@ impl Found {
 
 /// Asks GitHub whether there is something newer than `current` for `install`.
 pub fn check(install: &Install, current: &Version) -> Result<Found, String> {
-    let releases = Release::parse_list(&get_text(RELEASES)?)?;
+    let releases = gather(&get_text)?;
     Ok(pick(install, std::env::consts::OS, &releases, current))
+}
+
+/// The releases of every one of [`HOMES`], preferred home's first, asked of `get`. A home
+/// with no releases (or no repository) is passed over; one that does not answer otherwise
+/// (offline, too many checks) is said at once when it is the first asked, and passed over
+/// after one has answered.
+fn gather(get: &dyn Fn(&str) -> Result<String, String>) -> Result<Vec<Release>, String> {
+    let mut releases = Vec::new();
+    let mut none = None;
+    for home in HOMES {
+        match get(&releases_url(home)) {
+            Ok(text) => releases.extend(Release::parse_list(&text)?),
+            Err(e) if releases.is_empty() && !e.contains("no releases") => return Err(e),
+            Err(e) => none = Some(e),
+        }
+    }
+    match (releases.is_empty(), none) {
+        (true, Some(e)) => Err(e),
+        _ => Ok(releases),
+    }
 }
 
 /// The end of the name of the build a computer running `os` is updated from, or told to
@@ -497,6 +526,107 @@ mod tests {
         assert_eq!(platform_suffix("macos"), ".dmg");
         assert_eq!(platform_suffix("windows"), "windows-x86_64.zip");
         assert_eq!(platform_suffix("linux"), "linux-x86_64.tar.gz");
+    }
+
+    /// `home`'s release list as the GitHub API sends it: each `(tag, files)`, signed.
+    fn listed(home: &str, releases: &[(&str, &[&str])]) -> String {
+        let list: Vec<_> = releases
+            .iter()
+            .map(|(tag, files)| {
+                let assets: Vec<_> = files
+                    .iter()
+                    .flat_map(|f| [f.to_string(), format!("{f}.minisig")])
+                    .map(|name| {
+                        serde_json::json!({"name": name, "size": 1, "digest": "sha256:00",
+                            "browser_download_url":
+                                format!("https://github.com/{home}/releases/download/{tag}/{name}")})
+                    })
+                    .collect();
+                serde_json::json!({"tag_name": tag,
+                    "html_url": format!("https://github.com/{home}/releases/tag/{tag}"),
+                    "assets": assets})
+            })
+            .collect();
+        serde_json::Value::Array(list).to_string()
+    }
+
+    #[test]
+    fn releases_are_read_from_power_whittle_first_then_noobynull() {
+        assert!(HOMES[0].starts_with("Power-Whittle/"), "{HOMES:?}");
+        assert!(HOMES.contains(&"NoobyNull/Cut-Craft"));
+        assert_eq!(
+            releases_url("Power-Whittle/Cut-Craft"),
+            "https://api.github.com/repos/Power-Whittle/Cut-Craft/releases?per_page=20"
+        );
+    }
+
+    #[test]
+    fn an_update_is_found_in_whichever_repository_has_this_computer_s_newest_build() {
+        const PW: &str = "Power-Whittle/Cut-Craft";
+        const NN: &str = "NoobyNull/Cut-Craft";
+        const LINUX_FILE: &str = "cut-craft-linux-x86_64.tar.gz";
+        const WINDOWS_FILE: &str = "cut-craft-windows-x86_64.zip";
+        let current = Version::new(0, 7, 0);
+        let both = |power: Result<String, String>, nooby: Result<String, String>| {
+            let asked = std::cell::RefCell::new(Vec::new());
+            let found = gather(&|url: &str| {
+                asked.borrow_mut().push(url.to_owned());
+                if url.contains("/Power-Whittle/") {
+                    power.clone()
+                } else {
+                    nooby.clone()
+                }
+            })
+            .map(|releases| pick(&LINUX, "linux", &releases, &current));
+            (found, asked.into_inner())
+        };
+        let tag_of = |found: &Result<Found, String>| match found {
+            Ok(Found::Release { release, .. }) => release.tag.clone(),
+            other => format!("{other:?}"),
+        };
+        let no_repo = || Err("GitHub has no releases of Cut Craft yet".to_owned());
+
+        // before the mirror exists: NoobyNull answers
+        let (found, asked) = both(no_repo(), Ok(listed(NN, &[("v0.7.6", &[LINUX_FILE])])));
+        assert_eq!(tag_of(&found), "v0.7.6");
+        assert!(asked[0].contains("/Power-Whittle/"), "{asked:?}");
+
+        // both have it: it comes from Power-Whittle
+        let release = [("v0.7.6", &[LINUX_FILE][..])];
+        let (found, _) = both(Ok(listed(PW, &release)), Ok(listed(NN, &release)));
+        let Ok(Found::Release { release, .. }) = &found else {
+            panic!("{found:?}")
+        };
+        assert!(release.page.contains(PW), "{release:?}");
+        assert!(
+            release.assets.iter().all(|a| a.url.contains(PW)),
+            "{release:?}"
+        );
+
+        // the mirror is behind, or has only another computer's build yet: NoobyNull's counts
+        let behind = listed(
+            PW,
+            &[("v0.7.7", &[WINDOWS_FILE]), ("v0.7.6", &[LINUX_FILE])],
+        );
+        let ahead = listed(NN, &[("v0.7.7", &[LINUX_FILE, WINDOWS_FILE])]);
+        assert_eq!(tag_of(&both(Ok(behind), Ok(ahead)).0), "v0.7.7");
+
+        // later, NoobyNull stops getting releases (or is gone): Power-Whittle's still count
+        let (found, _) = both(Ok(listed(PW, &[("v0.8.0", &[LINUX_FILE])])), no_repo());
+        assert_eq!(tag_of(&found), "v0.8.0");
+
+        // offline or too many checks: said at once, without asking again
+        let (found, asked) = both(Err("Could not reach GitHub".into()), no_repo());
+        assert_eq!(found.unwrap_err(), "Could not reach GitHub");
+        assert_eq!(asked.len(), 1);
+
+        // neither has any
+        assert!(
+            both(no_repo(), no_repo())
+                .0
+                .unwrap_err()
+                .contains("no releases")
+        );
     }
 
     #[test]

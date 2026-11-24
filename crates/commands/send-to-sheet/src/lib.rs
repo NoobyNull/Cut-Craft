@@ -2,7 +2,7 @@
 //! group; moving takes them off this one.
 
 use cut_craft_core::document::{Document, EntityId, StoredVector};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +28,7 @@ impl Command for SendToSheet {
             group: "Sheets",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

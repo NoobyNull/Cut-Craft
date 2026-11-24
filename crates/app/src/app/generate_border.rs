@@ -81,9 +81,14 @@ impl CutCraftApp {
         let Some(root) = crate::borders::library_root() else {
             return refuse(self, tr!("border-no-documents"));
         };
-        if !self
-            .addons
-            .may_run(crate::borders::ADDON_ID, "The Borders add-on")
+        // each program it starts is asked about: the Borders add-on's, and the Depth
+        // add-on's when the depth comes from it
+        if !self.may_run_add_on(crate::borders::ADDON_ID, "The Borders add-on", &program) {
+            return;
+        }
+        if params.depth_from == cmd_generate_border::DepthFrom::DepthAddOn
+            && let Some(depth) = &depth
+            && !self.may_run_add_on(crate::depth::ADDON_ID, "The Depth add-on", &depth.program)
         {
             return;
         }

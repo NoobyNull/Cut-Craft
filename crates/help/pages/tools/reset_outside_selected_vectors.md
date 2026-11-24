@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-23
 see-also: reset_inside_selected_vectors, create_shape, sculpt
 ---
 

@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::params::Items;
-use cut_craft_core::{Change, Command, CommandError, Meta, existing, existing_layer};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, existing, existing_layer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -53,6 +53,7 @@ impl Command for ShowHide {
             group: "Edit",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

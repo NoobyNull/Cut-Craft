@@ -2,7 +2,7 @@
 
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct AddZeroPlane;
 
@@ -16,6 +16,7 @@ impl Command for AddZeroPlane {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

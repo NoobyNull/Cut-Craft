@@ -4,7 +4,7 @@
 
 use cut_craft_core::component::Component;
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +33,7 @@ impl Command for SmoothSelectedComponents {
             group: "Modeling",
             icon: "modeling/texture.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

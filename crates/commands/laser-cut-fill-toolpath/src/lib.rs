@@ -7,7 +7,7 @@ use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
     Move, MoveKind, Tool, contour_moves, cut_points, hatch_lines, made_by,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, Needs, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -113,6 +113,9 @@ impl Command for LaserCutFillToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/laser_cut_fill.png",
             shortcut: "",
+            form: Form::Toolpath {
+                needs: Needs::Laser,
+            },
         }
     }
 

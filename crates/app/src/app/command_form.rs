@@ -56,6 +56,7 @@ impl CutCraftApp {
             .contains(&open.id);
         let suggested = open.suggested.clone();
         let form_id = open.id;
+        let laser = open.kind.needs() == cut_craft_core::Needs::Laser;
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
                 let (changed, ask) = super::clearing_section(
@@ -84,7 +85,9 @@ impl CutCraftApp {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong(tr!("actions-tool"));
-                asked.set(tool_picker(ui, form_id, params, tools, &slots, units));
+                asked.set(tool_picker(
+                    ui, form_id, laser, params, tools, &slots, units,
+                ));
                 if let Some(line) = &reach {
                     super::reach::show(ui, line);
                 }
@@ -500,7 +503,7 @@ impl CutCraftApp {
             .as_ref()
             .is_some_and(|i| self.depth_high_detail.unwrap_or(i.detailed.is_some()));
         if let (true, Some(installed), Some(id)) = (start, installed, chosen)
-            && self.addons.may_run(crate::depth::ADDON_ID, name)
+            && self.may_run_add_on(crate::depth::ADDON_ID, name, &installed.program)
         {
             let installed = installed.with_high_detail(high_detail);
             match crate::depth::Estimating::start(&installed, id, &self.doc.bitmaps[&id], ui.ctx())

@@ -7,7 +7,7 @@ use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, inside};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, MoveKind, Toolpath, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, existing};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -335,6 +335,7 @@ impl Command for MergedToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/merge_toolpaths.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 
@@ -472,6 +473,7 @@ impl Command for UngroupMergedToolpath {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

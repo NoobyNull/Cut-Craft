@@ -8,7 +8,7 @@ use cut_craft_core::component::{
     Combine, Component, Level, model_at_resolution, shown_components, silhouette,
 };
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -79,6 +79,7 @@ impl Command for Slice {
             group: "Modeling",
             icon: "modeling/slice_model.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

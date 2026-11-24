@@ -6,7 +6,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, contour_moves, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -249,6 +249,7 @@ impl Command for SketchCarvingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/sketch_carving.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 

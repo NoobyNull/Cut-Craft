@@ -366,6 +366,13 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_fir
                     }
                     ui.end_row();
                 }
+                ui.label("Laser");
+                ui.checkbox(&mut machine.laser, "Laser fitted")
+                    .on_hover_hint(
+                        "Tick if a laser is fitted to the head: only then are the laser \
+                         toolpaths offered on the Toolpaths page",
+                    );
+                ui.end_row();
             });
         // a 4th axis ticked before, that its firmware cannot drive (below the grid, so it
         // wraps to the window)

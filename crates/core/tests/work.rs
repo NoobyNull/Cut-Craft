@@ -76,6 +76,120 @@ fn the_old_cores_setting_becomes_a_share() {
     }
 }
 
+/// Work on the graphics card, which also draws the desktop, goes in short pieces with a rest
+/// after each, so the card is busy only the share of the time the limit allows.
+#[test]
+fn work_on_the_card_rests_after_each_piece_to_keep_to_its_share() {
+    let busy = Duration::from_millis(40);
+    let share = |share| Limit { on: true, share };
+    assert_eq!(
+        Limit::OFF.rest_after(busy),
+        Duration::ZERO,
+        "no limit, no rest"
+    );
+    assert_eq!(share(100).rest_after(busy), Duration::ZERO);
+    assert_eq!(share(80).rest_after(busy), Duration::from_millis(10));
+    assert_eq!(share(50).rest_after(busy), busy);
+    assert_eq!(share(10).rest_after(busy), Duration::from_millis(360));
+    assert_eq!(
+        share(0).rest_after(busy),
+        Duration::from_millis(360),
+        "at least 10%"
+    );
+    assert_eq!(
+        Limit::default().rest_after(busy),
+        Duration::from_millis(10),
+        "80% unless Options says otherwise"
+    );
+}
+
+/// The card's rest is a time it is free again: owed until then, whoever asks next, so a
+/// calculation that hands the card one short job after another rests between the jobs too,
+/// and nothing waits once the last job is done.
+#[test]
+fn the_card_is_owed_its_rest_until_its_time_whoever_asks_next() {
+    let t0 = Instant::now();
+    let ms = Duration::from_millis;
+    let mut rests = work::Rests::default();
+    assert_eq!(
+        rests.owed(t0),
+        Duration::ZERO,
+        "nothing owed before any work"
+    );
+    let limit = Limit {
+        on: true,
+        share: 80,
+    };
+    rests.worked(t0, t0 + ms(40), limit);
+    assert_eq!(rests.owed(t0 + ms(40)), ms(10), "a quarter of 40 ms at 80%");
+    assert_eq!(rests.owed(t0 + ms(45)), ms(5), "less once some has passed");
+    assert_eq!(rests.owed(t0 + ms(60)), Duration::ZERO, "none once it has");
+    rests.worked(t0 + ms(60), t0 + ms(100), Limit::OFF);
+    assert_eq!(
+        rests.owed(t0 + ms(100)),
+        Duration::ZERO,
+        "no rest with no limit"
+    );
+}
+
+/// A sleep shorter than a millisecond costs more than it rests on some systems, so rests too
+/// short to sleep are not dropped but added up, and slept once they come to a millisecond.
+#[test]
+fn rests_too_short_to_sleep_add_up_until_they_are_worth_it() {
+    let t0 = Instant::now();
+    let us = Duration::from_micros;
+    let limit = Limit {
+        on: true,
+        share: 80,
+    };
+    let mut rests = work::Rests::default();
+    rests.worked(t0, t0 + us(2000), limit);
+    assert_eq!(rests.owed(t0 + us(2000)), us(500));
+    assert_eq!(
+        rests.due(t0 + us(2000)),
+        Duration::ZERO,
+        "too short to sleep yet"
+    );
+    // the next piece starts without its rest: what it was owed is carried on
+    rests.worked(t0 + us(2000), t0 + us(4000), limit);
+    assert_eq!(rests.owed(t0 + us(4000)), us(1000));
+    assert_eq!(rests.due(t0 + us(4000)), us(1000), "worth a sleep now");
+    // time the card was left alone pays the rest off
+    rests.worked(t0 + us(9000), t0 + us(11_000), limit);
+    assert_eq!(
+        rests.owed(t0 + us(11_000)),
+        us(500),
+        "nothing carried after a pause"
+    );
+}
+
+#[test]
+fn paced_pieces_run_in_order_resting_between_and_owing_the_last_rest() {
+    let piece = Duration::from_millis(100);
+    work::set_limit(Limit {
+        on: true,
+        share: 50,
+    });
+    let (mut rests, mut done, start) = (work::Rests::default(), vec![], Instant::now());
+    let mut ended = start;
+    rests.paced(0..3, |i| {
+        std::thread::sleep(piece);
+        done.push(i);
+        ended = Instant::now();
+    });
+    let took = start.elapsed();
+    assert_eq!(done, [0, 1, 2], "every piece, in order");
+    assert!(
+        took >= piece * 5,
+        "a rest as long as each piece between them: {took:?}"
+    );
+    assert!(
+        rests.owed(ended) >= piece,
+        "the last piece's rest is left owed, not slept"
+    );
+    work::set_limit(Limit::default());
+}
+
 #[test]
 fn parallel_answers_in_order_on_no_more_threads_than_allowed() {
     let made = work::parallel(1000, |i| (i * 3, std::thread::current().id()));
