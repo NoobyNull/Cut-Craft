@@ -724,7 +724,7 @@ impl CutCraftApp {
             // the Select tool: put away whatever tool is in hand
             "select" => {
                 (self.form, self.view_tool) = (None, None);
-                "Select".clone_into(&mut self.status.current_tool);
+                self.status.current_tool = self.tool_label("select");
             }
             // menu items that are an existing tool reached another way
             "select_all_vectors_on_current_layer" => {

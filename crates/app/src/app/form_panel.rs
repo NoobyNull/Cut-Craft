@@ -264,7 +264,11 @@ impl CutCraftApp {
                         .fit_to_exact_size(egui::vec2(edge, edge)),
                 );
             }
-            ui.strong(open.label);
+            ui.strong(crate::tool_names::form_name(
+                &self.registry,
+                open.id,
+                open.label,
+            ));
         });
         let step = self.form_guidance();
         if FIXED_TEXT_FORMS.contains(&open.id) {

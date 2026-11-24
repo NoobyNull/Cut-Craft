@@ -7,6 +7,7 @@ use super::{
     SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, Screen, Shown, WHATS_NEW, egui, file_name, gui,
     menu_items, page_width, show_page, side_tabs, side_tabs_width,
 };
+use crate::tool_names::{page_tab_name, subtab_hint, subtab_name};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
@@ -289,8 +290,8 @@ impl CutCraftApp {
                 for &i in &row {
                     let tab = &set.tabs[i];
                     let response = ui
-                        .selectable_label(Some(i) == open, tab.name)
-                        .on_hover_hint(tr!("subtab-in-row", hint = tab.hint));
+                        .selectable_label(Some(i) == open, subtab_name(page, tab))
+                        .on_hover_hint(tr!("subtab-in-row", hint = subtab_hint(page, tab)));
                     if response.clicked() {
                         picked = Some(i);
                     }
@@ -329,7 +330,7 @@ impl CutCraftApp {
             if unfold.is_some() {
                 *self.unfold_mut(page) = None;
             }
-            let label = egui::RichText::new(tab.name).strong();
+            let label = egui::RichText::new(subtab_name(page, tab)).strong();
             let header = egui::CollapsingHeader::new(label)
                 .id_salt((page_key(page), "section", tab.name))
                 .default_open(true)
@@ -337,7 +338,7 @@ impl CutCraftApp {
                 .show(ui, |ui| self.subtab_contents(ui, page, i));
             let response = header
                 .header_response
-                .on_hover_hint(tr!("subtab-as-section", hint = tab.hint));
+                .on_hover_hint(tr!("subtab-as-section", hint = subtab_hint(page, tab)));
             if let Some(action) = self.popup(&response, || set.menu(tab.name, &sections)) {
                 chosen = Some(action);
             }
@@ -409,7 +410,7 @@ impl CutCraftApp {
         let row = ui.spacing().interact_size.y;
         let (mut pin, mut switch, mut help) = (false, false, false);
         ui.horizontal(|ui| {
-            ui.strong(title);
+            ui.strong(page_tab_name(title));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let pinned = self.pages.pinned(page);
                 pin = ui
@@ -521,12 +522,14 @@ impl CutCraftApp {
         let shown = self.pages.shown(Page::Design) != Shown::Hidden;
         let only = self.options.favourites.of(Page::Design).1;
         let labels = DESIGN_TABS.map(|t| {
+            let name = page_tab_name(t);
             if t == "Design" && only {
-                "Design ★"
+                format!("{name} ★")
             } else {
-                t
+                name
             }
         });
+        let labels = labels.each_ref().map(String::as_str);
         let tabs = side_tabs(ui, &labels, shown.then_some(self.design_tab));
         let (hovered, clicked) = (
             tabs.iter().position(egui::Response::hovered),
@@ -586,8 +589,9 @@ impl CutCraftApp {
     pub(super) fn toolpath_tabs(&mut self, ui: &mut egui::Ui) {
         let shown = self.pages.shown(Page::Toolpaths) != Shown::Hidden;
         let only = self.options.favourites.of(Page::Toolpaths).1;
-        let label = if only { "Toolpaths ★" } else { "Toolpaths" };
-        let tabs = side_tabs(ui, &[label], shown.then_some(0));
+        let name = page_tab_name("Toolpaths");
+        let label = if only { format!("{name} ★") } else { name };
+        let tabs = side_tabs(ui, &[label.as_str()], shown.then_some(0));
         let (hovered, clicked) = (
             tabs.iter().position(egui::Response::hovered),
             tabs.iter().position(egui::Response::clicked),

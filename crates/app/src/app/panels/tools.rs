@@ -327,7 +327,7 @@ impl CutCraftApp {
         // Ribbon names under its icons)
         for (name, tools) in sections {
             if !name.is_empty() {
-                ui.strong(*name);
+                ui.strong(crate::tool_names::group_name(name));
             }
             if !among && !folded {
                 self.spread_tools(ui, tools, edge, &mut clicked, &mut chosen);
@@ -426,9 +426,12 @@ impl CutCraftApp {
         let room = full - 2.0 * margin - 2.0 + spacing.x;
         let across = (room / (button + spacing.x)).floor();
         self.buttons_across.set(across);
-        let captions: Vec<&str> = clusters
+        let captions: Vec<String> = clusters
             .iter()
-            .map(|c| c.name.unwrap_or_default())
+            .map(|c| {
+                c.name
+                    .map_or_else(String::new, crate::tool_names::group_name)
+            })
             .collect();
         let widths: Vec<f32> = clusters
             .iter()
@@ -436,7 +439,7 @@ impl CutCraftApp {
             .map(|(cluster, caption)| {
                 let caption_width = ui
                     .painter()
-                    .layout_no_wrap((*caption).to_owned(), caption_font.clone(), caption_color)
+                    .layout_no_wrap(caption.clone(), caption_font.clone(), caption_color)
                     .size()
                     .x;
                 box_width(cluster.tools.len(), caption_width, button, spacing.x).min(full)
@@ -458,7 +461,7 @@ impl CutCraftApp {
                         ui.set_max_width(width - 2.0 * margin - 2.0);
                         ui.vertical(|ui| {
                             if cluster.name.is_some() {
-                                let text = egui::RichText::new(captions[i])
+                                let text = egui::RichText::new(&captions[i])
                                     .small()
                                     .color(caption_color);
                                 ui.add(

@@ -1,0 +1,54 @@
+# The names over groups of tools: the tool groups of every layout, the captioned boxes of tools
+# that do one job different ways, and the lists shown as a group. A group's key is `group-` and
+# its English name.
+
+group-file-operations = File Operations
+group-import = Import
+group-2d-view-control = 2D View Control
+group-create-vectors = Create Vectors
+group-select-and-edit = Select and Edit
+group-join-combine-and-trim = Join, Combine and Trim
+group-align-objects = Align Objects
+group-transform-objects = Transform Objects
+group-offset-and-layout = Offset and Layout
+group-array-objects = Array Objects
+group-shape-creation = Shape Creation
+group-shape-editing = Shape Editing
+group-export-model = Export Model
+group-job-and-tools = Job and Tools
+group-cut-out-and-clear = Cut Out and Clear
+group-holes = Holes
+group-carve-and-engrave = Carve and Engrave
+group-edges-and-inlays = Edges and Inlays
+group-3d-toolpaths = 3D Toolpaths
+group-laser = Laser
+group-from-other-toolpaths = From Other Toolpaths
+group-templates = Templates
+group-reports = Reports
+group-save-for-the-machine = Save for the Machine
+group-paperwork-for-the-job = Paperwork for the Job
+group-big-jobs = Big Jobs
+group-zoom = Zoom
+group-lines-and-curves = Lines and Curves
+group-rectangles = Rectangles
+group-circles-and-ellipses = Circles and Ellipses
+group-polygons-and-stars = Polygons and Stars
+group-text = Text
+group-join-and-close = Join and Close
+group-combine-shapes = Combine Shapes
+group-trim = Trim
+group-part-names = Part Names
+group-pictures = Pictures
+group-trace-picture = Trace Picture
+group-center-on-the-material = Center on the Material
+group-center-on-each-other = Center on Each Other
+group-line-up-edges = Line Up Edges
+group-space-out-evenly = Space Out Evenly
+group-nesting = Nesting
+group-copies = Copies
+group-create-shape = Create Shape
+group-clear-the-model = Clear the Model
+group-favourites = Favourites
+group-gadgets = Gadgets
+group-design-favourites = Design Favourites
+group-toolpath-favourites = Toolpath Favourites

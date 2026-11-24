@@ -8,6 +8,7 @@ use super::{
 };
 use crate::options::WindowLayout;
 use crate::tool_model::{Place, ToolModel};
+use crate::tool_names::{group_name, page_tab_name};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
@@ -63,15 +64,7 @@ impl CutCraftApp {
 
     /// A tool's name: the command's label, or its id in words.
     pub(super) fn tool_label(&self, id: &str) -> String {
-        if let Some(variant) = crate::flyout::variant(id) {
-            return variant.label.to_owned();
-        }
-        if let Some(label) = gui::built_in_label(id) {
-            return label.to_owned();
-        }
-        self.registry
-            .get(id)
-            .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())
+        crate::tool_names::name_of(&self.registry, id)
     }
 
     /// The available tools offered on the active machine whose names contain `text` (any case), in group order.
@@ -156,7 +149,7 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Browser");
         ui.horizontal_wrapped(|ui| {
             for (i, tab) in INSPECTOR_TABS.iter().enumerate() {
-                ui.selectable_value(&mut self.inspector_tab, i, *tab);
+                ui.selectable_value(&mut self.inspector_tab, i, page_tab_name(tab));
             }
         });
         ui.separator();
@@ -248,17 +241,18 @@ impl CutCraftApp {
                                 let explicit = self.explicit_icon(id);
                                 self.icons.find(explicit, id)
                             });
+                            let name = group_name(group.name);
                             let button = match icon {
                                 Some(path) => egui::Button::image(
                                     self.icons
                                         .image(path)
                                         .fit_to_exact_size(egui::vec2(edge, edge)),
                                 ),
-                                None => egui::Button::new(group.name)
+                                None => egui::Button::new(name.as_str())
                                     .wrap_mode(egui::TextWrapMode::Truncate),
                             }
                             .selected(self.rail_group == Some(i));
-                            if ui.add(button).on_hover_hint(group.name).clicked() {
+                            if ui.add(button).on_hover_hint(&name).clicked() {
                                 self.rail_group = (self.rail_group != Some(i)).then_some(i);
                                 (self.rail_favourites, self.rail_gadgets) = (false, false);
                             }
@@ -296,7 +290,7 @@ impl CutCraftApp {
             side_panel(egui::Panel::left("rail_flyout"), ui.ctx()).show(ui, |ui| {
                 cut_craft_bug_report::mark(ui, "Rail flyout");
                 ui.horizontal(|ui| {
-                    ui.strong(name);
+                    ui.strong(group_name(name));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         let row = ui.spacing().interact_size.y;
                         if ui
@@ -383,7 +377,7 @@ impl CutCraftApp {
             ui.horizontal(|ui| {
                 for (i, tab) in RIBBON_TABS.iter().enumerate() {
                     if *tab != GADGETS || !gadgets.is_empty() {
-                        ui.selectable_value(&mut self.ribbon_tab, i, *tab);
+                        ui.selectable_value(&mut self.ribbon_tab, i, page_tab_name(tab));
                     }
                 }
             });
@@ -621,9 +615,10 @@ impl CutCraftApp {
                 self.invoke(ui.ctx(), &[gui::RIBBON_PIN, &pin].concat());
             }
         });
-        response
-            .response
-            .on_hover_hint(tr!("layouts-ribbon-group-list", group = group.name));
+        response.response.on_hover_hint(tr!(
+            "layouts-ribbon-group-list",
+            group = group_name(group.name)
+        ));
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
         }
@@ -682,7 +677,7 @@ const RIBBON_TIP_ROWS: f32 = 6.0;
 
 /// A Ribbon group's name under its icons, with the arrow that lists its tools.
 fn group_label(name: &str) -> String {
-    format!("{name} ▾")
+    format!("{} ▾", group_name(name))
 }
 
 /// The rows a Ribbon tab's groups go in, by each group's width: as many to a row as fit in

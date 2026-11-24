@@ -1,0 +1,135 @@
+//! The names of the tools, the groups and boxes they sit in, the sub-tabs and the menu items,
+//! in the language in use. The English names are kept in Fluent (`locales/en/tools.ftl`,
+//! `tool-groups.ftl`, `subtabs.ftl` and `menu-items.ftl`) like every other word the app shows,
+//! so a language pack translates them too.
+//!
+//! Each is found by a key made from what never changes on screen: a tool by its id
+//! (`tools-draw-circle`), a group, a box or a menu item by its English name (`group-create-vectors`,
+//! `menu-item-save-as`), a sub-tab by its page and English name (`design-subtab-model`). A tool
+//! an add-on or a gadget brings has no key, and shows the name it gives.
+//!
+//! Every layout, menu, Find Tool and help page asks here, so a tool is named the same way
+//! wherever it shows.
+
+use crate::gui::{MenuItem, SubTab};
+use crate::pages::Page;
+use cut_craft_core::Registry;
+use cut_craft_i18n::{english, key_of, tr, tr_or};
+
+/// A tool's key: `tools-` and its id, hyphenated (`draw_circle` is `tools-draw-circle`).
+pub fn tool_key(id: &str) -> String {
+    key_of("tools", id)
+}
+
+/// Tool `id`'s name in the language in use; `english` (the name its command gives) when it
+/// has no key, as an add-on's tool or a gadget has none.
+pub fn tool_name(id: &str, english: &str) -> String {
+    tr_or(&tool_key(id), english)
+}
+
+/// Tool `id`'s English name as the code gives it: a tool box variant's, a built-in tool's,
+/// its command's label, or for a tool not made yet its id in words. `locales/en/tools.ftl`
+/// says the same for every tool on the pages (a test checks), and is what is shown.
+pub fn english_name(registry: &Registry, id: &str) -> String {
+    if let Some(variant) = crate::flyout::variant(id) {
+        return variant.label.to_owned();
+    }
+    if let Some(label) = crate::gui::built_in_label(id) {
+        return label.to_owned();
+    }
+    registry
+        .get(id)
+        .map_or_else(|| crate::gui::title_case(id), |c| c.meta().label.to_owned())
+}
+
+/// Tool `id`'s name in the language in use, the command's own name where it has no key.
+pub fn name_of(registry: &Registry, id: &str) -> String {
+    tool_name(id, &english_name(registry, id))
+}
+
+/// The name of the tool whose form is open, which the form knows by its command `id` and
+/// the English name it was opened under (a tool box variant such as Draw Rectangle from
+/// Center opens its command's form under its own name, as Setup Material opens Job Setup's).
+pub fn form_name(registry: &Registry, id: &str, english: &str) -> String {
+    let variant = crate::flyout::VARIANTS
+        .iter()
+        .find(|v| v.command == id && v.label == english)
+        .map(|v| v.id);
+    let built_in = crate::gui::BUILT_IN_ABOUTS
+        .iter()
+        .find(|(_, label, _)| *label == english)
+        .map(|(tool, _, _)| *tool);
+    match variant.or(built_in) {
+        Some(tool) => name_of(registry, tool),
+        None => tool_name(id, english),
+    }
+}
+
+/// A page tab's key, from its English name (`page-tab-layers`): the side tabs, the Rail's
+/// and Ribbon's browser tabs and the Ribbon's tabs.
+pub fn page_tab_key(name: &str) -> String {
+    key_of("page-tab", name)
+}
+
+/// A page tab's name in the language in use.
+pub fn page_tab_name(name: &str) -> String {
+    tr_or(&page_tab_key(name), name)
+}
+
+/// A tool group's or a tool box's key, from its English name: `group-create-vectors`.
+pub fn group_key(name: &str) -> String {
+    key_of("group", name)
+}
+
+/// A tool group's or a tool box's name in the language in use. The code keeps finding a
+/// group by its English name; only what is shown changes.
+pub fn group_name(name: &str) -> String {
+    tr_or(&group_key(name), name)
+}
+
+/// A sub-tab's key: its page and its English name (`design-subtab-create`,
+/// `toolpaths-subtab-create`), as both pages have a Create sub-tab, each its own words.
+pub fn subtab_key(page: Page, name: &str) -> String {
+    let prefix = match page {
+        Page::Design => "design-subtab",
+        Page::Toolpaths => "toolpaths-subtab",
+    };
+    key_of(prefix, name)
+}
+
+/// A sub-tab's name in the language in use.
+pub fn subtab_name(page: Page, tab: &SubTab) -> String {
+    tr_or(&subtab_key(page, tab.name), tab.name)
+}
+
+/// What a sub-tab's tools are for (its tooltip), in the language in use.
+pub fn subtab_hint(page: Page, tab: &SubTab) -> String {
+    tr_or(&format!("{}.hint", subtab_key(page, tab.name)), tab.hint)
+}
+
+/// A menu item's key, from its English name: `menu-item-save-as`.
+pub fn menu_item_key(name: &str) -> String {
+    key_of("menu-item", name)
+}
+
+/// Whether a menu item is named just as the tool it runs is: then it shows the tool's name,
+/// so translators translate it once.
+fn named_as_its_tool(item: &MenuItem) -> bool {
+    !item.action.is_empty()
+        && english().words(&tool_key(&item.action), None).as_deref() == Some(item.name.as_str())
+}
+
+/// A menu item's name in the language in use: its tool's name when it is named as that
+/// tool, else its own words. A recent file or a gadget shows its own name.
+pub fn menu_item_name(item: &MenuItem) -> String {
+    if item.action.starts_with("open_recent:") || item.action.starts_with("gadget_") {
+        return item.name.clone();
+    }
+    if named_as_its_tool(item) {
+        return tr(&tool_key(&item.action));
+    }
+    tr_or(&menu_item_key(&item.name), &item.name)
+}
+
+#[cfg(test)]
+mod tests;

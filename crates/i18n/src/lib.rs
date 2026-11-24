@@ -273,6 +273,35 @@ pub fn tr_args(key: &str, args: Option<&FluentArgs>) -> String {
         .unwrap_or_else(|| key.to_owned())
 }
 
+/// The words for `key` in the language in use, in English when it has none, or `fallback`
+/// when English has none either: for words that may or may not have a key, such as a tool's
+/// name, which an add-on or a gadget gives with no key of its own.
+pub fn tr_or(key: &str, fallback: &str) -> String {
+    let active = ACTIVE
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    active
+        .and_then(|l| l.format(key, None))
+        .or_else(|| english().words(key, None))
+        .unwrap_or_else(|| fallback.to_owned())
+}
+
+/// The key for English words that are found by what they say: `prefix`, then the words in
+/// lower case with every run of other characters a hyphen (`key_of("group", "2D View
+/// Control")` is `group-2d-view-control`).
+pub fn key_of(prefix: &str, words: &str) -> String {
+    let mut key = prefix.to_owned();
+    for word in words
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+    {
+        key.push('-');
+        key.push_str(&word.to_ascii_lowercase());
+    }
+    key
+}
+
 /// The words for a key, in the language in use: `tr!("start-recent")`, or with values
 /// `tr!("start-whats-new", version = env!("CARGO_PKG_VERSION"))`. A length or other measured
 /// number goes in already written in the job's units; a count that picks a plural goes in as
@@ -553,6 +582,19 @@ start-whats-new = Neu in v{ $version }
         assert_eq!(stretch("Cut 12 mm"), "Çüüt 12 mm~~~");
     }
 
+    #[test]
+    fn a_key_of_words_is_lower_case_and_hyphenated() {
+        assert_eq!(key_of("group", "2D View Control"), "group-2d-view-control");
+        assert_eq!(
+            key_of("menu-item", "Import Vectors / Bitmap..."),
+            "menu-item-import-vectors-bitmap"
+        );
+        assert_eq!(
+            key_of("group", "Join, Combine and Trim"),
+            "group-join-combine-and-trim"
+        );
+    }
+
     // One test switches languages, so the others never see another language mid-test.
     #[test]
     fn missing_words_fall_back_to_english_then_the_key() {
@@ -585,6 +627,13 @@ start-whats-new = Neu in v{ $version }
             tr!("start-whats-new", version = "1.2.3"),
             "What's new in v1.2.3"
         );
+        // words found by what they say, which may have no key: the words themselves
+        assert_eq!(tr_or("no-such-key", "Hole Pattern"), "Hole Pattern");
+        assert_eq!(tr_or("commit-calculate", "anything"), "Calculate");
+        use_language(Some(
+            Catalogue::parse("de", &[("a.ftl", "commit-calculate = Berechnen\n")]).0,
+        ));
+        assert_eq!(tr_or("commit-calculate", "anything"), "Berechnen");
         use_language(None);
         assert_eq!(tr("commit-create"), "Create");
     }

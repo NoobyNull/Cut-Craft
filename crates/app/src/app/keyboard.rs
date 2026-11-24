@@ -320,7 +320,8 @@ impl CutCraftApp {
             if self.pages.shown(behind.page) == Shown::Hidden {
                 self.pages.open(behind.page);
             }
-            behind.label.clone_into(&mut self.status.current_tool);
+            self.status.current_tool =
+                crate::tool_names::form_name(&self.registry, behind.id, behind.label);
             self.status
                 .set_message(&format!("Back to {}, as you left it", behind.label));
             self.form = Some(behind);
@@ -477,7 +478,7 @@ impl CutCraftApp {
         actions.extend(
             self.registry
                 .iter()
-                .map(|c| (c.id().to_owned(), c.meta().label.to_owned())),
+                .map(|c| (c.id().to_owned(), self.tool_label(c.id()))),
         );
         for id in BUILT_INS.iter().chain(LAYOUT_KEYS.iter().map(|(id, _)| id)) {
             if !actions.iter().any(|(a, _)| a == id) {
@@ -614,9 +615,7 @@ impl CutCraftApp {
                 let label = if id == shortcut::PAN_DRAG {
                     "Pan (hold and drag)".to_owned()
                 } else {
-                    self.registry
-                        .get(&id)
-                        .map_or_else(|| gui::title_case(&id), |c| c.meta().label.to_owned())
+                    self.tool_label(&id)
                 };
                 let keys = match trigger {
                     shortcut::Trigger::Key(keys) => ctx.format_shortcut(&keys),
