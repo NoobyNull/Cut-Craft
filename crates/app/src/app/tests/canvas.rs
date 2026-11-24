@@ -36,13 +36,7 @@ fn the_view_has_the_whole_width() {
 fn a_palette_group_lists_its_tools_and_a_pick_floats_its_form() {
     let mut h = canvas();
     assert!(h.text_at("Draw Circle").is_none(), "no list open at first");
-    let create = h
-        .app
-        .canvas_groups()
-        .iter()
-        .position(|g| g.name == "Create Vectors")
-        .unwrap();
-    h.app.canvas.group = Some(create);
+    h.app.canvas.group = Some("Create Vectors");
     // a box that just opened is measured first, then drawn
     h.frame(vec![]);
     h.frame(vec![]);
@@ -100,4 +94,50 @@ fn find_a_tool_is_in_the_header_and_enter_runs_the_first_match() {
     h.frame(vec![]);
     assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
     assert!(h.app.search.is_none());
+}
+
+#[test]
+fn enter_in_an_empty_find_box_runs_nothing() {
+    let mut h = canvas();
+    h.app.invoke(&h.ctx, "find_tool");
+    h.frame(vec![]);
+    h.frame(vec![key(Key::Enter)]);
+    h.frame(vec![]);
+    assert!(
+        h.app.form.is_none(),
+        "{:?}",
+        h.app.form.as_ref().map(|f| f.id)
+    );
+}
+
+#[test]
+fn the_library_components_and_toolpaths_actions_open_their_chips() {
+    let mut h = canvas();
+    for (id, tab) in [
+        ("clipart_library", "Library"),
+        ("component_levels", "Components"),
+        ("show_toolpaths_tab", "Toolpaths"),
+    ] {
+        h.app.invoke(&h.ctx, id);
+        let chip = INSPECTOR_TABS.iter().position(|t| *t == tab);
+        assert_eq!(h.app.canvas.chip, chip, "{id}");
+        h.frame(vec![]);
+    }
+}
+
+#[test]
+fn every_palette_group_can_be_reached_in_a_short_window() {
+    let mut h = canvas();
+    h.app.ribbon_tab = RIBBON_TABS.iter().position(|t| *t == "Toolpaths").unwrap();
+    h.window = egui::vec2(h.window.x, 420.0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let palette = h
+        .ctx
+        .memory(|m| m.area_rect(egui::Id::unique("canvas_palette")))
+        .expect("the palette is drawn");
+    assert!(
+        palette.bottom() <= 420.0,
+        "the palette scrolls within the window: {palette:?}"
+    );
 }

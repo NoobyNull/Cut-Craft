@@ -928,17 +928,11 @@ fn canvas(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
     app.options.general.layout = WindowLayout::Canvas;
     app.ribbon_tab = 0;
-    app.canvas.group = app
-        .canvas_groups()
-        .iter()
-        .position(|g| g.name == "Create Vectors");
+    app.canvas.group = Some("Create Vectors");
     app.canvas.chip = super::INSPECTOR_TABS.iter().position(|t| *t == "Layers");
     app.invoke(ctx, "draw_circle");
     // the pick closes the list; the picture shows it open
-    app.canvas.group = app
-        .canvas_groups()
-        .iter()
-        .position(|g| g.name == "Create Vectors");
+    app.canvas.group = Some("Create Vectors");
 }
 
 /// A full 3D model imported into a rotary job: shown turned round the axis in the stock.

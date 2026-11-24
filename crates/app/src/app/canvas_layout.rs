@@ -4,6 +4,7 @@
 
 use super::installed::GADGETS;
 use super::{CutCraftApp, INSPECTOR_TABS, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui};
+use crate::options::WindowLayout;
 use crate::tool_names::{group_name, page_tab_name};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
@@ -13,11 +14,12 @@ const FORM_SHARE: f32 = 0.8;
 /// How much of the view's height an open list (Sheets, Layers, Toolpaths…) may take.
 const LIST_SHARE: f32 = 0.6;
 
-/// What the Canvas layout has open: the palette's group whose tools fly out beside it,
-/// and the chip (an index into `INSPECTOR_TABS`) whose list floats above the chips.
+/// What the Canvas layout has open: the palette's group (by name, so it stays the same
+/// group when another machine offers other groups) whose tools fly out beside it, and the
+/// chip (an index into `INSPECTOR_TABS`) whose list floats above the chips.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct CanvasState {
-    pub group: Option<usize>,
+    pub group: Option<&'static str>,
     pub chip: Option<usize>,
 }
 
@@ -108,15 +110,15 @@ impl CutCraftApp {
         if edit.lost_focus() && text.is_empty() {
             self.search = None;
         }
+        if text.trim().is_empty() || self.search.is_none() {
+            return;
+        }
         let matches = self.search_matches(&text);
         if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             if let Some(&(id, _)) = matches.first() {
                 self.search = None;
                 self.invoke(ui.ctx(), id);
             }
-            return;
-        }
-        if text.trim().is_empty() || self.search.is_none() {
             return;
         }
         let below = edit.rect.left_bottom();
@@ -142,6 +144,17 @@ impl CutCraftApp {
             });
     }
 
+    /// Brings the browser's `tab` (one of `INSPECTOR_TABS`) forward: in the Rail and Ribbon
+    /// layouts' browser, and in Canvas as that chip's open list.
+    pub(super) fn show_inspector_tab(&mut self, tab: &str) {
+        if let Some(i) = INSPECTOR_TABS.iter().position(|&t| t == tab) {
+            self.inspector_tab = i;
+            if self.options.general.layout == WindowLayout::Canvas {
+                self.canvas.chip = Some(i);
+            }
+        }
+    }
+
     /// The groups of the header's tab with a tool for this machine.
     pub(super) fn canvas_groups(&self) -> Vec<gui::ToolGroup> {
         self.ribbon_groups()
@@ -165,36 +178,49 @@ impl CutCraftApp {
     /// tools beside it, another click closes the list.
     fn canvas_palette(&mut self, ui: &mut egui::Ui, at: egui::Pos2) {
         let groups = self.canvas_groups();
-        let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
+        let row = ui.spacing().interact_size.y;
+        let edge = TOOL_ICON_ROWS * row;
+        // down to just above the chips at the foot
+        let room = (ui.ctx().content_rect().bottom() - at.y - 3.0 * row).max(edge);
         let shown = egui::Area::new(egui::Id::unique("canvas_palette"))
             .default_pos(at)
             .show(ui.ctx(), |ui| {
                 floating(ui).show(ui, |ui| {
                     cut_craft_bug_report::mark(ui, "Canvas palette");
-                    for (i, group) in groups.iter().enumerate() {
-                        let name = group_name(group.name);
-                        let icon = group
-                            .tools
-                            .iter()
-                            .find_map(|&id| self.icons.find(self.explicit_icon(id), id));
-                        let button = match icon {
-                            Some(path) => egui::Button::image(
-                                self.icons
-                                    .image(path)
-                                    .fit_to_exact_size(egui::vec2(edge, edge)),
-                            ),
-                            None => egui::Button::new(name.as_str())
-                                .wrap_mode(egui::TextWrapMode::Truncate),
-                        }
-                        .min_size(egui::vec2(edge, edge))
-                        .selected(self.canvas.group == Some(i));
-                        if ui.add(button).on_hover_hint(&name).clicked() {
-                            self.canvas.group = (self.canvas.group != Some(i)).then_some(i);
-                        }
-                    }
+                    // a short window scrolls the palette rather than losing its foot
+                    egui::ScrollArea::vertical()
+                        .max_height(room)
+                        .show(ui, |ui| {
+                            for group in &groups {
+                                let name = group_name(group.name);
+                                let icon = group
+                                    .tools
+                                    .iter()
+                                    .find_map(|&id| self.icons.find(self.explicit_icon(id), id));
+                                let button = match icon {
+                                    Some(path) => egui::Button::image(
+                                        self.icons
+                                            .image(path)
+                                            .fit_to_exact_size(egui::vec2(edge, edge)),
+                                    ),
+                                    None => egui::Button::new(name.as_str())
+                                        .wrap_mode(egui::TextWrapMode::Truncate),
+                                }
+                                .min_size(egui::vec2(edge, edge))
+                                .selected(self.canvas.group == Some(group.name));
+                                if ui.add(button).on_hover_hint(&name).clicked() {
+                                    self.canvas.group = (self.canvas.group != Some(group.name))
+                                        .then_some(group.name);
+                                }
+                            }
+                        });
                 });
             });
-        let Some(group) = self.canvas.group.and_then(|i| groups.get(i)) else {
+        let Some(group) = self
+            .canvas
+            .group
+            .and_then(|name| groups.iter().find(|g| g.name == name))
+        else {
             return;
         };
         let tools: Vec<&'static str> = group
