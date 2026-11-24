@@ -193,7 +193,7 @@ impl CutCraftApp {
                 ),
                 None => egui::Button::new(&label),
             }
-            .selected(self.status.current_tool == label);
+            .selected(self.tool_in_hand(id));
             let response = ui.add_enabled(self.available(id), button);
             let response = self
                 .with_guidance(response, id)
