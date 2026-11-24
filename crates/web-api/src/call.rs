@@ -158,7 +158,8 @@ pub struct Gcode {
     /// Where to save it as well (the file, as Save Toolpaths names it); shown only if left out.
     #[serde(default)]
     pub save_to: Option<String>,
-    /// Write over a file already there.
+    /// Write over an earlier save already there: archived or replaced as Options say
+    /// (Replace when they say to ask).
     #[serde(default)]
     pub replace: bool,
     /// Go ahead though the checks before cutting found warnings (as answering Save Anyway).
