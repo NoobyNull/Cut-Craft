@@ -48,20 +48,20 @@ panels-version = v{ $version }
 
 # The buttons under the Toolpath List.
 toolpaths-move-up = Move Up
-    .tooltip = Cut the picked toolpath, or the picked group with all its toolpaths, sooner
+    .tooltip = Cut the picked toolpath, or the picked group with everything inside it, sooner
 toolpaths-move-down = Move Down
-    .tooltip = Cut the picked toolpath, or the picked group with all its toolpaths, later
+    .tooltip = Cut the picked toolpath, or the picked group with everything inside it, later
 toolpaths-delete = Delete
     .tooltip = Delete Toolpath: take the picked toolpath out of the job. Del does the same just after you click it in the list
 toolpaths-group = Group
-    .tooltip = Put the picked toolpaths (Ctrl-click to pick several) in a new group, which cuts them one after another and moves them together
+    .tooltip = Put the picked toolpaths (Ctrl-click to pick several) in a new group, which cuts them one after another and moves them together. Picked inside a group, the new group goes inside that one; a picked group goes inside a new group
 toolpaths-ungroup = Ungroup
-    .tooltip = Take the picked toolpaths out of their group, or take the picked group apart, keeping its toolpaths
+    .tooltip = Take the picked toolpaths out of their group, or take the picked group apart, keeping its toolpaths. Either moves up one level, into the group around it if there is one
 toolpaths-new-group = New Group
-    .tooltip = Create Empty Group: toolpaths made while it is picked join it; drag toolpaths onto its name to put them in it
+    .tooltip = Create Empty Group (inside the picked group, if one is picked): toolpaths made while it is picked join it; drag toolpaths or groups onto its name to put them in it
 panels-move-up = Move Up
 panels-move-down = Move Down
-panels-a-toolpath-group-its-toolpaths = A toolpath group: its toolpaths cut one after another. Toolpaths made while it is picked join it, and so do toolpaths dragged onto its name
+panels-a-toolpath-group-its-toolpaths = A toolpath group: everything inside it cuts one after another, and moves with it. Toolpaths made while it is picked join it, and so do toolpaths and groups dragged onto its name
 panels-check-the-toolpaths-and-write = Check the toolpaths and write the G-code file your machine runs, using its post processor
 panels-give-the-machine-a-folder = Give the machine a folder or web address to send to in Machine Configuration first
 panels-how-finely-the-3d-view = How finely the 3D view draws the model, and how many pictures a second it draws while it moves (Options ▸ 3D View)
@@ -82,3 +82,10 @@ panels-layer-vectors = { $count ->
 panels-toolpath-out-of-date = { $tool }
     Out of date: what it was made from has changed since. Recalculate it.
 panels-shank-guessed = ⚠ { $name } has no shank diameter set, so its shank is drawn from a guess: set it in the Tool Database
+panels-drag-to-change-the-cut-order = Drag to change the cut order: the blue line shows where it lands. Drop on a group's name to put it in that group
+panels-open-or-close-this-group = Open or close this group: closed, only its name shows
+panels-show-or-hide-this-group = Show or hide every toolpath in this group, its groups' too; Undo takes it back in one step
+panels-group-count = { $count ->
+    [one] 1 toolpath
+   *[other] { $count } toolpaths
+}
