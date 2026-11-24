@@ -13,11 +13,10 @@ pub struct Advanced {
     #[serde(default)]
     #[schemars(title = "Use Wayland directly (no file drag and drop)")]
     pub wayland_native: bool,
-    /// How many processor cores previews, simulations and imports may use at once; 0 uses
-    /// them all. Fewer keeps the computer responsive for other programs, but makes previews
-    /// slower
+    /// Replaced by Options ▸ Performance's calculation limit, which carries it over once
+    /// (0 was every core). Not shown; still saved, so options sealed before stay sealed
     #[serde(default)]
-    #[schemars(title = "Processor cores to use (0 = all)", range(min = 0, max = 256))]
+    #[schemars(skip)]
     pub cores: u32,
     /// How many points each stretch of a curved DXF spline becomes when it is imported. Fewer
     /// gives flat-sided curves; more gives smoother curves but bigger, slower jobs
@@ -308,7 +307,6 @@ impl Advanced {
 
     /// Hands these settings to the code they steer.
     pub fn apply(&self) {
-        cut_craft_core::simulation::set_core_limit(usize::try_from(self.cores).unwrap_or(0));
         cut_craft_core::import_settings::set_spline_samples(self.dxf_spline_detail);
         let (relist, most, unused_days, keep) = self.library_limits();
         crate::clipart::limits::set(relist, most, unused_days, keep);

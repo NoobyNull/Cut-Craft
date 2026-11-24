@@ -10,7 +10,7 @@ cd ~/cut-craft   # or wherever you cloned it
 
 Do this once on a new machine or a fresh clone.
 
-1. Install Rust (stable), then the test runner the commit hook uses:
+1. Install Rust (rustup; it fetches the version `rust-toolchain.toml` names on first use), then the test runner the commit hook uses:
 
    ```bash
    cargo install cargo-nextest --locked
@@ -173,8 +173,9 @@ To cut a release:
    list. The start page shows them under "What's new". Keep it to about four short lines, or
    the start page's links no longer fit and a test fails.
 
-4. Take the README's pictures again, so they show this version in the status bar and the
-   screens as they are now:
+4. Take the README's pictures again, but only when `scripts/release-version` says they are
+   out of date (something the app shows changed since they were last taken). When it says
+   they still match, skip this step:
 
    ```bash
    cargo run --release -p cut-craft -- --screenshots docs/screenshots
@@ -193,7 +194,7 @@ To cut a release:
 
    ```bash
    git switch -c version-0.6.1
-   git add Cargo.toml Cargo.lock crates/app/whats-new.md docs/screenshots
+   git add Cargo.toml Cargo.lock crates/app/whats-new.md docs/screenshots  # if retaken
    git commit -m "Version 0.6.1"
    git push -u origin version-0.6.1
    gh pr create --title "chore: version 0.6.1" --body "Version 0.6.1"

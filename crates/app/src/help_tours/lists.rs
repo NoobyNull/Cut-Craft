@@ -108,9 +108,10 @@ pub(super) const TOURS: &[Tour] = &[
             },
             Step {
                 caption: "Press **Move Up** or **Move Down** above the list, or drag the \
-                          toolpath to its new place.",
+                          toolpath by its grip (≡) at the left of its row: a blue line shows \
+                          where it will land.",
                 setup: |_, _| {},
-                mark: Mark::At("button:toolpaths_move_up"),
+                mark: Mark::At("toolpath_grip:Cut out"),
             },
             Step {
                 caption: "It now cuts in its new place: the file you save runs the toolpaths in \
@@ -720,6 +721,29 @@ pub(super) const TOURS: &[Tour] = &[
                     app.more_toolpaths.clear();
                 },
                 mark: Mark::At("toolpath_group:Group 1"),
+            },
+            Step {
+                caption: "Groups can hold groups. Pick toolpaths already in a group and press \
+                          **Group**, or drag a group by its grip onto another group's name. The \
+                          lines show which group holds what.",
+                setup: |app, _| {
+                    let second = toolpath_ids(app)[1];
+                    let params = serde_json::json!({
+                        "toolpaths": [second],
+                        "group": "Group 2",
+                        "inside": "Group 1",
+                    });
+                    run(app, "group_toolpaths", params);
+                },
+                mark: Mark::At("toolpath_group:Group 2"),
+            },
+            Step {
+                caption: "Click a group's arrow to close it to its name and count, and again to \
+                          open it. A group moves and cuts with everything inside it.",
+                setup: |app, _| {
+                    app.doc.toolpath_groups_closed.insert("Group 2".into());
+                },
+                mark: Mark::At("toolpath_arrow:Group 2"),
             },
         ],
     },

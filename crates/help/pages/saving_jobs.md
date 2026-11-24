@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: save, open, save_toolpaths, setup_material, settings
+reviewed: 2026-11-23
+see-also: save, open, save_toolpaths, setup_material, settings, updates
 icon: common/save.png
 ---
 
@@ -34,6 +34,11 @@ the open file as usual.
 Cut Craft copies your unsaved work every 30 seconds. If it closes without saving (a crash,
 a power cut), it opens that work again the next time it starts. The copy is kept until
 you save or close the job.
+
+The work comes back under the job's own name, still marked as not saved, so **Save** puts
+it back in its own file. (A job you never saved comes back as **Untitled**.) Installing an
+update keeps your unsaved work the same way, without asking: see
+[Updates](help:updates).
 
 - **Edit ▸ Options ▸ General Settings ▸ Keep a recovery copy every** sets how often, from
   10 seconds to 10 minutes. Shorter loses less work; longer writes to the disk less often.

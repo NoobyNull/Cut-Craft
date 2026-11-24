@@ -1,0 +1,7 @@
+# Every computer and CI job builds with this one Rust, so Format and Clippy say the same thing
+# everywhere (a newer Clippy finds new warnings). rustup fetches it on first use. Move it to a
+# newer release in its own pull request, fixing whatever the newer Clippy finds there.
+[toolchain]
+channel = "1.100.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
