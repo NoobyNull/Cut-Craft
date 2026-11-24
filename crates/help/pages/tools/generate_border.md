@@ -58,7 +58,9 @@ Under **Depth**:
 
 - **Depth from**: **Google** turns the picture it drew into a depth map, so the depth
   matches the picture. **Depth add-on** works it out on your own computer instead, free and
-  with nothing more sent, using the [Depth add-on](help:relief_from_photo).
+  with nothing more sent, using the [Depth add-on](help:relief_from_photo). If your copy of
+  the Depth add-on is not official, Cut Craft asks before running it too, just as it asks
+  about the Borders add-on (see [Running unsigned code](help:addons)).
 - **Depth curve**: below 1 the middle heights rise, for a fuller carving; above 1 they fall,
   for crisper tops. 1 leaves them as they came.
 - **Smoothing**: smooths the small steps between greys so the carving isn't terraced.

@@ -31,7 +31,14 @@ impl CutCraftApp {
         let my_gadgets = crate::gadgets::my_gadgets_dir();
         let addon_gadgets =
             crate::depth::addons_dir().map_or_default(|dir| crate::gadgets::from_addons(&dir));
-        let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
+        // tests never read the answers kept on this computer
+        let trust = if cfg!(test) {
+            crate::trust::Trust::new(None)
+        } else {
+            crate::trust::Trust::in_settings_folder()
+        };
+        let gadgets =
+            crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets, &trust);
         let mine: Vec<(String, &'static str)> = gadgets
             .installed()
             .filter_map(|g| Some((g.label.clone(), registry.get(&g.id)?.id())))
@@ -146,13 +153,8 @@ impl CutCraftApp {
             my_gadgets: mine,
             installed_addons: vec![],
             rail_gadgets: false,
-            unsigned_gadgets: gadgets
-                .mine
-                .iter()
-                .map(|g| (g.id.clone(), g.label.clone()))
-                .collect(),
-            unsigned_gadgets_allowed: std::collections::HashSet::new(),
-            unsigned_gadget_ok: ask_to_run_unsigned,
+            unsigned_gadgets: gadgets.unsigned,
+            trust,
             reporter: {
                 let mut reporter = cut_craft_bug_report::Reporter::new(
                     super::BUG_REPO,
@@ -858,25 +860,7 @@ impl CutCraftApp {
                     self.save_options();
                 }
             }
-            id if !self.may_run_gadget(id) => {}
             _ => self.start_command(id),
-        }
-    }
-
-    /// Whether gadget `id` may run: always for Cut Craft's own; for one from the My Gadgets
-    /// folder, once the user has been warned and said yes (asked once a session).
-    fn may_run_gadget(&mut self, id: &str) -> bool {
-        let Some(label) = self.unsigned_gadgets.get(id) else {
-            return true;
-        };
-        if self.unsigned_gadgets_allowed.contains(id) {
-            return true;
-        }
-        if (self.unsigned_gadget_ok)(label) {
-            self.unsigned_gadgets_allowed.insert(id.to_owned());
-            true
-        } else {
-            false
         }
     }
 
@@ -1295,31 +1279,4 @@ pub(super) fn contributors() -> Vec<(&'static str, &'static str, &'static str)> 
         })
         .filter(|(login, ..)| !login.is_empty())
         .collect()
-}
-
-/// What the user is told before an unsigned gadget first runs.
-pub(super) fn unsigned_warning(label: &str) -> String {
-    format!(
-        "\u{201c}{label}\u{201d} is not an official Cut Craft gadget. It came from your My \
-         Gadgets folder or an unsigned add-on, not from a signed Cut Craft build, so nobody has \
-         checked what it does.\n\n\
-         Cut Craft and its author are not responsible for what this gadget does or can do, \
-         including anything harmful or malicious. It can only change the job that is open, \
-         and Undo takes back everything it did in one step. Check its result before you \
-         cut.\n\nRun it?"
-    )
-}
-
-/// Asks, in a system dialog, whether to run the unsigned gadget `label`.
-pub(super) fn ask_to_run_unsigned(label: &str) -> bool {
-    let answer = super::message_dialog()
-        .set_title("Unsigned gadget")
-        .set_description(unsigned_warning(label))
-        .set_level(rfd::MessageLevel::Warning)
-        .set_buttons(rfd::MessageButtons::OkCancelCustom(
-            "Run Gadget".into(),
-            "Cancel".into(),
-        ))
-        .show();
-    matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
 }

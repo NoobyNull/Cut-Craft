@@ -30,6 +30,7 @@ mod snapping_and_guides;
 mod tool_database;
 mod toolpath_list;
 mod toolpaths;
+mod unsigned_code;
 mod updating;
 mod view_3d;
 
