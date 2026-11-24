@@ -375,3 +375,69 @@ fn a_dimension_copied_onto_itself_is_still_a_dimension() {
         "a pasted dimension can still be edited"
     );
 }
+
+mod rotary_solids {
+    use super::*;
+    use cut_craft_core::component::{Combine, Component};
+    use cut_craft_core::document::{Along, Job};
+    use cut_craft_core::glam::DVec3;
+
+    /// A rotary job 40 mm across, its axis along `along`, holding a full 3D model: one
+    /// triangle, at A=0 straight up 10 from the axis and one turned a quarter round.
+    fn job(along: Along) -> (Document, EntityId) {
+        let mut doc = Document {
+            job: Job::rotary(60.0, 40.0, along),
+            ..Document::default()
+        };
+        let mut model =
+            Component::from_fn("Model", Combine::Add, doc.job.area(), 0.5, |_| Some(20.0));
+        model.set_solid(&[[
+            DVec3::new(10.0, 0.0, 10.0),
+            DVec3::new(20.0, 10.0, 0.0),
+            DVec3::new(30.0, 0.0, 10.0),
+        ]]);
+        let mut c = Change::builder(&doc);
+        let id = c.add_component(model);
+        doc.apply(&c.finish()).unwrap();
+        doc.selected_components = [id].into();
+        (doc, id)
+    }
+
+    fn close(a: DVec3, b: DVec3) -> bool {
+        (a - b).length() < 1e-4
+    }
+
+    #[test]
+    fn moving_a_full_model_moves_it_along_the_axis_and_turns_it_round() {
+        // a quarter of the way round a 40 mm cylinder is 10 pi mm on the unrolled sheet
+        let quarter = 10.0 * std::f64::consts::PI;
+        for (along, by) in [
+            (Along::X, Point::new(5.0, quarter)),
+            (Along::Y, Point::new(quarter, 5.0)),
+        ] {
+            let (mut doc, id) = job(along);
+            let change =
+                Change::transform_selected(&doc, |_| DAffine2::from_translation(by)).unwrap();
+            doc.apply(&change).unwrap();
+            let moved = doc.components[&id].solid_triangles();
+            assert_eq!(moved.len(), 1, "{along:?}: the model is kept whole");
+            let [a, b, _] = moved[0];
+            // 5 further along; straight up has turned the way A turns round, to +y
+            assert!(close(a, DVec3::new(15.0, 10.0, 0.0)), "{along:?}: {a:?}");
+            assert!(close(b, DVec3::new(25.0, 0.0, -10.0)), "{along:?}: {b:?}");
+        }
+    }
+
+    #[test]
+    fn a_full_model_is_not_scaled_turned_or_mirrored_on_the_sheet_and_is_told_why() {
+        let (doc, _) = job(Along::X);
+        let refused =
+            Change::transform_selected(&doc, |_| DAffine2::from_scale(Point::new(2.0, 2.0)));
+        match refused {
+            Err(CommandError::Failed(why)) => {
+                assert!(why.contains("Orientate 3D Model"), "{why}");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+}

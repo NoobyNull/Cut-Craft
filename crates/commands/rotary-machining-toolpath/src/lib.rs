@@ -20,7 +20,7 @@
 //! and says so in red.
 
 use cut_craft_core::component::{Combine, placed_model};
-use cut_craft_core::document::{Along, Document};
+use cut_craft_core::document::{Along, Document, Joined, Support};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::progress;
@@ -102,6 +102,10 @@ pub struct Params {
     /// A small notch at A=0, just past the last ring, so the part can be put back exactly as
     /// it was if a job has to be started again
     pub registration_mark: bool,
+    /// Cut away the centre stock Job Setup leaves along the axis (Holding the Part), down to
+    /// the model: for the last toolpath, once everything else is cut. The ends the part is
+    /// kept joined at stay as they are
+    pub cut_support: bool,
     /// The holder above the bit, and the chuck and tailstock: filled in from Machine
     /// Configuration as the toolpath is made (the usual ones without)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,6 +132,7 @@ impl Default for Params {
             end: 0.0,
             allowance: 0.0,
             registration_mark: false,
+            cut_support: false,
             surroundings: None,
         }
     }
@@ -367,6 +372,73 @@ fn takes_solid(k: &cut_craft_core::component::Component) -> bool {
     !k.solid.is_empty() && matches!(k.combine, Combine::Add | Combine::Merge)
 }
 
+/// Segments round each round part of the support: fine enough that the bit stays within
+/// a few thousandths of a millimetre of it, and never inside it.
+const SUPPORT_SEGMENTS: usize = 96;
+
+/// A round bar on the turning axis, `radius` out, from `from` to `to` along it (the job's X
+/// or Y), ends closed: its sides just outside the circle, so nothing inside it is cut.
+fn bar(radius: f64, from: f64, to: f64) -> Vec<[DVec3; 3]> {
+    use std::f64::consts::TAU;
+    #[expect(clippy::cast_precision_loss, reason = "a few segments")]
+    let step = TAU / SUPPORT_SEGMENTS as f64;
+    let out = radius / (step / 2.0).cos();
+    let at = |along: f64, k: usize| {
+        #[expect(clippy::cast_precision_loss, reason = "a few segments")]
+        let (sin, cos) = (k as f64 * step).sin_cos();
+        DVec3::new(along, out * sin, out * cos)
+    };
+    let (a, b) = (DVec3::new(from, 0.0, 0.0), DVec3::new(to, 0.0, 0.0));
+    (0..SUPPORT_SEGMENTS)
+        .flat_map(|k| {
+            let n = k + 1;
+            [
+                [at(from, k), at(to, k), at(to, n)],
+                [at(from, k), at(to, n), at(from, n)],
+                [a, at(from, n), at(from, k)],
+                [b, at(to, k), at(to, n)],
+            ]
+        })
+        .collect()
+}
+
+/// What Job Setup's Holding the Part leaves of the material, as a model the bit is kept
+/// off: the centre stock along the whole axis (unless it is being cut away), and the
+/// material whole past the model (from `model`, along the material) at an end it stays
+/// joined at. `None` when it leaves nothing.
+fn supporting(
+    support: Support,
+    tool: &Tool,
+    swing: f64,
+    length: f64,
+    along_from: f64,
+    model: Option<(f64, f64)>,
+    cut_beam: bool,
+) -> Option<Solid> {
+    let mut triangles = vec![];
+    if support.beam > 0.0 && !cut_beam {
+        triangles.extend(bar(support.beam / 2.0, along_from, along_from + length));
+    }
+    if let Some((first, last)) = model {
+        // a little past the blank's corners, so all of it is left
+        let whole = swing + 1.0;
+        let (chuck, tailstock) = support.joined.ends();
+        if chuck && first > 0.0 {
+            triangles.extend(bar(whole, along_from, along_from + first));
+        }
+        if tailstock && last < length {
+            triangles.extend(bar(whole, along_from + last, along_from + length));
+        }
+    }
+    (!triangles.is_empty()).then(|| Solid {
+        mesh: Mesh::new(triangles),
+        cutter: Cutter::new(tool),
+        allowance: 0.0,
+        out: 0.0,
+        along_from,
+    })
+}
+
 /// One pass of the bit: points (along, A as mm round the surface, the bit's height from the
 /// material's top) each with how far across the axis the bit is held there.
 type Pass = Vec<(DVec3, f64)>;
@@ -378,6 +450,8 @@ struct Work<'a> {
     /// (grown by the allowance), and how far out from the axis their heights were moved to
     /// sit in the material as the rest of the model was.
     solid: Option<&'a Solid>,
+    /// What is left of the material to hold the part ([`supporting`]): kept like a model.
+    support: Option<&'a Solid>,
     tool: &'a Tool,
     allowance: f64,
     along_x: bool,
@@ -431,7 +505,7 @@ impl Work<'_> {
         let mut tip = self
             .turned
             .drop(self.tool, along, turned, across, self.allowance);
-        if let Some(solid) = self.solid {
+        for solid in self.solid.iter().chain(&self.support) {
             tip = tip.max(solid.drop(along, turned / radius, across));
         }
         tip
@@ -1125,10 +1199,14 @@ fn angles(typed: &str) -> (Option<Vec<f64>>, Option<String>) {
     ((!good.is_empty()).then_some(good), note)
 }
 
-/// Where along the part the model is: from its first point to its last.
+/// Where along the part the model is, from the material's start: its first point to its
+/// last.
 fn model_along(work: &Work) -> Option<(f64, f64)> {
-    if let Some((lo, hi)) = work.solid.and_then(|s| s.mesh.bounds()) {
-        return Some((lo.x, hi.x));
+    // the full models are kept in the job's own X and Y: counted from the material's start
+    if let Some(solid) = work.solid
+        && let Some((lo, hi)) = solid.mesh.bounds()
+    {
+        return Some((lo.x - solid.along_from, hi.x - solid.along_from));
     }
     let t = work.turned;
     let mut found: Option<(f64, f64)> = None;
@@ -1146,7 +1224,13 @@ fn model_along(work: &Work) -> Option<(f64, f64)> {
 
 /// In red, when the model is in the chuck or tailstock, or so near them that the collet nut
 /// and spindle can't get down beside it: how much room to leave.
-fn too_near(work: &Work, head: &Head, around: &Surroundings, length: f64) -> Vec<String> {
+fn too_near(
+    work: &Work,
+    head: &Head,
+    around: &Surroundings,
+    length: f64,
+    joined: Joined,
+) -> Vec<String> {
     let Some((first, last)) = model_along(work) else {
         return vec![];
     };
@@ -1154,7 +1238,9 @@ fn too_near(work: &Work, head: &Head, around: &Surroundings, length: f64) -> Vec
     let room = head.widest() + 2.0;
     let (free_from, free_to) = head.free();
     let mut notes = vec![];
-    if around.chuck > 0.0 && first < free_from + room {
+    // an end the part stays joined at is not cut beside the model: no room needed there
+    let (at_chuck, at_tailstock) = joined.ends();
+    if around.chuck > 0.0 && !at_chuck && first < free_from + room {
         notes.push(format!(
             "The model starts {} from the job's start, but the chuck holds the first {} \
              (Machine Configuration's rotary settings), and the collet nut and spindle, {} \
@@ -1166,7 +1252,7 @@ fn too_near(work: &Work, head: &Head, around: &Surroundings, length: f64) -> Vec
             units.length(room, 0),
         ));
     }
-    if around.tailstock > 0.0 && last > free_to - room {
+    if around.tailstock > 0.0 && !at_tailstock && last > free_to - room {
         notes.push(format!(
             "The model ends {} from the job's end, but the tailstock takes the last {}, and \
              the collet nut and spindle can't get down beside it. Leave at least {} between \
@@ -1183,6 +1269,7 @@ fn too_near(work: &Work, head: &Head, around: &Surroundings, length: f64) -> Vec
 /// along the part, and what would reach it.
 fn left_note(
     outcome: &Outcome,
+    tool: &Tool,
     around: &Surroundings,
     units: cut_craft_core::document::Units,
 ) -> Option<String> {
@@ -1201,10 +1288,22 @@ fn left_note(
         let list: Vec<String> = outcome.tilts.iter().map(|a| format!("{a:.0}°")).collect();
         format!(" (A locked at {} for the details)", list.join(", "))
     };
+    // the reach was taken, not given: the likeliest thing to put right
+    let (stickout, guessed) = cut_craft_core::collision::stickout(tool);
+    let guess = if guessed {
+        format!(
+            " The Tool Database doesn't say how far this bit sticks out of the collet, so {} \
+             was taken: set its stick-out there if it sticks out further.",
+            units.length(stickout, 0)
+        )
+    } else {
+        String::new()
+    };
     Some(format!(
         "The collet nut ({} across) and spindle can't get down to some of the model at any \
          angle tried{tilts}: it is left rough between {} and {} along the part. A bit that \
-         sticks out further, a slimmer holder, or the model sliced into parts would reach it.",
+         sticks out further, a slimmer holder, or the model sliced into parts would reach it.\
+         {guess}",
         units.length(around.holder.nut_diameter, 0),
         units.length(from, 1),
         units.length(to, 1),
@@ -1284,9 +1383,30 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         step: stepover * tool.diameter,
         top: Stock::of(&doc.job).map_or(radius, |stock| stock.swing().max(radius)),
         units: doc.job.units,
+        support: None,
+    };
+    // what Job Setup leaves to hold the part, kept like a model
+    let holding = supporting(
+        rotary.support,
+        tool,
+        work.top,
+        length,
+        if along_x {
+            doc.job.area().min.x
+        } else {
+            doc.job.area().min.y
+        },
+        model_along(&work),
+        p.cut_support,
+    );
+    let work = Work {
+        support: holding.as_ref(),
+        ..work
     };
     let plain = |passes: Vec<Pass>| passes.into_iter().map(|p| (p, false)).collect();
     let mut notes = vec![];
+    // what of the model it can't cut: kept with the toolpath, for the checks before cutting
+    let mut kept: Vec<String> = vec![];
     // the holder, chuck and tailstock, where the toolpath keeps clear of them
     let mut kept_clear: Option<Head> = None;
     // each pass, and whether the bit can come down to it at the rapid rate
@@ -1306,9 +1426,15 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
                     angles: typed,
                     head: Head::new(tool, &around, length, stock.swing()),
                 };
-                notes.extend(too_near(&work, &details.head, &around, length));
+                kept.extend(too_near(
+                    &work,
+                    &details.head,
+                    &around,
+                    length,
+                    rotary.support.joined,
+                ));
                 let (passes, outcome) = work.sides_then_details(&stock, &details)?;
-                notes.extend(left_note(&outcome, &around, doc.job.units));
+                kept.extend(left_note(&outcome, tool, &around, doc.job.units));
                 kept_clear = Some(details.head);
                 passes
             }
@@ -1357,6 +1483,10 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
     let mut toolpath =
         made_by::<RotaryMachiningToolpath>(p, p.name.clone(), tool.clone(), vec![], moves);
     toolpath.across = across;
+    if !kept.is_empty() {
+        toolpath.params[cut_craft_core::toolpath::MADE_NOTES] = kept.clone().into();
+    }
+    notes.extend(kept);
     Ok((toolpath, notes))
 }
 
