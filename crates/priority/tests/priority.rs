@@ -40,14 +40,22 @@ fn lowering_twice_is_harmless() {
 #[cfg(any(unix, windows))]
 fn processor_time_grows_while_working() {
     let before = cut_craft_priority::process_time().expect("the system says");
+    // work until the processor has run us for 100 ms: on a busy computer that takes longer than
+    // 100 ms by the clock, so the clock only limits how long to try
     let start = std::time::Instant::now();
     let mut x = 0u64;
-    while start.elapsed() < Duration::from_millis(200) {
-        x = std::hint::black_box(x.wrapping_mul(31).wrapping_add(7));
+    let mut after = before;
+    while after.saturating_sub(before) < Duration::from_millis(100)
+        && start.elapsed() < Duration::from_secs(30)
+    {
+        for _ in 0..100_000 {
+            x = std::hint::black_box(x.wrapping_mul(31).wrapping_add(7));
+        }
+        after = cut_craft_priority::process_time().expect("the system says");
     }
-    let after = cut_craft_priority::process_time().expect("the system says");
     assert!(
         after.saturating_sub(before) >= Duration::from_millis(100),
-        "{before:?} → {after:?}"
+        "{before:?} → {after:?} in {:?}",
+        start.elapsed()
     );
 }
