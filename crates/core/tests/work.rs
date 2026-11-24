@@ -103,28 +103,56 @@ fn work_on_the_card_rests_after_each_piece_to_keep_to_its_share() {
     );
 }
 
+/// The card's rest is a time it is free again: owed until then, whoever asks next, so a
+/// calculation that hands the card one short job after another rests between the jobs too,
+/// and nothing waits once the last job is done.
 #[test]
-fn paced_pieces_rest_between_them_by_the_limit_and_not_after_the_last() {
-    let piece = Duration::from_millis(20);
-    let run = |limit| {
-        work::set_limit(limit);
-        let (start, mut done) = (Instant::now(), vec![]);
-        work::paced(0..3, |i| {
-            std::thread::sleep(piece);
-            done.push(i);
-        });
-        (start.elapsed(), done)
+fn the_card_is_owed_its_rest_until_its_time_whoever_asks_next() {
+    let t0 = Instant::now();
+    let ms = Duration::from_millis;
+    let mut rests = work::Rests::default();
+    assert_eq!(
+        rests.owed(t0),
+        Duration::ZERO,
+        "nothing owed before any work"
+    );
+    let limit = Limit {
+        on: true,
+        share: 80,
     };
-    let (free, done) = run(Limit::OFF);
-    assert_eq!(done, [0, 1, 2], "every piece, in order");
-    assert!(free < piece * 5, "no rests with no limit: {free:?}");
-    let (half, _) = run(Limit {
+    rests.worked(t0, t0 + ms(40), limit);
+    assert_eq!(rests.owed(t0 + ms(40)), ms(10), "a quarter of 40 ms at 80%");
+    assert_eq!(rests.owed(t0 + ms(45)), ms(5), "less once some has passed");
+    assert_eq!(rests.owed(t0 + ms(60)), Duration::ZERO, "none once it has");
+    rests.worked(t0 + ms(60), t0 + ms(100), Limit::OFF);
+    assert_eq!(
+        rests.owed(t0 + ms(100)),
+        Duration::ZERO,
+        "no rest with no limit"
+    );
+}
+
+#[test]
+fn paced_pieces_run_in_order_resting_between_and_owing_the_last_rest() {
+    let piece = Duration::from_millis(100);
+    work::set_limit(Limit {
         on: true,
         share: 50,
     });
+    let (mut rests, mut done, start) = (work::Rests::default(), vec![], Instant::now());
+    rests.paced(0..3, |i| {
+        std::thread::sleep(piece);
+        done.push(i);
+    });
+    let took = start.elapsed();
+    assert_eq!(done, [0, 1, 2], "every piece, in order");
     assert!(
-        half >= piece * 5,
-        "a rest as long as each piece but the last: {half:?}"
+        took >= piece * 5,
+        "a rest as long as each piece between them: {took:?}"
+    );
+    assert!(
+        rests.owed(Instant::now()) > piece / 2,
+        "the last piece's rest is left owed, not slept"
     );
     work::set_limit(Limit::default());
 }

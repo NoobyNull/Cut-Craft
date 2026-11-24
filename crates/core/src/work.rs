@@ -28,16 +28,36 @@ pub struct Limit {
     pub share: u8,
 }
 
-/// Runs `each` on every piece in turn, resting after each but the last as the limit asks
-/// ([`Limit::rest_after`]): how work handed to the graphics card, which draws the desktop
-/// too, keeps to its share of the card.
-pub fn paced<I: IntoIterator>(pieces: I, mut each: impl FnMut(I::Item)) {
-    let (limit, mut rest) = (limit(), Duration::ZERO);
-    for piece in pieces {
-        std::thread::sleep(rest);
-        let start = Instant::now();
-        each(piece);
-        rest = limit.rest_after(start.elapsed());
+/// When the graphics card, which draws the desktop too, is free for calculations again:
+/// after each piece of work it rests as the limit asks ([`Limit::rest_after`]). The rest is
+/// owed to whoever hands it work next, so a calculation that sends one short job after
+/// another rests between the jobs as well, and nothing waits once the last one is done.
+#[derive(Debug, Default)]
+pub struct Rests {
+    until: Option<Instant>,
+}
+
+impl Rests {
+    /// How long work arriving at `now` waits for the card's rest to end.
+    pub fn owed(&self, now: Instant) -> Duration {
+        self.until
+            .map_or(Duration::ZERO, |until| until.saturating_duration_since(now))
+    }
+
+    /// Notes a piece that kept the card busy from `start` to `end`, under `limit`.
+    pub fn worked(&mut self, start: Instant, end: Instant, limit: Limit) {
+        self.until = Some(end + limit.rest_after(end.saturating_duration_since(start)));
+    }
+
+    /// Runs `each` on every piece in turn, each after the rest owed before it.
+    pub fn paced<I: IntoIterator>(&mut self, pieces: I, mut each: impl FnMut(I::Item)) {
+        let limit = limit();
+        for piece in pieces {
+            std::thread::sleep(self.owed(Instant::now()));
+            let start = Instant::now();
+            each(piece);
+            self.worked(start, Instant::now(), limit);
+        }
     }
 }
 
