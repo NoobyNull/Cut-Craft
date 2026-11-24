@@ -151,13 +151,14 @@ impl CutCraftApp {
             .collect()
     }
 
-    /// Favourites' or Gadgets' tools, listed with no palette.
+    /// Favourites' or Gadgets' tools for this machine, listed with no palette.
     fn canvas_list(&self, tab: &str) -> Vec<&'static str> {
-        if tab == GADGETS {
+        let tools = if tab == GADGETS {
             self.gadget_tools()
         } else {
             self.tool_model().every_favourite(&self.options.favourites)
-        }
+        };
+        tools.into_iter().filter(|id| self.offered(id)).collect()
     }
 
     /// The palette: one icon for each group, top to bottom; a click lists that group's
