@@ -646,10 +646,7 @@ impl CutCraftApp {
 
 /// The sub-tabs of `page`.
 pub(super) fn subtab_set(page: Page) -> gui::SubTabSet {
-    match page {
-        Page::Design => gui::DESIGN,
-        Page::Toolpaths => gui::TOOLPATHS,
-    }
+    crate::tool_model::ToolModel::sections(page)
 }
 
 /// `page`'s name in ids.

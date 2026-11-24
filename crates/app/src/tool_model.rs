@@ -37,7 +37,7 @@ impl<'a> ToolModel<'a> {
     }
 
     /// Every group: the Create/Edit groups (drawing, then modeling), then the Process ones.
-    pub fn all_groups(&self) -> Vec<ToolGroup> {
+    pub fn all_groups(self) -> Vec<ToolGroup> {
         [Page::Design, Page::Toolpaths]
             .into_iter()
             .flat_map(|kind| self.groups(kind))
@@ -45,7 +45,7 @@ impl<'a> ToolModel<'a> {
     }
 
     /// One kind's groups, in order.
-    pub fn groups(&self, kind: Page) -> Vec<ToolGroup> {
+    pub fn groups(self, kind: Page) -> Vec<ToolGroup> {
         let t = self.toolbar;
         match kind {
             Page::Design => t.groups.iter().chain(&t.modeling_groups).copied().collect(),
@@ -63,7 +63,7 @@ impl<'a> ToolModel<'a> {
 
     /// The kind of tool `id` is: Process when a Process group holds it, else Create/Edit
     /// (gadgets and add-on tools are drawn with the Create/Edit tools).
-    pub fn kind_of(&self, id: &str) -> Page {
+    pub fn kind_of(self, id: &str) -> Page {
         if self
             .groups(Page::Toolpaths)
             .iter()
@@ -76,7 +76,7 @@ impl<'a> ToolModel<'a> {
     }
 
     /// `kind`'s favourites in the order picked, leaving out any no longer one of its tools.
-    pub fn favourites(&self, kind: Page, favourites: &Favourites) -> Vec<&'static str> {
+    pub fn favourites(self, kind: Page, favourites: &Favourites) -> Vec<&'static str> {
         let groups = self.groups(kind);
         favourites
             .of(kind)
@@ -92,14 +92,14 @@ impl<'a> ToolModel<'a> {
     }
 
     /// Both kinds' favourites, the Create/Edit ones first.
-    pub fn every_favourite(&self, favourites: &Favourites) -> Vec<&'static str> {
+    pub fn every_favourite(self, favourites: &Favourites) -> Vec<&'static str> {
         let mut tools = self.favourites(Page::Design, favourites);
         tools.extend(self.favourites(Page::Toolpaths, favourites));
         tools
     }
 
     /// Whether `id` is on its own kind's favourites.
-    pub fn is_favourite(&self, id: &str, favourites: &Favourites) -> bool {
+    pub fn is_favourite(self, id: &str, favourites: &Favourites) -> bool {
         favourites.of(self.kind_of(id)).0.iter().any(|f| f == id)
     }
 
@@ -127,7 +127,7 @@ impl<'a> ToolModel<'a> {
     /// Favourites first in every layout, then what that place can do with it. `folded` says
     /// whether tool groups are folded into one button (Options ▸ General).
     pub fn menu(
-        &self,
+        self,
         id: &str,
         place: Place,
         favourites: &Favourites,
