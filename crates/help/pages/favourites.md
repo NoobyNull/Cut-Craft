@@ -31,6 +31,7 @@ Where they show depends on your [window layout](help:interface_layout):
 - In Ribbon and Classic, right-click a favourite and pick **Move Earlier** or **Move
   Later** to change their order.
 
-Favourites are kept between runs and are the same in every layout. In the Ribbon, a group
-holding a favourite is never folded away when the window is narrow. To pick another layout,
+Favourites are kept between runs and are the same in every layout. In the Ribbon, a
+group's list also lets you pin a tool to show it as an icon (see
+[Ribbon layout](help:layout_ribbon)). To pick another layout,
 use [Interface Layout](help:interface_layout).

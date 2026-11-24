@@ -123,11 +123,12 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
     pub flyout_faces: crate::flyout::Faces,
-    /// How many times each tool has been picked from a tool button, by id: the Ribbon folds
-    /// the groups used least first when the window is too narrow for them all.
+    /// The tools pinned to the Ribbon (`true`) or taken off it (`false`) by hand, by id;
+    /// any other tool is on it when it is one of its group's first few. A group's list has
+    /// every tool either way.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
-    pub tool_uses: std::collections::BTreeMap<String, u32>,
+    pub ribbon_pins: std::collections::BTreeMap<String, bool>,
 }
 
 /// Each tool page's favourite tools, in the order shown, and whether it shows only those.
@@ -211,6 +212,7 @@ impl Default for Options {
                 autosave_seconds: autosave_seconds(),
                 flyout_hold_seconds: flyout_hold_seconds(),
                 fold_tool_groups: false,
+                ribbon_icons: RibbonIcons::Compact,
                 show_tips_at_startup: true,
             },
             job_defaults: JobDefaults::default(),
@@ -235,7 +237,7 @@ impl Default for Options {
             design_sections: vec![],
             toolpath_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
-            tool_uses: std::collections::BTreeMap::new(),
+            ribbon_pins: std::collections::BTreeMap::new(),
         }
     }
 }

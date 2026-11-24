@@ -81,26 +81,6 @@ fn favourites_come_in_the_order_picked_and_only_while_still_tools_of_that_kind()
 }
 
 #[test]
-fn a_group_holding_a_favourite_is_kept_and_uses_add_up() {
-    let toolbar = toolbar();
-    let model = ToolModel::new(&toolbar);
-    let create = model
-        .all_groups()
-        .into_iter()
-        .find(|g| g.name == "Create Vectors")
-        .unwrap();
-    let mut favourites = Favourites::default();
-    assert!(!ToolModel::holds_a_favourite(&create, &favourites));
-    favourites.design.push("draw_circle".into());
-    assert!(ToolModel::holds_a_favourite(&create, &favourites));
-
-    let uses = [("draw_circle".to_owned(), 3), ("draw_text".to_owned(), 4)]
-        .into_iter()
-        .collect();
-    assert_eq!(ToolModel::uses(&create, &uses), 7);
-}
-
-#[test]
 fn every_layout_gives_a_tool_the_same_favourites_item() {
     let toolbar = toolbar();
     let model = ToolModel::new(&toolbar);
