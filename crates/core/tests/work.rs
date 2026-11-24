@@ -316,7 +316,10 @@ fn calculations_start_their_threads_in_one_place() {
         if !rust || name.ends_with("tests.rs") || !name.contains("/src/") {
             continue;
         }
-        let text = std::fs::read_to_string(&path).unwrap();
+        // Windows checkouts end lines with \r\n
+        let text = std::fs::read_to_string(&path)
+            .unwrap()
+            .replace("\r\n", "\n");
         // a file's own tests, at its foot, may start threads as they like
         let code = text
             .split("#[cfg(test)]\nmod tests")
