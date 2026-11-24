@@ -86,6 +86,7 @@ mod send;
 mod setup_material;
 mod shortcuts_page;
 mod snapping;
+mod split_views;
 mod surfacing;
 mod tabs;
 #[cfg(test)]
@@ -410,6 +411,8 @@ enum Split {
     Stacked,
     /// 2D left of 3D
     SideBySide,
+    /// The view picked fills the room, the other in a corner of it
+    Picture,
 }
 
 /// The picked components' outlines, with the components and revision they were traced for.
@@ -666,6 +669,8 @@ struct CutCraftApp {
     shaded_saved: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
+    /// Where the 2D view's top left corner was on screen last frame, to move `camera` with it.
+    view_2d_at: Option<egui::Pos2>,
     view_tool: Option<ViewTool>,
     /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
     pages: Pages,
@@ -1093,6 +1098,8 @@ struct CutCraftApp {
     shortcut_search: String,
     /// Both views shown at once.
     split: Option<Split>,
+    /// How the two views share the room while both show.
+    split_layout: split_views::SplitLayout,
     /// The Library tab.
     clipart: crate::clipart::Clipart,
     /// Files from the Library waiting to be added, one after another, each with the level
