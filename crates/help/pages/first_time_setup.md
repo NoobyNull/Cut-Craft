@@ -36,8 +36,8 @@ the job every new file starts with, and puts the starter bits in your units at t
 the Tool Database, and arranges the window as picked. The status bar says what was set
 up.
 
-**Skip for now** starts with Cut Craft's usual 600 × 400 × 20 mm job, no machine and the
-Ribbon layout.
+**Skip for now** starts with Cut Craft's usual 600 × 400 × 20 mm job and no machine, and
+keeps the layout already in use (Ribbon on a new install).
 
 ## Asking again
 

@@ -38,8 +38,8 @@ pub(in super::super) const TIPS: &[Tip] = &[
     scene(
         Area::Start,
         "tips/design_then_toolpaths.png",
-        "Cut Craft works in two steps. **Design** (down the left) is where you draw what you \
-         want. **Toolpaths** (down the right) is where you tell the machine how to cut it.",
+        "Cut Craft works in two steps. **Design** is where you draw what you want. \
+         **Toolpaths** is where you tell the machine how to cut it.",
         "getting_started",
     ),
     scene(

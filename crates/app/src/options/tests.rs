@@ -143,6 +143,18 @@ fn a_new_install_starts_in_ribbon_and_older_options_keep_classic() {
 }
 
 #[test]
+fn an_older_file_read_setting_by_setting_still_keeps_classic() {
+    let mut file = serde_json::to_value(Options::default()).unwrap();
+    let general = file["general"].as_object_mut().unwrap();
+    general.remove("layout");
+    // a setting this version cannot read, so the file is read setting by setting
+    general.insert("autosave_seconds".into(), "often".into());
+    let read = Options::read_bytes(&serde_json::to_vec(&file).unwrap());
+    assert_eq!(read.unread, ["general ▸ autosave_seconds"]);
+    assert_eq!(read.options.general.layout, WindowLayout::Classic);
+}
+
+#[test]
 fn layouts_are_listed_ribbon_rail_classic() {
     assert_eq!(
         WindowLayout::ALL,

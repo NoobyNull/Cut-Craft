@@ -323,6 +323,16 @@ impl Options {
             }
         }
         carry_over(&mut file);
+        // options saved before the layout setting had the Classic window: said here, so a
+        // file read setting by setting keeps it too
+        if let Some(general) = file
+            .get_mut("general")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            general.entry("layout").or_insert_with(|| {
+                serde_json::to_value(WindowLayout::before_the_setting()).expect("layout serialises")
+            });
+        }
         let (mut options, unread) = match serde_json::from_value::<Self>(file.clone()) {
             Ok(options) => (options, vec![]),
             Err(_) => Self::read_each(file),
