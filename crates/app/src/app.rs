@@ -669,6 +669,8 @@ struct CutCraftApp {
     shaded_saved: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
+    /// Where the 2D view's top left corner was on screen last frame, to move `camera` with it.
+    view_2d_at: Option<egui::Pos2>,
     view_tool: Option<ViewTool>,
     /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
     pages: Pages,

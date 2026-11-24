@@ -84,3 +84,19 @@ fn the_divider_shares_the_room_and_dragged_to_the_edge_ends_the_split() {
         "the 3D view on the left went; the 2D view has the room"
     );
 }
+
+#[test]
+fn a_zoomed_2d_view_keeps_its_drawing_when_the_view_moves() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let middle = view_middle(&h);
+    h.app.camera = h.app.view_transform.map(|t| t.zoomed_about(middle, 2.0));
+    h.frame(vec![]);
+    let before = h.at(0.0, 0.0) - h.app.view_2d_at.unwrap();
+    h.app.split = Some(Split::SideBySide);
+    h.app.split_layout.three_d_first = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let after = h.at(0.0, 0.0) - h.app.view_2d_at.unwrap();
+    assert!((before - after).length() < 0.5, "{before:?} then {after:?}");
+}

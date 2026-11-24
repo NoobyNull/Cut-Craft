@@ -86,6 +86,7 @@ impl CutCraftApp {
             shaded_image: None,
             shaded_saved: std::sync::Arc::default(),
             camera: None,
+            view_2d_at: None,
             view_tool: None,
             pages: Pages::default(),
             search: None,

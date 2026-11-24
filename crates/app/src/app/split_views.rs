@@ -32,12 +32,22 @@ impl Default for SplitLayout {
     }
 }
 
-/// Where a drag of the divider leaves the split: `Some(share)` to keep it, clamped to
-/// what fits; `None` when it went past either end.
-pub(super) fn dragged_share(share: f32) -> Option<f32> {
-    (LEAST_SHARE..=1.0 - LEAST_SHARE)
-        .contains(&share)
-        .then_some(share)
+/// The least share either view may have of a room `along` points long: `LEAST_SHARE`, or
+/// enough for `least_points` if that is more. Past half there is no room for two views.
+pub(super) fn least_share(along: f32, least_points: f32) -> f32 {
+    LEAST_SHARE.max(least_points / along.max(1.0)).min(0.5)
+}
+
+/// Where a drag of the divider leaves the split: `Some(share)` to keep it; `None` when it
+/// went past either end, leaving a view less than `least` of the room.
+pub(super) fn dragged_share(share: f32, least: f32) -> Option<f32> {
+    (least..=1.0 - least).contains(&share).then_some(share)
+}
+
+/// The least a view in a split may be, in points: room for the 2D view's margins (one
+/// `row` on each side) and something between them.
+fn least_points(row: f32) -> f32 {
+    3.0 * row + DIVIDER
 }
 
 /// The corner nearest `at` in `room`.
@@ -72,7 +82,10 @@ impl CutCraftApp {
         }
         let stacked = split == Split::Stacked;
         let along = if stacked { room.height() } else { room.width() };
-        let cut = self.split_layout.share * along - DIVIDER / 2.0;
+        // a room too short for both views at their least shares it out evenly
+        let least = least_share(along, least_points(ui.spacing().interact_size.y));
+        let share = self.split_layout.share.clamp(least, 1.0 - least);
+        let cut = share * along - DIVIDER / 2.0;
         let (first, rest) = if stacked {
             room.split_top_bottom_at_y(room.top() + cut)
         } else {
@@ -137,7 +150,9 @@ impl CutCraftApp {
             } else {
                 (at.x - room.left()) / room.width()
             };
-            if let Some(share) = dragged_share(share) {
+            let along = if stacked { room.height() } else { room.width() };
+            let least = least_share(along, least_points(ui.spacing().interact_size.y));
+            if let Some(share) = dragged_share(share, least) {
                 self.split_layout.share = share;
             } else {
                 // the view dragged away goes; the other has the room
@@ -172,6 +187,9 @@ impl CutCraftApp {
         let (bar, inside) = small.split_top_bottom_at_y(small.top() + row);
         let stroke = egui::Stroke::new(2.0, ui.visuals().selection.bg_fill);
         ui.painter().rect_filled(bar, 0.0, ui.visuals().window_fill);
+        // the big view must not show through round the small one's drawing
+        ui.painter()
+            .rect_filled(inside, 0.0, ui.visuals().panel_fill);
         self.view_in(ui, inside, !big_2d);
         ui.painter()
             .rect_stroke(small, 0.0, stroke, egui::StrokeKind::Outside);
@@ -216,10 +234,29 @@ mod tests {
 
     #[test]
     fn a_drag_keeps_the_split_until_a_view_is_almost_gone() {
-        assert_eq!(dragged_share(0.3), Some(0.3));
-        assert_eq!(dragged_share(LEAST_SHARE), Some(LEAST_SHARE));
-        assert_eq!(dragged_share(0.02), None);
-        assert_eq!(dragged_share(0.98), None);
+        let least = least_share(1000.0, 20.0);
+        assert_eq!(least, LEAST_SHARE);
+        assert_eq!(dragged_share(0.3, least), Some(0.3));
+        assert_eq!(dragged_share(LEAST_SHARE, least), Some(LEAST_SHARE));
+        assert_eq!(dragged_share(0.02, least), None);
+        assert_eq!(dragged_share(0.98, least), None);
+    }
+
+    #[test]
+    fn a_short_room_keeps_each_view_tall_enough_to_fit_the_drawing() {
+        let row = 18.0;
+        let least = least_share(300.0, least_points(row));
+        assert!(least * 300.0 >= 3.0 * row, "{least}");
+        assert_eq!(
+            dragged_share(0.12, least),
+            None,
+            "too short a view ends the split"
+        );
+        assert_eq!(
+            least_share(50.0, least_points(row)),
+            0.5,
+            "no room: half each"
+        );
     }
 
     #[test]
