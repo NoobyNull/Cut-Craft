@@ -882,3 +882,130 @@ fn what_is_left_rough_is_kept_with_the_toolpath_and_a_guessed_stick_out_is_said(
     assert!(kept.iter().any(|n| n.contains("left rough")), "{kept:?}");
     assert!(!kept.iter().any(|n| n.contains("was taken")), "{kept:?}");
 }
+
+/// [`boxed`] held as `support` says.
+fn supported(joined: cut_craft_core::document::Joined, beam: f64) -> Document {
+    let mut doc = boxed();
+    doc.job.rotary = doc.job.rotary.map(|r| cut_craft_core::document::Rotary {
+        support: cut_craft_core::document::Support { joined, beam },
+        ..r
+    });
+    doc
+}
+
+/// How far the ball's centre is from the turning axis at each cut, and where along.
+fn centres(toolpath: &Toolpath, ball: f64) -> Vec<(f64, f64)> {
+    poses(toolpath)
+        .into_iter()
+        .map(|(along, _, height, across)| (along, across.hypot(height + ball / 2.0)))
+        .collect()
+}
+
+#[test]
+fn centre_stock_is_left_standing_along_the_axis_through_the_model_and_past_it() {
+    use cut_craft_core::document::Joined;
+    let long = || Tool {
+        stickout: 40.0,
+        flute_length: 25.0,
+        ..ball(6.0)
+    };
+    for strategy in [
+        Strategy::Radial,
+        Strategy::Indexed,
+        Strategy::SidesThenDetails,
+    ] {
+        let p = Params {
+            tool: long(),
+            strategy,
+            faces: 2,
+            tilts: 2,
+            ..Params::default()
+        };
+        // a beam 10 across: the ball's centre never comes within its radius and the ball's
+        let beamed = machine(&supported(Joined::Neither, 10.0), &p).unwrap();
+        let near = centres(&beamed, 6.0);
+        assert!(
+            near.iter().all(|&(_, d)| d >= 5.0 + 3.0 - 1e-3),
+            "{strategy:?}: into the beam at {:?}",
+            near.iter().find(|&&(_, d)| d < 8.0 - 1e-3)
+        );
+        // the beam is cut round, past the box's ends too
+        assert!(
+            near.iter().any(|&(a, d)| a < 7.0 && d < 8.0 + 0.5),
+            "{strategy:?}: the beam followed past the model"
+        );
+        // without it, or with Cut Away the Support ticked, the bit goes nearer the axis
+        let plain = machine(&supported(Joined::Neither, 0.0), &p).unwrap();
+        let cut_away = machine(
+            &supported(Joined::Neither, 10.0),
+            &Params {
+                cut_support: true,
+                ..p.clone()
+            },
+        )
+        .unwrap();
+        for open in [plain, cut_away] {
+            assert!(
+                centres(&open, 6.0).iter().any(|&(_, d)| d < 8.0 - 1.0),
+                "{strategy:?}: down past where the beam would be"
+            );
+        }
+    }
+}
+
+#[test]
+fn past_the_model_at_an_end_it_is_kept_joined_at_the_material_is_left_whole() {
+    use cut_craft_core::document::Joined;
+    let p = Params {
+        tool: Tool {
+            stickout: 40.0,
+            flute_length: 25.0,
+            ..ball(6.0)
+        },
+        strategy: Strategy::SidesThenDetails,
+        faces: 2,
+        tilts: 0,
+        ..Params::default()
+    };
+    // the box runs from 10 to 50 along: the ball's side reaches 3 past its centre
+    let cut_at = |joined| -> Vec<f64> {
+        let toolpath = machine(&supported(joined, 0.0), &p).unwrap();
+        poses(&toolpath).into_iter().map(|(a, ..)| a).collect()
+    };
+    let chuck = cut_at(Joined::Chuck);
+    assert!(
+        chuck.iter().all(|&a| a + 3.0 >= 10.0 - 1e-6),
+        "into the chuck end"
+    );
+    assert!(
+        chuck.iter().any(|&a| a - 3.0 > 50.0),
+        "the tailstock end is cut away"
+    );
+    let both = cut_at(Joined::Both);
+    assert!(
+        both.iter()
+            .all(|&a| a + 3.0 >= 10.0 - 1e-6 && a - 3.0 <= 50.0 + 1e-6),
+        "into an end"
+    );
+    let neither = cut_at(Joined::Neither);
+    assert!(
+        neither.iter().any(|&a| a + 3.0 < 10.0),
+        "the chuck end is cut away"
+    );
+    // joined at the chuck, the model needs no room beside it
+    let near_chuck = Params {
+        surroundings: Some(Surroundings {
+            chuck: 2.0,
+            ..Surroundings::default()
+        }),
+        ..p.clone()
+    };
+    for joined in [Joined::Neither, Joined::Chuck] {
+        let (_, notes) = made(&supported(joined, 0.0), &near_chuck).unwrap();
+        assert_eq!(
+            notes.iter().any(|n| n.contains("chuck holds")),
+            joined == Joined::Neither,
+            "{joined:?}: {notes:?}"
+        );
+    }
+}

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-21
+reviewed: 2026-11-24
 see-also: rotary_machining_toolpath, orientate_3d_model, rounding_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths
 ---
 
@@ -32,7 +32,7 @@ finished piece off.
 
    ![Step 5](pictures/rotary_lathe_toolpath/step-5.png)
 
-6. **Holding stub** is how thick a stub is left on the axis, keeping the part joined on until it is cut free.
+6. **Holding stub** is how thick a stub is left on the axis, keeping the part joined on until it is cut free. If [Job Setup](help:job_setup) leaves centre stock (Holding the Part), Face and Turn leave at least that much; Part off cuts through it, as it is meant to cut the part free.
 
    ![Step 6](pictures/rotary_lathe_toolpath/step-6.png)
 
