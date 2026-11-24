@@ -68,7 +68,12 @@ fn the_ribbons_favourites_tab_shows_each_pages_favourites() {
     h.frame(vec![]);
     assert!(h.text_at("Design Favourites").is_some());
     assert!(h.text_at("Toolpath Favourites").is_some());
-    assert_eq!(h.app.favourite_tools(Page::Toolpaths), ["pocket_toolpath"]);
+    assert_eq!(
+        h.app
+            .tool_model()
+            .favourites(Page::Toolpaths, &h.app.options.favourites),
+        ["pocket_toolpath"]
+    );
 }
 
 #[test]

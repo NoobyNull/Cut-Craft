@@ -128,6 +128,7 @@ fn rail_and_ribbon_show_the_hovered_tools_guidance_in_a_tip_box() {
     assert!(h.texts_at("Next:").is_empty(), "no list open, no tip box");
     h.app.rail_group = h
         .app
+        .tool_model()
         .all_groups()
         .iter()
         .position(|g| g.name == "Create Vectors");
@@ -414,7 +415,7 @@ fn the_rails_tool_rows_and_a_flyouts_list_carry_the_guidance_too() {
     let mut h = Harness::new();
     h.app.options.general.layout = crate::options::WindowLayout::Rail;
     h.frame(vec![]);
-    let groups = h.app.all_groups();
+    let groups = h.app.tool_model().all_groups();
     h.app.rail_group = groups.iter().position(|g| g.name == "Create Vectors");
     h.frame(vec![]);
     // the Rail's list of Create Vectors: its rows name each tool

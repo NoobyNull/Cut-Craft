@@ -8,7 +8,7 @@ fn the_rail_layout_lists_a_groups_tools_by_name() {
     h.app.options.general.layout = crate::options::WindowLayout::Rail;
     h.frame(vec![]);
     assert!(h.text_at("Draw Circle").is_none());
-    let groups = h.app.all_groups();
+    let groups = h.app.tool_model().all_groups();
     let create = groups
         .iter()
         .position(|g| g.name == "Create Vectors")
@@ -1324,6 +1324,7 @@ fn a_narrow_ribbon_folds_the_groups_used_least_and_picks_are_counted() {
     let button = folded(&h).first().cloned().expect("something still folded");
     let group = h
         .app
+        .tool_model()
         .all_groups()
         .into_iter()
         .find(|g| format!("{} ▾", g.name) == button)

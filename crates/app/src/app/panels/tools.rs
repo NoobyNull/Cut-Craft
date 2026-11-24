@@ -5,6 +5,7 @@ use super::{
     CutCraftApp, PIN_ICON, PINNED_ICON, Page, TOOL_BOX_MARGIN, TOOL_ICON_ROWS, egui, file_name,
     files, flyout_arrow, gui, picked_message, tool_cell, tool_cell_size, tr,
 };
+use crate::tool_model::Place;
 
 impl CutCraftApp {
     /// The Materials Library window; its edits (to the library and the bits' feeds) are
@@ -263,21 +264,12 @@ impl CutCraftApp {
         groups: &[gui::ToolGroup],
         page: Page,
     ) {
-        let (favourites, only) = self.options.favourites.of(page);
-        if !only {
+        if !self.options.favourites.of(page).1 {
             self.tool_groups(ui, groups, page);
             return;
         }
         // in the order picked; a tool no longer on the page is left out
-        let tools: Vec<&'static str> = favourites
-            .iter()
-            .filter_map(|f| {
-                groups
-                    .iter()
-                    .flat_map(|g| g.tools.iter().copied())
-                    .find(|id| id == f)
-            })
-            .collect();
+        let tools = self.tool_model().favourites(page, &self.options.favourites);
         if tools.is_empty() {
             ui.weak(tr!("panels-no-favourites-yet-right-click"));
             if ui.button(tr!("panels-show-all-tools")).clicked() {
@@ -320,7 +312,7 @@ impl CutCraftApp {
         for (name, tools) in sections {
             ui.strong(*name);
             if !among && !folded {
-                self.spread_tools(ui, tools, page, edge, &mut clicked, &mut chosen);
+                self.spread_tools(ui, tools, edge, &mut clicked, &mut chosen);
                 ui.add_space(ui.spacing().item_spacing.y);
                 continue;
             }
@@ -352,7 +344,7 @@ impl CutCraftApp {
                         }
                         response
                     };
-                    if let Some(action) = self.tool_menu_on(&response, page, id, among, folded) {
+                    if let Some(action) = self.tool_menu_on(&response, id, among, folded) {
                         chosen = Some(action);
                     }
                 }
@@ -373,18 +365,23 @@ impl CutCraftApp {
         }
     }
 
-    /// A tool button's right-click menu, and the action picked from it.
+    /// A tool button's right-click menu, and the action picked from it: a grid's, or the
+    /// favourites' when shown `among` them.
     pub(super) fn tool_menu_on(
         &self,
         response: &egui::Response,
-        page: Page,
         id: &str,
         among: bool,
         folded: bool,
     ) -> Option<String> {
-        let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
+        let place = if among {
+            Place::Favourites
+        } else {
+            Place::Grid
+        };
         self.popup(response, || {
-            gui::tool_menu(page, id, favourite, among, folded)
+            self.tool_model()
+                .menu(id, place, &self.options.favourites, folded)
         })
     }
 
@@ -396,7 +393,6 @@ impl CutCraftApp {
         &self,
         ui: &mut egui::Ui,
         tools: &[&'static str],
-        page: Page,
         edge: f32,
         clicked: &mut Option<&'static str>,
         chosen: &mut Option<String>,
@@ -484,7 +480,7 @@ impl CutCraftApp {
                                             *clicked = Some(id);
                                         }
                                         if let Some(action) =
-                                            self.tool_menu_on(&response, page, id, false, false)
+                                            self.tool_menu_on(&response, id, false, false)
                                         {
                                             *chosen = Some(action);
                                         }

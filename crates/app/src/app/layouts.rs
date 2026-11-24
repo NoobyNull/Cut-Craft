@@ -7,6 +7,7 @@ use super::{
     side_panel,
 };
 use crate::options::WindowLayout;
+use crate::tool_model::{Place, ToolModel};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
@@ -45,15 +46,9 @@ impl CutCraftApp {
         }
     }
 
-    /// Every tool group: the drawing groups, then the modeling and toolpath ones.
-    pub(super) fn all_groups(&self) -> Vec<gui::ToolGroup> {
-        let t = &self.toolbar;
-        t.groups
-            .iter()
-            .chain(&t.modeling_groups)
-            .chain(&t.toolpath_groups)
-            .copied()
-            .collect()
+    /// The tools every layout shows, read the same way by each ([`crate::tool_model`]).
+    pub(super) fn tool_model(&self) -> ToolModel<'_> {
+        ToolModel::new(&self.toolbar)
     }
 
     /// The icon a tool names: its command's, or a built-in tool's own (empty when its icon
@@ -82,7 +77,8 @@ impl CutCraftApp {
     /// The available tools whose names contain `text` (any case), in group order.
     pub(super) fn search_matches(&self, text: &str) -> Vec<(&'static str, String)> {
         let text = text.trim().to_lowercase();
-        self.all_groups()
+        self.tool_model()
+            .all_groups()
             .iter()
             .flat_map(|g| g.tools.iter().copied())
             .filter(|id| self.available(id))
@@ -180,27 +176,10 @@ impl CutCraftApp {
         }
     }
 
-    /// `page`'s favourites that are still tools, in the order picked.
-    pub(super) fn favourite_tools(&self, page: Page) -> Vec<&'static str> {
-        let all = self.all_groups();
-        self.options
-            .favourites
-            .of(page)
-            .0
-            .iter()
-            .filter_map(|f| {
-                all.iter()
-                    .flat_map(|g| g.tools.iter().copied())
-                    .find(|id| id == f)
-            })
-            .collect()
-    }
-
-    /// A Rail row's right-click menu: the tool added to its page's favourites, or taken off.
-    pub(super) fn rail_menu(&self, id: &str) -> Vec<gui::MenuItem> {
-        let page = self.page_of(id);
-        let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
-        vec![gui::favourite_item(page, id, favourite)]
+    /// A Rail row's right-click menu, as every layout gives a tool in a list by name.
+    pub(super) fn row_menu(&self, id: &str) -> Vec<gui::MenuItem> {
+        self.tool_model()
+            .menu(id, Place::Row, &self.options.favourites, false)
     }
 
     /// Tools by icon and name, one per row, each with its right-click menu; whether one was
@@ -229,7 +208,7 @@ impl CutCraftApp {
             if response.clicked() {
                 clicked = Some(id);
             }
-            if let Some(action) = self.popup(&response, || self.rail_menu(id)) {
+            if let Some(action) = self.popup(&response, || self.row_menu(id)) {
                 chosen = Some(action);
             }
         }
@@ -237,7 +216,7 @@ impl CutCraftApp {
             self.invoke(ui.ctx(), &action);
         }
         if let Some(id) = clicked {
-            self.pick(ui.ctx(), self.page_of(id), id);
+            self.pick(ui.ctx(), self.tool_model().kind_of(id), id);
         }
         clicked.is_some()
     }
@@ -249,7 +228,7 @@ impl CutCraftApp {
         let spacing = &style.spacing;
         let margin = spacing.item_spacing.y;
         let edge = TOOL_ICON_ROWS * spacing.interact_size.y;
-        let groups = self.all_groups();
+        let groups = self.tool_model().all_groups();
         let gadgets = self.gadget_tools();
         // what was installed can be removed while its list is open
         self.rail_gadgets &= !gadgets.is_empty();
@@ -302,9 +281,10 @@ impl CutCraftApp {
                     });
             });
         let list = if self.rail_favourites {
-            let mut tools = self.favourite_tools(Page::Design);
-            tools.extend(self.favourite_tools(Page::Toolpaths));
-            Some(("Favourites", tools))
+            Some((
+                "Favourites",
+                self.tool_model().every_favourite(&self.options.favourites),
+            ))
         } else if self.rail_gadgets {
             Some((GADGETS, gadgets))
         } else {
@@ -442,8 +422,8 @@ impl CutCraftApp {
                     GroupFit {
                         open: (f32::from(columns) * cell).max(name + cell) + gap,
                         folded,
-                        uses: self.group_uses(group),
-                        kept: self.holds_a_favourite(group),
+                        uses: ToolModel::uses(group, &self.options.tool_uses),
+                        kept: ToolModel::holds_a_favourite(group, &self.options.favourites),
                     }
                 })
                 .collect();
@@ -484,27 +464,6 @@ impl CutCraftApp {
         }
     }
 
-    /// How many times a group's tools have been picked, all told.
-    fn group_uses(&self, group: &gui::ToolGroup) -> u32 {
-        group
-            .tools
-            .iter()
-            .filter_map(|id| self.options.tool_uses.get(*id))
-            .fold(0, |sum, n| sum.saturating_add(*n))
-    }
-
-    /// Whether any of a group's tools is a favourite of either page: such a group never folds.
-    fn holds_a_favourite(&self, group: &gui::ToolGroup) -> bool {
-        [Page::Design, Page::Toolpaths].into_iter().any(|page| {
-            self.options
-                .favourites
-                .of(page)
-                .0
-                .iter()
-                .any(|f| group.tools.contains(&f.as_str()))
-        })
-    }
-
     /// A group folded into one button for want of room: a click lists its tools by icon and
     /// name, as the Rail does.
     fn folded_group(&mut self, ui: &mut egui::Ui, group: gui::ToolGroup) {
@@ -530,7 +489,13 @@ impl CutCraftApp {
         ];
         let lists: Vec<_> = pages
             .into_iter()
-            .map(|(page, name)| (page, name, self.favourite_tools(page)))
+            .map(|(page, name)| {
+                (
+                    page,
+                    name,
+                    self.tool_model().favourites(page, &self.options.favourites),
+                )
+            })
             .filter(|(_, _, tools)| !tools.is_empty())
             .collect();
         if lists.is_empty() {

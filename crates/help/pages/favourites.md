@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-24
 see-also: interface_layout, settings, find_tool
 ---
 

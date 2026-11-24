@@ -198,7 +198,7 @@ impl CutCraftApp {
                 .set_message(&format!("{}: not implemented yet", gui::title_case(id)));
             return;
         };
-        let page = self.page_of(cmd.id());
+        let page = self.tool_model().kind_of(cmd.id());
         let (id, interactive) = (cmd.id(), cmd.interactive());
         let (meta, fields, mut params) = (
             cmd.meta(),
