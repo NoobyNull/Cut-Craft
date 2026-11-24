@@ -30,9 +30,9 @@ mod snapping_and_guides;
 mod tool_database;
 mod toolpath_list;
 mod toolpaths;
-mod verbs;
 mod unsigned_code;
 mod updating;
+mod verbs;
 mod view_3d;
 
 /// A headless frame's output: no renderer takes its texture changes, so they are let go.
