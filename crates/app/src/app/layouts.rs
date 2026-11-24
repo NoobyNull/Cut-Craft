@@ -422,50 +422,33 @@ impl CutCraftApp {
         }
     }
 
-    /// Ribbon ▸ a group's list ▸ a pin: the tool goes on the Ribbon or comes off it, kept in
-    /// the options (nothing kept when that is where it starts).
-    pub(super) fn toggle_ribbon_pin(&mut self, id: &str) {
-        let Some(index) = self
-            .tool_model()
-            .all_groups()
-            .iter()
-            .find_map(|g| g.tools.iter().position(|t| *t == id))
-        else {
-            return;
+    /// Ribbon ▸ a group's list ▸ a pin: `on:<id>` puts the tool on the Ribbon, `off:<id>`
+    /// takes it off; kept in the options.
+    pub(super) fn set_ribbon_pin(&mut self, action: &str) {
+        let (on, id) = match action.split_once(':') {
+            Some(("on", id)) => (true, id),
+            Some(("off", id)) => (false, id),
+            _ => return,
         };
-        let pins = &mut self.options.ribbon_pins;
-        let now = !pinned(id, index, pins);
-        if now == (index < RIBBON_STARTER_PINS) {
-            pins.remove(id);
-        } else {
-            pins.insert(id.to_owned(), now);
-        }
+        self.options.ribbon_pins.insert(id.to_owned(), on);
         self.save_options();
     }
 
     /// A Ribbon tab's groups, as many to a row as fit and the rest on further rows, in order
-    /// and each group whole, so a narrow window hides no tool.
+    /// and each group whole. Each group is its icons on a tight grid two high, as wide as
+    /// its name under them; it shows as many of its tools as fill that width (two columns
+    /// at least) until pinned or unpinned by hand.
     fn ribbon_rows(&mut self, ui: &mut egui::Ui, groups: &[gui::ToolGroup], page: Page, edge: f32) {
         let spacing = ui.spacing().clone();
         let font = egui::TextStyle::Body.resolve(ui.style());
         let room = ui.available_width();
+        let cell = super::panels::tool_cell_size(&spacing, edge);
+        let step = cell.x + spacing.item_spacing.x;
         // the line after each group, and the room either side of it
         let gap = 2.0 * spacing.item_spacing.x + 1.0;
-        let shown: Vec<Vec<&'static str>> = groups
+        let plans: Vec<(Vec<&'static str>, f32)> = groups
             .iter()
             .map(|group| {
-                on_ribbon(group.tools, &self.options.ribbon_pins)
-                    .into_iter()
-                    .filter(|id| self.offered(id))
-                    .collect()
-            })
-            .collect();
-        // two rows of icons, laid out as they will be drawn, but never narrower than the
-        // group's name and its arrow
-        let widths: Vec<f32> = groups
-            .iter()
-            .zip(&shown)
-            .map(|(group, tools)| {
                 let name = ui
                     .painter()
                     .layout_no_wrap(
@@ -476,40 +459,47 @@ impl CutCraftApp {
                     .size()
                     .x
                     + 2.0 * spacing.button_padding.x;
-                let icons = if tools.is_empty() {
-                    0.0
+                // compact: as many columns as fit under the name; every tool when asked
+                let starter = if self.options.general.ribbon_icons
+                    == crate::options::RibbonIcons::EveryTool
+                {
+                    usize::MAX
                 } else {
-                    super::panels::narrowest_spread(ui, tools, edge, 2, room - gap)
+                    2 * starter_columns(name, step)
                 };
-                icons.max(name) + gap
+                let offered: Vec<_> = group
+                    .tools
+                    .iter()
+                    .copied()
+                    .filter(|id| self.offered(id))
+                    .collect();
+                let shown = on_ribbon(&offered, &self.options.ribbon_pins, starter);
+                let across = shown.len().div_ceil(2);
+                let icons = f32::from(u16::try_from(across).unwrap_or(u16::MAX)) * step
+                    - spacing.item_spacing.x;
+                (shown, icons.max(name))
             })
             .collect();
+        let widths: Vec<f32> = plans.iter().map(|(_, w)| w + gap).collect();
         let line = ui.visuals().widgets.noninteractive.bg_stroke;
+        // two rows of icons, the same height in every group, so the names line up
+        let icons_height = 2.0 * (cell.y + spacing.item_spacing.y);
         for (n, row) in wrap_rows(&widths, room).into_iter().enumerate() {
             if n > 0 {
                 ui.separator();
             }
-            // every group's name on one line along the row's foot: the icons above them as
-            // tall as the row's tallest, as measured last frame
-            let tallest = egui::Id::unique(("ribbon row", self.ribbon_tab, n));
-            let icons = ui.data(|d| d.get_temp::<f32>(tallest)).unwrap_or(0.0);
-            let mut measured: f32 = 0.0;
             let mut ends = vec![];
             let drawn = ui.horizontal_top(|ui| {
                 for i in row {
+                    let (shown, width) = &plans[i];
                     let group = ui.vertical(|ui| {
-                        ui.set_width(widths[i] - gap);
-                        let height = self.ribbon_group(ui, groups[i], &shown[i], page, icons);
-                        measured = measured.max(height);
+                        ui.set_width(*width);
+                        self.ribbon_group(ui, groups[i], shown, page, edge, icons_height);
                     });
                     ends.push(group.response.rect.right() + gap / 2.0);
                     ui.add_space(gap - spacing.item_spacing.x);
                 }
             });
-            if measured != icons {
-                ui.data_mut(|d| d.insert_temp(tallest, measured));
-                ui.ctx().request_repaint();
-            }
             // a line after each group, as tall as the row and no taller
             let rect = drawn.response.rect;
             for x in ends {
@@ -518,45 +508,54 @@ impl CutCraftApp {
         }
     }
 
-    /// One Ribbon group: its pinned tools' icons, and under them, `icons` down (its row's
-    /// tallest), its name, which lists every tool in it by icon and name, each with a pin
-    /// that puts it on the Ribbon or takes it off. Gives how tall its own icons are.
+    /// One Ribbon group: its pinned tools' icons two high, and under them its name, which
+    /// lists every tool in it by icon and name, each with a pin that puts it on the Ribbon
+    /// or takes it off.
     fn ribbon_group(
         &mut self,
         ui: &mut egui::Ui,
         group: gui::ToolGroup,
         shown: &[&'static str],
         page: Page,
-        icons: f32,
-    ) -> f32 {
-        let height = ui
-            .vertical(|ui| {
-                if !shown.is_empty() {
-                    self.tool_sections(ui, &[("", shown.to_vec())], page, false);
+        edge: f32,
+        icons_height: f32,
+    ) {
+        let mut clicked = None;
+        let mut chosen = None;
+        let across = shown.len().div_ceil(2).max(1);
+        let top = ui.cursor().min.y;
+        for row in shown.chunks(across) {
+            ui.horizontal(|ui| {
+                for &id in row {
+                    let response = self.tool_button(ui, id, edge);
+                    if response.clicked() {
+                        clicked = Some(id);
+                    }
+                    if let Some(action) = self.tool_menu_on(&response, id, false, false) {
+                        chosen = Some(action);
+                    }
                 }
-            })
-            .response
-            .rect
-            .height();
-        ui.add_space((icons - height).max(0.0));
+            });
+        }
+        let used = ui.cursor().min.y - top;
+        ui.add_space((icons_height - used).max(0.0));
         let response = ui.menu_button(group_label(group.name), |ui| {
-            let tools: Vec<(usize, &'static str)> = group
-                .tools
-                .iter()
-                .copied()
-                .enumerate()
-                .filter(|(_, id)| self.offered(id))
-                .collect();
             let row = ui.spacing().interact_size.y;
             let mut pin = None;
             egui::Grid::new(("ribbon list", group.name))
                 .num_columns(2)
                 .show(ui, |ui| {
-                    for &(i, id) in &tools {
+                    let listed: Vec<&'static str> = group
+                        .tools
+                        .iter()
+                        .copied()
+                        .filter(|id| self.offered(id))
+                        .collect();
+                    for id in listed {
                         if self.tool_rows(ui, &[id]) {
                             ui.close();
                         }
-                        let pinned = pinned(id, i, &self.options.ribbon_pins);
+                        let pinned = shown.contains(&id);
                         if ui
                             .add(self.pin_button(pinned, row))
                             .on_hover_hint(tr!(if pinned {
@@ -566,21 +565,26 @@ impl CutCraftApp {
                             }))
                             .clicked()
                         {
-                            pin = Some(id);
+                            pin = Some(if pinned { "off:" } else { "on:" }.to_owned() + id);
                         }
                         ui.end_row();
                     }
                 });
             ui.separator();
             ui.weak(tr!("layouts-ribbon-pins-note"));
-            if let Some(id) = pin {
-                self.invoke(ui.ctx(), &[gui::RIBBON_PIN, id].concat());
+            if let Some(pin) = pin {
+                self.invoke(ui.ctx(), &[gui::RIBBON_PIN, &pin].concat());
             }
         });
         response
             .response
             .on_hover_hint(tr!("layouts-ribbon-group-list", group = group.name));
-        height
+        if let Some(action) = chosen {
+            self.invoke(ui.ctx(), &action);
+        }
+        if let Some(id) = clicked {
+            self.pick(ui.ctx(), page, id);
+        }
     }
 
     /// The Ribbon's Favourites tab: each page's favourites as a group of icons, in the order
@@ -655,30 +659,32 @@ pub(super) fn wrap_rows(widths: &[f32], room: f32) -> Vec<Vec<usize>> {
     rows
 }
 
-/// How many of each group's tools, from the first, are on the Ribbon until pinned or
-/// unpinned by hand: two rows of two, so a tab's groups fit in a row or two and each
-/// group's list holds the rest.
-pub(super) const RIBBON_STARTER_PINS: usize = 4;
-
-/// Whether the tool at `index` in its group is on the Ribbon: as pinned or unpinned by hand
-/// (`pins`), else when it is one of the group's first few.
-pub(super) fn pinned(
-    id: &str,
-    index: usize,
-    pins: &std::collections::BTreeMap<String, bool>,
-) -> bool {
-    pins.get(id).copied().unwrap_or(index < RIBBON_STARTER_PINS)
+/// How many columns of icons a Ribbon group shows until its tools are pinned or unpinned by
+/// hand: as many as fit under its name (`name` wide, a column every `step`), two at least.
+pub(super) fn starter_columns(name: f32, step: f32) -> usize {
+    // whole columns only; a name narrower than two still gets two
+    let fit = (name / step).floor();
+    if fit >= 2.0 {
+        // a width in columns, small and positive: no truncation
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let fit = fit as usize;
+        fit
+    } else {
+        2
+    }
 }
 
-/// The tools of a Ribbon group drawn as icons, in order: those pinned (see [`pinned`]).
+/// The tools of a Ribbon group drawn as icons, in order: those pinned by hand, and of the
+/// rest the group's first `starter` unless unpinned by hand (`pins`).
 pub(super) fn on_ribbon(
     tools: &[&'static str],
     pins: &std::collections::BTreeMap<String, bool>,
+    starter: usize,
 ) -> Vec<&'static str> {
     tools
         .iter()
         .enumerate()
-        .filter(|&(i, id)| pinned(id, i, pins))
+        .filter(|&(i, id)| pins.get(*id).copied().unwrap_or(i < starter))
         .map(|(_, id)| *id)
         .collect()
 }

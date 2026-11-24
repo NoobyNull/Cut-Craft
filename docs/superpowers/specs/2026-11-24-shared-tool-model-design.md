@@ -68,9 +68,13 @@ program's screens, menus or icons. No layout, menu or help page names another pr
 
 ## Narrow windows (agreed 2026-11-24)
 
-The Ribbon never folds a group away. When the window is too narrow for every group, the
-groups go on to a second row (or more), in order, each group whole. Under each group's icons
-is its name with a ▾: a click lists every tool in the group by icon and name, each with a
-pin. Every tool starts pinned; unpinning one takes its icon off the Ribbon, and its group's
-list keeps it (`options.ribbon_hidden`). The use counts that chose which group to fold are
-gone.
+The Ribbon never folds a group away, and is designed for a 1920-wide screen. Each group is
+its icons on a tight grid two high, with no boxes inside it, and its name under them; the
+names line up along the row. When the window is too narrow for every group, the groups go
+on to a second row (or more), in order, each group whole.
+
+**Options ▸ General ▸ Ribbon icons**: **Compact** (the default) shows as many of a group's
+tools as fit under its name (two columns at least), which keeps each tab to one row at 1920
+wide; **Every Tool** shows them all. Either way the group's name (**Create Vectors ▾**) lists
+every tool in it by icon and name, each with a pin that puts it on the Ribbon or takes it
+off (`options.ribbon_pins`). The use counts that chose which group to fold are gone.

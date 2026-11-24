@@ -1278,20 +1278,22 @@ fn ribbon_groups_wrap_onto_more_rows_in_order() {
 }
 
 #[test]
-fn a_ribbon_group_shows_its_first_few_tools_until_pinned_or_unpinned() {
-    use super::layouts::{RIBBON_STARTER_PINS, on_ribbon};
+fn a_ribbon_group_shows_as_many_tools_as_fit_under_its_name_until_pinned() {
+    use super::layouts::{on_ribbon, starter_columns};
+    // two columns at least, more while its name is wider
+    assert_eq!(starter_columns(50.0, 60.0), 2);
+    assert_eq!(starter_columns(200.0, 60.0), 3);
     let tools = ["a", "b", "c", "d", "e", "f"];
     let mut pins = std::collections::BTreeMap::new();
-    assert_eq!(on_ribbon(&tools, &pins), tools[..RIBBON_STARTER_PINS]);
+    assert_eq!(on_ribbon(&tools, &pins, 4), tools[..4]);
     // pinned by hand, in its place; unpinned by hand, gone
     pins.insert("f".to_owned(), true);
     pins.insert("b".to_owned(), false);
-    assert_eq!(on_ribbon(&tools, &pins), ["a", "c", "d", "f"]);
+    assert_eq!(on_ribbon(&tools, &pins, 4), ["a", "c", "d", "f"]);
 }
 
 #[test]
 fn a_ribbon_tab_fits_in_two_rows_of_groups_and_each_name_lists_and_pins_every_tool() {
-    use super::layouts::RIBBON_STARTER_PINS;
     let mut h = Harness::new();
     h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
     for tab in 0..3 {
@@ -1329,7 +1331,7 @@ fn a_ribbon_tab_fits_in_two_rows_of_groups_and_each_name_lists_and_pins_every_to
     let (groups, _) = h.app.ribbon_groups();
     let group = *groups
         .iter()
-        .find(|g| g.tools.len() > RIBBON_STARTER_PINS)
+        .find(|g| g.tools.len() > 6)
         .expect("a group with more tools than are pinned");
     let first = h.app.tool_label(group.tools[0]);
     let last = h.app.tool_label(group.tools.last().unwrap());
@@ -1338,16 +1340,55 @@ fn a_ribbon_tab_fits_in_two_rows_of_groups_and_each_name_lists_and_pins_every_to
     h.frame(vec![]);
     assert!(h.text_at(&first).is_some(), "{} lists {first}", group.name);
     assert!(h.text_at(&last).is_some(), "{} lists {last}", group.name);
-    // and a pin puts a tool on the ribbon or takes it off; kept only while it differs
-    // from where it started
+    // and a pin puts a tool on the ribbon or takes it off, kept in the options
     let ctx = h.ctx.clone();
-    let pin = |id: &str| format!("{}{id}", gui::RIBBON_PIN);
-    h.app.invoke(&ctx, &pin(group.tools[0]));
+    let pin = |on: &str, id: &str| [gui::RIBBON_PIN, on, ":", id].concat();
+    h.app.invoke(&ctx, &pin("off", group.tools[0]));
     assert_eq!(h.app.options.ribbon_pins.get(group.tools[0]), Some(&false));
     let late = *group.tools.last().unwrap();
-    h.app.invoke(&ctx, &pin(late));
+    h.app.invoke(&ctx, &pin("on", late));
     assert_eq!(h.app.options.ribbon_pins.get(late), Some(&true));
-    h.app.invoke(&ctx, &pin(group.tools[0]));
-    h.app.invoke(&ctx, &pin(late));
-    assert!(h.app.options.ribbon_pins.is_empty());
+    h.frame(vec![]);
+    h.frame(vec![]);
+}
+
+#[test]
+fn every_tool_on_the_ribbon_is_a_setting_compact_by_default() {
+    use crate::options::RibbonIcons;
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    assert_eq!(h.app.options.general.ribbon_icons, RibbonIcons::Compact);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let (groups, _) = h.app.ribbon_groups();
+    let last = groups.last().unwrap().name;
+    let compact = h.text_at(&format!("{last} ▾")).unwrap().y;
+    // every tool: the groups need more room, so the last goes further down
+    h.app.options.general.ribbon_icons = RibbonIcons::EveryTool;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let full = h.text_at(&format!("{last} ▾")).unwrap().y;
+    assert!(full > compact, "{full} below {compact}");
+}
+
+#[test]
+fn at_1920_wide_every_ribbon_tab_is_one_row_of_groups() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    h.window = vec2(1920.0, 1080.0);
+    for tab in 0..3 {
+        h.app.ribbon_tab = tab;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        let (groups, _) = h.app.ribbon_groups();
+        let rows: Vec<f32> = groups
+            .iter()
+            .filter_map(|g| h.text_at(&format!("{} ▾", g.name)).map(|p| p.y))
+            .collect();
+        assert_eq!(rows.len(), groups.len(), "tab {tab}");
+        assert!(
+            rows.iter().all(|y| (y - rows[0]).abs() < 0.5),
+            "tab {tab}: {rows:?}"
+        );
+    }
 }

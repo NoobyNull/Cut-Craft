@@ -22,7 +22,6 @@ mod playback;
 mod toolpath_tree;
 mod toolpaths_page;
 mod tools;
-pub(super) use tools::narrowest_spread;
 mod view_3d;
 
 /// The push-pin's two drawings.

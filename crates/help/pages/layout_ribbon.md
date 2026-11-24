@@ -18,8 +18,12 @@ them: draw on **Design**, shape 3D parts on **Model**, then make and save cuts o
    at the foot of the left-hand panel.
 3. Click the icon. Its settings open on the right.
 
-Each group shows its first few tools as icons. Click the group's name, such as **Create
-Vectors ▾**, to list every tool in it by name, and click one to use it.
+Each group shows the tools that fit under its name as icons. Click the group's name, such as
+**Create Vectors ▾**, to list every tool in it by name, and click one to use it.
+
+To see every tool as an icon instead, set **Options ▸ General ▸ Ribbon icons** to **Every
+Tool**. The Ribbon then takes two rows on a wide screen. **Compact**, the starting choice,
+keeps it to one row on a 1920-wide screen.
 
 ## Choosing which tools show
 

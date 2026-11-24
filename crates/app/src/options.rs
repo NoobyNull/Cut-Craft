@@ -210,6 +210,7 @@ impl Default for Options {
                 autosave_seconds: autosave_seconds(),
                 flyout_hold_seconds: flyout_hold_seconds(),
                 fold_tool_groups: false,
+                ribbon_icons: RibbonIcons::Compact,
                 show_tips_at_startup: true,
             },
             job_defaults: JobDefaults::default(),

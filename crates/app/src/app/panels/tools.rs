@@ -385,7 +385,7 @@ impl CutCraftApp {
 
     /// A tool button's right-click menu, and the action picked from it: a grid's, or the
     /// favourites' when shown `among` them.
-    pub(super) fn tool_menu_on(
+    pub(in super::super) fn tool_menu_on(
         &self,
         response: &egui::Response,
         id: &str,
@@ -499,7 +499,12 @@ impl CutCraftApp {
     }
 
     /// One tool's icon button: enabled when it is built, highlighted while in hand.
-    pub(super) fn tool_button(&self, ui: &mut egui::Ui, id: &str, edge: f32) -> egui::Response {
+    pub(in super::super) fn tool_button(
+        &self,
+        ui: &mut egui::Ui,
+        id: &str,
+        edge: f32,
+    ) -> egui::Response {
         let label = self.tool_label(id);
         let explicit = self.explicit_icon(id);
         let button = self
@@ -700,72 +705,4 @@ fn box_rows(widths: &[f32], full: f32, gap: f32) -> Vec<Vec<usize>> {
         rows.last_mut().expect("a row").push(i);
     }
     rows
-}
-
-/// The narrowest width boxes of tool buttons (`(how many, caption width)` each), laid out as
-/// [`box_rows`] does with each box's buttons wrapping inside it, take no more than `rows`
-/// rows of buttons in; `limit` when even that is too narrow.
-pub(super) fn narrowest_for_rows(
-    boxes: &[(usize, f32)],
-    button: f32,
-    gap: f32,
-    rows: usize,
-    limit: f32,
-) -> f32 {
-    let inner = 2.0 * TOOL_BOX_MARGIN + 2.0;
-    let rows_at = |full: f32| -> usize {
-        let widths: Vec<f32> = boxes
-            .iter()
-            .map(|&(n, caption)| box_width(n, caption, button, gap).min(full))
-            .collect();
-        box_rows(&widths, full, gap)
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|&i| {
-                        let across = crate::flyout::per_row(widths[i] - inner, button, gap);
-                        boxes[i].0.div_ceil(across.max(1))
-                    })
-                    .max()
-                    .unwrap_or(0)
-            })
-            .sum()
-    };
-    // from one button and its box up, a button at a time
-    let mut full = button + inner;
-    while full < limit && rows_at(full) > rows {
-        full += button + gap;
-    }
-    full.min(limit)
-}
-
-/// The narrowest width a section of `tools` can be spread out in, as
-/// [`CutCraftApp::spread_tools`] lays it out, so it takes no more than `rows` rows of icons;
-/// `limit` at most.
-pub(in super::super) fn narrowest_spread(
-    ui: &egui::Ui,
-    tools: &[&'static str],
-    edge: f32,
-    rows: usize,
-    limit: f32,
-) -> f32 {
-    let gap = ui.spacing().item_spacing.x;
-    let button = tool_cell_size(ui.spacing(), edge).x;
-    let caption_font = egui::TextStyle::Small.resolve(ui.style());
-    let boxes: Vec<(usize, f32)> = crate::flyout::clusters(tools)
-        .iter()
-        .map(|cluster| {
-            let caption = ui
-                .painter()
-                .layout_no_wrap(
-                    cluster.name.unwrap_or_default().to_owned(),
-                    caption_font.clone(),
-                    egui::Color32::PLACEHOLDER,
-                )
-                .size()
-                .x;
-            (cluster.tools.len(), caption)
-        })
-        .collect();
-    narrowest_for_rows(&boxes, button, gap, rows, limit)
 }

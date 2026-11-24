@@ -298,6 +298,17 @@ impl Theme {
     }
 }
 
+/// How many tools each Ribbon group shows as icons.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RibbonIcons {
+    /// The tools that fit under the group's name; the name lists the rest
+    #[default]
+    Compact,
+    /// Every tool in the group
+    EveryTool,
+}
+
 /// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`,
 /// `docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

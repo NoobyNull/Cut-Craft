@@ -113,9 +113,10 @@ the left and the dark theme on the right.
 of tool groups, the sheets, layers and toolpath list on the left, and the open form on the
 right. A **Favourites** tab holds the tools you keep at hand.
 
-Each Ribbon group shows its first few tools as icons. Click a group's name, such as
-**Create Vectors ▾**, to list every tool in it; the pin beside each one puts it on the
-Ribbon or takes it off. When the window is too narrow for every group on a tab, the groups
+Each Ribbon group shows the tools that fit under its name as icons. Click a group's name,
+such as **Create Vectors ▾**, to list every tool in it; the pin beside each one puts it on
+the Ribbon or takes it off. **General ▸ Ribbon icons** set to **Every Tool** shows every
+tool as an icon instead (**Compact** is the starting choice). When the window is too narrow for every group on a tab, the groups
 carry on along a second row, in the same order, so nothing is hidden.
 
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)

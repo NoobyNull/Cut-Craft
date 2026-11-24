@@ -1,7 +1,8 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
 use super::{
-    Deserialize, Display, FileDialogDefault, JsonSchema, Serialize, WindowLayout, egui, on,
+    Deserialize, Display, FileDialogDefault, JsonSchema, RibbonIcons, Serialize, WindowLayout,
+    egui, on,
 };
 
 /// Toolpath settings.
@@ -285,6 +286,12 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Fold tool groups into one button")]
     pub fold_tool_groups: bool,
+    /// How many tools each group shows as icons in the Ribbon layout. Compact shows those
+    /// that fit under the group's name, and the name lists the rest (pin any tool to show
+    /// it); Every Tool shows them all, the groups going on to more rows as they need
+    #[serde(default)]
+    #[schemars(title = "Ribbon icons")]
+    pub ribbon_icons: RibbonIcons,
     /// Open a short Did You Know? tip each time Cut Craft starts, a different one each
     /// time. Help ▸ Did You Know? shows them whenever you like
     #[serde(default = "on")]
