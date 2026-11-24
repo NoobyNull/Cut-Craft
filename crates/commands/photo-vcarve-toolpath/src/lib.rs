@@ -9,7 +9,7 @@ use cut_craft_core::toolpath::{
     Move, MoveKind, Tool, ToolDatabase, ToolShape, cut_points, hatch_lines, made_by,
     project_onto_model,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -175,6 +175,7 @@ impl Command for PhotoVcarveToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/engraving.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

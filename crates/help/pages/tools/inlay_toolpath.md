@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-23
 see-also: vcarve_inlay_toolpath, pocket_toolpath, profile_toolpath
 ---
 

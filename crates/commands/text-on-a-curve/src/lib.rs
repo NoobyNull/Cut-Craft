@@ -7,7 +7,7 @@ use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::font;
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::{DAffine2, DVec2};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -106,6 +106,7 @@ impl Command for TextOnACurve {
             group: "Create Vectors",
             icon: "drawing/create_vectors/text_on_a_curve.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

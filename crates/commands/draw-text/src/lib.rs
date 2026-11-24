@@ -6,7 +6,9 @@ use cut_craft_core::font::{self, Align};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
+use cut_craft_core::{
+    Change, Command, CommandError, Drag, Form, Interactive, Meta, ensure_positive,
+};
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
@@ -179,6 +181,7 @@ impl Command for DrawText {
             group: "Create Vectors",
             icon: "drawing/create_vectors/draw_text.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
@@ -588,6 +591,7 @@ impl Command for BreakTextIntoLines {
             group: "Create Vectors",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

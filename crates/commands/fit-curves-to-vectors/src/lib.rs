@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::trace::{self, Fit};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -65,6 +65,7 @@ impl Command for FitCurvesToVectors {
             group: "Edit Objects",
             icon: "drawing/create_vectors/fit_curves_to_vectors.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

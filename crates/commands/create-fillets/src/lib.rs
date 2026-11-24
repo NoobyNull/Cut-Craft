@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Segment, polyline_distance, winding};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -79,6 +79,7 @@ impl Command for CreateFillets {
             group: "Create Vectors",
             icon: "drawing/create_vectors/create_fillets.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

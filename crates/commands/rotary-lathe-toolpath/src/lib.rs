@@ -21,7 +21,7 @@ use cut_craft_core::glam::DVec3;
 use cut_craft_core::progress;
 use cut_craft_core::rotary_axis::Surroundings;
 use cut_craft_core::toolpath::{Move, Tool, follow, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use cut_craft_rotary::{Cutter, Head, Stock};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -101,6 +101,7 @@ impl Command for RotaryLatheToolpath {
             group: "3D Toolpaths",
             icon: "toolpaths/rotary_lathe_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 
@@ -235,7 +236,13 @@ fn turned(
 
     // where the material is to come down to
     let cell = (tool.diameter / 8.0).clamp(0.1, 0.5);
-    let stub = (p.holding_stub / 2.0).max(0.0);
+    // Job Setup's centre stock is left too, but for parting off: that cuts the part free
+    let beam = if p.operation == Operation::PartOff {
+        0.0
+    } else {
+        rotary.support.beam / 2.0
+    };
+    let stub = (p.holding_stub / 2.0).max(beam);
     let span = |r: f64| Profile {
         from: 0.0,
         cell,
@@ -621,6 +628,44 @@ mod tests {
         for w in levels.windows(2) {
             assert!(w[1] - w[0] <= 3.0 + 1e-6, "{levels:?}");
         }
+    }
+
+    #[test]
+    fn facing_and_turning_leave_the_centre_stock_and_part_off_cuts_through_it() {
+        use cut_craft_core::document::{Joined, Support};
+        let mut doc = round_job(100.0, 40.0);
+        doc.job.rotary = doc.job.rotary.map(|r| cut_craft_core::document::Rotary {
+            support: Support {
+                joined: Joined::Neither,
+                beam: 12.0,
+            },
+            ..r
+        });
+        let lowest = |p: &Params| {
+            let (cuts, _) = cuts_of(&doc, p);
+            cuts.iter().map(|c| c.z).fold(f64::INFINITY, f64::min)
+        };
+        // the 8 mm stub is inside the 12 mm beam: down to 6 out from the axis, the top 20 out
+        let face = Params {
+            start: 80.0,
+            ..Params::default()
+        };
+        assert!(
+            (lowest(&face) - (6.0 - 20.0)).abs() < 1e-6,
+            "{}",
+            lowest(&face)
+        );
+        // parting off is cutting it free: through to the stub as asked
+        let part = Params {
+            operation: Operation::PartOff,
+            start: 80.0,
+            ..Params::default()
+        };
+        assert!(
+            (lowest(&part) - (4.0 - 20.0)).abs() < 1e-6,
+            "{}",
+            lowest(&part)
+        );
     }
 
     #[test]

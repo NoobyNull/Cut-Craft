@@ -9,7 +9,7 @@ use std::io::{Read as _, Write as _};
 use std::net::{SocketAddr, TcpStream};
 
 /// The app with the Web API switched on, on a free port.
-fn switched_on() -> (Harness, SocketAddr) {
+pub(super) fn switched_on() -> (Harness, SocketAddr) {
     let mut h = Harness::new();
     h.app.options.web_api.enabled = true;
     h.app.options.web_api.port = 0;
@@ -22,7 +22,7 @@ fn switched_on() -> (Harness, SocketAddr) {
 
 /// `method path` with `body` sent from another thread while the app runs frames, as the
 /// window would; its status and JSON.
-fn call(
+pub(super) fn call(
     h: &mut Harness,
     at: SocketAddr,
     method: &str,

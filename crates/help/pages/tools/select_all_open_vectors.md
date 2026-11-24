@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: join_vectors, close_with_line, vector_validator
 ---
 

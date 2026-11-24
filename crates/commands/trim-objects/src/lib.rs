@@ -5,7 +5,7 @@
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, inside};
 use cut_craft_core::trace::{Fit, fit};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -86,6 +86,7 @@ impl Command for TrimObjects {
             group: "Edit Objects",
             icon: "drawing/edit_objects/trim_objects.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

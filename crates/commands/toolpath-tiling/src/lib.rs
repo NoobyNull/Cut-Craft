@@ -16,7 +16,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::tiling::Tiling;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +45,7 @@ impl Command for ToolpathTiling {
             group: "Toolpaths",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

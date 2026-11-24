@@ -2,7 +2,7 @@
 //! above it in the tree (the top of the tree, as new components go).
 
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::{Change, Command, CommandError, Meta, existing};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,7 @@ impl Command for DuplicateComponent {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

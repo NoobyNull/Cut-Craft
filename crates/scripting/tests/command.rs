@@ -3,7 +3,7 @@
 use cmd_draw_circle::DrawCircle;
 use cut_craft_core::testing::sample_document;
 use cut_craft_core::{DynCommand, Registry};
-use cut_craft_scripting::load_gadget;
+use cut_craft_scripting::{load_gadget, waiting_gadget};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -147,4 +147,38 @@ fn a_setting_without_a_default_starts_within_its_range() {
         g.default_params(),
         json!({ "holes": 3, "depth": 3.0, "angle": -5.0 })
     );
+}
+
+/// A gadget whose top-level code would show it had run.
+const LOUD: &str = r#"error("this gadget's code ran")
+function run() end"#;
+
+#[test]
+fn a_waiting_gadget_runs_none_of_its_code_until_it_is_opened() {
+    let (g, waiting) = waiting_gadget("star-burst.lua", HOLES, commands());
+    // named after its file, with no form, and it will not run
+    assert_eq!(g.id(), "gadget_star_burst");
+    assert_eq!(g.meta().label, "star-burst.lua");
+    assert_eq!(g.meta().group, "Gadgets");
+    assert_eq!(g.schema()["properties"], json!({}));
+    let doc = sample_document();
+    let refused = g.run_json(&doc, &json!({})).unwrap_err().to_string();
+    assert!(refused.contains("not been allowed"), "{refused}");
+    // opened (the user said yes): read, named and run like any other gadget
+    assert_eq!(waiting.open().unwrap(), "Hole Pattern");
+    assert_eq!(g.meta().label, "Hole Pattern");
+    assert!(g.schema()["properties"]["count"].is_object());
+    assert!(g.run_json(&doc, &g.default_params()).is_ok());
+    // opened again: nothing new runs, the same name comes back
+    assert_eq!(waiting.open().unwrap(), "Hole Pattern");
+}
+
+#[test]
+fn a_waiting_gadget_is_not_even_read_until_opened() {
+    // code at the top of the file would run while reading its name: it is not read yet
+    let (g, waiting) = waiting_gadget("loud.lua", LOUD, commands());
+    assert_eq!(g.meta().label, "loud.lua");
+    let why = waiting.open().unwrap_err().to_string();
+    assert!(why.contains("this gadget's code ran"), "{why}");
+    assert_eq!(g.meta().label, "loud.lua", "a broken gadget stays waiting");
 }

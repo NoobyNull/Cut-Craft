@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: draw_text, auto_layout_text, convert_text_to_curves
 ---
 

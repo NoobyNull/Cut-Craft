@@ -2,7 +2,7 @@
 //! changes how they combine with the rest.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +25,7 @@ impl Command for MoveToLevel {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

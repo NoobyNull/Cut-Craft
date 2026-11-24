@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-23
 see-also: trim_objects, cut_vector, join_vectors
 ---
 

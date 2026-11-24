@@ -9,9 +9,13 @@ use cut_craft_core::toolpath::Toolpath;
 use cut_craft_rotary::gcode::{Reading, read};
 use cut_craft_rotary::{Cutter, Replay, Speeds, Stock, Voxels};
 
-/// About how many cells of material the turning preview cuts: fine enough to see the cut,
-/// few enough to cut and draw as it plays.
-const CELLS: usize = 2_000_000;
+/// About how many cells of material the turning preview cuts at the Detail slider's
+/// `percent`: eight times the points a flat preview takes there, the material being solid
+/// rather than a surface. Fine enough at the middle to show a finish's passes (a third of a
+/// millimetre on a 300 mm by 80 mm blank), few enough to cut and draw as it plays.
+fn cells(percent: u8) -> usize {
+    8 * crate::preview_detail::most_points(percent)
+}
 
 /// What is needed to make a turning preview, taken from the window's thread.
 pub(super) struct Making {
@@ -24,6 +28,8 @@ pub(super) struct Making {
     /// what they cut.
     earlier: Vec<Toolpath>,
     toolpaths: Vec<Toolpath>,
+    /// The Detail slider's percent: how finely the material is cut.
+    detail: u8,
 }
 
 /// A playing turning preview, and its surface as last drawn.
@@ -53,6 +59,7 @@ impl Making {
         rapid: f64,
         earlier: Vec<Toolpath>,
         toolpaths: Vec<Toolpath>,
+        detail: u8,
     ) -> Option<Self> {
         post.wraps()?;
         Some(Self {
@@ -70,13 +77,17 @@ impl Making {
             },
             earlier,
             toolpaths,
+            detail,
         })
     }
 
     /// Writes each toolpath's file and reads it back, cuts the earlier ones into the
     /// material, and lays the rest out to play. A toolpath the post can't write is left out.
     pub(super) fn make(self) -> Turning {
-        let mut start = Voxels::of(&self.stock, Voxels::cell_for(&self.stock, CELLS));
+        let mut start = Voxels::of(
+            &self.stock,
+            Voxels::cell_for(&self.stock, cells(self.detail)),
+        );
         let read_back = |toolpath: &Toolpath| {
             let mut doc = cut_craft_core::document::Document {
                 job: self.job,
@@ -223,7 +234,15 @@ impl super::CutCraftApp {
         let axis = (self.machines.active())
             .filter(|m| m.has_rotary())
             .map_or_default(|m| m.rotary_axis);
-        Making::new(&job, post, &axis, self.summary.rapid, earlier, toolpaths)
+        Making::new(
+            &job,
+            post,
+            &axis,
+            self.summary.rapid,
+            earlier,
+            toolpaths,
+            self.display.detail,
+        )
     }
 
     /// Once a frame: the turning preview kept at the same point through the job as the
@@ -347,11 +366,40 @@ mod tests {
         (job, toolpath)
     }
 
+    #[test]
+    fn the_material_is_cut_as_finely_as_the_detail_slider_says() {
+        let (job, toolpath) = ring(Along::X);
+        let cell = |detail| {
+            let post = cut_craft_post::Post::default_for(&job);
+            let axis = cut_craft_core::rotary_axis::RotaryAxis::default();
+            Making::new(
+                &job,
+                post,
+                &axis,
+                5000.0,
+                vec![],
+                vec![toolpath.clone()],
+                detail,
+            )
+            .unwrap()
+            .make()
+            .replay
+            .material()
+            .cell()
+        };
+        let (coarse, middle, fine) = (cell(0), cell(50), cell(100));
+        assert!(coarse > middle && middle > fine, "{coarse} {middle} {fine}");
+        // a 300 mm by 80 mm blank at the middle: finer than a finish's passes are apart
+        let blank = 300.0 * 80.0 * 80.0;
+        let cells = u32::try_from(cells(50)).unwrap();
+        assert!((blank / f64::from(cells)).cbrt() < 0.4);
+    }
+
     fn turning(along: Along) -> Turning {
         let (job, toolpath) = ring(along);
         let post = cut_craft_post::Post::default_for(&job);
         let axis = cut_craft_core::rotary_axis::RotaryAxis::default();
-        Making::new(&job, post, &axis, 5000.0, vec![], vec![toolpath])
+        Making::new(&job, post, &axis, 5000.0, vec![], vec![toolpath], 50)
             .expect("a rotary job and a wrapping post")
             .make()
     }
@@ -410,10 +458,30 @@ mod tests {
         let (job, toolpath) = ring(Along::X);
         let axis = cut_craft_core::rotary_axis::RotaryAxis::default();
         let flat = cut_craft_post::Post::default_for(&Job::default());
-        assert!(Making::new(&job, flat, &axis, 5000.0, vec![], vec![toolpath.clone()]).is_none());
+        assert!(
+            Making::new(
+                &job,
+                flat,
+                &axis,
+                5000.0,
+                vec![],
+                vec![toolpath.clone()],
+                50
+            )
+            .is_none()
+        );
         let post = cut_craft_post::Post::default_for(&job);
         assert!(
-            Making::new(&Job::default(), post, &axis, 5000.0, vec![], vec![toolpath]).is_none()
+            Making::new(
+                &Job::default(),
+                post,
+                &axis,
+                5000.0,
+                vec![],
+                vec![toolpath],
+                50
+            )
+            .is_none()
         );
     }
 }

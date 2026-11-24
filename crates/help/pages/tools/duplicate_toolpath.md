@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: toolpath_properties, delete_toolpath, copy_toolpath_to_sheet
 ---
 

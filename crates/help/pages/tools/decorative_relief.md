@@ -23,6 +23,10 @@ see-also: embellish, texture_area, vector_texture, performance
 
    ![Step 4](pictures/decorative_relief/step-4.png)
 
+Once the relief is made, **Create** goes away and the relief follows the form: change a
+setting and it is made again in place, with nothing to press. To make a second one, close the
+form and open it again.
+
 Raising the pieces is spread over the processor's cores, as many as
 [Options ▸ Performance](help:performance) allows, so your other programs stay smooth while
 it works.

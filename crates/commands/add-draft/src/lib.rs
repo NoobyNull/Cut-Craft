@@ -8,7 +8,7 @@ use cut_craft_core::component::{
     model_at_resolution, model_component, model_shape_at_resolution, shown_components,
 };
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +38,7 @@ impl Command for AddDraft {
             group: "Modeling",
             icon: "modeling/add_draft_to_model.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

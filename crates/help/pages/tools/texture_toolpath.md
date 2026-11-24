@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-23
 see-also: pocket_toolpath, fluting_toolpath, stepover
 ---
 

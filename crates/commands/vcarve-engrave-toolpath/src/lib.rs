@@ -11,7 +11,7 @@ use cut_craft_core::toolpath::{
     Move, MoveKind, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by,
     project_onto_model,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -149,6 +149,7 @@ impl Command for VcarveEngraveToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/vcarve_engrave_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

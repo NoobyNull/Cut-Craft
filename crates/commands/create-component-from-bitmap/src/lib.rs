@@ -3,7 +3,7 @@
 
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +48,7 @@ impl Command for CreateComponentFromBitmap {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Create,
         }
     }
 
