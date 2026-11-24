@@ -398,8 +398,14 @@ fn a_pause_can_take_the_head_to_the_change_position_and_wait_as_long_as_asked() 
             .unwrap_or_else(|| panic!("goes to the change position: {lines:#?}"));
         assert!(up < over, "lifts before moving across: {lines:#?}");
         assert!(
-            lines[stop..].iter().any(|l| l == "G4 P7.5"),
-            "waits 7.5 s: {lines:#?}"
+            lines[stop..].iter().any(|l| l == "G4 P7.50"),
+            "waits 7.5 s, in the post's own dwell format: {lines:#?}"
+        );
+        assert!(
+            lines[stop..]
+                .iter()
+                .any(|l| l.contains("Waits 7.5 s for the spindle")),
+            "{lines:#?}"
         );
         assert!(!lines[stop..].iter().any(|l| l == "G4 P3"), "{lines:#?}");
     }
@@ -423,6 +429,41 @@ fn a_pause_can_take_the_head_to_the_change_position_and_wait_as_long_as_asked() 
             .iter()
             .any(|l| l.contains("PARK"))
     );
+}
+
+#[test]
+fn the_spin_up_after_a_pause_is_in_the_units_the_post_gives_its_dwells() {
+    // a controller that reads G4 P in milliseconds (Mach3's "dwell in ms", Fanuc style):
+    // its post says so with a multiplier, and the spin-up follows it, never 3 ms for 3 s
+    let job = cut_craft_core::document::Job::default();
+    let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+    let ms = Post::parse(&format!(
+        "{BASIC}\nVAR DWELL_TIME = [DWELL|A|P|1.0|1000]\nbegin DWELL_MOVE\n\"G4 [DWELL]\"\n"
+    ))
+    .unwrap();
+    let mach3 = Post::parse(include_str!("../posts/mach3_arcs_mm.pp")).unwrap();
+    let three = Pause {
+        spin_up: Some(3.0),
+        park: None,
+    };
+    for (post, wait) in [(&ms, "G4 P3000"), (&mach3, "G4 P3.00")] {
+        let lines = render_with(&post.with_pauses(three), job, two());
+        let stop = lines.iter().position(|l| l == "M0").expect("a stop");
+        assert!(
+            lines[stop..].iter().any(|l| l == wait),
+            "{wait}: {lines:#?}"
+        );
+        assert!(
+            lines[stop..].iter().any(|l| l.contains("Waits 3 s")),
+            "{lines:#?}"
+        );
+    }
+    let asked = Pause {
+        spin_up: Some(4.0),
+        park: None,
+    };
+    let lines = render_with(&ms.with_pauses(asked), job, two());
+    assert!(lines.iter().any(|l| l == "G4 P4000"), "{lines:#?}");
 }
 
 #[test]

@@ -105,6 +105,7 @@ const NUMBERS: &[&str] = &[
     "Radius",
     "Angle",
     "DWELL",
+    "SPINUP",
     "DB",
     "DBX",
     "DBY",
@@ -186,8 +187,9 @@ const THREE_PLACES: &[&str] = &[
     "Radius",
     "Angle",
 ];
-const TEXTS: [&str; 19] = [
+const TEXTS: [&str; 20] = [
     "TOOLNAME",
+    "SPINUP_SECONDS",
     "TOOLPATH_NAME",
     "TP_FILENAME",
     "TP_DIR",
@@ -319,13 +321,21 @@ pub struct Post {
     /// Where a pause for a bit change takes the head ([`Pause::park`]); printed as `[PARKX]`
     /// `[PARKY]` `[PARKZ]`.
     park: Option<[f64; 3]>,
+    /// How long a pause for a bit change waits for the spindle, seconds; printed as
+    /// `[SPINUP]` the way the post prints its own dwell (`[DWELL]`), so a post that gives
+    /// dwells in milliseconds gets milliseconds.
+    spin_up: f64,
 }
 
 /// The spindle's time to come up to speed after a pause Cut Craft writes, seconds.
 pub const DEFAULT_SPIN_UP: f64 = 3.0;
 
-/// `value` seconds as a dwell prints them: to a tenth, without a trailing `.0`.
-fn seconds(value: f64) -> String {
+/// The note before the wait for the spindle after a pause, saying how long it is in
+/// seconds whatever units the dwell prints in.
+const SPIN_UP_NOTE: &str = "(Waits [SPINUP_SECONDS] s for the spindle to come up to speed)";
+
+/// `value` seconds as a note says them: to a tenth, without a trailing `.0`.
+pub(crate) fn seconds(value: f64) -> String {
     let text = format!("{:.1}", value.max(0.0));
     text.strip_suffix(".0")
         .map_or_else(|| text.clone(), str::to_owned)
@@ -537,9 +547,11 @@ impl Post {
         lines.push(format!("(Change to {tool}, set Z zero, then resume)"));
         lines.push("M0".to_owned());
         lines.push(if has("S") { "[S] M3" } else { "M3" }.to_owned());
-        // the spindle's time to come up to speed
-        lines.push(format!("G4 P{}", seconds(DEFAULT_SPIN_UP)));
+        // the spindle's time to come up to speed, in the post's own dwell units
+        lines.push(SPIN_UP_NOTE.to_owned());
+        lines.push("G4 [SPINUP]".to_owned());
         let mut post = self.clone();
+        post.spin_up_as_dwell();
         post.blocks.insert("TOOLCHANGE".to_owned(), lines);
         // the first tool is fitted by hand before starting, not loaded by the changer
         let fitted = format!("(First tool {tool}, fitted and zeroed before starting)");
@@ -563,7 +575,7 @@ impl Post {
     /// position would print as an angle.
     fn paused_as(&self, pause: Pause) -> Self {
         let mut post = self.clone();
-        let Some(lines) = post.blocks.get_mut("TOOLCHANGE") else {
+        let Some(lines) = self.blocks.get("TOOLCHANGE") else {
             return post;
         };
         let words = |line: &str| -> Vec<String> {
@@ -576,11 +588,21 @@ impl Post {
         let stop = lines
             .iter()
             .position(|l| is(l, &["M0", "M00", "M1", "M01"]));
-        if let Some(seconds_wanted) = pause.spin_up {
+        let timed = pause.spin_up.is_some();
+        if let Some(seconds) = pause.spin_up {
+            post.spin_up = seconds.max(0.0);
+        }
+        let Some(lines) = post.blocks.get_mut("TOOLCHANGE") else {
+            return post;
+        };
+        if timed {
             let after = stop.unwrap_or(0);
-            let wait = format!("G4 P{}", seconds(seconds_wanted));
+            let wait = "G4 [SPINUP]".to_owned();
             if let Some(at) = lines.iter().skip(after).position(|l| is(l, &["G4", "G04"])) {
                 lines[after + at] = wait;
+                if lines.get(after + at - 1).map(String::as_str) != Some(SPIN_UP_NOTE) {
+                    lines.insert(after + at, SPIN_UP_NOTE.to_owned());
+                }
             } else {
                 let on = lines
                     .iter()
@@ -588,6 +610,7 @@ impl Post {
                     .position(|l| is(l, &["M3", "M03", "M4", "M04"]))
                     .map_or(lines.len(), |at| after + at + 1);
                 lines.insert(on, wait);
+                lines.insert(on, SPIN_UP_NOTE.to_owned());
             }
         }
         let park = pause.park.filter(|_| self.wrap.is_none());
@@ -607,7 +630,27 @@ impl Post {
             }
             post.park = Some(park);
         }
+        if timed {
+            post.spin_up_as_dwell();
+        }
         post
+    }
+
+    /// `[SPINUP]` printed as the post prints its own dwell (`[DWELL]`: its letter, places
+    /// and multiplier, so seconds or milliseconds as its controller reads them), else as
+    /// `P` and seconds to a tenth.
+    fn spin_up_as_dwell(&mut self) {
+        let mut format = self
+            .formats
+            .get("DWELL")
+            .cloned()
+            .unwrap_or_else(|| Format {
+                prefix: "P".to_owned(),
+                decimals: 1,
+                ..Format::default()
+            });
+        format.only_changes = false;
+        self.formats.insert("SPINUP".to_owned(), format);
     }
 
     /// This post writing for a machine whose rotary is `axis`: A wound no further than it may
@@ -645,6 +688,7 @@ impl Post {
             drill_list: (String::new(), ",".into(), ",".into()),
             blocks: HashMap::new(),
             park: None,
+            spin_up: DEFAULT_SPIN_UP,
         };
         let mut block: Option<String> = None;
         for line in text.lines().map(str::trim) {

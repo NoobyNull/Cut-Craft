@@ -925,7 +925,8 @@ fn bit_changes(ui: &mut egui::Ui, machine: &mut Machine) {
                 )
                 .on_hover_hint(
                     "How long the machine waits for the spindle to come up to speed before \
-                     cutting again; 0 keeps the post's own wait (3 s in Cut Craft's posts)",
+                     cutting again; 0 keeps the post's own wait (3 s in Cut Craft's posts). \
+                     It is written in the units the post gives its dwells",
                 );
             });
             ui.checkbox(&mut machine.group_by_bit, "Group by bit")

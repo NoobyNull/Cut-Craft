@@ -577,6 +577,9 @@ impl Post {
             v.numbers.insert("PARKY", y);
             v.numbers.insert("PARKZ", job.machine_z(z).max(safe));
         }
+        v.numbers.insert("SPINUP", self.spin_up);
+        v.texts
+            .insert("SPINUP_SECONDS", super::seconds(self.spin_up));
         let text = |s: Option<&std::ffi::OsStr>| s.map(|s| s.to_string_lossy().into_owned());
         let shown = |p: Option<&Path>| p.map(|p| p.display().to_string());
         for (label, value) in [
