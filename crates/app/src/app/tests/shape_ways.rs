@@ -167,3 +167,21 @@ fn the_ribbon_shows_one_button_per_shape_even_with_every_tool() {
     assert!(drawn(&mut h, "tool:draw_rectangle_from_center").is_some());
     assert!(drawn(&mut h, "tool:draw_circle_from_edge").is_some());
 }
+
+#[test]
+fn the_canvas_palette_lists_one_row_per_shape() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Canvas;
+    h.app.canvas.group = Some("Create Vectors");
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(h.text_at("Draw Rectangle").is_some());
+    assert!(h.text_at("Draw Rectangle from Center").is_none());
+    assert!(h.text_at("Draw Circle from Edge").is_none());
+    h.app.options.general.other_ways = crate::options::OtherWays::AsButtons;
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert!(h.text_at("Draw Rectangle from Center").is_some());
+}

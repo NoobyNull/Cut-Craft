@@ -418,11 +418,7 @@ impl CutCraftApp {
                 });
                 self.page_rects = [Some(rect), None];
             }
-            Screen::Job => match self.options.general.layout {
-                WindowLayout::Classic => self.job_pages(ui),
-                WindowLayout::Rail => self.rail_layout(ui),
-                WindowLayout::Ribbon => self.ribbon_layout(ui),
-            },
+            Screen::Job => self.job_layout(ui),
         }
         egui::CentralPanel::default().show(ui, |ui| {
             self.top_bar(ui);
@@ -453,6 +449,16 @@ impl CutCraftApp {
                 }
             }
         });
+    }
+
+    /// A job's panels around the views, as its window layout arranges them.
+    fn job_layout(&mut self, ui: &mut egui::Ui) {
+        match self.options.general.layout {
+            WindowLayout::Classic => self.job_pages(ui),
+            WindowLayout::Rail => self.rail_layout(ui),
+            WindowLayout::Ribbon => self.ribbon_layout(ui),
+            WindowLayout::Canvas => self.canvas_layout(ui),
+        }
     }
 
     /// The top bar's sheet, layer and level drop-downs: a command to apply, if one was

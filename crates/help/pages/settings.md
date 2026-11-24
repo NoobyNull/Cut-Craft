@@ -97,10 +97,10 @@ then the old shortcut still runs.
 **Mouse and Shortcuts** also holds **Trackpad mode** and an **Invert** box for each way of
 moving the views: see [Moving the views](help:view_controls).
 
-## How the window looks: three layouts, light or dark
+## How the window looks: four layouts, light or dark
 
-Cut Craft can arrange its tools three ways: **Ribbon** (the one it starts with), **Rail** and
-**Classic**. Press [Interface Layout](help:interface_layout) under 2D View Control to see
+Cut Craft can arrange its tools four ways: **Ribbon** (the one it starts with), **Rail**,
+**Canvas** and **Classic**. Press [Interface Layout](help:interface_layout) under 2D View Control to see
 each and pick one, or use **View ▸ Window Layout** or **Options ▸ General ▸ Window layout**.
 Every tool is in every layout; only where the buttons sit changes. **Ctrl+K** finds a tool by
 name whichever you use.
@@ -132,6 +132,12 @@ that group's tools are listed by name beside it. The open tool's form sits in th
 on the right.
 
 ![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
+
+**[Canvas](help:layout_canvas)**: the whole window is the drawing. A palette of tool groups
+floats down the left, the open tool's form floats on the right, and the sheets, layers and
+toolpaths open from chips along the foot. A box in the header finds a tool by name.
+
+![The Canvas layout, light theme on the left and dark on the right](pictures/layouts/canvas-light-and-dark.png)
 
 **[Classic](help:layout_classic)**: the Design page with its tool groups down the left, tabs
 down the side for Sheets, Layers, Components and Library, and the Toolpaths page on the

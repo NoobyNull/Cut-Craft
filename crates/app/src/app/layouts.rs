@@ -13,9 +13,10 @@ use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
 /// View ▸ Window Layout's items and the layouts they pick.
-const LAYOUTS: [(&str, WindowLayout); 3] = [
+const LAYOUTS: [(&str, WindowLayout); 4] = [
     ("layout_ribbon", WindowLayout::Ribbon),
     ("layout_rail", WindowLayout::Rail),
+    ("layout_canvas", WindowLayout::Canvas),
     ("layout_classic", WindowLayout::Classic),
 ];
 
@@ -83,6 +84,11 @@ impl CutCraftApp {
     /// Find Tool (Ctrl+K): a window over the view listing the tools whose names contain the
     /// text typed; a click runs one, Enter the first, Escape (in `shortcuts`) closes.
     pub(super) fn tool_search(&mut self, ctx: &egui::Context) {
+        // the Canvas layout finds tools in its header instead
+        if self.options.general.layout == WindowLayout::Canvas && self.screen == super::Screen::Job
+        {
+            return;
+        }
         let Some(mut text) = self.search.clone() else {
             return;
         };
@@ -153,7 +159,12 @@ impl CutCraftApp {
             }
         });
         ui.separator();
-        match INSPECTOR_TABS[self.inspector_tab] {
+        self.browser_list(ui, INSPECTOR_TABS[self.inspector_tab]);
+    }
+
+    /// One of the browser's lists: `tab` is its English name in `INSPECTOR_TABS`.
+    pub(super) fn browser_list(&mut self, ui: &mut egui::Ui, tab: &str) {
+        match tab {
             "Toolpaths" => self.toolpath_list(ui, false),
             tab => {
                 egui::ScrollArea::vertical().show(ui, |ui| match tab {
@@ -671,7 +682,7 @@ impl CutCraftApp {
 }
 
 /// What a favourites list says while it has none, and how to add one.
-const NO_FAVOURITES: &str = "No favourites yet: right-click a tool ▸ Add to Favourites";
+pub(super) const NO_FAVOURITES: &str = "No favourites yet: right-click a tool ▸ Add to Favourites";
 
 /// How many rows of text the Ribbon keeps for the tool tip at the browser's foot.
 const RIBBON_TIP_ROWS: f32 = 6.0;

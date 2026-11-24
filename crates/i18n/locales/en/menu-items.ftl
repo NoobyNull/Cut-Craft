@@ -140,6 +140,7 @@ menu-item-cascade-windows = Cascade Windows
 menu-item-window-layout = Window Layout
 menu-item-ribbon = Ribbon
 menu-item-rail = Rail
+menu-item-canvas = Canvas
 menu-item-classic-design-and-toolpaths-pages = Classic (Design and Toolpaths pages)
 menu-item-job-setup-sheet-editor = Job Setup Sheet Editor...
 menu-item-add-ons = Add-ons...

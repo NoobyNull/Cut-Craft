@@ -79,13 +79,32 @@ wide; **Every Tool** shows them all. Either way the group's name (**Create Vecto
 every tool in it by icon and name, each with a pin that puts it on the Ribbon or takes it
 off (`options.ribbon_pins`). The use counts that chose which group to fold are gone.
 
+## Canvas, the fourth layout (agreed 2026-11-24)
+
+Matthew asked for "a panel like fusion uses": the whole window as canvas, with the tools
+floating over it. `WindowLayout::Canvas` (listed after Rail, before Classic; Ribbon stays
+the default) draws:
+
+- a thin header: the Ribbon's tabs (`ribbon_tab` is shared) and, on the right, a Find a
+  Tool box. Ctrl+K puts the keyboard in it; matches drop down under it; Enter runs the
+  first. The Find Tool window is not shown in this layout.
+- a palette of the tab's groups down the left (only groups with a tool for the machine),
+  one icon each; a click flies the group's tools out beside it by icon and name, with the
+  tip box under them. Favourites and Gadgets list their tools with no palette.
+- the open form floating on the right (`form_panel`, up to 80% of the view's height).
+- chips along the foot for `INSPECTOR_TABS`; a click opens that list floating above them.
+
+The view keeps its own bar (2D / 3D, the split, sheet, layer, level, snapping). The 2D/3D
+split already existed (Window ▸ Tile, and the two split buttons); picture-in-picture 3D
+with a swap and a draggable split divider come in the next PR.
+
 ## One button per shape (agreed 2026-11-24)
 
 A shape drawn more than one way has one button in every layout: Draw Rectangle (Corner or
 Center) and Draw Circle (Center or Edge). **Draw from** at the top of its form picks the way,
 and the button opens the way picked last (`options.shape_ways`). Only the same shape done
 another way is folded in, so Ellipse, Polygon and Star keep their own buttons. The ways are
-left off the tool pages, the Rail's lists and the Ribbon (icons and group lists, with either
+left off the tool pages, the Rail's lists, the Canvas palette and the Ribbon (icons and group lists, with either
 Ribbon icons choice) through `CutCraftApp::has_button`; Find Tool, menus and favourites keep
 them. **Options ▸ General ▸ Other ways to draw a shape** (`OtherWays`: **In the form** by
 default, or **As buttons**) puts their buttons back.
