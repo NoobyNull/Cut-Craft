@@ -11,7 +11,7 @@ fn frame(ctx: &egui::Context, draw: impl FnMut(&egui::Context)) {
             egui::Pos2::ZERO,
             // tall enough for the whole Machine Configuration, so a window sized to the
             // screen and not its contents shows
-            egui::vec2(1200.0, 1000.0),
+            egui::vec2(1200.0, 1400.0),
         )),
         ..Default::default()
     };

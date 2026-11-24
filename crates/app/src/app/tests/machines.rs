@@ -140,7 +140,9 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
         h.app.output_post().is_ok(),
         "kept in the custom posts, not read from where it was"
     );
-    // the Machine menu opens its windows; the online ones stay greyed
+    // the Machine menu opens its windows; the online ones stay greyed (on a screen tall
+    // enough for the whole of Machine Configuration, so its posts are drawn)
+    h.window.y = 1100.0;
     for id in [
         "machine_configuration",
         "post_processor_management",

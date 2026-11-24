@@ -68,6 +68,38 @@ pub struct Machine {
     /// Holder per bit: each bit can have a holder of its own in the Tool Database, used
     /// instead of [`Self::holder`] (a tool changer's bits each sit in their own holder).
     pub holder_per_bit: bool,
+    /// How a job with several bits is saved when the machine has no tool changer: a file
+    /// for each bit (the default), or one file pausing at each change.
+    pub hand_changes: HandChanges,
+    /// Where the head goes for a bit to be changed at a pause, from the job's X0 Y0 and
+    /// above the top of the material, mm; `None` lifts straight up to the safe Z.
+    pub change_position: Option<ChangePosition>,
+    /// How long the spindle is given to come up to speed after a pause, seconds; 0 keeps
+    /// the post's own wait (3 seconds in Cut Craft's posts).
+    pub spin_up: f64,
+    /// Group by bit: toolpaths using the same bit are cut together, saving bit changes,
+    /// though the order they are listed in changes. Off: always cut in list order.
+    pub group_by_bit: bool,
+}
+
+/// How bits are changed on a machine without a tool changer (Machine Configuration).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HandChanges {
+    /// A file for each bit, run one after another: change the bit and set Z zero between
+    /// files. The safest, and the only way on controllers that cannot jog while paused.
+    #[default]
+    SeparateFiles,
+    /// One file that stops (M0) at each bit change, to be resumed once the bit is changed.
+    Pause,
+}
+
+/// Where the head waits for a bit change at a pause: X and Y from the job's X0 Y0, and Z
+/// above the top of the material, mm.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ChangePosition {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
 }
 
 /// The firmware a machine's controller runs: it decides whether the machine can have a 4th
@@ -157,6 +189,21 @@ impl Machine {
     pub fn firmware(&self) -> Firmware {
         self.firmware
             .unwrap_or_else(|| Firmware::guess(&self.controller))
+    }
+
+    /// How its pauses for a bit change are written: where the head goes, and how long the
+    /// spindle is given to come up to speed.
+    pub fn pause(&self) -> cut_craft_post::Pause {
+        cut_craft_post::Pause {
+            spin_up: (self.spin_up > 0.0).then_some(self.spin_up),
+            park: self.change_position.map(|p| [p.x, p.y, p.z]),
+        }
+    }
+
+    /// Whether its controller cannot jog while paused (standard GRBL holds at `M0` and
+    /// refuses to jog), which makes setting Z zero at a pause hard.
+    pub fn cannot_jog_when_paused(&self) -> bool {
+        self.firmware() == Firmware::Grbl
     }
 
     /// It has a 4th axis (A) its firmware can drive: ticked, on firmware other than standard

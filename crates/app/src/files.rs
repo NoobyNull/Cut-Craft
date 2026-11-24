@@ -210,6 +210,47 @@ pub fn save_plan(
     Ok(plan)
 }
 
+/// `ids` with the toolpaths using the same bit together, each bit's in list order, the
+/// bits in the order they are first used (Group by bit).
+pub fn by_first_use(doc: &Document, ids: &[EntityId]) -> Vec<EntityId> {
+    let tool = |id: &EntityId| doc.toolpaths[id].tool.name.as_str();
+    let mut bits: Vec<&str> = vec![];
+    for id in ids {
+        if !bits.contains(&tool(id)) {
+            bits.push(tool(id));
+        }
+    }
+    bits.iter()
+        .flat_map(|bit| ids.iter().filter(|id| tool(id) == *bit).copied())
+        .collect()
+}
+
+/// `plan` cut bit by bit (Group by bit): each file's toolpaths [`by_first_use`], then the
+/// files in the order their bits are first used, where `merge` (Group Where Possible) puts
+/// files next to each other that use one same bit into one.
+pub fn grouped_by_bit(doc: &Document, plan: &[Vec<EntityId>], merge: bool) -> Vec<Vec<EntityId>> {
+    let tool = |id: &EntityId| doc.toolpaths[id].tool.name.clone();
+    let plan: Vec<Vec<EntityId>> = plan.iter().map(|ids| by_first_use(doc, ids)).collect();
+    let firsts: Vec<EntityId> = plan.iter().filter_map(|ids| ids.first().copied()).collect();
+    let order = by_first_use(doc, &firsts);
+    let mut files: Vec<Vec<EntityId>> = vec![];
+    for first in order {
+        let Some(ids) = plan.iter().find(|ids| ids.first() == Some(&first)) else {
+            continue;
+        };
+        let one_bit = |ids: &[EntityId]| ids.iter().all(|id| tool(id) == tool(&ids[0]));
+        match files.last_mut() {
+            Some(last)
+                if merge && one_bit(last) && one_bit(ids) && tool(&last[0]) == tool(&ids[0]) =>
+            {
+                last.extend(ids);
+            }
+            _ => files.push(ids.clone()),
+        }
+    }
+    files
+}
+
 /// `plan` with each file split where its tool changes, for a post that cannot change tools:
 /// a file for each tool in turn, run in order.
 pub fn by_tool(doc: &Document, plan: Vec<Vec<EntityId>>) -> Vec<Vec<EntityId>> {
