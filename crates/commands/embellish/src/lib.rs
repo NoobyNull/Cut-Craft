@@ -46,7 +46,7 @@ use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::trace::{Fit, fit};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use design::{Motifs, Settings, Where};
 use field::Field;
 use motif::Item;
@@ -816,6 +816,7 @@ impl Command for Embellish {
             group: "Create Vectors",
             icon: "drawing/create_vectors/embellish.png",
             shortcut: "",
+            form: Form::Remake { keeps_apply: true },
         }
     }
 
@@ -826,6 +827,11 @@ impl Command for Embellish {
             editing: Some(k.at),
             ..k.params
         })
+    }
+
+    /// Opened on an embellishment it made: pressing it changes that one.
+    fn reopens(doc: &Document) -> bool {
+        edits_selection(doc)
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {

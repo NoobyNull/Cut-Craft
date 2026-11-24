@@ -4,7 +4,7 @@
 //! apart. Trace Bitmap's window shows and changes the same settings, with a preview.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +26,7 @@ impl Command for QuickTrace {
             group: "Create Vectors",
             icon: "drawing/create_vectors/quick_trace.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

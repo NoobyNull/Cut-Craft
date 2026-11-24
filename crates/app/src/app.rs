@@ -500,6 +500,9 @@ struct OpenForm {
     id: &'static str,
     label: &'static str,
     icon: &'static str,
+    /// How it behaves, as its command says: what its button says, and whether what it made
+    /// follows it.
+    kind: cut_craft_core::Form,
     fields: Vec<Field>,
     params: Value,
     error: Option<String>,
@@ -540,7 +543,7 @@ struct OpenForm {
     beyond: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
-    /// A form that remakes what it made ([`REMAKE_FORMS`]): the history's revision and the selection
+    /// A form that remakes what it made ([`Form::Remake`](cut_craft_core::Form::Remake)): the history's revision and the selection
     /// just after its pieces were made, and the settings it was made with. While nothing else
     /// has been done or picked since, a change of settings takes them back and makes them
     /// again.

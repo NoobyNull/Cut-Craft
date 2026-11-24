@@ -5,7 +5,7 @@
 //! red.
 
 use cut_craft_core::document::{Document, LayerId};
-use cut_craft_core::{Change, Command, CommandError, Meta, existing_layer};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, existing_layer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +27,7 @@ impl Command for MergeVisibleLayers {
             group: "Layers",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

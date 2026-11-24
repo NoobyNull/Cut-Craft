@@ -4,7 +4,7 @@
 use crate::{ScriptError, describe, run_gadget};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
-use cut_craft_core::{Change, CommandError, Drag, DynCommand, Meta, Registry};
+use cut_craft_core::{Change, CommandError, Drag, DynCommand, Form, Meta, Registry};
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
 
@@ -46,6 +46,7 @@ pub fn load_gadget(
             group: "Gadgets",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         },
         schema,
         defaults,

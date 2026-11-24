@@ -247,6 +247,7 @@ impl CutCraftApp {
                 id: cmd.id(),
                 label: meta.label,
                 icon: meta.icon,
+                kind: meta.form,
                 fields,
                 params,
                 error: None,

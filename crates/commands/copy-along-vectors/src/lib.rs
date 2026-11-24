@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Rect};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use glam::DAffine2;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -102,6 +102,7 @@ impl Command for CopyAlongVectors {
             group: "Offset and Layout",
             icon: "drawing/create_vectors/copy_along_vectors.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

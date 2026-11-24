@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: layer_properties, set_current_layer, move_to_layer, delete_layer
 ---
 

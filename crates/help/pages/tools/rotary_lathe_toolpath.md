@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-21
+reviewed: 2026-11-23
 see-also: rotary_machining_toolpath, orientate_3d_model, rounding_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths
 ---
 

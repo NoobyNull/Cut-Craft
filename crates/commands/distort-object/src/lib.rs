@@ -7,7 +7,7 @@ use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::params::Xy;
 use cut_craft_core::trace::{self, Fit};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -359,6 +359,7 @@ impl Command for DistortObject {
             group: "Transform Objects",
             icon: "drawing/create_vectors/distort_object.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

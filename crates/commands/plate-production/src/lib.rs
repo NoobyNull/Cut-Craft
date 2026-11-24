@@ -12,7 +12,7 @@ use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::{DAffine2, DVec3};
 use cut_craft_core::toolpath::{Move, Toolpath};
-use cut_craft_core::{Change, Command, CommandError, Edit, Meta};
+use cut_craft_core::{Change, Command, CommandError, Edit, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -231,6 +231,7 @@ impl Command for PlateProduction {
             group: "Offset and Layout",
             icon: "",
             shortcut: "",
+            form: Form::Create,
         }
     }
 
