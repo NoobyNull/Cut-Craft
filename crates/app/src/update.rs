@@ -92,6 +92,12 @@ impl Updates {
         (self.phase, self.open) = (phase, true);
     }
 
+    /// Whether the Updates window is showing.
+    #[cfg(test)]
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+
     /// Whether the startup check runs for this copy (not when a package manager updates it).
     pub fn checks_at_startup(&self) -> bool {
         self.install.checks_at_startup()

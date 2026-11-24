@@ -294,9 +294,19 @@ impl CutCraftApp {
                 .pick_files()
                 .unwrap_or_default()
         };
+        // in a language pack, a wrong or missing word goes to its translators
+        let translation = || {
+            let dir = self.addons.dir()?;
+            let chosen = &self.options.language.pack;
+            let in_use =
+                (crate::languages::installed(dir).into_iter()).find(|p| p.id == *chosen)?;
+            let url = crate::languages::wording_issues(&in_use);
+            Some((in_use.name, url))
+        };
         let host = cut_craft_bug_report::Host {
             state: &state,
             pick_pictures: &pick,
+            translation: &translation,
         };
         let message = reporter.frame(ctx, &host);
         self.reporter = reporter;
@@ -338,10 +348,6 @@ impl CutCraftApp {
         .join("\n")
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "every window and panel, in drawing order"
-    )]
     pub(super) fn draw_window(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         self.icons.preload(ctx, self.options.general.preload_icons);
@@ -351,17 +357,8 @@ impl CutCraftApp {
             .retain(|id| doc.components.contains_key(id));
         doc.selected_bitmaps
             .retain(|id| doc.bitmaps.contains_key(id));
-        if ctx.input(|i| i.viewport().close_requested()) {
-            if self.confirm_discard() {
-                // asked once: a repeated close request must not ask again
-                self.session.discard_changes(&self.history);
-                self.clear_recovery();
-                self.restart_into_update();
-            } else {
-                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                // Cancel at "Save changes?" cancels the relaunch after an update too
-                self.restart_after_close = None;
-            }
+        if ctx.input(|i| i.viewport().close_requested()) && !self.close_requested() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
         paint_focus_ring(ctx);
         let title = match self.screen {

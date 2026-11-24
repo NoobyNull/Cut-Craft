@@ -238,6 +238,22 @@ const SCENES: &[Scene] = &[
         everyday(app);
         app.options_window = true;
         app.options_goto = Some("language");
+        // an official pack as it shows once installed: who translated it, how much is done
+        let pack = crate::languages::Pack {
+            id: "language-ru".into(),
+            name: "Русский".into(),
+            code: "ru".into(),
+            version: "1.0.2".into(),
+            signed: true,
+            translators: vec!["Ivan".into()],
+            from: cut_craft_updater::addon::Repo::parse(cut_craft_updater::addon::TRANSLATIONS)
+                .ok(),
+        };
+        app.language_packs = Some(vec![(pack, 40)]);
+        // picked, not applied: the page shows it with where to report a word
+        let mut edited = app.edited_options().clone();
+        edited.language.pack = "language-ru".into();
+        app.options_edited(edited);
         ctx.set_embed_viewports(true);
     }),
     // Help: Screen readers (Options ▸ Appearance, where the text size is)

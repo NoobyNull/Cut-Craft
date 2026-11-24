@@ -5,82 +5,8 @@ use crate::geometry::Point;
 use crate::toolpath::{Move, Tool, ToolShape, Toolpath};
 use glam::{DVec2, DVec3};
 use std::ops::Range;
-use std::sync::Mutex;
 
-/// Grids under this many cells are worked on the calling thread alone: threads cost more than
-/// they save there.
-const PARALLEL_CELLS: usize = 4096;
-
-/// Bands handed out per core: smaller bands than a core's share, taken as cores come free,
-/// so work bunched in part of the grid does not leave the other cores waiting.
-const BANDS_PER_CORE: usize = 4;
-
-/// The most cores heavy work may use, set from Options ▸ Advanced; 0 means all of them.
-static CORE_LIMIT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-
-/// Limits simulations, previews and imports to `limit` cores; 0 lets them use every core.
-pub fn set_core_limit(limit: usize) {
-    CORE_LIMIT.store(limit, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// The cores heavy work may use: every core, or fewer when Options says so, never none.
-pub fn cores() -> usize {
-    let all = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
-    match CORE_LIMIT.load(std::sync::atomic::Ordering::Relaxed) {
-        0 => all,
-        limit => limit.min(all),
-    }
-}
-
-/// Runs `work` on each of `jobs`, a thread per core taking the next as it comes free.
-fn queued<J: Send>(jobs: Vec<J>, threads: usize, work: impl Fn(J) + Sync) {
-    let queue = Mutex::new(jobs);
-    let (queue, work) = (&queue, &work);
-    std::thread::scope(|scope| {
-        for _ in 0..threads {
-            scope.spawn(move || {
-                loop {
-                    let next = queue.lock().expect("a band panicked").pop();
-                    let Some(job) = next else { break };
-                    work(job);
-                }
-            });
-        }
-    });
-}
-
-/// Fills `values`, a grid `columns` wide, in bands of rows across the cores: `fill(first, band)`
-/// gets each band's first row and its cells. A grid under a few thousand cells is one band.
-pub fn by_rows<T: Send>(values: &mut [T], columns: usize, fill: impl Fn(usize, &mut [T]) + Sync) {
-    let rows = values.len() / columns.max(1);
-    let threads = if values.len() < PARALLEL_CELLS {
-        1
-    } else {
-        cores().min(rows)
-    };
-    if threads <= 1 {
-        fill(0, values);
-        return;
-    }
-    let band = rows.div_ceil(threads * BANDS_PER_CORE).max(1);
-    let bands = values.chunks_mut(band * columns).enumerate().collect();
-    queued(bands, threads, |(i, chunk)| fill(i * band, chunk));
-}
-
-/// `f` of each item, in order, worked out across the cores.
-pub fn each<T: Sync, U: Send>(items: &[T], f: impl Fn(&T) -> U + Sync) -> Vec<U> {
-    let threads = cores().min(items.len());
-    if threads <= 1 {
-        return items.iter().map(f).collect();
-    }
-    let share = items.len().div_ceil(threads * BANDS_PER_CORE).max(1);
-    let mut out: Vec<Vec<U>> = (0..items.len().div_ceil(share)).map(|_| vec![]).collect();
-    let shares = items.chunks(share).zip(&mut out).collect();
-    queued(shares, threads, |(chunk, slot): (&[T], &mut Vec<U>)| {
-        *slot = chunk.iter().map(&f).collect();
-    });
-    out.into_iter().flatten().collect()
-}
+use crate::work::{by_rows, cores};
 
 /// How far clear of the material [`Material::overcut`] measures exactly, mm: a fine V-bit
 /// cut on a big job has thousands of cells inside the bit's width that its tip is far above.
@@ -582,10 +508,10 @@ impl Material {
                 cut(i, h, c);
             }
         } else {
-            std::thread::scope(|scope| {
+            crate::work::scope(|scope| {
                 for (i, (h, c)) in bands {
                     let cut = &cut;
-                    scope.spawn(move || cut(i, h, c));
+                    crate::work::spawn(scope, move || cut(i, h, c));
                 }
             });
         }
