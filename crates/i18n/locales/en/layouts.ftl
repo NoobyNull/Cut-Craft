@@ -8,4 +8,4 @@ layouts-part-of-a-tool-s = Part of a tool's name
 layouts-ribbon-group-list = Every tool in { $group }, by name. Pin a tool to show it on the ribbon, or unpin it to keep it only in this list
 layouts-ribbon-pin = Pin: show this tool on the ribbon
 layouts-ribbon-unpin = Unpin: keep this tool only in its group's list
-layouts-ribbon-pins-note = Pinned tools show on the ribbon. Each group starts with the tools that fit under its name.
+layouts-ribbon-pins-note = Pinned tools show on the ribbon. Each group starts with the tools that fit under its name, or with every tool when Ribbon icons is set to Every Tool.
