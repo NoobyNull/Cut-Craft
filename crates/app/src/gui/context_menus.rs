@@ -213,6 +213,10 @@ pub fn favourite_item(page: crate::pages::Page, id: &str, favourite: bool) -> Me
 /// them out: then `true` or `false` (Options ▸ General ▸ Fold tool groups into one button).
 pub const FOLD_TOOL_GROUPS: &str = "fold_tool_groups:";
 
+/// Pinning a tool to the Ribbon or taking it off (its group's list keeps it either way):
+/// then the tool's id.
+pub const RIBBON_PIN: &str = "ribbon_pin:";
+
 /// A tool page's tab menu: its favourites or all its tools, the one shown ticked.
 pub fn favourites_menu(page: crate::pages::Page, only: bool) -> Vec<MenuItem> {
     [("Show Favourites", true), ("Show All Tools", false)]

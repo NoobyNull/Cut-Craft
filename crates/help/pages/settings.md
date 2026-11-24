@@ -113,11 +113,10 @@ the left and the dark theme on the right.
 of tool groups, the sheets, layers and toolpath list on the left, and the open form on the
 right. A **Favourites** tab holds the tools you keep at hand.
 
-When the window is too narrow for every group on a Ribbon tab, Cut Craft folds some groups
-into one button, such as **Align Objects ▾**. Click it to list that group's tools by name.
-It folds the groups whose tools you have picked least first, and never a group holding one
-of your favourites (see **Favourites** below), so the tools you use stay in
-sight. Widen the window and the groups open again.
+Each Ribbon group shows its first few tools as icons. Click a group's name, such as
+**Create Vectors ▾**, to list every tool in it; the pin beside each one puts it on the
+Ribbon or takes it off. When the window is too narrow for every group on a tab, the groups
+carry on along a second row, in the same order, so nothing is hidden.
 
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
 

@@ -26,7 +26,6 @@ Defined once, read by every layout:
   Favourites first. What follows depends on where the button is: a grid of icons can fold
   tool groups, a tool among the favourites moves along them, and a row in a list has
   nothing more.
-- **Use counts** (`uses`) and **kept groups** (`holds_a_favourite`) for the Ribbon's folding.
 
 ## Templates and layouts
 
@@ -66,3 +65,12 @@ Rail, Ribbon and Classic read groups, kinds, favourites, menus and use counts fr
 
 The layouts borrow ways of working (a ribbon of tabs, a rail with an inspector), not another
 program's screens, menus or icons. No layout, menu or help page names another program.
+
+## Narrow windows (agreed 2026-11-24)
+
+The Ribbon never folds a group away. When the window is too narrow for every group, the
+groups go on to a second row (or more), in order, each group whole. Under each group's icons
+is its name with a ▾: a click lists every tool in the group by icon and name, each with a
+pin. Every tool starts pinned; unpinning one takes its icon off the Ribbon, and its group's
+list keeps it (`options.ribbon_hidden`). The use counts that chose which group to fold are
+gone.

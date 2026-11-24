@@ -851,6 +851,9 @@ impl CutCraftApp {
                 self.options.general.fold_tool_groups = id.ends_with("true");
                 self.save_options();
             }
+            id if id.starts_with(gui::RIBBON_PIN) => {
+                self.toggle_ribbon_pin(&id[gui::RIBBON_PIN.len()..]);
+            }
             id if id.starts_with(gui::SUBTAB_PLACE) => {
                 if let Some(sections) = gui::DESIGN.placed(&self.options.design_sections, id) {
                     self.options.design_sections = sections;

@@ -1260,88 +1260,94 @@ fn a_new_job_lets_go_of_the_form_kept_behind_a_placing_tool() {
 }
 
 #[test]
-fn the_ribbon_folds_the_least_used_groups_first_and_never_a_favourites() {
-    use super::layouts::{GroupFit, fold_plan};
-    let fit = |uses, kept| GroupFit {
-        open: 100.0,
-        folded: 40.0,
-        uses,
-        kept,
-    };
-    let groups = [fit(5, false), fit(0, false), fit(0, false), fit(9, false)];
-    assert_eq!(fold_plan(&groups, 400.0), [false; 4], "all fit");
-    // one fold saves 60: the rightmost of the two used least goes first
-    assert_eq!(fold_plan(&groups, 340.0), [false, false, true, false]);
-    assert_eq!(fold_plan(&groups, 280.0), [false, true, true, false]);
-    assert_eq!(fold_plan(&groups, 220.0), [true, true, true, false]);
-    // a group holding a favourite stays open, even if never used
-    let kept = [fit(5, false), fit(0, true), fit(0, false)];
-    assert_eq!(fold_plan(&kept, 200.0), [true, false, true]);
-    // room for nothing: everything that may fold does, and the row scrolls
-    assert_eq!(fold_plan(&kept, 10.0), [true, false, true]);
+fn ribbon_groups_wrap_onto_more_rows_in_order() {
+    use super::layouts::wrap_rows;
+    // all fit: one row
+    assert_eq!(wrap_rows(&[100.0, 100.0, 100.0], 400.0), [vec![0, 1, 2]]);
+    // a group that does not fit goes to the next row whole, the order kept
+    assert_eq!(
+        wrap_rows(&[100.0, 100.0, 100.0, 100.0], 250.0),
+        [vec![0, 1], vec![2, 3]]
+    );
+    // a group wider than the window has a row to itself
+    assert_eq!(
+        wrap_rows(&[100.0, 500.0, 100.0], 250.0),
+        [vec![0], vec![1], vec![2]]
+    );
+    assert_eq!(wrap_rows(&[], 250.0), [] as [Vec<usize>; 0]);
 }
 
 #[test]
-fn a_narrow_ribbon_folds_the_groups_used_least_and_picks_are_counted() {
-    let folded = |h: &Harness| -> Vec<String> {
-        h.shapes
-            .iter()
-            .filter_map(|c| match &c.shape {
-                egui::Shape::Text(t) if t.galley.text().ends_with('▾') => {
-                    Some(t.galley.text().to_owned())
-                }
-                _ => None,
-            })
-            .collect()
-    };
+fn a_ribbon_group_shows_its_first_few_tools_until_pinned_or_unpinned() {
+    use super::layouts::{RIBBON_STARTER_PINS, on_ribbon};
+    let tools = ["a", "b", "c", "d", "e", "f"];
+    let mut pins = std::collections::BTreeMap::new();
+    assert_eq!(on_ribbon(&tools, &pins), tools[..RIBBON_STARTER_PINS]);
+    // pinned by hand, in its place; unpinned by hand, gone
+    pins.insert("f".to_owned(), true);
+    pins.insert("b".to_owned(), false);
+    assert_eq!(on_ribbon(&tools, &pins), ["a", "c", "d", "f"]);
+}
+
+#[test]
+fn a_ribbon_tab_fits_in_two_rows_of_groups_and_each_name_lists_and_pins_every_tool() {
+    use super::layouts::RIBBON_STARTER_PINS;
     let mut h = Harness::new();
     h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
-    h.window = vec2(5000.0, 800.0);
+    for tab in 0..3 {
+        h.app.ribbon_tab = tab;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        // nothing folded away: every group of the tab is there under its own name, in
+        // order, a second row taking what the first has no room for
+        let (groups, _) = h.app.ribbon_groups();
+        let rows: Vec<f32> = groups
+            .iter()
+            .map(|g| {
+                h.text_at(&format!("{} ▾", g.name))
+                    .unwrap_or_else(|| panic!("{} not shown", g.name))
+                    .y
+            })
+            .collect();
+        assert!(rows.windows(2).all(|w| w[0] <= w[1] + 0.5), "{rows:?}");
+        let mut distinct = rows.clone();
+        distinct.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+        assert!(
+            distinct.len() <= 2,
+            "tab {tab}: {} rows of groups",
+            distinct.len()
+        );
+        // and the view still has most of the window
+        assert!(
+            rows.iter().all(|&y| y < 0.5 * h.window.y),
+            "tab {tab}: the ribbon is too tall: {rows:?}"
+        );
+    }
+    // a group's name lists every tool in it by name, those off the ribbon too
+    h.app.ribbon_tab = 0;
     h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(folded(&h).is_empty(), "room for all: {:?}", folded(&h));
-    h.window = vec2(2600.0, 800.0);
-    h.frame(vec![]);
-    h.frame(vec![]);
-    let before = folded(&h);
-    assert!(before.contains(&"Align Objects ▾".to_owned()), "{before:?}");
-    // Align Left used a lot: its group opens and another folds instead
-    h.app.options.tool_uses.insert("align_left".into(), 50);
-    h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(h.text_at("Align Objects ▾").is_none(), "{:?}", folded(&h));
-    assert!(h.text_at("Align Objects").is_some());
-    // a favourite's group never folds
-    h.app.options.favourites.design = vec!["weld_vectors".into()];
-    h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(
-        h.text_at("Join, Combine and Trim ▾").is_none(),
-        "{:?}",
-        folded(&h)
-    );
-    // a folded group's button lists its tools
-    let button = folded(&h).first().cloned().expect("something still folded");
-    let group = h
-        .app
-        .tool_model()
-        .all_groups()
-        .into_iter()
-        .find(|g| format!("{} ▾", g.name) == button)
-        .unwrap();
+    let (groups, _) = h.app.ribbon_groups();
+    let group = *groups
+        .iter()
+        .find(|g| g.tools.len() > RIBBON_STARTER_PINS)
+        .expect("a group with more tools than are pinned");
     let first = h.app.tool_label(group.tools[0]);
-    assert!(h.text_at(&first).is_none(), "{first} hidden while folded");
-    let at = h.text_at(&button).unwrap();
-    h.press(at, true, Modifiers::NONE);
-    h.press(at, false, Modifiers::NONE);
+    let last = h.app.tool_label(group.tools.last().unwrap());
+    let at = h.text_at(&format!("{} ▾", group.name)).unwrap();
+    h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(
-        h.text_at(&first).is_some(),
-        "{button} lists {first} by name"
-    );
-    // a pick from a button counts
+    assert!(h.text_at(&first).is_some(), "{} lists {first}", group.name);
+    assert!(h.text_at(&last).is_some(), "{} lists {last}", group.name);
+    // and a pin puts a tool on the ribbon or takes it off; kept only while it differs
+    // from where it started
     let ctx = h.ctx.clone();
-    h.app.pick(&ctx, Page::Design, "draw_circle");
-    assert_eq!(h.app.options.tool_uses.get("draw_circle"), Some(&1));
+    let pin = |id: &str| format!("{}{id}", gui::RIBBON_PIN);
+    h.app.invoke(&ctx, &pin(group.tools[0]));
+    assert_eq!(h.app.options.ribbon_pins.get(group.tools[0]), Some(&false));
+    let late = *group.tools.last().unwrap();
+    h.app.invoke(&ctx, &pin(late));
+    assert_eq!(h.app.options.ribbon_pins.get(late), Some(&true));
+    h.app.invoke(&ctx, &pin(group.tools[0]));
+    h.app.invoke(&ctx, &pin(late));
+    assert!(h.app.options.ribbon_pins.is_empty());
 }
