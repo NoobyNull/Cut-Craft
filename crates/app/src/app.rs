@@ -66,6 +66,7 @@ mod node_editing;
 mod notes_panel;
 mod options_apply;
 mod options_window;
+mod output;
 mod pace;
 mod page_layout;
 mod panels;

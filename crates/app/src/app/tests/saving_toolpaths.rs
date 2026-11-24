@@ -882,21 +882,6 @@ fn the_toolpath_summary_s_notes_follow_their_toolpath_through_a_reorder() {
 }
 
 #[test]
-fn saving_while_tiling_is_on_says_so() {
-    let path = std::path::Path::new("sign.nc");
-    let tiles = [
-        std::path::PathBuf::from("sign_tile1.nc"),
-        std::path::PathBuf::from("sign_tile2.nc"),
-    ];
-    let said = CutCraftApp::saved_message(&tiles, path, true);
-    assert!(said.contains("Toolpath Tiling is on"), "{said}");
-    let one = CutCraftApp::saved_message(&tiles[..1], path, true);
-    assert!(one.contains("Toolpath Tiling is on"), "{one}");
-    let plain = CutCraftApp::saved_message(&[path.to_path_buf()], path, false);
-    assert_eq!(plain, "Saved toolpaths to sign.nc");
-}
-
-#[test]
 fn a_tile_and_its_overlap_bigger_than_the_bed_is_said_in_red() {
     let mut h = Harness::new();
     h.app.machines.machines.push(cut_craft_machines::Machine {
