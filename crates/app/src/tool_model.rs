@@ -11,7 +11,6 @@
 use crate::gui::{self, MenuItem, SubTabSet, ToolGroup, Toolbar};
 use crate::options::Favourites;
 use crate::pages::Page;
-use std::collections::BTreeMap;
 
 /// Where a tool's button is shown, which decides what its right-click menu offers after
 /// Add to (or Remove from) Favourites.
@@ -101,26 +100,6 @@ impl<'a> ToolModel<'a> {
     /// Whether `id` is on its own kind's favourites.
     pub fn is_favourite(self, id: &str, favourites: &Favourites) -> bool {
         favourites.of(self.kind_of(id)).0.iter().any(|f| f == id)
-    }
-
-    /// Whether any of a group's tools is a favourite of either kind.
-    pub fn holds_a_favourite(group: &ToolGroup, favourites: &Favourites) -> bool {
-        [Page::Design, Page::Toolpaths].into_iter().any(|kind| {
-            favourites
-                .of(kind)
-                .0
-                .iter()
-                .any(|f| group.tools.contains(&f.as_str()))
-        })
-    }
-
-    /// How many times a group's tools have been picked, all told.
-    pub fn uses(group: &ToolGroup, uses: &BTreeMap<String, u32>) -> u32 {
-        group
-            .tools
-            .iter()
-            .filter_map(|id| uses.get(*id))
-            .fold(0, |sum, n| sum.saturating_add(*n))
     }
 
     /// A tool's right-click menu shown at `place`: Add to Favourites or Remove from

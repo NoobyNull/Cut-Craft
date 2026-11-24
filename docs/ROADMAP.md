@@ -50,7 +50,7 @@ pictures.
 | 2.1 | Triage #668 (1/4" end mill) and #669 (material shows hollow) | Not started |
 | 2.2 | Updates reach users: #670 and #680 | PRs open |
 | 2.3 | Saving toolpaths: #672, #673, #674, #675 (in that order), including the machine-damage hard stop | PRs open |
-| 2.3a | Switch to new layout: Ribbon by default and Classic listed last. #694 moves every layout onto one shared tool model; the next PR adds the layout picker, the layout question in first-run setup and once after updating, a Did You Know tip and a help page per layout. Lands before 2.4 so the walk-through and help pictures use the new screen | PRs open |
+| 2.3a | Switch to new layout: Ribbon by default and Classic listed last. #694 moves every layout onto one shared tool model; #697 adds the layout picker, the layout question in first-run setup and once after updating, a Did You Know tip and a help page per layout (both merged). A narrow Ribbon then goes on to a second row instead of folding groups (designed for 1920 wide, compact icons by default, Every Tool as a setting); each group name lists all its tools with pins. Lands before 2.4 so the walk-through and help pictures use the new screen | Done (#699 merged) |
 | 2.3b | Saving jobs with several bits: G-code file names that sort in cutting order and say the bit; per-machine Bit Changes (separate files or pauses, a bit change position, spin-up, opt-in Group by bit) and a check reminding to set Z zero with each bit | PRs open |
 | 2.4 | Walk the whole path by hand on both platforms and file every snag | Not started |
 | 2.5 | Help on every step of the path, including the built-in actions with no help page | Not started (with 3.4) |

@@ -323,9 +323,12 @@ impl CutCraftApp {
         let folded = self.options.general.fold_tool_groups;
         let mut clicked = None;
         let mut chosen = None;
-        // plain sections: a heading over its tools
+        // plain sections: a heading over its tools (none for an unnamed one, which the
+        // Ribbon names under its icons)
         for (name, tools) in sections {
-            ui.strong(*name);
+            if !name.is_empty() {
+                ui.strong(*name);
+            }
             if !among && !folded {
                 self.spread_tools(ui, tools, edge, &mut clicked, &mut chosen);
                 ui.add_space(ui.spacing().item_spacing.y);
@@ -382,7 +385,7 @@ impl CutCraftApp {
 
     /// A tool button's right-click menu, and the action picked from it: a grid's, or the
     /// favourites' when shown `among` them.
-    pub(super) fn tool_menu_on(
+    pub(in super::super) fn tool_menu_on(
         &self,
         response: &egui::Response,
         id: &str,
@@ -431,29 +434,15 @@ impl CutCraftApp {
             .iter()
             .zip(&captions)
             .map(|(cluster, caption)| {
-                let n = f32::from(u16::try_from(cluster.tools.len()).unwrap_or(u16::MAX));
                 let caption_width = ui
                     .painter()
                     .layout_no_wrap((*caption).to_owned(), caption_font.clone(), caption_color)
                     .size()
                     .x;
-                let icons = n * button + (n - 1.0).max(0.0) * spacing.x;
-                (icons.max(caption_width) + 2.0 * margin + 2.0).min(full)
+                box_width(cluster.tools.len(), caption_width, button, spacing.x).min(full)
             })
             .collect();
-        // the rows the boxes go in, a box going to the next row whole when this one has
-        // no room for it
-        let mut rows: Vec<Vec<usize>> = Vec::new();
-        let mut left = 0.0;
-        for (i, &width) in widths.iter().enumerate() {
-            if rows.is_empty() || left < width {
-                rows.push(Vec::new());
-                left = full;
-            }
-            left -= width + spacing.x;
-            rows.last_mut().expect("a row").push(i);
-        }
-        for row in rows {
+        for row in box_rows(&widths, full, spacing.x) {
             // loose tools line up with the tools of a box beside them
             let boxed_row = row.iter().any(|&i| clusters[i].name.is_some());
             ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
@@ -510,7 +499,12 @@ impl CutCraftApp {
     }
 
     /// One tool's icon button: enabled when it is built, highlighted while in hand.
-    pub(super) fn tool_button(&self, ui: &mut egui::Ui, id: &str, edge: f32) -> egui::Response {
+    pub(in super::super) fn tool_button(
+        &self,
+        ui: &mut egui::Ui,
+        id: &str,
+        edge: f32,
+    ) -> egui::Response {
         let label = self.tool_label(id);
         let explicit = self.explicit_icon(id);
         let button = self
@@ -687,4 +681,28 @@ impl CutCraftApp {
         };
         self.icon_button(icon, "", label, edge).selected(pinned)
     }
+}
+
+/// How wide a box of `n` tool buttons is laid out on one row, with its `caption`'s width,
+/// its margin and border: as wide as the icons or the caption, whichever is wider.
+fn box_width(n: usize, caption: f32, button: f32, gap: f32) -> f32 {
+    let n = f32::from(u16::try_from(n).unwrap_or(u16::MAX));
+    let icons = n * button + (n - 1.0).max(0.0) * gap;
+    icons.max(caption) + 2.0 * TOOL_BOX_MARGIN + 2.0
+}
+
+/// The rows boxes `widths` wide go in across `full`, `gap` apart: a box going to the next
+/// row whole when this one has no room for it.
+fn box_rows(widths: &[f32], full: f32, gap: f32) -> Vec<Vec<usize>> {
+    let mut rows: Vec<Vec<usize>> = Vec::new();
+    let mut left = 0.0;
+    for (i, &width) in widths.iter().enumerate() {
+        if rows.is_empty() || left < width {
+            rows.push(Vec::new());
+            left = full;
+        }
+        left -= width + gap;
+        rows.last_mut().expect("a row").push(i);
+    }
+    rows
 }

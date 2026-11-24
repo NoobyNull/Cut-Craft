@@ -14,13 +14,26 @@ them: draw on **Design**, shape 3D parts on **Model**, then make and save cuts o
 ## Finding a tool
 
 1. Click the tab for the step you are on: **Design**, **Model** or **Toolpaths**.
-2. Each group of tools has its name above its icons. Point at an icon to see what it does
+2. Each group of tools has its name under its icons. Point at an icon to see what it does
    at the foot of the left-hand panel.
 3. Click the icon. Its settings open on the right.
 
-If the window is too narrow for every group, some fold into one button, such as **Align
-Objects ▾**. Click it to list that group's tools by name. The groups you use least fold
-first, and a group holding one of your favourites never folds.
+Each group shows the tools that fit under its name as icons. Click the group's name, such as
+**Create Vectors ▾**, to list every tool in it by name, and click one to use it.
+
+To see every tool as an icon instead, set **Options ▸ General ▸ Ribbon icons** to **Every
+Tool**. The Ribbon then takes two rows on a wide screen. **Compact**, the starting choice,
+keeps it to one row on a 1920-wide screen.
+
+## Choosing which tools show
+
+In a group's list, each tool has a pin. A pinned tool shows as an icon on the Ribbon; an
+unpinned one stays in the list only, with either Ribbon icons choice. Click the pin to
+change it. Your choice is kept between runs.
+
+If the window is too narrow for every group on a tab, the groups carry on along a second
+row, in the same order. Nothing is hidden: unpin tools you rarely use to keep the Ribbon
+short.
 
 ## The panels
 
