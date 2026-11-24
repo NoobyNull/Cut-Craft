@@ -243,7 +243,7 @@ say "not implemented yet".
   beside the picture is not drawn; Overcut Distance is not offered.]
 - Help: About, Keyboard Shortcuts, Third Party Licenses, Check for Updates (crate
   `crates/updater`). Asks GitHub's releases (never a mirror) for a newer stable version,
-  at startup about once a day (Options ▸ Updates turns that off) and from the menu. "A new
+  at every startup (Options ▸ Updates turns that off) and from the menu. "A new
   version (X) is available. Download, install and relaunch?" Install Now downloads the release's file for this install (Windows .zip, Linux .tar.gz or
   AppImage), refuses it unless it carries a minisign signature from the release key built
   into the app (`crates/updater/release-key.pub`, its trusted comment naming the file) and

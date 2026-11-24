@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also:
 ---
 
@@ -89,7 +89,7 @@ there is nothing to update; see **Machine ▸ Post-Processor Management**.
 
 ## Updates
 
-Cut Craft asks GitHub about once a day, when it starts, whether there is a new version, and
+Every time Cut Craft starts, it asks GitHub whether there is a new version. If there is, it
 asks you: "A new version is available. Download, install and relaunch?" **Install Now**
 downloads it, checks it is genuine, installs it, and reopens Cut Craft on your job, asking
 you to save any changes first. **Help ▸ Check for Updates** asks straight away. See
