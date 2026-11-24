@@ -7,7 +7,7 @@ use cut_craft_core::drag_knife::{Overrides, surface_top};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, cut_points, made_by, project_onto_model};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -358,6 +358,7 @@ impl Command for DragKnifeToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/drag_knife_toolpath.png",
             shortcut: "",
+            form: Form::Toolpath,
         }
     }
 

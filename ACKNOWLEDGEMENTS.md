@@ -24,4 +24,4 @@ ships was drawn for it, in Cut Craft's own style: the flat icons, the shaded sol
 tools and the 3D import pictures.
 
 The GitHub and Thingiverse logos belong to their owners and are credited, with the other
-third-party assets and libraries, under **Help ▸ Third Party Licenses**.
+third-party assets and libraries, under **Help ▸ Credits** (the `credits` folder).

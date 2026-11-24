@@ -41,13 +41,6 @@ pub(super) const CARVE_AREA_ALPHA: f32 = 0.35;
 /// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
 pub(super) const RING_SHARE: f64 = 0.6;
 
-/// Forms whose model is made as soon as they open and then follows their settings.
-pub(super) const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
-
-/// Forms that make many pieces at once and go on remaking them as their settings change
-/// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
-pub(super) const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
-
 pub(super) const BUILT_INS: [&str; 106] = [
     "setup_material",
     "import_into_shape",
@@ -113,7 +106,7 @@ pub(super) const BUILT_INS: [&str; 106] = [
     "keyboard_shortcuts",
     "help_contents",
     "did_you_know",
-    "third_party_licenses",
+    "credits",
     "about_cut_craft",
     "check_for_updates",
     "addons",
@@ -184,7 +177,8 @@ pub(super) struct ShortcutCapture {
 pub(super) enum Info {
     About,
     Shortcuts,
-    Licenses,
+    /// Credits: the libraries, pictures and icons Cut Craft is built with.
+    Credits,
     /// Toolpath Summary: estimated machining times.
     Summary,
     /// Help Contents (also a page's ?, and F1) on a page: `contents`, a tool page
@@ -311,38 +305,6 @@ pub(super) struct SummaryRow {
     pub(super) visible: bool,
     pub(super) notes: String,
 }
-
-/// The libraries Cut Craft is built on and the licences their makers declare.
-// ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
-pub(super) const THIRD_PARTY: [(&str, &str); 21] = [
-    ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
-    ("log", "MIT or Apache-2.0"),
-    ("egui_commonmark", "MIT or Apache-2.0"),
-    ("pulldown-cmark", "MIT"),
-    ("glam", "MIT or Apache-2.0"),
-    ("i_overlay", "MIT or Apache-2.0"),
-    ("qrcode (part labels)", "MIT or Apache-2.0"),
-    ("md-5", "MIT or Apache-2.0"),
-    ("image", "MIT or Apache-2.0"),
-    ("usvg", "MPL-2.0"),
-    ("dxf", "MIT"),
-    ("serde / serde_json", "MIT or Apache-2.0"),
-    ("schemars", "MIT"),
-    ("rfd", "MIT"),
-    ("chrono", "MIT or Apache-2.0"),
-    ("env_logger", "MIT or Apache-2.0"),
-    ("log", "MIT or Apache-2.0"),
-    ("wgpu (through eframe)", "MIT or Apache-2.0"),
-    ("Rust standard library", "MIT or Apache-2.0"),
-    (
-        "GitHub and Thingiverse link icons",
-        "Icons8 (icons8.com), free with this credit",
-    ),
-    (
-        "Pointing hand and statue pictures (Orientate 3D Model)",
-        "Rendered from free models shared on printables.com",
-    ),
-];
 
 /// The fewest 3D view mesh cells along the longer side of the job: Options' Low detail.
 /// The detail while moving and when still are Options' (3D View); at Very High, 1200

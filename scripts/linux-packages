@@ -37,6 +37,7 @@ if [[ -n $libs && -d $libs/licenses ]]; then
     cp -r "$libs/licenses/." "$appdir/usr/share/doc/"
 fi
 install -Dm644 LICENSE "$appdir/usr/share/doc/cut-craft/LICENSE"
+install -Dm644 -t "$appdir/usr/share/doc/cut-craft/credits" credits/*.md
 install -m755 packaging/linux/AppRun "$appdir/AppRun"
 cp packaging/linux/family.yax.CutCraft.desktop "$appdir/"
 rsvg-convert -w 256 -h 256 assets/cut-craft.svg -o "$appdir/family.yax.CutCraft.png"
@@ -60,6 +61,7 @@ cp "$program" "$stage/cut-craft"
 cp assets/cut-craft.svg "$stage/"
 cp packaging/linux/family.yax.CutCraft.desktop "$stage/"
 cp LICENSE "$stage/"
+cp -r credits "$stage/"
 flatpak-builder --user --force-clean --repo=dist/flatpak-repo dist/flatpak-build \
     packaging/linux/family.yax.CutCraft.yml
 flatpak build-bundle dist/flatpak-repo "dist/cut-craft-${version}-x86_64.flatpak" family.yax.CutCraft \

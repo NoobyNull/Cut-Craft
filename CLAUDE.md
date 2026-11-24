@@ -10,3 +10,17 @@ every tool or setting you added or changed, or set its `reviewed:` date. The ste
 `scripts/help-touched origin/main`: it names every page the change still owes.
 
 Never name other CAD/CAM programs in anything a user sees (tests check this).
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues on `NoobyNull/Cut-Craft`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

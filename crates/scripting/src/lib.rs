@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 mod gadget;
 pub mod outside;
-pub use gadget::{GadgetCommand, load_gadget};
+pub use gadget::{GadgetCommand, Waiting, load_gadget, waiting_gadget};
 pub use outside::{Outside, run_outside_gadget};
 
 /// How much a gadget may do before it is stopped.

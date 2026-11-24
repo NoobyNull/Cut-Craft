@@ -358,12 +358,27 @@ pub struct Reporter {
     pub computer_details: bool,
     /// A crash log on its way to the service, and how that went.
     crash_sending: Option<(String, mpsc::Receiver<Result<(), relay::Failure>>)>,
+    /// [`Host::translation`], as it said when the form opened (`translation_asked`).
+    translation: Option<(String, String)>,
+    translation_asked: bool,
+}
+
+/// What the report form says, in a language pack, about a wrong or missing word.
+pub fn wording_note(language: &str) -> String {
+    format!(
+        "A wrong or missing word in {language}? The {language} pack is written by volunteers, \
+         so that goes to them, not here:"
+    )
 }
 
 /// What the app gives a report: its state, and a picker for pictures to add.
 pub struct Host<'a> {
     pub state: &'a dyn Fn() -> String,
     pub pick_pictures: &'a dyn Fn() -> Vec<PathBuf>,
+    /// The language pack in use, if any: its name and where to report a wrong or missing
+    /// word. Language packs are community supported, so wording goes to their translators
+    /// rather than to the app's own reports. Asked once each time the form opens.
+    pub translation: &'a dyn Fn() -> Option<(String, String)>,
 }
 
 impl Reporter {
@@ -387,6 +402,8 @@ impl Reporter {
             retry_dir: None,
             computer_details: true,
             crash_sending: None,
+            translation: None,
+            translation_asked: false,
         }
     }
 
@@ -581,13 +598,25 @@ impl Reporter {
 
     fn form(&mut self, ctx: &egui::Context, host: &Host) {
         let Some(draft) = &mut self.draft else {
+            (self.translation, self.translation_asked) = (None, false);
             return;
         };
+        if !self.translation_asked {
+            (self.translation, self.translation_asked) = ((host.translation)(), true);
+        }
+        let translation = self.translation.clone();
         let sending = self.sending.is_some();
         let (mut open, mut submit_now, mut cancel) = (true, false, false);
         let size = ctx.content_rect().size() * egui::vec2(FORM_SHARE, DIALOG_HEIGHT_SHARE);
         let id = egui::Id::unique("report_a_bug");
         dialog(ctx, id, "Report a Bug", size, &mut open, |ui| {
+            if let Some((language, url)) = &translation {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(wording_note(language));
+                    ui.hyperlink_to("Tell its translators", url);
+                });
+                ui.separator();
+            }
             ui.label("Title");
             ui.add(egui::TextEdit::singleline(&mut draft.title).desired_width(f32::INFINITY));
             ui.label("What went wrong, and what you expected");
@@ -868,6 +897,7 @@ mod tests {
         let host = Host {
             state: &|| "state".into(),
             pick_pictures: &Vec::new,
+            translation: &|| None,
         };
         let at = egui::pos2(100.0, 100.0);
         let mut texts = vec![];
@@ -923,6 +953,7 @@ mod tests {
         let host = Host {
             state: &|| "Status: Opened /home/sam/Jobs/sign.ccjob".into(),
             pick_pictures: &Vec::new,
+            translation: &|| None,
         };
         reporter.open(&host);
         let draft = reporter.draft.as_mut().unwrap();
@@ -956,6 +987,7 @@ mod tests {
         let host = Host {
             state: &|| "state".into(),
             pick_pictures: &Vec::new,
+            translation: &|| None,
         };
         let crash = "Cut Craft 0.6.3 on linux crashed: panicked at src/a.rs:1:1:\nboom\n\n\
                      Backtrace:\n  at /home/sam/src/a.rs\n";
@@ -1004,10 +1036,78 @@ mod tests {
     }
 
     #[test]
+    fn in_a_language_pack_the_form_sends_wording_to_its_translators() {
+        let ctx = egui::Context::default();
+        ctx.set_embed_viewports(true);
+        let texts_of = |reporter: &mut Reporter, host: &Host| -> Vec<String> {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+                ..Default::default()
+            };
+            let mut output = ctx.run_pass(input, |ctx| {
+                reporter.frame(ctx, host);
+            });
+            output.textures_delta.clear();
+            (output.shapes.iter())
+                .filter_map(|c| match &c.shape {
+                    egui::epaint::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let asked = std::cell::Cell::new(0);
+        let translation = || {
+            asked.set(asked.get() + 1);
+            Some((
+                "Русский".to_owned(),
+                "https://github.com/o/t/issues".to_owned(),
+            ))
+        };
+        let host = Host {
+            state: &|| "state".into(),
+            pick_pictures: &Vec::new,
+            translation: &translation,
+        };
+        let mut reporter = Reporter::new("me/app", None);
+        reporter.open(&host);
+        let mut texts = vec![];
+        for _ in 0..3 {
+            texts = texts_of(&mut reporter, &host);
+        }
+        assert!(texts.contains(&wording_note("Русский")), "{texts:?}");
+        assert!(
+            texts.iter().any(|t| t == "Tell its translators"),
+            "{texts:?}"
+        );
+        assert_eq!(asked.get(), 1, "asked once while the form is open");
+        // in English there is nothing to send elsewhere
+        let english = Host {
+            state: &|| "state".into(),
+            pick_pictures: &Vec::new,
+            translation: &|| None,
+        };
+        reporter.draft = None;
+        texts_of(&mut reporter, &english);
+        reporter.open(&english);
+        for _ in 0..3 {
+            texts = texts_of(&mut reporter, &english);
+        }
+        assert!(texts.iter().any(|t| t == "Title"), "{texts:?}");
+        assert!(
+            !texts.iter().any(|t| t == "Tell its translators"),
+            "{texts:?}"
+        );
+    }
+
+    #[test]
     fn a_crash_log_names_the_computer_only_when_that_is_ticked() {
         let host = Host {
             state: &|| "state".into(),
             pick_pictures: &Vec::new,
+            translation: &|| None,
         };
         let crash = "Cut Craft 0.6.16 on Debian GNU/Linux 12 x86_64 crashed: panicked at \
                      src/a.rs:1:1:\nboom\n\nBacktrace:\n  0: a\n\nSystem: Debian GNU/Linux 12 \
@@ -1036,6 +1136,7 @@ mod tests {
         let host = Host {
             state: &|| "state".into(),
             pick_pictures: &Vec::new,
+            translation: &|| None,
         };
         let at = egui::pos2(100.0, 100.0);
         let frame = |events, claim_it: bool, reporter: &mut Reporter| {

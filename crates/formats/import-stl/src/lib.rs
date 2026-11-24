@@ -102,10 +102,10 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
     // the grid in bands of rows, one per core, each thread raising its own band
     // ponytail: every thread scans every triangle for its band; an index by row if models of
     // millions of faces drag
-    let threads = cut_craft_core::simulation::cores();
+    let threads = cut_craft_core::work::cores();
     let band = rows.div_ceil(threads.min(rows));
     let index = |v: f64, n: usize| (v.max(0.0) as usize).min(n.saturating_sub(1));
-    std::thread::scope(|scope| {
+    cut_craft_core::work::scope(|scope| {
         for (i, (heights, steep)) in k.heights[..columns * rows]
             .chunks_mut(band * columns)
             .zip(steep.chunks_mut(band * columns))
@@ -113,7 +113,7 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
         {
             let first = i * band;
             let last = first + heights.len() / columns - 1;
-            scope.spawn(move || {
+            cut_craft_core::work::spawn(scope, move || {
                 for [a, b, c] in triangles {
                     let (ab, ac) = (b - a, c - a);
                     let det = ab.x * ac.y - ab.y * ac.x;

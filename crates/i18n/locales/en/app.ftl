@@ -130,6 +130,13 @@ border-saved = Saved "{ $name }" in your Library under Generated ▸ Borders. Do
 shortcuts-change = Change Shortcuts…
     .tooltip = Set your own keys, or the mouse's thumb buttons and wheel click, in Options ▸ Mouse and Shortcuts
 
+# Help ▸ Credits.
+credits-intro = Cut Craft is built with free libraries, pictures and icons made by other people. Thank you to all of them. Each keeps its own licence, shown here in full: click a line to read it.
+credits-search = Search by library or licence name
+credits-showing = Showing { $shown } of { $total }
+credits-none = Nothing matches "{ $search }". Try part of a library's name, such as serde, or a licence, such as MIT.
+credits-more = { $names } and { $count } more
+
 # Help ▸ About.
 about-name = Cut Craft
 about-version = Version { $version }
@@ -137,6 +144,8 @@ about-what = 2D and 3D design and CNC toolpaths.
 about-license = License
 about-read-license = Read the full license
 about-acknowledgements = Acknowledgements
+about-credits = Credits…
+    .tooltip = The libraries, pictures and icons Cut Craft is built with, and their licences
 about-contributors = Contributors on GitHub
 about-commits = { $count ->
     [one] { $count } commit

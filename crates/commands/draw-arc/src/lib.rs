@@ -3,7 +3,7 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, Segment, polar};
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +46,7 @@ impl Command for DrawArc {
             group: "Create Vectors",
             icon: "drawing/create_vectors/draw_arc.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

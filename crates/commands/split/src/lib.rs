@@ -4,7 +4,7 @@
 use cut_craft_core::component::chosen_or_baked;
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::inside;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct Split;
 
@@ -18,6 +18,7 @@ impl Command for Split {
             group: "Modeling",
             icon: "modeling/split_selected_component.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

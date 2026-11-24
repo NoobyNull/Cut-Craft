@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-21
+reviewed: 2026-11-23
 see-also: move_handle, node_edit, span_to_line, span_to_arc, smooth_point
 ---
 

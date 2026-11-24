@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 fn meta(label: &'static str, icon: &'static str, shortcut: &'static str) -> Meta {
     Meta {
@@ -12,6 +12,7 @@ fn meta(label: &'static str, icon: &'static str, shortcut: &'static str) -> Meta
         group: "Align",
         icon,
         shortcut,
+        form: Form::Apply,
     }
 }
 

@@ -3,7 +3,7 @@
 //! Other Side).
 
 use cut_craft_core::document::{Document, StoredVector};
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct CopyToOtherSide;
 
@@ -17,6 +17,7 @@ impl Command for CopyToOtherSide {
             group: "Edit",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

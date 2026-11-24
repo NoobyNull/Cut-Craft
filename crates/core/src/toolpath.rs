@@ -78,11 +78,13 @@ pub struct Toolpath {
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
-const MODEL_STRATEGIES: [&str; 4] = [
+const MODEL_STRATEGIES: [&str; 6] = [
     "3d_roughing_toolpath",
     "3d_finishing_toolpath",
     "3d_pencil_toolpath",
     "sketch_carving_toolpath",
+    "rotary_machining_toolpath",
+    "rotary_lathe_toolpath",
 ];
 
 /// The key a toolpath's own preview colour is kept under in its params: `[r, g, b]`, or
@@ -91,6 +93,11 @@ pub const PREVIEW_COLOUR: &str = "preview_colour";
 
 /// The key a toolpath's notes for the Toolpath Summary are kept under in its params.
 pub const SUMMARY_NOTES: &str = "summary_notes";
+
+/// The key a toolpath keeps what it said when it was made under, in its params: what of the
+/// model it could not cut (a spot left rough, a model in the tailstock). Made afresh each
+/// time it is calculated, and said again in the checks before cutting.
+pub const MADE_NOTES: &str = "made_notes";
 
 /// What a toolpath keeps in its params that is its own, not one of its settings: kept when
 /// it is recalculated.
@@ -119,6 +126,14 @@ impl Toolpath {
         self.params
             .get(SUMMARY_NOTES)
             .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+    }
+
+    /// What it said when it was made that the cut will show ([`MADE_NOTES`]).
+    pub fn made_notes(&self) -> Vec<String> {
+        self.params
+            .get(MADE_NOTES)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or_default()
     }
 

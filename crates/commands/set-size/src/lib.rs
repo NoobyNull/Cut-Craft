@@ -6,7 +6,7 @@ use cut_craft_core::ensure_positive;
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::params::Anchor;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -85,6 +85,7 @@ impl Command for SetSize {
             group: "Transform Objects",
             icon: "drawing/edit_objects/set_size.png",
             shortcut: "T",
+            form: Form::Apply,
         }
     }
 

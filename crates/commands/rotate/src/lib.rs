@@ -3,7 +3,7 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::params::Anchor;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +37,7 @@ impl Command for Rotate {
             group: "Transform Objects",
             icon: "drawing/edit_objects/rotate.png",
             shortcut: "R",
+            form: Form::Apply,
         }
     }
 

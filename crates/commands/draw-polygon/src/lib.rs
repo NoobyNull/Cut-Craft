@@ -4,7 +4,9 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, polar};
 use cut_craft_core::glam::DVec2;
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
+use cut_craft_core::{
+    Change, Command, CommandError, Drag, Form, Interactive, Meta, ensure_positive,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +48,7 @@ impl Command for DrawPolygon {
             group: "Create Vectors",
             icon: "drawing/create_vectors/draw_polygon.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

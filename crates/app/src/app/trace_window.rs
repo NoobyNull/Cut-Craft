@@ -229,13 +229,11 @@ fn start(picture: &Picture, params: Value, ctx: &egui::Context) -> Option<(Value
     let (asked, wake) = (params.clone(), ctx.clone());
     // the colours come from the copy traced: it only holds colours the picture has (its
     // pixels are picked, not blended), so its swatches are near the whole picture's
-    let spawned = std::thread::Builder::new()
-        .name("trace preview".into())
-        .spawn(move || {
-            let made = preview(&traced, scale, swatches, asked);
-            let _ = tx.send(made);
-            wake.request_repaint();
-        });
+    let spawned = cut_craft_core::work::background("trace preview", move || {
+        let made = preview(&traced, scale, swatches, asked);
+        let _ = tx.send(made);
+        wake.request_repaint();
+    });
     spawned.ok().map(|_| (params, rx))
 }
 
