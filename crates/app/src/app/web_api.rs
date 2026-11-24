@@ -293,7 +293,7 @@ impl CutCraftApp {
         let mut seen = BTreeSet::new();
         let mut list = vec![];
         let tools = self
-            .tools()
+            .tool_model()
             .all_groups()
             .into_iter()
             .flat_map(|g| g.tools.iter().map(|&t| (t.to_owned(), self.tool_label(t))));
@@ -317,7 +317,7 @@ impl CutCraftApp {
         let known = self.registry.get(action).is_some()
             || menu_items(self).iter().any(|(id, _)| id == action)
             || self
-                .tools()
+                .tool_model()
                 .all_groups()
                 .iter()
                 .any(|g| g.tools.contains(&action));

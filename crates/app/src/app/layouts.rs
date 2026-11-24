@@ -47,7 +47,7 @@ impl CutCraftApp {
     }
 
     /// The tools every layout shows, read the same way by each ([`crate::tool_model`]).
-    pub(super) fn tools(&self) -> ToolModel<'_> {
+    pub(super) fn tool_model(&self) -> ToolModel<'_> {
         ToolModel::new(&self.toolbar)
     }
 
@@ -77,7 +77,7 @@ impl CutCraftApp {
     /// The available tools whose names contain `text` (any case), in group order.
     pub(super) fn search_matches(&self, text: &str) -> Vec<(&'static str, String)> {
         let text = text.trim().to_lowercase();
-        self.tools()
+        self.tool_model()
             .all_groups()
             .iter()
             .flat_map(|g| g.tools.iter().copied())
@@ -178,7 +178,7 @@ impl CutCraftApp {
 
     /// A Rail row's right-click menu, as every layout gives a tool in a list by name.
     pub(super) fn row_menu(&self, id: &str) -> Vec<gui::MenuItem> {
-        self.tools()
+        self.tool_model()
             .menu(id, Place::Row, &self.options.favourites, false)
     }
 
@@ -216,7 +216,7 @@ impl CutCraftApp {
             self.invoke(ui.ctx(), &action);
         }
         if let Some(id) = clicked {
-            self.pick(ui.ctx(), self.tools().kind_of(id), id);
+            self.pick(ui.ctx(), self.tool_model().kind_of(id), id);
         }
         clicked.is_some()
     }
@@ -228,7 +228,7 @@ impl CutCraftApp {
         let spacing = &style.spacing;
         let margin = spacing.item_spacing.y;
         let edge = TOOL_ICON_ROWS * spacing.interact_size.y;
-        let groups = self.tools().all_groups();
+        let groups = self.tool_model().all_groups();
         let gadgets = self.gadget_tools();
         // what was installed can be removed while its list is open
         self.rail_gadgets &= !gadgets.is_empty();
@@ -283,7 +283,7 @@ impl CutCraftApp {
         let list = if self.rail_favourites {
             Some((
                 "Favourites",
-                self.tools().every_favourite(&self.options.favourites),
+                self.tool_model().every_favourite(&self.options.favourites),
             ))
         } else if self.rail_gadgets {
             Some((GADGETS, gadgets))
@@ -493,7 +493,7 @@ impl CutCraftApp {
                 (
                     page,
                     name,
-                    self.tools().favourites(page, &self.options.favourites),
+                    self.tool_model().favourites(page, &self.options.favourites),
                 )
             })
             .filter(|(_, _, tools)| !tools.is_empty())

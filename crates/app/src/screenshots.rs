@@ -901,7 +901,7 @@ fn rail(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.view = View::TwoD;
     app.options.general.layout = WindowLayout::Rail;
     app.rail_group = app
-        .tools()
+        .tool_model()
         .all_groups()
         .iter()
         .position(|g| g.name == "Create Vectors");

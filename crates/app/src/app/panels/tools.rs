@@ -269,7 +269,7 @@ impl CutCraftApp {
             return;
         }
         // in the order picked; a tool no longer on the page is left out
-        let tools = self.tools().favourites(page, &self.options.favourites);
+        let tools = self.tool_model().favourites(page, &self.options.favourites);
         if tools.is_empty() {
             ui.weak(tr!("panels-no-favourites-yet-right-click"));
             if ui.button(tr!("panels-show-all-tools")).clicked() {
@@ -380,7 +380,7 @@ impl CutCraftApp {
             Place::Grid
         };
         self.popup(response, || {
-            self.tools()
+            self.tool_model()
                 .menu(id, place, &self.options.favourites, folded)
         })
     }
