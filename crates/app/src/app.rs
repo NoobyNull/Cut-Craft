@@ -66,6 +66,7 @@ mod node_editing;
 mod notes_panel;
 mod options_apply;
 mod options_window;
+mod pace;
 mod page_layout;
 mod panels;
 mod passes;
@@ -267,12 +268,14 @@ impl SurfaceGpu {
             return;
         }
         let (wrap, sides, ctx) = (self.key.wrap, self.key.sides, ctx.clone());
-        let job = std::thread::spawn(move || {
+        let job = cut_craft_core::work::background("3d view detail", move || {
             let level = level_of(&view3d::coarse(&fine, cells), cells, wrap, sides, solid);
             ctx.request_repaint();
             level
         });
-        self.making.push((cells, job));
+        if let Ok(job) = job {
+            self.making.push((cells, job));
+        }
     }
 }
 
@@ -986,6 +989,8 @@ struct CutCraftApp {
     /// Picks the 3D view's detail while it moves from how quickly frames come (Options ▸
     /// Adjust detail to keep the view smooth).
     pacer: crate::frame_rate::Pacer,
+    /// How briskly a calculation is going, for the status bar's Crawl / Walk / Run / Sprint.
+    gauge: cut_craft_core::work::Gauge,
     /// The detail the 3D view draws at this frame, and whether it is moving; the frame
     /// (`egui::Context::cumulative_pass_nr`) that was judged.
     detail_3d: (crate::options::Detail, bool),
