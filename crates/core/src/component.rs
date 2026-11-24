@@ -136,6 +136,20 @@ impl Component {
             .collect()
     }
 
+    /// [`Self::solid`] moved `along` the turning axis and turned `turn` radians round it,
+    /// the way A turns.
+    pub fn solid_moved(&self, along: f64, turn: f64) -> Vec<[glam::DVec3; 3]> {
+        let (sin, cos) = turn.sin_cos();
+        self.solid_triangles()
+            .into_iter()
+            .map(|t| {
+                t.map(|v| {
+                    glam::DVec3::new(v.x + along, v.y * cos + v.z * sin, v.z * cos - v.y * sin)
+                })
+            })
+            .collect()
+    }
+
     /// Keeps `triangles` as [`Self::solid`].
     #[expect(clippy::cast_possible_truncation, reason = "kept to a micrometre")]
     pub fn set_solid(&mut self, triangles: &[[glam::DVec3; 3]]) {
