@@ -63,7 +63,7 @@ tool-by-tool state is `docs/tool-inventory.md`.
 - Machine-specific formats
 
 ## Advanced Features
-- Plugin architecture *(out of scope unless decided: see ROADMAP, Decisions)*
+- Plugin architecture *(out of scope unless decided: see docs/feature-status-2026-11-01.md, Decisions)*
 - Scripting support: Lua 5.4 gadgets in `crates/scripting` (sandboxed, one undo step per run; gadgets will install as add-ons)
 - Advanced modeling tools
 - Simulation and verification

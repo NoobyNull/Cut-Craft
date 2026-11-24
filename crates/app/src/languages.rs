@@ -3,8 +3,8 @@
 //! add-on and never with Cut Craft itself. Edit ▸ Options ▸ Language picks one; English is
 //! built in, and any words a pack lacks show in English.
 
-use cut_craft_i18n::Catalogue;
-use cut_craft_updater::addon::{self, Manifest};
+use cut_craft_i18n::{Catalogue, tr};
+use cut_craft_updater::addon::{self, Manifest, Repo};
 use std::path::Path;
 
 /// What Options keeps for the test language: English stretched and accented, to show where
@@ -23,6 +23,10 @@ pub struct Pack {
     pub version: String,
     /// Signed with Cut Craft's release key: official.
     pub signed: bool,
+    /// The volunteers who translated it, from its `addon.toml`.
+    pub translators: Vec<String>,
+    /// The repository it was installed from, when that is recorded.
+    pub from: Option<Repo>,
 }
 
 /// The language packs installed in `dir` (the add-ons folder), by id.
@@ -37,13 +41,16 @@ pub fn installed(dir: &Path) -> Vec<Pack> {
             let text = std::fs::read_to_string(e.path().join(addon::MANIFEST)).ok()?;
             let manifest = Manifest::parse(&text).ok()?;
             let code = manifest.language.filter(|_| manifest.kind == "language")?;
-            let signed = addon::installed(dir, &id).is_some_and(|r| r.signed);
+            let record = addon::installed(dir, &id);
+            let signed = record.as_ref().is_some_and(|r| r.signed);
             Some(Pack {
                 id,
                 name: manifest.name,
                 code,
                 version: manifest.version,
                 signed,
+                translators: manifest.translators,
+                from: record.map(|r| r.repo),
             })
         })
         .collect();
@@ -127,6 +134,36 @@ pub fn coverage(dir: &Path, pack: &Pack) -> u32 {
         let (done, total) = catalogue.coverage();
         percent(done, total)
     })
+}
+
+/// What is said about `pack` beside its name: an official pack is "Official, community
+/// supported" (checked and signed, but its words are written and kept up by volunteers),
+/// then who translated it, then how much of Cut Craft it covers once `percent` is known. One
+/// that is not signed gets no "Official" line; it is marked not official where it shows.
+pub fn support_lines(pack: &Pack, percent: Option<u32>) -> Vec<String> {
+    let mut lines = vec![];
+    if pack.signed {
+        lines.push(tr!("language-community-supported"));
+    }
+    if !pack.translators.is_empty() {
+        lines.push(tr!(
+            "language-translated-by",
+            names = pack.translators.join(", ")
+        ));
+    }
+    if let Some(percent) = percent {
+        lines.push(tr!("language-coverage", percent = percent));
+    }
+    lines
+}
+
+/// Where to report a wrong or missing word in `pack`: the Issues of the repository it came
+/// from, or of the translations' own when that is not recorded.
+pub fn wording_issues(pack: &Pack) -> String {
+    pack.from.as_ref().map_or_else(
+        || format!("https://github.com/{}/issues", addon::TRANSLATIONS),
+        addon::wording_issues,
+    )
 }
 
 fn percent(done: usize, total: usize) -> u32 {
@@ -216,6 +253,54 @@ mod tests {
         assert!(use_chosen(Some(&dir), "").is_ok());
         assert!(use_chosen(None, TEST_LANGUAGE).is_ok());
         cut_craft_i18n::use_language(None);
+    }
+
+    #[test]
+    fn an_official_pack_says_it_is_community_supported_and_who_made_it() {
+        let dir = folder("support", true);
+        let ru = dir.join("language-ru").join(addon::MANIFEST);
+        let text = std::fs::read_to_string(&ru).unwrap();
+        std::fs::write(&ru, format!("{text}\ntranslators = [\"Ivan\", \"Olga\"]")).unwrap();
+        let pack = &installed(&dir)[0];
+        assert_eq!(pack.translators, ["Ivan", "Olga"]);
+        assert_eq!(
+            support_lines(pack, Some(92)),
+            [
+                "Official, community supported",
+                "Translated by Ivan, Olga",
+                "92% translated"
+            ]
+        );
+        // wording problems go to the repository it came from
+        assert_eq!(
+            wording_issues(pack),
+            "https://github.com/NoobyNull/CutCraft-Russian/issues"
+        );
+        // no names, no "Translated by"; no percentage until it is known
+        let mut quiet = pack.clone();
+        quiet.translators.clear();
+        assert_eq!(
+            support_lines(&quiet, None),
+            ["Official, community supported"]
+        );
+        // one that is not signed is not official, which is said elsewhere
+        let unsigned = &installed(&folder("support-unsigned", false))[0];
+        assert!(
+            !support_lines(unsigned, None)
+                .iter()
+                .any(|l| l.contains("Official"))
+        );
+    }
+
+    #[test]
+    fn a_pack_with_no_record_reports_wording_to_the_translations() {
+        let dir = folder("support-norecord", true);
+        let mut pack = installed(&dir)[0].clone();
+        pack.from = None;
+        assert_eq!(
+            wording_issues(&pack),
+            format!("https://github.com/{}/issues", addon::TRANSLATIONS)
+        );
     }
 
     #[test]

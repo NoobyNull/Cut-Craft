@@ -252,6 +252,7 @@ impl CutCraftApp {
             spinning_3d: None,
             picked_outline: None,
             pacer: crate::frame_rate::Pacer::default(),
+            gauge: cut_craft_core::work::Gauge::default(),
             detail_3d: (crate::options::Detail::default(), false),
             paced_pass: u64::MAX,
             orbit: view3d::Orbit::default(),
@@ -293,6 +294,7 @@ impl CutCraftApp {
             recent_path: None,
             recovery_path: None,
             recovery_lock: None,
+            work_kept_for_update: false,
             autosaved: (0, 0.0),
             autosave: None,
             title: String::new(),
@@ -807,7 +809,7 @@ impl CutCraftApp {
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
                 self.kept_playback = None;
                 // the Preview tab's detail goes back to Options' default
-                self.display.detail = self.options.view_3d.preview_detail.min(100);
+                self.display.detail = self.options.performance.preview_detail.min(100);
                 self.status
                     .set_message("Preview reset: Undo Last Preview brings it back");
             }

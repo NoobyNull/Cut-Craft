@@ -4,8 +4,9 @@
 //! the window has a card, and the kernels' callers go through [`compute`].
 
 use crate::geometry::Point;
-use crate::simulation::{Material, by_rows, each};
+use crate::simulation::Material;
 use crate::toolpath::{Move, Tool};
+use crate::work::{by_rows, each};
 use glam::DVec3;
 use std::sync::{Arc, RwLock};
 

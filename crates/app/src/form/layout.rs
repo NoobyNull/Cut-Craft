@@ -16,7 +16,9 @@ pub(super) fn show_within(
     let shown: Vec<&Field> = fields
         .iter()
         .copied()
-        .filter(|f| f.when.as_ref().is_none_or(|w| w.shown(top)))
+        // a section's own settings decide first, as for greying ([`super::When::judged`]):
+        // a setting shown while its neighbour is ticked follows that neighbour
+        .filter(|f| f.when.as_ref().is_none_or(|w| w.judged(params, top)))
         .collect();
     let mut changed = false;
     // neighbours in one tab strip, or one group, make a block; the rest stand as they are

@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-17
-see-also: embellish, texture_area, vector_texture
+reviewed: 2026-11-24
+see-also: embellish, texture_area, vector_texture, performance
 ---
 
 ## Steps
@@ -22,3 +22,7 @@ see-also: embellish, texture_area, vector_texture
 4. Raised scrolls and leaves fill the rectangle, ready to carve.
 
    ![Step 4](pictures/decorative_relief/step-4.png)
+
+Raising the pieces is spread over the processor's cores, as many as
+[Options ▸ Performance](help:performance) allows, so your other programs stay smooth while
+it works.
