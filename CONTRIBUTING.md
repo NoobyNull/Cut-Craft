@@ -118,10 +118,12 @@ boxes to tick):
 
 - **The timeline.** Put the pull request, or the issue it fixes, on the
   [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) with a start date
-  and a target date, and keep its status right. When it merges, mark it done.
-- **The release mirror.** Power-Whittle/Cut-Craft gets every release's tag, `main` and files from
-  `.github/workflows/publish-release.yml`. Never commit to the mirror's `main` by hand: the next
-  release could no longer push `main` there. Change its description, rulesets or settings when a
+  and a target date, and keep its status right. When it merges, mark it done. The board needs
+  write access; without it, ask a maintainer in the pull request to add or update it for you.
+- **The release mirror.** Power-Whittle/Cut-Craft is a read-only copy for releases. Once the
+  release workflow's mirror step lands (it pushes each release's tag and `main` there and adds
+  the same files), never commit to the mirror's `main` by hand: the next release could no longer
+  push `main` there. Change its description, rulesets or settings when a
   change here makes them wrong (for example a new release step or a renamed branch).
 - **The add-ons and the org.** When a change touches where add-ons, updates or links point
   (the updater's homes, add-on repositories, links shown in the app), check the matching
