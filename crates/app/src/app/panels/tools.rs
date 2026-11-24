@@ -304,6 +304,21 @@ impl CutCraftApp {
         page: Page,
         among: bool,
     ) {
+        // a laser or rotary toolpath only on a machine that has one; a group left with
+        // nothing offered is left out whole
+        let sections: Vec<(&str, Vec<&'static str>)> = sections
+            .iter()
+            .map(|(name, tools)| {
+                let tools = tools
+                    .iter()
+                    .copied()
+                    .filter(|id| self.offered(id))
+                    .collect();
+                (*name, tools)
+            })
+            .filter(|(_, tools): &(&str, Vec<_>)| !tools.is_empty())
+            .collect();
+        let sections = sections.as_slice();
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
         let folded = self.options.general.fold_tool_groups;
         let mut clicked = None;

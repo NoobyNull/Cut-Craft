@@ -165,7 +165,7 @@ impl Command for FlutingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/fluting_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

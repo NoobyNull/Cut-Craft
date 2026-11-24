@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: first_time_setup, pocket_toolpath, profile_toolpath, stepover, collisions, check_tool_numbers, check_makers_figures
 ---
 
@@ -11,7 +11,7 @@ see-also: first_time_setup, pocket_toolpath, profile_toolpath, stepover, collisi
 
    ![Step 1](pictures/tool_database/step-1.png)
 
-2. **My Tools** are the bits you own; the makers' catalogues below are for copying from. Click a bit to see its drawing and settings, or add your own. Every toolpath's **Select…** picks from My Tools, and brings that bit's feeds, speeds and depth per pass with it.
+2. **My Tools** are the bits you own; the makers' catalogues below are for copying from. Click a bit to see its drawing and settings, or add your own. Every toolpath's **Select…** picks from My Tools, and brings that bit's feeds, speeds and depth per pass with it. A laser toolpath's **Select…** lists only lasers, and every other toolpath's lists only bits.
 
    ![Step 2](pictures/tool_database/step-2.png)
 

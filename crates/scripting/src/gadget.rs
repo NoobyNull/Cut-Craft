@@ -4,7 +4,7 @@
 use crate::{ScriptError, describe, run_gadget};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
-use cut_craft_core::{Change, CommandError, Drag, DynCommand, Form, Meta, Registry};
+use cut_craft_core::{Change, CommandError, Drag, DynCommand, Form, Meta, Needs, Registry};
 use serde_json::{Map, Value, json};
 use std::sync::{Arc, OnceLock};
 
@@ -99,27 +99,64 @@ fn read_gadget(file_name: &str, source: &str) -> Result<Read, ScriptError> {
         .as_str()
         .map_or_else(|| title_case(stem), str::to_owned);
     let (mut schema, defaults) = settings_schema(&settings).map_err(ScriptError::Syntax)?;
+    let form = form_of(&about).map_err(ScriptError::Syntax)?;
     if let Some(description) = about["description"].as_str() {
         schema["description"] = description.into();
     }
     // read once, when the user first may use it, and kept as long as the app runs
     let label: &'static str = Box::leak(label.into_boxed_str());
     Ok(Read {
-        meta: gadget_meta(label),
+        meta: gadget_meta(label, form),
         schema,
         defaults,
     })
 }
 
-/// A gadget's place in the menus: under Gadgets, called `label`.
-fn gadget_meta(label: &'static str) -> Meta {
+/// A gadget's place in the menus: under Gadgets, called `label`, with a `form` of its kind.
+fn gadget_meta(label: &'static str, form: Form) -> Meta {
     Meta {
         label,
         group: "Gadgets",
         icon: "",
         shortcut: "",
-        form: Form::Apply,
+        form,
     }
+}
+
+/// How the gadget's form behaves, from its `gadget` table's optional `form` and `needs`:
+/// `form = "apply"` (the default: it changes what is there), `"create"` (each press makes
+/// another) or `"toolpath"` (Calculate); a toolpath's `needs = "laser"` or `"rotary"` offers
+/// it only on a machine with one.
+fn form_of(about: &Value) -> Result<Form, String> {
+    let needs = match about["needs"].as_str() {
+        None => Needs::Nothing,
+        Some("laser") => Needs::Laser,
+        Some("rotary") => Needs::Rotary,
+        Some(other) => {
+            return Err(format!(
+                "needs = \"{other}\" is not a need: write \"laser\" or \"rotary\", or leave it out"
+            ));
+        }
+    };
+    let form = match about["form"].as_str() {
+        None | Some("apply") => Form::Apply,
+        Some("create") => Form::Create,
+        Some("toolpath") => return Ok(Form::Toolpath { needs }),
+        Some(other) => {
+            return Err(format!(
+                "form = \"{other}\" is not a kind of form: write \"apply\", \"create\" or \
+                 \"toolpath\", or leave it out"
+            ));
+        }
+    };
+    if needs != Needs::Nothing {
+        return Err(
+            "only a toolpath needs a laser or a 4th axis: add form = \"toolpath\", or \
+                    leave needs out"
+                .into(),
+        );
+    }
+    Ok(form)
 }
 
 /// The JSON schema of the form, and the settings it starts with, from a gadget's `settings`
@@ -254,7 +291,7 @@ impl DynCommand for GadgetCommand {
     fn meta(&self) -> Meta {
         self.read
             .get()
-            .map_or_else(|| gadget_meta(self.file_label), |r| r.meta)
+            .map_or_else(|| gadget_meta(self.file_label, Form::Apply), |r| r.meta)
     }
 
     fn schema(&self) -> Value {

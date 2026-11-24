@@ -57,10 +57,10 @@ pub(super) fn commit(kind: Form, page: Page, drawing: bool, made: bool) -> Optio
         Form::Remake { keeps_apply: true } if made => Some(Commit::Apply),
         Form::Remake { .. } => (!made).then_some(Commit::Create),
         _ if drawing => (!made).then_some(Commit::Create),
-        Form::Toolpath if page == Page::Toolpaths => Some(Commit::Calculate),
+        Form::Toolpath { .. } if page == Page::Toolpaths => Some(Commit::Calculate),
         Form::Generate => Some(Commit::Generate),
         Form::Create => Some(Commit::Create),
-        Form::Apply | Form::Toolpath => Some(Commit::Apply),
+        Form::Apply | Form::Toolpath { .. } => Some(Commit::Apply),
     }
 }
 

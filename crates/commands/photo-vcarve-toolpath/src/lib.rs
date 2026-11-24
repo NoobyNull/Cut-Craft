@@ -175,7 +175,7 @@ impl Command for PhotoVcarveToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/engraving.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

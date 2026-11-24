@@ -11,7 +11,7 @@ see-also: laser_picture_toolpath, profile_toolpath
 
    ![Step 1](pictures/laser_cut_fill_toolpath/step-1.png)
 
-2. On the Toolpaths page, press **Laser Cut / Fill** (under Laser).
+2. On the Toolpaths page, press **Laser Cut / Fill** (under Laser). It shows once **Laser fitted** is ticked in Machine Configuration.
 
    ![Step 2](pictures/laser_cut_fill_toolpath/step-2.png)
 
@@ -32,3 +32,13 @@ see-also: laser_picture_toolpath, profile_toolpath
    ![Step 6](pictures/laser_cut_fill_toolpath/step-6.png)
 
 When it looks right, [save it for your laser](help:save_toolpaths).
+
+## No Laser group on the Toolpaths page?
+
+The laser toolpaths show only for a machine with a laser. Open **Machine ▸ Machine
+Configuration**, tick **Laser fitted** for your machine and press **OK**: the **Laser** group
+appears. A laser toolpath already in a job stays in the list either way. If the active
+machine has no laser, its form says so in red at the foot, and you can still edit it.
+
+**Select…** on a laser toolpath shows only the lasers in the [Tool Database](help:tool_database);
+on any other toolpath it shows only bits.

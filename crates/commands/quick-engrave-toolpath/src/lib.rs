@@ -125,7 +125,7 @@ impl Command for QuickEngraveToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/quick_engrave.png",
             shortcut: "Ctrl+Q",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

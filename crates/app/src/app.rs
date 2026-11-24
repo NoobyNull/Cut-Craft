@@ -31,8 +31,8 @@ mod tool_sections;
 #[cfg(test)]
 use tool_sections::{KNIFE_LINE, held_name, tool_line};
 use tool_sections::{
-    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, is_laser_form,
-    put_listed, rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
+    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, put_listed,
+    rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
 };
 mod dialogs;
 pub(crate) use dialogs::message_dialog;
@@ -62,6 +62,7 @@ mod keyboard;
 mod language_page;
 mod layouts;
 mod mac;
+mod machine_fit;
 mod machine_setup;
 mod node_editing;
 mod notes_panel;

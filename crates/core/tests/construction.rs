@@ -21,7 +21,7 @@ impl Command for Centres {
             group: "Toolpath Operations",
             icon: "",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

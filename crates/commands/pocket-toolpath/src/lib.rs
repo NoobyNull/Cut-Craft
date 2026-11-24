@@ -216,7 +216,7 @@ impl Command for PocketToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/pocket_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

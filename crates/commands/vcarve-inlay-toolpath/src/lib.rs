@@ -88,7 +88,7 @@ impl Command for VcarveInlayToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/vcarve_inlay.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

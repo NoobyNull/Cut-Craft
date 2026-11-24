@@ -335,7 +335,7 @@ impl Command for MergedToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/merge_toolpaths.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

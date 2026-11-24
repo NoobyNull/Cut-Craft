@@ -30,7 +30,7 @@ use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{
     Move, MoveKind, Tool, ToolDatabase, ToolShape, Toolpath, follow, made_by,
 };
-use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, Needs, ensure_positive};
 use cut_craft_rotary::{Clearance, Cutter, Head, Mesh, Pose, Stock, Voxels};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -148,7 +148,9 @@ impl Command for RotaryMachiningToolpath {
             group: "3D Toolpaths",
             icon: "toolpaths/rotary_machining_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::Toolpath {
+                needs: Needs::Rotary,
+            },
         }
     }
 

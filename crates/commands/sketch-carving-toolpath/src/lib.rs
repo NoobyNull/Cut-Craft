@@ -249,7 +249,7 @@ impl Command for SketchCarvingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/sketch_carving.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

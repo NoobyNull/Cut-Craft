@@ -108,7 +108,7 @@ impl Command for PencilToolpath3d {
             group: "3D Toolpaths",
             icon: "toolpaths/3d_pencil_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

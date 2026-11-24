@@ -149,6 +149,30 @@ fn a_setting_without_a_default_starts_within_its_range() {
     );
 }
 
+/// A gadget says how its form behaves as a command does: Apply unless its `gadget` table
+/// says `form = "create"` or `"toolpath"`, a toolpath with what the machine `needs`.
+#[test]
+fn a_gadget_says_how_its_form_behaves() {
+    use cut_craft_core::{Form, Needs};
+    let form = |about: &str| {
+        let source = format!("gadget = {{ {about} }}\nfunction run() end");
+        load_gadget("g.lua", &source, commands()).map(|g| g.meta().form)
+    };
+    assert_eq!(form("").unwrap(), Form::Apply);
+    assert_eq!(form(r#"form = "create""#).unwrap(), Form::Create);
+    assert_eq!(form(r#"form = "toolpath""#).unwrap(), Form::TOOLPATH);
+    assert_eq!(
+        form(r#"form = "toolpath", needs = "laser""#).unwrap(),
+        Form::Toolpath {
+            needs: Needs::Laser
+        }
+    );
+    let wrong = form(r#"form = "live""#).err().unwrap().to_string();
+    assert!(wrong.contains("\"apply\", \"create\" or"), "{wrong}");
+    let wrong = form(r#"needs = "rotary""#).err().unwrap().to_string();
+    assert!(wrong.contains("add form = \"toolpath\""), "{wrong}");
+}
+
 /// A gadget whose top-level code would show it had run.
 const LOUD: &str = r#"error("this gadget's code ran")
 function run() end"#;

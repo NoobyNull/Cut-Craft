@@ -46,6 +46,10 @@ impl CutCraftApp {
                 .and_then(|m| m.slots.get(slot - 1).cloned().flatten())
                 .unwrap_or_default();
             self.select_tool(&current);
+            // a holder takes any tool, whatever form is open
+            if let Some(manager) = &mut self.tool_manager {
+                manager.lasers = None;
+            }
             self.picking = Some(super::PickFor::Holder(slot));
         }
     }

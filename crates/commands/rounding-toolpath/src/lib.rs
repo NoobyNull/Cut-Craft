@@ -109,7 +109,7 @@ impl Command for RoundingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/rounding_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

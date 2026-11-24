@@ -158,7 +158,7 @@ impl Command for FinishingToolpath3d {
             group: "3D Toolpaths",
             icon: "toolpaths/3d_finishing_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

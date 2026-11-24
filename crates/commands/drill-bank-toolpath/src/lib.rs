@@ -109,7 +109,7 @@ impl Command for DrillBankToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/drilling_toolpath.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

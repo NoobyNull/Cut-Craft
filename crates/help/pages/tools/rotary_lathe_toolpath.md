@@ -16,7 +16,7 @@ finished piece off.
 
    ![Step 1](pictures/rotary_lathe_toolpath/step-1.png)
 
-2. On the Toolpaths page, press **Rotary Lathe** (under 3D Toolpaths).
+2. On the Toolpaths page, press **Rotary Lathe** (under 3D Toolpaths). It shows once **4th axis** is ticked in Machine Configuration (see [The 4th axis and your firmware](help:rotary_firmware)).
 
    ![Step 2](pictures/rotary_lathe_toolpath/step-2.png)
 

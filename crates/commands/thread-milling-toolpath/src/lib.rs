@@ -458,7 +458,7 @@ impl Command for ThreadMillingToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/circular_pocket.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

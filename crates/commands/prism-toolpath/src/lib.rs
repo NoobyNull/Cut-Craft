@@ -113,7 +113,7 @@ impl Command for PrismToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/prism_carving.png",
             shortcut: "",
-            form: Form::Toolpath,
+            form: Form::TOOLPATH,
         }
     }
 

@@ -20,7 +20,7 @@ nick the side of a narrow ridge. This one keeps the bit clear of all of it.
 
    ![Step 1](pictures/rotary_machining_toolpath/step-1.png)
 
-2. On the Toolpaths page, press **4-Axis Rotary Machining** (under 3D Toolpaths).
+2. On the Toolpaths page, press **4-Axis Rotary Machining** (under 3D Toolpaths). It shows once **4th axis** is ticked in Machine Configuration (see [The 4th axis and your firmware](help:rotary_firmware)).
 
    ![Step 2](pictures/rotary_machining_toolpath/step-2.png)
 
