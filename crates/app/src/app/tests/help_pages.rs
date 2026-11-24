@@ -391,9 +391,11 @@ fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
     // hovering Draw Circle's button: its description, its next step, and the status bar's line
     h.app.options.general.fold_tool_groups = true;
     h.frame(vec![]);
-    flyout_arrow_naming(&mut h, "Draw Circle");
+    // the circles' flyout: Draw Circle, with Draw Ellipse under it
+    flyout_arrow_naming(&mut h, "Draw Ellipse");
     let hovered = guide::hovered(&h.ctx).expect("a hovered tool");
     assert_eq!(hovered.label, "Draw Circle");
+    assert!(hovered.about.contains("Center / Edge"), "{hovered:?}");
     assert!(
         hovered
             .next

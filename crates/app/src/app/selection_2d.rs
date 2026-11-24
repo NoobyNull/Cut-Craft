@@ -8,7 +8,9 @@ use super::{
     Canvas, Change, CutCraftApp, DAffine2, Drag, EntityId, Gesture, Grab, Handle, Overlay, Path,
     Point, Rect, ViewTool, egui, gui, handles,
 };
-use crate::flyout::DragWay;
+
+/// How a drawing tool's step ends: a shape it drew can be edited again.
+pub(super) const EDIT_DRAWN: &str = "; Shift-click one this tool drew to edit it";
 
 impl CutCraftApp {
     /// Transform mode while dragging: the selection as the handle would leave it, else the
@@ -269,8 +271,6 @@ impl CutCraftApp {
     /// What the tool in hand does next, for the status bar: a view tool's use, a drawing
     /// tool's next click or drag (a polyline's by how far it has got), or selecting's.
     pub(super) fn step_hint(&self, modes: Modes) -> Option<String> {
-        const EDIT: &str = "; Shift-click one this tool drew to edit it";
-        let drag = |what: &str| Some(format!("{what}{EDIT}"));
         match self.view_tool {
             Some(ViewTool::Pan) => return Some("Pan: drag to move the view".into()),
             Some(ViewTool::ZoomBox) => {
@@ -335,13 +335,9 @@ impl CutCraftApp {
         {
             return Some(step);
         }
-        // a toolbox variant says how it reads the drag
-        if let Some(form) = self.form.as_ref().filter(|f| f.way != DragWay::AsIs)
-            && let Some(variant) = crate::flyout::VARIANTS
-                .iter()
-                .find(|v| v.command == form.id && v.way == form.way)
-        {
-            return drag(variant.hint);
+        // a shape drawn another way says how it reads the drag
+        if let Some(step) = self.way_step() {
+            return Some(step);
         }
         if let Some(id) = self.drawing_tool() {
             return self.drawing_step(id, self.polyline.is_empty());
@@ -371,8 +367,7 @@ impl CutCraftApp {
     /// started); for any other drawing tool, its description and a drag; nothing for a tool
     /// that is not drawn with the mouse.
     pub(super) fn drawing_step(&self, id: &str, polyline_empty: bool) -> Option<String> {
-        const EDIT: &str = "; Shift-click one this tool drew to edit it";
-        let drag = |what: &str| Some(format!("{what}{EDIT}"));
+        let drag = |what: &str| Some(format!("{what}{EDIT_DRAWN}"));
         match id {
             "draw_polyline" if polyline_empty => Some(
                 "Draw Polyline: click the first point (drag for a curved span)".into(),

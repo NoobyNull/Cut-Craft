@@ -301,6 +301,7 @@ impl CutCraftApp {
             form.way = variant.way;
             form.label = variant.label;
             self.status.current_tool = self.tool_label(variant.id);
+            self.remember_way(variant.command, variant.id);
         }
     }
 

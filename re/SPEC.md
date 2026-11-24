@@ -207,6 +207,16 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   are Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle
   from Edge (the drag is the diameter). Flyouts were the default until Matthew found tools
   hidden under them too easy to miss (2026-11-09).
+- **One button per shape** (Cut Craft's own choice, not Aspire's) [inf]: a shape drawn more
+  than one way has one button, and **Draw from** at the top of its form picks the way:
+  Draw Rectangle from a **Corner** or the **Center**, Draw Circle from the **Center** or an
+  **Edge** (`WAYS` in `crates/app/src/flyout.rs`). The button opens the way picked last
+  (`options.shape_ways`), its tooltip names the ways, and the form says which way is in use, so
+  a beginner meets the choice where they draw rather than among look-alike icons. Only the
+  same shape drawn another way is folded in: Ellipse, Polygon and Star stay tools of their own.
+  Options ▸ General ▸ *Other ways to draw a shape* set to *As buttons* gives each way its button
+  back (the shape's own button then always draws the usual way). Find Tool, menus, favourites
+  and help name every way either way. Asked for by Matthew (2026-11-24).
 - **Design sub-tabs** (Cut Craft's own choice, not Aspire's) [inf]: Aspire's Drawing and
   Modeling tabs each run every group down one long page. Cut Craft's Design tab keeps File
   Operations and 2D View Control at the top, then five sub-tabs across the page: **Create**

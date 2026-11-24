@@ -312,7 +312,14 @@ impl CutCraftApp {
                 let tools = tools
                     .iter()
                     .copied()
-                    .filter(|id| self.offered(id))
+                    // favourites keep the other ways to draw a shape picked for them
+                    .filter(|id| {
+                        if among {
+                            self.offered(id)
+                        } else {
+                            self.has_button(id)
+                        }
+                    })
                     .collect();
                 (*name, tools)
             })
@@ -512,7 +519,7 @@ impl CutCraftApp {
         let explicit = self.explicit_icon(id);
         let button = self
             .icon_button(explicit, id, &label, edge)
-            .selected(self.status.current_tool == label);
+            .selected(self.tool_in_hand(id));
         let available = self.available(id);
         let response = tool_cell(ui, edge, |ui| ui.add_enabled(available, button));
         crate::marks::note(ui, &format!("tool:{id}"), response.rect);
@@ -546,7 +553,11 @@ impl CutCraftApp {
             .filter(|m| **m != id)
             .map(|m| self.tool_label(m))
             .collect();
-        let about = gui::about(id).unwrap_or(&label).to_owned();
+        let mut about = gui::about(id).unwrap_or(&label).to_owned();
+        // a shape drawn more than one way says where its other ways are
+        if let Some(ways) = self.ways_note(id) {
+            about = format!("{about}\n\n{ways}");
+        }
         let any_available = button.members.iter().any(|m| self.available(m));
         // the tip names the tools the flyout holds too, so they are found without opening it
         let tip = self.tool_tip(id, &tooltip(&about, &others));

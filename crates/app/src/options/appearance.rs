@@ -309,6 +309,17 @@ pub enum RibbonIcons {
     EveryTool,
 }
 
+/// Where the other ways to draw a shape are picked.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OtherWays {
+    /// One button for each shape; Draw from, at the top of its form, picks the way
+    #[default]
+    InTheForm,
+    /// A button of its own for each way too, beside the shape's
+    AsButtons,
+}
+
 /// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`,
 /// `docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

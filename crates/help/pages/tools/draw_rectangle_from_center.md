@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-24
 see-also: draw_rectangle, draw_circle, create_fillets
 ---
 
@@ -11,10 +11,21 @@ see-also: draw_rectangle, draw_circle, create_fillets
 
    ![Step 1](pictures/draw_rectangle_from_center/step-1.png)
 
-2. Under **Create**, press **Draw Rectangle From Centre** (it shares a button with Draw Rectangle).
+2. Under **Create**, press **Draw Rectangle**: one button draws every way.
 
    ![Step 2](pictures/draw_rectangle_from_center/step-2.png)
 
-3. Click the middle, then drag out to a corner, or type the size in the form.
+3. At the top of its form, under **Draw from**, pick **Center**. Its button opens that way next time.
 
    ![Step 3](pictures/draw_rectangle_from_center/step-3.png)
+
+4. Click the middle, then drag out to a corner, or type the size in the form.
+
+   ![Step 4](pictures/draw_rectangle_from_center/step-4.png)
+
+Pick **Corner** under **Draw from** to go back to drawing from one corner to the other.
+Holding **Alt** while you drag draws from the middle out too, just for that drag.
+
+Rather have a button of its own for each way? Set **Options ▸ General ▸ Other ways to draw a
+shape** to **As buttons** ([Settings](help:settings)), and **Draw Rectangle from Center** gets
+its own button beside Draw Rectangle again. Find Tool (**Ctrl+K**) finds it either way.

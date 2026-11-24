@@ -119,6 +119,12 @@ the Ribbon or takes it off. **General ▸ Ribbon icons** set to **Every Tool** s
 tool as an icon instead (**Compact** is the starting choice). When the window is too narrow for every group on a tab, the groups
 carry on along a second row, in the same order, so nothing is hidden.
 
+A shape you can draw more than one way has one button: **Draw Rectangle** (from a corner or
+the center) and **Draw Circle** (from the center or an edge). **Draw from**, at the top of its
+form, picks the way. In every layout, **General ▸ Other ways to draw a shape** set to **As buttons**
+gives [Draw Rectangle from Center](help:draw_rectangle_from_center) and
+[Draw Circle from Edge](help:draw_circle_from_edge) buttons of their own again.
+
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
 
 **[Rail](help:layout_rail)**: one icon for each tool group down the far left. Click one and

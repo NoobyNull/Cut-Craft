@@ -25,6 +25,10 @@ To see every tool as an icon instead, set **Options ▸ General ▸ Ribbon icons
 Tool**. The Ribbon then takes two rows on a wide screen. **Compact**, the starting choice,
 keeps it to one row on a 1920-wide screen.
 
+Draw Rectangle and Draw Circle each have one button with either choice: **Draw from**, at
+the top of the form, picks how the shape is drawn. See [Settings](help:settings) to give each
+way its own button.
+
 ## Choosing which tools show
 
 In a group's list, each tool has a pin. A pinned tool shows as an icon on the Ribbon; an

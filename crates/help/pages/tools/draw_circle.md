@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: draw_ellipse, draw_rectangle, pocket_toolpath
 ---
 
@@ -20,3 +20,7 @@ see-also: draw_ellipse, draw_rectangle, pocket_toolpath
    ![Step 3](pictures/draw_circle/step-3.png)
 
 Next, turn the circle into something the machine cuts: a [Pocket](help:pocket_toolpath) clears its inside, a [Profile](help:profile_toolpath) cuts round its edge.
+
+**Draw from**, at the top of the form, picks how the drag draws it: **Center** (from the
+middle out) or **Edge** (from one side straight across to the other; see
+[Draw Circle from Edge](help:draw_circle_from_edge)). The button opens the way you picked last.

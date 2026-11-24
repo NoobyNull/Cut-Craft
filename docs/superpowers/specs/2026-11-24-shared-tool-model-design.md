@@ -78,3 +78,14 @@ tools as fit under its name (two columns at least), which keeps each tab to one 
 wide; **Every Tool** shows them all. Either way the group's name (**Create Vectors ▾**) lists
 every tool in it by icon and name, each with a pin that puts it on the Ribbon or takes it
 off (`options.ribbon_pins`). The use counts that chose which group to fold are gone.
+
+## One button per shape (agreed 2026-11-24)
+
+A shape drawn more than one way has one button in every layout: Draw Rectangle (Corner or
+Center) and Draw Circle (Center or Edge). **Draw from** at the top of its form picks the way,
+and the button opens the way picked last (`options.shape_ways`). Only the same shape done
+another way is folded in, so Ellipse, Polygon and Star keep their own buttons. The ways are
+left off the tool pages, the Rail's lists and the Ribbon (icons and group lists, with either
+Ribbon icons choice) through `CutCraftApp::has_button`; Find Tool, menus and favourites keep
+them. **Options ▸ General ▸ Other ways to draw a shape** (`OtherWays`: **In the form** by
+default, or **As buttons**) puts their buttons back.

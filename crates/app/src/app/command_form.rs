@@ -20,6 +20,7 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
         let slots = self.slots();
         self.form_heading(ui);
+        self.way_picker(ui);
         let reach = self.form_reach();
         let room = self.placement_room();
         let Some(open) = &mut self.form else { return };

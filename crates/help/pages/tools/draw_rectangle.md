@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: draw_circle, select, profile_toolpath
 ---
 
@@ -24,3 +24,8 @@ see-also: draw_circle, select, profile_toolpath
    ![Step 4](pictures/draw_rectangle/step-4.png)
 
 Next, make a toolpath for it: a [Profile](help:profile_toolpath) cuts it out, a [Pocket](help:pocket_toolpath) clears its inside.
+
+**Draw from**, at the top of the form, picks how the drag draws it: **Corner** (from one
+corner to the opposite one) or **Center** (out from the middle, the same distance each way; see
+[Draw Rectangle from Center](help:draw_rectangle_from_center)). The button opens the way you
+picked last.

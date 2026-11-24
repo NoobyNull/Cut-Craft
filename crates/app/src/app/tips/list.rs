@@ -233,14 +233,15 @@ pub(in super::super) const TIPS: &[Tip] = &[
     tool(
         Area::Drawing,
         "draw_rectangle_from_center",
-        "To centre a rectangle on a point, use **Draw Rectangle from Center**: drag from the \
-         middle out to a corner.",
+        "To centre a rectangle on a point, pick **Center** under **Draw from** at the top of \
+         **Draw Rectangle**'s form, then drag from the middle out to a corner.",
     ),
     tool(
         Area::Drawing,
         "draw_circle_from_edge",
-        "**Draw Circle from Edge** drags from one side straight across to the other: handy when \
-         you know where a circle's edges must touch rather than where its centre is.",
+        "Pick **Edge** under **Draw from** in **Draw Circle**'s form to drag from one side \
+         straight across to the other: handy when you know where a circle's edges must touch \
+         rather than where its centre is.",
     ),
     tool(
         Area::Drawing,

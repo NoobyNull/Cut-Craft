@@ -552,6 +552,8 @@ impl CutCraftApp {
             "edit_toolpath" => self.edit_toolpath(),
             // a drawing tool's toolbox variant: its form, the drag read the variant's way
             id if crate::flyout::variant(id).is_some() => self.start_variant(id),
+            // a shape drawn more than one way: the way picked last in its form
+            id if !crate::flyout::ways_of(id).is_empty() => self.start_shape(id),
             // Edit Text: Draw Text opens on the selected text's settings
             "edit_text" => self.start_command("draw_text"),
             // The three Join icons: Join / Close Vectors their way

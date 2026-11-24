@@ -26,6 +26,7 @@ mod previews;
 mod rotary;
 mod saving_toolpaths;
 mod selecting;
+mod shape_ways;
 mod snapping_and_guides;
 mod tool_database;
 mod toolpath_list;

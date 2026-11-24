@@ -969,6 +969,8 @@ fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
 #[test]
 fn every_tool_shows_in_a_labelled_box_unless_groups_are_folded() {
     let mut h = Harness::new();
+    // the other ways to draw a shape with buttons of their own, as before they moved to its form
+    h.app.options.general.other_ways = crate::options::OtherWays::AsButtons;
     h.app.pages.set_pinned(Page::Design, true);
     h.frame(vec![]);
     h.frame(vec![]);
