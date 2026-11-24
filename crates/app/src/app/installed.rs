@@ -45,9 +45,72 @@ impl CutCraftApp {
             .map_or_default(crate::addons::installed_tools);
         // a pack installed or removed shows in Options ▸ Language
         self.language_packs = None;
+        self.relist_my_gadgets();
+    }
+
+    /// Gadgets ▸ My Gadgets listed again, as [`Self::installed_items`] has them now.
+    fn relist_my_gadgets(&mut self) {
         let items = self.installed_items();
         self.menus.set_my_gadgets(&items);
         self.start_menus.set_my_gadgets(&items);
+    }
+
+    /// Whether gadget `id` may run: Cut Craft's own and signed ones always; an unsigned one
+    /// once the user has said yes to it ([`crate::trust`]), asked now if they have not. One
+    /// still unread is read now, and takes its own name in the menus; one that turns out
+    /// broken says why in the status bar.
+    pub(super) fn may_run_gadget(&mut self, id: &str) -> bool {
+        let Some(gadget) = self.unsigned_gadgets.get(id) else {
+            return true;
+        };
+        if !self.trust.may_run(&gadget.code) {
+            return false;
+        }
+        let Some(waiting) = &gadget.waiting else {
+            return true;
+        };
+        match waiting.open() {
+            Ok(label) => {
+                if let Some(gadget) = self.unsigned_gadgets.get_mut(id) {
+                    label.clone_into(&mut gadget.code.name);
+                    gadget.waiting = None;
+                }
+                for (name, gadget) in &mut self.my_gadgets {
+                    if *gadget == id {
+                        label.clone_into(name);
+                    }
+                }
+                self.relist_my_gadgets();
+                true
+            }
+            Err(e) => {
+                let file = &gadget.code.name;
+                self.status
+                    .set_message(&format!("{file} could not be used: {e}"));
+                false
+            }
+        }
+    }
+
+    /// Whether the add-on `id` (called `name`) may start its program `program`: a signed
+    /// one always; an unsigned one once the user has said yes to this very program, asked
+    /// now if they have not ([`crate::trust`]).
+    pub(super) fn may_run_add_on(
+        &mut self,
+        id: &str,
+        name: &str,
+        program: &std::path::Path,
+    ) -> bool {
+        let code = self.addons.code(id, name, program);
+        self.trust.may_run(&code)
+    }
+
+    /// Why gadget `id` may not run without asking, when it is unsigned and the user has not
+    /// said yes to it: for the Web API, which never asks.
+    pub(super) fn not_allowed_yet(&self, id: &str) -> Option<String> {
+        let gadget = self.unsigned_gadgets.get(id)?;
+        (gadget.waiting.is_some() || !self.trust.allowed(&gadget.code))
+            .then(|| crate::trust::refusal(&gadget.code))
     }
 
     /// Gadgets ▸ My Gadgets: the gadgets, then the add-ons, each with the action that runs

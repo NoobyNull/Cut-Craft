@@ -183,9 +183,15 @@ fn changing_the_model_makes_only_the_toolpaths_that_cut_it_stale() {
     finishing.strategy = "3d_finishing_toolpath".into();
     let mut projected = doc.toolpaths[&flat].clone();
     projected.params = serde_json::json!({ "project_onto_model": true });
+    let mut rotary = doc.toolpaths[&flat].clone();
+    rotary.strategy = "rotary_machining_toolpath".into();
+    let mut lathe = doc.toolpaths[&flat].clone();
+    lathe.strategy = "rotary_lathe_toolpath".into();
     let mut c = Change::builder(&doc);
     let finishing = c.add_toolpath(finishing);
     let projected = c.add_toolpath(projected);
+    let rotary = c.add_toolpath(rotary);
+    let lathe = c.add_toolpath(lathe);
     let change = c.finish();
     doc.apply(&change).unwrap();
     let component = two_components().components.values().next().unwrap().clone();
@@ -196,6 +202,11 @@ fn changing_the_model_makes_only_the_toolpaths_that_cut_it_stale() {
     history.apply(&mut doc, change).unwrap();
     assert!(doc.toolpaths[&finishing].stale);
     assert!(doc.toolpaths[&projected].stale);
+    assert!(
+        doc.toolpaths[&rotary].stale,
+        "4-Axis Rotary Machining cuts the model"
+    );
+    assert!(doc.toolpaths[&lathe].stale, "Rotary Lathe turns the model");
     assert!(
         !doc.toolpaths[&flat].stale,
         "a flat toolpath does not cut the model"

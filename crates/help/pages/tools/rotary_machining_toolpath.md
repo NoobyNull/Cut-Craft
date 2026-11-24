@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-24
-see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, performance
+see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, tool_database, web_api, performance
 ---
 
 **4-Axis Rotary Machining** finishes a 3D model all the way round a turning cylinder. The bit
@@ -38,7 +38,7 @@ nick the side of a narrow ridge. This one keeps the bit clear of all of it.
 
    ![Step 5](pictures/rotary_machining_toolpath/step-5.png)
 
-6. Press **Calculate** to make the toolpath: a ring round the part at each step along it.
+6. Press **Calculate**, the button this form shows, to make the toolpath: a ring round the part at each step along it.
 
    ![Step 6](pictures/rotary_machining_toolpath/step-6.png)
 
@@ -74,6 +74,10 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   whatever XY zero [Job Setup](help:job_setup) uses: zeroed on the middle, the toolpath is
   written where the material is, just as with a corner.
 - **Allowance**: material left all the way round for a later pass.
+- **Cut Away the Support**: cuts away the centre stock [Job Setup](help:job_setup) leaves
+  along the axis (Holding the Part), down to the model. Tick it only on the last toolpath:
+  the ends the part is kept joined at still hold it. Left unticked, every way round cuts round
+  the centre stock and leaves the material whole past the model at a joined end.
 - **Registration mark**: a notch 0.5 mm deep at A=0, a bit's width past the last ring. If a
   job stops part way, turn A until the notch is under the bit and zero A there before starting
   again. It is only cut where there is waste past **End** to cut it in: when the part runs
@@ -139,7 +143,11 @@ settings: nothing is cut where they hold the material. (The other ways round cut
 **Start** and **End**, so keep those clear of the chuck and tailstock yourself.)
 
 When something can't be reached, the toolpath is still made, and a red note at the foot of the
-form says what and where:
+form says what and where. The toolpath keeps the note: the checks before saving the G-code say
+it again under **The bit fits every corner and detail it is asked to cut**, and so does the
+[Web API](help:web_api)'s list of toolpaths, so it isn't lost once the form is closed. In the
+preview, what was left looks like blocks and steps: that is the bulk clearing's levels, which
+no finish could get down to.
 
 - **The model is too near the chuck or tailstock**: the collet nut is wider than the bit, so it
   needs room beside the chuck to get down to the model. The note says how much to leave. Move
@@ -147,7 +155,12 @@ form says what and where:
   model. The same goes for the tailstock end.
 - **Some of the model is left rough**: no angle tried let the holder get down there. The note
   says where along the part, and which angles A locked at. A bit that sticks out further, a
-  slimmer holder, more **Tilts**, or the model sliced into parts would reach it.
+  slimmer holder, more **Tilts**, or the model sliced into parts would reach it. If the
+  [Tool Database](help:tool_database) doesn't say how far the bit sticks out of the collet
+  (its stick-out, or its flute length), 25 mm is taken and the note says so. That guess is
+  often what leaves a detailed model rough: measure the bit in the collet and set it.
+- A model joined to the material at the chuck or tailstock end (Job Setup's **Keep Joined
+  At**) needs no room beside it there, and nothing is said about it.
 
 To take the waste off the ends, or turn the blank round before the carving, use
 [Rotary Lathe](help:rotary_lathe_toolpath).

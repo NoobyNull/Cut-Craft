@@ -10,7 +10,8 @@ pkgrel=1
 pkgdesc='Design in 2D and 3D and make CNC router toolpaths'
 arch=('x86_64')
 url='https://github.com/NoobyNull/Cut-Craft'
-license=('PolyForm-Noncommercial-1.0.0')
+# PolyForm Strict 1.0.0 with Cut Craft's own additional permission (see LICENSE)
+license=('LicenseRef-Cut-Craft')
 # the window's libraries are loaded while it opens, so they are named here, not linked
 depends=('libgcc' 'glibc' 'hicolor-icon-theme' 'libx11' 'libxcb' 'libxcursor' 'libxi'
          'libxkbcommon' 'libxkbcommon-x11' 'libxrandr' 'vulkan-icd-loader' 'wayland')
@@ -44,6 +45,7 @@ package() {
   cd "$_pkgname-$pkgver-linux-$CARCH"
   install -Dm755 cut-craft "$pkgdir/usr/bin/cut-craft"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname/credits" credits/*.md
   install -Dm644 "$srcdir/family.yax.CutCraft-$pkgver.desktop" \
     "$pkgdir/usr/share/applications/family.yax.CutCraft.desktop"
   install -Dm644 "$srcdir/family.yax.CutCraft-$pkgver.svg" \

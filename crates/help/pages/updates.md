@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: web_api, contents, settings
 ---
 
@@ -89,6 +89,15 @@ as it was and the window says what happened. Most of the time the fix is one of 
   web browser. Versions before 0.7.1 never opened links (on every system, not only the Mac).
   In those, type the release page's address into your browser yourself:
   `github.com/NoobyNull/Cut-Craft/releases`.
+
+## Where updates come from
+
+Cut Craft's releases are on GitHub, and they are moving to the Power-Whittle organisation's
+page, `github.com/Power-Whittle/Cut-Craft`. While they move, each release goes on both
+pages. Cut Craft looks at both and offers you the newest one built for your computer,
+whichever page has it first, so there is nothing to change on your side. Every download
+is still checked against Cut Craft's own signature before anything is installed, whichever
+page it comes from.
 
 ## Copies that update another way
 

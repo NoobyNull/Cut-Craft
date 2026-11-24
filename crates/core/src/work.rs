@@ -28,8 +28,58 @@ pub struct Limit {
     pub share: u8,
 }
 
+/// The shortest rest worth a sleep: a shorter sleep can cost more than it asks for (on a
+/// Mac a test of 2,000 tiny pieces ran nine times as long), so shorter rests add up first.
+pub const LEAST_REST: Duration = Duration::from_millis(1);
+
+/// When the graphics card, which draws the desktop too, is free for calculations again:
+/// after each piece of work it rests as the limit asks ([`Limit::rest_after`]). The rest is
+/// owed to whoever hands it work next, so a calculation that sends one short job after
+/// another rests between the jobs as well, and nothing waits once the last one is done.
+#[derive(Debug, Default)]
+pub struct Rests {
+    until: Option<Instant>,
+}
+
+impl Rests {
+    /// How long work arriving at `now` waits for the card's rest to end.
+    pub fn owed(&self, now: Instant) -> Duration {
+        self.until
+            .map_or(Duration::ZERO, |until| until.saturating_duration_since(now))
+    }
+
+    /// The rest worth sleeping at `now`: what is owed once it comes to [`LEAST_REST`], else
+    /// nothing yet (it is kept and added to).
+    pub fn due(&self, now: Instant) -> Duration {
+        Some(self.owed(now))
+            .filter(|&owed| owed >= LEAST_REST)
+            .unwrap_or_default()
+    }
+
+    /// Notes a piece that kept the card busy from `start` to `end`, under `limit`; a rest
+    /// still owed when it started is carried on after it.
+    pub fn worked(&mut self, start: Instant, end: Instant, limit: Limit) {
+        let carried = self.owed(start);
+        self.until = Some(end + carried + limit.rest_after(end.saturating_duration_since(start)));
+    }
+
+    /// Runs `each` on every piece in turn, each after the rest due before it.
+    pub fn paced<I: IntoIterator>(&mut self, pieces: I, mut each: impl FnMut(I::Item)) {
+        let limit = limit();
+        for piece in pieces {
+            std::thread::sleep(self.due(Instant::now()));
+            let start = Instant::now();
+            each(piece);
+            self.worked(start, Instant::now(), limit);
+        }
+    }
+}
+
 /// The share of the cores calculations use unless Options says otherwise, percent.
 pub const DEFAULT_SHARE: u8 = 80;
+
+/// The least share of the time work on the graphics card is given, percent.
+const CARD_LEAST: u8 = 10;
 
 impl Default for Limit {
     fn default() -> Self {
@@ -55,6 +105,19 @@ impl Limit {
             return all;
         }
         (all * usize::from(self.share.min(100)) / 100).clamp(1, all)
+    }
+
+    /// How long work on the graphics card rests after a piece that kept it `busy`, so the
+    /// card (which also draws the desktop and your videos) works only the limit's share of
+    /// the time: a quarter of the piece at 80%, as long again at 50%, none with no limit.
+    /// The card is given at least a tenth of the time, so a tiny share does not leave a
+    /// preview waiting minutes.
+    pub fn rest_after(self, busy: Duration) -> Duration {
+        if !self.on {
+            return Duration::ZERO;
+        }
+        let share = u32::from(self.share.clamp(CARD_LEAST, 100));
+        busy * (100 - share) / share
     }
 
     /// The limit that gives the cores the old Advanced setting "Processor cores to use

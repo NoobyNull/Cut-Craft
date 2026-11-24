@@ -4,7 +4,7 @@ A desktop app for designing 2D and 3D work and turning it into CNC toolpaths and
 Draw vectors, build relief models, pick tools from a tool database, preview the cut in 3D and
 save G-code for your machine, all in one window. Written in Rust; runs on Linux, macOS and Windows.
 
-Cut Craft is free for noncommercial use only (see [License](#license)). It is an early **alpha**: expect rough edges, and
+Cut Craft is free for people and one-person businesses, even to make things to sell (see [License](#license)). It is an early **alpha**: expect rough edges, and
 please report them (see [Reporting bugs](#reporting-bugs)).
 
 ![The 2D view with shapes drawn on a new job](docs/screenshots/02-design-2d.png)
@@ -352,7 +352,7 @@ like the others.
 
 `CUT_CRAFT_ICON_DIR` points Cut Craft at a folder instead while icons are being worked on; an
 icon that is missing leaves its button showing its name, and everything still works. The
-third-party icons and models are credited under **Help ▸ Third Party Licenses**.
+third-party icons and models are credited under **Help ▸ Credits** (the `credits` folder).
 
 ## Acknowledgements
 
@@ -389,18 +389,20 @@ the same for every tool. What every tool is built from, and what is still to bui
 ## License
 
 Cut Craft is **source-available**, not open source or FOSS. It is licensed under the
-[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0);
-the full terms are in [LICENSE](LICENSE).
+[PolyForm Strict License 1.0.0](https://polyformproject.org/licenses/strict/1.0.0) with one
+extra permission, the *Cut Craft Additional Permission*; the full terms are in
+[LICENSE](LICENSE).
 
-- **You may** use, change and share Cut Craft free of charge for personal, hobby,
-  educational, research or other noncommercial purposes. Charities, schools, public research
-  bodies and government institutions may use it too.
-- **You may not** use it for any commercial purpose, such as making things to sell or running
-  a business with it.
-- **If you pass Cut Craft on**, keep the LICENSE file and its `Required Notice` credit line
-  with it.
+- **People and one-person businesses** (one owner, no employees) may use Cut Craft free of
+  charge for any purpose, including designing, making and selling things with it.
+- **Larger businesses** may use it for noncommercial purposes only. Charities, schools, public
+  research bodies and government institutions may use it too.
+- **Nobody may** share, sell, rent or sublicense Cut Craft itself, or change it, except to offer
+  changes back to the project (pull requests and translations are welcome). Download it from
+  this repository's releases.
 
-Third-party libraries and bundled icons, models and clipart keep their own licenses: bundled
-assets are credited under **Help ▸ Third Party Licenses**, and each library's license ships
-with its own source (`Cargo.lock` lists them all). This summary is for convenience; the
-LICENSE file is what applies.
+What you make with Cut Craft (designs, G-code, the things you cut) is yours.
+
+Third-party libraries, icons and models keep their own licenses. They are credited, with each
+license in full, under **Help ▸ Credits** and in the [`credits`](credits) folder that ships with
+every download. This summary is for convenience; the LICENSE file is what applies.

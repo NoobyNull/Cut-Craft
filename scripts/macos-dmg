@@ -31,6 +31,7 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
 cp LICENSE "$app/Contents/Resources/LICENSE"
+cp -R credits "$app/Contents/Resources/credits"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -74,6 +75,7 @@ mkdir -p "$stage"
 cp -R "$app" "$stage/"
 ln -s /Applications "$stage/Applications"
 cp LICENSE "$stage/LICENSE.txt"
+cp -R credits "$stage/Credits"
 dmg="dist/CutCraft-${version}-macos.dmg"
 hdiutil create -volname "Cut Craft" -srcfolder "$stage" -ov -format UDZO "$dmg"
 echo "$dmg"

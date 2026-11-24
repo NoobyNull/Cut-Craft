@@ -503,7 +503,7 @@ impl CutCraftApp {
             .as_ref()
             .is_some_and(|i| self.depth_high_detail.unwrap_or(i.detailed.is_some()));
         if let (true, Some(installed), Some(id)) = (start, installed, chosen)
-            && self.addons.may_run(crate::depth::ADDON_ID, name)
+            && self.may_run_add_on(crate::depth::ADDON_ID, name, &installed.program)
         {
             let installed = installed.with_high_detail(high_detail);
             match crate::depth::Estimating::start(&installed, id, &self.doc.bitmaps[&id], ui.ctx())

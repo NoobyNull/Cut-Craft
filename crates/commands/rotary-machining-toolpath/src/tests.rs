@@ -463,11 +463,24 @@ fn a_flat_job_is_asked_to_be_rotary() {
 /// A rotary job 40 mm across, 60 long along X, holding a box off to one side of the
 /// axis as a full 3D model kept as it really is, heights and all.
 fn boxed() -> Document {
+    boxed_at(0.0)
+}
+
+/// [`boxed`] on a job whose X0 Y0 is `offset` in from the material's corner both ways, the
+/// box kept where it is on the material.
+fn boxed_at(offset: f64) -> Document {
     let mut doc = Document {
-        job: Job::rotary(60.0, 40.0, Along::X),
+        job: Job {
+            offset: cut_craft_core::geometry::Point::new(offset, offset),
+            ..Job::rotary(60.0, 40.0, Along::X)
+        },
         ..Document::default()
     };
-    let (lo, hi) = (DVec3::new(10.0, -6.0, -8.0), DVec3::new(50.0, 12.0, 10.0));
+    let along = doc.job.area().min.x;
+    let (lo, hi) = (
+        DVec3::new(along + 10.0, -6.0, -8.0),
+        DVec3::new(along + 50.0, 12.0, 10.0),
+    );
     let at = |i: usize| {
         DVec3::new(
             if i & 1 == 1 { hi.x } else { lo.x },
@@ -796,4 +809,203 @@ fn nothing_is_cut_where_the_tailstock_holds_the_material_however_far_out() {
             .any(|n| n.contains("No room for the registration mark")),
         "{notes:?}"
     );
+}
+
+#[test]
+fn how_near_the_tailstock_the_model_ends_is_said_the_same_wherever_x0_y0_is() {
+    let p = Params {
+        tool: Tool {
+            stickout: 40.0,
+            flute_length: 25.0,
+            ..ball(6.0)
+        },
+        strategy: Strategy::SidesThenDetails,
+        faces: 2,
+        tilts: 0,
+        surroundings: Some(Surroundings {
+            tailstock: 15.0,
+            ..Surroundings::default()
+        }),
+        ..Params::default()
+    };
+    for offset in [0.0, 30.0, -12.5] {
+        let (_, notes) = made(&boxed_at(offset), &p).unwrap();
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.contains("The model ends 10.0 mm from the job's end")),
+            "X0 Y0 {offset} in: {notes:?}"
+        );
+    }
+}
+
+#[test]
+fn what_is_left_rough_is_kept_with_the_toolpath_and_a_guessed_stick_out_is_said() {
+    // a bit whose stick-out the Tool Database doesn't know: 25 mm is taken, too short to
+    // get the nut down beside the box
+    let unknown = Tool {
+        stickout: 0.0,
+        flute_length: 0.0,
+        ..ball(6.0)
+    };
+    let around = Surroundings {
+        tailstock: 15.0,
+        ..Surroundings::default()
+    };
+    let (toolpath, notes) = detailed(unknown, around, 0, "");
+    let kept = toolpath.made_notes();
+    assert!(kept.iter().any(|n| n.contains("left rough")), "{kept:?}");
+    assert!(kept.iter().any(|n| n.contains("tailstock")), "{kept:?}");
+    assert!(
+        kept.iter().all(|n| notes.contains(n)),
+        "said in the form too"
+    );
+    assert!(
+        kept.iter().any(|n| n.contains(
+            "The Tool Database doesn't say how far this bit sticks out of the collet, so 25 mm \
+             was taken"
+        )),
+        "{kept:?}"
+    );
+    // a stick-out given is not called a guess
+    let (toolpath, _) = detailed(
+        Tool {
+            stickout: 8.0,
+            flute_length: 6.0,
+            ..ball(6.0)
+        },
+        Surroundings::default(),
+        0,
+        "",
+    );
+    let kept = toolpath.made_notes();
+    assert!(kept.iter().any(|n| n.contains("left rough")), "{kept:?}");
+    assert!(!kept.iter().any(|n| n.contains("was taken")), "{kept:?}");
+}
+
+/// [`boxed`] held as `support` says.
+fn supported(joined: cut_craft_core::document::Joined, beam: f64) -> Document {
+    let mut doc = boxed();
+    doc.job.rotary = doc.job.rotary.map(|r| cut_craft_core::document::Rotary {
+        support: cut_craft_core::document::Support { joined, beam },
+        ..r
+    });
+    doc
+}
+
+/// How far the ball's centre is from the turning axis at each cut, and where along.
+fn centres(toolpath: &Toolpath, ball: f64) -> Vec<(f64, f64)> {
+    poses(toolpath)
+        .into_iter()
+        .map(|(along, _, height, across)| (along, across.hypot(height + ball / 2.0)))
+        .collect()
+}
+
+#[test]
+fn centre_stock_is_left_standing_along_the_axis_through_the_model_and_past_it() {
+    use cut_craft_core::document::Joined;
+    let long = || Tool {
+        stickout: 40.0,
+        flute_length: 25.0,
+        ..ball(6.0)
+    };
+    for strategy in [
+        Strategy::Radial,
+        Strategy::Indexed,
+        Strategy::SidesThenDetails,
+    ] {
+        let p = Params {
+            tool: long(),
+            strategy,
+            faces: 2,
+            tilts: 2,
+            ..Params::default()
+        };
+        // a beam 10 across: the ball's centre never comes within its radius and the ball's
+        let beamed = machine(&supported(Joined::Neither, 10.0), &p).unwrap();
+        let near = centres(&beamed, 6.0);
+        assert!(
+            near.iter().all(|&(_, d)| d >= 5.0 + 3.0 - 1e-3),
+            "{strategy:?}: into the beam at {:?}",
+            near.iter().find(|&&(_, d)| d < 8.0 - 1e-3)
+        );
+        // the beam is cut round, past the box's ends too
+        assert!(
+            near.iter().any(|&(a, d)| a < 7.0 && d < 8.0 + 0.5),
+            "{strategy:?}: the beam followed past the model"
+        );
+        // without it, or with Cut Away the Support ticked, the bit goes nearer the axis
+        let plain = machine(&supported(Joined::Neither, 0.0), &p).unwrap();
+        let cut_away = machine(
+            &supported(Joined::Neither, 10.0),
+            &Params {
+                cut_support: true,
+                ..p.clone()
+            },
+        )
+        .unwrap();
+        for open in [plain, cut_away] {
+            assert!(
+                centres(&open, 6.0).iter().any(|&(_, d)| d < 8.0 - 1.0),
+                "{strategy:?}: down past where the beam would be"
+            );
+        }
+    }
+}
+
+#[test]
+fn past_the_model_at_an_end_it_is_kept_joined_at_the_material_is_left_whole() {
+    use cut_craft_core::document::Joined;
+    let p = Params {
+        tool: Tool {
+            stickout: 40.0,
+            flute_length: 25.0,
+            ..ball(6.0)
+        },
+        strategy: Strategy::SidesThenDetails,
+        faces: 2,
+        tilts: 0,
+        ..Params::default()
+    };
+    // the box runs from 10 to 50 along: the ball's side reaches 3 past its centre
+    let cut_at = |joined| -> Vec<f64> {
+        let toolpath = machine(&supported(joined, 0.0), &p).unwrap();
+        poses(&toolpath).into_iter().map(|(a, ..)| a).collect()
+    };
+    let chuck = cut_at(Joined::Chuck);
+    assert!(
+        chuck.iter().all(|&a| a + 3.0 >= 10.0 - 1e-6),
+        "into the chuck end"
+    );
+    assert!(
+        chuck.iter().any(|&a| a - 3.0 > 50.0),
+        "the tailstock end is cut away"
+    );
+    let both = cut_at(Joined::Both);
+    assert!(
+        both.iter()
+            .all(|&a| a + 3.0 >= 10.0 - 1e-6 && a - 3.0 <= 50.0 + 1e-6),
+        "into an end"
+    );
+    let neither = cut_at(Joined::Neither);
+    assert!(
+        neither.iter().any(|&a| a + 3.0 < 10.0),
+        "the chuck end is cut away"
+    );
+    // joined at the chuck, the model needs no room beside it
+    let near_chuck = Params {
+        surroundings: Some(Surroundings {
+            chuck: 2.0,
+            ..Surroundings::default()
+        }),
+        ..p.clone()
+    };
+    for joined in [Joined::Neither, Joined::Chuck] {
+        let (_, notes) = made(&supported(joined, 0.0), &near_chuck).unwrap();
+        assert_eq!(
+            notes.iter().any(|n| n.contains("chuck holds")),
+            joined == Joined::Neither,
+            "{joined:?}: {notes:?}"
+        );
+    }
 }

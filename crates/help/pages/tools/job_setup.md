@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: setup_material, material_setup, settings, draw_rectangle, rotary_firmware, check_rotary_setup, rotary_machining_toolpath
 ---
 
@@ -60,6 +60,36 @@ Choose **Rotary** under **Job Type** to carve material turned by a 4th axis (see
 
 3. Pick the **Orientation**: whether the axis runs along X or along Y.
 4. Pick where **Z zero** is: on top of the material, or on the turning axis.
+
+5. Under **Holding the Part**, say what of the material is left to hold the part while it is
+   cut (see below). Leave **Keep Joined At** on **Neither** and **Centre Stock Diameter** at 0
+   to cut the part free all round, as before.
+
+### Holding the part
+
+A long or thin part, such as a figure lying along the axis, can flex or snap off part way
+through when everything round it is cut away. Two settings keep it held:
+
+![Left: the part kept joined at the chuck end and held at the head by centre stock. Right: the last toolpath cuts the centre stock away, and the chuck end still holds the part, ready to saw off flat](pictures/job_setup/holding-the-part.png)
+
+- **Keep Joined At**: the end (or ends) of the material the part stays joined to. Past the
+  model at that end the material is left whole, so that end of the model comes out as a flat
+  face: saw the part free there when it is done. A statue joined at the chuck gets a flat base.
+  It also needs no room beside the chuck for the collet nut.
+- **Centre Stock Diameter**: a round beam of material left along the turning axis, from the
+  chuck to the tailstock, through the model and past it. Every rotary toolpath cuts round it,
+  so the far end of the part (a statue's head) stays held by the tailstock. 0 leaves none.
+  It must be less than the material's diameter. 6 to 10 mm suits most parts in wood.
+
+The centre stock is centred on the turning axis wherever the model sits, so chuck the material
+so that it turns true (centred) on the axis. Where the model is thinner than the centre stock
+(a torch, a crown's points) the centre stock shows through until it is cut away.
+
+To finish, make the last toolpath a [4-Axis Rotary Machining](help:rotary_machining_toolpath)
+pass with **Cut Away the Support** ticked: it cuts the centre stock down to the model, and the
+joined end still holds the part. Then saw it off at the joined end. The checks before saving
+warn if any toolpath comes after it. [Rotary Lathe](help:rotary_lathe_toolpath) Face and Turn
+leave the centre stock too; Part off cuts through it.
 
 A square's corners and a board's edges swing out further than its top as A turns, out to the
 red circle. Toolpaths lift the bit that much higher before A turns, so it never knocks into
