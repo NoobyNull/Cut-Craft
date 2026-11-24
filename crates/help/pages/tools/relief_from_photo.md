@@ -28,7 +28,8 @@ Until a relief has been made, the form has a **Create** button. Use it when the 
 already there: a picture set to **Depth from: Picture**, or a photo you estimated earlier.
 If you press **Create** on a photo that has no depth yet, the form says so in red: press
 **Estimate Depth** first. Once the relief is made, **Create** goes away and the relief
-follows the form. To make a second relief, close the form and open it again.
+follows the form. To make a second relief, close the form and open it again: **Create**
+comes back.
 
 ## The Depth add-on
 
