@@ -339,7 +339,7 @@ impl CutCraftApp {
                 format!("[Contents](help:contents)\n\n{words}\n")
             }
             id => {
-                let (page, name) = match self.page_of(id) {
+                let (page, name) = match self.tools().kind_of(id) {
                     Page::Design => ("design", "Design"),
                     Page::Toolpaths => ("toolpaths", "Toolpaths"),
                 };

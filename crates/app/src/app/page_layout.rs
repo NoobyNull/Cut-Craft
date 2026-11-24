@@ -505,20 +505,6 @@ impl CutCraftApp {
         }
     }
 
-    /// The tool page a command's form shows in.
-    pub(super) fn page_of(&self, id: &str) -> Page {
-        let toolpaths = self
-            .toolbar
-            .toolpath_groups
-            .iter()
-            .any(|g| g.tools.contains(&id));
-        if toolpaths {
-            Page::Toolpaths
-        } else {
-            Page::Design
-        }
-    }
-
     /// A tool picked from a page, counted in the options: a page that flew out for it goes
     /// away again, unless the tool opened a form there.
     pub(super) fn pick(&mut self, ctx: &egui::Context, page: Page, id: &str) {
