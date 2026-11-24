@@ -11,6 +11,7 @@ mod busy;
 mod clipart;
 mod commands;
 mod compute;
+mod credits;
 mod depth;
 mod display;
 #[cfg(test)]

@@ -1,0 +1,16 @@
+# Libraries
+
+Cut Craft is built with these free libraries. Each one keeps its own licence, given here in
+full with the libraries that use it. Made from `Cargo.lock` by cargo-about; do not edit by
+hand (see [README.md](README.md)). Pictures, icons and the Rust standard library are in
+[other.md](other.md).
+{{#each licenses}}
+
+## {{{name}}}
+
+Used by: {{#each used_by}}{{#if @index}}, {{/if}}[{{{crate.name}}} {{{crate.version}}}](https://crates.io/crates/{{{crate.name}}}){{/each}}
+
+```
+{{{text}}}
+```
+{{/each}}

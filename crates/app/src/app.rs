@@ -829,6 +829,8 @@ struct CutCraftApp {
     tip: Option<usize>,
     /// The Did You Know? window's rendered tips.
     tips_cache: egui_commonmark::CommonMarkCache,
+    /// Help ▸ Credits: its search and rendered licence texts.
+    credits: crate::credits::Window,
     /// Sketch Carving's green areas, with the form settings, revision and selection they
     /// were found for.
     sketch_areas: Option<SketchAreas>,
