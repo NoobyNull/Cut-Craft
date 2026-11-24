@@ -75,6 +75,8 @@ impl CutCraftApp {
         let search = &mut self.shortcut_search;
         let mut shortcut_edit = None;
         let mut web_api_pressed = None;
+        let unsigned_remembered = self.trust.remembered();
+        let mut forget_unsigned = false;
         let mut job_edited = false;
         let (icons, materials) = (&self.icons, &self.materials);
         let show_advanced = &mut self.show_advanced;
@@ -146,6 +148,9 @@ impl CutCraftApp {
                             *show_advanced,
                         );
                     }
+                    if category.key == "confirmations" {
+                        forget_unsigned = unsigned_code_section(ui, unsigned_remembered);
+                    }
                     if category.key == "web_api" {
                         web_api_pressed =
                             super::web_api::options_section(ui, &web_api_state, &edited_web_api);
@@ -195,6 +200,10 @@ impl CutCraftApp {
         }
         if let Some(answer) = answer {
             self.options_answer(ctx, answer);
+        }
+        if forget_unsigned {
+            self.trust.forget();
+            self.status.set_message(&tr!("options-unsigned-forgotten"));
         }
         if let Some(pressed) = web_api_pressed {
             self.web_api_pressed(pressed);
@@ -291,7 +300,7 @@ impl CutCraftApp {
         // the Preview tab's detail stays as it was moved, unless the default changed
         let now = self.display.detail;
         options.apply_to(&mut self.display);
-        if options.view_3d.preview_detail == self.options.view_3d.preview_detail {
+        if options.performance.preview_detail == self.options.performance.preview_detail {
             self.display.detail = now;
         }
         ctx.set_theme(options.appearance.theme.preference());
@@ -321,4 +330,19 @@ impl CutCraftApp {
             self.keep_out_changed();
         }
     }
+}
+
+/// Options ▸ Confirmations: how much unsigned code the user said to run without asking,
+/// and a button that forgets those answers (at once: not a setting Apply keeps). Whether it
+/// was pressed.
+fn unsigned_code_section(ui: &mut egui::Ui, remembered: usize) -> bool {
+    ui.separator();
+    ui.strong(tr!("options-unsigned-heading"));
+    ui.label(tr!("options-unsigned-remembered", count = remembered));
+    ui.add_enabled(
+        remembered > 0,
+        egui::Button::new(tr!("options-unsigned-forget")),
+    )
+    .on_hover_text(tr!("options-unsigned-forget.tooltip"))
+    .clicked()
 }

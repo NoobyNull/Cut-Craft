@@ -184,6 +184,11 @@ pub enum Edit {
         before: Vec<String>,
         after: Vec<String>,
     },
+    /// Replaces which toolpath group each sub-group sits in.
+    SetToolpathGroupParents {
+        before: BTreeMap<String, String>,
+        after: BTreeMap<String, String>,
+    },
     /// Replaces the keep-out zones.
     SetKeepOut {
         before: Vec<crate::keep_out::KeepOutZone>,
@@ -298,6 +303,10 @@ impl Edit {
                 after: before,
             },
             Self::SetToolpathGroups { before, after } => Self::SetToolpathGroups {
+                before: after,
+                after: before,
+            },
+            Self::SetToolpathGroupParents { before, after } => Self::SetToolpathGroupParents {
                 before: after,
                 after: before,
             },
@@ -508,7 +517,31 @@ impl Change {
             let component = &doc.components[&id];
             let t = f(component.extent());
             if t != DAffine2::IDENTITY {
-                let moved = component.transformed(&t);
+                let mut moved = component.transformed(&t);
+                if let Some(rotary) = doc.job.rotary
+                    && !component.solid.is_empty()
+                {
+                    // a full model round the axis: moving it on the sheet moves it along the
+                    // axis and turns it round; anything else would lose its undercuts
+                    if t.matrix2 != glam::DMat2::IDENTITY {
+                        return Err(CommandError::Failed(format!(
+                            "{} is a full 3D model wrapped round the rotary axis: it can be \
+                             moved, but not scaled, turned or mirrored on the sheet. Use \
+                             Orientate 3D Model to change its size or which way it faces",
+                            component.name
+                        )));
+                    }
+                    let (along, round, circumference) = match rotary.along {
+                        crate::document::Along::X => {
+                            (t.translation.x, t.translation.y, doc.job.height)
+                        }
+                        crate::document::Along::Y => {
+                            (t.translation.y, t.translation.x, doc.job.width)
+                        }
+                    };
+                    let turn = std::f64::consts::TAU * round / circumference;
+                    moved.set_solid(&component.solid_moved(along, turn));
+                }
                 // a texture area's tiles keep their size: its new box is tiled again
                 let seed_of = |seed| doc.components.get(&seed).cloned();
                 let again = crate::texture_area::retiled(&moved, seed_of);

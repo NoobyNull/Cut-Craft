@@ -9,7 +9,7 @@ use std::io::{Read as _, Write as _};
 use std::net::{SocketAddr, TcpStream};
 
 /// The app with the Web API switched on, on a free port.
-fn switched_on() -> (Harness, SocketAddr) {
+pub(super) fn switched_on() -> (Harness, SocketAddr) {
     let mut h = Harness::new();
     h.app.options.web_api.enabled = true;
     h.app.options.web_api.port = 0;
@@ -22,7 +22,7 @@ fn switched_on() -> (Harness, SocketAddr) {
 
 /// `method path` with `body` sent from another thread while the app runs frames, as the
 /// window would; its status and JSON.
-fn call(
+pub(super) fn call(
     h: &mut Harness,
     at: SocketAddr,
     method: &str,
@@ -715,6 +715,9 @@ fn a_script_gets_the_gcode_save_toolpaths_would_write_and_can_save_it() {
         e["error"].as_str().unwrap().contains("accept_warnings"),
         "{e}"
     );
+    // said once, as Save Toolpaths lists it, not twice
+    let said = e["error"].as_str().unwrap().to_lowercase();
+    assert_eq!(said.matches("out of date").count(), 1, "{e}");
     let (status, made) = call(
         &mut h,
         at,
@@ -724,6 +727,51 @@ fn a_script_gets_the_gcode_save_toolpaths_would_write_and_can_save_it() {
     );
     assert_eq!(status, 200, "{made}");
     assert!(!made["warnings"].as_array().unwrap().is_empty(), "{made}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_script_writes_over_an_earlier_save_as_options_say() {
+    let (mut h, at, _) = with_a_toolpath();
+    let tool = &mut h.app.doc.toolpaths.values_mut().next().unwrap().tool;
+    tool.flute_length = 50.0;
+    h.app.doc.material_checked = true;
+    let dir = std::env::temp_dir().join(format!("cut-craft-web-over-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("sign.nc");
+    // an earlier save's tile file counts too, as in Save Toolpaths
+    std::fs::write(dir.join("sign_tile2.nc"), "old tile").unwrap();
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "save_to": path })),
+    );
+    assert_eq!(status, 409, "{e}");
+    assert!(
+        e["error"].as_str().unwrap().contains("sign_tile2.nc"),
+        "{e}"
+    );
+    let over = json!({ "save_to": path, "replace": true });
+    // replaced: nothing kept of the earlier save
+    let (status, e) = call(&mut h, at, "POST", "gcode", Some(over.clone()));
+    assert_eq!(status, 200, "{e}");
+    assert!(path.is_file());
+    assert!(!dir.join("sign_tile2.nc").exists());
+    assert!(!dir.join("Archive").exists());
+    // archived when Options say so
+    h.app.options.confirmations.earlier_gcode = crate::options::EarlierGcode::Archive;
+    let (status, e) = call(&mut h, at, "POST", "gcode", Some(over));
+    assert_eq!(status, 200, "{e}");
+    let archived: Vec<_> = std::fs::read_dir(dir.join("Archive"))
+        .unwrap()
+        .flatten()
+        .collect();
+    assert_eq!(archived.len(), 1, "{archived:?}");
+    assert!(archived[0].path().join("sign.nc").is_file());
+    assert!(path.is_file());
     let _ = std::fs::remove_dir_all(dir);
 }
 

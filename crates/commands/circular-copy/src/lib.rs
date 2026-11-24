@@ -2,7 +2,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use glam::DAffine2;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -85,6 +85,7 @@ impl Command for CircularCopy {
             group: "Array Objects",
             icon: "drawing/create_vectors/circular_copy.png",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

@@ -47,8 +47,6 @@ pub fn releases_url(home: &str) -> String {
 }
 /// Where releases are listed, for downloading by hand.
 pub const RELEASES_PAGE: &str = "https://github.com/NoobyNull/Cut-Craft/releases";
-/// How long after one check the next start checks again.
-pub const CHECK_EVERY_SECONDS: u64 = 20 * 60 * 60;
 /// The minisign public key releases are signed with (the secret key is only in the
 /// repository's Actions secrets; see `scripts/sign-release`).
 pub const RELEASE_KEY: &str = include_str!("../release-key.pub");
@@ -75,12 +73,6 @@ pub fn this_install() -> Install {
 /// The running version.
 pub fn current_version() -> Version {
     Version::parse(env!("CARGO_PKG_VERSION")).expect("the package version is a version")
-}
-
-/// Whether the startup check is due: never checked, or checked over
-/// [`CHECK_EVERY_SECONDS`] ago (or, by a clock put back, in the future).
-pub fn due(last_check: Option<u64>, now: u64) -> bool {
-    last_check.is_none_or(|last| now < last || now - last >= CHECK_EVERY_SECONDS)
 }
 
 /// What a check found.
@@ -635,15 +627,6 @@ mod tests {
                 .unwrap_err()
                 .contains("no releases")
         );
-    }
-
-    #[test]
-    fn checks_at_most_about_once_a_day() {
-        assert!(due(None, 1_000));
-        assert!(!due(Some(1_000), 1_000 + 3_600));
-        assert!(due(Some(1_000), 1_000 + CHECK_EVERY_SECONDS));
-        // the clock was put back
-        assert!(due(Some(1_000), 10));
     }
 
     #[test]

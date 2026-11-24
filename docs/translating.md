@@ -21,7 +21,10 @@ still partway done.
    language = "de"           # the code
    version = "0.1.0"         # raise it each time the pack changes
    needs_cutcraft = ">=0.7.0"
+   translators = ["Your Name"] # how you want to be credited; add each helper
    ```
+
+   `translators` shows in Add-ons and Options as **Translated by …**.
 
 3. Copy any English file you want to translate from `crates/i18n/locales/en/`, keeping its
    name, and translate the words after each `=`. Keep everything else exactly as it is:
@@ -97,6 +100,16 @@ Open a pull request with your folder. Once it's merged, the **Language packs** w
 with Cut Craft's release key (so it shows as official), and publishes it on
 [NoobyNull/CutCraft-Translations](https://github.com/NoobyNull/CutCraft-Translations).
 Cut Craft offers an update to anyone who has the pack installed.
+
+### Official, community supported
+
+Every pack that passes the checks (`cargo nextest run --profile languages`) is signed and
+published automatically: nobody reads it by hand first. Cut Craft shows such a pack as
+**Official, community supported**. "Official" means it was checked and signed, holds only
+words and can't run anything. "Community supported" means its wording is written and kept
+up by its translators, not by Cut Craft's author. When someone reports a wrong or missing
+word (from Edit ▸ Options ▸ Language, or the report form while a pack is in use), it goes to
+the Translations repository's Issues, for the translators to answer.
 
 Translations made with a machine or an AI should be checked by a native speaker who knows
 woodworking and CNC words before they're published.

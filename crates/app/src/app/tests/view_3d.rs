@@ -659,7 +659,7 @@ fn save_shaded_image_saves_the_3d_view_s_part_of_the_window() {
 #[test]
 fn the_detail_while_moving_is_two_steps_below_the_detail_when_still_unless_picked() {
     use crate::options::{Detail, MovingDetail};
-    let mut v = crate::options::Options::default().view_3d;
+    let mut v = crate::options::Options::default().performance;
     assert_eq!(v.still_detail, Detail::VeryHigh);
     assert_eq!(v.moving_detail, MovingDetail::TwoStepsLower);
     assert_eq!(
@@ -689,14 +689,14 @@ fn the_surface_drawn_on_is_made_again_when_the_detail_when_still_changes() {
     let first = h.app.drawing_surface().expect("a model to draw on");
     let again = h.app.drawing_surface().unwrap();
     assert!(std::sync::Arc::ptr_eq(&first, &again), "kept");
-    h.app.options.view_3d.still_detail = crate::options::Detail::Low;
+    h.app.options.performance.still_detail = crate::options::Detail::Low;
     let changed = h.app.drawing_surface().unwrap();
     assert!(!std::sync::Arc::ptr_eq(&first, &changed), "made again");
 }
 
 #[test]
 fn the_view_follows_the_frame_rate_by_default_aiming_for_thirty_a_second() {
-    let mut v = crate::options::Options::default().view_3d;
+    let mut v = crate::options::Options::default().performance;
     assert!(v.adjust_to_frame_rate);
     assert!((v.fps_wanted() - crate::options::TARGET_FPS).abs() < 1e-9);
     assert!((crate::options::TARGET_FPS - 30.0).abs() < 1e-9);
@@ -710,15 +710,21 @@ fn the_view_follows_the_frame_rate_by_default_aiming_for_thirty_a_second() {
 #[test]
 fn with_the_frame_rate_setting_off_moving_keeps_options_own_detail() {
     let h = turned_slowly(false, 20);
-    assert_eq!(h.app.moving_cells(), h.app.options.view_3d.moving_cells());
-    assert_eq!(h.app.turning_cells(), h.app.options.view_3d.still_cells());
+    assert_eq!(
+        h.app.moving_cells(),
+        h.app.options.performance.moving_cells()
+    );
+    assert_eq!(
+        h.app.turning_cells(),
+        h.app.options.performance.still_cells()
+    );
 }
 
 #[test]
 fn the_status_bar_shows_the_3d_detail_and_frame_rate_when_asked() {
     let mut h = turned_slowly(true, 3);
     assert!(status_text(&h, "3D detail").is_none(), "off unless asked");
-    h.app.options.view_3d.show_frame_rate = true;
+    h.app.options.performance.show_frame_rate = true;
     for _ in 0..10 {
         h.app.moved_3d = h.time + 0.1;
         h.frame(vec![]);

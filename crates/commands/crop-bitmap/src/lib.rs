@@ -5,7 +5,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Point, Rect, inside};
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct CropBitmap;
 
@@ -22,6 +22,7 @@ impl Command for CropBitmap {
             group: "Edit Objects",
             icon: "drawing/edit_objects/crop_bitmap.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

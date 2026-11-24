@@ -7,8 +7,8 @@
 use super::{
     BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Dialog, Document, EXPORT_LEVEL,
     EntityId, History, Icons, Info, PLAYBACK_SPEED, Page, Pages, SELECT_LEVEL, SaveForm, Screen,
-    Session, Shown, THIRD_PARTY, TOP_BAR_TOGGLES, ToolDatabase, Value, View, brush_dialog,
-    commands, dialog_size, egui, files, filtered_dialog, gui, saving_path, summary_table, view3d,
+    Session, Shown, TOP_BAR_TOGGLES, ToolDatabase, Value, View, brush_dialog, commands,
+    dialog_size, egui, files, filtered_dialog, gui, saving_path, summary_table, view3d,
 };
 use cut_craft_i18n::tr;
 
@@ -31,7 +31,14 @@ impl CutCraftApp {
         let my_gadgets = crate::gadgets::my_gadgets_dir();
         let addon_gadgets =
             crate::depth::addons_dir().map_or_default(|dir| crate::gadgets::from_addons(&dir));
-        let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
+        // tests never read the answers kept on this computer
+        let trust = if cfg!(test) {
+            crate::trust::Trust::new(None)
+        } else {
+            crate::trust::Trust::in_settings_folder()
+        };
+        let gadgets =
+            crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets, &trust);
         let mine: Vec<(String, &'static str)> = gadgets
             .installed()
             .filter_map(|g| Some((g.label.clone(), registry.get(&g.id)?.id())))
@@ -146,13 +153,8 @@ impl CutCraftApp {
             my_gadgets: mine,
             installed_addons: vec![],
             rail_gadgets: false,
-            unsigned_gadgets: gadgets
-                .mine
-                .iter()
-                .map(|g| (g.id.clone(), g.label.clone()))
-                .collect(),
-            unsigned_gadgets_allowed: std::collections::HashSet::new(),
-            unsigned_gadget_ok: ask_to_run_unsigned,
+            unsigned_gadgets: gadgets.unsigned,
+            trust,
             reporter: {
                 let mut reporter = cut_craft_bug_report::Reporter::new(
                     super::BUG_REPO,
@@ -188,6 +190,7 @@ impl CutCraftApp {
             help_history: cut_craft_help::wiki::History::default(),
             tip: None,
             tips_cache: egui_commonmark::CommonMarkCache::default(),
+            credits: crate::credits::Window::default(),
             sketch_areas: None,
             carve_area: None,
             reach_found: None,
@@ -252,6 +255,7 @@ impl CutCraftApp {
             spinning_3d: None,
             picked_outline: None,
             pacer: crate::frame_rate::Pacer::default(),
+            gauge: cut_craft_core::work::Gauge::default(),
             detail_3d: (crate::options::Detail::default(), false),
             paced_pass: u64::MAX,
             orbit: view3d::Orbit::default(),
@@ -293,6 +297,7 @@ impl CutCraftApp {
             recent_path: None,
             recovery_path: None,
             recovery_lock: None,
+            work_kept_for_update: false,
             autosaved: (0, 0.0),
             autosave: None,
             title: String::new(),
@@ -679,12 +684,8 @@ impl CutCraftApp {
             | "print" => {
                 self.clipboard_or_file_action(ctx, id);
             }
-            "keyboard_shortcuts"
-            | "third_party_licenses"
-            | "toolpath_summary"
-            | "about_cut_craft"
-            | "help_contents"
-            | "snap_options" => self.open_window(id),
+            "keyboard_shortcuts" | "credits" | "toolpath_summary" | "about_cut_craft"
+            | "help_contents" | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
             // F1: the open form's help page, else the contents
             "tool_help" => {
@@ -747,8 +748,8 @@ impl CutCraftApp {
                 if let Some(id) = self.selected_toolpath {
                     self.preview_toolpath(id);
                 } else if let Some(group) = &self.selected_group {
-                    // a picked group: its toolpaths in list order, as one preview
-                    self.preview_ids(&self.doc.toolpaths_in_group(group));
+                    // a picked group: its toolpaths (its sub-groups' too) in list order, as one preview
+                    self.preview_ids(&self.doc.toolpaths_under_group(group));
                 }
             }
             "job_sheet_editor" => self.job_sheet_window = true,
@@ -807,7 +808,7 @@ impl CutCraftApp {
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
                 self.kept_playback = None;
                 // the Preview tab's detail goes back to Options' default
-                self.display.detail = self.options.view_3d.preview_detail.min(100);
+                self.display.detail = self.options.performance.preview_detail.min(100);
                 self.status
                     .set_message("Preview reset: Undo Last Preview brings it back");
             }
@@ -857,25 +858,7 @@ impl CutCraftApp {
                     self.save_options();
                 }
             }
-            id if !self.may_run_gadget(id) => {}
             _ => self.start_command(id),
-        }
-    }
-
-    /// Whether gadget `id` may run: always for Cut Craft's own; for one from the My Gadgets
-    /// folder, once the user has been warned and said yes (asked once a session).
-    fn may_run_gadget(&mut self, id: &str) -> bool {
-        let Some(label) = self.unsigned_gadgets.get(id) else {
-            return true;
-        };
-        if self.unsigned_gadgets_allowed.contains(id) {
-            return true;
-        }
-        if (self.unsigned_gadget_ok)(label) {
-            self.unsigned_gadgets_allowed.insert(id.to_owned());
-            true
-        } else {
-            false
         }
     }
 
@@ -1152,7 +1135,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The Help windows: About, Keyboard Shortcuts, Third Party Licenses.
+    /// The Help windows: About, Keyboard Shortcuts, Credits.
     pub(super) fn info_window(&mut self, ctx: &egui::Context) {
         let Some(info) = self.info else { return };
         if let Info::Help(topic) = info {
@@ -1163,7 +1146,7 @@ impl CutCraftApp {
         let title = match info {
             Info::About => "About Cut Craft".to_owned(),
             Info::Shortcuts => "Keyboard Shortcuts".to_owned(),
-            Info::Licenses => "Third Party Licenses".to_owned(),
+            Info::Credits => "Credits".to_owned(),
             Info::Summary => "Toolpath Summary".to_owned(),
             Info::Help(_) => unreachable!("returned above"),
         };
@@ -1181,6 +1164,8 @@ impl CutCraftApp {
             .active()
             .map(|m| (m.name.clone(), m.acceleration));
         let summary = &mut self.summary;
+        let credits = &mut self.credits;
+        let mut open_credits = false;
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
@@ -1188,7 +1173,7 @@ impl CutCraftApp {
             Info::Summary => {
                 noted = summary_table(ui, &rows, total, summary, units, machine.clone());
             }
-            Info::About => about(ui),
+            Info::About => open_credits = about(ui),
             Info::Shortcuts => {
                 if ui
                     .button(tr!("shortcuts-change"))
@@ -1209,15 +1194,7 @@ impl CutCraftApp {
                         });
                     });
             }
-            Info::Licenses => {
-                egui::Grid::new("licenses").striped(true).show(ui, |ui| {
-                    for (name, licence) in THIRD_PARTY {
-                        ui.label(name);
-                        ui.label(licence);
-                        ui.end_row();
-                    }
-                });
-            }
+            Info::Credits => crate::credits::show(ui, credits),
         });
         // Apply under the summary's notes keeps them with their toolpath
         if let Some((id, notes)) = noted
@@ -1235,6 +1212,9 @@ impl CutCraftApp {
         if !open {
             self.info = None;
         }
+        if open_credits {
+            self.info = Some(Info::Credits);
+        }
         if change_shortcuts {
             self.info = None;
             self.options_window = true;
@@ -1243,8 +1223,9 @@ impl CutCraftApp {
     }
 }
 
-/// The About window: what Cut Craft is, its license, thanks and contributors.
-fn about(ui: &mut egui::Ui) {
+/// The About window: what Cut Craft is, its license, thanks and contributors. Gives whether
+/// Credits was clicked.
+fn about(ui: &mut egui::Ui) -> bool {
     ui.heading(tr!("about-name"));
     ui.label(tr!("about-version", version = env!("CARGO_PKG_VERSION")));
     ui.label(tr!("about-what"));
@@ -1258,6 +1239,10 @@ fn about(ui: &mut egui::Ui) {
     ui.separator();
     ui.strong(tr!("about-acknowledgements"));
     ui.label(ACKNOWLEDGEMENT);
+    let credits = ui
+        .button(tr!("about-credits"))
+        .on_hover_text(tr!("about-credits.tooltip"))
+        .clicked();
     ui.separator();
     ui.strong(tr!("about-contributors"));
     for (login, commits, url) in contributors() {
@@ -1270,13 +1255,16 @@ fn about(ui: &mut egui::Ui) {
             };
         });
     }
+    credits
 }
 
 /// The About window's plain summary of Cut Craft's own license (the top of LICENSE).
 pub(super) const LICENCE_SUMMARY: &str = "Cut Craft is source-available, not open source. \
-It is licensed under the PolyForm Noncommercial License 1.0.0: you may use, change and share it \
-free of charge for noncommercial purposes only, not for any commercial purpose such as making \
-things to sell. The LICENSE file is what applies.";
+It is licensed under the PolyForm Strict License 1.0.0 with an extra permission: people and \
+one-person businesses may use it free of charge for any purpose, including making and selling \
+things with it. Larger businesses may use it for noncommercial purposes only. Nobody may share, \
+sell or change Cut Craft itself, except to offer changes back to the project. The LICENSE file \
+is what applies.";
 
 /// The About window's thanks to the program that inspired Cut Craft (ACKNOWLEDGEMENTS.md in full).
 pub(super) const ACKNOWLEDGEMENT: &str = "Thank you to Vectric Ltd. Cut Craft was inspired by Vectric Aspire, \
@@ -1294,31 +1282,4 @@ pub(super) fn contributors() -> Vec<(&'static str, &'static str, &'static str)> 
         })
         .filter(|(login, ..)| !login.is_empty())
         .collect()
-}
-
-/// What the user is told before an unsigned gadget first runs.
-pub(super) fn unsigned_warning(label: &str) -> String {
-    format!(
-        "\u{201c}{label}\u{201d} is not an official Cut Craft gadget. It came from your My \
-         Gadgets folder or an unsigned add-on, not from a signed Cut Craft build, so nobody has \
-         checked what it does.\n\n\
-         Cut Craft and its author are not responsible for what this gadget does or can do, \
-         including anything harmful or malicious. It can only change the job that is open, \
-         and Undo takes back everything it did in one step. Check its result before you \
-         cut.\n\nRun it?"
-    )
-}
-
-/// Asks, in a system dialog, whether to run the unsigned gadget `label`.
-pub(super) fn ask_to_run_unsigned(label: &str) -> bool {
-    let answer = super::message_dialog()
-        .set_title("Unsigned gadget")
-        .set_description(unsigned_warning(label))
-        .set_level(rfd::MessageLevel::Warning)
-        .set_buttons(rfd::MessageButtons::OkCancelCustom(
-            "Run Gadget".into(),
-            "Cancel".into(),
-        ))
-        .show();
-    matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
 }

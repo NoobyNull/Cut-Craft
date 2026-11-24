@@ -99,7 +99,7 @@ impl CutCraftApp {
     pub(super) fn open_window(&mut self, id: &str) {
         self.info = match id {
             "keyboard_shortcuts" => Some(Info::Shortcuts),
-            "third_party_licenses" => Some(Info::Licenses),
+            "credits" => Some(Info::Credits),
             "toolpath_summary" => Some(Info::Summary),
             "about_cut_craft" => Some(Info::About),
             "help_contents" => Some(Info::Help("contents")),
@@ -127,7 +127,7 @@ impl CutCraftApp {
             .map_err(Clone::clone)
             .and_then(|p| self.plan(&form, p));
         let split = match &post {
-            Ok(p) if Self::split_for(&form, p) => Some(if p.changes_tools() {
+            Ok(p) if super::output::split_for(&form, p) => Some(if p.changes_tools() {
                 "Each tool gets a file of its own. Run them in order, changing the tool \
                  between files."
             } else {
@@ -146,7 +146,9 @@ impl CutCraftApp {
             .as_ref()
             .map_or_else(|_| vec![], |p| self.not_checked(p, form.changes));
         let mut again = false;
-        let errors = found.as_deref().is_some_and(|f| Self::refused(f).is_some());
+        let errors = found
+            .as_deref()
+            .is_some_and(|f| super::output::refused(f).is_some());
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong(tr!("views-machine-and-post-processor"));

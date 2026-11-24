@@ -2,7 +2,7 @@
 //! change, still grouped; after it, the text cannot be edited as text.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct ConvertTextToCurves;
 
@@ -16,6 +16,7 @@ impl Command for ConvertTextToCurves {
             group: "Create Vectors",
             icon: "drawing/create_vectors/convert_text_to_curves.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

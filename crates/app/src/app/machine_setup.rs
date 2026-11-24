@@ -229,10 +229,7 @@ impl CutCraftApp {
                 }
             }
             PostOutcome::Select(name) => {
-                let wraps = self.doc.job.rotary.map(|r| match r.along {
-                    cut_craft_core::document::Along::X => "Y",
-                    cut_craft_core::document::Along::Y => "X",
-                });
+                let wraps = cut_craft_machines::wraps_for(&self.doc.job);
                 let picked = self
                     .posts
                     .load(&name)

@@ -114,11 +114,15 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "group_toolpaths",
-        "Group Toolpaths: puts the selected toolpaths together in a folder in the toolpath list, to keep a long list tidy",
+        "Group Toolpaths: puts the selected toolpaths together in a folder in the toolpath list, to keep a long list tidy. A folder can hold folders of its own",
     ),
     (
         "arrange_toolpaths",
-        "Arrange Toolpaths: puts the toolpaths in a new cutting order, and in or out of groups, in one step, as dragging them in the toolpath list does",
+        "Arrange Toolpaths: puts the toolpaths in a new cutting order, and in or out of groups, in one step, as dragging them (or whole groups) in the toolpath list does",
+    ),
+    (
+        "show_toolpath_group",
+        "Show or Hide Toolpath Group: the tick beside a group's name shows or hides every toolpath in it, its sub-groups' too, in one step",
     ),
     (
         "rename_toolpath_group",
@@ -126,7 +130,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "ungroup_toolpaths",
-        "Ungroup Toolpaths: takes the toolpaths out of their folder, keeping them, or deletes them with it",
+        "Ungroup Toolpaths: takes a folder apart one level, its toolpaths and folders moving up into the folder it sat in, or deletes them with it",
     ),
     (
         "ungroup_merged_toolpath",
@@ -610,8 +614,8 @@ pub const HINTS: &[(&str, &str)] = &[
         "About Cut Craft: its version, its licence and the people who made it",
     ),
     (
-        "third_party_licenses",
-        "Third Party Licences: the licences of the free software Cut Craft is built with",
+        "credits",
+        "Credits: the libraries, pictures and icons Cut Craft is built with, and their licences",
     ),
     (
         "open_application_data_folder",

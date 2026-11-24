@@ -8,7 +8,7 @@ use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::{DMat3, DVec3};
-use cut_craft_core::{Change, Command, CommandError, EMPTY_MODEL, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, EMPTY_MODEL, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -292,6 +292,7 @@ impl Command for Segment3dModel {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 
