@@ -17,6 +17,11 @@ and Cut Craft's own window stay smooth while it works.
   when a video or the browser wants the processor they get it first. When nothing else
   wants it, the calculation still runs at full speed, so on a quiet computer this costs
   nothing.
+- **It shares the graphics card too.** Some previews and toolpaths are worked out on the
+  graphics card, which also draws your desktop and your videos. Cut Craft gives the card
+  its work in short pieces and lets it rest after each one, so at 80% the card spends about
+  a fifth of the time on everything else. The status bar's word is about the processor
+  only.
 
 ## Changing it: Edit ▸ Options ▸ Performance
 
@@ -25,7 +30,8 @@ and Cut Craft's own window stay smooth while it works.
    to let calculations use every core at full priority: the fastest, but other programs may
    stutter meanwhile.
 3. **Share of the computer to use** sets how much of the processor calculations may use.
-   Less keeps other programs smoother; more finishes sooner.
+   Less keeps other programs smoother; more finishes sooner. It sets the graphics card's
+   share too, never less than a tenth.
 4. Press **Apply**. The change applies from the next calculation; one already running
    keeps going as it started.
 

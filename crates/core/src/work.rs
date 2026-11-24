@@ -28,8 +28,24 @@ pub struct Limit {
     pub share: u8,
 }
 
+/// Runs `each` on every piece in turn, resting after each but the last as the limit asks
+/// ([`Limit::rest_after`]): how work handed to the graphics card, which draws the desktop
+/// too, keeps to its share of the card.
+pub fn paced<I: IntoIterator>(pieces: I, mut each: impl FnMut(I::Item)) {
+    let (limit, mut rest) = (limit(), Duration::ZERO);
+    for piece in pieces {
+        std::thread::sleep(rest);
+        let start = Instant::now();
+        each(piece);
+        rest = limit.rest_after(start.elapsed());
+    }
+}
+
 /// The share of the cores calculations use unless Options says otherwise, percent.
 pub const DEFAULT_SHARE: u8 = 80;
+
+/// The least share of the time work on the graphics card is given, percent.
+const CARD_LEAST: u8 = 10;
 
 impl Default for Limit {
     fn default() -> Self {
@@ -55,6 +71,19 @@ impl Limit {
             return all;
         }
         (all * usize::from(self.share.min(100)) / 100).clamp(1, all)
+    }
+
+    /// How long work on the graphics card rests after a piece that kept it `busy`, so the
+    /// card (which also draws the desktop and your videos) works only the limit's share of
+    /// the time: a quarter of the piece at 80%, as long again at 50%, none with no limit.
+    /// The card is given at least a tenth of the time, so a tiny share does not leave a
+    /// preview waiting minutes.
+    pub fn rest_after(self, busy: Duration) -> Duration {
+        if !self.on {
+            return Duration::ZERO;
+        }
+        let share = u32::from(self.share.clamp(CARD_LEAST, 100));
+        busy * (100 - share) / share
     }
 
     /// The limit that gives the cores the old Advanced setting "Processor cores to use

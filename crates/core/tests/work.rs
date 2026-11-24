@@ -76,6 +76,59 @@ fn the_old_cores_setting_becomes_a_share() {
     }
 }
 
+/// Work on the graphics card, which also draws the desktop, goes in short pieces with a rest
+/// after each, so the card is busy only the share of the time the limit allows.
+#[test]
+fn work_on_the_card_rests_after_each_piece_to_keep_to_its_share() {
+    let busy = Duration::from_millis(40);
+    let share = |share| Limit { on: true, share };
+    assert_eq!(
+        Limit::OFF.rest_after(busy),
+        Duration::ZERO,
+        "no limit, no rest"
+    );
+    assert_eq!(share(100).rest_after(busy), Duration::ZERO);
+    assert_eq!(share(80).rest_after(busy), Duration::from_millis(10));
+    assert_eq!(share(50).rest_after(busy), busy);
+    assert_eq!(share(10).rest_after(busy), Duration::from_millis(360));
+    assert_eq!(
+        share(0).rest_after(busy),
+        Duration::from_millis(360),
+        "at least 10%"
+    );
+    assert_eq!(
+        Limit::default().rest_after(busy),
+        Duration::from_millis(10),
+        "80% unless Options says otherwise"
+    );
+}
+
+#[test]
+fn paced_pieces_rest_between_them_by_the_limit_and_not_after_the_last() {
+    let piece = Duration::from_millis(20);
+    let run = |limit| {
+        work::set_limit(limit);
+        let (start, mut done) = (Instant::now(), vec![]);
+        work::paced(0..3, |i| {
+            std::thread::sleep(piece);
+            done.push(i);
+        });
+        (start.elapsed(), done)
+    };
+    let (free, done) = run(Limit::OFF);
+    assert_eq!(done, [0, 1, 2], "every piece, in order");
+    assert!(free < piece * 5, "no rests with no limit: {free:?}");
+    let (half, _) = run(Limit {
+        on: true,
+        share: 50,
+    });
+    assert!(
+        half >= piece * 5,
+        "a rest as long as each piece but the last: {half:?}"
+    );
+    work::set_limit(Limit::default());
+}
+
 #[test]
 fn parallel_answers_in_order_on_no_more_threads_than_allowed() {
     let made = work::parallel(1000, |i| (i * 3, std::thread::current().id()));
