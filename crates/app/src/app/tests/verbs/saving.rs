@@ -37,7 +37,8 @@ impl Harness {
 
     /// The checks before cutting passed for the job and machine as they are now.
     pub(in super::super) fn given_checks_passed(&mut self) {
-        self.app.saving_checked = Some((self.app.history.revision(), self.app.machines.active));
+        let now = self.app.now_checked();
+        self.app.saving.go(Vec::new(), now);
     }
 
     /// The checks before cutting kept, one set per plan, job and machine.

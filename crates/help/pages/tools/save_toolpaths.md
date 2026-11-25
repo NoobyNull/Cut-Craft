@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: checks_before_cutting, profile_toolpath, pocket_toolpath, collisions, rotary_machining_toolpath
 ---
 

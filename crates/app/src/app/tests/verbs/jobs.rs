@@ -129,12 +129,12 @@ impl Harness {
 
     /// Save Anyway answered for `problems`, as its button does.
     pub(in super::super) fn given_save_anyway_agreed(&mut self, problems: &[&str]) {
-        self.app.checks_accepted = problems.iter().map(|&p| p.to_owned()).collect();
+        (self.app.saving).accept(problems.iter().map(|&p| p.to_owned()).collect());
     }
 
     /// The problems Save Anyway was answered for, not yet used by a save.
     pub(in super::super) fn save_anyway_agreed(&self) -> &[String] {
-        &self.app.checks_accepted
+        self.app.saving.accepted()
     }
 
     // ---- crash reports ----
