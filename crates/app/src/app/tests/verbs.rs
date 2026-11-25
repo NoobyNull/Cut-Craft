@@ -737,10 +737,180 @@ impl Harness {
     pub(super) fn shortcut_rows(&self, search: &str) -> Vec<super::super::shortcuts_page::Row> {
         self.app.shortcut_rows(search)
     }
+
+    // ---- machines and post processors ----
+
+    /// Adds a machine (Machine ▸ Add Machine, its settings left as they come), now the one
+    /// in use.
+    pub(super) fn given_machine(&mut self) {
+        self.app.machines.add();
+    }
+
+    /// Changes the machine in use, as its Machine Configuration would.
+    pub(super) fn edit_machine(&mut self, edit: impl FnOnce(&mut cut_craft_machines::Machine)) {
+        edit(self.app.machines.active_mut().expect("a machine in use"));
+    }
+
+    /// The machine in use, if there is one.
+    pub(super) fn machine(&self) -> Option<&cut_craft_machines::Machine> {
+        self.app.machines.active()
+    }
+
+    /// Every machine Cut Craft keeps.
+    pub(super) fn machines(&self) -> &[cut_craft_machines::Machine] {
+        &self.app.machines.machines
+    }
+
+    /// The post processor File ▸ Save Toolpaths would save through now, or why there is none.
+    pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
+        self.app.output_post()
+    }
+
+    /// The job's toolpaths saved through `post` to `path`, as Save Toolpaths does.
+    pub(super) fn save_through(
+        &self,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
+        files::save_through(post, &self.app.slots(), &self.app.doc, path, None)
+    }
+
+    /// Save Toolpaths' window set as `form`, saving through `post` to `path`: what it said.
+    pub(super) fn save_toolpaths_to(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+    ) -> Result<String, String> {
+        self.app.save_toolpaths_to(form, post, path)
+    }
+
+    /// The post Save Toolpaths' window set as `form` saves through.
+    pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
+        self.app.form_post(form)
+    }
+
+    /// Send to Machine with Save Toolpaths' window set as `form`, through `post`, to
+    /// `store`; `earlier` answers whether to replace files already there. What it said.
+    pub(super) fn send_to(
+        &mut self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        store: &dyn cut_craft_machines::send::Store,
+        earlier: &dyn Fn(&[String]) -> Option<crate::options::EarlierGcode>,
+    ) -> Result<String, String> {
+        self.app.send_to(form, post, store, earlier)
+    }
+
+    /// The custom post processors kept in `folder`, as the settings folder holds them.
+    pub(super) fn given_posts_folder(&mut self, folder: std::path::PathBuf) {
+        self.app.posts = cut_craft_machines::Library::new(Some(folder));
+    }
+
+    /// The post processors Cut Craft has: its own and the ones installed.
+    pub(super) fn posts(&self) -> &cut_craft_machines::Library {
+        &self.app.posts
+    }
+
+    /// Installs the post processor file at `path`, as Post Processor Management's Install does.
+    pub(super) fn install_post(&mut self, path: &std::path::Path) {
+        self.app.install_post(path);
+    }
+
+    /// Installs the offline machine package at `path` (Machine ▸ Install Offline Package).
+    pub(super) fn install_package(&mut self, path: &std::path::Path) {
+        self.app.install_package(path);
+    }
+
+    /// Install Offline Package from inside Machine Configuration, with the package at `path`.
+    pub(super) fn install_package_in_machine_window(&mut self, path: &std::path::Path) {
+        self.app.machine_outcome_install(path);
+    }
+
+    /// Picks a post in Post Processor Management (Select, ...).
+    pub(super) fn pick_post(&mut self, outcome: cut_craft_machines::PostOutcome) {
+        self.app.post_outcome(outcome);
+    }
+
+    /// Reads the machines from the file at `path`, as starting does.
+    pub(super) fn load_machines_from(&mut self, path: &std::path::Path) {
+        self.app.load_machines_at(path);
+    }
+
+    /// Keeps a change to the machines (saving them), the status bar saying `done`.
+    pub(super) fn keep_machines(&mut self, done: &str) {
+        self.app.machines_changed(done);
+    }
+
+    /// Machine Configuration's Add, on the machines it is editing (kept once applied).
+    pub(super) fn add_machine_in_window(&mut self) {
+        self.app
+            .machine_window
+            .as_mut()
+            .expect("Machine Configuration is open")
+            .draft
+            .add();
+    }
+
+    /// The machines Machine Configuration is editing, if it is open.
+    pub(super) fn machines_being_edited(&self) -> Option<&cut_craft_machines::Machines> {
+        self.app.machine_window.as_ref().map(|w| &w.draft)
+    }
+
+    /// Whether Post Processor Management is open.
+    pub(super) fn post_window_open(&self) -> bool {
+        self.app.post_window.is_some()
+    }
+
+    /// Whether Machine Files is open.
+    pub(super) fn machine_files_open(&self) -> bool {
+        self.app.machine_files.is_some()
+    }
+
+    /// The bit database the forms pick bits from.
+    pub(super) fn tool_database(&self) -> &ToolDatabase {
+        &self.app.tools
+    }
+
+    // ---- pages, menus and finding tools ----
+
+    /// Which pages are open and pinned.
+    pub(super) fn pages(&self) -> &Pages {
+        &self.app.pages
+    }
+
+    /// The menu bar as it stands (the start screen's or a job's).
+    pub(super) fn menu_bar(&self) -> &gui::MenuSystem {
+        self.app.current_menus()
+    }
+
+    /// Find a Tool's matches for `text`: each tool's id and name.
+    pub(super) fn find_tools(&self, text: &str) -> Vec<(&'static str, String)> {
+        self.app.search_matches(text)
+    }
+
+    /// The lathe form's note on how fast A turns, and whether the machine caps it.
+    pub(super) fn lathe_a_speed_note(&self) -> Option<(String, bool)> {
+        self.app
+            .lathe_a_speed(self.app.form.as_ref().expect("a form is open"))
+    }
+
+    // ---- crashes ----
+
+    /// Starts after a crash that left `crash` as its log.
+    pub(super) fn crashed_last_time(&mut self, crash: String) {
+        let ctx = self.ctx.clone();
+        self.app.offer_crash(&ctx, crash);
+    }
+
+    /// Whether the bug report window is open.
+    pub(super) fn bug_report_open(&self) -> bool {
+        self.app.reporter.is_open()
+    }
 }
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 12] = [
+const THROUGH_THE_HARNESS: [(&str, &str); 13] = [
     ("layers_sheets.rs", include_str!("layers_sheets.rs")),
     (
         "accessibility_tests.rs",
@@ -756,6 +926,7 @@ const THROUGH_THE_HARNESS: [(&str, &str); 12] = [
     ("moving.rs", include_str!("moving.rs")),
     ("calculating.rs", include_str!("calculating.rs")),
     ("keys_and_mouse.rs", include_str!("keys_and_mouse.rs")),
+    ("machines.rs", include_str!("machines.rs")),
 ];
 
 /// The lines of `source` that reach into the app past the harness.
