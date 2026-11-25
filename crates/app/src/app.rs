@@ -83,6 +83,7 @@ mod pace;
 mod page_layout;
 mod panels;
 mod passes;
+mod photo_depth;
 mod placement;
 mod player;
 mod preview;
@@ -728,15 +729,10 @@ pub(crate) struct CutCraftApp {
     selected_group: Option<String>,
     /// Quick Engrave's Immediate Output: the post and side name it saves with.
     immediate_output: SaveForm,
-    /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
-    depth_estimate: Option<crate::depth::Estimating>,
+    /// Relief from Photo: the Depth add-on's estimate running, and High detail.
+    photo_depth: photo_depth::PhotoDepth,
     /// Generate Border's key, and the border it is generating.
     border: generate_border::BorderForm,
-    /// Relief from Photo's High detail tick: unset means on once the model is fetched.
-    depth_high_detail: Option<bool>,
-    /// The High detail model downloading, or why its last download failed.
-    depth_detail_fetch: Option<crate::depth::FetchingDetail>,
-    depth_detail_failed: Option<String>,
     /// A slow job running off the window's thread, its progress shown over the window.
     busy: Option<crate::busy::Busy<CutCraftApp>>,
     /// How long a job may take before its progress is shown; quicker ones finish as if
