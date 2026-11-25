@@ -327,7 +327,18 @@ impl CutCraftApp {
         // Ribbon names under its icons)
         for (name, tools) in sections {
             if !name.is_empty() {
-                ui.strong(crate::tool_names::group_name(name));
+                let label = crate::tool_names::group_name(name);
+                if self.group_named(name).is_some() {
+                    // a group's heading puts the whole group on a toolbar of your own
+                    let heading = ui.add(
+                        egui::Label::new(egui::RichText::new(label).strong())
+                            .selectable(false)
+                            .sense(egui::Sense::click()),
+                    );
+                    chosen = chosen.or_else(|| self.group_menu_on(&heading, name));
+                } else {
+                    ui.strong(label);
+                }
             }
             if !among && !folded {
                 self.spread_tools(ui, tools, edge, &mut clicked, &mut chosen);
@@ -398,8 +409,10 @@ impl CutCraftApp {
             Place::Grid
         };
         self.popup(response, || {
-            self.tool_model()
-                .menu(id, place, &self.options.favourites, folded)
+            let menu = self
+                .tool_model()
+                .menu(id, place, &self.options.favourites, folded);
+            self.with_toolbar_menu(menu, &crate::custom_toolbars::Item::Tool(id.to_owned()))
         })
     }
 

@@ -122,7 +122,12 @@ fn named_as_its_tool(item: &MenuItem) -> bool {
 /// A menu item's name in the language in use: its tool's name when it is named as that
 /// tool, else its own words. A recent file or a gadget shows its own name.
 pub fn menu_item_name(item: &MenuItem) -> String {
-    if item.action.starts_with("open_recent:") || item.action.starts_with("gadget_") {
+    // a toolbar of your own is called what you called it
+    let toolbar = [crate::custom_toolbars::ACTION, "add:"].concat();
+    if item.action.starts_with("open_recent:")
+        || item.action.starts_with("gadget_")
+        || item.action.starts_with(&toolbar)
+    {
         return item.name.clone();
     }
     if named_as_its_tool(item) {

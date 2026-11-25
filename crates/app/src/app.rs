@@ -10,6 +10,7 @@ mod canvas_layout;
 mod check_list;
 mod command_form;
 mod commit;
+mod custom_toolbars;
 mod cutting;
 mod depth;
 mod dialog_windows;
@@ -694,6 +695,8 @@ struct CutCraftApp {
     ribbon_tab: usize,
     /// What the Canvas layout has open.
     canvas: canvas_layout::CanvasState,
+    /// What the toolbars of your own have open.
+    toolbars: custom_toolbars::ToolbarState,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
     /// The user's own spelling words, one a line; none in tests.
