@@ -68,6 +68,10 @@ pub struct Machine {
     /// Holder per bit: each bit can have a holder of its own in the Bit Library, used
     /// instead of [`Self::holder`] (a tool changer's bits each sit in their own holder).
     pub holder_per_bit: bool,
+    /// Protect the Machine: which checks refuse a job as a risk of damage to it (keep-out
+    /// zones, bed size, Z travel, spoilboard depth), all on unless switched off here, and how
+    /// deep a cut may go into the spoilboard.
+    pub protect: cut_craft_core::preflight::Protect,
     /// How a job with several bits is saved when the machine has no tool changer: a file
     /// for each bit (the default), or one file pausing at each change.
     pub hand_changes: HandChanges,

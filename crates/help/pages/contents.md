@@ -27,6 +27,8 @@ a CNC machine cuts them with.
   your job.
 - [Reporting a bug](help:bug_reports): right-click ▸ Report a Bug Here…, what each report
   sends (the details of your computer included), and how to switch those off.
+- [Protect the Machine](help:protect_the_machine): what is never saved because it could
+  damage the machine, and the only way past, per machine in Machine Configuration.
 - [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
   hitting wood beside a deep cut, shown red in the preview and asked about before saving.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you

@@ -150,9 +150,6 @@ impl CutCraftApp {
             .as_ref()
             .map_or_else(|_| vec![], |p| self.not_checked(p, form.changes));
         let mut again = false;
-        let errors = found
-            .as_deref()
-            .is_some_and(|f| super::output::refused(f).is_some());
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong(tr!("views-machine-and-post-processor"));
@@ -200,8 +197,12 @@ impl CutCraftApp {
             ui.add_space(ui.spacing().item_spacing.y);
             // ticked in the list this frame counts at once
             let unticked = found.as_deref().is_some_and(|f| !self.all_acknowledged(f));
-            let ready = plan.is_ok() && !errors && found.is_some() && !unticked;
-            pressed = self.save_buttons(ui, ready, errors, unticked);
+            // what could damage the machine is never saved or sent, ticked or not
+            let refused = found
+                .as_deref()
+                .is_some_and(|f| !super::output::refused(f).is_empty());
+            let ready = plan.is_ok() && found.is_some() && !unticked && !refused;
+            pressed = self.save_buttons(ui, ready, unticked);
         });
         if again {
             self.check_again();
@@ -248,7 +249,6 @@ impl CutCraftApp {
         &self,
         ui: &mut egui::Ui,
         ready: bool,
-        errors: bool,
         unticked: bool,
     ) -> (
         bool,
@@ -259,11 +259,7 @@ impl CutCraftApp {
         let (mut save, mut send, mut manage, mut view) = (false, false, None, false);
         ui.horizontal(|ui| {
             let response = ui.add_enabled(ready, egui::Button::new(tr!("views-save-toolpaths")));
-            save = if errors {
-                response
-                    .on_disabled_hover_text(tr!("views-fix-the-problems-marked-must"))
-                    .clicked()
-            } else if unticked {
+            save = if unticked {
                 response.on_disabled_hover_text(t!(TICK_TO_SAVE)).clicked()
             } else {
                 response.clicked()
@@ -276,12 +272,10 @@ impl CutCraftApp {
                     egui::Button::new(tr!("views-send-to-machine")),
                 )
                 .on_hover_hint(tr!("views-save-the-files-straight-onto"));
-            send = if reachable && unticked && !errors {
+            send = if reachable && unticked {
                 response.on_disabled_hover_text(t!(TICK_TO_SAVE)).clicked()
             } else if reachable {
-                response
-                    .on_disabled_hover_text(tr!("views-fix-the-problems-marked-must-2"))
-                    .clicked()
+                response.clicked()
             } else {
                 response
                     .on_disabled_hover_text(super::send::NO_MACHINE_FOLDER)

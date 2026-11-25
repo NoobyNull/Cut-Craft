@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: toolpaths, save_toolpaths
+reviewed: 2026-11-25
+see-also: toolpaths, save_toolpaths, protect_the_machine
 ---
 
 # Checks before cutting
@@ -28,8 +28,12 @@ a block of material to look for crashes. **Cancel** stops it; **Check Again** ru
 The line at the top counts them up, such as *✔ 15 passed · ⚠ 3 to read · 2 not checked*.
 Each check then shows how it came out, with what needs you first:
 
-- **✖ Must fix** (red): the toolpaths are not saved until it is put right, such as a rapid
-  move that would crash into the material.
+- **⛔ Could damage the machine** (red): a cut into a keep-out zone, past the bed or the Z
+  travel, or too deep into the spoilboard. It has **no tick**: nothing is saved or sent
+  while it is so. Put it right, or see [Protect the Machine](help:protect_the_machine).
+- **✖ Must fix** (red): something that breaks a bit or stops the job, such
+  as a rapid move that would crash into the material. Put it right if you can. If you
+  mean it, **tick it** and save anyway (see below).
 - **⚠ To read** (amber): something you should know before cutting. Read it and **tick it**.
 - **✔ Passed** (green): nothing found.
 - **– Not checked** (grey): the check could not be made, and it says why, such as *Shop
@@ -39,13 +43,43 @@ Each check then shows how it came out, with what needs you first:
 Point at a check's name to see what it protects you from. Press its **?** for its own page,
 with how to fix what it found.
 
-## Ticking each warning
+## Ticking each warning and error
 
 ![Every warning ticked, Save Toolpaths ready](pictures/checks/checks-ticked.png)
 
-**Save Toolpaths...** and **Send to Machine** stay greyed until every ⚠ is ticked. Ticking
-says *I have read this, and it is what I want*. Nothing is refused for a warning: you
-decide. The ticks cannot be switched off, so nothing slips past unread. (Earlier versions
+**Save Toolpaths...** and **Send to Machine** stay greyed until every ✖ and ⚠ is ticked.
+Ticking says *I have read this, and it is what I want*: you decide. Only a ⛔ Could
+damage the machine is refused, whatever is ticked.
+
+## Saving with errors
+
+![Save Anyway with an error to tick](pictures/checks/save-anyway-errors.png)
+
+A ✖ Must fix ticked in the list is not the end of it. Every time you save or send,
+**Save Anyway** asks again and lists:
+
+1. A red line at the top, *The job as it stands will not run on the machine*, when it would
+   stop on the machine as saved (a toolpath with no feed rate or plunge rate, say).
+2. Each error in red with a tick box of its own. **Save Anyway** stays greyed until each
+   one is ticked. The ones you ticked in the list come ticked.
+3. The warnings, to read.
+
+Press **Save Anyway** (or **Send Anyway**) to save, or **Go Back** (**Don't Save** when
+the job would still run) to put it right first. The answer is never remembered: the next
+save asks again.
+
+A file saved past errors says so at the top, before its first command, in comments the
+machine skips:
+
+```
+; SAVED WITH ERRORS: the checks before cutting found these, and Save Anyway was chosen
+; Profile: End Mill has no feed rate, so the machine would not move while cutting...
+```
+
+So whoever runs the file later sees what it was saved with.
+
+A toolpath with no moves at all has nothing to write: it is left out of the files, and the
+status bar names it once saved. The ticks cannot be switched off, so nothing slips past unread. (Earlier versions
 had a *Save and tell* choice in Options ▸ Confirmations that saved without asking; it is
 gone, and options saved with it still open.)
 

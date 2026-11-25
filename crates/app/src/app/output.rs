@@ -35,14 +35,27 @@ pub(super) struct Output<'a> {
 /// What the checks before cutting allow with what they found.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Verdict {
-    /// Not written: the errors, each with its fix.
-    Refused(String),
+    /// Not written, and no Save Anyway: a risk of damage to the machine, each said; only
+    /// switching its check off in Machine Configuration lets it past.
+    Refused(Vec<String>),
     /// Asked first (Save Anyway): every problem found, the question shows them all.
-    Ask(Vec<String>),
+    Ask(Asking),
     /// Written.
     Go,
 }
 
+/// What Save Anyway asks about.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct Asking {
+    /// Every problem found, errors and warnings, as the checks list them.
+    pub problems: Vec<String>,
+    /// The errors among them (Must fix), each ticked on its own before Save Anyway.
+    pub errors: Vec<String>,
+    /// The errors that leave a job that will not run as saved (a toolpath with no moves,
+    /// no feed, plunge rate or spindle speed): asked as "will not run", Save Anyway or Go
+    /// Back.
+    pub wont_run: Vec<String>,
+}
 impl Output<'_> {
     /// The machine has a tool changer (slots in Machine Configuration); with no machine set
     /// up there is none.
@@ -135,6 +148,7 @@ impl Output<'_> {
     }
 
     /// The toolpaths of `plan` in `doc` that pass over a keep-out zone, by name.
+    #[cfg(test)]
     pub(super) fn not_kept_out(&self, doc: &Document, plan: &[Vec<EntityId>]) -> Vec<String> {
         plan.iter()
             .flatten()
@@ -144,33 +158,14 @@ impl Output<'_> {
             .collect()
     }
 
-    /// The job with its toolpaths thinned to their tolerances, as they are saved; refused
-    /// when a toolpath of `plan`, as saved, would cut into a keep-out zone.
-    pub(super) fn thinned(&self, plan: &[Vec<EntityId>]) -> Result<Document, String> {
-        use super::toolpath_output::{CLIP_SETTING, can_clip};
-        let thinned = self.tolerances.thinned(self.doc);
-        // a toolpath that cannot abide by the keep-out zones is not saved; checked on the
-        // moves saved, which the tolerance may have straightened
-        let crossing = self.not_kept_out(&thinned, plan);
-        if !crossing.is_empty() {
-            let clippable = plan
-                .iter()
-                .flatten()
-                .filter_map(|id| thinned.toolpaths.get(id))
-                .any(|t| crossing.contains(&t.name) && can_clip(t));
-            let way = if clippable {
-                format!(", or turn on clipping ({CLIP_SETTING}) and recalculate")
-            } else {
-                " (laser and drill bank toolpaths are not clipped: move the part or the zone)"
-                    .to_owned()
-            };
-            return Err(format!(
-                "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
-                 their clearance are right{way}",
-                crossing.join(", ")
-            ));
-        }
-        Ok(thinned)
+    /// The toolpaths of `plan` left out of the files as they have no moves, by name.
+    pub(super) fn left_out(&self, form: &SaveForm, post: &Post) -> Vec<String> {
+        let plan = self.plan(form, post).unwrap_or_default();
+        (plan.iter().flatten())
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .filter(|t| t.moves.is_empty())
+            .map(|t| t.name.clone())
+            .collect()
     }
 
     /// The files the form's plan makes through `post` at `path` (and beside it), with the
@@ -185,8 +180,31 @@ impl Output<'_> {
         made: chrono::NaiveDateTime,
         note_variables: &[cut_craft_core::notes::Variable],
     ) -> Result<Vec<(PathBuf, String)>, String> {
-        let plan = self.plan(form, post)?;
-        let thinned = self.thinned(&plan)?;
+        // a toolpath with no moves has nothing to write: left out (saving says so)
+        let plan: Plan = (self.plan(form, post)?.into_iter())
+            .map(|file| {
+                (file.into_iter())
+                    .filter(|id| {
+                        self.doc
+                            .toolpaths
+                            .get(id)
+                            .is_some_and(|t| !t.moves.is_empty())
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .filter(|file| !file.is_empty())
+            .collect();
+        // nothing left to cut: no files, and an earlier save is kept as it was
+        if plan.is_empty() {
+            let left = self.left_out(form, post);
+            let has = if left.len() == 1 { "has" } else { "have" };
+            return Err(format!(
+                "Nothing to save: {} {has} no moves to cut. Recalculate, or untick in the \
+                 toolpath list what is not to be saved",
+                left.join(", "),
+            ));
+        }
+        let thinned = self.tolerances.thinned(self.doc);
         let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
             if self.doc.bottom_side {
                 "Bottom"
@@ -236,7 +254,30 @@ impl Output<'_> {
                 texts.push((path.clone(), text));
             }
         }
+        // every tile empty: no files, and an earlier save is kept as it was
+        if texts.is_empty() {
+            return Err(
+                "Nothing to save: no tile has anything to cut. Recalculate the \
+                        toolpaths, or check the tiles cover the cuts"
+                    .to_owned(),
+            );
+        }
         Ok(texts)
+    }
+
+    /// What the G-code says when the machine's protection had checks switched off as it was
+    /// made: which, for whoever runs it; `None` with every check on, or no machine.
+    pub(super) fn protection_off(&self) -> Option<String> {
+        let machine = self.machine?;
+        let off = machine.protect.switched_off();
+        (!off.is_empty()).then(|| {
+            format!(
+                "PROTECTION OFF: the checks for {} were switched off for {} in Machine \
+                 Configuration as this was made",
+                off.join(", "),
+                machine.name
+            )
+        })
     }
 
     /// What saving says once `written` are saved beside `path`.
@@ -282,50 +323,141 @@ pub(super) fn no_tool_changer() -> Finding {
     }
 }
 
-/// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when
-/// there are none.
-pub(super) fn refused(found: &[Finding]) -> Option<String> {
-    let errors: Vec<&str> = found
-        .iter()
+/// The errors (Must fix) in `found`.
+pub(super) fn errors(found: &[Finding]) -> Vec<String> {
+    (found.iter())
         .filter(|f| f.severity == Severity::Error)
-        .map(|f| f.message.as_str())
-        .collect();
-    (!errors.is_empty()).then(|| format!("Not saved: {}", errors.join("; ")))
+        .map(|f| f.message.clone())
+        .collect()
 }
 
-/// Whether every warning in `found` was ticked as read (errors are never ticked).
+/// The risks of damage to the machine in `found`: never saved, sent or made, whatever is
+/// ticked or answered.
+pub(super) fn refused(found: &[Finding]) -> Vec<String> {
+    (found.iter())
+        .filter(|f| f.severity == Severity::Damage)
+        .map(|f| f.message.clone())
+        .collect()
+}
+
+/// What refusing `damage` says, in the status bar and to a script: nothing saved, why, and
+/// the only way past.
+pub(super) fn refusal(damage: &[String]) -> String {
+    format!(
+        "Nothing saved: this could damage the machine. {}. Put it right, or switch the check \
+         off in Machine Configuration's Protect the Machine",
+        damage.join(". ")
+    )
+}
+
+/// Whether every problem in `found` that is ticked, errors too, was ticked as read (a risk
+/// of damage to the machine has no tick: see [`refused`]).
 pub(super) fn all_acknowledged(
     found: &[Finding],
     acknowledged: &std::collections::BTreeSet<String>,
 ) -> bool {
-    found
-        .iter()
-        .filter(|f| f.severity != Severity::Error)
+    (found.iter())
+        .filter(|f| f.severity != Severity::Damage)
         .all(|f| acknowledged.contains(&f.message))
 }
 
-/// What the checks before cutting allow with what they `found`: refused for an error; else
-/// asked about (Save Anyway) unless every warning was ticked as read in `acknowledged`, or
-/// `accepted` already answers Save Anyway for each of them. The collet or spindle hitting
-/// the material ([`Severity::MustAsk`]) is asked about even when ticked.
+/// What the checks before cutting allow with what they `found`: asked about (Save Anyway)
+/// unless every problem was ticked as read in `acknowledged`, or `accepted` already answers
+/// Save Anyway for each of them. Errors and the collet or spindle hitting the material
+/// ([`Severity::MustAsk`]) are asked about even when ticked: every save asks again. Only a
+/// risk of damage to the machine is refused, whatever was ticked or answered: otherwise
+/// the operator decides.
 pub(super) fn verdict(
     found: &[Finding],
     acknowledged: &std::collections::BTreeSet<String>,
     accepted: &[String],
 ) -> Verdict {
-    if let Some(refused) = refused(found) {
+    let refused = refused(found);
+    if !refused.is_empty() {
         return Verdict::Refused(refused);
     }
     let ticked = all_acknowledged(found, acknowledged);
-    let must_ask = found.iter().any(|f| f.severity == Severity::MustAsk);
+    let must_ask = found
+        .iter()
+        .any(|f| matches!(f.severity, Severity::MustAsk | Severity::Error));
     let problems: Vec<String> = found.iter().map(|f| f.message.clone()).collect();
     // Save Anyway answered for these problems, every one of them shown then
     let answered = problems.iter().all(|p| accepted.contains(p));
-    if !problems.is_empty() && (must_ask || !ticked) && !answered {
-        Verdict::Ask(problems)
-    } else {
-        Verdict::Go
+    if problems.is_empty() || answered || (ticked && !must_ask) {
+        return Verdict::Go;
     }
+    let wont_run = (found.iter())
+        .filter(|f| f.severity == Severity::Error && f.check == Check::CanCut)
+        .map(|f| f.message.clone())
+        .collect();
+    Verdict::Ask(Asking {
+        problems,
+        errors: errors(found),
+        wont_run,
+    })
+}
+
+/// `texts` with the `errors` they were saved with (Save Anyway), and which of the
+/// machine's protection was switched off (`protection_off`, see
+/// [`Output::protection_off`]), said in comments at the top of each file, before its first
+/// command, so whoever runs it sees them: in the post's own comment style (`;` or
+/// brackets, as its header writes them). Unchanged without either.
+pub(super) fn marked(
+    texts: Vec<(PathBuf, String)>,
+    errors: &[String],
+    protection_off: Option<&str>,
+) -> Vec<(PathBuf, String)> {
+    let mut lines: Vec<String> = protection_off.map(str::to_owned).into_iter().collect();
+    if !errors.is_empty() {
+        lines.push(
+            "SAVED WITH ERRORS: the checks before cutting found these, and Save Anyway was \
+             chosen"
+                .to_owned(),
+        );
+        lines.extend(cut_craft_core::notes::gcode_lines(&errors.join("\n"), &[]));
+    }
+    if lines.is_empty() {
+        return texts;
+    }
+    (texts.into_iter())
+        .map(|(path, text)| {
+            // the post's own line ending: CR LF, LF, or CR alone
+            let ending = if text.contains("\r\n") {
+                "\r\n"
+            } else if text.contains('\r') && !text.contains('\n') {
+                "\r"
+            } else {
+                "\n"
+            };
+            let last = ending.chars().last().unwrap_or('\n');
+            let semicolon = (text.split(last))
+                .map(str::trim_start)
+                .find(|l| l.starts_with('(') || l.starts_with(';'))
+                .is_some_and(|l| l.starts_with(';'));
+            let mut said = String::new();
+            for line in &lines {
+                let line = if semicolon {
+                    format!("; {line}")
+                } else {
+                    format!("({line})")
+                };
+                said.push_str(&line);
+                said.push_str(ending);
+            }
+            // after the header's own comments, before the first command
+            let mut at = 0;
+            for line in text.split_inclusive(last) {
+                let t = line.trim();
+                if !(t.starts_with('(') || t.starts_with(';') || t.is_empty()) {
+                    break;
+                }
+                at += line.len();
+            }
+            let mut text = text;
+            text.insert_str(at, &said);
+            (path, text)
+        })
+        .collect()
 }
 
 /// What the status bar says once `written` are saved, beside `path`; `tiled` while Toolpath
@@ -347,6 +479,18 @@ pub(super) fn saved_message(written: &[PathBuf], path: &Path, tiled: bool) -> St
     } else {
         saved
     }
+}
+
+/// What saving says, `said`, with the toolpaths `left_out` of the files (they have no moves)
+/// named after it.
+pub(super) fn with_left_out(said: String, left_out: &[String]) -> String {
+    if left_out.is_empty() {
+        return said;
+    }
+    format!(
+        "{said}. Left out, as it has no moves to cut: {}",
+        left_out.join(", ")
+    )
 }
 
 /// Writes each file of `texts`; the files written, in order.

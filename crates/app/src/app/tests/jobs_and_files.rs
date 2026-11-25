@@ -577,12 +577,12 @@ fn a_dxf_without_units_asks_which_with_the_guess_picked_then_zooms_to_it() {
 fn a_save_that_fails_after_replace_or_archive_leaves_the_earlier_files_where_they_were() {
     use crate::files::{SaveMode, ToolChanges};
     use crate::options::EarlierGcode;
-    use cut_craft_core::keep_out::KeepOutZone;
     let mut h = Harness::new();
     two_tools(&mut h);
-    // a clamp put down over the first rectangle after its toolpath was made
-    let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
-    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
+    // every toolpath hidden once the save was asked for: nothing to make the files from
+    for t in h.app.doc.toolpaths.values_mut() {
+        t.visible = false;
+    }
     let dir = fresh_dir("resave-fail");
     let form = SaveForm {
         mode: SaveMode::VisibleToOneFile,
@@ -602,7 +602,7 @@ fn a_save_that_fails_after_replace_or_archive_leaves_the_earlier_files_where_the
         h.app.save_over_earlier(&form, post.clone(), path.clone());
         h.app.answer_earlier(Some(choice), false);
         let message = h.app.status.message.clone();
-        assert!(message.contains("keep-out zone"), "{message}");
+        assert!(message.contains("no toolpaths are shown"), "{message}");
         assert!(message.contains("earlier files were left"), "{message}");
         for file in [&path, &numbered] {
             assert_eq!(std::fs::read_to_string(file).unwrap(), "old", "{choice:?}");
@@ -844,14 +844,82 @@ fn save_anyway_counts_only_for_the_save_it_answered() {
     };
     h.app.save_checks = checks(cut_craft_core::preflight::Severity::Error, "Too deep");
     h.app.checks_accepted = vec!["Too deep".to_owned()];
-    assert!(h.app.ready_to_save(&form, false).is_none(), "refused");
+    assert!(
+        h.app.ready_to_save(&form, false).is_some(),
+        "Save Anyway answered"
+    );
     assert!(
         h.app.checks_accepted.is_empty(),
         "used up by the save it was for"
     );
+    // the same error, the next save: asked again, never remembered
+    assert!(h.app.ready_to_save(&form, false).is_none(), "asks again");
+    assert!(h.app.save_anyway.take().is_some());
     h.app.save_checks = checks(cut_craft_core::preflight::Severity::MustAsk, "Collet hits");
     assert!(h.app.ready_to_save(&form, false).is_none(), "asks again");
     assert!(h.app.save_anyway.is_some());
+}
+
+#[test]
+fn saving_past_an_error_ticks_each_one_and_the_files_say_so() {
+    let mut h = ready_for_output();
+    let form = one_file_form();
+    let post = h.app.form_post(&form).unwrap();
+    let plan = h.app.plan(&form, &post).unwrap();
+    let error = "Profile: End Mill has no feed rate";
+    h.app.save_checks = vec![super::SaveChecks {
+        plan,
+        changes: form.changes,
+        revision: h.app.history.revision(),
+        machine: h.app.machines.active,
+        found: Some(vec![cut_craft_core::preflight::Finding {
+            severity: cut_craft_core::preflight::Severity::Error,
+            message: error.to_owned(),
+            check: cut_craft_core::preflight::Check::CanCut,
+        }]),
+    }];
+    // asked, not refused: the error to tick on its own, and the job will not run
+    assert!(h.app.ready_to_save(&form, false).is_none());
+    let ask = h.app.save_anyway.as_ref().expect("Save Anyway asks");
+    assert_eq!(ask.asking.errors, [error]);
+    assert_eq!(ask.asking.wont_run, [error]);
+    assert!(ask.ticked.is_empty(), "nothing ticked for them");
+    // ticked under the checks, it shows ticked here, but is still asked about
+    h.app.save_anyway = None;
+    h.app.acknowledged.insert(error.to_owned());
+    assert!(
+        h.app.ready_to_save(&form, false).is_none(),
+        "asked every time"
+    );
+    let ask = h.app.save_anyway.take().unwrap();
+    assert!(ask.ticked.contains(error));
+    // Save Anyway: saved, and the file says what it was saved past
+    h.app.checks_accepted = vec![error.to_owned()];
+    let post = h
+        .app
+        .ready_to_save(&form, false)
+        .expect("Save Anyway answered");
+    let dir = fresh_dir("saved-with-errors");
+    let written = h
+        .app
+        .write_toolpath_files(&form, &post, &dir.join("sign.nc"))
+        .unwrap();
+    let text = std::fs::read_to_string(&written[0]).unwrap();
+    assert!(text.contains("SAVED WITH ERRORS"), "{text}");
+    assert!(text.contains("no feed rate"), "{text}");
+    // the job changed before the files were written (the Web API can, while a question
+    // waits): nothing written, saved again once checked as it is now
+    h.app.checks_accepted = vec![error.to_owned()];
+    let post = h.app.ready_to_save(&form, false).unwrap();
+    h.rectangle(300.0, 20.0, 10.0, 10.0);
+    let later = dir.join("later.nc");
+    let why = h
+        .app
+        .write_toolpath_files(&form, &post, &later)
+        .unwrap_err();
+    assert!(why.contains("the job changed while saving"), "{why}");
+    assert!(!later.exists());
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
