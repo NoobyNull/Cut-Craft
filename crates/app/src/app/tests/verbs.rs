@@ -632,7 +632,7 @@ impl Harness {
     /// once done (and still wanted), the status bar says "used".
     pub(super) fn start_slow_job(&mut self, title: &str, work: impl FnOnce() + Send + 'static) {
         self.app.in_background(title, "test:slow", work, |app, ()| {
-            app.status.set_message("used")
+            app.status.set_message("used");
         });
     }
 
