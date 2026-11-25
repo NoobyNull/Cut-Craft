@@ -175,4 +175,13 @@ impl Harness {
     pub(in super::super) fn materials_kept(&self) -> usize {
         self.app.materials.materials.len()
     }
+
+    /// The checks before cutting on the toolpaths in `plan`, in that order.
+    pub(in super::super) fn preflight(
+        &self,
+        plan: &[Vec<EntityId>],
+        changes: crate::files::ToolChanges,
+    ) -> Vec<cut_craft_core::preflight::Finding> {
+        self.app.preflight(plan, changes)
+    }
 }

@@ -108,4 +108,26 @@ impl Harness {
     pub(in super::super) fn given_material_not_asked(&mut self) {
         self.app.ask_material = true;
     }
+
+    /// Preview All on every toolpath (or only the shown ones).
+    pub(in super::super) fn preview_all(&mut self, visible_only: bool) {
+        self.app.preview_all(visible_only);
+    }
+
+    /// The Preview Control's Pause.
+    pub(in super::super) fn pause_playback(&mut self) {
+        self.app.player.playing = false;
+    }
+
+    /// Drags the Preview Control's Progress to `share` of the way through.
+    pub(in super::super) fn seek_playback(&mut self, share: f64) {
+        let playback = self.app.player.playback.as_mut().expect("a preview plays");
+        let at = playback.length() * share;
+        playback.seek(at);
+    }
+
+    /// Whether a finished preview's cut material is shown.
+    pub(in super::super) fn has_previewed_material(&self) -> bool {
+        self.app.preview.material.is_some()
+    }
 }

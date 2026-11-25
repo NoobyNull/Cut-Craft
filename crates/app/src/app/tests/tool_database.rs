@@ -7,10 +7,13 @@ use super::*;
 #[test]
 fn a_vendor_tool_database_imports_when_one_is_given() {
     let mut h = Harness::new();
-    let before = h.app.tools.tools.len();
-    h.app
-        .import_tools(std::path::Path::new("/nonexistent.vtdb"));
-    assert_eq!(h.app.tools.tools.len(), before, "nothing added on failure");
+    let before = h.tool_database().tools.len();
+    h.import_tools(std::path::Path::new("/nonexistent.vtdb"));
+    assert_eq!(
+        h.tool_database().tools.len(),
+        before,
+        "nothing added on failure"
+    );
     let Some(dir) = std::env::var_os("CUT_CRAFT_VENDOR_FILES") else {
         return;
     };
@@ -21,15 +24,15 @@ fn a_vendor_tool_database_imports_when_one_is_given() {
     }) else {
         return;
     };
-    h.app.import_tools(&file);
-    assert!(h.app.tools.tools.len() > before + 10, "{}", file.display());
+    h.import_tools(&file);
+    assert!(
+        h.tool_database().tools.len() > before + 10,
+        "{}",
+        file.display()
+    );
     let name = file.file_stem().unwrap().to_string_lossy();
     assert!(
-        h.app
-            .tools
-            .tools
-            .iter()
-            .any(|t| t.group.starts_with(&*name)),
+        (h.tool_database().tools.iter()).any(|t| t.group.starts_with(&*name)),
         "in a group named after the file"
     );
 }
@@ -41,7 +44,7 @@ fn relief_from_photo_carves_only_what_the_bit_can() {
     use cut_craft_core::bitmap::Bitmap;
     use cut_craft_core::geometry::{Point, Rect};
     let mut h = Harness::new();
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     // white all over, with one black column: a groove 1 mm wide
     c.add_bitmap(Bitmap {
         name: "map".into(),
@@ -54,10 +57,10 @@ fn relief_from_photo_carves_only_what_the_bit_can() {
         depth: Vec::new(),
         rgb: Vec::new(),
     });
-    h.app.record(Ok(c.finish()), "added");
-    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.make(c.finish(), "added");
+    h.invoke("relief_from_photo");
     h.frame(vec![]);
-    let form = h.app.form.as_mut().unwrap();
+    let mut params = h.form_settings().clone();
     for (key, value) in [
         ("depth_from", "picture".into()),
         ("max_height", 10.0.into()),
@@ -68,29 +71,28 @@ fn relief_from_photo_carves_only_what_the_bit_can() {
         ("smoothness", 0.into()),
     ] {
         let value: serde_json::Value = value;
-        form.params[key] = value;
+        params[key] = value;
     }
-    let params = form.params.clone();
-    h.app.apply_form("relief_from_photo", &params).unwrap();
+    h.set_form_settings(params.clone());
+    h.apply_form("relief_from_photo", &params).unwrap();
     let lowest = |h: &Harness| {
-        let k = h.app.doc.components.values().next().unwrap();
+        let k = h.doc().components.values().next().unwrap();
         k.height_range().unwrap().0
     };
     let as_drawn = lowest(&h);
     // ticked before a bit is picked: the form says to Select… one
-    let form = h.app.form.as_mut().unwrap();
-    form.params["only_what_the_bit_can_carve"] = true.into();
-    let params = form.params.clone();
-    let refused = h.app.apply_form("relief_from_photo", &params).unwrap_err();
+    params["only_what_the_bit_can_carve"] = true.into();
+    h.set_form_settings(params.clone());
+    let refused = h.apply_form("relief_from_photo", &params).unwrap_err();
     assert!(refused.contains("Select…"), "{refused}");
     // the bit comes from the Bit Library, as on a toolpath form; no passes or rest there
     h.frame(vec![]);
     assert!(h.text_at("Select…").is_some(), "the form's tool");
     assert!(h.text_at("Edit Passes…").is_none());
-    h.app.choose_tool("6 mm Ball Nose");
-    h.app.form.as_mut().unwrap().dirty = true;
+    h.choose_tool("6 mm Ball Nose");
+    h.touch_form();
     h.frame(vec![]);
-    assert_eq!(h.app.doc.components.len(), 1, "made again in place");
+    assert_eq!(h.doc().components.len(), 1, "made again in place");
     assert!(
         lowest(&h) > as_drawn + 2.0,
         "the groove fills in: {as_drawn} -> {}",
@@ -101,8 +103,8 @@ fn relief_from_photo_carves_only_what_the_bit_can() {
 #[test]
 fn toolpath_forms_take_their_tool_from_the_database_and_follow_its_edits() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "pocket_toolpath");
-    h.app.choose_tool("3 mm End Mill");
+    h.invoke("pocket_toolpath");
+    h.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Edit…").is_some());
@@ -110,19 +112,17 @@ fn toolpath_forms_take_their_tool_from_the_database_and_follow_its_edits() {
         h.text_at("Number of Flutes").is_none(),
         "the tool's settings are not edited in the form"
     );
-    assert_eq!(h.app.form.as_ref().unwrap().params["tool"]["diameter"], 3.0);
-    h.app.edit_tool(&h.ctx, Some("3 mm End Mill".into()));
-    let manager = h.app.tool_manager.as_mut().expect("the Bit Library opens");
+    assert_eq!(h.form_value("tool")["diameter"], 3.0);
+    h.edit_bit("3 mm End Mill");
+    let manager = h.bit_library().expect("the Bit Library opens");
     let Some(cut_craft_tool_database::Pick::Tool(i)) = manager.pick else {
         panic!("on the form's tool")
     };
     assert_eq!(manager.draft.tools[i].name, "3 mm End Mill");
-    manager.draft.tools[i].pass_depth = 1.25;
-    let edited = manager.draft.clone();
-    h.app.tools = edited;
-    h.app.refresh_form_tool();
+    h.in_bit_library(|m| m.draft.tools[i].pass_depth = 1.25);
+    h.keep_bit_library();
     assert_eq!(
-        h.app.form.as_ref().unwrap().params["tool"]["pass_depth"],
+        h.form_value("tool")["pass_depth"],
         1.25,
         "saving the database updates the open form"
     );
@@ -131,46 +131,49 @@ fn toolpath_forms_take_their_tool_from_the_database_and_follow_its_edits() {
 #[test]
 fn the_tool_database_window_keeps_edits_only_on_ok() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "tool_database");
+    h.invoke("tool_database");
     h.frame(vec![]);
-    let count = h.app.tools.tools.len();
-    h.app.tool_manager.as_mut().unwrap().draft.tools.remove(0);
+    let count = h.tool_database().tools.len();
+    h.in_bit_library(|m| {
+        m.draft.tools.remove(0);
+    });
     h.frame(vec![]);
-    assert_eq!(h.app.tools.tools.len(), count, "not until OK");
+    assert_eq!(h.tool_database().tools.len(), count, "not until OK");
     let ok = *h.texts_at("OK").last().expect("the window has OK");
     h.click(ok, Modifiers::NONE);
-    assert!(h.app.tool_manager.is_none());
-    assert_eq!(h.app.tools.tools.len(), count - 1);
-    h.app.invoke(&h.ctx, "tool_database");
-    h.app.tool_manager.as_mut().unwrap().draft.tools.clear();
+    assert!(h.bit_library().is_none());
+    assert_eq!(h.tool_database().tools.len(), count - 1);
+    h.invoke("tool_database");
+    h.in_bit_library(|m| m.draft.tools.clear());
     h.frame(vec![]);
     let cancel = *h.texts_at("Cancel").last().expect("and Cancel");
     h.click(cancel, Modifiers::NONE);
-    assert_eq!(h.app.tools.tools.len(), count - 1, "Cancel drops the edits");
+    assert_eq!(
+        h.tool_database().tools.len(),
+        count - 1,
+        "Cancel drops the edits"
+    );
 }
 
 #[test]
 fn three_d_finishing_picks_its_tools_in_the_tool_database() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "3d_finishing_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.invoke("3d_finishing_toolpath");
+    h.pin(Page::Toolpaths);
     h.frame(vec![]);
     h.frame(vec![]);
-    let first = h.app.form.as_ref().unwrap().params["tools"][0]["name"].clone();
+    let first = h.form_value("tools")[0]["name"].clone();
     // no drop-down of tools: each has Select… and Edit…, and Add a tool… opens the database
     assert!(h.text_at("Select…").is_some(), "the first tool's Select…");
     let add = h.text_at("Add a bit…").expect("an Add button");
     h.click(add, Modifiers::NONE);
     select_in_tool_database(&mut h, "6 mm Ball Nose");
-    let form = h.app.form.as_ref().unwrap();
-    assert_eq!(form.params["tools"][0]["name"], first, "kept");
+    let form = h.form_settings();
+    assert_eq!(form["tools"][0]["name"], first, "kept");
+    assert_eq!(form["tools"][1]["name"], "6 mm Ball Nose", "added after it");
+    let ball = h.tool_database().get("6 mm Ball Nose").unwrap();
     assert_eq!(
-        form.params["tools"][1]["name"], "6 mm Ball Nose",
-        "added after it"
-    );
-    let ball = h.app.tools.get("6 mm Ball Nose").unwrap();
-    assert_eq!(
-        form.params["tools"][1]["feed_rate"],
+        form["tools"][1]["feed_rate"],
         serde_json::json!(ball.feed_rate),
         "its own feeds and speeds come with it"
     );
@@ -178,35 +181,33 @@ fn three_d_finishing_picks_its_tools_in_the_tool_database() {
     let select = *h.texts_at("Select…").first().unwrap();
     h.click(select, Modifiers::NONE);
     select_in_tool_database(&mut h, "3 mm End Mill");
-    let form = h.app.form.as_ref().unwrap();
-    assert_eq!(form.params["tools"][0]["name"], "3 mm End Mill");
-    assert_eq!(form.params["tools"][1]["name"], "6 mm Ball Nose");
-    assert_eq!(form.params["tools"].as_array().unwrap().len(), 2);
+    let form = h.form_settings();
+    assert_eq!(form["tools"][0]["name"], "3 mm End Mill");
+    assert_eq!(form["tools"][1]["name"], "6 mm Ball Nose");
+    assert_eq!(form["tools"].as_array().unwrap().len(), 2);
 }
 
 #[test]
 fn rest_machining_picks_its_earlier_tools_in_the_tool_database() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
-    h.app.choose_tool("3 mm End Mill");
+    h.invoke("profile_toolpath");
+    h.pin(Page::Toolpaths);
+    h.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     // what Rest Machining's Add a tool… asks for: Select Bit, for its list
-    h.app
-        .ask_listed(&h.ctx, ToolList::Rest, ListAsk::Select(ListSlot::New));
+    h.ask_listed(ToolList::Rest, ListAsk::Select(ListSlot::New));
     select_in_tool_database(&mut h, "6 mm End Mill");
-    let form = h.app.form.as_ref().unwrap();
-    assert_eq!(form.params["rest"]["after"][0]["name"], "6 mm End Mill");
+    let form = h.form_settings();
+    assert_eq!(form["rest"]["after"][0]["name"], "6 mm End Mill");
     assert_eq!(
-        form.params["tool"]["name"], "3 mm End Mill",
+        form["tool"]["name"], "3 mm End Mill",
         "the form's own tool is left as it was"
     );
     // and its Select… replaces that one
-    h.app
-        .ask_listed(&h.ctx, ToolList::Rest, ListAsk::Select(ListSlot::At(0)));
+    h.ask_listed(ToolList::Rest, ListAsk::Select(ListSlot::At(0)));
     select_in_tool_database(&mut h, "6 mm Ball Nose");
-    let after = &h.app.form.as_ref().unwrap().params["rest"]["after"];
+    let after = &h.form_value("rest")["after"];
     assert_eq!(after.as_array().unwrap().len(), 1);
     assert_eq!(after[0]["name"], "6 mm Ball Nose");
 }
@@ -214,8 +215,8 @@ fn rest_machining_picks_its_earlier_tools_in_the_tool_database() {
 #[test]
 fn three_d_pencil_picks_the_bits_that_finished_before_in_the_tool_database() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "3d_pencil_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.invoke("3d_pencil_toolpath");
+    h.pin(Page::Toolpaths);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
@@ -226,32 +227,32 @@ fn three_d_pencil_picks_the_bits_that_finished_before_in_the_tool_database() {
         h.text_at("Rest Machining").is_none(),
         "not a second list of earlier bits"
     );
-    h.app
-        .ask_listed(&h.ctx, ToolList::Before, ListAsk::Select(ListSlot::At(0)));
+    h.ask_listed(ToolList::Before, ListAsk::Select(ListSlot::At(0)));
     select_in_tool_database(&mut h, "6 mm End Mill");
-    let form = h.app.form.as_ref().unwrap();
-    assert_eq!(form.params["bits_before"][0]["name"], "6 mm End Mill");
-    assert_eq!(form.params["bits_before"].as_array().unwrap().len(), 1);
+    let form = h.form_settings();
+    assert_eq!(form["bits_before"][0]["name"], "6 mm End Mill");
+    assert_eq!(form["bits_before"].as_array().unwrap().len(), 1);
     assert_ne!(
-        form.params["tool"]["name"], "6 mm End Mill",
+        form["tool"]["name"], "6 mm End Mill",
         "the pencil bit is left as it was"
     );
-    h.app
-        .ask_listed(&h.ctx, ToolList::Before, ListAsk::Select(ListSlot::New));
+    h.ask_listed(ToolList::Before, ListAsk::Select(ListSlot::New));
     select_in_tool_database(&mut h, "6 mm Ball Nose");
-    let form = h.app.form.as_ref().unwrap();
-    assert_eq!(form.params["bits_before"][1]["name"], "6 mm Ball Nose");
+    let form = h.form_settings();
+    assert_eq!(form["bits_before"][1]["name"], "6 mm Ball Nose");
 }
 
 #[test]
 fn the_tool_database_window_shows_the_chip_load() {
     let mut h = Harness::new();
-    h.app.tools = ToolDatabase {
-        tools: vec![Tool::default()],
-        ..ToolDatabase::default()
-    };
-    h.app.invoke(&h.ctx, "tool_database");
-    h.app.tool_manager.as_mut().unwrap().pick = Some(cut_craft_tool_database::Pick::Tool(0));
+    h.given_bits(|db| {
+        *db = ToolDatabase {
+            tools: vec![Tool::default()],
+            ..ToolDatabase::default()
+        };
+    });
+    h.invoke("tool_database");
+    h.in_bit_library(|m| m.pick = Some(cut_craft_tool_database::Pick::Tool(0)));
     h.frame(vec![]);
     h.frame(vec![]);
     // the details scroll: down to the feeds
@@ -279,21 +280,25 @@ fn the_tool_database_window_shows_the_chip_load() {
 #[test]
 fn the_tool_database_says_when_changes_wait_and_apply_keeps_them() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "tool_database");
+    h.invoke("tool_database");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
-    let manager = h.app.tool_manager.as_mut().unwrap();
-    manager.new_material = "Cork".into();
-    manager.add_material();
+    h.in_bit_library(|m| {
+        m.new_material = "Cork".into();
+        m.add_material();
+    });
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::NOT_APPLIED).is_some());
     assert!(
-        !h.app.tools.materials.iter().any(|m| m == "Cork"),
+        !h.tool_database().materials.iter().any(|m| m == "Cork"),
         "not kept yet"
     );
     click_button(&mut h, "Apply");
-    assert!(h.app.tools.materials.iter().any(|m| m == "Cork"), "kept");
+    assert!(
+        h.tool_database().materials.iter().any(|m| m == "Cork"),
+        "kept"
+    );
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
 }
@@ -301,22 +306,24 @@ fn the_tool_database_says_when_changes_wait_and_apply_keeps_them() {
 #[test]
 fn a_fine_bit_note_after_a_preview_keeps_the_count_beside_it() {
     let mut h = Harness::new();
-    h.app.wait_before_showing = std::time::Duration::ZERO;
-    h.app.display.animate_preview = false;
+    h.given_progress_shown_at_once();
+    h.given_animated_preview(false);
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for id in ["profile_toolpath", "pocket_toolpath"] {
-        h.app.invoke(&h.ctx, id);
-        let params = h.app.form.as_ref().unwrap().params.clone();
-        h.app.apply_form(id, &params).unwrap();
+        h.invoke(id);
+        let params = h.form_settings().clone();
+        h.apply_form(id, &params).unwrap();
         until_not_busy(&mut h);
-        h.app.form = None;
+        h.close_form();
     }
-    for t in h.app.doc.toolpaths.values_mut() {
-        t.tool.diameter = 0.05;
-    }
-    h.app.preview_all(false);
+    h.given_document(|doc| {
+        for t in doc.toolpaths.values_mut() {
+            t.tool.diameter = 0.05;
+        }
+    });
+    h.preview_all(false);
     until_not_busy(&mut h);
-    let message = &h.app.status.message;
+    let message = h.status_message();
     assert!(
         message.starts_with("Previewed 2 toolpaths. ⚠ "),
         "{message}"
@@ -329,15 +336,15 @@ fn the_drag_knife_form_says_a_knife_needs_no_flute_length() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 40.0, 40.0);
     h.click(h.at(50.0, 30.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "drag_knife_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.invoke("drag_knife_toolpath");
+    h.pin(Page::Toolpaths);
     h.frame(vec![]);
     h.frame(vec![]);
     // no "Depth not checked: set this bit's Flute Length", and no end mill or pass
-    assert_eq!(h.app.form_reach(), None);
+    assert_eq!(h.form_reach(), None);
     assert!(h.text_at(super::KNIFE_LINE).is_some());
     assert!(h.text_at("0.5 mm end mill, 3 mm a pass").is_none());
-    let params = &h.app.form.as_ref().unwrap().params;
+    let params = h.form_settings();
     assert_eq!(
         params["pressure"].as_f64(),
         Some(50.0),
@@ -351,9 +358,9 @@ fn pocket_clears_with_bigger_bits_picked_in_the_tool_database() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.click(h.at(60.0, 35.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "pocket_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
-    h.app.choose_tool("3 mm End Mill");
+    h.invoke("pocket_toolpath");
+    h.pin(Page::Toolpaths);
+    h.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     h.frame(vec![]);
     // one picker on the form: no separate Rest Machining list beside clearing
@@ -368,38 +375,30 @@ fn pocket_clears_with_bigger_bits_picked_in_the_tool_database() {
     let tick = h
         .text_at("Clear with bigger bits first")
         .expect("clearing, off to start with");
-    assert_eq!(
-        h.app.form.as_ref().unwrap().params["clearance_tools"],
-        serde_json::json!([])
-    );
+    assert_eq!(h.form_value("clearance_tools"), &serde_json::json!([]));
     // ticking it opens the Bit Library to pick the clearing bit in
     h.click(tick, Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().expect("Select Bit");
+    let manager = h.bit_library().expect("Select Bit");
     assert!(manager.selecting);
-    let big = manager
-        .draft
-        .tools
-        .iter()
-        .position(|t| t.name == "12 mm End Mill")
-        .unwrap();
-    manager.pick = Some(cut_craft_tool_database::Pick::Tool(big));
+    let big = manager.draft.index_of("12 mm End Mill").unwrap();
+    h.in_bit_library(|m| m.pick = Some(cut_craft_tool_database::Pick::Tool(big)));
     h.frame(vec![]);
     h.frame(vec![]);
     let select = *h.texts_at("Select").last().expect("Select, in place of OK");
     h.click(select, Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    let form = h.app.form.as_ref().unwrap();
+    let form = h.form_settings();
     assert_eq!(
-        form.params["tool"]["name"], "3 mm End Mill",
+        form["tool"]["name"], "3 mm End Mill",
         "the finishing bit stays"
     );
-    assert_eq!(form.params["clearance_tools"][0]["name"], "12 mm End Mill");
+    assert_eq!(form["clearance_tools"][0]["name"], "12 mm End Mill");
     assert_eq!(
-        form.params["clearance_tools"][0]["feed_rate"],
-        serde_json::json!(h.app.tools.get("12 mm End Mill").unwrap().feed_rate),
+        form["clearance_tools"][0]["feed_rate"],
+        serde_json::json!(h.tool_database().get("12 mm End Mill").unwrap().feed_rate),
         "with its own feeds and speeds"
     );
     // another, in between: kept largest first
@@ -410,20 +409,16 @@ fn pocket_clears_with_bigger_bits_picked_in_the_tool_database() {
     );
     h.frame(vec![]);
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().expect("Select Bit");
-    let middle = manager
-        .draft
-        .tools
-        .iter()
-        .position(|t| t.name == "6 mm End Mill")
-        .unwrap();
-    manager.pick = Some(cut_craft_tool_database::Pick::Tool(middle));
+    let manager = h.bit_library().expect("Select Bit");
+    let middle = manager.draft.index_of("6 mm End Mill").unwrap();
+    h.in_bit_library(|m| m.pick = Some(cut_craft_tool_database::Pick::Tool(middle)));
     h.frame(vec![]);
     h.frame(vec![]);
     h.click(*h.texts_at("Select").last().unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    let names: Vec<&str> = h.app.form.as_ref().unwrap().params["clearance_tools"]
+    let names: Vec<&str> = h
+        .form_value("clearance_tools")
         .as_array()
         .unwrap()
         .iter()
@@ -437,11 +432,11 @@ fn pocket_says_on_the_form_when_a_clearing_bit_is_not_bigger_than_the_finishing_
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.click(h.at(60.0, 35.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "pocket_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
-    h.app.choose_tool("6 mm End Mill");
-    let small = serde_json::to_value(h.app.tools.get("3 mm End Mill").unwrap()).unwrap();
-    h.app.form.as_mut().unwrap().params["clearance_tools"] = serde_json::json!([small]);
+    h.invoke("pocket_toolpath");
+    h.pin(Page::Toolpaths);
+    h.choose_tool("6 mm End Mill");
+    let small = serde_json::to_value(h.tool_database().get("3 mm End Mill").unwrap()).unwrap();
+    h.set_form_value("/clearance_tools", serde_json::json!([small]));
     h.frame(vec![]);
     h.frame(vec![]);
     let said = h.shapes.iter().any(|clipped| {
@@ -456,11 +451,11 @@ fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 150.0, 150.0);
     h.click(h.at(160.0, 85.0), Modifiers::NONE);
-    assert!(!h.app.doc.selection.is_empty(), "the rectangle is selected");
-    h.app.invoke(&h.ctx, "pocket_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
-    h.app.choose_tool("3 mm End Mill");
-    h.app.form.as_mut().unwrap().params["depth"] = 6.0.into();
+    assert!(!h.doc().selection.is_empty(), "the rectangle is selected");
+    h.invoke("pocket_toolpath");
+    h.pin(Page::Toolpaths);
+    h.choose_tool("3 mm End Mill");
+    h.set_form_value("/depth", 6.0.into());
     h.frame(vec![]);
     h.frame(vec![]);
     h.click(
@@ -470,8 +465,8 @@ fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
     );
     h.frame(vec![]);
     h.frame(vec![]);
-    let form = h.app.form.as_ref().unwrap();
-    let picked = form.params["clearance_tools"].as_array().unwrap();
+    let form = h.form_settings();
+    let picked = form["clearance_tools"].as_array().unwrap();
     assert!(!picked.is_empty(), "a bigger bit clears this pocket first");
     for bit in picked {
         assert!(bit["diameter"].as_f64().unwrap() > 3.0, "{bit}");
@@ -486,18 +481,15 @@ fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
 #[test]
 fn suggest_takes_bits_from_my_tools_only() {
     let mut h = Harness::new();
-    let mut catalogue = h.app.tools.get("12 mm End Mill").unwrap().clone();
+    let mut catalogue = h.tool_database().get("12 mm End Mill").unwrap().clone();
     catalogue.name = "Vendor 16 mm End Mill".into();
     catalogue.diameter = 16.0;
     catalogue.group = "Vendor/End Mills".into();
-    h.app.tools.tools.push(catalogue);
-    h.app.tools.catalogues = vec!["Vendor".into()];
-    let names: Vec<String> = h
-        .app
-        .suggest_candidates()
-        .into_iter()
-        .map(|c| c.tool.name)
-        .collect();
+    h.given_bits(|db| {
+        db.tools.push(catalogue);
+        db.catalogues = vec!["Vendor".into()];
+    });
+    let names = h.suggested_bits();
     assert!(names.iter().any(|n| n == "12 mm End Mill"), "{names:?}");
     assert!(
         !names.iter().any(|n| n.starts_with("Vendor")),
@@ -513,15 +505,8 @@ fn suggest_takes_bits_from_my_tools_only() {
 fn a_tool_renamed_in_the_tool_database_is_renamed_in_the_jobs_toolpaths_too() {
     let mut h = Harness::new();
     two_tools(&mut h);
-    h.app.rename_toolpath_tools(
-        &[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())],
-        "Bit library saved",
-    );
-    let names: Vec<(String, String)> = h
-        .app
-        .doc
-        .toolpaths
-        .values()
+    h.rename_toolpath_tools(&[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())]);
+    let names: Vec<(String, String)> = (h.doc().toolpaths.values())
         .map(|t| {
             (
                 t.tool.name.clone(),
@@ -537,30 +522,23 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_the_jobs_toolpaths_too() {
         "{names:?}"
     );
     assert!(names.iter().any(|(n, _)| n == "3 mm End Mill"), "{names:?}");
-    assert!(h.app.doc.toolpaths.values().all(|t| !t.stale));
+    assert!(h.doc().toolpaths.values().all(|t| !t.stale));
     // so the tool changer slot it was loaded in still gives its number
-    let ids: Vec<_> = h.app.doc.toolpaths.keys().copied().collect();
-    h.app.machines.add();
-    let machine = h.app.machines.active_mut().unwrap();
-    machine.set_slot_count(2);
-    machine.slots[0] = Some("Spiral 6".into());
-    machine.slots[1] = Some("3 mm End Mill".into());
-    let found = h
-        .app
-        .preflight(&[ids], crate::files::ToolChanges::ToolChanger);
+    let ids: Vec<_> = h.doc().toolpaths.keys().copied().collect();
+    h.given_machine();
+    h.edit_machine(|machine| {
+        machine.set_slot_count(2);
+        machine.slots[0] = Some("Spiral 6".into());
+        machine.slots[1] = Some("3 mm End Mill".into());
+    });
+    let found = h.preflight(&[ids], crate::files::ToolChanges::ToolChanger);
     assert!(
         found.iter().all(|f| !f.message.contains("not loaded")),
         "{found:?}"
     );
     // undone in one step
-    h.app.invoke(&h.ctx, "undo");
-    assert!(
-        h.app
-            .doc
-            .toolpaths
-            .values()
-            .any(|t| t.tool.name == "6 mm End Mill")
-    );
+    h.invoke("undo");
+    assert!((h.doc().toolpaths.values()).any(|t| t.tool.name == "6 mm End Mill"));
 }
 
 #[test]
@@ -572,20 +550,21 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_other_saved_jobs_when_they_
     two_tools(&mut h);
     // another job, saved before the bit was renamed
     let other = dir.join("other.ccjob");
-    h.app.save_to(&other);
+    h.save_to(&other);
     // renamed in the Bit Library window, then OK
-    h.app.invoke(&h.ctx, "tool_database");
+    h.invoke("tool_database");
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().unwrap();
-    let at = manager.draft.index_of("6 mm End Mill").unwrap();
-    manager.draft.tools[at].name = "Spiral 6".into();
-    manager.note_rename("6 mm End Mill", "Spiral 6");
+    h.in_bit_library(|manager| {
+        let at = manager.draft.index_of("6 mm End Mill").unwrap();
+        manager.draft.tools[at].name = "Spiral 6".into();
+        manager.note_rename("6 mm End Mill", "Spiral 6");
+    });
     h.frame(vec![]);
     let ok = *h.texts_at("OK").last().expect("the window has OK");
     h.click(ok, Modifiers::NONE);
     h.frame(vec![]);
     let names = |h: &Harness| -> Vec<String> {
-        (h.app.doc.toolpaths.values())
+        (h.doc().toolpaths.values())
             .map(|t| t.tool.name.clone())
             .collect()
     };
@@ -595,7 +574,7 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_other_saved_jobs_when_they_
         names(&h)
     );
     // the other job takes the new name when it opens, so its changer slot is found
-    assert!(h.app.open_path(&other));
+    assert!(h.open(&other));
     assert!(
         names(&h).contains(&"Spiral 6".to_owned()),
         "{:?}",
@@ -603,10 +582,10 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_other_saved_jobs_when_they_
     );
     assert!(!names(&h).contains(&"6 mm End Mill".to_owned()));
     // a new bit given the old name is not mistaken for the renamed one
-    let mut new = h.app.tools.get("Spiral 6").unwrap().clone();
+    let mut new = h.tool_database().get("Spiral 6").unwrap().clone();
     new.name = "6 mm End Mill".into();
-    h.app.tools.tools.push(new);
-    assert!(h.app.open_path(&other));
+    h.given_bits(|db| db.tools.push(new));
+    assert!(h.open(&other));
     assert!(names(&h).contains(&"6 mm End Mill".to_owned()));
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -614,25 +593,25 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_other_saved_jobs_when_they_
 #[test]
 fn a_drill_shows_as_drill_only_in_the_tool_database_and_can_be_changed_there() {
     let mut h = Harness::new();
-    let mut drill = h.app.tools.tools[0].clone();
+    let mut drill = h.tool_database().tools[0].clone();
     drill.name = "Drill 6mm".into();
     drill.drill_only = true;
-    h.app.tools.tools.push(drill);
-    let at = h.app.tools.tools.len() - 1;
-    h.app.invoke(&h.ctx, "tool_database");
-    h.app.tool_manager.as_mut().unwrap().pick = Some(cut_craft_tool_database::Pick::Tool(at));
+    h.given_bits(|db| db.tools.push(drill));
+    let at = h.tool_database().tools.len() - 1;
+    h.invoke("tool_database");
+    h.in_bit_library(|m| m.pick = Some(cut_craft_tool_database::Pick::Tool(at)));
     h.frame(vec![]);
     h.frame(vec![]);
     let tick = h.text_at("Drill only").expect("shown beside its tool type");
     h.click(tick, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(!h.app.tool_manager.as_ref().unwrap().draft.tools[at].drill_only);
+    assert!(!h.bit_library().unwrap().draft.tools[at].drill_only);
 }
 
 #[test]
 fn a_laser_form_shows_its_laser_from_the_tool_database_and_says_when_a_bit_is_picked() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "laser_cut_fill_toolpath");
+    h.invoke("laser_cut_fill_toolpath");
     h.frame(vec![]);
     h.frame(vec![]);
     let texts = h.texts();
@@ -649,7 +628,7 @@ fn a_laser_form_shows_its_laser_from_the_tool_database_and_says_when_a_bit_is_pi
     );
     assert!(!texts.iter().any(|t| t.contains("is not a laser")));
     // a router bit picked here is said in red, never refused
-    h.app.choose_tool("6 mm End Mill");
+    h.choose_tool("6 mm End Mill");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
@@ -660,9 +639,9 @@ fn a_laser_form_shows_its_laser_from_the_tool_database_and_says_when_a_bit_is_pi
         h.texts()
     );
     // and a laser on a router's toolpath
-    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.invoke("profile_toolpath");
     h.frame(vec![]);
-    h.app.choose_tool(&Tool::laser().name);
+    h.choose_tool(&Tool::laser().name);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
@@ -682,14 +661,14 @@ fn a_tool_database_or_materials_library_that_could_not_be_read_is_never_said_sav
     let (tools, materials) = (dir.join("tools.json"), dir.join("materials.json"));
     std::fs::write(&tools, "{ not json").unwrap();
     std::fs::write(&materials, "{ not json").unwrap();
-    h.app.load_tools_at(Some(tools.clone()));
-    h.app.load_materials_at(Some(materials.clone()));
-    h.app.tools_changed("Bit library saved");
-    let message = h.app.status.message.clone();
+    h.load_tools_at(Some(tools.clone()));
+    h.load_materials_at(Some(materials.clone()));
+    h.tools_changed("Bit library saved");
+    let message = h.status_message().to_owned();
     assert!(message.starts_with("Bit library not saved"), "{message}");
     assert!(message.contains("tools.json"), "{message}");
     assert!(message.contains("rename that file"), "{message}");
-    let saved = h.app.save_materials();
+    let saved = h.save_materials();
     let e = saved.unwrap_err();
     assert!(e.starts_with("Materials Library not saved"), "{e}");
     assert!(e.contains("materials.json"), "{e}");
@@ -700,15 +679,17 @@ fn a_tool_database_or_materials_library_that_could_not_be_read_is_never_said_sav
 
 #[test]
 fn the_materials_library_s_add_tool_keeps_a_catalogue_bit_copied_into_my_tools() {
-    use cut_craft_tool_database::materials::{MaterialPick, MaterialsWindow};
+    use cut_craft_tool_database::materials::MaterialPick;
     let mut h = Harness::new();
-    let mut bit = h.app.tools.tools[0].clone();
+    let mut bit = h.tool_database().tools[0].clone();
     bit.name = "Maker Bit".into();
     bit.group = "Catalogues/Maker".into();
-    h.app.tools.catalogues.push("Catalogues/Maker".into());
-    h.app.tools.tools.push(bit);
-    let catalogue = h.app.tools.tools.len() - 1;
-    let mut window = MaterialsWindow::new(&h.app.materials, &h.app.tools);
+    h.given_bits(|db| {
+        db.catalogues.push("Catalogues/Maker".into());
+        db.tools.push(bit);
+    });
+    let catalogue = h.tool_database().tools.len() - 1;
+    let mut window = h.materials_window();
     let maple = window
         .library
         .materials
@@ -716,41 +697,42 @@ fn the_materials_library_s_add_tool_keeps_a_catalogue_bit_copied_into_my_tools()
         .position(|m| m.name == "Hard Maple")
         .unwrap();
     window.pick = Some(MaterialPick::Material(maple));
-    h.app.materials_window = Some(window);
+    h.given_materials_window(window);
     // Add Tool, then Copy to My Bits and Select on the catalogue bit
-    let mut picker = cut_craft_tool_database::Manager::selecting(&h.app.tools, "Maker Bit");
+    let mut picker = cut_craft_tool_database::Manager::selecting(h.tool_database(), "Maker Bit");
     cut_craft_tool_database::tree::copy_to_mine(&mut picker.draft, catalogue);
-    h.app.tool_manager = Some(picker);
-    h.app.picking = Some(super::PickFor::Material);
+    h.given_bit_picker_for_material(picker);
     assert!(
-        h.app
-            .library_outcome(&cut_craft_tool_database::Outcome::Select(
-                "Maker Bit".into()
-            ))
+        h.bit_library_outcome(&cut_craft_tool_database::Outcome::Select(
+            "Maker Bit".into()
+        ))
     );
-    h.app.materials_kept(true);
+    h.keep_materials(true);
     let has_maple =
         |t: &cut_craft_core::toolpath::Tool| t.materials.iter().any(|d| d.material == "Hard Maple");
-    let mine = h.app.tools.get("Maker Bit").unwrap();
-    assert!(!h.app.tools.is_catalogue(mine), "the My Bits copy is kept");
+    let mine = h.tool_database().get("Maker Bit").unwrap();
+    assert!(
+        !h.tool_database().is_catalogue(mine),
+        "the My Bits copy is kept"
+    );
     assert!(has_maple(mine), "with the material's feeds");
     assert!(
-        !has_maple(&h.app.tools.tools[catalogue]),
+        !has_maple(&h.tool_database().tools[catalogue]),
         "the read-only catalogue entry is left as it was"
     );
 }
 
 #[test]
 fn a_broken_materials_json_still_saves_the_bits_feeds_to_tools_json() {
-    use cut_craft_tool_database::materials::{MaterialPick, MaterialsWindow};
+    use cut_craft_tool_database::materials::MaterialPick;
     let mut h = Harness::new();
     let dir = std::env::temp_dir().join(format!("cut-craft-broken-lib-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let (tools, materials) = (dir.join("tools.json"), dir.join("materials.json"));
     std::fs::write(&materials, "{ not json").unwrap();
-    h.app.tools_path = Some(tools.clone());
-    h.app.load_materials_at(Some(materials.clone()));
-    let mut window = MaterialsWindow::new(&h.app.materials, &h.app.tools);
+    h.given_tools_path(tools.clone());
+    h.load_materials_at(Some(materials.clone()));
+    let mut window = h.materials_window();
     let maple = window
         .library
         .materials
@@ -760,11 +742,11 @@ fn a_broken_materials_json_still_saves_the_bits_feeds_to_tools_json() {
     window.pick = Some(MaterialPick::Material(maple));
     let bit = window.tools.tools[0].name.clone();
     window.add_tool(&bit);
-    h.app.materials_window = Some(window);
-    h.app.materials_kept(true);
+    h.given_materials_window(window);
+    h.keep_materials(true);
     let saved = std::fs::read_to_string(&tools).unwrap_or_default();
     assert!(saved.contains("Hard Maple"), "the feeds reach tools.json");
-    let message = h.app.status.message.clone();
+    let message = h.status_message().to_owned();
     assert!(
         message.starts_with("Materials Library not saved"),
         "{message}"
@@ -782,15 +764,15 @@ fn a_renamed_tool_s_toolpaths_never_say_an_unreadable_tool_database_was_saved() 
     std::fs::create_dir_all(&dir).unwrap();
     let tools = dir.join("tools.json");
     std::fs::write(&tools, "{ not json").unwrap();
-    h.app.load_tools_at(Some(tools.clone()));
-    h.app.tools_kept(
+    h.load_tools_at(Some(tools.clone()));
+    h.tools_kept(
         "Bit library saved",
         &[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())],
     );
-    let message = h.app.status.message.clone();
+    let message = h.status_message().to_owned();
     assert!(message.starts_with("Bit library not saved"), "{message}");
     assert!(!message.contains("Bit library saved"), "{message}");
-    let names: Vec<_> = h.app.doc.toolpaths.values().map(|t| &t.tool.name).collect();
+    let names: Vec<_> = h.doc().toolpaths.values().map(|t| &t.tool.name).collect();
     assert!(names.iter().any(|n| *n == "Spiral 6"), "{names:?}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -800,26 +782,24 @@ fn a_fine_bit_is_noted_under_the_controls_while_its_preview_plays() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for _ in 0..2 {
-        h.app.invoke(&h.ctx, "profile_toolpath");
-        let params = h.app.form.as_ref().unwrap().params.clone();
-        h.app.apply("profile_toolpath", &params).unwrap();
-        h.app.form = None;
+        h.invoke("profile_toolpath");
+        let params = h.form_settings().clone();
+        h.run("profile_toolpath", &params).unwrap();
+        h.close_form();
     }
     // only the first toolpath's bit is fine
-    let first = *h.app.doc.toolpaths.keys().next().expect("two toolpaths");
-    h.app.doc.toolpaths.get_mut(&first).unwrap().tool.diameter = 0.05;
-    h.app.display.animate_preview = true;
-    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let first = *h.doc().toolpaths.keys().next().expect("two toolpaths");
+    h.given_document(|doc| doc.toolpaths.get_mut(&first).unwrap().tool.diameter = 0.05);
+    h.given_animated_preview(true);
+    h.invoke("preview_all_toolpaths");
     h.frame(vec![]);
     h.frame(vec![]);
     // paused near each end, so on the fine toolpath and on the wide one: not stopped
-    h.app.player.playing = false;
+    h.pause_playback();
     for share in [0.01, 0.99] {
-        let playback = h.app.player.playback.as_mut().expect("playing");
-        let at = playback.length() * share;
-        playback.seek(at);
+        h.seek_playback(share);
         h.frame(vec![]);
-        assert!(h.app.player.playback.is_some() && h.app.preview.material.is_none());
+        assert!(h.playback().is_some() && !h.has_previewed_material());
         assert!(
             h.texts()
                 .iter()
@@ -833,9 +813,9 @@ fn a_fine_bit_is_noted_under_the_controls_while_its_preview_plays() {
 fn a_new_jobs_default_bit_has_its_flute_length_so_the_form_warns_of_nothing() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.invoke("profile_toolpath");
+    h.pin(Page::Toolpaths);
     h.frame(vec![]);
-    let line = h.app.form_reach().expect("a reach line");
+    let line = h.form_reach().expect("a reach line");
     assert!(!line.text().contains("not checked"), "{line:?}");
 }
