@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-25
 see-also: checks_before_cutting, rotary_firmware, job_setup, rotary_machining_toolpath
 ---
 
@@ -26,8 +26,10 @@ up in **Machine ▸ Machine Configuration ▸ Rotary (4th axis)**:
 - The material has **room to turn**: a square's corners or a board's edges swing out further
   than its top, and must clear the spoilboard below (**Axis height**) and the bit lifted all the
   way up (**Room above**). See [Room to turn](help:rotary_firmware).
-- No toolpath **turns A with the bit lower** than the material swings, and none lifts the bit
-  higher than Z can go.
+- **A turns clear of the corners.** Whenever a toolpath turns A with the bit lower than a
+  square's corners or a board's edges swing, the saved file lifts the bit clear first, turns A,
+  and comes back down, and the turning preview shows it. The check warns only when that lift, or
+  any other, is higher than Z can go.
 
 ## Why it matters
 
