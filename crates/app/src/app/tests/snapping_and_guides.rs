@@ -8,7 +8,7 @@ fn drawing_snaps_to_nearby_corners() {
     h.rectangle(10.0, 10.0, 20.0, 10.0);
     h.app.invoke(&h.ctx, "draw_circle");
     h.app.invoke(&h.ctx, "snap_options");
-    assert!(h.app.snap_window);
+    assert!(h.app.snap.open);
     h.frame(vec![]);
     let scale = h.app.view_transform.unwrap().scale;
     let near = 2.0 / f64::from(scale); // two pixels off the corner
@@ -656,13 +656,9 @@ fn the_top_bar_splits_the_views_and_toggles_snapping() {
 
 /// Untick (or tick) Smart snapping in the open Snapping Options, as its tick box does.
 fn toggle_smart_snapping(h: &mut Harness) {
-    let mut edited = h
-        .app
-        .snap_draft
-        .clone()
-        .unwrap_or_else(|| h.app.options.snapping.clone());
+    let mut edited = h.app.snap.shown(&h.app.options.snapping).clone();
     edited.smart_snapping = !edited.smart_snapping;
-    h.app.snap_draft = (edited != h.app.options.snapping).then_some(edited);
+    h.app.snap.edited(&h.app.options.snapping, edited);
     h.frame(vec![]);
 }
 
@@ -670,7 +666,7 @@ fn toggle_smart_snapping(h: &mut Harness) {
 fn snapping_options_changes_wait_for_apply_and_close_asks_first() {
     let mut h = Harness::new();
     h.app.options.snapping.smart_snapping = true;
-    h.app.snap_window = true;
+    h.app.snap.open = true;
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
@@ -681,7 +677,7 @@ fn snapping_options_changes_wait_for_apply_and_close_asks_first() {
     // Apply uses it and leaves the window open
     click_button(&mut h, "Apply");
     assert!(!h.app.options.snapping.smart_snapping, "used now");
-    assert!(h.app.snap_window);
+    assert!(h.app.snap.open);
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
     // changed back, Close asks; Discard Changes keeps it as applied
@@ -690,15 +686,15 @@ fn snapping_options_changes_wait_for_apply_and_close_asks_first() {
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ASK).is_some());
     click_button(&mut h, "Discard Changes");
-    assert!(!h.app.snap_window);
+    assert!(!h.app.snap.open);
     assert!(!h.app.options.snapping.smart_snapping);
     // Cancel throws changes away too
-    h.app.snap_window = true;
+    h.app.snap.open = true;
     h.frame(vec![]);
     h.frame(vec![]);
     toggle_smart_snapping(&mut h);
     click_button(&mut h, "Cancel");
-    assert!(!h.app.snap_window);
+    assert!(!h.app.snap.open);
     assert!(!h.app.options.snapping.smart_snapping);
 }
 

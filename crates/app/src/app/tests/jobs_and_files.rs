@@ -302,7 +302,7 @@ fn options_close_with_changes_not_applied_asks_first() {
     let mut h = options_with_a_change_not_applied();
     click_button(&mut h, "Close");
     h.frame(vec![]);
-    assert!(h.app.options_editor.open, "not closed yet");
+    assert!(h.app.options_editor.window.open, "not closed yet");
     assert!(
         h.text_at(super::options_apply::ASK).is_some(),
         "{:?}",
@@ -310,7 +310,7 @@ fn options_close_with_changes_not_applied_asks_first() {
     );
     // Keep Editing: back to the settings, the change still waiting
     click_button(&mut h, "Keep Editing");
-    assert!(h.app.options_editor.open);
+    assert!(h.app.options_editor.window.open);
     assert!(h.app.options_dirty());
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ASK).is_none());
@@ -318,7 +318,7 @@ fn options_close_with_changes_not_applied_asks_first() {
     click_button(&mut h, "Close");
     h.frame(vec![]);
     click_button(&mut h, "Discard Changes");
-    assert!(!h.app.options_editor.open);
+    assert!(!h.app.options_editor.window.open);
     assert_eq!(h.app.options.general.recent_file_list_size, 9);
 }
 
@@ -328,7 +328,7 @@ fn options_close_can_apply_the_changes_on_the_way_out() {
     click_button(&mut h, "Close");
     h.frame(vec![]);
     click_button(&mut h, "Apply and Close");
-    assert!(!h.app.options_editor.open);
+    assert!(!h.app.options_editor.window.open);
     assert_eq!(h.app.options.recent_count(), files::RECENT_COUNT);
 }
 
@@ -343,7 +343,7 @@ fn options_close_with_nothing_changed_just_closes() {
     click_button(&mut h, "Apply");
     assert_eq!(h.app.options, options);
     click_button(&mut h, "Close");
-    assert!(!h.app.options_editor.open, "closed without asking");
+    assert!(!h.app.options_editor.window.open, "closed without asking");
 }
 
 #[test]

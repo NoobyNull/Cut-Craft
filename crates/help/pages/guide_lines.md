@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-25
 see-also: snapping, view_2d, make_construction_line, dimensions
 icon: snapping/smart_snapping_on.png
 ---

@@ -70,7 +70,7 @@ impl Harness {
 
     /// Whether the Options window is open.
     pub(in super::super) fn options_window_open(&self) -> bool {
-        self.app.options_editor.open
+        self.app.options_editor.window.open
     }
 
     /// A press on the Shortcuts page: Add…, Reset, Move it here, ...
@@ -138,6 +138,6 @@ impl Harness {
 
     /// Closes the Options window, as its Close does.
     pub(in super::super) fn close_options_window(&mut self) {
-        self.app.options_editor.open = false;
+        self.app.options_editor.window.open = false;
     }
 }

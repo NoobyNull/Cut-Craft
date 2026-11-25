@@ -227,7 +227,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
          unit shows up").window()
         .run(|a, _| a.import_cut_list_picked()),
     act("snap_options", "Snap Options", "Snap Options: chooses what the pointer snaps to as you draw: the grid, guides, ends, middles and centres").keys("F4")
-        .run(|a, _| a.snap_window = true),
+        .run(|a, _| a.snap.open = true),
     act("node_edit", "Node Edit", "Node Edit: shows the points (nodes) a vector is made of, to drag them, or right-click to add, delete or change them. Del deletes the nodes picked with a box; picked nodes are let go when you pick another vector, undo or leave Node Edit").keys("N")
         .run(|a, _| a.toggle_node_edit()),
     act("transform", "Transform", "Transform: click an object to move, size or rotate it with handles you drag; click it again to switch between sizing and rotating")

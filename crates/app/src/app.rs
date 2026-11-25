@@ -100,6 +100,7 @@ mod surfacing;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod unapplied;
 #[cfg(test)]
 pub(crate) use tests::document_menus;
 mod tips;
@@ -906,12 +907,9 @@ pub(crate) struct CutCraftApp {
     machine_files: Option<send::MachineFiles>,
     /// The checks before cutting shown in Save Toolpaths' form and the Analyse tab.
     save_checks: Vec<SaveChecks>,
-    /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
-    snap_window: bool,
-    /// Snapping Options changed and not applied yet; `None` when it shows them as they are.
-    snap_draft: Option<cut_craft_core::snap::SnapOptions>,
-    /// Close was pressed on Snapping Options with changes not applied: it asks first.
-    snap_closing: bool,
+    /// Snapping Options (F4): whether it is open, and its changes not applied yet. The
+    /// options themselves are kept in `options.snapping`.
+    snap: unapplied::Unapplied<cut_craft_core::snap::SnapOptions>,
     /// Gadgets ▸ Job Setup Sheet Editor is open.
     job_sheet_window: bool,
     /// Toolpaths ▸ Print Part Labels is open.
