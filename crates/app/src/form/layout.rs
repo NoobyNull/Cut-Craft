@@ -36,7 +36,7 @@ pub(super) fn show_within(
         } else if let Some(group) = &first.group {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
-                ui.strong(group);
+                ui.strong(super::setting_text(group));
                 diagram(ui, block, look);
                 let mut changed = plain(ui, block, params, look, top);
                 if let Some(end) = look.group_end {
@@ -95,7 +95,7 @@ pub(super) fn tabs(
     let mut picked: usize = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     ui.horizontal_wrapped(|ui| {
         for (i, name) in names.iter().enumerate() {
-            ui.selectable_value(&mut picked, i, *name);
+            ui.selectable_value(&mut picked, i, super::setting_text(name));
         }
     });
     ui.data_mut(|d| d.insert_temp(id, picked));

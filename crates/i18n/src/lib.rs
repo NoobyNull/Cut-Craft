@@ -302,6 +302,29 @@ pub fn key_of(prefix: &str, words: &str) -> String {
     key
 }
 
+/// The key of a piece of text known by its English words, for text that has no name of its
+/// own (a setting's label or tooltip): `prefix`, its first five words, and a short check of
+/// all of it, so two texts that start alike never share a key (`setting-cut-depth-1a2b3c`).
+/// Changed English gets a new key, so a translation of the old words never shows for it.
+pub fn text_key(prefix: &str, english: &str) -> String {
+    let start: Vec<&str> = english
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .take(5)
+        .collect();
+    // FNV-1a: the same check on every computer and in every version
+    let mut hash: u32 = 0x811c_9dc5;
+    for byte in english.bytes() {
+        hash ^= u32::from(byte);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    format!(
+        "{}-{:06x}",
+        key_of(prefix, &start.join(" ")),
+        hash & 0x00ff_ffff
+    )
+}
+
 /// The words for a key, in the language in use: `tr!("start-recent")`, or with values
 /// `tr!("start-whats-new", version = env!("CARGO_PKG_VERSION"))`. A length or other measured
 /// number goes in already written in the job's units; a count that picks a plural goes in as
@@ -593,6 +616,18 @@ start-whats-new = Neu in v{ $version }
             key_of("group", "Join, Combine and Trim"),
             "group-join-combine-and-trim"
         );
+    }
+
+    #[test]
+    fn a_text_key_starts_with_its_words_and_tells_alike_texts_apart() {
+        let key = text_key("setting", "Cut depth: how deep the bit goes, from the top");
+        assert!(key.starts_with("setting-cut-depth-how-deep-the-"), "{key}");
+        assert_eq!(
+            key,
+            text_key("setting", "Cut depth: how deep the bit goes, from the top")
+        );
+        assert_ne!(text_key("setting", "Depth"), text_key("setting", "depth"));
+        assert_ne!(text_key("setting", "Depth"), text_key("setting", "Depth."));
     }
 
     // One test switches languages, so the others never see another language mid-test.
