@@ -87,6 +87,7 @@ mod photo_depth;
 mod placement;
 mod player;
 mod preview;
+mod rail_list;
 mod reach;
 mod sample;
 #[path = "screenshots.rs"]
@@ -697,12 +698,9 @@ pub(crate) struct CutCraftApp {
     search: Option<String>,
     /// The browser's tab (`INSPECTOR_TABS`) in the Rail and Ribbon layouts.
     inspector_tab: usize,
-    /// The Rail layout's open group (an index into `all_groups`), and whether its list
-    /// stays open after a tool is picked.
-    rail_group: Option<usize>,
-    rail_pinned: bool,
-    /// Whether the Rail layout's list shows the favourites (its ★ button) instead of a group.
-    rail_favourites: bool,
+    /// The Rail layout's list: which is open (a group, the favourites or the gadgets), and
+    /// whether its pin keeps it open after a tool is picked.
+    rail: rail_list::RailList,
     /// The Ribbon layout's tab (`RIBBON_TABS`), which the Canvas layout's header shares.
     ribbon_tab: usize,
     /// What the Canvas layout has open.
@@ -819,8 +817,6 @@ pub(crate) struct CutCraftApp {
     /// The add-ons installed that are not gadgets, by name, each with the tool it brings
     /// when Cut Craft knows it, and whether it is official (`crate::addons::installed_tools`).
     installed_addons: Vec<(String, Option<&'static str>, bool)>,
-    /// Rail: the Gadgets list is open.
-    rail_gadgets: bool,
     /// Gadgets from the My Gadgets folder or unsigned add-ons, not from Cut Craft's own
     /// signed builds, by command id.
     unsigned_gadgets: std::collections::HashMap<String, crate::gadgets::Unsigned>,

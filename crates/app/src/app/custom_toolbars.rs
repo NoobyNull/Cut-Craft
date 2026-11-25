@@ -156,8 +156,7 @@ impl CutCraftApp {
             if response.clicked() {
                 self.toolbars.rail = (self.toolbars.rail != Some(n)).then_some(n);
                 self.toolbars.group = None;
-                self.rail_group = None;
-                (self.rail_favourites, self.rail_gadgets) = (false, false);
+                self.rail.close();
             }
             self.toolbar_name_menu(&response, n);
         }
@@ -167,7 +166,7 @@ impl CutCraftApp {
     pub(super) fn rail_toolbar(&mut self) -> Option<usize> {
         let docked = self.docked_toolbars();
         self.toolbars.rail = self.toolbars.rail.filter(|n| docked.contains(n));
-        if self.rail_group.is_some() || self.rail_favourites || self.rail_gadgets {
+        if self.rail.is_open() {
             self.toolbars.rail = None;
         }
         self.toolbars.rail
