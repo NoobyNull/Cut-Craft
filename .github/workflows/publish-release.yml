@@ -4,7 +4,7 @@
 # adds them to the release with scripts/publish-release. Whichever computer finishes first
 # publishes the release; the others add their files to it as they finish.
 #
-# Each release is mirrored to Power-Whittle/Cut-Craft too, where Cut Craft is moving (the
+# Each release is mirrored to Power-Whittle/PowerWhittle too, where Cut Craft is moving (the
 # updater reads both; crates/updater HOMES): the tag and main are pushed there, and the same
 # signed files go on the same release with the same script. It pushes with the secret
 # MIRROR_TOKEN, or else ADDON_RELEASE_TOKEN: a token of the owner's that may push code,
@@ -71,7 +71,7 @@ jobs:
       - name: Mirror them to Power-Whittle
         continue-on-error: true
         env:
-          MIRROR: Power-Whittle/Cut-Craft
+          MIRROR: Power-Whittle/PowerWhittle
           MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN || secrets.ADDON_RELEASE_TOKEN }}
         run: |
           if [[ -z $MIRROR_TOKEN ]]; then
