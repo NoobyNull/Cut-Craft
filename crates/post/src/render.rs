@@ -144,7 +144,7 @@ impl Post {
                 if let (Some(b), Some(hit)) = (bank, hit) {
                     out.drop_drills(&mut v, &b.bank, &hit.drills, by_pattern, &mut down);
                 }
-                let mut steps = self.steps(&part, &doc.job, at);
+                let mut steps = self.steps(&part, &doc.job, at, held);
                 if let Some(w) = winding.as_mut() {
                     steps = w.plan(steps, at);
                 }
@@ -450,16 +450,31 @@ impl Post {
         })
     }
 
-    /// The moves of `toolpath`, starting from `at`, as they are written: a plunge from above
-    /// the job's Plunge (Z2) gap goes down to it at the rapid rate first, and runs of cuts
-    /// become arcs where the post can write them.
-    pub(super) fn steps(&self, toolpath: &Toolpath, job: &Job, mut at: DVec3) -> Vec<Step> {
+    /// The moves of `toolpath`, starting from `at` with the bit held `held_across` off the
+    /// turning axis, as they are written: a plunge from above the job's Plunge (Z2) gap goes
+    /// down to it at the rapid rate first, and runs of cuts become arcs where the post can
+    /// write them.
+    pub(super) fn steps(
+        &self,
+        toolpath: &Toolpath,
+        job: &Job,
+        mut at: DVec3,
+        mut held_across: f64,
+    ) -> Vec<Step> {
         let gap = job.plunge_gap();
         // a bit held off the turning axis: its moves are where its tip cuts, written as where A
         // turns to and how high the bit is
         let held = match (&self.wrap, job.rotary) {
             (Some((axis, _)), Some(r)) if !toolpath.across.is_empty() => {
                 Some((usize::from(*axis == "Y"), r.diameter / 2.0))
+            }
+            _ => None,
+        };
+        // a square's corners or a board's edges swing out past the material's top: a rapid
+        // that turns A lower than that lifts clear first, turns, and comes back down
+        let corners = match (&self.wrap, job.rotary) {
+            (Some((axis, _)), Some(_)) if job.turning_gap() > job.clearance + 1e-9 => {
+                Some((usize::from(*axis == "Y"), job.turning_gap()))
             }
             _ => None,
         };
@@ -478,9 +493,24 @@ impl Post {
                 let down = from.lerp(to, (from.z - gap) / (from.z - to.z));
                 lines.push((MoveKind::Rapid, down, 0.0, across));
             }
+            if let Some((round, high)) = corners
+                && m.kind == MoveKind::Rapid
+                && (to[round] - from[round]).abs() > 1e-9
+                && from.z.min(to.z) < high - 1e-9
+            {
+                // straight up where it is, held as it is; across and round only once clear
+                lines.push((
+                    MoveKind::Rapid,
+                    from.with_z(from.z.max(high)),
+                    0.0,
+                    held_across,
+                ));
+                lines.push((MoveKind::Rapid, to.with_z(to.z.max(high)), 0.0, across));
+            }
             let power = toolpath.power.get(i).copied().unwrap_or(0.0);
             lines.push((m.kind, to, power, across));
             from = to;
+            held_across = across;
         }
         let line = |&(kind, to, power, across): &(MoveKind, DVec3, f64, f64)| {
             Step::Line(kind, to, power, across)

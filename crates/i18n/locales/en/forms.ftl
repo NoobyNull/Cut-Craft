@@ -65,6 +65,13 @@ rest-minimum-detail = Minimum detail
 rest-overlap = Overlap
     .tooltip = Grow each unmachined area by this
 
+# A flat toolpath on a rotary job: wrapped round the part, or cut flat with A locked.
+locked-face = Flat on a locked face
+    .tooltip = A turns to one angle and stays there, and this toolpath is cut flat on that face, its depth measured down from the face. Off, it is wrapped round the part
+locked-face-own-angle = Set the angle myself
+    .tooltip = Off, A turns to where the cut is drawn round the part: the nearest flat face of a square or a board
+locked-face-angle = Angle
+
 # A toolpath's Vector Selector: which vectors it takes each time it is calculated.
 selector-associate = Associate a Vector Selector with this toolpath
     .tooltip = Take the vectors that pass it each time the toolpath is calculated

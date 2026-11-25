@@ -19,14 +19,15 @@
 //! material and of the chuck and tailstock: where they would not fit it leaves the material,
 //! and says so in red.
 
+use cut_craft_core::component::MachiningBoundary;
 use cut_craft_core::document::Document;
 use cut_craft_core::rotary_axis::Surroundings;
 use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, Toolpath, made_by};
 use cut_craft_core::{Change, Command, CommandError, Form, Meta, Needs, ensure_positive};
 use cut_craft_rotary::{Cutter, Head, Stock};
 use cut_craft_rotary_carving::{
-    Carving, Details, NO_ROOM_FOR_MARK, Pass, Reach, angles, in_material, joined, left_note,
-    too_near,
+    Carving, Details, Limit, NO_ROOM_FOR_MARK, Pass, Reach, angles, in_material, joined, left_note,
+    limit_vectors, too_near,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -92,6 +93,19 @@ pub struct Params {
     /// Where along the axis the rings end, from the job's start; 0 runs to the job's end
     #[schemars(extend("x-unit" = "mm", "x-group" = "Along the part"), range(min = 0))]
     pub end: f64,
+    /// Where on the material the bit may cut: all of it, or within the model's outline, a
+    /// level's, or the selected closed vectors. Drawn on the job, they wrap round the part
+    #[serde(default)]
+    #[schemars(title = "Machining limit", extend("x-group" = "Machining Limit Boundary"))]
+    pub machining_boundary: MachiningBoundary,
+    /// The level whose components make the limit
+    #[serde(default)]
+    #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}, "x-group" = "Machining Limit Boundary"))]
+    pub boundary_level: String,
+    /// Grows the limit outward by this much (negative shrinks it)
+    #[serde(default)]
+    #[schemars(title = "Boundary Offset", extend("x-unit" = "mm", "x-group" = "Machining Limit Boundary", "x-hide-when" = {"machining_boundary": "material"}))]
+    pub machining_boundary_offset: f64,
     /// Material left on the part for a later pass, all the way round
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub allowance: f64,
@@ -126,6 +140,9 @@ impl Default for Params {
             tilt_angles: String::new(),
             start: 0.0,
             end: 0.0,
+            machining_boundary: MachiningBoundary::Material,
+            boundary_level: String::new(),
+            machining_boundary_offset: 0.0,
             allowance: 0.0,
             registration_mark: false,
             cut_support: false,
@@ -200,6 +217,12 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
             cut_support: p.cut_support,
         },
     )?;
+    let carving = carving.limited(Limit::of(
+        doc,
+        p.machining_boundary,
+        p.machining_boundary_offset,
+        &p.boundary_level,
+    )?)?;
     let (along_x, length, radius, end) =
         (carving.along_x, carving.length, carving.radius, carving.end);
     let work = carving.work();
@@ -271,6 +294,9 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
             radius,
         ));
     }
+    if let Some(limit) = &carving.limit {
+        passes = limit.keep(along_x, passes);
+    }
     let held_off = p.strategy != Strategy::Radial;
     let (mut moves, across) = joined(&passes, doc.job.turning_gap(), held_off, radius, along_x);
     // worked out from the material's corner; written where the material is in the job, as
@@ -280,8 +306,13 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         m.to.x += corner.x;
         m.to.y += corner.y;
     }
-    let mut toolpath =
-        made_by::<RotaryMachiningToolpath>(p, p.name.clone(), tool.clone(), vec![], moves);
+    let mut toolpath = made_by::<RotaryMachiningToolpath>(
+        p,
+        p.name.clone(),
+        tool.clone(),
+        limit_vectors(doc, p.machining_boundary),
+        moves,
+    );
     toolpath.across = across;
     if !kept.is_empty() {
         toolpath.params[cut_craft_core::toolpath::MADE_NOTES] = kept.clone().into();

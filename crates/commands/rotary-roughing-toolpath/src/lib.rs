@@ -10,13 +10,14 @@
 //! collet nut and spindle clear of the material beside the cut and of the chuck and
 //! tailstock: where they would not let the bit down it stops short, and says so in red.
 
+use cut_craft_core::component::MachiningBoundary;
 use cut_craft_core::document::Document;
 use cut_craft_core::rotary_axis::Surroundings;
 use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, Toolpath, made_by};
 use cut_craft_core::{Change, Command, CommandError, Form, Meta, Needs, ensure_positive};
-use cut_craft_rotary::{Head, Stock, Voxels};
+use cut_craft_rotary::{Head, Stock};
 use cut_craft_rotary_carving::{
-    CELLS, Carving, CutDirection, Levels, Reach, Way, cut_by, joined, too_near,
+    Carving, CutDirection, Levels, Limit, Reach, Way, joined, limit_vectors, too_near,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -57,6 +58,19 @@ pub struct Params {
     /// Where along the axis the roughing ends, from the job's start; 0 runs to the job's end
     #[schemars(extend("x-unit" = "mm", "x-group" = "Along the part"), range(min = 0))]
     pub end: f64,
+    /// Where on the material the bit may cut: all of it, or within the model's outline, a
+    /// level's, or the selected closed vectors. Drawn on the job, they wrap round the part
+    #[serde(default)]
+    #[schemars(title = "Machining limit", extend("x-group" = "Machining Limit Boundary"))]
+    pub machining_boundary: MachiningBoundary,
+    /// The level whose components make the limit
+    #[serde(default)]
+    #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}, "x-group" = "Machining Limit Boundary"))]
+    pub boundary_level: String,
+    /// Grows the limit outward by this much (negative shrinks it)
+    #[serde(default)]
+    #[schemars(title = "Boundary Offset", extend("x-unit" = "mm", "x-group" = "Machining Limit Boundary", "x-hide-when" = {"machining_boundary": "material"}))]
+    pub machining_boundary_offset: f64,
     /// The holder above the bit, and the chuck and tailstock: filled in from Machine
     /// Configuration as the toolpath is made (the usual ones without)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -83,6 +97,9 @@ impl Default for Params {
             allowance: 0.5,
             start: 0.0,
             end: 0.0,
+            machining_boundary: MachiningBoundary::Material,
+            boundary_level: String::new(),
+            machining_boundary_offset: 0.0,
             surroundings: None,
             whole_blank: false,
         }
@@ -149,24 +166,15 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
             cut_support: false,
         },
     )?;
+    let carving = carving.limited(Limit::of(
+        doc,
+        p.machining_boundary,
+        p.machining_boundary_offset,
+        &p.boundary_level,
+    )?)?;
     let work = carving.work();
-    let corner = doc.job.area().min;
-    let corner = cut_craft_core::glam::DVec3::new(corner.x, corner.y, 0.0);
-    // no finer than a twelfth of the bit: what is left between is not worth a pass
-    let mut material = Voxels::of(
-        &stock,
-        Voxels::cell_for(&stock, CELLS).max(tool.diameter / 12.0),
-    );
-    if !p.whole_blank {
-        cut_craft_core::progress::stage("Working out what the toolpaths above leave");
-        cut_by(
-            &mut material,
-            &doc.toolpaths_before_made(),
-            corner,
-            carving.radius,
-            carving.along_x,
-        );
-    }
+    let corner = carving.corner(doc);
+    let mut material = carving.left_of(doc, &stock, p.whole_blank);
     let around = p.surroundings.unwrap_or_default();
     let head = Head::new(tool, &around, carving.length, stock.swing());
     let mut notes = too_near(
@@ -210,8 +218,13 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         m.to.x += corner.x;
         m.to.y += corner.y;
     }
-    let toolpath =
-        made_by::<RotaryRoughingToolpath>(p, p.name.clone(), tool.clone(), vec![], moves);
+    let toolpath = made_by::<RotaryRoughingToolpath>(
+        p,
+        p.name.clone(),
+        tool.clone(),
+        limit_vectors(doc, p.machining_boundary),
+        moves,
+    );
     Ok((toolpath, notes))
 }
 

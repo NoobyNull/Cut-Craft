@@ -1085,6 +1085,19 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     tool(
         Area::Toolpaths,
+        "rotary_locked_angles_toolpath",
+        "On a rotary job, **Rotary Locked Angles** holds A still at the angles that reach the \
+         most, one after another, and stops when nothing worth another is left: four for a \
+         square part.",
+    ),
+    tool(
+        Area::Toolpaths,
+        "rotary_details_toolpath",
+        "On a rotary job, **Rotary Details** runs a smaller bit after the finish, only where \
+         the bigger bits before it could not reach.",
+    ),
+    tool(
+        Area::Toolpaths,
         "rotary_machining_toolpath",
         "On a rotary job, **4-Axis Rotary Machining** finishes the model ring by ring all the \
          way round, worked out round the turning axis itself so a bit cutting deep never \

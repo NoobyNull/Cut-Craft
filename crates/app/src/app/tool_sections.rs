@@ -613,6 +613,53 @@ pub(super) fn selector_section(
     }
 }
 
+/// A flat toolpath's Flat on a locked face, on a rotary job: wrapped round the part (off,
+/// the usual) or cut flat with A locked, at the face the cut is drawn on or an angle typed.
+pub(super) fn locked_face_section(ui: &mut egui::Ui, params: &mut Value) {
+    use cut_craft_core::locked_face::{KEY, LockedFace};
+    let before = LockedFace::of(params);
+    let mut on = before.is_some();
+    let mut face = before.unwrap_or_default();
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.checkbox(&mut on, tr!("locked-face"))
+            .on_hover_hint(tr!("locked-face.tooltip"));
+        if !on {
+            return;
+        }
+        ui.indent("locked_face", |ui| {
+            let mut own = face.angle.is_some();
+            ui.checkbox(&mut own, tr!("locked-face-own-angle"))
+                .on_hover_hint(tr!("locked-face-own-angle.tooltip"));
+            face.angle = own.then(|| face.angle.unwrap_or(0.0));
+            if let Some(angle) = &mut face.angle {
+                ui.horizontal(|ui| {
+                    ui.label(tr!("locked-face-angle"));
+                    ui.add(
+                        cut_craft_bug_report::number::Number::new(angle)
+                            .name(tr!("locked-face-angle"))
+                            .range(-360.0..=360.0)
+                            .suffix("°"),
+                    );
+                });
+            }
+        });
+    });
+    let after = on.then_some(face);
+    if after != before {
+        match after {
+            Some(face) => {
+                params[KEY] = serde_json::to_value(face).expect("a locked face serialises");
+            }
+            None => {
+                if let Some(map) = params.as_object_mut() {
+                    map.remove(KEY);
+                }
+            }
+        }
+    }
+}
+
 pub(super) fn rest_section(
     ui: &mut egui::Ui,
     params: &mut Value,

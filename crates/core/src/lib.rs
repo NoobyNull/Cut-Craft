@@ -30,6 +30,7 @@ pub mod handles;
 pub mod import_layers;
 pub mod import_settings;
 pub mod keep_out;
+pub mod locked_face;
 pub mod material_class;
 pub mod material_library;
 pub mod medial;
@@ -45,6 +46,7 @@ pub mod random;
 pub mod reach;
 pub mod rest;
 pub mod rotary_axis;
+pub mod rotary_upgrade;
 pub mod selection;
 pub mod selector;
 pub mod simplify;
@@ -67,7 +69,7 @@ pub use glam;
 pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Sequence, Step, UnitGuess};
 pub use command::{
     Command, CommandError, Drag, DynCommand, EMPTY_MODEL, Form, Interactive, Meta, Needs, NoParams,
-    Registry, SELECT_FIRST, ensure_named, ensure_positive, existing, existing_layer, gone,
-    sentence, tool_does_not_fit,
+    Registry, SELECT_FIRST, ensure_named, ensure_positive, error_words, existing, existing_layer,
+    gone, sentence, tool_does_not_fit,
 };
 pub use formats::{ExportEntry, Exporter, FileFormat, ImportEntry, Importer};

@@ -163,3 +163,5 @@ about-commits = { $count ->
     [one] { $count } commit
    *[other] { $count } commits
 }
+lathe-a-speed = Nearest the axis ({ $radius } out) A turns at { $rate }°/min, to keep the bit's feed of { $feed }/min there.
+lathe-a-speed-capped = Nearest the axis ({ $radius } out) A would need { $rate }°/min to keep the bit's feed of { $feed }/min, but this machine turns A at most { $most }°/min: within { $slow } of the axis the bit cuts slower than its feed, and its chips get thinner. A slower feed or a bigger holding stub keeps them.

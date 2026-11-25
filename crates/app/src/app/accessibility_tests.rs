@@ -5,19 +5,7 @@ use eframe::egui::accesskit::{Role, TreeUpdate};
 
 /// One frame with the accessibility tree on; the tree it built.
 fn tree(h: &mut Harness) -> TreeUpdate {
-    h.ctx.enable_accesskit();
-    // the tree is built from the frame after it is turned on
-    for _ in 0..2 {
-        h.frame(vec![]);
-    }
-    h.time += 0.1;
-    let input = RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, h.window)),
-        time: Some(h.time),
-        ..Default::default()
-    };
-    let out = headless(h.ctx.run_ui(input, |ui| h.app.pass(ui)));
-    out.platform_output.accesskit_update.expect("a tree")
+    h.accessibility_tree()
 }
 
 /// Every number box's name, as a screen reader would say it.
@@ -51,7 +39,7 @@ fn assert_all_named(scene: &str, tree: &TreeUpdate) {
 #[test]
 fn job_setup_number_boxes_are_heard_by_their_labels() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "job_size_and_position");
+    h.invoke("job_size_and_position");
     let tree = tree(&mut h);
     assert_all_named("Job Setup", &tree);
     let names = number_boxes(&tree);
@@ -66,7 +54,7 @@ fn job_setup_number_boxes_are_heard_by_their_labels() {
 #[test]
 fn toolpath_form_number_boxes_are_heard_by_their_labels() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.invoke("profile_toolpath");
     let tree = tree(&mut h);
     assert_all_named("Profile", &tree);
     let names = number_boxes(&tree);
@@ -76,14 +64,14 @@ fn toolpath_form_number_boxes_are_heard_by_their_labels() {
 #[test]
 fn drawing_number_boxes_are_heard_by_their_labels() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.invoke("draw_rectangle");
     assert_all_named("Draw Rectangle", &tree(&mut h));
 }
 
 #[test]
 fn number_box_arrows_are_not_tab_stops() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.invoke("profile_toolpath");
     let tree = tree(&mut h);
     let arrows: Vec<_> = tree
         .nodes

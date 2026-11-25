@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-25
-see-also: rotary_finishing_toolpath, rotary_machining_toolpath, rotary_lathe_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths, tool_database
+see-also: rotary_finishing_toolpath, rotary_locked_angles_toolpath, rotary_machining_toolpath, rotary_lathe_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths, tool_database
 ---
 
 **Rotary Roughing** takes the bulk off a carved part on a rotary job: a level at a time from the
@@ -64,6 +64,10 @@ cuts with its **Start**, **End** and **Allowance**.
 - **Allowance**: material left on the model, all the way round, for the finish to take off.
 - **Start** and **End**: where along the axis it cuts, from the job's start (the chuck end).
   End 0 runs to the job's end.
+- **Machining limit**: where on the material it may cut. **Material** (the usual) is all of
+  it; **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline,
+  grown by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job
+  does. Selected vectors are kept with the toolpath, so it recalculates the same.
 
 ## What it keeps clear of
 
@@ -71,4 +75,5 @@ It never cuts air. It keeps out of the **Chuck** and **Tailstock** set in
 [Machine Configuration](help:rotary_firmware), and keeps the collet nut and spindle (see
 [Collisions](help:collisions)) clear of the material beside the cut. Where they would not let the
 bit down as far as it should go, it stops short there and says so in red: rough the material
-beside it down first, or use a bit that sticks out further.
+beside it down first, or use a bit that sticks out further. Material outside the
+**Machining limit** is never cut, so the holder keeps clear of it too, all the way round.

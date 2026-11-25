@@ -100,14 +100,25 @@ pub const EMPTY_MODEL: &str =
 
 /// Every message reads as a sentence, whatever case it was written in: a capital first and a
 /// full stop last. A message should also say what to do about it ("Pick a smaller bit"),
-/// not only what is wrong; the app's tests run every command to keep that so.
+/// not only what is wrong; the app's tests run every command to keep that so. It is shown in
+/// the chosen language ([`error_words`]).
 impl fmt::Display for CommandError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidParams(why) | Self::Failed(why) => f.write_str(&sentence(why)),
-            Self::NothingSelected => f.write_str(&sentence(SELECT_FIRST)),
+            Self::InvalidParams(why) | Self::Failed(why) => {
+                f.write_str(&sentence(&error_words(why)))
+            }
+            Self::NothingSelected => f.write_str(&sentence(&error_words(SELECT_FIRST))),
         }
     }
+}
+
+/// A command's message in the chosen language: `locales/<language>/errors.ftl` holds every
+/// message a command writes as it is (`CommandError::Failed("…")`), keyed by its English
+/// words (`error-`, its first words and a check of the whole text). A message put together
+/// from values (`format!`) has no key and shows in English.
+pub fn error_words(english: &str) -> String {
+    cut_craft_i18n::tr_or(&cut_craft_i18n::text_key("error", english), english)
 }
 
 impl std::error::Error for CommandError {}
@@ -567,6 +578,7 @@ impl Registry {
             })?;
         let mut fresh = fresh;
         crate::rest::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
+        crate::locked_face::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
         if let Some(selector) = settings.get("selector") {
             fresh.params["selector"] = selector.clone();
         }

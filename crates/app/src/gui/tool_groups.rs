@@ -272,6 +272,8 @@ pub(super) fn toolpath_groups() -> Vec<ToolGroup> {
                 "rounding_toolpath",
                 "rotary_roughing_toolpath",
                 "rotary_finishing_toolpath",
+                "rotary_locked_angles_toolpath",
+                "rotary_details_toolpath",
                 "rotary_machining_toolpath",
                 "rotary_lathe_toolpath",
             ],

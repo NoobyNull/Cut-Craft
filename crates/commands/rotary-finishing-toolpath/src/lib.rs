@@ -10,14 +10,15 @@
 //! cuts air. Where the collet nut and spindle can't get down beside what is left, or the
 //! chuck or tailstock is in the way, it stays up there and says so in red.
 
+use cut_craft_core::component::MachiningBoundary;
 use cut_craft_core::document::Document;
 use cut_craft_core::rotary_axis::Surroundings;
 use cut_craft_core::toolpath::{MADE_NOTES, Tool, ToolDatabase, ToolShape, Toolpath, made_by};
-use cut_craft_core::{Change, Command, CommandError, Form, Meta, Needs, ensure_positive};
-use cut_craft_rotary::{Head, Stock, Voxels};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, Needs};
+use cut_craft_rotary::{Head, Stock};
 use cut_craft_rotary_carving::{
-    CELLS, Carving, CutDirection, Finish, NO_ROOM_FOR_MARK, Pass, Reach, Way, Work, cut_by, joined,
-    too_near,
+    Carving, CutDirection, Finish, Limit, NO_ROOM_FOR_MARK, Pass, Reach, Way, Work, finishing_step,
+    joined, limit_vectors, too_near,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,9 @@ pub enum Held {
     /// A set distance to one side of the turning axis: the side of the ball cuts, not its
     /// slow-turning tip, for a cleaner finish, and walls that face sideways are reached
     OffCentre,
+    /// A and the bit's place across the axis change together, so the bit meets the model
+    /// square on: flat faces are cut with A still, steep sides by the side of the ball
+    FollowsTheSurface,
 }
 
 /// Which sides of the axis an off-centre finish is held to.
@@ -72,7 +76,8 @@ pub struct Params {
     /// Both cuts back and forth, staying down
     #[schemars(title = "Cut direction", extend("x-group" = "Strategy"))]
     pub cut_direction: CutDirection,
-    /// Where the bit is held: over the turning axis, or to one side of it
+    /// Where the bit is held: over the turning axis, to one side of it, or following the
+    /// surface
     #[schemars(title = "Bit held", extend("x-group" = "Strategy"))]
     pub held: Held,
     /// How far to one side of the turning axis the bit is held. Positive is the way the part
@@ -91,6 +96,19 @@ pub struct Params {
     /// Where along the axis the finish ends, from the job's start; 0 runs to the job's end
     #[schemars(extend("x-unit" = "mm", "x-group" = "Along the part"), range(min = 0))]
     pub end: f64,
+    /// Where on the material the bit may cut: all of it, or within the model's outline, a
+    /// level's, or the selected closed vectors. Drawn on the job, they wrap round the part
+    #[serde(default)]
+    #[schemars(title = "Machining limit", extend("x-group" = "Machining Limit Boundary"))]
+    pub machining_boundary: MachiningBoundary,
+    /// The level whose components make the limit
+    #[serde(default)]
+    #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}, "x-group" = "Machining Limit Boundary"))]
+    pub boundary_level: String,
+    /// Grows the limit outward by this much (negative shrinks it)
+    #[serde(default)]
+    #[schemars(title = "Boundary Offset", extend("x-unit" = "mm", "x-group" = "Machining Limit Boundary", "x-hide-when" = {"machining_boundary": "material"}))]
+    pub machining_boundary_offset: f64,
     /// A small notch at A=0, just past the end of the finish, so the part can be put back
     /// exactly as it was if a job has to be started again
     pub registration_mark: bool,
@@ -127,6 +145,9 @@ impl Default for Params {
             allowance: 0.0,
             start: 0.0,
             end: 0.0,
+            machining_boundary: MachiningBoundary::Material,
+            boundary_level: String::new(),
+            machining_boundary_offset: 0.0,
             registration_mark: false,
             cut_support: false,
             surroundings: None,
@@ -167,10 +188,14 @@ const NOTHING_LEFT: &str = "Nothing is left to finish between Start and End: the
     above this one already take the material down to the model. Move this toolpath further up \
     the list, or leave it out.";
 
+/// Why the registration mark was left out, when the machining limit doesn't reach it.
+const MARK_OUTSIDE: &str = "The registration mark wasn't cut: A=0 just past End is outside the \
+    machining limit. Grow the limit to take it in, or pencil a line on the material at A=0.";
+
 /// How far across the bit is held for each run over the whole part.
 fn held(p: &Params) -> Vec<f64> {
     match (p.held, p.sides) {
-        (Held::OverTheAxis, _) => vec![0.0],
+        (Held::OverTheAxis | Held::FollowsTheSurface, _) => vec![0.0],
         (Held::OffCentre, Sides::OneSide) => vec![p.offset],
         (Held::OffCentre, Sides::BothSides) => vec![p.offset, -p.offset],
     }
@@ -179,13 +204,6 @@ fn held(p: &Params) -> Vec<f64> {
 /// The toolpath, and what it has to say in red.
 fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandError> {
     let tool = &p.tool;
-    ensure_positive("bit diameter", tool.diameter)?;
-    let stepover = tool.finishing_stepover();
-    if !(stepover > 0.0 && stepover <= 1.0) {
-        return Err(CommandError::InvalidParams(
-            "the bit's finishing stepover must be more than 0% and at most 100%: set it in the Bit Library".into(),
-        ));
-    }
     let Some(stock) = doc.job.rotary.and_then(|_| Stock::of(&doc.job)) else {
         return Err(CommandError::Failed(
             "this toolpath turns the material: set the job up as rotary in Job Setup".into(),
@@ -197,30 +215,20 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         Reach {
             start: p.start,
             end: p.end,
-            step: stepover * tool.diameter,
+            step: finishing_step(tool)?,
             allowance: p.allowance.max(0.0),
             cut_support: p.cut_support,
         },
     )?;
+    let carving = carving.limited(Limit::of(
+        doc,
+        p.machining_boundary,
+        p.machining_boundary_offset,
+        &p.boundary_level,
+    )?)?;
     let work = carving.work();
-    let corner = doc.job.area().min;
-    let corner = cut_craft_core::glam::DVec3::new(corner.x, corner.y, 0.0);
-    // no finer than a twelfth of the bit: a pass is cut wherever any of it is within a cell,
-    // so a thin layer left by the roughing is still found
-    let mut material = Voxels::of(
-        &stock,
-        Voxels::cell_for(&stock, CELLS).max(tool.diameter / 12.0),
-    );
-    if !p.whole_blank {
-        cut_craft_core::progress::stage("Working out what the toolpaths above leave");
-        cut_by(
-            &mut material,
-            &doc.toolpaths_before_made(),
-            corner,
-            carving.radius,
-            carving.along_x,
-        );
-    }
+    let corner = carving.corner(doc);
+    let mut material = carving.left_of(doc, &stock, p.whole_blank);
     let around = p.surroundings.unwrap_or_default();
     let head = Head::new(tool, &around, carving.length, stock.swing());
     // what of the model it can't cut: kept with the toolpath, for the checks before cutting
@@ -240,24 +248,33 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
             direction: p.cut_direction,
             held: held(p),
             head,
+            follow: p.held == Held::FollowsTheSurface,
         },
     )?;
     if !finished.kept_off.is_empty() {
         kept.push(kept_off_note(&around, &finished.kept_off, carving.units));
     }
     let mut passes = finished.passes;
-    if passes.is_empty() {
+    // nothing cut and nothing kept off: the toolpaths above already took it all
+    if passes.is_empty() && finished.kept_off.is_empty() {
         notes.push(NOTHING_LEFT.to_owned());
     }
     if p.registration_mark {
         // just past the end of the finish
         let along = (carving.end + tool.diameter).min(carving.length);
         match mark(&work, &mark_head, along) {
+            Ok(mark)
+                if work
+                    .limit
+                    .is_some_and(|l| !mark.iter().all(|p| l.holds_point(carving.along_x, p))) =>
+            {
+                notes.push(MARK_OUTSIDE.to_owned());
+            }
             Ok(mark) => passes.push((mark, false)),
             Err(why) => notes.push(why),
         }
     }
-    let held_off = p.held == Held::OffCentre;
+    let held_off = p.held != Held::OverTheAxis;
     let (mut moves, across) = joined(
         &passes,
         doc.job.turning_gap(),
@@ -271,8 +288,13 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         m.to.x += corner.x;
         m.to.y += corner.y;
     }
-    let mut toolpath =
-        made_by::<RotaryFinishingToolpath>(p, p.name.clone(), tool.clone(), vec![], moves);
+    let mut toolpath = made_by::<RotaryFinishingToolpath>(
+        p,
+        p.name.clone(),
+        tool.clone(),
+        limit_vectors(doc, p.machining_boundary),
+        moves,
+    );
     toolpath.across = across;
     if !kept.is_empty() {
         toolpath.params[MADE_NOTES] = kept.clone().into();

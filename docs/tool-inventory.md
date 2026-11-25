@@ -402,8 +402,39 @@ say "not implemented yet".
   Off centre (Offset mm to one side; One side, or Both sides one after the other). Like Rotary
   Roughing it cuts only what the toolpaths above it leave (unless Advanced rotary mode), and
   where the holder can't get down beside what is left it stays up and says so in red.
-  Registration mark and Cut away centre support as in 4-Axis Rotary Machining. Spiral (the
-  calculator choosing it over rings when quicker) is still to come.
+  Registration mark and Cut away centre support as in 4-Axis Rotary Machining. Bit held
+  Follows the surface (`Work::following`, crates/rotary-carving/src/follow.rs): each point of
+  a line is turned so the model faces straight up at it (its slope round the part, evened out
+  over the ball's width, at most 60°), the bit held across to stay over it, so flat faces are
+  cut with A still. Spiral (the calculator choosing it over rings when quicker) is still to
+  come.
+- Rotary Locked Angles (Cut Craft's own, `rotary_locked_angles_toolpath`): on a rotary job, A
+  locked at one angle after another (of every 15°), each picked where it reaches the most of
+  what is left, and the side facing the bit finished back and forth along the part with A held
+  still (`Work::locked_angles`, over `best_tilt` and `locked`). Most angles is the limit; it
+  stops sooner when no angle reaches enough to be worth it (a square bar takes four). Cuts
+  only what the toolpaths above it leave; says in red where the holder kept it from the model
+  at every angle, and when the angles allowed ran out with more left.
+- Rotary Details (Cut Craft's own, `rotary_details_toolpath`): on a rotary job, rest machining
+  for carved parts. Each of the Bits that finished before is run as a finish all the way round
+  over a voxel copy of what is left (in thought), then the smaller detail bit goes round the
+  part ring by ring where some is still left, then up to Most angles locked angles
+  (`locked_angles`) for what the rings could not reach. Also cuts only what the toolpaths above
+  it leave (Advanced rotary mode starts from the whole blank; the bits before still count).
+- Rotary machining limit: every rotary toolpath (Roughing, Finishing, Locked Angles, Details,
+  4-Axis Rotary Machining, Lathe) has Machining limit Material (the usual) / Model / Selected
+  Level / Selected Vector(s), with Boundary Offset (`cut_craft_rotary_carving::Limit`). The
+  outlines are read on the unrolled sheet, so vectors drawn on the job wrap round the part; the
+  carving keeps the bit out wherever its tip would land outside them (`Work::cutting`), and
+  4-Axis Rotary Machining splits its passes there (`Limit::keep`). The Lathe turns all the way
+  round, so it uses only how far along the outlines reach (Part off ignores it). Selected
+  vectors are kept with the toolpath by id.
+- Flat on a locked face (`cut_craft_core::locked_face`): on a rotary job, any flat toolpath's
+  form (not lasers, not the rotary toolpaths) can tick Flat on a locked face. A locks at the
+  middle of the cuts round the part (snapped to the nearest flat face of a square or a board),
+  or at an angle typed in; round the sheet becomes the bit held across the face
+  (`Toolpath::across`), depth from the face. Applied after the strategy, like rest machining,
+  on Calculate and on recalculating.
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits

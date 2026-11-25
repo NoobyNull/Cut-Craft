@@ -66,6 +66,8 @@ fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap
 cmd-rotary-machining-toolpath = { path = "../commands/rotary-machining-toolpath" }
 cmd-rotary-roughing-toolpath = { path = "../commands/rotary-roughing-toolpath" }
 cmd-rotary-finishing-toolpath = { path = "../commands/rotary-finishing-toolpath" }
+cmd-rotary-locked-angles-toolpath = { path = "../commands/rotary-locked-angles-toolpath" }
+cmd-rotary-details-toolpath = { path = "../commands/rotary-details-toolpath" }
 cmd-rotary-lathe-toolpath = { path = "../commands/rotary-lathe-toolpath" }
 cmd-3d-pencil-toolpath = { path = "../commands/3d-pencil-toolpath" }
 cmd-quick-trace = { path = "../commands/quick-trace" }

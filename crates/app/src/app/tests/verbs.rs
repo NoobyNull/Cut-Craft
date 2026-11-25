@@ -156,11 +156,180 @@ impl Harness {
     pub(super) fn variable_value(&self, key: &str) -> String {
         super::notes_panel::value_now(&self.app, key)
     }
+
+    // ---- views, layouts and floating lists ----
+
+    /// One frame with the screen reader's tree turned on: the tree it was handed.
+    pub(super) fn accessibility_tree(&mut self) -> egui::accesskit::TreeUpdate {
+        self.ctx.enable_accesskit();
+        // the tree is built from the frame after it is turned on
+        for _ in 0..2 {
+            self.frame(vec![]);
+        }
+        self.time += 0.1;
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.window)),
+            time: Some(self.time),
+            ..Default::default()
+        };
+        let out = headless(self.ctx.run_ui(input, |ui| self.app.pass(ui)));
+        out.platform_output.accesskit_update.expect("a tree")
+    }
+
+    /// The view that has the window (or the big part of a split).
+    pub(super) fn view(&self) -> &View {
+        &self.app.view
+    }
+
+    /// How the views are split, if they are.
+    pub(super) fn split(&self) -> Option<Split> {
+        self.app.split
+    }
+
+    /// The views split as `split`, as an earlier session left them.
+    pub(super) fn given_split(&mut self, split: Option<Split>) {
+        self.app.split = split;
+    }
+
+    /// Side by side, with the 3D view on the left.
+    pub(super) fn given_3d_view_first(&mut self) {
+        self.app.split_layout.three_d_first = true;
+    }
+
+    /// The corner the small view sits in.
+    pub(super) fn small_view_corner(&self) -> egui::Align2 {
+        self.app.split_layout.corner
+    }
+
+    /// The left view's share of the width, side by side.
+    pub(super) fn split_share(&self) -> f32 {
+        self.app.split_layout.share
+    }
+
+    /// Whether the 3D view is on the left, side by side.
+    pub(super) fn three_d_view_first(&self) -> bool {
+        self.app.split_layout.three_d_first
+    }
+
+    /// Zooms the 2D view by `factor` about the screen point `at`, as the wheel does.
+    pub(super) fn zoom_2d_about(&mut self, at: Pos2, factor: f32) {
+        self.app.camera = self.app.view_transform.map(|t| t.zoomed_about(at, factor));
+    }
+
+    /// Where the 2D view's area starts on screen.
+    pub(super) fn view_2d_corner(&self) -> Pos2 {
+        self.app.view_2d_at.expect("the 2D view is drawn")
+    }
+
+    /// Shows the ribbon (or Canvas palette) tab named `name`.
+    pub(super) fn show_ribbon_tab(&mut self, name: &str) {
+        self.app.ribbon_tab = RIBBON_TABS
+            .iter()
+            .position(|t| *t == name)
+            .unwrap_or_else(|| panic!("no tab {name}"));
+    }
+
+    /// The Canvas palette's groups, in order.
+    pub(super) fn canvas_groups(&self) -> Vec<gui::ToolGroup> {
+        self.app.canvas_groups()
+    }
+
+    /// The Canvas palette group whose list is open, if one is.
+    pub(super) fn open_canvas_group(&self) -> Option<&'static str> {
+        self.app.canvas.group
+    }
+
+    /// Opens the Canvas palette group `name`'s list, as pointing at it does.
+    pub(super) fn open_canvas_group_list(&mut self, name: &'static str) {
+        self.app.canvas.group = Some(name);
+    }
+
+    /// The Canvas chip (Layers, Library, ...) whose list is open, as its tab's place.
+    pub(super) fn open_canvas_chip(&self) -> Option<usize> {
+        self.app.canvas.chip
+    }
+
+    /// Whether Find a Tool's search box is open.
+    pub(super) fn finding_a_tool(&self) -> bool {
+        self.app.search.is_some()
+    }
+
+    // ---- updating, recovery and closing ----
+
+    /// Whether the Updates window is open.
+    pub(super) fn updates_window_open(&self) -> bool {
+        self.app.updates.is_open()
+    }
+
+    /// Starts this run as run `run` with its settings in `settings`: where its recovery copy
+    /// goes.
+    pub(super) fn given_settings_folder(&mut self, settings: &std::path::Path, run: &str) {
+        self.app.claim_recovery(settings, run);
+    }
+
+    /// No folder for recovery copies (the settings folder could not be made).
+    pub(super) fn given_no_recovery_folder(&mut self) {
+        self.app.recovery_path = None;
+    }
+
+    /// Opens the work an earlier run left, as starting does: whether there was any.
+    pub(super) fn open_recovered_work(&mut self) -> bool {
+        self.app.open_recovery()
+    }
+
+    /// Install Now, as far as handing the open work over to the new version.
+    pub(super) fn hand_off_for_update(&mut self) -> crate::app::job_files::HandOff {
+        self.app.hand_off_for_update()
+    }
+
+    /// The file the new version opens after an update, if it opens one.
+    pub(super) fn job_to_reopen(&self) -> Option<std::path::PathBuf> {
+        self.app.job_to_reopen()
+    }
+
+    /// The window's close button: whether it closes.
+    pub(super) fn close_window(&mut self) -> bool {
+        self.app.close_requested()
+    }
+
+    /// The job's file, if it has one (None: Untitled).
+    pub(super) fn job_path(&self) -> Option<&std::path::Path> {
+        self.app.session.path.as_deref()
+    }
+
+    /// Whether the job has changes not yet saved.
+    pub(super) fn has_unsaved_changes(&self) -> bool {
+        self.app.session.is_dirty(&self.app.history)
+    }
+
+    /// The status bar's message.
+    pub(super) fn status_message(&self) -> &str {
+        &self.app.status.message
+    }
+
+    /// Whether a recovery copy is being written now.
+    pub(super) fn writing_recovery_copy(&self) -> bool {
+        self.app.autosave.is_some()
+    }
+
+    /// Waits for the recovery copy being written to be done.
+    pub(super) fn finish_recovery_copy(&mut self) {
+        let (_, writing) = self.app.autosave.take().expect("a copy is being written");
+        writing.join().unwrap().unwrap();
+    }
 }
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 1] =
-    [("layers_sheets.rs", include_str!("layers_sheets.rs"))];
+const THROUGH_THE_HARNESS: [(&str, &str); 5] = [
+    ("layers_sheets.rs", include_str!("layers_sheets.rs")),
+    (
+        "accessibility_tests.rs",
+        include_str!("../accessibility_tests.rs"),
+    ),
+    ("canvas.rs", include_str!("canvas.rs")),
+    ("split_views.rs", include_str!("split_views.rs")),
+    ("updating.rs", include_str!("updating.rs")),
+];
 
 /// The lines of `source` that reach into the app past the harness.
 fn reaching_in(source: &str) -> Vec<(usize, &str)> {
@@ -168,20 +337,26 @@ fn reaching_in(source: &str) -> Vec<(usize, &str)> {
         .lines()
         .enumerate()
         .map(|(n, line)| (n + 1, line.trim()))
-        .filter(|(_, line)| {
-            line.contains("h.app")
-                || *line == ".app"
-                || line.starts_with(".app.")
-                || line.contains("CutCraftApp")
-        })
+        .filter(|(_, line)| reaches_app(line) || line.contains("CutCraftApp"))
         .collect()
+}
+
+/// Whether `line` names a harness's `.app` (`h.app.doc`, `next.app`, `hs[0].app`, a wrapped
+/// `.app.form`), not a path such as `crate::app::` or a name such as `h.app_state`.
+fn reaches_app(line: &str) -> bool {
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    line.match_indices(".app").any(|(at, _)| {
+        let before = line[..at].chars().next_back();
+        let after = line[at + ".app".len()..].chars().next();
+        after.is_none_or(|c| !word(c)) && before.is_none_or(|c| word(c) || c == ')' || c == ']')
+    })
 }
 
 #[test]
 fn reaching_in_finds_the_app_however_the_line_is_wrapped() {
-    let source = "h.app.doc.notes = x;\nlet m = h\n    .app\n    .form;\nh\n    .app.apply(a);\n|app: &CutCraftApp| 1\nh.doc().notes\n";
+    let source = "h.app.doc.notes = x;\nlet m = h\n    .app\n    .form;\nh\n    .app.apply(a);\n|app: &CutCraftApp| 1\nh.doc().notes\nnext.app.session\nuse crate::app::job_files;\nh.app_state()\nharnesses[0].app.doc\n";
     let lines: Vec<usize> = reaching_in(source).iter().map(|(n, _)| *n).collect();
-    assert_eq!(lines, [1, 3, 6, 7]);
+    assert_eq!(lines, [1, 3, 6, 7, 9, 12]);
 }
 
 #[test]
