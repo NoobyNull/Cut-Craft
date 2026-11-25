@@ -108,7 +108,8 @@ credits list is generated and checked by CI.
 - **Online catalogue** (#597 to #603) and gadget network access (#587).
 - **Auto Toolpath** (#595).
 - **Rotary:** choose what rotary toolpaths cut (Material, Model, Vector, Level) and the true
-  XYZA speed work.
+  XYZA speed work. Seeing the wrap while drawing (seams, A angles and ghost bands in the 2D
+  view) is being built now, ahead of the rest.
 - **Cut list optimizer** stays a separate program.
 
 Moving add-ons to the Power-Whittle organisation can happen any time, because it changes no
