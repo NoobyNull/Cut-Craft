@@ -246,15 +246,15 @@ impl CutCraftApp {
     /// with it: its other side on top, the side that was up underneath. A side never
     /// previewed comes up uncut, so the one that was up is kept underneath, not lost.
     pub(super) fn follow_side(&mut self) {
-        if self.doc.bottom_side == self.preview_side {
+        if self.doc.bottom_side == self.preview.side {
             return;
         }
-        self.preview_side = self.doc.bottom_side;
-        if self.simulation.is_none() {
+        self.preview.side = self.doc.bottom_side;
+        if self.preview.material.is_none() {
             return;
         }
         self.finish_playback();
-        let Some(mut top) = self.simulation.take() else {
+        let Some(mut top) = self.preview.material.take() else {
             return;
         };
         let mut now_up = if let Some(under) = top.other_side.take() {
@@ -267,8 +267,8 @@ impl CutCraftApp {
             fresh
         };
         now_up.other_side = Some(std::sync::Arc::new(top));
-        self.simulation = Some(now_up);
-        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        self.preview.material = Some(now_up);
+        self.preview_changed();
     }
 
     /// `change` with the components Orientate 3D Model makes put on the level clipart was

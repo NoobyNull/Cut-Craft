@@ -587,14 +587,14 @@ fn preview_all_played_starts_again_from_uncut_material() {
     let mut h = playing_preview();
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
     // an old cut, far from the square's profile
-    let top = h.app.simulation.as_ref().unwrap().heights[0];
-    h.app.simulation.as_mut().unwrap().heights[0] = top - 5.0;
+    let top = h.app.preview.material.as_ref().unwrap().heights[0];
+    h.app.preview.material.as_mut().unwrap().heights[0] = top - 5.0;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
     let playing = h.app.player.playback.as_ref().expect("it plays");
     assert_eq!(playing.material().heights[0], top, "old cuts gone");
     // Preview of one toolpath still cuts into what is there
     h.app.finish_playback();
-    h.app.simulation.as_mut().unwrap().heights[0] = top - 5.0;
+    h.app.preview.material.as_mut().unwrap().heights[0] = top - 5.0;
     let id = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.preview_toolpath(id);
     let playing = h.app.player.playback.as_ref().expect("it plays");
@@ -605,8 +605,8 @@ fn preview_all_played_starts_again_from_uncut_material() {
 fn previewing_a_group_played_starts_from_uncut_material() {
     let mut h = playing_preview();
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
-    let top = h.app.simulation.as_ref().unwrap().heights[0];
-    h.app.simulation.as_mut().unwrap().heights[0] = top - 5.0;
+    let top = h.app.preview.material.as_ref().unwrap().heights[0];
+    h.app.preview.material.as_mut().unwrap().heights[0] = top - 5.0;
     let ids: Vec<_> = h.app.doc.toolpaths.keys().copied().collect();
     h.app.preview_ids(&ids);
     let playing = h.app.player.playback.as_ref().expect("it plays");

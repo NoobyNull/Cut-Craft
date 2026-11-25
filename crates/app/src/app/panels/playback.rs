@@ -18,10 +18,7 @@ impl CutCraftApp {
             .collect();
         if self.display.animate_preview {
             self.finish_playback();
-            self.before_preview = Some(super::super::BeforePreview(
-                self.simulation.clone(),
-                self.preview_side,
-            ));
+            self.preview.keep_for_undo(false);
             self.play(&visible, true, move |app| {
                 app.preview_other_side(visible_only);
             });
@@ -37,10 +34,7 @@ impl CutCraftApp {
             return;
         }
         self.finish_playback();
-        self.before_preview = Some(super::super::BeforePreview(
-            self.simulation.clone(),
-            self.preview_side,
-        ));
+        self.preview.keep_for_undo(false);
         self.play(ids, true, |_| {});
     }
 
@@ -52,10 +46,7 @@ impl CutCraftApp {
     ) {
         self.finish_playback();
         // the preview before stays shown until this one is cut
-        self.before_preview = Some(super::super::BeforePreview(
-            self.simulation.clone(),
-            self.preview_side,
-        ));
+        self.preview.keep_for_undo(false);
         let fresh = self.fresh_material();
         self.preview_in_background(ids, fresh, then);
     }
@@ -111,7 +102,7 @@ impl CutCraftApp {
     /// in the job's order, and the other side too when it was previewed.
     pub(in super::super) fn rework_preview(&mut self) {
         self.finish_playback();
-        let Some(material) = &self.simulation else {
+        let Some(material) = &self.preview.material else {
             return;
         };
         let marks: std::collections::BTreeSet<u32> = material
@@ -227,11 +218,12 @@ impl CutCraftApp {
                     playback.set_other_side(other);
                 } else {
                     let material = app
-                        .simulation
+                        .preview
+                        .material
                         .get_or_insert_with(|| Material::over(&job, grid.area, grid.cell));
                     material.other_side = other;
                 }
-                (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
+                app.preview_changed();
                 if app.display.auto_open_3d {
                     app.view = View::ThreeD;
                 }
@@ -280,12 +272,13 @@ impl CutCraftApp {
         let clamps: Vec<_> = source.named_keep_out().cloned().collect();
         drop(source);
         let grid = self.preview_grid();
-        let start = (self.simulation.clone())
+        let start = (self.preview.material.clone())
             .filter(|m| !fresh && m.lies_on(&self.doc.job))
             .map_or_else(|| self.fresh_material(), |m| m.including(grid.area));
         // on a rotary job, the file's own moves turning the material as well, carrying on
         // from what the toolpaths before these cut when the preview does
-        let carries_on = (self.simulation.as_ref()).is_some_and(|m| !fresh && m.lies_on(&job));
+        let carries_on =
+            (self.preview.material.as_ref()).is_some_and(|m| !fresh && m.lies_on(&job));
         let making = self.turning_making(
             if carries_on {
                 earlier.iter().map(|(_, t)| t.clone()).collect()
@@ -328,11 +321,11 @@ impl CutCraftApp {
                 if let Some(hit) = super::super::background::collision_note(&collided) {
                     app.status.set_message(&hit);
                 }
-                app.collisions = collided;
+                app.preview.collisions = collided;
                 app.player.start(playback, revision);
                 app.turning = turning;
-                app.simulation = None;
-                (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
+                app.preview.material = None;
+                app.preview_changed();
                 if app.display.auto_open_3d {
                     app.view = View::ThreeD;
                 }
@@ -380,12 +373,8 @@ impl CutCraftApp {
     /// next Preview cuts into that.
     pub(super) fn drop_preview_of_old_block(&mut self) {
         let job = self.doc.job;
-        let old = |m: &Material| !m.lies_on(&job);
-        if self.simulation.as_ref().is_some_and(old)
-            || (self.before_preview.as_ref()).is_some_and(|b| b.0.as_ref().is_some_and(old))
-        {
-            (self.simulation, self.before_preview) = (None, None);
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        if self.preview.drop_old(|m| !m.lies_on(&job)) {
+            self.preview_changed();
             self.status
                 .set_message(&cut_craft_i18n::tr!("status-preview-new-material"));
         }
@@ -395,18 +384,15 @@ impl CutCraftApp {
     /// the playback, so its controls stay to scrub it again.
     pub(in super::super) fn finish_playback(&mut self) {
         if let Some(cut) = self.player.finish() {
-            self.simulation = Some(cut);
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.preview.material = Some(cut);
+            self.preview_changed();
         }
     }
 
     pub(in super::super) fn preview_toolpath(&mut self, id: EntityId) {
         if self.display.animate_preview {
             self.finish_playback();
-            self.before_preview = Some(super::super::BeforePreview(
-                self.simulation.clone(),
-                self.preview_side,
-            ));
+            self.preview.keep_for_undo(false);
             self.play(&[id], false, |_| {});
             return;
         }
@@ -414,13 +400,10 @@ impl CutCraftApp {
         if !self.preview_source().toolpaths.contains_key(&id) {
             return;
         }
-        self.before_preview = Some(super::super::BeforePreview(
-            self.simulation.clone(),
-            self.preview_side,
-        ));
+        self.preview.keep_for_undo(false);
         // cut into the preview so far (on a block Job Setup has not changed since)
         let grid = self.preview_grid();
-        let start = (self.simulation.clone())
+        let start = (self.preview.material.clone())
             .filter(|m| m.lies_on(&self.doc.job))
             .map_or_else(|| self.fresh_material(), |m| m.including(grid.area));
         self.preview_in_background(&[id], start, |_| {});
@@ -587,8 +570,8 @@ impl CutCraftApp {
     /// its material again.
     pub(super) fn resume_playback(&mut self) {
         if self.player.resume() {
-            self.simulation = None;
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.preview.material = None;
+            self.preview_changed();
         }
     }
 }

@@ -823,7 +823,7 @@ fn a_fine_bit_is_noted_under_the_controls_while_its_preview_plays() {
         let at = playback.length() * share;
         playback.seek(at);
         h.frame(vec![]);
-        assert!(h.app.player.playback.is_some() && h.app.simulation.is_none());
+        assert!(h.app.player.playback.is_some() && h.app.preview.material.is_none());
         assert!(
             h.texts()
                 .iter()

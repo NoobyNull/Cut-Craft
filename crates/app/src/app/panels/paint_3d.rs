@@ -200,7 +200,7 @@ impl CutCraftApp {
     ) -> Option<Point> {
         let (job, previewing) = (
             self.shown_job(),
-            self.simulation.is_some() || self.showing_uncut_material(),
+            self.preview.material.is_some() || self.showing_uncut_material(),
         );
         let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
         let surface = self.surface_3d()?.into_owned();
@@ -437,7 +437,7 @@ impl CutCraftApp {
             // the block's sides: a preview's, the uncut material's, the block the model
             // sits on
             sides: shown.material_block
-                && (self.simulation.is_some()
+                && (self.preview.material.is_some()
                     || self.player.playback.is_some()
                     || self.showing_uncut_material()
                     || self.model_on_material()),
@@ -457,7 +457,7 @@ impl CutCraftApp {
         }
         let job = self.shown_job();
         // the uncut material wraps as a preview's stock does: its top at the surface
-        let previewing = self.simulation.is_some()
+        let previewing = self.preview.material.is_some()
             || self.player.playback.is_some()
             || self.showing_uncut_material();
         // a playing preview's tool: where its tip is, and the parts it is drawn in
@@ -529,7 +529,7 @@ impl CutCraftApp {
         }
         // the model's body, under its surface: also while a model is imported, whose own
         // faces (all of them, or past the face limit those out of reach) are drawn as well
-        let body_draw = (slot.is_some() && self.simulation.is_none())
+        let body_draw = (slot.is_some() && self.preview.material.is_none())
             .then(|| self.solid_gpu.clone())
             .flatten()
             .map(|geometry| {
@@ -749,8 +749,9 @@ impl CutCraftApp {
     /// on its own zero plane at 0 and the material's outline is drawn from there up to its
     /// thickness, so zero is measured from that top.
     pub(in super::super) fn origin_height_3d(&self) -> f64 {
-        let importing =
-            self.importing_model() && self.simulation.is_none() && self.player.playback.is_none();
+        let importing = self.importing_model()
+            && self.preview.material.is_none()
+            && self.player.playback.is_none();
         origin_3d(&self.doc.job, importing)
     }
 

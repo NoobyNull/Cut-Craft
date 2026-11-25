@@ -42,19 +42,20 @@ impl CutCraftApp {
         if self.player.playback.is_some() {
             return self.playback_surface().map(Cow::Owned);
         }
-        if let Some(material) = &self.simulation {
+        if let Some(material) = &self.preview.material {
             if self
-                .simulation_coarse
+                .preview
+                .coarse
                 .as_ref()
                 .is_none_or(|(made, _)| *made != cells)
             {
                 let sheet = view3d::on_sheet(material, self.doc.job.area(), cells);
-                self.simulation_coarse = Some((cells, sheet));
+                self.preview.coarse = Some((cells, sheet));
             }
-            let (_, coarse) = self.simulation_coarse.as_ref().expect("made above");
+            let (_, coarse) = self.preview.coarse.as_ref().expect("made above");
             if self.doc.job.machined_area == MachinedArea::MaterialColor
                 && coarse.other_side.is_none()
-                && self.collisions.is_empty()
+                && self.preview.collisions.is_empty()
             {
                 return Some(Cow::Borrowed(coarse));
             }
@@ -81,7 +82,7 @@ impl CutCraftApp {
     /// Whether the 3D view shows the job's material uncut: no preview, and no model yet
     /// (the block Job Setup describes is there from the start, not made by the user).
     pub(in super::super) fn showing_uncut_material(&self) -> bool {
-        self.simulation.is_none()
+        self.preview.material.is_none()
             && self.player.playback.is_none()
             && self.doc.components.is_empty()
     }
@@ -91,7 +92,7 @@ impl CutCraftApp {
     /// (not a preview).
     pub(in super::super) fn shows_turned(&self) -> bool {
         if self.doc.job.rotary.is_none()
-            || self.simulation.is_some()
+            || self.preview.material.is_some()
             || self.player.playback.is_some()
         {
             return false;
@@ -187,7 +188,7 @@ impl CutCraftApp {
     /// `material` with the stock the collet, spindle or shank would hit painted red, once
     /// the preview has finished playing (before then the tool has not got there).
     pub(super) fn collisions_painted(&self, mut material: Material) -> Material {
-        if self.collisions.is_empty()
+        if self.preview.collisions.is_empty()
             || self.player.playback.as_ref().is_some_and(|p| !p.finished())
         {
             return material;
@@ -215,7 +216,7 @@ impl CutCraftApp {
     pub(in super::super) fn current_collisions(
         &self,
     ) -> impl Iterator<Item = (EntityId, &super::super::Collided)> {
-        self.collisions.iter().filter_map(|(&id, c)| {
+        self.preview.collisions.iter().filter_map(|(&id, c)| {
             self.doc
                 .toolpaths
                 .get(&id)
@@ -288,7 +289,7 @@ impl CutCraftApp {
     /// top round the model and its sides: on a flat job, not while a 3D model is imported
     /// (it is placed in the material, which would hide it) or a preview shows.
     pub(in super::super) fn model_on_material(&self) -> bool {
-        self.simulation.is_none()
+        self.preview.material.is_none()
             && self.player.playback.is_none()
             && self.doc.job.rotary.is_none()
             && !self.importing_model()
@@ -642,11 +643,11 @@ impl CutCraftApp {
         // a single click picks while the model shows, not over a preview, where a click
         // is the first half of a double-click taking a piece away
         let clicked = at.filter(|_| {
-            response.clicked() && self.simulation.is_none() && self.player.playback.is_none()
+            response.clicked() && self.preview.material.is_none() && self.player.playback.is_none()
         });
         // while a preview shows, a double-click takes away the piece cut free under it
         let removed = double
-            .filter(|_| self.player.playback.is_none() && self.simulation.is_some())
+            .filter(|_| self.player.playback.is_none() && self.preview.material.is_some())
             .is_some_and(|at| self.remove_preview_piece(fit, at));
         let picked = clicked
             .or(double)
@@ -757,7 +758,7 @@ impl CutCraftApp {
     /// when still.
     pub(in super::super) fn fine_surface(&mut self) -> Material {
         let most = self.options.performance.still_cells();
-        if let Some(material) = &self.simulation {
+        if let Some(material) = &self.preview.material {
             return self.painted(view3d::on_sheet(material, self.doc.job.area(), most));
         }
         let job = &self.doc.job;
@@ -814,7 +815,7 @@ impl CutCraftApp {
             return sheet;
         }
         let key = self.geometry_key(wrap, sides);
-        let solid = self.simulation.is_none();
+        let solid = self.preview.material.is_none();
         let kept = match &mut self.surface_gpu {
             Some(kept) if kept.key == key => kept,
             other => other.insert(super::super::SurfaceGpu::new(key)),
@@ -939,7 +940,7 @@ impl CutCraftApp {
         {
             return Some(std::sync::Arc::clone(sheet));
         }
-        let material = self.simulation.as_ref()?;
+        let material = self.preview.material.as_ref()?;
         let (area, most) = (self.doc.job.area(), key.cells);
         let sheet = view3d::on_sheet(material, area, most);
         let hole = material.area();

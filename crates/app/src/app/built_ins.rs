@@ -252,7 +252,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("new_from_template", "New from Template", "New from Template: starts a new job from a saved template, with its material, vectors and toolpaths ready").window()
         .run(|a, _| a.new_from_template()),
     act("create_component_from_toolpath_preview", "Create Component from Toolpath Preview", "Create Component from Toolpath Preview: turns the previewed, cut material into a 3D component, to carve on or reuse. It goes on the level of the component picked in the tree, else the top shown level, and the status bar names it")
-        .when(|a| a.simulation.is_some(), "actions-why-preview-first")
+        .when(|a| a.preview.material.is_some(), "actions-why-preview-first")
         .run(|a, _| a.component_from_preview()),
     act("toolpath_summary", "Toolpath Summary", "Toolpath Summary: lists every toolpath with its bit, depths and how long it takes to cut")
         .run(|a, _| a.info = Some(Info::Summary)),
@@ -368,10 +368,10 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .run(|a, _| a.preview_all(true)),
     act("undo_last_preview", "Undo Last Preview", "Undo Last Preview: goes back to the preview as it was before the last Preview or Reset \
          Preview, once, turned over to the side the job is on now")
-        .when(|a| a.before_preview.is_some() && a.player.playback.is_none(), "actions-why-no-preview-to-undo")
+        .when(|a| a.preview.before.is_some() && a.player.playback.is_none(), "actions-why-no-preview-to-undo")
         .run(CutCraftApp::undo_last_preview),
     act("save_shaded_image", "Save Shaded Image", "Save Shaded Image: saves a picture of the 3D view, to show what the finished piece will look like")
-        .when(|a| a.simulation.is_some() || a.player.playback.is_some() || !a.doc.components.is_empty(), "actions-why-preview-or-model")
+        .when(|a| a.preview.material.is_some() || a.player.playback.is_some() || !a.doc.components.is_empty(), "actions-why-preview-or-model")
         .run(CutCraftApp::save_shaded_image_picked),
     act("edit_object", "Edit Object", "Edit Object: opens the selected object in the tool that made it, with its settings, to change them").keys("E")
         .when(|a| a.object_to_edit().is_some() || a.shape_to_edit(), "actions-why-select-shape")
@@ -379,7 +379,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("job_sheet_editor", "Job Setup Sheet Editor", "Job Setup Sheet Editor: chooses what the printed job sheet shows: the job, its tools and its toolpaths").window()
         .run(|a, _| a.job_sheet_window = true),
     act("reset_preview", "Reset Preview", "Reset Preview: clears the preview back to uncut material; Undo Last Preview brings it back")
-        .when(|a| a.simulation.is_some() || a.player.playback.is_some() || a.player.kept.is_some(), "actions-why-preview-first")
+        .when(|a| a.preview.material.is_some() || a.player.playback.is_some() || a.player.kept.is_some(), "actions-why-preview-first")
         .run(CutCraftApp::reset_preview),
     act("export_as_stl", "Export Model as STL", "Save the 3D model as an STL file, for a 3D printer or another program")
         .run(|a, _| (a.stl_window, a.stl_result) = (true, None)),

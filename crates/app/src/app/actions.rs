@@ -212,8 +212,6 @@ impl CutCraftApp {
             save_form: None,
             machine_files: None,
             save_checks: vec![],
-            before_preview: None,
-            preview_side: false,
             picked_nodes: Vec::new(),
             node_mirror: [false, false],
             menu_at: None,
@@ -224,8 +222,7 @@ impl CutCraftApp {
             display: crate::display::Display::default(),
             held_detail: None,
             preview_grid_kept: std::cell::Cell::new(None),
-            simulation: None,
-            simulation_coarse: None,
+            preview: super::preview::Preview::default(),
             import_level: None,
             polyline: crate::polyline::Draft::default(),
             placed: Vec::new(),
@@ -240,9 +237,7 @@ impl CutCraftApp {
             height_applied_at: None,
             job_epoch: 0,
             toolpath_keys: super::follow::Keys::default(),
-            preview_marks: std::collections::BTreeMap::new(),
             tool_note: None,
-            collisions: std::collections::BTreeMap::new(),
             stale_known: 0,
             stale_while_form: false,
             recalculate_ask: None,
@@ -755,7 +750,7 @@ impl CutCraftApp {
     /// Model > Create Component from Toolpath Preview: the block as previewed, standing on
     /// the material's bottom.
     pub(super) fn component_from_preview(&mut self) {
-        if let Some(preview) = &self.simulation {
+        if let Some(preview) = &self.preview.material {
             // the block as cut, standing on the material's bottom
             let mut block = preview.clone();
             for h in &mut block.heights {
