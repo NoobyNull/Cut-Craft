@@ -3,6 +3,12 @@
 # lines). The hard-coded text check warns of text not listed here. Move one into Fluent,
 # then delete its line.
 
+bug-report/src/lib.rs | "Clicked: {widget}"
+bug-report/src/lib.rs | "Clicked: {widget}"
+bug-report/src/lib.rs | "{name} ✕"
+machines/src/manager.rs | "T{}"
+machines/src/manager.rs | "T{}"
+machines/src/manager/posts.rs | "{arrow} {title} ({})"
 src/app/dialog_windows.rs | "{}: {e}"
 src/app/gcode_view.rs | "• {problem}"
 src/app/machine_setup.rs | "Installed as {}: a post with its name was already listed, so this one is kept beside it. Pick it in Machine Configuration to use it"
@@ -30,3 +36,7 @@ src/clipart.rs | "{locked} Vectric clipart file{} here can't be shown: .3dclip a
 src/clipart.rs | "{locked} Vectric clipart file{} here can't be shown: .3dclip and .v3m files only open in the program that made them. Export them from it as STL to use them here."
 src/clipart.rs | "{} ({count})"
 src/clipart.rs | "{} ({why})"
+tool-database/src/manager.rs | "T{n}"
+tool-database/src/manager/form.rs | "T{} ({holding})"
+tool-database/src/manager/form.rs | "{:.places$} {unit}"
+tool-database/src/manager/form.rs | "{Tool Type} {Diameter|F}"

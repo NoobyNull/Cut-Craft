@@ -4,12 +4,8 @@
 //! [`cut_craft_i18n::text_key`]: `text-`, the first words and a check of the whole text, so a
 //! reworded text gets a new key and an old translation never shows for it.
 
-/// `english` in the language in use (see [`t!`]).
-pub fn text(english: &str) -> String {
-    cut_craft_i18n::tr_or(&text_key(english), english)
-}
-
-/// The key of a text known by its English words.
+/// The key of a text known by its English words (shown by [`cut_craft_i18n::text`]).
+#[cfg(test)]
 pub fn text_key(english: &str) -> String {
     cut_craft_i18n::text_key("text", english)
 }
@@ -143,7 +139,7 @@ mod tests {
     #[test]
     fn a_text_with_no_key_shows_as_written() {
         assert_eq!(
-            super::text("Words nobody wrote a key for"),
+            cut_craft_i18n::text("Words nobody wrote a key for"),
             "Words nobody wrote a key for"
         );
     }
