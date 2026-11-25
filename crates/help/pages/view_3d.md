@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: job_setup, check_zeroing, 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
 ---
 
@@ -144,7 +144,8 @@ The three split buttons beside **2D View** and **3D View**, in the bar over the 
   them to give one more room. Drag it right to the edge to show just the other view. **⇄**
   on the bar swaps their places.
 - **One view in a corner of the other** keeps the view you picked (2D or 3D) big and shows
-  the other small in a corner. Drag the small view's bar to another corner. **⇄** on it
+  the other small in a corner. Drag the small view's bar to another corner: while you
+  drag, the corner it will go to is shaded, and it moves there when you let go. **⇄** on it
   makes the small view the big one.
 
 **Window ▸ Tile Windows Horizontal** and **Tile Windows Vertical** do the same as the first
