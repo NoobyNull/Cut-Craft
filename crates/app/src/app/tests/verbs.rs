@@ -317,10 +317,204 @@ impl Harness {
         let (_, writing) = self.app.autosave.take().expect("a copy is being written");
         writing.join().unwrap().unwrap();
     }
+
+    // ---- making things, as the tools do ----
+
+    /// Makes `change` as a tool does: one undo step named `name`, reported in the status bar.
+    pub(super) fn make(&mut self, change: Change, name: &str) {
+        self.app.record(Ok(change), name);
+    }
+
+    /// Selects `ids`, as clicking them does.
+    pub(super) fn select(&mut self, ids: impl IntoIterator<Item = EntityId>) {
+        self.app.doc.selection = ids.into_iter().collect();
+    }
+
+    /// The open form's settings, all of them, as they now stand.
+    pub(super) fn form_settings(&self) -> &Value {
+        &self.app.form.as_ref().expect("a form is open").params
+    }
+
+    /// Recalculates toolpath `id`, as its Recalculate does.
+    pub(super) fn recalculate(&mut self, id: EntityId) {
+        let again = self
+            .app
+            .registry
+            .recalculate(&self.app.doc, id)
+            .expect("it recalculates");
+        self.app.record(Ok(again), "recalculate");
+    }
+
+    // ---- the 2D view ----
+
+    /// Zoom to Job: the next frame fits the job in the view.
+    pub(super) fn zoom_to_job(&mut self) {
+        self.invoke("zoom_to_job");
+    }
+
+    /// The 2D view's area on screen.
+    pub(super) fn view_2d_area(&self) -> Rect {
+        self.app.view_area.expect("the 2D view was drawn")
+    }
+
+    /// How many screen points a millimetre is in the 2D view.
+    pub(super) fn zoom_2d(&self) -> f32 {
+        self.app
+            .view_transform
+            .expect("the 2D view was drawn")
+            .scale
+    }
+
+    /// Where a drawing tool's drag lands once snapped (to ends, ghosts, ...): its gesture.
+    pub(super) fn snap_drag(&mut self, drag: Drag) -> Option<Gesture> {
+        let scale = self.zoom_2d();
+        let ctx = self.ctx.clone();
+        let mut snapped = None;
+        headless(ctx.run_ui(RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                snapped = self.app.snapped(ui, Some(Gesture::Dragging(drag)), scale);
+            });
+        }));
+        snapped
+    }
+
+    // ---- the 3D view and imported models ----
+
+    /// Shows `view` (View ▸ 2D or 3D).
+    pub(super) fn show_view(&mut self, view: View) {
+        self.app.view = view;
+    }
+
+    /// Whether View ▸ Auto Wrapping is on: a rotary job drawn round its axis.
+    pub(super) fn auto_wrapping(&self) -> bool {
+        self.app.display.auto_wrapping
+    }
+
+    /// Ticks or clears View ▸ Auto Wrapping.
+    pub(super) fn set_auto_wrapping(&mut self, on: bool) {
+        self.app.display.auto_wrapping = on;
+    }
+
+    /// Which way the 3D view looks.
+    pub(super) fn orbit(&self) -> view3d::Orbit {
+        self.app.orbit
+    }
+
+    /// Imports the model or picture file at `path`, as File ▸ Import does.
+    pub(super) fn import(&mut self, path: &std::path::Path) {
+        self.app.import_file(path);
+    }
+
+    /// The model the import form shows while it is open, triangle by triangle.
+    pub(super) fn importing_model(&self) -> Option<&[cmd_orientate_3d_model::Seen]> {
+        self.app
+            .form
+            .as_ref()
+            .and_then(|f| f.model.as_deref())
+            .map(Vec::as_slice)
+    }
+
+    /// Whether the open form has changes its model or shape has yet to follow.
+    pub(super) fn form_waiting_to_follow(&self) -> bool {
+        self.app.form.as_ref().is_some_and(|f| f.dirty)
+    }
+
+    /// The component the open form made, if it made one.
+    pub(super) fn form_made(&self) -> Option<EntityId> {
+        self.app.form.as_ref().and_then(|f| f.drawn)
+    }
+
+    /// The heights the 3D view draws the models' surface from, `cells` a side.
+    pub(super) fn model_shape(&mut self, cells: usize) -> Material {
+        self.app.model_shape(cells)
+    }
+
+    /// Whether the 3D view shows the job turned round its rotary axis.
+    pub(super) fn shows_turned(&self) -> bool {
+        self.app.shows_turned()
+    }
+
+    /// The rotary job's full models as the 3D view draws them, triangle by triangle.
+    pub(super) fn rotary_models(&self) -> Vec<cmd_orientate_3d_model::Seen> {
+        self.app.rotary_models(None)
+    }
+
+    /// A drag of `delta` in a 3D view of `size` while a model is placed: whether the form
+    /// took it (turning or moving the model) rather than the view.
+    pub(super) fn drag_3d(
+        &mut self,
+        mode: view3d::DragMode,
+        delta: egui::Vec2,
+        size: egui::Vec2,
+    ) -> bool {
+        self.app.import_drag(Some(mode), delta, size)
+    }
+
+    /// The 3D view's detail now, and whether it is the coarser one used while turning.
+    pub(super) fn detail_3d(&self) -> (crate::options::Detail, bool) {
+        self.app.detail_3d
+    }
+
+    /// The cells a side the 3D view draws with while it turns.
+    pub(super) fn moving_cells(&self) -> usize {
+        self.app.moving_cells()
+    }
+
+    // ---- unsigned code ----
+
+    /// The answer the user gives whenever Cut Craft asks whether to run unsigned code.
+    pub(super) fn answer_unsigned_with(
+        &mut self,
+        answer: fn(&crate::trust::Code) -> crate::trust::Answer,
+    ) {
+        self.app.trust.ask = answer;
+    }
+
+    /// Puts the unsigned gadget `source`, from the file `file`, in My Gadgets as Cut Craft
+    /// finds it on starting: unread, by its file's name. Its command id.
+    pub(super) fn given_unsigned_gadget(&mut self, file: &str, source: &str) -> &'static str {
+        let commands = std::sync::Arc::new(crate::commands::registry());
+        let (gadget, waiting) = cut_craft_scripting::waiting_gadget(file, source, commands);
+        let id = cut_craft_core::DynCommand::id(&gadget);
+        std::sync::Arc::get_mut(&mut self.app.registry)
+            .expect("nothing else holds the commands between frames")
+            .add_dyn(Box::new(gadget));
+        self.app.my_gadgets.push((file.to_owned(), id));
+        let code = crate::trust::Code::gadget(id, file, source.as_bytes());
+        let waiting = Some(waiting);
+        self.app
+            .unsigned_gadgets
+            .insert(id.to_owned(), crate::gadgets::Unsigned { code, waiting });
+        id
+    }
+
+    /// My Gadgets, as its list names them.
+    pub(super) fn my_gadgets(&self) -> Vec<String> {
+        self.app
+            .installed_items()
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect()
+    }
+
+    /// Add-ons kept in `folder`, as a settings folder holds them.
+    pub(super) fn given_add_ons_folder(&mut self, folder: std::path::PathBuf) {
+        self.app.addons = crate::addons::Addons::new(Some(folder));
+    }
+
+    /// Starting the add-on `id`'s `program`: whether it may run (asking if unsigned).
+    pub(super) fn may_run_add_on(
+        &mut self,
+        id: &str,
+        name: &str,
+        program: &std::path::Path,
+    ) -> bool {
+        self.app.may_run_add_on(id, name, program)
+    }
 }
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 5] = [
+const THROUGH_THE_HARNESS: [(&str, &str); 9] = [
     ("layers_sheets.rs", include_str!("layers_sheets.rs")),
     (
         "accessibility_tests.rs",
@@ -329,6 +523,10 @@ const THROUGH_THE_HARNESS: [(&str, &str); 5] = [
     ("canvas.rs", include_str!("canvas.rs")),
     ("split_views.rs", include_str!("split_views.rs")),
     ("updating.rs", include_str!("updating.rs")),
+    ("locked_face.rs", include_str!("locked_face.rs")),
+    ("rotary_wrap.rs", include_str!("rotary_wrap.rs")),
+    ("unsigned_code.rs", include_str!("unsigned_code.rs")),
+    ("rotary.rs", include_str!("rotary.rs")),
 ];
 
 /// The lines of `source` that reach into the app past the harness.
