@@ -2991,6 +2991,7 @@ dependencies = [
  "chrono",
  "cut-craft-bug-report",
  "cut-craft-core",
+ "cut-craft-i18n",
  "cut-craft-post",
  "eframe",
  "roxmltree 0.20.0",
@@ -3054,6 +3055,7 @@ version = "0.7.6"
 dependencies = [
  "cut-craft-bug-report",
  "cut-craft-core",
+ "cut-craft-i18n",
  "eframe",
  "flate2",
  "serde_json",

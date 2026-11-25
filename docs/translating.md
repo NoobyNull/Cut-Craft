@@ -98,9 +98,14 @@ put in may still show in English until the part of Cut Craft it comes from is tr
 
 `text.ftl` holds the rest of the words in Cut Craft's windows that have no name of their
 own: hints over the 2D view, tooltips on the layer and view buttons, headings and choices in
-the tool panels. Each key is its English words plus a short check, such as
+the tool panels, and the Machine Configuration, Post-Processor, Tool Database and Report a
+Bug windows. Each key is its English words plus a short check, such as
 `text-hide-0c7bcd`, and a `## file` comment over each group says where it shows. If the
 English is reworded, the key changes and the new words show in English until translated.
+
+The sentences in those windows with a value put in have keys of their own: `machines.ftl`
+for Machine Configuration and Post-Processor, `tool-database.ftl` for the Tool Database.
+Keep each `{ $value }`, and move it to wherever your language puts it.
 
 ## Tool forms and settings
 
