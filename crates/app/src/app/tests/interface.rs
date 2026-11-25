@@ -6,13 +6,13 @@ use crate::options::WindowLayout;
 #[test]
 fn the_window_layout_menu_picks_and_ticks_a_layout() {
     let mut h = Harness::new();
-    assert_eq!(h.app.layout_checked("layout_classic"), Some(true));
-    assert_eq!(h.app.layout_checked("zoom_box"), None);
-    assert!(h.app.available("layout_rail"));
-    h.app.invoke(&h.ctx, "layout_rail");
-    assert_eq!(h.app.options.general.layout, WindowLayout::Rail);
-    assert_eq!(h.app.layout_checked("layout_rail"), Some(true));
-    assert_eq!(h.app.layout_checked("layout_classic"), Some(false));
+    assert_eq!(h.layout_checked("layout_classic"), Some(true));
+    assert_eq!(h.layout_checked("zoom_box"), None);
+    assert!(h.available("layout_rail"));
+    h.invoke("layout_rail");
+    assert_eq!(h.options().general.layout, WindowLayout::Rail);
+    assert_eq!(h.layout_checked("layout_rail"), Some(true));
+    assert_eq!(h.layout_checked("layout_classic"), Some(false));
     h.frame(vec![]);
     assert!(h.text_at("Design").is_none(), "no Design page or side tab");
     assert!(h.text_at("Sheets").is_some(), "the browser's tabs");
@@ -22,8 +22,7 @@ fn the_window_layout_menu_picks_and_ticks_a_layout() {
 fn find_tool_lists_the_tools_whose_names_match() {
     let mut h = Harness::new();
     let names = |h: &Harness, text: &str| {
-        h.app
-            .search_matches(text)
+        h.find_tools(text)
             .into_iter()
             .map(|(_, label)| label)
             .collect::<Vec<_>>()
@@ -37,8 +36,8 @@ fn find_tool_lists_the_tools_whose_names_match() {
         names(&h, "paste in place").is_empty(),
         "nothing to paste yet"
     );
-    h.app.invoke(&h.ctx, "find_tool");
-    assert_eq!(h.app.search.as_deref(), Some(""));
+    h.invoke("find_tool");
+    assert_eq!(h.find_tool_text(), Some(""));
     // a new window is laid out unseen on its first frame
     h.frame(vec![]);
     h.frame(vec![]);
@@ -50,30 +49,25 @@ fn find_tool_lists_the_tools_whose_names_match() {
         repeat: false,
         modifiers: Modifiers::NONE,
     }]);
-    assert!(h.app.search.is_none(), "Escape closes it");
+    assert!(!h.finding_a_tool(), "Escape closes it");
 }
 
 #[test]
 fn the_ribbons_favourites_tab_shows_each_pages_favourites() {
     let mut h = Harness::new();
-    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
-    h.app.ribbon_tab = RIBBON_TABS.iter().position(|&t| t == "Favourites").unwrap();
+    h.given_options(|o| o.general.layout = crate::options::WindowLayout::Ribbon);
+    h.show_ribbon_tab("Favourites");
     h.frame(vec![]);
     assert!(
         h.text_at("No favourites yet: right-click a tool ▸ Add to Favourites")
             .is_some()
     );
-    h.app.options.favourites.design = vec!["draw_circle".into()];
-    h.app.options.favourites.toolpaths = vec!["pocket_toolpath".into(), "gone".into()];
+    h.given_options(|o| o.favourites.design = vec!["draw_circle".into()]);
+    h.given_options(|o| o.favourites.toolpaths = vec!["pocket_toolpath".into(), "gone".into()]);
     h.frame(vec![]);
     assert!(h.text_at("Design Favourites").is_some());
     assert!(h.text_at("Toolpath Favourites").is_some());
-    assert_eq!(
-        h.app
-            .tool_model()
-            .favourites(Page::Toolpaths, &h.app.options.favourites),
-        ["pocket_toolpath"]
-    );
+    assert_eq!(h.favourite_tools(Page::Toolpaths), ["pocket_toolpath"]);
 }
 
 #[test]
@@ -115,7 +109,7 @@ fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
     use cut_craft_core::bitmap::Bitmap;
     use cut_craft_core::geometry::{Point, Rect};
     let mut h = Harness::new();
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     // a red left half and a blue right half on 100 x 50 mm
     let rgb = (0..4 * 2)
         .flat_map(|i| {
@@ -135,32 +129,25 @@ fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
         depth: Vec::new(),
         rgb,
     });
-    h.app.record(Ok(c.finish()), "added");
-    h.app.invoke(&h.ctx, "trace_bitmap");
+    h.make(c.finish(), "added");
+    h.invoke("trace_bitmap");
     h.frame(vec![]);
     let (from, to) = (h.at(10.0, 10.0), h.at(40.0, 40.0));
     h.drag(from, to);
-    let area: Rect =
-        serde_json::from_value(h.app.form.as_ref().unwrap().params["area"].clone()).unwrap();
+    let area: Rect = serde_json::from_value(h.form_value("area").clone()).unwrap();
     assert!(
         (area.min.x - 10.0).abs() < 1.0 && (area.max.y - 40.0).abs() < 1.0,
         "{area:?}"
     );
     // a click lets the area go; in colour mode the next one picks the colour clicked
     h.click(h.at(70.0, 25.0), Modifiers::NONE);
-    assert!(h.app.form.as_ref().unwrap().params["area"].is_null());
-    h.app.form.as_mut().unwrap().params["mode"] = "colors".into();
+    assert!(h.form_value("area").is_null());
+    h.set_form_value("/mode", "colors".into());
     // the blue starts traced (the red counts as the background): a click lets it go
     h.click(h.at(70.0, 25.0), Modifiers::NONE);
-    assert_eq!(
-        h.app.form.as_ref().unwrap().params["trace"],
-        serde_json::json!([])
-    );
+    assert_eq!(h.form_value("trace"), &serde_json::json!([]));
     h.click(h.at(70.0, 25.0), Modifiers::NONE);
-    assert_eq!(
-        h.app.form.as_ref().unwrap().params["trace"],
-        serde_json::json!(["#1414c8"])
-    );
+    assert_eq!(h.form_value("trace"), &serde_json::json!(["#1414c8"]));
 }
 
 #[test]
@@ -170,13 +157,13 @@ fn left_to_right_windows_and_right_to_left_crosses() {
     h.rectangle(100.0, 10.0, 50.0, 50.0);
     h.drag(h.at(0.0, 0.0), h.at(120.0, 80.0));
     assert_eq!(
-        h.app.doc.selection.len(),
+        h.doc().selection.len(),
         1,
         "only the first rectangle is fully inside"
     );
     h.drag(h.at(120.0, 80.0), h.at(0.0, 0.0));
     assert_eq!(
-        h.app.doc.selection.len(),
+        h.doc().selection.len(),
         2,
         "crossing also takes the one it touches"
     );
@@ -195,7 +182,7 @@ fn the_status_bar_says_what_the_tool_in_hand_does_next() {
     let empty = hint(&mut h, somewhere);
     assert!(empty.starts_with("Nothing drawn yet"), "{empty}");
     h.rectangle(400.0, 300.0, 10.0, 10.0);
-    h.app.doc.selection = cut_craft_core::selection::Selection::new();
+    h.select([]);
     // selecting, with nothing selected
     let select = hint(&mut h, somewhere);
     assert!(
@@ -203,7 +190,7 @@ fn the_status_bar_says_what_the_tool_in_hand_does_next() {
         "{select}"
     );
     // a polyline: its first point, then the next
-    h.app.invoke(&h.ctx, "draw_polyline");
+    h.invoke("draw_polyline");
     let first = hint(&mut h, somewhere);
     assert!(first.contains("click the first point"), "{first}");
     h.click(h.at(10.0, 10.0), Modifiers::NONE);
@@ -211,9 +198,8 @@ fn the_status_bar_says_what_the_tool_in_hand_does_next() {
     assert!(next.starts_with("Click the next point"), "{next}");
     assert!(next.contains("click the first point to close it"), "{next}");
     // a dragged shape, and Shift-click to edit one
-    h.app.form = None;
-    h.app.polyline = crate::polyline::Draft::default();
-    h.app.invoke(&h.ctx, "draw_circle");
+    h.put_down_drawing_tool();
+    h.invoke("draw_circle");
     let circle = hint(&mut h, somewhere);
     assert!(
         circle.starts_with("Draw Circle: drag from the centre"),
@@ -245,14 +231,7 @@ fn the_height_buttons_are_bigger_than_an_ordinary_button() {
     let (mut h, dome) = dome_from_above();
     h.click(dome, Modifiers::NONE);
     h.frame(vec![]);
-    let at = |which: Handle3d| {
-        h.app
-            .handles_3d
-            .iter()
-            .find(|(k, _)| *k == which)
-            .map(|(_, at)| *at)
-            .unwrap()
-    };
+    let at = |which: Handle3d| handle_3d_at(&h, which);
     let apart = (at(Handle3d::Height) - at(Handle3d::Total)).length();
     let button = h.ctx.global_style().spacing.interact_size.y;
     assert!(
@@ -264,21 +243,22 @@ fn the_height_buttons_are_bigger_than_an_ordinary_button() {
 #[test]
 fn the_design_tab_opens_the_sub_tab_a_tool_run_elsewhere_lives_on() {
     let mut h = Harness::new();
-    assert_eq!(h.app.design_subtab, 0, "Create is open at the start");
+    assert_eq!(h.design_subtab(), "Create", "Create is open at the start");
     h.rectangle(10.0, 10.0, 20.0, 10.0);
-    h.app.invoke(&h.ctx, "align_left");
+    h.invoke("align_left");
     assert_eq!(
-        gui::DESIGN_SUBTABS[h.app.design_subtab].name,
+        h.design_subtab(),
         "Arrange",
         "an alignment from the Edit menu shows the Arrange sub-tab"
     );
-    h.app.invoke(&h.ctx, "zoom_to_job");
+    h.invoke("zoom_to_job");
     assert_eq!(
-        h.app.design_subtab, 2,
+        h.design_subtab(),
+        "Arrange",
         "a tool always shown changes nothing"
     );
-    h.app.invoke(&h.ctx, "sculpt");
-    assert_eq!(gui::DESIGN_SUBTABS[h.app.design_subtab].name, "Model");
+    h.invoke("sculpt");
+    assert_eq!(h.design_subtab(), "Model");
 }
 
 #[test]
@@ -286,35 +266,33 @@ fn a_design_sub_tab_can_have_a_section_of_its_own() {
     let mut h = Harness::new();
     // tall enough for the buttons at their full size and what comes under them
     h.window = vec2(1280.0, 1600.0);
-    h.app.pages.set_pinned(Page::Design, true);
-    h.app.pages.open(Page::Design);
+    h.pin(Page::Design);
+    h.open_page(Page::Design);
     h.frame(vec![]);
     assert!(h.text_at("Create Vectors").is_some(), "Create is open");
     assert!(h.text_at("Shape Creation").is_none(), "Model is a tab");
-    h.app
-        .invoke(&h.ctx, &format!("{}Import:section", gui::SUBTAB_PLACE));
+    h.invoke(&format!("{}Import:section", gui::SUBTAB_PLACE));
     h.frame(vec![]);
     for group in ["Create Vectors", "Import"] {
         assert!(h.text_at(group).is_some(), "{group} shows");
     }
     // Model's section comes before Import's, which it pushes down the page
-    h.app
-        .invoke(&h.ctx, &format!("{}Model:section", gui::SUBTAB_PLACE));
-    assert_eq!(h.app.options.design_sections, ["Model", "Import"]);
+    h.invoke(&format!("{}Model:section", gui::SUBTAB_PLACE));
+    assert_eq!(h.options().design_sections, ["Model", "Import"]);
     h.frame(vec![]);
     for group in ["Create Vectors", "Shape Creation"] {
         assert!(h.text_at(group).is_some(), "{group} shows");
     }
     // a tool on a section leaves the row's tab as it was
-    h.app.invoke(&h.ctx, "sculpt");
-    assert_eq!(h.app.design_subtab, 0);
+    h.invoke("sculpt");
+    assert_eq!(h.design_subtab(), "Create");
     // kept between runs
-    let json = serde_json::to_string(&h.app.options).unwrap();
+    let json = serde_json::to_string(h.options()).unwrap();
     let (back, _) = crate::options::Options::from_bytes(json.as_bytes());
     assert_eq!(back.design_sections, ["Model", "Import"]);
     // and all back in one row
-    h.app.invoke(&h.ctx, &format!("{}*:row", gui::SUBTAB_PLACE));
-    assert_eq!(h.app.options.design_sections, Vec::<String>::new());
+    h.invoke(&format!("{}*:row", gui::SUBTAB_PLACE));
+    assert_eq!(h.options().design_sections, Vec::<String>::new());
     h.frame(vec![]);
     assert!(h.text_at("Shape Creation").is_none());
 }
@@ -331,26 +309,25 @@ fn the_view_buttons_are_the_view_actions() {
 fn menu_items_that_reuse_existing_tools() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    h.app
-        .apply("add_layer", &serde_json::json!({ "name": "Top" }))
+    h.run("add_layer", &serde_json::json!({ "name": "Top" }))
         .unwrap();
     h.rectangle(50.0, 10.0, 20.0, 20.0);
-    let on_top = *h.app.doc.selection.iter().next().unwrap();
-    h.app.invoke(&h.ctx, "select_all_vectors");
-    h.app.invoke(&h.ctx, "select_all_vectors_on_current_layer");
+    let on_top = *h.doc().selection.iter().next().unwrap();
+    h.invoke("select_all_vectors");
+    h.invoke("select_all_vectors_on_current_layer");
     assert_eq!(
-        h.app.doc.selection,
+        h.doc().selection,
         [on_top].into(),
         "Select Vectors on Layer, current layer"
     );
-    h.app.invoke(&h.ctx, "job_size_and_position");
-    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("job_setup"));
-    h.app.invoke(&h.ctx, "show_toolpaths_tab");
-    assert_ne!(h.app.pages.shown(Page::Toolpaths), Shown::Hidden);
-    h.app.invoke(&h.ctx, "zoom_box");
-    h.app.invoke(&h.ctx, "select");
+    h.invoke("job_size_and_position");
+    assert_eq!(h.form_id(), Some("job_setup"));
+    h.invoke("show_toolpaths_tab");
+    assert_ne!(h.page_shown(Page::Toolpaths), Shown::Hidden);
+    h.invoke("zoom_box");
+    h.invoke("select");
     assert!(
-        h.app.form.is_none() && h.app.view_tool.is_none(),
+        h.form_id().is_none() && h.view_tool().is_none(),
         "the Select tool"
     );
 }
@@ -358,7 +335,7 @@ fn menu_items_that_reuse_existing_tools() {
 /// Controls that wait on a person or open other programs: the system's file dialogs, the
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
-fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
+fn needs_a_person(h: &Harness, id: &str) -> bool {
     const ASKS: [&str; 30] = [
         "save_shaded_image",
         "import_toolpaths_file",
@@ -394,7 +371,7 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "open_clipart_folder",
     ];
     ASKS.contains(&id)
-        || app.registry.exporter(id).is_some()
+        || h.is_exporter(id)
         || id.starts_with(EXPORT_LEVEL)
         // a file dialog for the brush
         || id.starts_with(gui::SAVE_BRUSH)
@@ -405,25 +382,22 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
 #[test]
 fn every_enabled_control_works() {
     let mut h = Harness::new();
-    h.app.doc.job.width = 100.0;
-    h.app.doc.job.height = 100.0;
+    h.given_document(|doc| {
+        doc.job.width = 100.0;
+        doc.job.height = 100.0;
+    });
     h.rectangle(10.0, 10.0, 40.0, 40.0);
     h.rectangle(30.0, 30.0, 40.0, 40.0);
-    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.invoke("select_all_vectors");
     for id in ["profile_toolpath", "create_shape"] {
-        let params = h.app.registry.get(id).unwrap().initial_params(&h.app.doc);
-        h.app.apply(id, &params).unwrap();
+        let params = h.opening_settings(id);
+        h.run(id, &params).unwrap();
     }
-    h.app.selected_toolpath = h.app.doc.toolpaths.keys().next().copied();
+    let first = *h.doc().toolpaths.keys().next().unwrap();
+    h.select_toolpath(first);
     h.frame(vec![]);
-    let toolbar = &h.app.toolbar;
-    let mut ids: Vec<String> = h
-        .app
-        .menus
-        .items()
-        .iter()
-        .map(|i| i.action.clone())
-        .collect();
+    let toolbar = h.toolbar();
+    let mut ids: Vec<String> = h.menu_actions();
     for group in toolbar
         .groups
         .iter()
@@ -434,8 +408,8 @@ fn every_enabled_control_works() {
     }
     ids.extend(VIEW_BUTTONS.iter().map(|id| (*id).to_owned()));
     // the right-click menus, on each thing they open on
-    let doc = &h.app.doc;
-    let mut popups = h.app.menus.selection_menu(doc);
+    let doc = h.doc();
+    let mut popups = h.selection_menu();
     for layer in &doc.layers {
         popups.extend(gui::layer_menu(doc, layer));
     }
@@ -455,26 +429,23 @@ fn every_enabled_control_works() {
     ids.extend(enabled.map(|i| i.action.clone()));
     ids.sort();
     ids.dedup();
-    let start = (h.app.doc.clone(), h.app.selected_toolpath);
+    let start = (h.doc().clone(), h.selected_toolpath());
     let mut ran = 0;
     for id in ids {
-        if !h.app.available(&id) || needs_a_person(&h.app, &id) {
+        if !h.available(&id) || needs_a_person(&h, &id) {
             continue;
         }
-        (h.app.doc, h.app.selected_toolpath) = start.clone();
-        h.app.history = History::default();
-        (h.app.form, h.app.view_tool) = (None, None);
-        h.app.status.set_message("");
-        h.app.invoke(&h.ctx, &id);
+        h.start_over_on(start.0.clone(), start.1);
+        h.invoke(&id);
         // a tool with a form runs with what the form starts with
-        if let Some(form) = h.app.form.take() {
-            let outcome = h.app.apply(form.id, &form.params);
+        if let Some((form, params)) = h.take_form() {
+            let outcome = h.run(form, &params);
             if let Err(why) = outcome {
                 assert!(!why.contains("not implemented"), "{id}: {why}");
             }
         }
         h.frame(vec![]);
-        let said = &h.app.status.message;
+        let said = h.status_message();
         assert!(!said.contains("not implemented"), "{id}: {said}");
         ran += 1;
     }
@@ -484,14 +455,12 @@ fn every_enabled_control_works() {
 #[test]
 fn the_side_bar_lists_other_tools_like_this_with_their_icons() {
     let h = Harness::new();
-    let group = h.app.help_group_of("draw_circle");
+    let group = h.help_group_of("draw_circle");
     assert!(
         group.contains(&"draw_circle") && group.len() > 2,
         "{group:?}"
     );
-    let bar = h
-        .app
-        .help_sidebar("draw_circle", &h.app.help_page("draw_circle"));
+    let bar = h.help_sidebar("draw_circle");
     let others: Vec<String> = group
         .iter()
         .filter(|t| **t != "draw_circle")
@@ -499,30 +468,26 @@ fn the_side_bar_lists_other_tools_like_this_with_their_icons() {
         .collect();
     assert_eq!(bar.like_this, others, "the rest of its group, in order");
     for t in &bar.like_this {
-        assert!(h.app.help_icon(t).is_some(), "{t} shows its icon");
+        assert!(h.has_help_icon(t), "{t} shows its icon");
     }
     // pages that are no tool's have no group, but still their related pages
-    assert_eq!(h.app.help_group_of("stepover").len(), 0);
+    assert_eq!(h.help_group_of("stepover").len(), 0);
     assert_ne!(side_bar(&h, "stepover").len(), 0);
 }
 
 #[test]
 fn a_page_links_the_names_of_other_pages_in_its_words() {
     let h = Harness::new();
-    let names = h.app.help_page("pocket_toolpath");
+    let names = h.help_page("pocket_toolpath");
     assert!(names.contains("(help:stepover)"), "{names}");
     // a tool's own name never links to itself
-    assert!(
-        !h.app
-            .help_page("draw_circle")
-            .contains("(help:draw_circle)")
-    );
+    assert!(!h.help_page("draw_circle").contains("(help:draw_circle)"));
 }
 
 #[test]
 fn the_performance_page_limits_calculations_with_a_share_slider() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "options");
+    h.invoke("options");
     h.frame(vec![]);
     h.frame(vec![]);
     let at = *h.texts_at("Performance").last().expect("a page of its own");
@@ -541,7 +506,7 @@ fn the_performance_page_limits_calculations_with_a_share_slider() {
 #[test]
 fn advanced_options_show_only_once_ticked_and_warn_first() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "options");
+    h.invoke("options");
     h.frame(vec![]);
     h.frame(vec![]);
     let tick = h.text_at("Show advanced settings").expect("the tick box");
@@ -567,11 +532,11 @@ fn advanced_options_show_only_once_ticked_and_warn_first() {
 fn options_cancel_throws_away_changes_not_applied() {
     let mut h = options_with_a_change_not_applied();
     click_button(&mut h, "Cancel");
-    assert!(!h.app.options_editor.window.open, "closed");
-    assert_eq!(h.app.options.general.recent_file_list_size, 9, "as it was");
-    assert!(!h.app.options_dirty());
+    assert!(!h.options_window_open(), "closed");
+    assert_eq!(h.options().general.recent_file_list_size, 9, "as it was");
+    assert!(!h.options_dirty());
     // opened again, it shows the options as they are
-    h.app.invoke(&h.ctx, "options");
+    h.invoke("options");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
@@ -580,9 +545,9 @@ fn options_cancel_throws_away_changes_not_applied() {
 #[test]
 fn reset_to_defaults_puts_back_only_the_page_shown() {
     let mut h = Harness::new();
-    h.app.options.appearance.theme = crate::options::Theme::Dark;
-    h.app.options.general.recent_file_list_size = 9;
-    h.app.invoke(&h.ctx, "options");
+    h.given_options(|o| o.appearance.theme = crate::options::Theme::Dark);
+    h.given_options(|o| o.general.recent_file_list_size = 9);
+    h.invoke("options");
     h.frame(vec![]);
     h.frame(vec![]);
     let at = *h.texts_at("Appearance").last().expect("listed");
@@ -594,11 +559,12 @@ fn reset_to_defaults_puts_back_only_the_page_shown() {
     click_button(&mut h, "Apply");
     // Light, or System on a Mac
     assert_eq!(
-        h.app.options.appearance.theme,
+        h.options().appearance.theme,
         crate::options::Theme::default()
     );
     assert_eq!(
-        h.app.options.general.recent_file_list_size, 9,
+        h.options().general.recent_file_list_size,
+        9,
         "other pages kept"
     );
 }
@@ -606,14 +572,14 @@ fn reset_to_defaults_puts_back_only_the_page_shown() {
 #[test]
 fn the_window_title_sits_in_the_menu_bar_unless_the_desktop_s_is_chosen() {
     let mut h = Harness::new();
-    let title = h.app.title.clone();
+    let title = h.window_title().to_owned();
     let file = h.text_at("File").expect("the File menu");
     let at = h
         .text_at(&title)
         .expect("the title in Cut Craft's own title bar");
     assert!((at.y - file.y).abs() < 1.0, "in the menus' row");
     assert!(at.x > file.x, "after the menus");
-    h.app.options.appearance.system_title_bar = true;
+    h.given_options(|o| o.appearance.system_title_bar = true);
     h.frame(vec![]);
     assert_eq!(h.text_at(&title), None, "the desktop's title bar shows it");
 }
@@ -622,12 +588,12 @@ fn the_window_title_sits_in_the_menu_bar_unless_the_desktop_s_is_chosen() {
 fn the_log_says_what_a_command_made() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 40.0, 30.0);
-    let vector = *h.app.doc.vectors.keys().next().unwrap();
+    let vector = *h.doc().vectors.keys().next().unwrap();
     let step = cut_craft_core::toolpath::Move {
         kind: cut_craft_core::toolpath::MoveKind::Cut,
         to: cut_craft_core::glam::DVec3::ZERO,
     };
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     c.add_toolpath(cut_craft_core::toolpath::Toolpath {
         name: "Profile 1".into(),
         strategy: "test".into(),
@@ -656,10 +622,10 @@ fn the_log_says_what_a_command_made() {
 #[test]
 fn the_design_tab_shows_its_favourites_or_all_its_tools() {
     let mut h = Harness::new();
-    h.app.pages.set_pinned(Page::Design, true);
-    h.app.pages.open(Page::Design);
+    h.pin(Page::Design);
+    h.open_page(Page::Design);
     h.frame(vec![]);
-    let first_group = h.app.toolbar.groups[0].name;
+    let first_group = h.toolbar().groups[0].name;
     assert!(
         h.text_at(first_group).is_some(),
         "all the tools to start with"
@@ -674,19 +640,18 @@ fn the_design_tab_shows_its_favourites_or_all_its_tools() {
         gui::tool_menu(Page::Design, "draw_circle", false, false, false)[0].action,
         tool("draw_circle", "add")
     );
-    h.app.invoke(&h.ctx, &tool("draw_circle", "add"));
-    h.app.invoke(&h.ctx, &tool("draw_rectangle", "add"));
-    h.app.invoke(&h.ctx, &tool("draw_rectangle", "earlier"));
+    h.invoke(&tool("draw_circle", "add"));
+    h.invoke(&tool("draw_rectangle", "add"));
+    h.invoke(&tool("draw_rectangle", "earlier"));
     assert_eq!(
-        h.app.options.favourites.design,
+        h.options().favourites.design,
         ["draw_rectangle", "draw_circle"]
     );
     assert!(
-        h.app.options.favourites.toolpaths.is_empty(),
+        h.options().favourites.toolpaths.is_empty(),
         "each tab its own"
     );
-    h.app
-        .invoke(&h.ctx, &format!("{}design:true", gui::FAVOURITES_ONLY));
+    h.invoke(&format!("{}design:true", gui::FAVOURITES_ONLY));
     h.frame(vec![]);
     assert!(
         !h.texts_at("Design ★").is_empty(),
@@ -695,28 +660,28 @@ fn the_design_tab_shows_its_favourites_or_all_its_tools() {
     assert!(h.text_at("Favourites").is_some());
     assert!(h.text_at(first_group).is_none(), "only the favourites");
     // taken off them all, the way back is offered
-    h.app.invoke(&h.ctx, &tool("draw_circle", "remove"));
-    h.app.invoke(&h.ctx, &tool("draw_rectangle", "remove"));
+    h.invoke(&tool("draw_circle", "remove"));
+    h.invoke(&tool("draw_rectangle", "remove"));
     h.frame(vec![]);
     let back = h.text_at("Show All Tools").expect("a way back");
     h.click(back, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(!h.app.options.favourites.design_only);
+    assert!(!h.options().favourites.design_only);
     assert!(h.text_at(first_group).is_some());
 }
 
 #[test]
 fn every_tool_on_the_tool_pages_has_an_icon() {
     let h = Harness::new();
-    let toolbar = &h.app.toolbar;
+    let toolbar = h.toolbar();
     let missing: Vec<&str> = toolbar
         .groups
         .iter()
         .chain(&toolbar.modeling_groups)
         .chain(&toolbar.toolpath_groups)
         .flat_map(|g| g.tools.iter().copied())
-        .filter(|id| h.app.registry.get(id).is_some() || gui::built_in_label(id).is_some())
-        .filter(|id| h.app.icons.find(h.app.explicit_icon(id), id).is_none())
+        .filter(|id| h.is_command(id) || gui::built_in_label(id).is_some())
+        .filter(|id| !h.tool_has_icon(id))
         .collect();
     assert!(
         missing.is_empty(),
@@ -762,7 +727,7 @@ fn a_pinned_page_has_room_for_five_tool_buttons_side_by_side() {
         for _ in 0..3 {
             h.frame(vec![]);
         }
-        let across = h.app.buttons_across.get();
+        let across = h.buttons_across();
         assert!(across >= 5.0, "{across} at {text_scale}× text");
     }
 }
@@ -771,7 +736,7 @@ fn a_pinned_page_has_room_for_five_tool_buttons_side_by_side() {
 fn unpinning_one_page_leaves_the_others_width_alone() {
     let mut h = both_pinned();
     let both = page_widths(&mut h, 2)[1];
-    h.app.pages.set_pinned(Page::Design, false);
+    h.unpin(Page::Design);
     let one = page_widths(&mut h, 2);
     assert_eq!(
         one[0],
@@ -784,11 +749,11 @@ fn unpinning_one_page_leaves_the_others_width_alone() {
 #[test]
 fn a_flown_out_page_is_as_wide_as_a_pinned_one() {
     let mut h = Harness::new();
-    let docked = h.app.page_rects[0].expect("Design docked").width();
-    h.app.pages.set_pinned(Page::Design, false);
-    h.app.pages.open(Page::Design);
+    let docked = h.page_rect(0).expect("Design docked").width();
+    h.unpin(Page::Design);
+    h.open_page(Page::Design);
     h.frame(vec![]);
-    let out = h.app.flyout_rect.expect("Design flown out").width();
+    let out = h.flyout_rect().expect("Design flown out").width();
     assert!(
         (out - docked).abs() <= 1.0,
         "{out} flown out, {docked} docked"
@@ -796,14 +761,14 @@ fn a_flown_out_page_is_as_wide_as_a_pinned_one() {
     // nor does a form on it, or the frames after, push it wider
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for form in ["job_setup", "draw_text", "offset_vectors"] {
-        h.app.invoke(&h.ctx, form);
-        h.app.pages.open(Page::Design);
+        h.invoke(form);
+        h.open_page(Page::Design);
         for _ in 0..6 {
             h.frame(vec![]);
-            let now = h.app.flyout_rect.expect("still out").width();
+            let now = h.flyout_rect().expect("still out").width();
             assert_eq!(now, out, "{form}");
         }
-        h.app.form = None;
+        h.close_form();
     }
 }
 
@@ -821,8 +786,8 @@ fn the_status_bar_shows_the_version() {
 #[test]
 fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last() {
     let mut h = Harness::new();
-    h.app.options.general.fold_tool_groups = true;
-    h.app.pages.set_pinned(Page::Design, true);
+    h.given_options(|o| o.general.fold_tool_groups = true);
+    h.pin(Page::Design);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
@@ -833,19 +798,17 @@ fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last(
     // a click on the arrow opens the flyout, each tool by name, and runs nothing
     h.click(arrow, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.form.is_none(), "the arrow runs nothing");
+    assert!(h.form_id().is_none(), "the arrow runs nothing");
     assert!(
         h.text_at("Draw Ellipse").is_some(),
         "the flyout names its tools"
     );
     let pick = h.text_at("Draw Circle from Edge").expect("listed");
     h.click(pick, Modifiers::NONE);
-    let form = h.app.form.as_ref().expect("its form");
-    assert_eq!(form.id, "draw_circle");
-    assert_eq!(form.way, crate::flyout::DragWay::AcrossEdge);
+    assert_eq!(h.form_id(), Some("draw_circle"), "its form");
+    assert_eq!(h.form_way(), Some(crate::flyout::DragWay::AcrossEdge));
     assert_eq!(
-        h.app
-            .options
+        h.options()
             .flyout_faces
             .get("draw_circle")
             .map(String::as_str),
@@ -853,7 +816,7 @@ fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last(
         "the pick becomes the button's face"
     );
     // a press held on the face opens it too, and its release runs nothing
-    h.app.form = None;
+    h.close_form();
     h.frame(vec![]);
     h.frame(vec![]);
     let face = arrow - vec2(12.0, 12.0);
@@ -866,15 +829,18 @@ fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last(
     h.press(face, false, Modifiers::NONE);
     h.frame(vec![]);
     assert!(
-        h.app.form.is_none(),
+        h.form_id().is_none(),
         "the release after a hold runs nothing"
     );
     // a plain click runs the face: the tool picked last
     h.frame(vec![key(Key::Escape)]);
     h.click(face, Modifiers::NONE);
     assert_eq!(
-        h.app.form.as_ref().map(|f| (f.id, f.way)),
-        Some(("draw_circle", crate::flyout::DragWay::AcrossEdge))
+        (h.form_id(), h.form_way()),
+        (
+            Some("draw_circle"),
+            Some(crate::flyout::DragWay::AcrossEdge)
+        )
     );
 }
 
@@ -1015,23 +981,23 @@ fn every_language_pack_character_has_a_glyph() {
 fn switching_units_and_back_leaves_every_tool_figure_as_it_was() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
-    h.app.choose_tool("3 mm End Mill");
+    h.invoke("profile_toolpath");
+    h.pin(Page::Toolpaths);
+    h.choose_tool("3 mm End Mill");
     h.frame(vec![]);
-    let before = h.app.form.as_ref().unwrap().params.clone();
-    let database = serde_json::to_value(&h.app.tools).unwrap();
+    let before = h.form_settings().clone();
+    let database = serde_json::to_value(h.tool_database()).unwrap();
     for units in ["units_inch", "units_mm", "units_inch", "units_mm"] {
-        h.app.set_units(units);
+        h.set_units(units);
         h.frame(vec![]);
         h.frame(vec![]);
     }
     assert_eq!(
-        h.app.form.as_ref().unwrap().params["tool"],
-        before["tool"],
+        h.form_value("tool"),
+        &before["tool"],
         "kept in mm, only shown in inches"
     );
-    assert_eq!(serde_json::to_value(&h.app.tools).unwrap(), database);
+    assert_eq!(serde_json::to_value(h.tool_database()).unwrap(), database);
 }
 
 /// Tools that were only in a menu get a button too (Matthew, 2026-11-10): the left page's
@@ -1040,7 +1006,7 @@ fn switching_units_and_back_leaves_every_tool_figure_as_it_was() {
 #[test]
 fn menu_only_tools_have_a_button_on_their_side() {
     let h = Harness::new();
-    let toolbar = &h.app.toolbar;
+    let toolbar = h.toolbar();
     let model = toolbar.subtab_groups(
         gui::DESIGN_SUBTABS
             .iter()
@@ -1094,7 +1060,7 @@ fn menu_only_tools_have_a_button_on_their_side() {
         ("create_job_sheet", "Save Job Sheet"),
         ("cut_list", "Save Cut List"),
     ] {
-        assert_eq!(h.app.tool_label(id), label);
+        assert_eq!(h.tool_label(id), label);
         assert!(gui::about(id).is_some(), "{id} has a tooltip");
     }
 }
@@ -1110,7 +1076,7 @@ fn dont_ask_again_stops_the_question_but_not_the_mark() {
     let no = h.text_at("Not Now").expect("the button");
     h.click(no, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(!h.app.options.confirmations.ask_to_recalculate);
+    assert!(!h.options().confirmations.ask_to_recalculate);
     move_first_vector(&mut h);
     h.frame(vec![]);
     h.frame(vec![]);
@@ -1119,7 +1085,7 @@ fn dont_ask_again_stops_the_question_but_not_the_mark() {
         "not asked again"
     );
     assert!(
-        h.app.doc.toolpaths.values().all(|t| t.stale),
+        h.doc().toolpaths.values().all(|t| t.stale),
         "still marked out of date"
     );
 }
@@ -1127,12 +1093,12 @@ fn dont_ask_again_stops_the_question_but_not_the_mark() {
 #[test]
 fn cancel_brings_nothing_in() {
     let mut h = Harness::new();
-    h.app.import_file(&unitless_dxf("units-cancel"));
+    h.import(&unitless_dxf("units-cancel"));
     h.frame(vec![]);
     h.frame(vec![]);
     h.click(*h.texts_at("Cancel").last().unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.doc.vectors.is_empty());
+    assert!(h.doc().vectors.is_empty());
     assert!(
         h.text_at("This drawing doesn't say what units it was made in")
             .is_none()
@@ -1148,18 +1114,17 @@ fn a_page_that_names_its_icon_shows_it_beside_its_title_and_in_lists() {
         .collect();
     assert!(named.contains(&"number_fields"), "{named:?}");
     for id in named {
-        assert!(h.app.help_icon(id).is_some(), "{id}: its icon is not found");
+        assert!(h.has_help_icon(id), "{id}: its icon is not found");
         let uri = h
-            .app
             .help_icon_uri(id, super::help::PAGE_ICON)
             .unwrap_or_default();
-        let page = h.app.help_markdown(id);
+        let page = h.help_markdown(id);
         let title = page
             .lines()
             .find(|l| l.starts_with("# "))
             .unwrap_or_default();
         assert!(title.contains(&uri), "{id}: no icon by its title: {title}");
-        assert!(title.ends_with(&h.app.help_title(id)), "{id}: {title}");
+        assert!(title.ends_with(&h.help_title(id)), "{id}: {title}");
     }
 }
 
@@ -1169,9 +1134,9 @@ fn a_page_that_names_its_icon_shows_it_beside_its_title_and_in_lists() {
 fn canvas_only_tools_have_no_commit_button() {
     let mut h = Harness::new();
     h.rectangle(-10.0, -10.0, 20.0, 20.0);
-    let before = h.app.doc.vectors.len();
+    let before = h.doc().vectors.len();
     for id in ["interactive_vector_trim", "draw_freehand"] {
-        h.app.invoke(&h.ctx, id);
+        h.invoke(id);
         h.frame(vec![]);
         for label in ["Apply", "Create", "Calculate"] {
             assert!(h.text_at(label).is_none(), "{id}: {label}");
@@ -1182,9 +1147,9 @@ fn canvas_only_tools_have_no_commit_button() {
                 .is_some(),
             "{id}"
         );
-        h.app.form = None;
+        h.close_form();
     }
-    assert_eq!(h.app.doc.vectors.len(), before, "nothing trimmed or drawn");
+    assert_eq!(h.doc().vectors.len(), before, "nothing trimmed or drawn");
 }
 
 /// A tool page that settles, with icons drawn and the app's own look at 100% text: the Edit
@@ -1194,10 +1159,7 @@ fn edit_tab_with_icons() -> Harness {
     egui_extras::install_image_loaders(&h.ctx);
     h.window = vec2(1700.0, 800.0);
     readable(&h.ctx, 1.0);
-    h.app.design_subtab = gui::DESIGN_SUBTABS
-        .iter()
-        .position(|t| t.name == "Edit")
-        .expect("an Edit tab");
+    h.show_design_subtab("Edit");
     for _ in 0..4 {
         h.frame(vec![]);
     }
@@ -1245,7 +1207,7 @@ fn hovering_a_tool_button_never_rewraps_the_page() {
         .y;
     // down to the Transform Objects row too, the last on the tab
     let bottom = h.text_at("Transform Objects").expect("its heading").y + 70.0;
-    let page = h.app.page_rects[0].expect("the Design page");
+    let page = h.page_rect(0).expect("the Design page");
     // the tip box's top edge, under the last row of buttons, moves if any row rewraps
     let settled = |h: &Harness| {
         (
@@ -1288,23 +1250,17 @@ fn a_greyed_item_says_what_it_waits_for_not_that_it_is_missing() {
         ("delete_toolpath", "Pick a toolpath"),
         ("recalculate_all_toolpaths", "No toolpaths yet"),
     ] {
-        assert!(!h.app.available(id), "{id}");
-        let why = h.app.unavailable_why(id);
+        assert!(!h.available(id), "{id}");
+        let why = h.unavailable_why(id);
         assert!(why.contains(said), "{id}: {why}");
         assert!(!why.to_lowercase().contains("not implemented"), "{id}");
     }
     assert!(
-        h.app
-            .unavailable_why("no_such_tool")
+        h.unavailable_why("no_such_tool")
             .contains("not implemented yet")
     );
     let start = Harness::at_start();
-    assert!(
-        start
-            .app
-            .unavailable_why("close")
-            .contains("No job is open")
-    );
+    assert!(start.unavailable_why("close").contains("No job is open"));
 }
 
 #[test]
@@ -1327,37 +1283,37 @@ fn a_language_pack_picked_in_options_is_used_once_applied() {
     .unwrap();
     std::fs::write(ru.join("menus.ftl"), "menu-file = Файл\n").unwrap();
     let mut h = Harness::new();
-    h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
-    h.app.options_editor.open_at(crate::options::LANGUAGE);
+    h.given_add_ons_folder(addons.clone());
+    h.open_options_at(crate::options::LANGUAGE);
     h.frame(vec![]);
     h.frame(vec![]);
     // listed with how much it covers, and marked as not official (unsigned)
     assert!(h.text_at("Русский").is_some(), "{:?}", h.texts());
     assert!(h.text_at("⚠ not official").is_some());
     click_button(&mut h, "Русский");
-    assert_eq!(h.app.edited_options().language.pack, "language-ru");
+    assert_eq!(h.edited_options().language.pack, "language-ru");
     assert_eq!(
         cut_craft_i18n::tr("menu-file"),
         "File",
         "not used before Apply"
     );
     h.apply_options();
-    assert_eq!(h.app.options.language.pack, "language-ru");
+    assert_eq!(h.options().language.pack, "language-ru");
     assert_eq!(cut_craft_i18n::tr("menu-file"), "Файл");
     // what the pack lacks stays English
     assert_eq!(cut_craft_i18n::tr("menu-edit"), "Edit");
     // back to English, and a pack that has gone leaves English and says so
-    h.app.use_language("");
+    h.use_language("");
     assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
     std::fs::remove_dir_all(&addons).unwrap();
-    h.app.options.language.pack = "language-ru".to_owned();
-    h.app.use_language("language-ru");
+    h.given_options(|o| o.language.pack = "language-ru".to_owned());
+    h.use_language("language-ru");
     assert_eq!(cut_craft_i18n::tr("menu-file"), "File");
-    assert_eq!(h.app.options.language.pack, "", "Options says English too");
+    assert_eq!(h.options().language.pack, "", "Options says English too");
     assert!(
-        h.app.status.message.contains("not installed"),
+        h.status_message().contains("not installed"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
 }
 
@@ -1411,8 +1367,8 @@ fn while_a_calculation_runs_the_status_bar_says_how_briskly_and_opens_performanc
 #[test]
 fn interface_layout_opens_the_layout_picker_and_use_this_layout_switches() {
     let mut h = Harness::new();
-    assert_eq!(h.app.options.general.layout, WindowLayout::Classic);
-    h.app.invoke(&h.ctx, "interface_layout");
+    assert_eq!(h.options().general.layout, WindowLayout::Classic);
+    h.invoke("interface_layout");
     // a window is sized on its first frame and drawn on the next
     h.frame(vec![]);
     h.frame(vec![]);
@@ -1428,32 +1384,32 @@ fn interface_layout_opens_the_layout_picker_and_use_this_layout_switches() {
     }
     click_button(&mut h, "Rail");
     click_button(&mut h, "Use This Layout");
-    assert_eq!(h.app.options.general.layout, WindowLayout::Rail);
-    assert!(h.app.layout_question.is_none());
+    assert_eq!(h.options().general.layout, WindowLayout::Rail);
+    assert_eq!(h.layout_question(), None);
 }
 
 #[test]
 fn cancel_on_the_layout_picker_changes_nothing() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "interface_layout");
+    h.invoke("interface_layout");
     // a window is sized on its first frame and drawn on the next
     h.frame(vec![]);
     h.frame(vec![]);
     click_button(&mut h, "Ribbon");
     click_button(&mut h, "Cancel");
-    assert_eq!(h.app.options.general.layout, WindowLayout::Classic);
-    assert!(h.app.layout_question.is_none());
-    assert!(!h.app.options.layout_asked);
+    assert_eq!(h.options().general.layout, WindowLayout::Classic);
+    assert_eq!(h.layout_question(), None);
+    assert!(!h.options().layout_asked);
 }
 
 #[test]
 fn after_updating_the_question_offers_ribbon_and_keep_leaves_the_layout() {
     let mut h = Harness::new();
-    h.app.ask_layout_after_update();
+    h.ask_layout_after_update();
     h.frame(vec![]);
     h.frame(vec![]);
-    assert_eq!(h.app.layout_question.unwrap().chosen, WindowLayout::Ribbon);
+    assert_eq!(h.layout_question(), Some(WindowLayout::Ribbon));
     click_button(&mut h, "Keep Classic");
-    assert_eq!(h.app.options.general.layout, WindowLayout::Classic);
-    assert!(h.app.options.layout_asked);
+    assert_eq!(h.options().general.layout, WindowLayout::Classic);
+    assert!(h.options().layout_asked);
 }
