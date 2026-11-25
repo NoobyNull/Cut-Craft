@@ -214,3 +214,40 @@ fn changing_the_model_makes_it_out_of_date() {
     );
     assert!(toolpath.reads_model(), "it cuts the model");
 }
+
+#[test]
+fn under_a_machining_limit_the_holder_keeps_clear_of_the_stock_left_outside_it() {
+    // a groove down to a thin rod from 2 to 58 along, and only part of the way round it
+    // (10 to 50 mm round the sheet) to rough: the stock round the rest of it is never cut, so
+    // the collet nut, wider than the strip, can't come down past it
+    let mut doc = turned(|x| if (2.0..58.0).contains(&x) { 5.0 } else { 20.0 });
+    let mut c = Change::builder(&doc);
+    let at = cut_craft_core::geometry::Point::new;
+    let id = c.add(cut_craft_core::geometry::Path::polyline(
+        &[at(5.0, 10.0), at(55.0, 10.0), at(55.0, 50.0), at(5.0, 50.0)],
+        true,
+    ));
+    c.select([id]);
+    doc.apply(&c.finish()).unwrap();
+    let p = Params {
+        machining_boundary: cut_craft_core::component::MachiningBoundary::SelectedVectors,
+        tool: Tool {
+            flute_length: 8.0,
+            stickout: 8.0,
+            ..mill(6.0)
+        },
+        ..Params::default()
+    };
+    let (toolpath, notes) = rough(&doc, &p);
+    let cuts = cuts(&toolpath);
+    assert_ne!(cuts.len(), 0, "{notes:?}");
+    let deepest = cuts
+        .iter()
+        .map(|c| 20.0 + c.z)
+        .fold(f64::INFINITY, f64::min);
+    assert!(
+        deepest >= 20.0 - 8.0 - 0.5,
+        "no deeper than the bit sticks out below the uncut stock: {deepest}"
+    );
+    assert!(!notes.is_empty(), "it says what it couldn't reach");
+}

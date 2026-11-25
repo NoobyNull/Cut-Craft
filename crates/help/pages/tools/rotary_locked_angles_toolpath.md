@@ -60,4 +60,5 @@ the whole blank, as if nothing were above it.
 - **The collet nut and spindle can't get down to some of the model at any angle**: it keeps
   the holder (see [Collisions](help:collisions)) clear of the material, and out of the
   **Chuck** and **Tailstock**, so that part is left rough. A bit that sticks out further, or a
-  slimmer holder, would reach it.
+  slimmer holder, would reach it. It says so even when the holder keeps it off everything
+  left, and no angle cuts at all.

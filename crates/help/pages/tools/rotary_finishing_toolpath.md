@@ -71,7 +71,8 @@ goes over the whole blank, as if nothing were above it.
 - **Machining limit**: where on the material it may cut. **Material** (the usual) is all of
   it; **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline,
   grown by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job
-  does. Selected vectors are kept with the toolpath, so it recalculates the same.
+  does. Selected vectors are kept with the toolpath, so it recalculates the same. The bit
+  lifts over every gap in the limit, however narrow, rather than cutting straight across it.
 - **Registration mark**: a small notch at A=0 just past End, so the part can be put back
   exactly as it was if a job has to be started again.
 - **Cut support**: cut away the centre stock Job Setup leaves along the axis, down to the

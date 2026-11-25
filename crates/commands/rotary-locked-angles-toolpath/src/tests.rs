@@ -187,3 +187,39 @@ fn changing_the_model_makes_it_out_of_date() {
     let (toolpath, _) = made(&squared(), &coarse()).unwrap();
     assert!(toolpath.reads_model(), "it cuts the model");
 }
+
+#[test]
+fn where_the_holder_keeps_every_angle_off_it_says_so() {
+    // a groove 20 mm wide down to a rod 14 mm under the material's top, roughed out above;
+    // then a bit sticking out only 3 mm: the collet nut, wider than the groove, can't get
+    // down to what the roughing left at any angle
+    let mut doc = shaped(|x, _| if (20.0..40.0).contains(&x) { 6.0 } else { 20.0 });
+    let roughing = cmd_rotary_roughing_toolpath::Params {
+        tool: Tool {
+            shape: ToolShape::EndMill,
+            pass_depth: 3.0,
+            ..ball(6.0)
+        },
+        ..cmd_rotary_roughing_toolpath::Params::default()
+    };
+    let roughed =
+        cmd_rotary_roughing_toolpath::RotaryRoughingToolpath::run(&doc, &roughing).unwrap();
+    doc.apply(&roughed).unwrap();
+    let p = Params {
+        tool: Tool {
+            flute_length: 3.0,
+            stickout: 3.0,
+            ..ball(6.0)
+        },
+        ..coarse()
+    };
+    let (_, notes) = made(&doc, &p).unwrap();
+    assert!(
+        notes.iter().any(|n| n.contains("collet nut")),
+        "the material it couldn't reach is said: {notes:?}"
+    );
+    assert!(
+        !notes.iter().any(|n| n.starts_with("Nothing is left")),
+        "not that nothing is left: {notes:?}"
+    );
+}

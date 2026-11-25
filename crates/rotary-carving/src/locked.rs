@@ -63,6 +63,13 @@ impl Work<'_> {
         }
         if more {
             more = self.best_facing(material, &detail, head, &tilts).is_some();
+        } else if let Some(angle) = self.most_held_back(material, &detail, head, &tilts) {
+            // no angle worth cutting, but the holder keeps the bit from something left: where
+            // it does is said, found by trying that angle on a copy (what it cuts is slivers,
+            // not worth an angle)
+            let mut probe = material.clone();
+            let round = angle.to_radians() * radius;
+            let _ = self.locked(round, &mut probe, &fine, head, room, &mut refused);
         }
         // where the holder kept the bit off, and something is still left for it there now
         // (not in the chuck or tailstock: that is meant to be left)
