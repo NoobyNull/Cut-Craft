@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/app", "crates/help", "crates/i18n", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/window-owner", "crates/priority", "crates/updater", "crates/machines", "crates/rotary", "crates/depth-addon", "crates/border-tile", "crates/web-api", "crates/content-pack", "crates/packs/*", "crates/commands/*", "crates/formats/*"]
+members = ["crates/app", "crates/help", "crates/i18n", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/window-owner", "crates/priority", "crates/updater", "crates/machines", "crates/rotary", "crates/rotary-carving", "crates/depth-addon", "crates/border-tile", "crates/web-api", "crates/content-pack", "crates/packs/*", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
 version = "0.7.6"
@@ -11,6 +11,7 @@ license-file = "LICENSE"
 cut-craft-core = { path = "crates/core" }
 cut-craft-border-tile = { path = "crates/border-tile" }
 cut-craft-rotary = { path = "crates/rotary" }
+cut-craft-rotary-carving = { path = "crates/rotary-carving" }
 cut-craft-window-owner = { path = "crates/window-owner" }
 cut-craft-priority = { path = "crates/priority" }
 cut-craft-help = { path = "crates/help" }

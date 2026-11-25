@@ -896,6 +896,7 @@ impl Change {
                     || toolpath.vectors.iter().any(|v| vectors.contains(v))
                     || picture_of(toolpath).is_some_and(|b| pictures.contains(&b))
                     || picks_again.contains(id)
+                    || (toolpath.cuts_what_is_left() && recut.iter().any(|r| r < id))
             })
             .map(|(&id, _)| id)
             .collect();
