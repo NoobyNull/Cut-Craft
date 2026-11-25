@@ -19,3 +19,4 @@ web-api-the-web-api-must-be = The Web API must be running to show its docs page
 web-api-try-again = Try Again
 web-api-try-it = Try it
 web-api-docs-page = The docs page lists every call, and every tool and menu item, each ready to try in your web browser: { $page }
+web-api-running-at = { $running } at http://{ $at }

@@ -76,6 +76,12 @@ pub struct ToolpathSettings {
     #[serde(default = "on")]
     #[schemars(title = "Bit name in multiple file names")]
     pub bit_in_file_names: bool,
+    /// Off (the usual): each rotary toolpath cuts only what the toolpaths above it in the
+    /// list leave of the blank. On: each cuts the whole blank, as if nothing were above it,
+    /// and you decide what it cuts with its Start, End and allowance
+    #[serde(default)]
+    #[schemars(title = "Advanced rotary mode")]
+    pub advanced_rotary: bool,
 }
 
 /// Two minutes to stop, change a bit by hand and zero it again.

@@ -89,6 +89,8 @@ impl CutCraftApp {
         self.units_question(ctx);
         // a save that would replace G-code from an earlier save: Replace or Archive?
         self.earlier_question(ctx);
+        // a new toolpath order that left toolpaths cutting what is left out of date
+        self.reorder_question(ctx);
         // what the checks before cutting found: save anyway?
         self.save_anyway_question(ctx);
         // Save or Send pressed in Save Toolpaths: once its window has closed
@@ -203,7 +205,7 @@ impl CutCraftApp {
             painter.text(
                 screen.center(),
                 egui::Align2::CENTER_CENTER,
-                "Drop to open or import",
+                t!("Drop to open or import"),
                 egui::TextStyle::Heading.resolve(&ctx.global_style()),
                 ctx.global_style().visuals.strong_text_color(),
             );
@@ -613,24 +615,24 @@ impl CutCraftApp {
                     (
                         "split_stacked",
                         "view/split_over_and_under.png",
-                        "2D over 3D",
+                        t!("2D over 3D"),
                         Split::Stacked,
                     ),
                     (
                         "split_side_by_side",
                         "view/split_side_by_side.png",
-                        "2D beside 3D",
+                        t!("2D beside 3D"),
                         Split::SideBySide,
                     ),
                     (
                         "split_picture",
                         "view/split_picture_in_picture.png",
-                        "One view in a corner of the other",
+                        t!("One view in a corner of the other"),
                         Split::Picture,
                     ),
                 ] {
                     let button = self
-                        .icon_button(icon, "", tip, edge)
+                        .icon_button(icon, "", &tip, edge)
                         .selected(self.split == Some(split));
                     if ui.add(button).on_hover_hint(tip).clicked() {
                         clicked = Some(id);
@@ -653,9 +655,9 @@ impl CutCraftApp {
                 ui.horizontal_centered(|ui| {
                     if self.doc.job.double_sided.is_some() {
                         let side = if self.doc.bottom_side {
-                            "Bottom Side"
+                            t!("Bottom Side")
                         } else {
-                            "Top Side"
+                            t!("Top Side")
                         };
                         if ui
                             .button(side)

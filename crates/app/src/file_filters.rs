@@ -179,7 +179,7 @@ pub fn filters(dialog: Dialog<'_>, registry: &Registry) -> Vec<Filter> {
         Dialog::InstallPostProcessor => vec![Filter::new("Post-processor", &["pp"])],
         Dialog::MachinePackage => vec![Filter::new("Machine package", &["json"])],
         Dialog::OpenToolDatabase => vec![Filter::new(
-            "Bit librarys",
+            "Bit libraries",
             &crate::files::TOOL_FILE_EXTENSIONS,
         )],
         Dialog::SaveToolDatabase => vec![Filter::new("Cut Craft bit library", &["json"])],

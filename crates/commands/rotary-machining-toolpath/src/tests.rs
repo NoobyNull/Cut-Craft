@@ -1,7 +1,14 @@
 use super::*;
+use cut_craft_core::component::placed_model;
 use cut_craft_core::component::{Combine, Component};
+use cut_craft_core::document::Along;
 use cut_craft_core::document::Job;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::glam::DVec3;
+use cut_craft_core::rotary_axis;
 use cut_craft_core::toolpath::MoveKind;
+use cut_craft_rotary::Mesh;
+use cut_craft_rotary_carving::{GRAZE, MARK_DEPTH, Turned};
 
 /// A rotary job 40 mm across, 60 mm long along X, holding a part `radius(x)` from the
 /// axis all the way round (its top at the material's surface).

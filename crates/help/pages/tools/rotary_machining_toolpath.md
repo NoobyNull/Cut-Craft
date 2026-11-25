@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, tool_database, web_api, performance
+reviewed: 2026-11-25
+see-also: rotary_roughing_toolpath, rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, tool_database, web_api, performance
 ---
 
 **4-Axis Rotary Machining** finishes a 3D model all the way round a turning cylinder. The bit

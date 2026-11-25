@@ -45,6 +45,18 @@ recalculate-all = Recalculate All
 recalculate-not-now = Not Now
     .tooltip = Leave them marked ⚠ in the Toolpaths list; Recalculate All is there when you want it
 
+# A new toolpath order left toolpaths that cut only what is above them out of date. $names lists them.
+reorder-ask-title = Out of date after the new order
+reorder-ask = { $count ->
+    [one] { $names } cuts only what the toolpaths above it leave, and they are different now: it is out of date (⚠) until it is recalculated. Put the old order back?
+   *[other] { $names } cut only what the toolpaths above them leave, and those are different now: they are out of date (⚠) until they are recalculated. Put the old order back?
+}
+reorder-put-back = Put it back
+    .tooltip = Undo the new order: everything goes back where it was, up to date as before
+reorder-keep = Keep the new order
+    .tooltip = Keep it, and recalculate the toolpaths marked ⚠ when you are ready
+reorder-put-back-done = The old order is back
+
 # Draw Text's spelling check.
 spelling-title = Spelling
 spelling-no-dictionary = Spelling: no dictionary found (put a Hunspell .dic and .aff in Cut Craft's dictionaries folder)

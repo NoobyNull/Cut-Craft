@@ -177,8 +177,10 @@ impl View {
 pub fn editor(ui: &mut egui::Ui, tool: &mut Tool) -> bool {
     let Some(shape) = outline(tool) else {
         ui.vertical(|ui| {
-            ui.weak("Give the tool a diameter to see it drawn");
-            ui.label("Diameter");
+            ui.weak(cut_craft_i18n::t!(
+                "Give the tool a diameter to see it drawn"
+            ));
+            ui.label(cut_craft_i18n::t!("Diameter"));
         });
         return length(ui, "Diameter", &mut tool.diameter, tool.units);
     };
@@ -464,8 +466,9 @@ fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) 
             "Angle"
         };
         changed |= on_left(ui, view, height, pointing, |ui| {
-            ui.weak(caption)
-                .on_hover_hint("The angle across the point, from one side to the other");
+            ui.weak(caption).on_hover_hint(cut_craft_i18n::t!(
+                "The angle across the point, from one side to the other"
+            ));
             ui.add(
                 Number::new(&mut tool.angle)
                     .range(1.0..=179.0)
@@ -479,8 +482,10 @@ fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) 
         let pointing = view.at(-shape.radius, 0.0);
         let units = tool.units;
         changed |= on_left(ui, view, 0.0, pointing, |ui| {
-            ui.weak("Corner radius")
-                .on_hover_hint("How rounded the bit's bottom corners are");
+            ui.weak(cut_craft_i18n::t!("Corner radius"))
+                .on_hover_hint(cut_craft_i18n::t!(
+                    "How rounded the bit's bottom corners are"
+                ));
             length(ui, "Corner radius", &mut tool.tip_radius, units)
         });
     }
@@ -488,9 +493,10 @@ fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) 
         let height = shape.flute_top / 2.0;
         let pointing = view.at(-shape.radius, height);
         changed |= on_left(ui, view, height, pointing, |ui| {
-            ui.weak("Taper angle").on_hover_hint(
-                "For a tapered bit, how far each side leans from straight; 0 for straight",
-            );
+            ui.weak(cut_craft_i18n::t!("Taper angle"))
+                .on_hover_hint(cut_craft_i18n::t!(
+                    "For a tapered bit, how far each side leans from straight; 0 for straight"
+                ));
             ui.add(
                 Number::new(&mut tool.taper)
                     .range(0.0..=45.0)
@@ -528,7 +534,7 @@ fn labelled(
         ui.horizontal(|ui| {
             changed = length(ui, caption, value, units);
             if !set {
-                ui.colored_label(ui.visuals().warn_fg_color, "not set")
+                ui.colored_label(ui.visuals().warn_fg_color, cut_craft_i18n::t!("not set"))
                     .on_hover_hint(hint);
             }
         });

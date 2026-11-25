@@ -40,10 +40,37 @@ fn wanted(ctx: &egui::Context, name: &str) -> bool {
         .is_some_and(|w| w == name)
 }
 
+fn spotlit_id() -> egui::Id {
+    egui::Id::unique("help-mark-spotlit")
+}
+
+/// Rings `name` wherever it is drawn, and scrolls it into view, until [`clear_spotlight`]:
+/// a setting a hint sends the person to (Turn on advanced rotary mode…).
+pub fn spotlight(ctx: &egui::Context, name: &str) {
+    ctx.data_mut(|d| d.insert_temp(spotlit_id(), name.to_owned()));
+}
+
+/// Stops ringing what [`spotlight`] rang.
+pub fn clear_spotlight(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.remove::<String>(spotlit_id()));
+}
+
+/// Whether `name` is the one [`spotlight`] rings.
+pub fn spotlit(ctx: &egui::Context, name: &str) -> bool {
+    ctx.data(|d| d.get_temp::<String>(spotlit_id()))
+        .is_some_and(|w| w == name)
+}
+
 /// Notes that `name` was drawn at `rect` this frame, in `ui`; scrolls it into view when it is
-/// [`want`]ed.
+/// [`want`]ed, and rings it when it is [`spotlight`]ed.
 pub fn note(ui: &egui::Ui, name: &str, rect: egui::Rect) {
-    if keep(ui.ctx(), name, rect) && !ui.clip_rect().contains_rect(rect) {
+    let lit = spotlit(ui.ctx(), name);
+    if lit {
+        let stroke = egui::Stroke::new(2.0, ui.visuals().selection.stroke.color);
+        ui.painter()
+            .rect_stroke(rect.expand(3.0), 4.0, stroke, egui::StrokeKind::Outside);
+    }
+    if (keep(ui.ctx(), name, rect) || lit) && !ui.clip_rect().contains_rect(rect) {
         ui.scroll_to_rect(rect, Some(egui::Align::Center));
     }
 }

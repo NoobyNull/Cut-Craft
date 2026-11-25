@@ -1,0 +1,19 @@
+[package]
+name = "cmd-rotary-finishing-toolpath"
+description = "Rotary Finishing"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+cut-craft-rotary.workspace = true
+cut-craft-rotary-carving.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+cmd-rotary-roughing-toolpath = { path = "../rotary-roughing-toolpath" }
+
+[lints]
+workspace = true

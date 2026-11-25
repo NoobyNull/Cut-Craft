@@ -99,3 +99,7 @@ panels-pace-run = Run
     .tooltip = Calculating on up to { $cores } of { $all } cores ({ $share }%), giving way to your other programs. Click to change how much of the computer Cut Craft may use
 panels-pace-sprint = Sprint
     .tooltip = No limit: calculating on all { $all } cores at full speed, so other programs may stutter meanwhile. Click to set a limit
+panels-toolpaths-changed = ⚠ { $count ->
+    [one] { $count } toolpath changed since it was made: recalculate before cutting
+   *[other] { $count } toolpaths changed since they were made: recalculate before cutting
+}

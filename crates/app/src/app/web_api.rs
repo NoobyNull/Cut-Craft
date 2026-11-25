@@ -502,10 +502,17 @@ pub(super) fn options_section(
             ui.weak(tr!("web-api-the-web-api-is-off"));
         }
         State::Running(at) => {
-            ui.colored_label(RUNNING_GREEN, format!("{RUNNING} at http://{at}"));
+            ui.colored_label(
+                RUNNING_GREEN,
+                cut_craft_i18n::tr!(
+                    "web-api-running-at",
+                    running = t!(RUNNING),
+                    at = at.to_string()
+                ),
+            );
         }
         State::Failed(why) => {
-            ui.colored_label(ui.visuals().error_fg_color, NOT_RUNNING);
+            ui.colored_label(ui.visuals().error_fg_color, t!(NOT_RUNNING));
             ui.label(why);
             if ui
                 .button(tr!("web-api-try-again"))
