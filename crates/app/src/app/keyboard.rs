@@ -248,7 +248,7 @@ impl CutCraftApp {
         self.run_shortcuts(ctx);
         // Escape during a 3D handle drag cancels only the drag, staying in Transform mode
         let escape = KeyboardShortcut::new(Modifiers::NONE, Key::Escape);
-        if self.drag_3d.is_some()
+        if self.handle_drag.is_held()
             && !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| i.consume_shortcut(&escape))
         {

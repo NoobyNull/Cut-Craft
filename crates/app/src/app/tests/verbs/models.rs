@@ -79,7 +79,7 @@ impl Harness {
 
     /// Whether a 3D handle drag holds the settings it started from.
     pub(in super::super) fn dragging_3d_handle(&self) -> bool {
-        self.app.drag_base.is_some()
+        self.app.handle_drag.is_setting_height()
     }
 
     /// Where the 3D settings popup draws the radio for `combine`.

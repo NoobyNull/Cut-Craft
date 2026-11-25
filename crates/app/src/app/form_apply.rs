@@ -40,7 +40,7 @@ impl CutCraftApp {
     /// many, and that they and any G-code saved from them want making again. Toolpaths are
     /// never remade by themselves.
     pub(super) fn note_stale(&mut self) {
-        if self.drag_3d.is_some() {
+        if self.handle_drag.is_held() {
             return;
         }
         let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
@@ -62,7 +62,7 @@ impl CutCraftApp {
     /// Once a form that left toolpaths out of date has closed: asks whether to recalculate
     /// them all now. No just leaves them marked; Save Toolpaths still warns.
     pub(super) fn ask_to_recalculate(&mut self, ctx: &egui::Context) {
-        let done = self.form.is_none() && self.drag_3d.is_none();
+        let done = self.form.is_none() && !self.handle_drag.is_held();
         if done && std::mem::take(&mut self.stale_while_form) {
             let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
             let ask = self.options.confirmations.ask_to_recalculate;
