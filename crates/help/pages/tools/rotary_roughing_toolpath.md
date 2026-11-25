@@ -75,4 +75,5 @@ It never cuts air. It keeps out of the **Chuck** and **Tailstock** set in
 [Machine Configuration](help:rotary_firmware), and keeps the collet nut and spindle (see
 [Collisions](help:collisions)) clear of the material beside the cut. Where they would not let the
 bit down as far as it should go, it stops short there and says so in red: rough the material
-beside it down first, or use a bit that sticks out further.
+beside it down first, or use a bit that sticks out further. Material outside the
+**Machining limit** is never cut, so the holder keeps clear of it too, all the way round.

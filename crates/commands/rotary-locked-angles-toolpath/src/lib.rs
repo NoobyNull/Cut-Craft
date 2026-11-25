@@ -173,7 +173,8 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
     if more {
         kept.push(more_note(&outcome.tilts));
     }
-    if passes.is_empty() {
+    // nothing cut and nothing kept off: the toolpaths above already took it all
+    if passes.is_empty() && outcome.left.is_empty() {
         notes.push(NOTHING_LEFT.to_owned());
     }
     let (mut moves, across) = joined(

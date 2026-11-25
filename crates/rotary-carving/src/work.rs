@@ -396,6 +396,23 @@ impl Work<'_> {
         best_of(&scores, |s| s.facing).or_else(|| best_of(&scores, |s| s.reached))
     }
 
+    /// The angle (degrees) where the holder keeps the bit from the most of what is left of
+    /// the `material`: none where it keeps it from nothing. However little, it is worth
+    /// saying: it may be all that is left.
+    pub fn most_held_back(
+        &self,
+        material: &Voxels,
+        check: &Check,
+        head: &Head,
+        tried: &[f64],
+    ) -> Option<f64> {
+        self.tilt_scores(material, check, head, tried)
+            .into_iter()
+            .filter(|s| s.held_back > 0.0)
+            .max_by(|a, b| a.held_back.total_cmp(&b.held_back))
+            .map(|s| s.angle)
+    }
+
     /// How much of what is left of the `material` A locked at each 15° reaches (none for
     /// those `tried`), and how much of that faces the bit squarely.
     #[expect(
@@ -427,6 +444,7 @@ impl Work<'_> {
                 angle,
                 reached: 0.0,
                 facing: 0.0,
+                held_back: 0.0,
             };
             if tried.iter().any(|&t| near(t, angle)) {
                 return score;
@@ -455,9 +473,6 @@ impl Work<'_> {
                     }
                     let tip = tips[line][i];
                     let pose = Pose::new(along(i), across(line), tip, round / radius);
-                    if !clear.allows(pose) {
-                        continue;
-                    }
                     // outside the machining limit it won't be cut: it can't win an angle
                     let point = (self.point(along(i), round, tip - radius), across(line));
                     if self
@@ -473,6 +488,10 @@ impl Work<'_> {
                     };
                     let n = material.held(&check.looks, looking, 64);
                     if n < check.enough {
+                        continue;
+                    }
+                    if !clear.allows(pose) {
+                        score.held_back += n as f64;
                         continue;
                     }
                     score.reached += n as f64;
@@ -648,6 +667,8 @@ struct Score {
     reached: f64,
     /// Weighted by how squarely: full straight under the bit, none at [`FACING`].
     facing: f64,
+    /// What the holder kept the bit from: there to cut, but not let down to.
+    held_back: f64,
 }
 
 /// The angle with the most of what `by` counts, when that is enough to be worth it: a few
