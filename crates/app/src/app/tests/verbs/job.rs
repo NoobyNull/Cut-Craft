@@ -58,6 +58,11 @@ impl Harness {
         self.app.doc.selection = ids.into_iter().collect();
     }
 
+    /// Selects the components `ids`, as clicking them in the 3D view or Components list does.
+    pub(in super::super) fn select_components(&mut self, ids: impl IntoIterator<Item = EntityId>) {
+        self.app.doc.selected_components = ids.into_iter().collect();
+    }
+
     /// The open form's settings, all of them, as they now stand.
     pub(in super::super) fn form_settings(&self) -> &Value {
         &self.app.form.as_ref().expect("a form is open").params
