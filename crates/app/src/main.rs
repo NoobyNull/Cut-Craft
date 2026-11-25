@@ -3,6 +3,19 @@
 // release builds on Windows open no console window behind the app
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+/// A piece of the app's text known by its English words, in the language in use:
+/// `t!("Clear with bigger bits first")`, or a `&str` constant's: `t!(INSIDE_GROUP)`. For text
+/// that is only words; a sentence with a value put in uses a key of its own
+/// (`tr!("status-exported", path = …)`). See [`words`].
+macro_rules! t {
+    ($english:literal) => {
+        cut_craft_i18n::text($english)
+    };
+    ($constant:ident) => {
+        cut_craft_i18n::text($constant)
+    };
+}
+
 mod addons;
 mod app;
 mod axes;
@@ -42,6 +55,7 @@ mod trust;
 mod update;
 mod view2d;
 mod view3d;
+mod words;
 
 fn main() {
     // the command line first: --version and --help print and stop, touching nothing (a closed

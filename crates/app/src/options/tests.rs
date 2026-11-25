@@ -343,11 +343,10 @@ fn saving_thins_each_toolpath_to_its_familys_tolerance() {
 }
 
 #[test]
-fn a_saved_rotary_toolpath_held_off_the_axis_is_the_one_the_preview_plays() {
+fn a_saved_rotary_toolpath_held_off_the_axis_is_thinned_with_each_move_kept_where_it_is_held() {
     use cut_craft_core::Command;
     use cut_craft_core::component::{Combine, Component};
     use cut_craft_core::document::{Along, Document, Job};
-    use cut_craft_core::rotary_axis::RotaryAxis;
     // a bump on a round blank, cut from four sides with A held still: the bit is held
     // off the axis, so each move has its own place across it
     let mut doc = Document {
@@ -368,26 +367,25 @@ fn a_saved_rotary_toolpath_held_off_the_axis_is_the_one_the_preview_plays() {
     doc.apply(&change).unwrap();
     let toolpath = doc.toolpaths.values().next().unwrap();
     assert!(!toolpath.across.is_empty(), "held off the axis");
-    let post = cut_craft_post::Post::default_for(&doc.job).with_rotary(RotaryAxis {
-        centre_set: true,
-        ..RotaryAxis::default()
-    });
-    let file = cut_craft_post::File {
-        path: std::path::Path::new("/jobs/bump.nc"),
-        job: None,
-        made: chrono::NaiveDateTime::default(),
-        slots: &[],
-        notes: &[],
-    };
-    // what Save Toolpaths and View G-code write, at the default tolerance, is what the
-    // turning preview plays: the toolpath as it was calculated
+    // what Save Toolpaths writes (and the turning preview plays, thinned the same way):
+    // fewer moves, each still held where it was calculated
     let saved = Options::default().toolpaths.thinned(&doc);
     let kept = saved.toolpaths.values().next().unwrap();
     assert_eq!(kept.moves.len(), kept.across.len());
-    assert_eq!(
-        post.render(&saved, &file).unwrap(),
-        post.render(&doc, &file).unwrap()
-    );
+    assert!(kept.moves.len() < toolpath.moves.len(), "thinned");
+    let mut from = 0;
+    for (m, across) in kept.moves.iter().zip(&kept.across) {
+        let i = from
+            + toolpath.moves[from..]
+                .iter()
+                .position(|o| o == m)
+                .expect("a kept move is one of the toolpath's own");
+        assert_eq!(
+            *across, toolpath.across[i],
+            "move {i} keeps its place across"
+        );
+        from = i + 1;
+    }
 }
 
 #[test]
@@ -769,6 +767,7 @@ fn keep_out_labels_show_and_clipping_is_off_until_turned_on() {
     fields.remove("change_by_changer");
     fields.remove("file_name_underscores");
     fields.remove("bit_in_file_names");
+    fields.remove("advanced_rotary");
     let older: ToolpathSettings = serde_json::from_value(saved).unwrap();
     assert_eq!(older, o.toolpaths);
 }

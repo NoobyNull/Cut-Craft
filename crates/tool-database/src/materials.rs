@@ -269,10 +269,10 @@ impl MaterialsWindow {
                 }
                 egui::Panel::bottom("materials_buttons").show(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(cut_craft_i18n::t!("Cancel")).clicked() {
                             outcome = Some(MaterialsOutcome::Cancel);
                         }
-                        if ui.button("OK").clicked() {
+                        if ui.button(cut_craft_i18n::t!("OK")).clicked() {
                             outcome = Some(MaterialsOutcome::Ok);
                         }
                         if unapplied::apply_button(ui, dirty) {
@@ -289,15 +289,18 @@ impl MaterialsWindow {
                     .show(ui, |ui| {
                         egui::Panel::bottom("materials_tree_buttons").show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                if ui.button("New Material").clicked() {
+                                if ui.button(cut_craft_i18n::t!("New Material")).clicked() {
                                     self.new_material();
                                 }
                                 let picked = self.material().is_some();
                                 if ui
-                                    .add_enabled(picked, egui::Button::new("Delete"))
-                                    .on_hover_hint(
-                                        "Deletes the material and every bit's feeds for it",
+                                    .add_enabled(
+                                        picked,
+                                        egui::Button::new(cut_craft_i18n::t!("Delete")),
                                     )
+                                    .on_hover_hint(cut_craft_i18n::t!(
+                                        "Deletes the material and every bit's feeds for it"
+                                    ))
                                     .clicked()
                                 {
                                     self.delete_material();
@@ -370,7 +373,7 @@ impl MaterialsWindow {
             }
             Some(MaterialPick::Class(class)) => self.class_details(ui, class),
             _ => {
-                ui.weak("Pick a class or material in the list");
+                ui.weak(cut_craft_i18n::t!("Pick a class or material in the list"));
                 false
             }
         }
@@ -382,10 +385,10 @@ impl MaterialsWindow {
         egui::Grid::new("material_details")
             .num_columns(2)
             .show(ui, |ui| {
-                ui.label("Name");
+                ui.label(cut_craft_i18n::t!("Name"));
                 ui.text_edit_singleline(&mut m.name);
                 ui.end_row();
-                ui.label("Class");
+                ui.label(cut_craft_i18n::t!("Class"));
                 egui::ComboBox::from_id_salt("material_class")
                     .selected_text(format!("{}. {}", m.class.number(), m.class.name()))
                     .show_ui(ui, |ui| {
@@ -395,10 +398,11 @@ impl MaterialsWindow {
                         }
                     });
                 ui.end_row();
-                ui.label("Hardness").on_hover_hint(
-                    "Where it sits in its class: a bit's feeds for the class are placed \
-                     between its softest and hardest materials by this",
-                );
+                ui.label(cut_craft_i18n::t!("Hardness"))
+                    .on_hover_hint(cut_craft_i18n::t!(
+                        "Where it sits in its class: a bit's feeds for the class are placed \
+                     between its softest and hardest materials by this"
+                    ));
                 ui.horizontal(|ui| {
                     ui.add(
                         Number::new(&mut m.hardness)
@@ -408,7 +412,7 @@ impl MaterialsWindow {
                     ui.weak(m.class.scale());
                 });
                 ui.end_row();
-                ui.label("Notes");
+                ui.label(cut_craft_i18n::t!("Notes"));
                 ui.text_edit_multiline(&mut m.notes);
                 ui.end_row();
             });
@@ -417,7 +421,7 @@ impl MaterialsWindow {
             self.rename(i, &before);
         }
         ui.separator();
-        ui.strong("Bits with feeds and speeds for it");
+        ui.strong(cut_craft_i18n::t!("Bits with feeds and speeds for it"));
         let library = self.library.clone();
         let mut remove = None;
         for (t, tool) in self.tools.tools.iter_mut().enumerate() {
@@ -434,7 +438,7 @@ impl MaterialsWindow {
                     ui.label(&tool.name);
                     if ui
                         .small_button("×")
-                        .on_hover_hint("Remove its feeds for this material")
+                        .on_hover_hint(cut_craft_i18n::t!("Remove its feeds for this material"))
                         .clicked()
                     {
                         remove = Some((t, at));
@@ -457,19 +461,19 @@ impl MaterialsWindow {
                 .any(|d| d.material.eq_ignore_ascii_case(&name));
             if !own && tool.class_feeds.iter().any(|f| f.class == class) {
                 let cut = tool.for_material_in(&name, &library);
-                ui.weak(format!(
-                    "{}: from its {} range, feed {:.0} mm/min at {:.0} r.p.m.",
-                    tool.name,
-                    class.name(),
-                    cut.feed_rate,
-                    cut.spindle_speed
+                ui.weak(cut_craft_i18n::tr!(
+                    "tool-database-from-class-range",
+                    tool = tool.name.clone(),
+                    class = class.name().to_string(),
+                    feed = format!("{:.0}", cut.feed_rate),
+                    speed = format!("{:.0}", cut.spindle_speed)
                 ));
             }
         }
-        ui.button("Add Tool…")
-            .on_hover_hint(
-                "Pick a bit with the tool selector: it gets feeds and speeds for this material",
-            )
+        ui.button(cut_craft_i18n::t!("Add Tool…"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Pick a bit with the tool selector: it gets feeds and speeds for this material"
+            ))
             .clicked()
     }
 
@@ -477,18 +481,19 @@ impl MaterialsWindow {
         ui.heading(format!("{}. {}", class.number(), class.name()));
         let members = self.library.in_class(class);
         if let (Some(soft), Some(hard)) = (members.first(), members.last()) {
-            ui.weak(format!(
-                "From {} ({}) to {} ({}), {}: a material between cuts with feeds between, \
-                 by its hardness, unless it has feeds of its own",
-                soft.name,
-                soft.hardness,
-                hard.name,
-                hard.hardness,
-                class.scale()
+            ui.weak(cut_craft_i18n::tr!(
+                "tool-database-class-span",
+                soft = soft.name.clone(),
+                soft_hardness = soft.hardness.to_string(),
+                hard = hard.name.clone(),
+                hard_hardness = hard.hardness.to_string(),
+                scale = class.scale().to_string()
             ));
         }
         ui.separator();
-        ui.strong("Bits with feeds and speeds for the class");
+        ui.strong(cut_craft_i18n::t!(
+            "Bits with feeds and speeds for the class"
+        ));
         let mut remove = None;
         for (t, tool) in self.tools.tools.iter_mut().enumerate() {
             let Some(at) = tool.class_feeds.iter().position(|f| f.class == class) else {
@@ -500,7 +505,7 @@ impl MaterialsWindow {
                     ui.label(&tool.name);
                     if ui
                         .small_button("×")
-                        .on_hover_hint("Remove its feeds for this class")
+                        .on_hover_hint(cut_craft_i18n::t!("Remove its feeds for this class"))
                         .clicked()
                     {
                         remove = Some((t, at));
@@ -508,11 +513,11 @@ impl MaterialsWindow {
                 });
                 let feeds = &mut tool.class_feeds[at];
                 ui.push_id("softest", |ui| {
-                    ui.weak("Softest");
+                    ui.weak(cut_craft_i18n::t!("Softest"));
                     data_row(ui, &mut feeds.softest, units, rates);
                 });
                 ui.push_id("hardest", |ui| {
-                    ui.weak("Hardest");
+                    ui.weak(cut_craft_i18n::t!("Hardest"));
                     data_row(ui, &mut feeds.hardest, units, rates);
                 });
             });
@@ -520,10 +525,10 @@ impl MaterialsWindow {
         if let Some((t, at)) = remove {
             self.tools.tools[t].class_feeds.remove(at);
         }
-        ui.button("Add Tool…")
-            .on_hover_hint(
-                "Pick a bit with the tool selector: it gets feeds and speeds for the whole class",
-            )
+        ui.button(cut_craft_i18n::t!("Add Tool…"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Pick a bit with the tool selector: it gets feeds and speeds for the whole class"
+            ))
             .clicked()
     }
 }
@@ -533,11 +538,11 @@ impl MaterialsWindow {
 fn data_row(ui: &mut egui::Ui, d: &mut CuttingData, units: Units, rates: RateUnits) -> bool {
     let mut changed = false;
     ui.horizontal_wrapped(|ui| {
-        ui.label("Feed");
+        ui.label(cut_craft_i18n::t!("Feed"));
         changed |= rate(ui, "Feed", &mut d.feed_rate, rates);
-        ui.label("Plunge");
+        ui.label(cut_craft_i18n::t!("Plunge"));
         changed |= rate(ui, "Plunge", &mut d.plunge_rate, rates);
-        ui.label("Spindle");
+        ui.label(cut_craft_i18n::t!("Spindle"));
         changed |= ui
             .add(
                 Number::new(&mut d.spindle_speed)
@@ -546,11 +551,11 @@ fn data_row(ui: &mut egui::Ui, d: &mut CuttingData, units: Units, rates: RateUni
                     .name("Spindle"),
             )
             .changed();
-        ui.label("Pass Depth");
+        ui.label(cut_craft_i18n::t!("Pass Depth"));
         changed |= length(ui, "Pass Depth", &mut d.pass_depth, units);
-        ui.label("Clearing");
+        ui.label(cut_craft_i18n::t!("Clearing"));
         changed |= percent(ui, "Clearing Stepover", &mut d.stepover);
-        ui.label("Finishing");
+        ui.label(cut_craft_i18n::t!("Finishing"));
         changed |= percent(ui, "Finishing Stepover", &mut d.finish_stepover);
     });
     changed

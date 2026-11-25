@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-23
-see-also: arrange_toolpaths, group_toolpaths, toolpath_summary
+reviewed: 2026-11-25
+see-also: rotary_roughing_toolpath, arrange_toolpaths, group_toolpaths, toolpath_summary
 ---
 
 **Move Up** and **Move Down** above the Toolpath List move the picked toolpath one place. The list
@@ -26,5 +26,8 @@ is the order the toolpaths are cut and saved in, top first.
 
 - Inside a group, a toolpath moves only inside that group; it steps past a whole group inside
   it in one press.
+- A toolpath that cuts only what the toolpaths above it leave ([Rotary Roughing](help:rotary_roughing_toolpath))
+  goes out of date (⚠) when a move changes what is above it. Cut Craft says so, with **Put it
+  back** to undo the move, or **Keep the new order** to recalculate it later.
 - Dragging a toolpath in the list by its grip (≡) moves it too: see
   [Arrange Toolpaths](help:arrange_toolpaths).

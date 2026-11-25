@@ -105,7 +105,9 @@ warn if any toolpath comes after it. [Rotary Lathe](help:rotary_lathe_toolpath) 
 leave the centre stock too; Part off cuts through it.
 
 A square's corners and a board's edges swing out further than its top as A turns, out to the
-red circle. Toolpaths lift the bit that much higher before A turns, so it never knocks into
-them, and the [Rotary set up](help:check_rotary_setup) check sees that they clear the
-spoilboard and the bit.
+red circle. Whenever a rapid move turns A with the bit lower than that, the saved file lifts
+the bit clear first, turns A, and comes back down, so it never knocks into them, and the
+[Rotary set up](help:check_rotary_setup) check sees that they clear the spoilboard and the
+bit. Cutting moves are not lifted: the toolpaths that cut while A turns stay on the material
+already, below its top.
 

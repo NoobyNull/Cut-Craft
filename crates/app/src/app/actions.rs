@@ -145,6 +145,7 @@ impl CutCraftApp {
             deep_cut: None,
             units_ask: None,
             earlier_ask: None,
+            reorder_ask: None,
             gcode_view: None,
             save_anyway: None,
             checks_accepted: Vec::new(),
@@ -699,7 +700,16 @@ impl CutCraftApp {
             }
             "keyboard_shortcuts" | "credits" | "toolpath_summary" | "about_cut_craft"
             | "help_contents" | "snap_options" => self.open_window(id),
-            "options" => self.options_window = true,
+            "options" => {
+                crate::marks::clear_spotlight(ctx);
+                self.options_window = true;
+            }
+            // the toolpaths menu's hint: Options at Advanced rotary mode, ringed
+            "advanced_rotary_mode" => {
+                self.options_goto = Some("toolpaths");
+                crate::marks::spotlight(ctx, "field:advanced_rotary");
+                self.options_window = true;
+            }
             // F1: the open form's help page, else the contents
             "tool_help" => {
                 let topic = self.form.as_ref().map_or("contents", |f| {

@@ -33,8 +33,8 @@ mod tool_sections;
 #[cfg(test)]
 use tool_sections::{KNIFE_LINE, held_name, tool_line};
 use tool_sections::{
-    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, put_listed,
-    rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
+    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, locked_face_section,
+    put_listed, rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
 };
 mod dialogs;
 pub(crate) use dialogs::message_dialog;
@@ -51,7 +51,7 @@ mod settings;
 pub use settings::*;
 mod bit_changes;
 #[cfg(test)]
-mod hard_coded_text;
+pub(crate) mod hard_coded_text;
 mod help;
 #[cfg(test)]
 mod help_coverage;
@@ -778,6 +778,9 @@ struct CutCraftApp {
     units_ask: Option<units_ask::UnitsAsk>,
     /// Save Toolpaths held for the question about G-code an earlier save left there.
     earlier_ask: Option<EarlierAsk>,
+    /// The toolpaths a new order left out of date, as they cut only what is above them:
+    /// waiting on Put it back or Keep the new order.
+    reorder_ask: Option<Vec<String>>,
     /// View G-code's window, while open.
     gcode_view: Option<gcode_view::GcodeView>,
     /// Save Toolpaths held for the question about what the checks before cutting found.

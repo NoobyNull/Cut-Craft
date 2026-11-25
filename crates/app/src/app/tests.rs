@@ -19,6 +19,7 @@ mod interface;
 mod jobs_and_files;
 mod keys_and_mouse;
 mod layers_sheets;
+mod locked_face;
 mod machines;
 mod materials;
 mod models_3d;

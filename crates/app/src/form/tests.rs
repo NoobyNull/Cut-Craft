@@ -451,9 +451,10 @@ const NOT_LENGTHS: [&str; 14] = [
 /// Numbers with no unit that are not measurements: counts, ids, shares and strengths. A
 /// new number that is none of these needs an `x-unit` (`mm` for a length), so it is
 /// shown converted in an inch job, or a place here saying why not.
-const UNITLESS: [&str; 65] = [
+const UNITLESS: [&str; 66] = [
     // counts
     "extra_passes",
+    "most_angles",
     "sides",
     "points",
     "passes",

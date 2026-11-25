@@ -209,6 +209,7 @@ impl Default for Options {
                 change_by_changer: change_by_changer(),
                 file_name_underscores: false,
                 bit_in_file_names: true,
+                advanced_rotary: false,
             },
             language: Language::default(),
             performance: Performance::default(),
