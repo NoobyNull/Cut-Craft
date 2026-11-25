@@ -102,7 +102,8 @@ mod tests {
         out
     }
 
-    /// Every command's code and the core's: the files whose messages go in `errors.ftl`.
+    /// Every command's code, the file formats', the border tiles' and the core's: the files
+    /// whose messages go in `errors.ftl`.
     fn error_sources() -> Vec<(std::path::PathBuf, String)> {
         fn walk(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
             let Ok(entries) = std::fs::read_dir(dir) else {
@@ -123,8 +124,10 @@ mod tests {
         let crates = app.parent().unwrap_or(app);
         let mut files = vec![];
         walk(&crates.join("core/src"), &mut files);
-        let mut commands: Vec<_> = std::fs::read_dir(crates.join("commands"))
-            .unwrap()
+        walk(&crates.join("border-tile/src"), &mut files);
+        let mut commands: Vec<_> = ["commands", "formats"]
+            .iter()
+            .flat_map(|group| std::fs::read_dir(crates.join(group)).unwrap())
             .map(|e| e.unwrap().path().join("src"))
             .collect();
         commands.sort();
@@ -141,9 +144,68 @@ mod tests {
             .collect()
     }
 
-    /// Every message a command writes as it is (`Failed("…")`, `InvalidParams("…")`, or a
-    /// `&str` constant there), and [`cut_craft_core::SELECT_FIRST`]: its file and its words,
-    /// each once. A `format!` message has values in it, so no key.
+    /// The texts in the brackets that open at `open`: every literal and `&str` constant there,
+    /// in each branch of an `if` or `match`, but none inside a `format!` (it has values in it,
+    /// so no key).
+    fn texts_in(code: &str, open: usize, constants: &[(String, String)]) -> Vec<String> {
+        let bytes = code.as_bytes();
+        let mut found = vec![];
+        let (mut depth, mut skip) = (0usize, None);
+        let mut i = open;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'(' => {
+                    depth += 1;
+                    let before = code[..i].trim_end();
+                    if skip.is_none() && before.ends_with("format!") {
+                        skip = Some(depth);
+                    }
+                }
+                b')' => {
+                    if skip == Some(depth) {
+                        skip = None;
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                b'\'' if bytes.get(i + 2) == Some(&b'\'') => i += 2,
+                b'"' => {
+                    let Some((words, end)) = literal_at(bytes, i) else {
+                        break;
+                    };
+                    if skip.is_none() {
+                        found.push(words);
+                    }
+                    i = end;
+                    continue;
+                }
+                c if c.is_ascii_uppercase()
+                    && !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') =>
+                {
+                    let name: String = code[i..]
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                        .collect();
+                    if skip.is_none()
+                        && let Some((_, words)) = constants.iter().find(|(n, _)| *n == name)
+                    {
+                        found.push(words.clone());
+                    }
+                    i += name.len();
+                    continue;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        found
+    }
+
+    /// Every message a tool writes as it is, in `Failed(…)`, `InvalidParams(…)` or the `Err(…)`
+    /// of the code that hands a tool its message (a file format's reader, the core), and
+    /// [`cut_craft_core::SELECT_FIRST`]: its file and its words, each once.
     fn every_error() -> Vec<(String, String)> {
         let codes = error_sources();
         let constants = constants(&codes);
@@ -153,7 +215,7 @@ mod tests {
         )];
         for (file, code) in &codes {
             let bytes = code.as_bytes();
-            for call in ["Failed(", "InvalidParams("] {
+            for call in ["Failed(", "InvalidParams(", "Err(", "map_err("] {
                 let mut from = 0;
                 while let Some(at) = code[from..].find(call) {
                     let start = from + at;
@@ -163,25 +225,13 @@ mod tests {
                     {
                         continue;
                     }
-                    let open = from + code[from..].len() - code[from..].trim_start().len();
-                    let words = if bytes.get(open) == Some(&b'"') {
-                        literal_at(bytes, open).map(|(w, _)| w)
-                    } else {
-                        let name: String = code[open..]
-                            .chars()
-                            .take_while(|c| {
-                                c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_'
-                            })
-                            .collect();
-                        constants
-                            .iter()
-                            .find(|(n, _)| !name.is_empty() && *n == name)
-                            .map(|(_, w)| w.clone())
-                    };
-                    if let Some(words) = words
-                        && !out.iter().any(|(_, w)| *w == words)
-                    {
-                        out.push((short(file), words));
+                    for words in texts_in(code, from - 1, &constants) {
+                        // a word or two is a name handed to a message (`gone("sheet")`), not one
+                        if words.split_whitespace().count() >= 3
+                            && !out.iter().any(|(_, w)| *w == words)
+                        {
+                            out.push((short(file), words));
+                        }
                     }
                 }
             }

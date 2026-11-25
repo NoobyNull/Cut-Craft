@@ -2,6 +2,9 @@
 # check of the whole text). The app starts each with a capital and ends it with a full stop,
 # so write them as the English is. Each line says which tool says it.
 
+## border-tile/src/lib.rs
+error-the-depth-map-is-too-eab97d = the depth map is too big
+
 ## commands/3d-finishing-toolpath/src/lib.rs
 error-choose-at-least-one-tool-80c346 = choose at least one tool
 error-the-tool-s-finishing-stepover-87e5e5 = the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database
@@ -64,6 +67,10 @@ error-the-components-have-no-shape-22e869 = the components have no shape. Select
 
 ## commands/component-properties/src/lib.rs
 error-set-shape-height-to-0-03822c = set shape height to 0 or more
+
+## commands/construction-lines/src/lib.rs
+error-the-selected-vectors-are-construction-8e3909 = the selected vectors are construction lines already. Select a solid line to make it one
+error-the-selected-vectors-are-real-01e0a3 = the selected vectors are real lines already. Select a dashed construction line to make it real
 
 ## commands/convert-text-to-curves/src/lib.rs
 error-select-the-text-to-convert-860efd = select the text to convert
@@ -221,6 +228,7 @@ error-select-at-least-two-objects-697425 = select at least two objects to group
 
 ## commands/import-toolpaths/src/lib.rs
 error-pick-the-g-code-file-f0d13d = pick the G-code file to import (File ▸ Import ▸ Import Toolpaths…)
+error-the-file-has-no-moves-33d53c = the file has no moves in it: is it G-code?
 
 ## commands/inlay-toolpath/src/lib.rs
 error-select-the-closed-vectors-to-57c730 = select the closed vectors to inlay
@@ -255,6 +263,7 @@ error-select-closed-vectors-to-make-16862e = select closed vectors to make the z
 error-select-circles-where-the-slots-a2bb48 = select circles where the slots go in
 
 ## commands/laser-cut-fill-toolpath/src/lib.rs
+error-select-the-closed-vectors-to-9255ad = select the closed vectors to cut or fill
 error-the-kerf-leaves-nothing-to-7e6dda = the kerf leaves nothing to cut inside the shapes. Make the kerf smaller
 error-set-power-to-more-than-2d5d46 = set power to more than 0 and at most 100 %
 
@@ -338,6 +347,11 @@ error-pick-a-v-bit-prism-440f7f = pick a V-bit: prism carving needs one
 ## commands/profile-toolpath/src/lib.rs
 error-select-the-vectors-to-profile-ec4f8a = select the vectors to profile
 error-click-on-the-vectors-in-cba6b9 = click on the vectors in the 2D view to place the tabs
+error-cut-outside-instead-190532 = cut Outside instead
+
+## commands/quick-engrave-toolpath/src/lib.rs
+error-select-the-closed-vectors-to-b7f734 = select the closed vectors to fill
+error-select-the-vectors-to-engrave-cedd97 = select the vectors to engrave
 
 ## commands/quick-trace/src/lib.rs
 error-import-a-bitmap-to-trace-e1f9ce = import a bitmap to trace
@@ -349,6 +363,14 @@ error-this-photo-has-no-depth-4a83cc = this photo has no depth yet: use Estimate
 error-set-the-lift-to-0-0d2e4c = set the lift to 0 or more and below the max height
 error-set-the-soft-edge-and-058804 = set the soft edge and base to 0 or more
 error-pick-the-bit-you-will-ab2118 = pick the bit you will carve with: Select… under Tool, or untick Only What the Bit Can Carve
+
+## commands/reorder-component/src/lib.rs
+error-it-is-already-at-the-ff9a66 = it is already at the top of its level
+error-it-is-already-at-the-7083ca = it is already at the bottom of its level
+
+## commands/reorder-layer/src/lib.rs
+error-it-is-already-at-the-da6de7 = it is already at the top of the list
+error-it-is-already-at-the-096963 = it is already at the bottom of the list
 
 ## commands/reorder-level/src/lib.rs
 error-it-is-already-at-the-472725 = it is already at the end of the list
@@ -443,6 +465,7 @@ error-check-the-tile-settings-the-c887c4 = check the tile settings: the tile nee
 ## commands/texture-toolpath/src/lib.rs
 error-select-the-vectors-to-use-f4f59d = select the vectors to use as the pattern
 error-the-boundary-offset-leaves-nothing-c8cf1e = the boundary offset leaves nothing to texture. Make the boundary offset smaller
+error-not-a-texture-settings-file-ddc043 = not a texture settings file
 
 ## commands/thread-milling-toolpath/src/lib.rs
 error-select-the-vectors-to-thread-d37c59 = select the vectors to thread round their centres
@@ -451,6 +474,8 @@ error-set-the-max-depth-at-5d8a17 = set the max depth at least a pitch below the
 error-the-thread-mill-is-too-9e0153 = the thread mill is too big for this thread. Pick a smaller thread mill
 
 ## commands/trace-bitmap/src/lib.rs
+error-nothing-to-trace-tick-more-427fe0 = nothing to trace. Tick more colours, or lower the noise filter
+error-nothing-to-trace-set-another-f93ed0 = nothing to trace. Set another threshold or trace colour
 error-this-picture-has-no-colours-fd9e95 = this picture has no colours. Set the trace to black and white
 
 ## commands/trim-objects/src/lib.rs
@@ -515,6 +540,8 @@ error-only-construction-lines-are-selected-bad7b0 = Only construction lines are 
 error-type-a-name-cf6c71 = Type a name.
 
 ## core/src/component.rs
+error-select-the-closed-vectors-to-100822 = select the closed vectors to machine inside
+error-the-machining-boundary-is-empty-5c006d = the machining boundary is empty
 error-there-is-no-3d-model-29926e = there is no 3D model to machine: create a shape first
 error-the-model-does-not-fit-b5cfb0 = the model does not fit in the material where Material Setup puts it. Change the position in Material Setup, or make the model lower
 
@@ -525,5 +552,47 @@ error-the-picture-this-toolpath-was-1d4208 = the picture this toolpath was made 
 error-that-vector-cannot-be-edited-a6e9cd = that vector cannot be edited: its layer is hidden or locked, or it was deleted. Show or unlock its layer, or pick another vector
 error-there-is-no-node-there-622bc8 = there is no node there. Click on a node
 
-## core/src/progress.rs
-error-stopped-e2f34e = stopped
+## core/src/vfont.rs
+error-not-a-vectric-font-2925f6 = not a Vectric font
+error-the-font-shares-an-object-0fe45e = the font shares an object; not expected in fonts
+error-a-glyph-holds-something-other-005b08 = a glyph holds something other than contours
+
+## formats/cut-list/src/lib.rs
+error-the-job-has-no-parts-b74f41 = The job has no parts to list. Draw or import closed shapes first.
+error-the-cut-list-is-empty-256301 = The cut list is empty.
+error-the-cut-list-has-no-a3d745 = The cut list has no parts in it (every quantity is 0, or no rows).
+
+## formats/export-as-3d-clipart/src/lib.rs
+error-not-a-clipart-file-this-d7672e = not a clipart file this version of Cut Craft reads
+error-the-clipart-file-is-damaged-d6ef42 = the clipart file is damaged
+error-there-is-no-component-to-efe33c = there is no component to export: create one first
+
+## formats/export-as-grayscale-bitmap/src/lib.rs
+error-there-is-no-3d-model-ffdf55 = there is no 3D model to export
+error-the-model-is-too-big-0a64ed = the model is too big for a bitmap. Use a lower resolution
+
+## formats/export-as-stl/src/lib.rs
+error-there-is-no-3d-model-698ad7 = there is no 3D model to export: create a shape first
+error-closing-with-the-other-side-f46ed4 = closing with the other side needs a double-sided job with a model on its other side. Turn this off, or set the job to double-sided in Job Setup
+error-the-job-is-too-small-caffed = the job is too small to export
+
+## formats/export-dxf/src/lib.rs
+error-there-are-no-vectors-to-66410f = there are no vectors to export. Draw or import vectors first
+
+## formats/import-crv3d/src/lib.rs
+error-not-a-vectric-job-no-869605 = not a Vectric job: no 2D data
+error-the-job-holds-no-vectors-2f83fc = the job holds no vectors
+
+## formats/import-dxf/src/lib.rs
+error-the-dxf-has-no-lines-0ad344 = the DXF has no lines, arcs, circles, polylines, ellipses or splines. Export it again from the program that made it
+
+## formats/import-stl/src/lib.rs
+error-the-model-has-no-area-4a8078 = the model has no area seen from above. Export it again from the program that made it
+error-not-an-stl-file-e67a9e = not an STL file
+error-the-stl-file-has-a-762c91 = the STL file has a broken triangle
+
+## formats/import-svg/src/lib.rs
+error-the-svg-has-no-vector-d67023 = the SVG has no vector paths. Export it again with its shapes as paths
+
+## formats/part-labels/src/lib.rs
+error-the-job-has-no-parts-e61b41 = The job has no parts to label. Draw or import closed shapes first.
