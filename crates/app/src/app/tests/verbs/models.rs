@@ -125,11 +125,13 @@ impl Harness {
 
     // ---- Relief from Photo's depth ----
 
+    #[cfg(unix)]
     /// An unsigned add-on asks nothing: it runs this time, as answering so does.
     pub(in super::super) fn given_unsigned_runs_this_time(&mut self) {
         self.app.trust.ask = |_| crate::trust::Answer::RunThisTime;
     }
 
+    #[cfg(unix)]
     /// Starts the Depth add-on `installed` estimating picture `id`, as `photo`.
     pub(in super::super) fn start_depth_estimate(
         &mut self,
@@ -141,6 +143,7 @@ impl Harness {
         self.app.photo_depth.estimate = Some(estimate.expect("the add-on starts"));
     }
 
+    #[cfg(unix)]
     /// Whether a depth estimate is still running.
     pub(in super::super) fn estimating_depth(&self) -> bool {
         self.app.photo_depth.estimating()
