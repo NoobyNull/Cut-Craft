@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn the_ribbon_layout_shows_a_tabs_groups() {
     let mut h = Harness::new();
-    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    h.given_options(|o| o.general.layout = crate::options::WindowLayout::Ribbon);
     h.frame(vec![]);
     for name in ["Design", "Model", "Toolpaths", "Sheets"] {
         assert!(h.text_at(name).is_some(), "{name}");
@@ -18,14 +18,14 @@ fn the_ribbon_layout_shows_a_tabs_groups() {
     );
     assert!(h.text_at("Cut Out and Clear").is_none());
     assert!(h.text_at("Cut Out and Clear ▾").is_none());
-    h.app.ribbon_tab = 2;
+    h.show_ribbon_tab("Toolpaths");
     h.frame(vec![]);
     assert!(
         h.text_at("Cut Out and Clear")
             .or(h.text_at("Cut Out and Clear ▾"))
             .is_some()
     );
-    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.invoke("pocket_toolpath");
     h.frame(vec![]);
     assert!(
         h.text_at("Pocket Toolpath").is_some(),
@@ -40,12 +40,12 @@ fn a_template_opens_as_a_new_unsaved_job() {
     let path = dir.join("plate.ccjobt");
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);
-    std::fs::write(&path, cut_craft_core::file::save_job(&h.app.doc)).unwrap();
+    std::fs::write(&path, cut_craft_core::file::save_job(h.doc())).unwrap();
     let mut fresh = Harness::new();
-    assert!(fresh.app.open_path(&path));
-    assert_eq!(fresh.app.doc.vectors.len(), h.app.doc.vectors.len());
-    assert_eq!(fresh.app.session.path, None, "saving asks for a new name");
-    assert!(!fresh.app.recent.contains(&path));
+    assert!(fresh.open(&path));
+    assert_eq!(fresh.doc().vectors.len(), h.doc().vectors.len());
+    assert_eq!(fresh.job_path(), None, "saving asks for a new name");
+    assert!(!fresh.recent_shown().contains(&path));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -53,13 +53,12 @@ fn a_template_opens_as_a_new_unsaved_job() {
 fn vcarve_shades_the_area_it_would_carve_while_its_form_is_open() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);
-    h.app.invoke(&h.ctx, "select_all_vectors");
-    h.app.invoke(&h.ctx, "vcarve_engrave_toolpath");
+    h.invoke("select_all_vectors");
+    h.invoke("vcarve_engrave_toolpath");
     h.frame(vec![]);
     let area = |h: &Harness| -> f64 {
-        let found = h.app.carve_area.as_ref().expect("found");
+        let found = h.carve_area().expect("found");
         found
-            .triangles
             .iter()
             .map(|[a, b, c]| ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.0)
             .sum()
@@ -70,24 +69,21 @@ fn vcarve_shades_the_area_it_would_carve_while_its_form_is_open() {
         "Fill shades the whole shape: {fill}"
     );
     // Outside: a band beside the edge, outside the rectangle
-    h.app.form.as_mut().expect("open").params["place"] = "outside".into();
+    h.edit_form(|p| p["place"] = "outside".into());
     h.frame(vec![]);
     let outside = area(&h);
     assert!(outside > 0.0 && (outside - fill).abs() > 1.0, "{outside}");
     assert!(
-        h.app
-            .carve_area
-            .as_ref()
+        h.carve_area()
             .expect("found")
-            .triangles
             .iter()
             .flatten()
             .any(|p| p.x < 10.0),
         "outside the edge"
     );
-    h.app.form = None;
+    h.close_form();
     h.frame(vec![]);
-    assert!(h.app.carve_area.is_none(), "gone with the form");
+    assert!(h.carve_area().is_none(), "gone with the form");
 }
 
 #[test]
@@ -95,45 +91,38 @@ fn the_toolpath_menu_acts_on_the_toolpath_clicked() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for _ in 0..2 {
-        let params = h.app.registry.get("profile_toolpath").unwrap();
-        let mut params = params.initial_params(&h.app.doc);
+        let mut params = h.opening_settings("profile_toolpath");
         // straight down: a helix sits by the start point, which moves with the shape's place
         params["entry"] = serde_json::json!({ "mode": "plunge" });
-        h.app.apply("profile_toolpath", &params).unwrap();
+        h.run("profile_toolpath", &params).unwrap();
     }
-    let toolpath = |i: usize| {
-        move |app: &CutCraftApp| {
-            let (&id, t) = app.doc.toolpaths.iter().nth(i).unwrap();
-            gui::toolpath_menu(&app.doc, id, t)
-        }
-    };
-    let min_x = |app: &CutCraftApp| -> Vec<f64> {
-        let bounds = app.doc.toolpaths.values();
+    let min_x = |h: &Harness| -> Vec<f64> {
+        let bounds = h.doc().toolpaths.values();
         bounds
             .map(|t| cut_craft_core::testing::cut_bounds(t).min.x)
             .collect()
     };
-    h.choose(toolpath(0), &["Hide", "This"]);
-    let visible: Vec<bool> = h.app.doc.toolpaths.values().map(|t| t.visible).collect();
+    h.choose_on_toolpath(0, &["Hide", "This"]);
+    let visible: Vec<bool> = h.doc().toolpaths.values().map(|t| t.visible).collect();
     assert_eq!(visible, [false, true]);
-    let before = min_x(&h.app);
+    let before = min_x(&h);
     let shift =
         serde_json::json!({ "relative": true, "x": 100.0, "y": 0.0, "anchor": "bottom_left" });
-    h.app.apply("move", &shift).unwrap();
-    h.choose(toolpath(1), &["Recalculate", "Visible"]);
-    let after = min_x(&h.app);
+    h.run("move", &shift).unwrap();
+    h.choose_on_toolpath(1, &["Recalculate", "Visible"]);
+    let after = min_x(&h);
     assert!(
         (after[0] - before[0]).abs() < 1e-6 && (after[1] - before[1] - 100.0).abs() < 1e-6,
         "only the shown toolpath follows its vectors: {before:?} → {after:?}"
     );
-    let second = *h.app.doc.toolpaths.keys().nth(1).unwrap();
-    h.choose(toolpath(1), &["Rename"]);
-    let form = h.app.form.take().unwrap();
-    assert_eq!(form.id, "toolpath_properties");
-    assert_eq!(form.params["toolpath"], serde_json::json!(second));
-    h.choose(toolpath(1), &["Delete", "Invisible"]);
+    let second = *h.doc().toolpaths.keys().nth(1).unwrap();
+    h.choose_on_toolpath(1, &["Rename"]);
+    let (id, settings) = h.take_form().unwrap();
+    assert_eq!(id, "toolpath_properties");
+    assert_eq!(settings["toolpath"], serde_json::json!(second));
+    h.choose_on_toolpath(1, &["Delete", "Invisible"]);
     assert_eq!(
-        h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>(),
+        h.doc().toolpaths.keys().copied().collect::<Vec<_>>(),
         [second]
     );
 }
@@ -142,19 +131,18 @@ fn the_toolpath_menu_acts_on_the_toolpath_clicked() {
 fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    let params = h.app.registry.get("profile_toolpath").unwrap();
-    let params = params.initial_params(&h.app.doc);
-    h.app.apply("profile_toolpath", &params).unwrap();
-    h.app.invoke(&h.ctx, "machining_layout");
+    let params = h.opening_settings("profile_toolpath");
+    h.run("profile_toolpath", &params).unwrap();
+    h.invoke("machining_layout");
     // the toolpath list's section settles its height over a frame or two
     h.frame(vec![]);
     h.frame(vec![]);
-    let (&id, toolpath) = h.app.doc.toolpaths.iter().next().unwrap();
+    let (&id, toolpath) = h.doc().toolpaths.iter().next().unwrap();
     let row = h
         .text_at(&toolpath.name.clone())
         .expect("the toolpath is listed");
     h.right_click(row);
-    assert_eq!(h.app.selected_toolpath, Some(id));
+    assert_eq!(h.selected_toolpath(), Some(id));
     assert!(h.text_at("Recalculate").is_some(), "its menu is open");
 }
 
@@ -167,11 +155,10 @@ fn the_create_shape_icons_open_it_with_their_profile() {
         ("create_shape_smooth", "smooth"),
         ("create_shape_flat", "flat"),
     ] {
-        h.app.invoke(&h.ctx, id);
-        let form = h.app.form.as_ref().expect("Create Shape's form");
+        h.invoke(id);
         assert_eq!(
-            (form.id, form.params["profile"].as_str()),
-            ("create_shape", Some(profile))
+            (h.form_id(), h.form_value("profile").as_str()),
+            (Some("create_shape"), Some(profile))
         );
     }
 }
@@ -180,21 +167,23 @@ fn the_create_shape_icons_open_it_with_their_profile() {
 fn edit_toolpath_reopens_its_form_and_replaces_it() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
-    h.app.form = None;
-    let id = *h.app.doc.toolpaths.keys().next().unwrap();
-    h.app.selected_toolpath = Some(id);
-    h.app.doc.selection = cut_craft_core::selection::Selection::new();
-    h.app.invoke(&h.ctx, "edit_toolpath");
-    let form = h.app.form.as_mut().expect("the toolpath's form");
-    assert_eq!((form.id, form.editing), ("profile_toolpath", Some(id)));
-    form.params["name"] = Value::from("Edited");
-    let params = form.params.clone();
-    h.app.apply_form("profile_toolpath", &params).unwrap();
-    assert_eq!(h.app.doc.toolpaths.len(), 1, "replaced, not added");
-    assert_eq!(h.app.doc.toolpaths[&id].name, "Edited");
+    h.invoke("profile_toolpath");
+    let params = h.form_settings().clone();
+    h.run("profile_toolpath", &params).unwrap();
+    h.close_form();
+    let id = *h.doc().toolpaths.keys().next().unwrap();
+    h.select_toolpath(id);
+    h.select([]);
+    h.invoke("edit_toolpath");
+    assert_eq!(
+        (h.form_id(), h.form_editing()),
+        (Some("profile_toolpath"), Some(id))
+    );
+    h.edit_form(|p| p["name"] = Value::from("Edited"));
+    let params = h.form_settings().clone();
+    h.apply_form("profile_toolpath", &params).unwrap();
+    assert_eq!(h.doc().toolpaths.len(), 1, "replaced, not added");
+    assert_eq!(h.doc().toolpaths[&id].name, "Edited");
 }
 
 #[test]
@@ -204,45 +193,41 @@ fn the_side_tabs_put_drawing_and_modeling_on_design() {
         ["Design", "Sheets", "Layers", "Components", "Library"]
     );
     let h = Harness::new();
-    let names: Vec<&str> = h
-        .app
-        .design_groups("Design")
-        .iter()
-        .map(|g| g.name)
-        .collect();
+    let names: Vec<&str> = h.design_groups("Design").iter().map(|g| g.name).collect();
     assert!(
         names.contains(&"Create Vectors") && names.contains(&"Shape Creation"),
         "{names:?}"
     );
-    assert!(h.app.design_groups("Components").is_empty());
+    assert!(h.design_groups("Components").is_empty());
 }
 
 #[test]
 fn toolpath_forms_open_in_the_toolpaths_page() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    assert_eq!(h.app.form.as_ref().unwrap().page, Page::Toolpaths);
+    h.invoke("profile_toolpath");
+    assert_eq!(h.form_page(), Page::Toolpaths);
     assert_eq!(
-        h.app.pages.shown(Page::Toolpaths),
+        h.page_shown(Page::Toolpaths),
         Shown::Flyout,
         "brought out to show its form"
     );
-    h.app.invoke(&h.ctx, "draw_circle");
-    assert_eq!(h.app.form.as_ref().unwrap().page, Page::Design);
+    h.invoke("draw_circle");
+    assert_eq!(h.form_page(), Page::Design);
 }
 
 #[test]
 fn deleting_the_selected_toolpath_is_undoable() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "drilling_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("drilling_toolpath", &params).unwrap();
-    h.app.selected_toolpath = h.app.doc.toolpaths.keys().next().copied();
-    h.app.invoke(&h.ctx, "delete_toolpath");
-    assert!(h.app.doc.toolpaths.is_empty());
-    h.app.invoke(&h.ctx, "undo");
-    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    h.invoke("drilling_toolpath");
+    let params = h.form_settings().clone();
+    h.run("drilling_toolpath", &params).unwrap();
+    let id = *h.doc().toolpaths.keys().next().unwrap();
+    h.select_toolpath(id);
+    h.invoke("delete_toolpath");
+    assert!(h.doc().toolpaths.is_empty());
+    h.invoke("undo");
+    assert_eq!(h.doc().toolpaths.len(), 1);
 }
 
 #[test]
@@ -250,35 +235,33 @@ fn tabs_are_placed_and_removed_by_clicking_the_vector() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.click(h.at(60.0, 35.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    {
-        let params = &mut h.app.form.as_mut().unwrap().params;
+    h.invoke("profile_toolpath");
+    h.edit_form(|params| {
         params["tabs"] = "flat".into();
         params["tab"]["spacing"] = "placed".into();
-    }
+    });
     h.frame(vec![]);
     h.click(h.at(60.0, 30.0), Modifiers::NONE);
     let tabs = |h: &Harness| -> Vec<Point> {
-        serde_json::from_value(h.app.form.as_ref().unwrap().params["tab_points"].clone())
-            .unwrap_or_default()
+        serde_json::from_value(h.form_settings()["tab_points"].clone()).unwrap_or_default()
     };
     let placed = tabs(&h);
-    assert_eq!(placed.len(), 1, "{}", h.app.status.message);
+    assert_eq!(placed.len(), 1, "{}", h.status_message());
     assert!(near(placed[0], Point::new(60.0, 30.0)), "{placed:?}");
     assert_eq!(
-        h.app.doc.selection.len(),
+        h.doc().selection.len(),
         1,
         "the click placed a tab, not a selection"
     );
     // a drag from the tab moves it along the vector
-    h.app.options.snapping.smart_snapping = false;
+    h.given_options(|o| o.snapping.smart_snapping = false);
     h.drag(h.at(60.0, 30.0), h.at(60.5, 45.0));
     let moved = tabs(&h);
-    assert_eq!(moved.len(), 1, "{}", h.app.status.message);
+    assert_eq!(moved.len(), 1, "{}", h.status_message());
     assert!(near(moved[0], Point::new(60.0, 45.0)), "{moved:?}");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
-    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    let params = h.form_settings().clone();
+    h.run("profile_toolpath", &params).unwrap();
+    assert_eq!(h.doc().toolpaths.len(), 1);
     h.click(h.at(60.0, 45.0), Modifiers::NONE);
     assert!(tabs(&h).is_empty(), "a second click takes it off");
 }
@@ -286,17 +269,17 @@ fn tabs_are_placed_and_removed_by_clicking_the_vector() {
 #[test]
 fn a_side_bar_entry_opens_its_page() {
     let mut h = Harness::new();
-    h.app.info = Some(Info::Help("pocket_toolpath"));
+    h.open_info(Info::Help("pocket_toolpath"));
     h.frame(vec![]);
     h.frame(vec![]);
-    let label = h.app.help_title("profile_toolpath");
+    let label = h.help_title("profile_toolpath");
     let at = *h
         .texts_at(&label)
         .last()
         .expect("Profile listed beside Pocket");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.info, Some(Info::Help("profile_toolpath")));
+    assert_eq!(h.info(), Some(Info::Help("profile_toolpath")));
 }
 
 #[test]
@@ -305,17 +288,17 @@ fn set_as_default_in_job_setup_keeps_the_clearing_default() {
     let mut h = Harness::at_classic_start();
     let mut mine = cut_craft_core::document::Job::default();
     mine.clearing.way_back = WayBack::Alternate;
-    h.app.options.default_job = Some(mine);
-    h.app.invoke(&h.ctx, "new");
+    h.given_options(|o| o.default_job = Some(mine));
+    h.invoke("new");
     h.frame(vec![]);
-    let form = h.app.form.as_mut().expect("the Job Setup form");
-    form.params["size"]["width"] = 300.0.into();
+    assert!(h.form_id().is_some(), "the Job Setup form");
+    h.edit_form(|p| p["size"]["width"] = 300.0.into());
     let button = h
         .text_at("Set as Default")
         .expect("a Set as Default button");
     h.click(button, Modifiers::NONE);
     h.frame(vec![]);
-    let saved = h.app.options.default_job.expect("kept in the options");
+    let saved = h.options().default_job.expect("kept in the options");
     assert!((saved.width - 300.0).abs() < 1e-9);
     assert_eq!(
         saved.clearing.way_back,
@@ -327,16 +310,16 @@ fn set_as_default_in_job_setup_keeps_the_clearing_default() {
 #[test]
 fn sheets_take_selected_vectors_and_toolpaths_from_their_menus() {
     let mut h = Harness::new();
-    h.app.doc = cut_craft_core::testing::two_sheets();
-    let menu = gui::sheet_menu(&h.app.doc, 1);
+    h.open_document(cut_craft_core::testing::two_sheets());
+    let menu = gui::sheet_menu(h.doc(), 1);
     let item = |name: &str| menu.iter().find(|m| m.name == name).unwrap();
     assert!(item("Copy Selected Vectors Here").is_enabled);
-    let selected = h.app.doc.selection.len();
+    let selected = h.doc().selection.len();
     let action = item("Move Selected Vectors Here").action.clone();
-    h.app.invoke(&h.ctx, &action);
-    assert_eq!(h.app.doc.sheets[1].objects.vectors.len(), selected);
+    h.invoke(&action);
+    assert_eq!(h.doc().sheets[1].objects.vectors.len(), selected);
     // the active sheet's own menu cannot send to itself
-    let own = gui::sheet_menu(&h.app.doc, 0);
+    let own = gui::sheet_menu(h.doc(), 0);
     assert!(
         !own.iter()
             .find(|m| m.name == "Copy Selected Vectors Here")
@@ -360,22 +343,21 @@ fn a_texture_toolpaths_texture_saves_to_a_file_and_loads_into_another_form() {
     let path = dir.join("scallops.vtexture");
     let mut h = Harness::new();
     assert_eq!(
-        h.app.save_texture(&path).unwrap_err(),
+        h.save_texture(&path).unwrap_err(),
         "no Texture Toolpath form is open"
     );
-    h.app.invoke(&h.ctx, "texture_toolpath");
-    h.app.form.as_mut().unwrap().params["stepover"] = Value::from(7.5);
-    h.app.save_texture(&path).unwrap();
+    h.invoke("texture_toolpath");
+    h.edit_form(|p| p["stepover"] = Value::from(7.5));
+    h.save_texture(&path).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.contains("\r\nStepover: 7.50000 0\r\n"), "{text}");
-    h.app.form = None;
-    h.app.invoke(&h.ctx, "texture_toolpath");
-    h.app.form.as_mut().unwrap().params["name"] = Value::from("Lid");
-    h.app.load_texture(&path).unwrap();
-    let form = h.app.form.as_ref().unwrap();
-    assert_eq!(form.params["stepover"], 7.5);
-    assert_eq!(form.params["name"], "Lid", "the form keeps its own name");
-    assert!(h.app.status.message.contains("Loaded texture"));
+    h.close_form();
+    h.invoke("texture_toolpath");
+    h.edit_form(|p| p["name"] = Value::from("Lid"));
+    h.load_texture(&path).unwrap();
+    assert_eq!(h.form_value("stepover"), 7.5);
+    assert_eq!(h.form_value("name"), "Lid", "the form keeps its own name");
+    assert!(h.status_message().contains("Loaded texture"));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -386,34 +368,24 @@ fn load_texture_keeps_the_forms_vector_selector() {
     let dir = fresh_dir("texture-selector");
     let path = dir.join("scallops.vtexture");
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "texture_toolpath");
-    h.app.save_texture(&path).unwrap();
+    h.invoke("texture_toolpath");
+    h.save_texture(&path).unwrap();
     let selector = serde_json::json!({ "open": false, "closed": true });
-    h.app.form.as_mut().unwrap().params["selector"] = selector.clone();
-    h.app.load_texture(&path).unwrap();
-    let form = h.app.form.as_ref().unwrap();
+    h.edit_form(|p| p["selector"] = selector.clone());
+    h.load_texture(&path).unwrap();
     std::fs::remove_dir_all(dir).unwrap();
-    assert_eq!(form.params["selector"], selector);
+    assert_eq!(h.form_value("selector"), &selector);
 }
 
 #[test]
 fn a_profile_never_cuts_a_selected_construction_line() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 30.0);
-    h.app.invoke(&h.ctx, "make_construction_line");
-    let err = h
-        .app
-        .apply(
-            "profile_toolpath",
-            &h.app
-                .registry
-                .get("profile_toolpath")
-                .unwrap()
-                .default_params(),
-        )
-        .unwrap_err();
+    h.invoke("make_construction_line");
+    let settings = h.default_settings("profile_toolpath");
+    let err = h.run("profile_toolpath", &settings).unwrap_err();
     assert!(err.contains("construction lines"), "{err}");
-    assert!(h.app.doc.toolpaths.is_empty());
+    assert!(h.doc().toolpaths.is_empty());
 }
 
 #[test]
@@ -421,16 +393,16 @@ fn v_carve_fill_has_no_edit_passes_for_a_depth_it_does_not_cut() {
     // Fill works its depth out from each shape's width: the hidden Groove depth is not it
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "vcarve_engrave_toolpath");
+    h.invoke("vcarve_engrave_toolpath");
     for _ in 0..5 {
         h.frame(vec![]);
     }
-    assert_eq!(h.app.form.as_ref().unwrap().params["place"], "fill");
+    assert_eq!(h.form_settings()["place"], "fill");
     assert!(
         h.text_at("Edit Passes…").is_none(),
         "no passes window for Fill"
     );
-    h.app.form.as_mut().unwrap().params["place"] = "inside".into();
+    h.edit_form(|p| p["place"] = "inside".into());
     for _ in 0..3 {
         h.frame(vec![]);
     }
@@ -445,12 +417,12 @@ fn fluting_offers_edit_passes_for_its_flute_depth() {
     // fluting steps down a pass at a time, so its passes are set as any other cut's
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "fluting_toolpath");
+    h.invoke("fluting_toolpath");
     for _ in 0..5 {
         h.frame(vec![]);
     }
     assert!(h.text_at("Edit Passes…").is_some());
-    let params = &h.app.form.as_ref().unwrap().params;
+    let params = h.form_settings();
     assert_eq!(passes::cut_depth(params), params["flute_depth"].as_f64());
 }
 
@@ -458,13 +430,13 @@ fn fluting_offers_edit_passes_for_its_flute_depth() {
 fn edit_passes_shows_each_pass_and_a_click_adds_one() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    h.app.form.as_mut().unwrap().params["depth"] = serde_json::json!(6.0);
-    h.app.form.as_mut().unwrap().params["tool"]["pass_depth"] = serde_json::json!(3.0);
+    h.invoke("profile_toolpath");
+    h.edit_form(|p| p["depth"] = serde_json::json!(6.0));
+    h.edit_form(|p| p["tool"]["pass_depth"] = serde_json::json!(3.0));
     h.frame(vec![]);
     h.frame(vec![]);
     let passes = |h: &Harness| {
-        let tool = &h.app.form.as_ref().unwrap().params["tool"];
+        let tool = &h.form_settings()["tool"];
         serde_json::from_value::<Tool>(tool.clone())
             .unwrap()
             .pass_depths(6.0)
@@ -516,7 +488,7 @@ fn edit_tabs_adds_tabs_by_number_off_the_corners_and_sets_2d_or_3d() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.click(h.at(60.0, 35.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.invoke("profile_toolpath");
     h.frame(vec![]);
     h.frame(vec![]);
     // down the form to its Tabs, the button at their foot (the form is on the Toolpaths page,
@@ -554,7 +526,7 @@ fn edit_tabs_adds_tabs_by_number_off_the_corners_and_sets_2d_or_3d() {
     h.click(h.text_at("Not on corners").unwrap(), Modifiers::NONE);
     h.click(h.text_at("Add Tabs").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    let params = h.app.form.as_ref().unwrap().params.clone();
+    let params = h.form_settings().clone();
     let tabs: Vec<Point> = serde_json::from_value(params["tab_points"].clone()).unwrap();
     assert_eq!(
         tabs.len(),
@@ -574,19 +546,16 @@ fn edit_tabs_adds_tabs_by_number_off_the_corners_and_sets_2d_or_3d() {
     assert_eq!(params["tab"]["spacing"], "placed", "to move by hand after");
     assert!(h.text_at("4 tabs placed").is_some());
     h.click(h.text_at("3D Tabs").unwrap(), Modifiers::NONE);
-    assert_eq!(h.app.form.as_ref().unwrap().params["tabs"], "triangular");
+    assert_eq!(h.form_settings()["tabs"], "triangular");
     h.click(h.text_at("Delete All Tabs").unwrap(), Modifiers::NONE);
-    assert_eq!(
-        h.app.form.as_ref().unwrap().params["tab_points"],
-        serde_json::json!([])
-    );
+    assert_eq!(h.form_settings()["tab_points"], serde_json::json!([]));
 }
 
 #[test]
 fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.invoke("pocket_toolpath");
     h.frame(vec![]);
     h.frame(vec![]);
     // down the form to its Clear Pocket, the picture and Cutting… at its foot; the form's
@@ -616,7 +585,7 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     h.click(h.text_at("Cutting…").expect("the button"), Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    let params = |h: &Harness| h.app.form.as_ref().unwrap().params.clone();
+    let params = |h: &Harness| h.form_settings().clone();
     for (choice, key, value) in [
         ("Both directions", "ways", "both"),
         ("From the outline in", "rings", "outline_in"),
@@ -627,7 +596,7 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     }
     // a pocket clears with a light bite by Adaptive, not in loops
     assert!(h.text_at("Trochoidal").is_none());
-    h.app.form.as_mut().unwrap().params["strategy"] = "adaptive".into();
+    h.edit_form(|p| p["strategy"] = "adaptive".into());
     // adaptive: the job's Clearing Settings, a button away, set its bite and the loops
     for _ in 0..3 {
         h.frame(vec![]);
@@ -639,13 +608,13 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     for _ in 0..3 {
         h.frame(vec![]);
     }
-    assert!(h.app.clearing_window);
+    assert!(h.clearing_window_open());
     h.click(h.text_at("Clockwise").expect("the loops"), Modifiers::NONE);
     for _ in 0..3 {
         h.frame(vec![]);
     }
     assert_eq!(
-        h.app.doc.job.clearing.loops.turn,
+        h.doc().job.clearing.loops.turn,
         cut_craft_core::entry::Turn::Clockwise
     );
 }
@@ -656,35 +625,33 @@ fn toolpath_forms_save_their_settings_and_load_them_back() {
     let dir = std::env::temp_dir().join(format!("cut-craft-form-settings-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("profile.ccsettings");
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    let form = h.app.form.as_mut().expect("open");
-    let key = form
-        .params
+    h.invoke("profile_toolpath");
+    let key = h
+        .form_settings()
         .as_object()
         .unwrap()
         .iter()
         .find(|(_, v)| v.is_f64())
         .map(|(k, _)| k.clone())
         .expect("a number setting");
-    form.params[&key] = serde_json::json!(7.25);
-    h.app.save_form_settings(&path);
-    assert!(h.app.status.message.starts_with("Saved the settings"));
+    h.edit_form(|p| p[&key] = serde_json::json!(7.25));
+    h.save_form_settings(&path);
+    assert!(h.status_message().starts_with("Saved the settings"));
 
-    h.app.form.as_mut().unwrap().params[&key] = serde_json::json!(1.0);
-    h.app.load_form_settings(&path);
-    let form = h.app.form.as_ref().unwrap();
-    assert_eq!(form.params[&key], serde_json::json!(7.25));
-    assert!(form.dirty, "the loaded settings are yet to be applied");
+    h.edit_form(|p| p[&key] = serde_json::json!(1.0));
+    h.load_form_settings(&path);
+    assert_eq!(h.form_value(&key), &serde_json::json!(7.25));
+    assert!(h.form_dirty(), "the loaded settings are yet to be applied");
 
-    h.app.form = None;
-    h.app.invoke(&h.ctx, "pocket_toolpath");
-    let before = h.app.form.as_ref().unwrap().params.clone();
-    h.app.load_form_settings(&path);
-    assert_eq!(h.app.form.as_ref().unwrap().params, before, "left alone");
+    h.close_form();
+    h.invoke("pocket_toolpath");
+    let before = h.form_settings().clone();
+    h.load_form_settings(&path);
+    assert_eq!(h.form_settings(), &before, "left alone");
     assert!(
-        h.app.status.message.starts_with("Could not load"),
+        h.status_message().starts_with("Could not load"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -696,13 +663,12 @@ fn import_toolpaths_opens_its_form_on_the_file_and_adds_its_toolpaths() {
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("nameplate.nc");
     std::fs::write(&file, "G21 G90\nG0 X10 Y10 Z5\nG1 Z-1 F600\nX40\n").unwrap();
-    h.app.import_toolpaths_from(&file);
-    let form = h.app.form.as_ref().expect("its form");
-    assert_eq!(form.id, "import_toolpaths");
-    assert_eq!(form.params["name"], "nameplate");
-    let params = form.params.clone();
-    h.app.apply("import_toolpaths", &params).unwrap();
-    let toolpath = h.app.doc.toolpaths.values().next().expect("added");
+    h.import_toolpaths_from(&file);
+    assert_eq!(h.form_id(), Some("import_toolpaths"), "its form");
+    assert_eq!(h.form_value("name"), "nameplate");
+    let params = h.form_settings().clone();
+    h.run("import_toolpaths", &params).unwrap();
+    let toolpath = h.doc().toolpaths.values().next().expect("added");
     assert_eq!(toolpath.name, "nameplate");
     assert_eq!(toolpath.tool.feed_rate, 600.0, "the file's feed rate");
     std::fs::remove_dir_all(&dir).ok();
@@ -729,14 +695,14 @@ fn the_profile_form_shows_which_side_it_cuts_just_under_the_depth() {
     let inside = h.text_at("Inside").unwrap();
     h.click(inside - egui::vec2(0.0, 25.0), Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.form.as_ref().unwrap().params["side"], "inside");
+    assert_eq!(h.form_settings()["side"], "inside");
     assert!(h.text_at(&super::cutting::side_said("inside")).is_some());
 }
 
 #[test]
 fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
     let mut h = profile_form();
-    let thickness = h.app.doc.job.thickness;
+    let thickness = h.doc().job.thickness;
     assert!(
         h.text_at("Cut right through").is_none(),
         "no tick: a cut past the material is warned of on Calculate"
@@ -745,10 +711,10 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
         h.text_at(&super::tabs::loose()).is_none(),
         "6 mm deep holds the part"
     );
-    h.app.form.as_mut().unwrap().params["depth"] = thickness.into();
+    h.edit_form(|p| p["depth"] = thickness.into());
     h.frame(vec![]);
     h.frame(vec![]);
-    let params = |h: &Harness| h.app.form.as_ref().unwrap().params.clone();
+    let params = |h: &Harness| h.form_settings().clone();
     let over = h.form_heading("Profile Toolpath") + egui::vec2(0.0, 200.0);
     let add = scroll_above_foot(&mut h, over, "Add Tabs");
     assert!(
@@ -756,24 +722,24 @@ fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
         "right through, no tabs"
     );
     // made like that, the status bar warns too
-    h.app.apply("profile_toolpath", &params(&h)).unwrap();
+    h.run("profile_toolpath", &params(&h)).unwrap();
     assert!(
-        h.app.status.message.contains("comes loose"),
+        h.status_message().contains("comes loose"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
     // Add Tabs puts tabs on, and the warning goes
     h.click(add, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.form.as_ref().unwrap().params["tabs"], "flat");
+    assert_eq!(h.form_settings()["tabs"], "flat");
     assert!(h.text_at(&super::tabs::loose()).is_none());
 }
 
 #[test]
 fn add_tabs_with_nothing_selected_and_delete_all_tabs_leave_the_tab_settings_alone() {
     let mut h = profile_form();
-    h.app.doc.selection.clear();
-    let params = |h: &Harness| h.app.form.as_ref().unwrap().params.clone();
+    h.select([]);
+    let params = |h: &Harness| h.form_settings().clone();
     assert_eq!(params(&h)["tabs"], "none");
     h.ctx
         .data_mut(|d| d.insert_temp(egui::Id::unique("edit_tabs"), true));
@@ -784,16 +750,15 @@ fn add_tabs_with_nothing_selected_and_delete_all_tabs_leave_the_tab_settings_alo
     assert_eq!(params(&h)["tabs"], "none", "nothing added: tabs stay off");
     assert_eq!(params(&h)["tab"]["spacing"], "automatic");
     assert!(
-        h.app.status.message.contains("select the vectors"),
+        h.status_message().contains("select the vectors"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
     // tabs placed by hand, then turned off: deleting them leaves them off
-    {
-        let p = &mut h.app.form.as_mut().unwrap().params;
+    h.edit_form(|p| {
         p["tab"]["spacing"] = "placed".into();
         p["tab_points"] = serde_json::json!([[10.0, 30.0]]);
-    }
+    });
     h.frame(vec![]);
     h.click(h.text_at("Delete All Tabs").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
@@ -801,9 +766,9 @@ fn add_tabs_with_nothing_selected_and_delete_all_tabs_leave_the_tab_settings_alo
     assert_eq!(params(&h)["tabs"], "none", "still off");
     assert_eq!(params(&h)["tab"]["spacing"], "placed");
     assert!(
-        h.app.status.message.contains("click the vectors"),
+        h.status_message().contains("click the vectors"),
         "says how to place more: {}",
-        h.app.status.message
+        h.status_message()
     );
 }
 
@@ -865,9 +830,9 @@ fn the_profile_form_keeps_tab_and_tool_settings_in_their_windows() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.click(h.at(60.0, 35.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
-    h.app.choose_tool("3 mm End Mill");
+    h.invoke("profile_toolpath");
+    h.pin(Page::Toolpaths);
+    h.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     h.frame(vec![]);
     // the form: the tool's name and one line, the tab choice, and the buttons
@@ -886,37 +851,37 @@ fn the_profile_form_keeps_tab_and_tool_settings_in_their_windows() {
     h.click(h.text_at("Select…").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().expect("Select Bit");
-    assert!(manager.selecting);
-    assert_eq!(manager.shown_tool(), Some("3 mm End Mill"));
-    let other = manager
-        .draft
-        .tools
-        .iter()
-        .position(|t| t.name == "6 mm Ball Nose")
-        .unwrap();
-    manager.pick = Some(cut_craft_tool_database::Pick::Tool(other));
+    h.in_bit_library(|manager| {
+        assert!(manager.selecting, "Select Bit");
+        assert_eq!(manager.shown_tool(), Some("3 mm End Mill"));
+        let other = manager
+            .draft
+            .tools
+            .iter()
+            .position(|t| t.name == "6 mm Ball Nose")
+            .unwrap();
+        manager.pick = Some(cut_craft_tool_database::Pick::Tool(other));
+    });
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Select Bit").is_some());
     let select = *h.texts_at("Select").last().expect("Select, in place of OK");
     h.click(select, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.tool_manager.is_none(), "closed");
-    let form = h.app.form.as_ref().unwrap();
-    let ball = h.app.tools.get("6 mm Ball Nose").unwrap();
-    assert_eq!(form.params["tool"]["name"], "6 mm Ball Nose");
+    assert!(h.bit_library().is_none(), "closed");
+    let ball = h.tool_database().get("6 mm Ball Nose").unwrap();
+    assert_eq!(h.form_value("tool")["name"], "6 mm Ball Nose");
     assert_eq!(
-        form.params["tool"]["feed_rate"],
+        h.form_value("tool")["feed_rate"],
         serde_json::json!(ball.feed_rate),
         "its own feeds and speeds come with it"
     );
     // 2D tabs: the form says what they will be
-    h.app.form.as_mut().unwrap().params["tabs"] = "flat".into();
+    h.edit_form(|p| p["tabs"] = "flat".into());
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
-        h.app.form.as_ref().unwrap().params["tab"]["spacing"] == "automatic",
+        h.form_settings()["tab"]["spacing"] == "automatic",
         "kept with the toolpath"
     );
     let over = h.form_heading("Profile Toolpath") + egui::vec2(0.0, 200.0);
@@ -942,8 +907,8 @@ fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() 
     use cut_craft_core::glam::DVec3;
     use cut_craft_core::toolpath::{Move, MoveKind};
     let mut h = Harness::new();
-    h.app.display.previews_2d = true;
-    let (width, height) = (h.app.doc.job.width, h.app.doc.job.height);
+    h.given_2d_previews(true);
+    let (width, height) = (h.doc().job.width, h.doc().job.height);
     let (rows, step) = (400_usize, 0.02);
     let along = (width / step) as usize;
     let mut moves = Vec::with_capacity(rows * along);
@@ -965,7 +930,7 @@ fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() 
         }
     }
     assert!(moves.len() > 2_000_000, "{} cuts", moves.len());
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     c.add_toolpath(cut_craft_core::toolpath::Toolpath {
         name: "3D Finishing".into(),
         strategy: "3d_finishing_toolpath".into(),
@@ -981,7 +946,7 @@ fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() 
         fallbacks: vec![],
         across: vec![],
     });
-    h.app.record(Ok(c.finish()), "made");
+    h.make(c.finish(), "made");
     h.frame(vec![]);
     let shapes = std::mem::take(&mut h.shapes);
     let vertices: usize = h
@@ -1005,14 +970,14 @@ fn the_status_bar_and_a_pocket_form_count_the_selected_vectors() {
     let line = serde_json::json!({ "points": [
         { "x": 10.0, "y": 40.0 }, { "x": 60.0, "y": 40.0 }
     ], "closed": false });
-    h.app.apply("draw_polyline", &line).unwrap();
-    h.app.form = None;
-    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.run("draw_polyline", &line).unwrap();
+    h.close_form();
+    h.invoke("select_all_vectors");
     h.frame(vec![]);
     let count = "3 vectors selected: 2 closed, 1 open";
     let at = h.text_at(count).expect("the status bar counts them");
     assert!(at.y > 700.0, "in the status bar: {at:?}");
-    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.invoke("pocket_toolpath");
     // the Toolpaths page flies out unseen on its first frame
     h.frame(vec![]);
     h.frame(vec![]);
@@ -1066,37 +1031,36 @@ fn picked_toolpaths_group_together_and_the_group_moves_as_one() {
     // Pocket, then Cut Out with Ctrl held: both picked
     h.click(h.text_at("Pocket").unwrap(), Modifiers::NONE);
     h.click(h.text_at("Cut Out").unwrap(), Modifiers::COMMAND);
-    assert_eq!(h.app.picked_toolpaths(), [EntityId(1), EntityId(3)]);
+    assert_eq!(h.picked_toolpaths(), [EntityId(1), EntityId(3)]);
     h.click(h.text_at("Group").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     // grouped toolpaths cut one after another, where the first of them did
     assert_eq!(toolpath_names(&h), ["Pocket", "Cut Out", "Drill"]);
     let groups: Vec<Option<&str>> = h
-        .app
-        .doc
+        .doc()
         .toolpaths
         .values()
         .map(|t| t.group.as_deref())
         .collect();
     assert_eq!(groups, [Some("Group 1"), Some("Group 1"), None]);
     assert_eq!(
-        h.app.picked_toolpaths(),
+        h.picked_toolpaths(),
         [EntityId(1), EntityId(2)],
         "still picked in their new places"
     );
     // one step undoes it
-    h.app.invoke(&h.ctx, "undo");
+    h.invoke("undo");
     assert_eq!(toolpath_names(&h), ["Pocket", "Drill", "Cut Out"]);
-    h.app.invoke(&h.ctx, "redo");
+    h.invoke("redo");
     h.frame(vec![]);
     // the group's name picks it; Move Down takes both its toolpaths past Drill
     h.click(h.text_at("Group 1").unwrap(), Modifiers::NONE);
-    assert_eq!(h.app.selected_group.as_deref(), Some("Group 1"));
+    assert_eq!(h.selected_toolpath_group(), Some("Group 1"));
     h.click(h.text_at("Move Down").unwrap(), Modifiers::NONE);
     assert_eq!(toolpath_names(&h), ["Drill", "Pocket", "Cut Out"]);
     // Ungroup on the picked group takes it apart, keeping its toolpaths
     h.click(h.text_at("Ungroup").unwrap(), Modifiers::NONE);
-    assert!(h.app.doc.toolpaths.values().all(|t| t.group.is_none()));
+    assert!(h.doc().toolpaths.values().all(|t| t.group.is_none()));
     assert_eq!(toolpath_names(&h), ["Drill", "Pocket", "Cut Out"]);
 }
 
@@ -1135,22 +1099,24 @@ fn a_drill_picked_for_a_profile_is_warned_of_in_red_at_the_foot_of_its_form() {
         )
     };
     // a drill brought in from a vendor's tool library
-    let mut drill = h.app.tools.tools[0].clone();
-    drill.name = "Drill 6mm".into();
-    drill.drill_only = true;
-    h.app.tools.tools.push(drill);
+    h.given_bits(|bits| {
+        let mut drill = bits.tools[0].clone();
+        drill.name = "Drill 6mm".into();
+        drill.drill_only = true;
+        bits.tools.push(drill);
+    });
     for (id, warned) in [("profile_toolpath", true), ("drilling_toolpath", false)] {
-        h.app.invoke(&h.ctx, id);
-        h.app.choose_tool("Drill 6mm");
+        h.invoke(id);
+        h.choose_tool("Drill 6mm");
         h.frame(vec![]);
         h.frame(vec![]);
         assert_eq!(h.text_at(&warning("Drill 6mm")).is_some(), warned, "{id}");
-        h.app.form = None;
+        h.close_form();
     }
     // an end mill: nothing said
-    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.invoke("profile_toolpath");
     h.frame(vec![]);
-    let name = h.app.form.as_ref().unwrap().params["tool"]["name"]
+    let name = h.form_settings()["tool"]["name"]
         .as_str()
         .unwrap()
         .to_owned();
@@ -1163,13 +1129,12 @@ fn on_a_mac_quick_engrave_has_no_cmd_q() {
     h.ctx.set_os(egui::os::OperatingSystem::Mac);
     let quit = shortcut::parse_trigger("Ctrl+Q").unwrap();
     assert!(
-        !h.app.bindings(&h.ctx).iter().any(|(_, t)| *t == quit),
+        !h.shortcuts_in_use().iter().any(|(_, t)| *t == quit),
         "⌘Q is the Mac's Quit"
     );
     h.ctx.set_os(egui::os::OperatingSystem::Windows);
     assert!(
-        h.app
-            .bindings(&h.ctx)
+        h.shortcuts_in_use()
             .contains(&("quick_engrave_toolpath".to_owned(), quit)),
         "Ctrl+Q elsewhere"
     );
@@ -1193,23 +1158,20 @@ fn the_2d_view_draws_vectors_and_toolpaths_in_the_colours_picked() {
     // a colour-blind user could not tell vectors from toolpaths: Options ▸ Appearance
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    let params = h
-        .app
-        .registry
-        .get("profile_toolpath")
-        .unwrap()
-        .initial_params(&h.app.doc);
-    h.app.apply("profile_toolpath", &params).unwrap();
-    h.app.selected_toolpath = None;
-    h.app.doc.selection.clear();
-    h.app.view = View::TwoD;
+    let params = h.opening_settings("profile_toolpath");
+    h.run("profile_toolpath", &params).unwrap();
+    h.given_no_toolpath_picked();
+    h.select([]);
+    h.show_view(View::TwoD);
     let (vector, toolpath) = ([1, 2, 3], [4, 5, 6]);
-    let look = &mut h.app.options.appearance;
-    look.line_colors = crate::options::LinePalette::MyOwn;
-    for theme in [&mut look.light_2d, &mut look.dark_2d] {
-        theme.vector_color = vector;
-        theme.toolpath_color = toolpath;
-    }
+    h.given_options(|o| {
+        let look = &mut o.appearance;
+        look.line_colors = crate::options::LinePalette::MyOwn;
+        for theme in [&mut look.light_2d, &mut look.dark_2d] {
+            theme.vector_color = vector;
+            theme.toolpath_color = toolpath;
+        }
+    });
     h.frame(vec![]);
     let drawn_in = |h: &Harness, [r, g, b]: [u8; 3]| {
         let colour = egui::epaint::ColorMode::Solid(egui::Color32::from_rgb(r, g, b));
