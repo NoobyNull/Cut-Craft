@@ -113,3 +113,5 @@ views-split-divider = Drag to give one view more room; drag it right to the edge
 views-split-swap = Swap the views' places
 views-picture-bar = Drag to another corner
 views-picture-swap = Swap: make this view the big one
+# 2D view, rotary jobs: the A axis angle written beside a seam or a wrap band's edge. $degrees: a whole number, may be negative.
+views-rotary-seam-angle = A { $degrees }°

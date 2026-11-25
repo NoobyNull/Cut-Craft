@@ -240,9 +240,9 @@ impl CutCraftApp {
             }
             "pp" => self.install_post(path),
             e if files::TOOL_FILE_EXTENSIONS.contains(&e) && e != "json" => self.import_tools(path),
-            _ if self.screen != Screen::Job => self.status.set_message(&format!(
-                "Open or make a job to import {} into",
-                file_name(path)
+            _ if self.screen != Screen::Job => self.status.set_message(&cut_craft_i18n::tr!(
+                "status-open-a-job-to-import",
+                file = file_name(path).clone()
             )),
             _ => self.import_file(path),
         }
@@ -258,12 +258,14 @@ impl CutCraftApp {
                 let kept = files::config_dir()
                     .map(|d| d.join(LAST_CRASH))
                     .filter(|path| std::fs::write(path, &crash).is_ok());
-                let where_ = kept.map_or_else(String::new, |p| {
-                    format!(" Its crash log is kept in {}.", p.display())
-                });
-                self.status.set_message(&format!(
-                    "Cut Craft closed with an error last time.{where_} To send crash reports, \
-                     change Edit ▸ Options ▸ Bug Reports."
+                self.status.set_message(&kept.map_or_else(
+                    || cut_craft_i18n::tr!("status-closed-with-error"),
+                    |p| {
+                        cut_craft_i18n::tr!(
+                            "status-closed-with-error-log",
+                            path = p.display().to_string()
+                        )
+                    },
                 ));
             }
             CrashLogs::Send => {
@@ -737,7 +739,9 @@ impl CutCraftApp {
                     (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
                         self.camera = Some(ViewTransform::fit(area, margin, bounds));
                     }
-                    _ => self.status.set_message("select something to zoom to"),
+                    _ => self
+                        .status
+                        .set_message(&cut_craft_i18n::tr!("status-select-to-zoom")),
                 }
                 return;
             }

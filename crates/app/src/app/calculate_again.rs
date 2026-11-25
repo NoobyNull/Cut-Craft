@@ -96,7 +96,7 @@ impl CutCraftApp {
         };
         form.note = Some((params.clone(), note.to_owned()));
         self.status
-            .set_message("Already up to date: nothing changed, so nothing was calculated");
+            .set_message(&cut_craft_i18n::tr!("status-already-up-to-date"));
     }
 
     /// The open form's note, while its settings are the ones it was said for.
