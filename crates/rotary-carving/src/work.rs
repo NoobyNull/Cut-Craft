@@ -1,6 +1,6 @@
 //! Part of the rotary carving engine.
 
-use crate::{MARK_DEPTH, Pass, Solid, Turned, runs};
+use crate::{Limit, MARK_DEPTH, Pass, Solid, Turned, runs};
 use cut_craft_core::CommandError;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::progress;
@@ -29,6 +29,8 @@ pub struct Work<'a> {
     pub top: f64,
     /// What lengths are said in.
     pub units: cut_craft_core::document::Units,
+    /// Where on the unrolled material the bit may cut: none for all of it.
+    pub limit: Option<&'a Limit>,
 }
 
 impl Work<'_> {
@@ -520,6 +522,14 @@ impl Work<'_> {
             let pose = self.pose(point);
             let fits = clear.is_none_or(|c| c.allows(pose));
             blocked.push(!fits);
+            // outside the machining limit: not cut, never bridged over, and the material
+            // there kept as it is
+            if self.limit.is_some_and(|l| !l.holds_point(self.along_x, point)) {
+                blocked[i] = true;
+                last = None;
+                cuts.push(false);
+                continue;
+            }
             let looking = Pose {
                 height: pose.height - margin,
                 ..pose

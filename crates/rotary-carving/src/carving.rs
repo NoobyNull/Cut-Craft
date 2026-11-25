@@ -6,7 +6,7 @@ use cut_craft_core::document::{Along, Document, Rotary, Units};
 use cut_craft_core::toolpath::Tool;
 use cut_craft_rotary::Stock;
 
-use crate::{Solid, Turned, Work, model_along, parts, supporting};
+use crate::{Limit, Solid, Turned, Work, model_along, parts, supporting};
 
 /// The part as a rotary carving toolpath sees it, ready to work passes out over
 /// ([`Self::work`]).
@@ -30,6 +30,8 @@ pub struct Carving {
     pub end: f64,
     pub step: f64,
     pub units: Units,
+    /// Where on the unrolled material the bit may cut: none for all of it.
+    pub limit: Option<Limit>,
 }
 
 /// Where a carving toolpath cuts along the part, how far apart its passes are, and what it
@@ -105,6 +107,7 @@ impl Carving {
             end,
             step: reach.step,
             units: doc.job.units,
+            limit: None,
         };
         // what Job Setup leaves to hold the part, kept like a model
         let origin = if along_x {
@@ -140,6 +143,27 @@ impl Carving {
             step: self.step,
             top: self.top,
             units: self.units,
+            limit: self.limit.as_ref(),
         }
+    }
+
+    /// Kept within `limit` (none for the whole material): the passes worked out only as far
+    /// along the part as it reaches, and a bit's width either side.
+    ///
+    /// # Errors
+    /// When the limit lies wholly outside Start and End.
+    pub fn limited(mut self, limit: Option<Limit>) -> Result<Self, CommandError> {
+        if let Some(l) = &limit {
+            let reach = self.tool.diameter / 2.0;
+            self.start = self.start.max(l.from - reach);
+            self.end = self.end.min(l.to + reach);
+            if self.end <= self.start {
+                return Err(CommandError::InvalidParams(
+                    "the machining limit lies outside Start and End: nothing to cut".into(),
+                ));
+            }
+        }
+        self.limit = limit;
+        Ok(self)
     }
 }
