@@ -287,6 +287,7 @@ impl MenuSystem {
                         b("cut_list"),
                         sep(),
                         b("clearing_settings"),
+                        b("advanced_rotary_mode"),
                         a("Preview Colors...", "materials"),
                         sep(),
                         b("tool_database"),

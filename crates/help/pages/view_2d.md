@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-22
-see-also: view_3d, pan, zoom_box, zoom_to_job, keyboard_shortcuts, interface_layout
+reviewed: 2026-11-25
+see-also: view_3d, pan, zoom_box, zoom_to_job, keyboard_shortcuts, interface_layout, job_setup, settings
 icon: view/2d_view.png
 ---
 
@@ -32,6 +32,38 @@ No wheel button, or prefer another? In **Edit ▸ Options ▸ Mouse and Shortcut
 - [Zoom to Selection](help:zoom_selected) fits the shapes you picked.
 - [Zoom Box](help:zoom_box): drag a box round what you want to fill the view.
 - [Pan](help:pan): drag with the left button to move the view, for a mouse with no wheel.
+
+## Rotary jobs: the seams and the wrap bands
+
+On a [rotary job](help:job_setup) the sheet is the outside of the material unrolled flat:
+one full turn, from one **seam** to the other. The two seams are the same line on the real
+material, so a shape that runs off one seam carries on in from the other.
+
+The 2D view shows this for you:
+
+![A rotary job in the 2D view, light and dark: two blue seams marked A 0° and A 360°, shaded bands above and below, and two slanted lines that run off the top seam seen coming back in, faded, at the bottom](pictures/rotary-wrap-bands.png)
+
+1. The two seams are drawn as **blue lines**, each with the **A angle** the rotary turns to
+   there (for example **A 0°** and **A 360°**).
+2. Past each seam is a shaded **wrap band**: what lies just over the seam on the other side.
+   On material lying along X the bands are above and below the sheet; along Y they are to
+   its left and right.
+3. Anything near one seam is drawn again, faded, a turn away: a **ghost**. A line that runs
+   off the top of the sheet is seen coming back in at the bottom, where it will really be
+   cut.
+4. Click a ghost to pick the shape it copies: the shape and its ghost are both picked. When
+   you draw, the ends and middles of ghosts snap just as the shapes themselves do, so a new
+   line can join up with a shape across the seam.
+5. You can draw in a band too. What you draw stays where you drew it, and its ghost shows
+   on the other side.
+
+[Zoom to Job](help:zoom_to_job) fits the sheet and both bands, so the seams are always in
+view. To change how far the bands reach, open **Edit ▸ Options ▸ Appearance** and set
+**Rotary wrap bands** to **Quarter turn** (90°, the one Cut Craft starts with), **Half
+turn** (180°: the whole of the other side at once) or **Off**.
+
+Toolpaths are not drawn again in the bands: to see a rotary toolpath all the way round, use
+the toolpath preview in the [3D view](help:view_3d).
 
 ## 2D or 3D
 

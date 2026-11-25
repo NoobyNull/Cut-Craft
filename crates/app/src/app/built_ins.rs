@@ -211,7 +211,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("unlock_all_existing_guides", "Unlock All Existing Guides", "Unlock All Existing Guides: lets the guide lines be dragged again")
         .run(|a, _| a.lock_guides(false)),
     act("options", "Options", "Options: Cut Craft's settings, such as units, colours and where files are kept")
-        .run(|a, _| a.options_window = true),
+        .run(CutCraftApp::open_options),
     act("segment_3d_model_file", "Segment 3D Model", "Segment 3D Model File: splits a 3D model file into pieces thin enough for your material, to carve in layers").window()
         .run(|a, _| a.segment_model_file()),
     act("import_toolpaths_file", "Import Toolpaths (G-code)", "Read a G-code file (.nc, .tap, .gcode and the like) back in as toolpaths, to preview \
@@ -396,6 +396,9 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("clearing_settings", "Clearing Settings", "How adaptive and trochoidal clearing cut in this job: the light step, the loops, \
          and whether rows and loops keep climb on the way back").window()
         .run(|a, _| a.clearing_window = true),
+    act("advanced_rotary_mode", "Turn On Advanced Rotary Mode", "Open Options at Advanced rotary mode: each rotary toolpath then cuts the whole blank, \
+         not only what the toolpaths above it leave").window()
+        .run(CutCraftApp::open_advanced_rotary_mode),
     act("cut_list", "Save Cut List", "Save a list of the job's parts and their sizes, as a spreadsheet (CSV)").window()
         .run(|a, _| a.export("cut_list")),
     act("show_open_vector_ends", "Show Open Vector Ends", "Put a circle on each end of every open vector, so a gap that stops a shape being \

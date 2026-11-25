@@ -64,19 +64,6 @@ fn source_ids(params: &mut serde_json::Value) -> Vec<&mut serde_json::Value> {
         .collect()
 }
 
-/// `params` with `a` and `b` traded wherever it names them.
-fn traded(params: &serde_json::Value, a: EntityId, b: EntityId) -> serde_json::Value {
-    let mut params = params.clone();
-    for source in source_ids(&mut params) {
-        if *source == serde_json::json!(a.0) {
-            *source = serde_json::json!(b.0);
-        } else if *source == serde_json::json!(b.0) {
-            *source = serde_json::json!(a.0);
-        }
-    }
-    params
-}
-
 impl Command for ReorderToolpath {
     const ID: &'static str = "reorder_toolpath";
     type Params = Params;
@@ -99,21 +86,17 @@ impl Command for ReorderToolpath {
                 Direction::Down => "it is already at the bottom of the list".into(),
             })
         })?;
-        let mut c = Change::builder(doc);
-        for (&id, toolpath) in &doc.toolpaths {
-            let mut toolpath = match id {
-                id if id == p.toolpath => doc.toolpaths[&other].clone(),
-                id if id == other => moving.clone(),
-                _ => toolpath.clone(),
-            };
-            let params = traded(&toolpath.params, p.toolpath, other);
-            let swapped = id == p.toolpath || id == other;
-            if swapped || params != toolpath.params {
-                toolpath.params = params;
-                c.replace_toolpath(id, toolpath);
-            }
-        }
-        Ok(c.finish())
+        // the two trade places; every other toolpath stays where it is
+        let order: Vec<(EntityId, Toolpath)> = doc
+            .toolpaths
+            .iter()
+            .map(|(&id, toolpath)| match id {
+                id if id == p.toolpath => (other, doc.toolpaths[&other].clone()),
+                id if id == other => (p.toolpath, moving.clone()),
+                _ => (id, toolpath.clone()),
+            })
+            .collect();
+        arranged(doc, &order)
     }
 }
 
@@ -139,10 +122,27 @@ pub fn arranged(doc: &Document, order: &[(EntityId, Toolpath)]) -> Result<Change
         .zip(&slots)
         .map(|((from, _), &to)| (*from, to))
         .collect();
+    // what each toolpath cut after before: one that cuts only what those leave is out of
+    // date once they are different
+    let cuts = |t: &Toolpath| (t.moves.clone(), t.tool.clone(), t.power.clone());
+    let above_before: std::collections::BTreeMap<EntityId, Vec<_>> = slots
+        .iter()
+        .enumerate()
+        .map(|(i, id)| {
+            (
+                *id,
+                slots[..i].iter().map(|s| cuts(&doc.toolpaths[s])).collect(),
+            )
+        })
+        .collect();
     let mut c = Change::builder(doc);
-    for ((_, toolpath), &slot) in order.iter().zip(&slots) {
+    for (i, ((from, toolpath), &slot)) in order.iter().zip(&slots).enumerate() {
         let mut toolpath = toolpath.clone();
         toolpath.params = followed(&toolpath.params, &moved);
+        if toolpath.cuts_what_is_left() {
+            let above: Vec<_> = order[..i].iter().map(|(_, t)| cuts(t)).collect();
+            toolpath.stale |= above_before.get(from) != Some(&above);
+        }
         if doc.toolpaths.get(&slot) != Some(&toolpath) {
             c.replace_toolpath(slot, toolpath);
         }
@@ -400,5 +400,95 @@ mod tests {
             assert_eq!(doc.toolpath_groups, ["Outside", "Tabs", "Edge"]);
             assert_eq!(doc.toolpath_group_path("Tabs"), ["Edge", "Tabs"]);
         }
+    }
+
+    /// A, B and a Rotary Roughing (ids 1, 2, 3), each cutting differently.
+    fn roughed_last() -> Document {
+        let mut doc = three_toolpaths();
+        let mut c = Change::builder(&doc);
+        for (id, name) in [(1u32, "A"), (2, "B"), (3, "Rough")] {
+            let mut t = doc.toolpaths[&EntityId(id.into())].clone();
+            t.name = name.into();
+            t.moves = vec![cut_craft_core::toolpath::Move {
+                kind: cut_craft_core::toolpath::MoveKind::Cut,
+                to: cut_craft_core::glam::DVec3::new(0.0, 0.0, -f64::from(id)),
+            }];
+            if name == "Rough" {
+                t.strategy = "rotary_roughing_toolpath".into();
+            }
+            c.replace_toolpath(EntityId(id.into()), t);
+        }
+        doc.apply(&c.finish()).unwrap();
+        doc
+    }
+
+    fn stale(doc: &Document) -> Vec<&str> {
+        doc.toolpaths
+            .values()
+            .filter(|t| t.stale)
+            .map(|t| t.name.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn a_toolpath_cutting_what_is_left_is_out_of_date_once_what_is_above_it_changes() {
+        // what is above the roughing changes order: it would cut differently
+        let mut doc = roughed_last();
+        run_on::<ReorderToolpath>(
+            &mut doc,
+            &Params {
+                toolpath: EntityId(1),
+                direction: Direction::Down,
+            },
+        );
+        assert_eq!(names(&doc), ["B", "A", "Rough"]);
+        assert_eq!(stale(&doc), ["Rough"]);
+        // moved up above B: it no longer cuts after B
+        let mut doc = roughed_last();
+        run_on::<ReorderToolpath>(
+            &mut doc,
+            &Params {
+                toolpath: EntityId(3),
+                direction: Direction::Up,
+            },
+        );
+        assert_eq!(names(&doc), ["A", "Rough", "B"]);
+        assert_eq!(stale(&doc), ["Rough"]);
+        // one made for the whole blank (Settings' advanced rotary mode) never goes out of date
+        let mut doc = roughed_last();
+        let mut c = Change::builder(&doc);
+        let mut whole = doc.toolpaths[&EntityId(3)].clone();
+        whole.params = serde_json::json!({ "whole_blank": true });
+        c.replace_toolpath(EntityId(3), whole);
+        doc.apply(&c.finish()).unwrap();
+        run_on::<ReorderToolpath>(
+            &mut doc,
+            &Params {
+                toolpath: EntityId(1),
+                direction: Direction::Down,
+            },
+        );
+        assert!(stale(&doc).is_empty(), "{:?}", stale(&doc));
+    }
+
+    #[test]
+    fn a_toolpath_cutting_what_is_left_is_out_of_date_once_one_above_it_is_made_again() {
+        let mut doc = roughed_last();
+        let mut c = Change::builder(&doc);
+        let mut a = doc.toolpaths[&EntityId(1)].clone();
+        a.moves[0].to.z -= 1.0;
+        c.replace_toolpath(EntityId(1), a);
+        let change = c.finish().marking_stale(&doc);
+        doc.apply(&change).unwrap();
+        assert_eq!(stale(&doc), ["Rough"]);
+        // renamed only, it cuts the same: nothing goes out of date
+        let mut doc = roughed_last();
+        let mut c = Change::builder(&doc);
+        let mut a = doc.toolpaths[&EntityId(1)].clone();
+        a.name = "A again".into();
+        c.replace_toolpath(EntityId(1), a);
+        let change = c.finish().marking_stale(&doc);
+        doc.apply(&change).unwrap();
+        assert_eq!(stale(&doc), Vec::<&str>::new());
     }
 }
