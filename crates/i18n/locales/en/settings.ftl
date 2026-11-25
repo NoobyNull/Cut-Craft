@@ -357,6 +357,16 @@ setting-2d-view-in-the-dark-162499 = 2D view in the dark theme
 setting-the-2d-view-s-colors-4c80a7 = The 2D view's colors while the dark theme is on
 setting-grid-point-size-39e980 = Grid point size
 setting-how-big-the-snap-grid-018487 = How big the snap grid's points are drawn, in screen points
+setting-rotary-wrap-bands-1c6ba4 = Rotary wrap bands
+setting-rotary-jobs-how-far-past-1f66ea =
+    Rotary jobs: how far past each seam the 2D view shows the other side of the
+    material, so a line that runs off one edge can be seen coming back in at the other
+setting-off-c6b4aa = Off
+setting-no-bands-the-sheet-alone-73a7c1 = No bands: the sheet alone, as on a flat job
+setting-quarter-turn-fdf29a = Quarter turn
+setting-a-quarter-of-a-turn-1b8376 = A quarter of a turn (90°) past each seam
+setting-half-turn-3a7553 = Half turn
+setting-half-a-turn-180-past-ce6dfa = Half a turn (180°) past each seam: the whole of the other side at once
 setting-text-size-041143 = Text size
 setting-how-big-text-buttons-and-a5d892 =
     How big text, buttons and lines are, as a percentage: larger is easier to read and to
@@ -414,6 +424,19 @@ setting-check-for-updates-when-cut-a5a721 = Check for updates when Cut Craft sta
 setting-every-time-cut-craft-starts-933f9f =
     Every time Cut Craft starts, ask GitHub whether there is a new version,
     and say so if there is. Nothing is downloaded or installed until you choose Install Now
+setting-backups-ddaf64 = Backups
+setting-options-backups-the-backups-cut-f962c7 =
+    Options ▸ Backups: the backups Cut Craft makes by itself. Help ▸ Back Up Settings makes one
+    any time.
+setting-back-up-every-week-df868c = Back up every week
+setting-also-back-up-once-a-74b2df =
+    Also back up once a week, when Cut Craft starts. A backup is always made before an
+    update is installed, before the window layout changes, before first-time setup is run
+    again, and before Cut Craft rewrites a library itself
+setting-backups-to-keep-73979e = Backups to keep
+setting-how-many-automatic-backups-to-3abf39 =
+    How many automatic backups to keep. When there are more, the oldest is removed.
+    Backups you save yourself are never removed
 setting-bug-reports-1ebb86 = Bug Reports
 setting-bug-reports-and-what-happens-5d7ed1 = Bug reports, and what happens after Cut Craft closes because of an error.
 setting-if-cut-craft-crashes-62c84b = If Cut Craft crashes
@@ -3125,7 +3148,6 @@ setting-hidden-levels-are-left-out-88f322 = Hidden levels are left out of the mo
 setting-raises-the-whole-level-on-4e45c6 = Raises the whole level on a flat plane this thick
 setting-mirror-mode-f9938d = Mirror Mode
 setting-a-level-s-mirror-mode-12824e = A level's mirror mode: which part of the job is drawn, the rest being its reflection.
-setting-off-c6b4aa = Off
 setting-no-mirroring-the-level-is-0a060c = No mirroring: the level is as modelled
 setting-the-left-half-is-copied-b658bc = The left half is copied, flipped, onto the right half
 setting-right-to-left-de077b = Right to Left
