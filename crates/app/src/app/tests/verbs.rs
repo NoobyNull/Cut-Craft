@@ -16,7 +16,7 @@ mod views;
 mod window;
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 13] = [
+const THROUGH_THE_HARNESS: [(&str, &str); 14] = [
     ("layers_sheets.rs", include_str!("layers_sheets.rs")),
     (
         "accessibility_tests.rs",
@@ -33,6 +33,7 @@ const THROUGH_THE_HARNESS: [(&str, &str); 13] = [
     ("calculating.rs", include_str!("calculating.rs")),
     ("keys_and_mouse.rs", include_str!("keys_and_mouse.rs")),
     ("machines.rs", include_str!("machines.rs")),
+    ("toolpath_list.rs", include_str!("toolpath_list.rs")),
 ];
 
 /// The lines of `source` that reach into the app past the harness.

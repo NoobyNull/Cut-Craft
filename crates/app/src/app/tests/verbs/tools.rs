@@ -133,4 +133,39 @@ impl Harness {
     pub(in super::super) fn select_toolpath(&mut self, id: EntityId) {
         self.app.selected_toolpath = Some(id);
     }
+
+    /// The toolpath picked in the Toolpaths list, if one is.
+    pub(in super::super) fn selected_toolpath(&self) -> Option<EntityId> {
+        self.app.selected_toolpath
+    }
+
+    /// The toolpath the open form edits, if it edits one rather than making a new one.
+    pub(in super::super) fn form_editing(&self) -> Option<EntityId> {
+        self.app.form.as_ref().expect("a form is open").editing
+    }
+
+    /// Edit on the picked toolpath, as a double-click on its row does.
+    pub(in super::super) fn edit_toolpath(&mut self) {
+        self.app.edit_toolpath();
+    }
+
+    /// The open form's Cancel.
+    pub(in super::super) fn cancel_form(&mut self) {
+        self.app.cancel_form();
+    }
+
+    /// How many changes made in the toolpath list the open form noted, to keep on Cancel.
+    pub(in super::super) fn form_list_steps(&self) -> usize {
+        self.app
+            .form
+            .as_ref()
+            .expect("a form is open")
+            .list_steps
+            .len()
+    }
+
+    /// How many undo steps there were when the open form opened.
+    pub(in super::super) fn form_opened_at_step(&self) -> usize {
+        self.app.form.as_ref().expect("a form is open").undo_from
+    }
 }
