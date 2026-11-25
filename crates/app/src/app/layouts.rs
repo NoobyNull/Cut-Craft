@@ -2,6 +2,7 @@
 //! can use (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`).
 
 use super::installed::GADGETS;
+use super::rail_list::List;
 use super::{
     Align, CutCraftApp, INSPECTOR_TABS, Layout, Page, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui,
     side_panel,
@@ -241,7 +242,7 @@ impl CutCraftApp {
         let groups = self.tool_model().all_groups();
         let gadgets = self.gadget_tools();
         // what was installed can be removed while its list is open
-        self.rail_gadgets &= !gadgets.is_empty();
+        self.rail.keep_gadgets(!gadgets.is_empty());
         egui::Panel::left("rail")
             .resizable(false)
             .exact_size(edge + 2.0 * (spacing.button_padding.x + margin))
@@ -268,11 +269,10 @@ impl CutCraftApp {
                                 None => egui::Button::new(name.as_str())
                                     .wrap_mode(egui::TextWrapMode::Truncate),
                             }
-                            .selected(self.rail_group == Some(i));
+                            .selected(self.rail.group() == Some(i));
                             let response = ui.add(button).on_hover_hint(&name);
                             if response.clicked() {
-                                self.rail_group = (self.rail_group != Some(i)).then_some(i);
-                                (self.rail_favourites, self.rail_gadgets) = (false, false);
+                                self.rail.toggle(List::Group(i));
                             }
                             if let Some(action) = self.group_menu_on(&response, group.name) {
                                 self.invoke(ui.ctx(), &action);
@@ -281,15 +281,13 @@ impl CutCraftApp {
                         // after the groups, so none of their buttons moves for it
                         let star = egui::Button::new(egui::RichText::new("★").size(0.8 * edge))
                             .min_size(egui::vec2(edge, edge))
-                            .selected(self.rail_favourites);
+                            .selected(self.rail.open == List::Favourites);
                         if ui
                             .add(star)
                             .on_hover_hint(tr!("layouts-favourites-the-tools-you-keep"))
                             .clicked()
                         {
-                            self.rail_favourites = !self.rail_favourites;
-                            self.rail_group = None;
-                            self.rail_gadgets = false;
+                            self.rail.toggle(List::Favourites);
                         }
                         // then the toolbars of your own, and last of all, once something is
                         // installed, Gadgets
@@ -301,15 +299,16 @@ impl CutCraftApp {
         // a toolbar's list is its own strip, under its name
         let list = if toolbar.is_some() {
             Some(("", vec![]))
-        } else if self.rail_favourites {
+        } else if self.rail.open == List::Favourites {
             Some((
                 "Favourites",
                 self.tool_model().every_favourite(&self.options.favourites),
             ))
-        } else if self.rail_gadgets {
+        } else if self.rail.open == List::Gadgets {
             Some((GADGETS, gadgets))
         } else {
-            self.rail_group
+            self.rail
+                .group()
                 .and_then(|i| groups.get(i))
                 .map(|g| (g.name, g.tools.to_vec()))
         };
@@ -340,11 +339,11 @@ impl CutCraftApp {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let row = ui.spacing().interact_size.y;
                     if ui
-                        .add(self.pin_button(self.rail_pinned, row))
+                        .add(self.pin_button(self.rail.pinned, row))
                         .on_hover_hint(tr!("layouts-keep-this-list-open-after"))
                         .clicked()
                     {
-                        self.rail_pinned = !self.rail_pinned;
+                        self.rail.pinned = !self.rail.pinned;
                     }
                 });
             });
@@ -365,10 +364,8 @@ impl CutCraftApp {
                     picked
                 })
                 .inner;
-            if picked && !self.rail_pinned {
-                self.rail_group = None;
+            if picked && self.rail.picked() {
                 self.toolbars.rail = None;
-                (self.rail_favourites, self.rail_gadgets) = (false, false);
             }
         });
     }
@@ -390,14 +387,13 @@ impl CutCraftApp {
             ),
             None => egui::Button::new(GADGETS).wrap_mode(egui::TextWrapMode::Truncate),
         }
-        .selected(self.rail_gadgets);
+        .selected(self.rail.open == List::Gadgets);
         if ui
             .add(button)
             .on_hover_hint(tr!("layouts-gadgets-the-gadgets-and-add"))
             .clicked()
         {
-            self.rail_gadgets = !self.rail_gadgets;
-            (self.rail_group, self.rail_favourites) = (None, false);
+            self.rail.toggle(List::Gadgets);
         }
     }
 

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: interface_layout, layout_ribbon, layout_canvas, layout_classic, favourites, find_tool
 ---
 
