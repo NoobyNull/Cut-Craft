@@ -24,7 +24,7 @@ impl Harness {
 
     /// Keeps the bits in `path` from now on, without reading it first.
     pub(in super::super) fn given_tools_path(&mut self, path: std::path::PathBuf) {
-        self.app.tools_path = Some(path);
+        self.app.tools_file.at(Some(path));
     }
 
     /// Reads the materials from `path`, as starting up does.

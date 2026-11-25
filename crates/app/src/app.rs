@@ -69,6 +69,7 @@ mod keyboard;
 mod language_page;
 mod layout_choice;
 mod layouts;
+mod library_file;
 mod mac;
 mod machine_fit;
 mod machine_setup;
@@ -759,19 +760,14 @@ pub(crate) struct CutCraftApp {
     layout_question: Option<layout_choice::LayoutQuestion>,
     post_window: Option<cut_craft_machines::PostManager>,
     tools: ToolDatabase,
-    /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
-    tools_path: Option<std::path::PathBuf>,
-    /// The bit library file that could not be read at start: nothing is saved over it,
-    /// and every save says so.
-    tools_unreadable: Option<std::path::PathBuf>,
+    /// Where `tools` is saved, and whether its file could not be read at start.
+    tools_file: library_file::LibraryFile,
     /// The open Bit Library window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// The Materials Library: materials by class and hardness.
     materials: cut_craft_core::material_library::MaterialLibrary,
-    /// Where `materials` is saved; `None` keeps it in memory.
-    materials_path: Option<std::path::PathBuf>,
-    /// The Materials Library file that could not be read at start, as `tools_unreadable`.
-    materials_unreadable: Option<std::path::PathBuf>,
+    /// Where `materials` is saved, and whether its file could not be read at start.
+    materials_file: library_file::LibraryFile,
     /// The open Materials Library window.
     materials_window: Option<cut_craft_tool_database::materials::MaterialsWindow>,
     /// What the open Select Bit picks for: a tool in one of the form's lists, or a tool
