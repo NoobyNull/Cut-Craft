@@ -10,6 +10,9 @@ use cut_craft_core::toolpath::MoveKind;
 use eframe::egui::{self, PointerButton, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, vec2};
 use std::f32::consts::FRAC_PI_2;
 
+mod wrap;
+pub use wrap::Wrap;
+
 /// How strongly vectors outside the group stepped into are drawn (a share of the usual).
 const OUTSIDE_GROUP_FADE: f32 = 0.35;
 
@@ -232,19 +235,29 @@ pub struct Canvas {
     response: egui::Response,
     /// The material, in job coordinates.
     job: JobRect,
+    /// A rotary job's seams and the bands past them, when they are shown.
+    wrap: Option<Wrap>,
 }
 
 impl Canvas {
-    /// The view of `job`: as `camera` has it when the user has zoomed or panned, else fitted.
-    pub fn new(ui: &mut egui::Ui, job: &Job, camera: Option<ViewTransform>) -> Self {
+    /// The view of `job`: as `camera` has it when the user has zoomed or panned, else fitted
+    /// (a rotary job's wrap bands and all).
+    pub fn new(
+        ui: &mut egui::Ui,
+        job: &Job,
+        camera: Option<ViewTransform>,
+        wrap: Option<Wrap>,
+    ) -> Self {
         let (area, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+        let fitted = wrap.map_or_else(|| job.area(), |w| w.strip());
         let transform = camera
-            .unwrap_or_else(|| ViewTransform::fit(area, ui.spacing().interact_size.y, job.area()));
+            .unwrap_or_else(|| ViewTransform::fit(area, ui.spacing().interact_size.y, fitted));
         Self {
             transform,
             area,
             response,
             job: job.area(),
+            wrap,
         }
     }
 
@@ -693,12 +706,119 @@ impl Canvas {
         }
     }
 
-    /// The job's material sheet, filled in `colour`, under everything else drawn.
+    /// The job's material sheet, filled in `colour`, under everything else drawn; a rotary
+    /// job's wrap bands too, which [`Self::paint`] then shades.
     pub fn paint_sheet(&self, ui: &egui::Ui, colour: [u8; 3]) {
-        let t = self.transform;
-        let job = Rect::from_two_pos(t.to_screen(self.job.min), t.to_screen(self.job.max));
         let colour = egui::Color32::from_rgb(colour[0], colour[1], colour[2]);
-        ui.painter_at(self.area).rect_filled(job, 0.0, colour);
+        let painter = ui.painter_at(self.area);
+        let sheet = self.wrap.map_or(self.job, |w| w.strip());
+        painter.rect_filled(self.on_screen(sheet), 0.0, colour);
+    }
+
+    /// The job's pictures (bitmaps), each over the rectangle it covers.
+    fn paint_pictures(&self, ui: &egui::Ui, painter: &egui::Painter, doc: &Document) {
+        let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+        for (id, bitmap) in &doc.bitmaps {
+            let texture = bitmap_texture(ui.ctx(), *id, bitmap);
+            let at = self.on_screen(bitmap.rect);
+            painter.image(texture.id(), at, whole, egui::Color32::WHITE);
+        }
+    }
+
+    /// The datum's two lines, dashed, across the whole view.
+    fn paint_datum(&self, painter: &egui::Painter, ui: &egui::Ui, (dash, gap): (f32, f32)) {
+        let datum = ui.visuals().widgets.noninteractive.fg_stroke;
+        let (o, area) = (self.transform.origin, self.area);
+        for line in [
+            [pos2(area.left(), o.y), pos2(area.right(), o.y)],
+            [pos2(o.x, area.top()), pos2(o.x, area.bottom())],
+        ] {
+            painter.extend(Shape::dashed_line(&line, datum, dash, gap));
+        }
+    }
+
+    /// A circle on each open end, in the warning colour: where a shape has a gap.
+    fn paint_open_ends(&self, painter: &egui::Painter, ui: &egui::Ui, doc: &Document) {
+        let visuals = ui.visuals();
+        let datum = visuals.widgets.noninteractive.fg_stroke;
+        let radius = ui.spacing().interact_size.y * OPEN_END_SHARE;
+        let ring = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
+        for end in cmd_join_open_ends::open_ends(doc) {
+            let at = self.transform.to_screen(end.point);
+            painter.circle(at, radius, visuals.extreme_bg_color, ring);
+        }
+    }
+
+    /// Where `r` (in job coordinates) is on screen.
+    fn on_screen(&self, r: JobRect) -> Rect {
+        Rect::from_two_pos(
+            self.transform.to_screen(r.min),
+            self.transform.to_screen(r.max),
+        )
+    }
+
+    /// A rotary job's wrap: the drawing near each seam drawn again, faded, a turn away (so
+    /// what runs off one seam is seen coming in at the other), the bands past the seams
+    /// shaded, the seams marked and each mark's A angle written by it.
+    fn paint_wrap(
+        &self,
+        ui: &egui::Ui,
+        doc: &Document,
+        stamp: Stamp,
+        screen: &dyn Fn(&Path) -> Vec<Pos2>,
+        dashes: (f32, f32),
+        colour: [u8; 3],
+    ) {
+        let Some(wrap) = self.wrap else {
+            return;
+        };
+        let t = self.transform;
+        let strip = self.on_screen(wrap.strip()).intersect(self.area);
+        for by in wrap.shifts() {
+            let mut painter = ui.painter_at(strip);
+            painter.multiply_opacity(GHOST_STRENGTH);
+            let (shift, back) = (t.to_screen(by), t.to_screen(Point::ZERO));
+            let moved = shift - back;
+            let ghost = |path: &Path| -> Vec<Pos2> {
+                screen(path).into_iter().map(|p| p + moved).collect()
+            };
+            let keep = |path: &Path| wrap.ghost_shows(path.bounds(), by);
+            paint_vectors(&painter, ui, doc, stamp, &ghost, dashes, colour, &keep);
+        }
+        let painter = ui.painter_at(self.area);
+        let visuals = ui.visuals();
+        let veil = visuals.extreme_bg_color.gamma_multiply(BAND_VEIL);
+        for band in wrap.bands() {
+            painter.rect_filled(self.on_screen(band), 0.0, veil);
+        }
+        let width = visuals.widgets.noninteractive.fg_stroke.width;
+        let seam = Stroke::new(2.0 * width, colour32(SEAM_COLOUR));
+        let edge = Stroke::new(width, colour32(SEAM_COLOUR).gamma_multiply(BAND_VEIL));
+        let font = egui::FontId::proportional(ui.text_style_height(&egui::TextStyle::Small));
+        let gap = ui.spacing().item_spacing.x;
+        for (i, ([from, to], degrees)) in wrap.marks().into_iter().enumerate() {
+            let is_seam = i == 1 || i == 2;
+            let (a, b) = (t.to_screen(from), t.to_screen(to));
+            painter.line_segment([a, b], if is_seam { seam } else { edge });
+            // the A angle at the far end of the line: right of it, or above it
+            let end = if wrap.seams_across() {
+                pos2(a.x.max(b.x), a.y)
+            } else {
+                pos2(a.x, a.y.min(b.y))
+            };
+            let (at, anchor) = if wrap.seams_across() {
+                (end + vec2(gap, 0.0), egui::Align2::LEFT_CENTER)
+            } else {
+                (end - vec2(0.0, gap), egui::Align2::CENTER_BOTTOM)
+            };
+            let text = cut_craft_i18n::tr!("views-rotary-seam-angle", degrees = rounded(degrees));
+            let colour = if is_seam {
+                colour32(SEAM_COLOUR)
+            } else {
+                visuals.weak_text_color()
+            };
+            painter.text(at, anchor, text, font.clone(), colour);
+        }
     }
 
     #[expect(
@@ -723,25 +843,13 @@ impl Canvas {
             ui.spacing().item_spacing.x / 2.0,
         );
 
-        for (id, bitmap) in &doc.bitmaps {
-            let texture = bitmap_texture(ui.ctx(), *id, bitmap);
-            let at = Rect::from_two_pos(t.to_screen(bitmap.rect.min), t.to_screen(bitmap.rect.max));
-            let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-            painter.image(texture.id(), at, whole, egui::Color32::WHITE);
-        }
+        self.paint_pictures(ui, &painter, doc);
         let moving = match overlay {
             Overlay::Moving { components, .. } => components.as_slice(),
             _ => &[],
         };
         self.paint_components(ui, &painter, doc, stamp, moving);
-        let datum = visuals.widgets.noninteractive.fg_stroke;
-        let (o, area) = (t.origin, self.area);
-        for line in [
-            [pos2(area.left(), o.y), pos2(area.right(), o.y)],
-            [pos2(o.x, area.top()), pos2(o.x, area.bottom())],
-        ] {
-            painter.extend(Shape::dashed_line(&line, datum, dash, gap));
-        }
+        self.paint_datum(&painter, ui, (dash, gap));
 
         // chords within half a physical pixel of the true curve
         let tolerance = f64::from(0.5 / (ui.ctx().pixels_per_point() * t.scale));
@@ -752,18 +860,23 @@ impl Canvas {
                 .collect()
         };
         let selected = visuals.selection.stroke;
-        paint_vectors(&painter, ui, doc, stamp, &screen, (dash, gap), lines.vector);
+        let all = |_: &Path| true;
+        paint_vectors(
+            &painter,
+            ui,
+            doc,
+            stamp,
+            &screen,
+            (dash, gap),
+            lines.vector,
+            &all,
+        );
         self.paint_guides_and_zones(&painter, ui, doc, display, (dash, gap));
         self.paint_outlines(&painter, doc, selected, (dash, gap));
         self.paint_toolpaths(&painter, ui, doc, highlighted, display, lines);
+        self.paint_wrap(ui, doc, stamp, &screen, (dash, gap), lines.vector);
         if display.open_ends {
-            // a circle on each open end, in the warning colour: where a shape has a gap
-            let radius = ui.spacing().interact_size.y * OPEN_END_SHARE;
-            let ring = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
-            for end in cmd_join_open_ends::open_ends(doc) {
-                let at = t.to_screen(end.point);
-                painter.circle(at, radius, visuals.extreme_bg_color, ring);
-            }
+            self.paint_open_ends(&painter, ui, doc);
         }
 
         match overlay {
@@ -780,10 +893,11 @@ impl Canvas {
                 handles,
             } => {
                 let half = ui.spacing().interact_size.y * NODE_HANDLE_SHARE / 2.0;
+                let thin = visuals.widgets.noninteractive.fg_stroke.width;
                 // under the nodes: a thin line from each node out to its round handle
                 for (node, handle) in handles {
                     let (a, b) = (t.to_screen(*node), t.to_screen(*handle));
-                    painter.line_segment([a, b], Stroke::new(datum.width, selected.color));
+                    painter.line_segment([a, b], Stroke::new(thin, selected.color));
                     painter.circle(b, half * HANDLE_DOT_SHARE, selected.color, selected);
                 }
                 for q in at {
@@ -838,10 +952,33 @@ pub const CONSTRUCTION_DASHES: [f32; 2] = [2.0, 0.4];
 /// How faint a dragged component is drawn where it was, out of 255.
 const MOVING_FADE: u8 = 70;
 
+/// How strongly a rotary job's ghost copies are drawn (a share of the usual): nearly as
+/// strong as the drawing inside the sheet, where they really are cut.
+const GHOST_STRENGTH: f32 = 0.8;
+
+/// How thickly the wrap bands are veiled in the view's far background (lighter in the light
+/// theme, darker in the dark), fading all drawn there to about half.
+const BAND_VEIL: f32 = 0.55;
+
+/// What a rotary job's seams are drawn in: a clear blue on the light and the dark theme,
+/// never red, which means a warning.
+pub const SEAM_COLOUR: [u8; 3] = [70, 135, 235];
+
+/// An angle as the seam marks write it: whole degrees, with no "-0".
+fn rounded(degrees: f64) -> i64 {
+    #[expect(clippy::cast_possible_truncation, reason = "a few turns of degrees")]
+    let d = degrees.round() as i64;
+    d
+}
+
 /// The shown vectors, each in its layer's colour if it has one, else `colour`: selected ones
 /// dashed (selected groups solid), then their common lines
 /// (spans lying on another span of the same layer) over them in red, for attention.
-/// Stepped inside a group, vectors outside it are drawn faded.
+/// Stepped inside a group, vectors outside it are drawn faded. Only the paths `keep` says.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one pass of the vectors, taken apart"
+)]
 fn paint_vectors(
     painter: &egui::Painter,
     ui: &egui::Ui,
@@ -850,6 +987,7 @@ fn paint_vectors(
     screen: &dyn Fn(&Path) -> Vec<Pos2>,
     (dash, gap): (f32, f32),
     colour: [u8; 3],
+    keep: &dyn Fn(&Path) -> bool,
 ) {
     let visuals = ui.visuals();
     let width = visuals.widgets.noninteractive.fg_stroke.width;
@@ -859,7 +997,7 @@ fn paint_vectors(
         doc.inside_group
             .is_some_and(|g| !doc.group_chain(id).contains(&g))
     };
-    for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
+    for (id, path) in (doc.vectors.iter()).filter(|(id, path)| doc.shown(**id) && keep(path)) {
         if doc.selection.contains(id) && doc.vector_groups.contains_key(id) {
             painter.add(Shape::line(screen(path), selected));
         } else if doc.selection.contains(id) {
@@ -897,6 +1035,7 @@ fn paint_vectors(
     painter.extend(
         common_lines(ui.ctx(), doc, stamp)
             .iter()
+            .filter(|span| keep(span))
             .map(|span| Shape::line(screen(span), red)),
     );
 }
