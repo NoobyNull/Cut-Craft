@@ -350,7 +350,7 @@ mod tests {
         for entry in registry.importers() {
             check(format!("{} file kind", entry.id), entry.format.label);
         }
-        for b in crate::built_ins::BUILT_INS {
+        for b in crate::app::built_ins::BUILT_INS {
             check(format!("{} name", b.id), b.name);
             check(format!("{} description", b.id), b.about);
         }

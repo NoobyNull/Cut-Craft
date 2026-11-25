@@ -234,7 +234,7 @@ pub(super) const SCROLL_NOTCH: f32 = 50.0;
 pub(super) const BRUSH_STEP: f64 = 0.1;
 pub(super) const BRUSH_FINE_STEP: f64 = 0.02;
 /// The view buttons over the top right of the 2D view, by action: each one's name and icon
-/// are its [`crate::built_ins`] entry's.
+/// are its [`crate::app::built_ins`] entry's.
 pub(super) const VIEW_BUTTONS: [&str; 4] = ["pan", "zoom_box", "zoom_to_job", "zoom_selected"];
 /// Scrolling a view's height divided by this doubles the zoom.
 // ponytail: fixed rate until a preferences dialog exists
@@ -253,15 +253,6 @@ pub(super) const STARTUP_TASKS: [(&str, &str); 4] = [
 pub(crate) fn menu_key(name: &str) -> String {
     cut_craft_i18n::key_of("menu", name)
 }
-/// The top bar's split and snapping toggles.
-pub(super) const TOP_BAR_TOGGLES: [&str; 6] = [
-    "split_stacked",
-    "split_side_by_side",
-    "split_picture",
-    "toggle_geometry_snapping",
-    "toggle_smart_snapping",
-    "toggle_grid_snapping",
-];
 /// The level menu's Select Components and Export as 3D Clipart: these, then the level's id.
 pub const SELECT_LEVEL: &str = "select_level_components:";
 pub const EXPORT_LEVEL: &str = "export_level_clipart:";

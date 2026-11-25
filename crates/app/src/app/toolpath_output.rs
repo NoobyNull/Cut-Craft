@@ -100,36 +100,31 @@ impl CutCraftApp {
         (!refused.is_empty()).then(|| format!("{KEEP_OUT_REFUSED}: {}. {way}", refused.join("; ")))
     }
 
-    pub(super) fn toolpath_action(&mut self, id: &str) {
-        match id {
-            "recalculate_toolpath" => {
-                if let Some(id) = self.selected_toolpath {
-                    self.recalculate_in_background(vec![id], "Toolpath recalculated", |_| {});
-                }
-            }
-            // the cascade: Recalculate on each shown toolpath
-            "recalculate_visible_toolpaths" => {
-                let shown = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
-                let ids: Vec<EntityId> = shown.map(|(&id, _)| id).collect();
-                self.recalculate_in_background(ids, "Visible toolpaths recalculated", |_| {});
-            }
-            "recalculate_all_toolpaths" => {
-                let ids: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
-                self.recalculate_in_background(ids, "All toolpaths recalculated", |_| {});
-            }
-            // the toolpath list's button: the Delete Toolpath command on the selected one
-            "delete_toolpath" => {
-                if let Some(id) = self.selected_toolpath.take()
-                    && let Err(e) =
-                        self.apply("delete_toolpath", &serde_json::json!({ "toolpath": id }))
-                {
-                    self.status.set_message(&e);
-                }
-            }
-            "save_toolpaths" => {
-                self.save_form = Some(self.default_save_form());
-            }
-            _ => unreachable!("not a toolpath action: {id}"),
+    /// Recalculate Toolpath: the selected one, worked out again.
+    pub(super) fn recalculate_selected(&mut self) {
+        if let Some(id) = self.selected_toolpath {
+            self.recalculate_in_background(vec![id], "Toolpath recalculated", |_| {});
+        }
+    }
+
+    /// Recalculate Visible Toolpaths: the cascade, Recalculate on each shown toolpath.
+    pub(super) fn recalculate_shown(&mut self) {
+        let shown = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
+        let ids: Vec<EntityId> = shown.map(|(&id, _)| id).collect();
+        self.recalculate_in_background(ids, "Visible toolpaths recalculated", |_| {});
+    }
+
+    pub(super) fn recalculate_all(&mut self) {
+        let ids: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
+        self.recalculate_in_background(ids, "All toolpaths recalculated", |_| {});
+    }
+
+    /// The toolpath list's button: the Delete Toolpath command on the selected one.
+    pub(super) fn delete_selected_toolpath(&mut self) {
+        if let Some(id) = self.selected_toolpath.take()
+            && let Err(e) = self.apply("delete_toolpath", &serde_json::json!({ "toolpath": id }))
+        {
+            self.status.set_message(&e);
         }
     }
 

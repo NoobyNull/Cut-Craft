@@ -1,7 +1,7 @@
 //! What the tools and menu items below do, where their command crate's own words will not do
 //! (a crate holding several commands says one thing for all of them) or there is no crate: the
 //! view and preview switches, the layouts and a gadget. The built-in actions say it in
-//! [`crate::built_ins`].
+//! [`crate::app::built_ins`].
 
 /// Each id and what it does, in the person's words.
 pub const HINTS: &[(&str, &str)] = &[

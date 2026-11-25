@@ -646,7 +646,7 @@ impl CutCraftApp {
         let shift = ui.input(|i| i.modifiers.shift);
         if removed {
         } else if let Some(id) = picked {
-            self.pick_3d(ui, id, shift);
+            self.pick_3d(id, shift);
         } else if clicked.is_some() && !shift {
             self.doc.selected_components.clear();
         }
@@ -658,14 +658,14 @@ impl CutCraftApp {
     /// A click on component `id`: Shift adds or takes it away, else it alone is picked;
     /// with any picked, Transform mode shows their handles and height buttons (when no
     /// other view tool is in use). Clicking again keeps it so.
-    pub(super) fn pick_3d(&mut self, ui: &egui::Ui, id: EntityId, shift: bool) {
+    pub(super) fn pick_3d(&mut self, id: EntityId, shift: bool) {
         if !shift {
             self.doc.selected_components = [id].into();
         } else if !self.doc.selected_components.remove(&id) {
             self.doc.selected_components.insert(id);
         }
         if !self.doc.selected_components.is_empty() && self.view_tool.is_none() {
-            self.view_action(ui.ctx(), "transform");
+            self.toggle_transform();
         }
     }
 

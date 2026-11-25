@@ -24,7 +24,7 @@ fn every_tool() -> Vec<&'static str> {
             ids.push(c.id());
         }
     }
-    for b in crate::built_ins::BUILT_INS {
+    for b in crate::app::built_ins::BUILT_INS {
         if !ids.contains(&b.id) {
             ids.push(b.id);
         }
@@ -121,7 +121,7 @@ fn menu_item_names(items: &[gui::MenuItem], out: &mut Vec<String>) {
     let tools = every_tool();
     let named_as_tool = |item: &gui::MenuItem| {
         let built_in =
-            crate::built_ins::get(&item.action).is_some_and(|b| item.name == b.menu_name());
+            crate::app::built_ins::get(&item.action).is_some_and(|b| item.name == b.menu_name());
         built_in
             || (tools.contains(&item.action.as_str())
                 && english_name(&registry, &item.action) == item.name)
@@ -167,7 +167,7 @@ fn every_tool_has_its_name_in_english() {
 fn every_tooltip() -> Vec<(&'static str, &'static str)> {
     let mut ids: Vec<&'static str> = crate::hints::HINTS.iter().map(|(id, _)| *id).collect();
     ids.extend(gui::command_ids());
-    ids.extend(crate::built_ins::BUILT_INS.iter().map(|b| b.id));
+    ids.extend(crate::app::built_ins::BUILT_INS.iter().map(|b| b.id));
     ids.extend(crate::flyout::VARIANTS.iter().map(|v| v.id));
     ids.extend(every_tool());
     let mut out: Vec<(&'static str, &'static str)> = vec![];

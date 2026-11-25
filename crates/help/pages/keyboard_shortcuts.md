@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-25
 see-also: find_tool, view_2d, settings, getting_started, screen_readers
 ---
 

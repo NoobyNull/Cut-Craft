@@ -105,3 +105,28 @@ fn a_menu_item_of_an_action_shows_the_actions_name_in_the_language_in_use() {
 fn a_menu_item_for_an_action_not_listed_is_caught_when_the_menus_are_made() {
     let _ = MenuItem::built_in("not_an_action");
 }
+
+#[test]
+fn every_action_runs_something() {
+    let idle: Vec<&str> = (BUILT_INS.iter())
+        .filter(|b| !b.runs())
+        .map(|b| b.id)
+        .collect();
+    assert!(idle.is_empty(), "nothing runs: {idle:?}");
+}
+
+#[test]
+fn an_action_that_can_be_greyed_out_says_why_in_english() {
+    for b in BUILT_INS {
+        if b.why.is_empty() {
+            continue;
+        }
+        assert!(b.why.starts_with("actions-why-"), "{}: {}", b.id, b.why);
+        assert!(
+            cut_craft_i18n::english().words(b.why, None).is_some(),
+            "{}: {} is not in locales/en/actions.ftl",
+            b.id,
+            b.why
+        );
+    }
+}

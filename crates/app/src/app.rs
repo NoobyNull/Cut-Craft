@@ -1,10 +1,12 @@
 //! The main window: menus, Design and Toolpaths panels, and the 2D/3D views over the
 //! document, its undo history and the command registry.
 
+mod action_runs;
 mod actions;
 mod app_icon;
 mod background;
 mod backups;
+pub(crate) mod built_ins;
 mod calculate_again;
 mod canvas_2d;
 mod canvas_layout;
@@ -618,7 +620,7 @@ struct CarveArea {
     clippy::struct_excessive_bools,
     reason = "the windows and modes it shows"
 )]
-struct CutCraftApp {
+pub(crate) struct CutCraftApp {
     screen: Screen,
     doc: Document,
     history: History,

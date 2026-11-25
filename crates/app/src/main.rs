@@ -20,7 +20,6 @@ mod addons;
 mod app;
 mod axes;
 mod borders;
-mod built_ins;
 mod busy;
 mod clipart;
 mod commands;

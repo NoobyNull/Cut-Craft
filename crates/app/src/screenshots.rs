@@ -90,7 +90,7 @@ const SCENES: &[Scene] = &[
     }),
     // Help: 3D View ▸ Changing a model's height (each builds on the one before)
     ("height-start", height_start),
-    ("height-buttons", |app, ctx| {
+    ("height-buttons", |app, _| {
         // one click on the medallion: picked, outlined, its height buttons shown
         let medallion = app
             .doc
@@ -99,7 +99,7 @@ const SCENES: &[Scene] = &[
             .find(|(_, k)| k.name == "Medallion")
             .map(|(&id, _)| id);
         app.doc.selected_components = medallion.into_iter().collect();
-        app.view_action(ctx, "transform");
+        app.toggle_transform();
     }),
     ("height-taller", height_taller),
     // Help: Material Setup ▸ Model Position in Material
@@ -293,7 +293,7 @@ const SCENES: &[Scene] = &[
         height_start(app, ctx);
     }),
     // Help: Transform ▸ Which way the handles go (the move cross along X and Y in 3D)
-    ("transform-axis-handles", |app, ctx| {
+    ("transform-axis-handles", |app, _| {
         let medallion = app
             .doc
             .components
@@ -301,7 +301,7 @@ const SCENES: &[Scene] = &[
             .find(|(_, k)| k.name == "Medallion")
             .map(|(&id, _)| id);
         app.doc.selected_components = medallion.into_iter().collect();
-        app.view_action(ctx, "transform");
+        app.toggle_transform();
     }),
     // Help: Orientate 3D Model ▸ Turning the model with the rings
     ("turn-rings", |app, ctx| {

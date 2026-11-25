@@ -78,9 +78,6 @@ text-selected-layers-d4275e = Selected layers
 
 ## src/app/views.rs
 text-drop-to-open-or-import-8b9385 = Drop to open or import
-text-2d-over-3d-a87e26 = 2D over 3D
-text-2d-beside-3d-44dcf2 = 2D beside 3D
-text-one-view-in-a-corner-89957f = One view in a corner of the other
 text-bottom-side-652dcd = Bottom Side
 text-top-side-3356bf = Top Side
 
