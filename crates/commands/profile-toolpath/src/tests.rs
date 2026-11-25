@@ -121,7 +121,7 @@ fn remembers_how_it_was_made_so_it_can_be_recalculated() {
 fn a_shape_smaller_than_the_tool_cannot_be_cut_inside() {
     assert_eq!(
         profile(Side::Inside, 4.0).unwrap_err(),
-        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, \
+        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller bit, \
              or cut Outside instead."
     );
 }

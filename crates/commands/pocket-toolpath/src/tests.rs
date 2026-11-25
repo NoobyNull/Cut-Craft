@@ -815,7 +815,7 @@ fn clearing_bits_cut_largest_first_whatever_order_they_were_picked_in() {
 fn a_shape_smaller_than_the_tool_cannot_be_pocketed() {
     assert_eq!(
         pocket(4.0, &Params::default()).unwrap_err(),
-        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, \
+        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller bit, \
              or make the shapes bigger."
     );
 }
@@ -831,7 +831,7 @@ fn stepover_must_be_a_fraction_of_the_tool() {
     };
     assert_eq!(
         pocket(20.0, &p).unwrap_err(),
-        "Set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database."
+        "Set the bit's clearing stepover to more than 0% and at most 100% in the Bit Library."
     );
 }
 

@@ -64,7 +64,7 @@ pub struct Params {
     pub allowance: f64,
     /// Its pass depth spaces the levels, its stepover the lines
     pub tool: Tool,
-    /// Where the tool's tip may go
+    /// Where the bit's tip may go
     #[serde(default)]
     #[schemars(title = "Machining Limit Boundary")]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
@@ -169,11 +169,11 @@ impl Command for RoughingToolpath3d {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let tool = &p.tool;
-        ensure_positive("tool diameter", tool.diameter)?;
+        ensure_positive("bit diameter", tool.diameter)?;
         ensure_positive("pass depth", tool.pass_depth)?;
         if !(tool.stepover > 0.0 && tool.stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database".into(),
+                "set the bit's clearing stepover to more than 0% and at most 100% in the Bit Library".into(),
             ));
         }
         if p.allowance.is_nan() || p.allowance < 0.0 {
@@ -366,7 +366,7 @@ fn connect(
     moves
 }
 
-/// Where the tool's tip rests at each cell of the grid inside the boundary; infinite
+/// Where the bit's tip rests at each cell of the grid inside the boundary; infinite
 /// outside it.
 fn tips(grid: &Material, tool: &Tool, boundary: &[Path]) -> Vec<f64> {
     let (columns, rows) = (grid.columns, grid.rows);
@@ -411,7 +411,7 @@ fn tips(grid: &Material, tool: &Tool, boundary: &[Path]) -> Vec<f64> {
         .collect()
 }
 
-/// The separate areas cut at each level, as a label per cell of the grid: where the tool's
+/// The separate areas cut at each level, as a label per cell of the grid: where the bit's
 /// tip ([`tips`]) rests no higher than the level.
 fn areas(grid: &Material, levels: &[f64], tips: &[f64]) -> Vec<Vec<Option<usize>>> {
     let (columns, rows) = (grid.columns, grid.rows);

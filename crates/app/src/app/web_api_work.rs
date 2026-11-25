@@ -283,6 +283,7 @@ impl CutCraftApp {
     fn start_web_checks(&mut self, plans: Vec<Vec<EntityId>>) {
         self.web_api.checks = None;
         let doc = self.doc.clone();
+        let tolerances = self.options.toolpaths.clone();
         let mut limits = self.limits();
         if self.default_changes() != files::ToolChanges::ToolChanger {
             limits.slots.clear();
@@ -291,6 +292,8 @@ impl CutCraftApp {
             CHECKING_FOR_API,
             "check",
             move || {
+                // checked as saved: each toolpath thinned to its tolerance
+                let doc = tolerances.thinned(&doc);
                 let mut found: BTreeMap<EntityId, Vec<Finding>> = BTreeMap::new();
                 for plan in plans {
                     let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
@@ -538,35 +541,25 @@ impl CutCraftApp {
             .map_err(|e| ApiError::refused(capital(&e)))?;
         let mut found: Vec<Finding> = found.into_values().flatten().collect();
         found.extend(self.no_tool_changer_for(form.changes));
-        // as Save Toolpaths decides: an error stops it; every warning (the collet or
-        // spindle hitting the material too) is asked about, and "accept_warnings" is the
-        // Save Anyway answer. Nothing is ticked as read through the Web API.
-        let warnings: Vec<String> = found.iter().map(|f| f.message.clone()).collect();
-        let accepted = if gcode.accept_warnings {
-            warnings.as_slice()
-        } else {
-            &[]
-        };
-        match super::output::verdict(&found, &std::collections::BTreeSet::default(), accepted) {
-            super::output::Verdict::Refused(refused) => return Err(ApiError::refused(refused)),
-            super::output::Verdict::Ask(problems) => {
-                return Err(ApiError::refused(format!(
-                    "The checks before cutting found: {}. Put them right, or send \
-                     \"accept_warnings\": true to make the G-code anyway (as Save Anyway).",
-                    problems.join("; ")
-                )));
-            }
-            super::output::Verdict::Go => {}
-        }
+        let (errors, warnings) = web_verdict(&found, gcode)?;
+        let left_out = self.with_picked(gcode, |app| app.output().left_out(&form, &post));
+
         let saving = gcode.save_to.as_deref().map(std::path::PathBuf::from);
         let path = match &saving {
             Some(path) => files::with_extension_added(path, &post.extension),
-            None => std::path::PathBuf::from(self.output().file_name(&form, &post)),
+            // named as the toolpaths picked, not the window's selection
+            None => self.with_picked(gcode, |app| {
+                std::path::PathBuf::from(app.output().file_name(&form, &post))
+            }),
         };
         let made = chrono::Local::now().naive_local();
         let texts = self
             .with_picked(gcode, |app| app.toolpath_texts(&form, &post, &path, made))
             .map_err(|e| ApiError::refused(capital(&e)))?;
+        // saved past errors, or with the machine's protection switched off: said at the top
+        // of each file
+        let off = self.output().protection_off();
+        let texts = super::output::marked(texts, &errors, off.as_deref());
         if saving.is_some() {
             // an earlier save there (the same names, or the tile, numbered and side files
             // an earlier layout left) is written over only when asked, and then as Save
@@ -595,6 +588,7 @@ impl CutCraftApp {
             }
             .map_err(ApiError::refused)?;
             let said = self.output().saved_message(&written, &path);
+            let said = super::output::with_left_out(said, &left_out);
             self.status.set_message(&format!("{said} (Web API)"));
         }
         cut_craft_bug_report::logs::step("Web API made G-code");
@@ -613,6 +607,8 @@ impl CutCraftApp {
             "post": post.name,
             "files": files,
             "warnings": warnings,
+            "errors": errors,
+            "left_out": left_out,
             "saved": saving.is_some(),
         }))
     }
@@ -845,4 +841,53 @@ fn leave_out_windows(ctx: &egui::Context) {
             }
         }
     });
+}
+
+/// As Save Toolpaths decides with what the checks `found`: every problem is asked about.
+/// The errors and the warnings, by message, unless refused.
+fn web_verdict(found: &[Finding], gcode: &Gcode) -> Result<(Vec<String>, Vec<String>), ApiError> {
+    // "accept_warnings" is the Save Anyway answer for the warnings, "accept_errors" for the
+    // errors (Must fix), so a script never goes past a crash by accident. Nothing is ticked
+    // as read through the Web API.
+    let errors = super::output::errors(found);
+    let accepted: Vec<String> = (found.iter())
+        .filter(|f| {
+            if errors.contains(&f.message) {
+                gcode.accept_errors
+            } else {
+                gcode.accept_warnings
+            }
+        })
+        .map(|f| f.message.clone())
+        .collect();
+    let refused = super::output::refused(found);
+    let warnings: Vec<String> = (found.iter())
+        .filter(|f| !errors.contains(&f.message) && !refused.contains(&f.message))
+        .map(|f| f.message.clone())
+        .collect();
+    let verdict = super::output::verdict(found, &std::collections::BTreeSet::default(), &accepted);
+    if let super::output::Verdict::Refused(damage) = verdict {
+        // nothing a script sends gets past it: only Machine Configuration does
+        return Err(ApiError::refused(super::output::refusal(&damage)));
+    }
+    if let super::output::Verdict::Ask(asking) = verdict {
+        let (said, flag) = if !asking.errors.is_empty() && !gcode.accept_errors {
+            let what = if asking.wont_run.is_empty() {
+                "errors that can break a bit or spoil the job"
+            } else {
+                "errors: the job will not run as saved"
+            };
+            (
+                format!("{what}: {}", asking.errors.join("; ")),
+                "accept_errors",
+            )
+        } else {
+            (warnings.join("; "), "accept_warnings")
+        };
+        return Err(ApiError::refused(format!(
+            "The checks before cutting found {said}. Put them right, or send \
+             \"{flag}\": true to make the G-code anyway (as Save Anyway)."
+        )));
+    }
+    Ok((errors, warnings))
 }

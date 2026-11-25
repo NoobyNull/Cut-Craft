@@ -25,8 +25,12 @@ a CNC machine cuts them with.
   shown each time Cut Craft starts. Each links to the page that says more.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.
+- [Backing up your settings](help:backups): Help ▸ Back Up Settings, what goes in, and the
+  backups Cut Craft makes by itself before updates and other big changes.
 - [Reporting a bug](help:bug_reports): right-click ▸ Report a Bug Here…, what each report
   sends (the details of your computer included), and how to switch those off.
+- [Protect the Machine](help:protect_the_machine): what is never saved because it could
+  damage the machine, and the only way past, per machine in Machine Configuration.
 - [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
   hitting wood beside a deep cut, shown red in the preview and asked about before saving.
 - [Web API](help:web_api): let a program or script drive Cut Craft, off until you
@@ -56,6 +60,8 @@ a CNC machine cuts them with.
   [Rail](help:layout_rail), [Canvas](help:layout_canvas) or [Classic](help:layout_classic),
   and how to switch.
 - [Favourites](help:favourites): the tools you use most, kept at hand.
+- [Toolbars of your own](help:toolbars): your own named toolbars of tools and groups,
+  in every layout or floating over the drawing.
 - [Saving and opening jobs](help:saving_jobs): Increment and Save, the recovery copy, and
   a job that won't open.
 - [Colors on screen](help:colors_on_screen): color-blind friendly colors, or your own.
@@ -67,7 +73,7 @@ a CNC machine cuts them with.
 
 ## Windows that open beside Cut Craft
 
-Some tools open in a window of their own: Did You Know?, Options, the Tool Database,
+Some tools open in a window of their own: Did You Know?, Options, the Bit Library,
 Machine Configuration, View G-code, Report a Bug and others. Each one stays in front of
 Cut Craft's main window until you close it, so clicking the main window never hides it.
 You can still use the main window while it is open. It does not cover other programs,

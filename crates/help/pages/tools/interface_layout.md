@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: layout_ribbon, layout_rail, layout_canvas, layout_classic, favourites, find_tool, settings
 ---
 
@@ -54,6 +54,9 @@ page on the right, and tabs down the sides.
 First-time setup asks which layout you want, with Ribbon picked. If you used Cut Craft
 before this question existed, it asks once after you update. **Keep** leaves your window as
 it was.
+
+Before the layout changes, Cut Craft [backs up your settings](help:backups), so the layout and
+favourites you had are kept.
 
 Not sure where a tool went? Press **Ctrl+K** for [Find Tool](help:find_tool) and type part
 of its name. Your [favourites](help:favourites) are the same in every layout.

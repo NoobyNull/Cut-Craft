@@ -531,14 +531,14 @@ impl CutCraftApp {
     }
 
     /// The whole job's cutting time, minutes: every shown toolpath, the moves between them,
-    /// the tool changes and the trip back home.
+    /// the bit changes and the trip back home.
     pub(super) fn job_minutes(&self) -> f64 {
         self.cut_times().total
     }
 
     /// What the cutting times go by: the Toolpath Summary's rapid rate, the active
     /// machine's top speeds, cornering and (unless the Toolpath Summary is told not to)
-    /// accelerations, its tool changer, and the tool change times in Options.
+    /// accelerations, its tool changer, and the bit change times in Options.
     pub(super) fn motion(&self) -> cut_craft_core::cut_time::Motion {
         let machine = self.machines.active();
         let o = &self.options.toolpaths;

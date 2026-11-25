@@ -26,14 +26,51 @@ pub fn post_for(
     library: &Library,
     picked: Option<&str>,
 ) -> Result<Post, String> {
-    if let Some(why) = no_a_axis(machine, job) {
+    if let Some(why) = no_a_axis(machine, job).or_else(|| no_4th_axis(machine, job)) {
         return Err(why);
     }
     let post = match picked {
-        Some(name) => library.load(name)?,
+        Some(name) => suited(library.load(name)?, job)?,
         None => as_written(machine, job, library)?,
     };
     Ok(on_machine(machine, post))
+}
+
+/// `post` when it writes this kind of job (flat, or wrapping the side that goes round);
+/// else why not, as one written for another would put the moves on the wrong axis.
+fn suited(post: Post, job: &Job) -> Result<Post, String> {
+    let wraps = wraps_for(job);
+    if post.wraps() == wraps {
+        return Ok(post);
+    }
+    Err(match (wraps, job.rotary) {
+        (None, _) => format!(
+            "{} is a rotary post: pick a flat one for this job",
+            post.name
+        ),
+        (Some(_), Some(r)) => format!(
+            "{} is not a post for this rotary job: pick a Rotary A, cylinder along {} post",
+            post.name,
+            match r.along {
+                Along::X => "X",
+                Along::Y => "Y",
+            }
+        ),
+        (Some(_), None) => format!("{} does not suit this job", post.name),
+    })
+}
+
+/// Why a rotary job can't be saved for `machine`: its 4th axis is not ticked in Machine
+/// Configuration, whichever post would be used. `None` for a flat job or no machine.
+fn no_4th_axis(machine: Option<&Machine>, job: &Job) -> Option<String> {
+    let machine = machine?;
+    (job.rotary.is_some() && !machine.has_rotary()).then(|| {
+        format!(
+            "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
+             Configuration",
+            machine.name
+        )
+    })
 }
 
 /// The machine's posts that suit `job` (flat, or wrapping its side), for Save Toolpaths to
@@ -83,13 +120,6 @@ fn as_written(machine: Option<&Machine>, job: &Job, library: &Library) -> Result
         return Ok(Post::default_for(job));
     };
     let wraps = wraps_for(job);
-    if wraps.is_some() && !machine.has_rotary() {
-        return Err(format!(
-            "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
-             Configuration",
-            machine.name
-        ));
-    }
     // the default first: one that will not load says so rather than being passed over
     let default = machine.post().map(|name| library.load(name)).transpose()?;
     if let Some(post) = default.filter(|p| p.wraps() == wraps) {
@@ -180,6 +210,9 @@ mod tests {
             name(post_for(Some(&m), &flat(), &library(), None)),
             Post::default_for(&flat()).name
         );
+        // still not a rotary job without its 4th axis ticked
+        let why = post_for(Some(&m), &rotary(Along::X), &library(), None).unwrap_err();
+        assert!(why.contains("has no 4th axis"), "{why}");
     }
 
     #[test]
@@ -222,8 +255,21 @@ mod tests {
     #[test]
     fn a_rotary_job_needs_the_4th_axis_ticked() {
         let m = machine(&[FLAT, ROUND_X], Firmware::FluidNc, false);
-        let why = post_for(Some(&m), &rotary(Along::X), &library(), None).unwrap_err();
-        assert!(why.contains("has no 4th axis"), "{why}");
+        for picked in [None, Some(ROUND_X)] {
+            let why = post_for(Some(&m), &rotary(Along::X), &library(), picked).unwrap_err();
+            assert!(why.contains("has no 4th axis"), "{why}");
+        }
+    }
+
+    #[test]
+    fn a_picked_post_for_another_kind_of_job_is_refused() {
+        let m = machine(&[FLAT, ROUND_X, ROUND_Y], Firmware::FluidNc, true);
+        let why = post_for(Some(&m), &rotary(Along::X), &library(), Some(ROUND_Y)).unwrap_err();
+        assert!(why.contains("cylinder along X post"), "{why}");
+        let why = post_for(Some(&m), &flat(), &library(), Some(ROUND_X)).unwrap_err();
+        assert!(why.contains("pick a flat one"), "{why}");
+        let why = post_for(None, &rotary(Along::X), &library(), Some(FLAT)).unwrap_err();
+        assert!(why.contains("not a post for this rotary job"), "{why}");
     }
 
     #[test]
@@ -253,9 +299,8 @@ mod tests {
             format!("{picked:?}").contains("rotary: Some("),
             "{picked:?}"
         );
-        // without the 4th axis ticked the post is left as written
-        let m = machine(&[FLAT, ROUND_X], Firmware::FluidNc, false);
-        let picked = post_for(Some(&m), &flat(), &library(), Some(ROUND_X)).unwrap();
+        // a flat post is left as written
+        let picked = post_for(Some(&m), &flat(), &library(), Some(FLAT)).unwrap();
         assert!(format!("{picked:?}").contains("rotary: None"), "{picked:?}");
     }
 

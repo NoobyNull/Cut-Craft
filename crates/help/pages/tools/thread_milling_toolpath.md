@@ -28,3 +28,5 @@ see-also: drilling_toolpath, pocket_toolpath
    ![Step 5](pictures/thread_milling_toolpath/step-5.png)
 
 For an internal thread, clear the hole first with a [Pocket](help:pocket_toolpath), then thread it. When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

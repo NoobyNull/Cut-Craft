@@ -137,7 +137,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("draw_circle_from_edge", "Draw Circle from Edge", "Draw Circle from Edge: drag from one side straight across to the other")
         .when(|a| a.variant_ready("draw_circle_from_edge"), "actions-why-job-first")
         .run(|a, _| a.start_variant("draw_circle_from_edge")),
-    act("tool_changer", "Tool Changer", "Tool Changer: which bit is in each slot of your machine's automatic tool changer").window()
+    act("tool_changer", "Tool Changer (ATC)", "Tool Changer (ATC): which bit is in each slot of your machine's automatic tool changer").window()
         .run(|a, _| a.tool_changer_window = true),
     act("find_tool", "Find Tool", "Find Tool: type part of a tool's name to find it and open it, wherever it is in the menus").keys("Ctrl+K").window()
         .when(CutCraftApp::job_open, "actions-why-job-first")
@@ -218,7 +218,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
          and check it before it runs").window()
         .run(|a, _| a.import_toolpaths_picked()),
     act("print_job_sheet", "Print Job Sheet", "Open the job sheet in the web browser to print it: the job, the material, each \
-         toolpath's tool and how long it takes").window()
+         toolpath's bit and how long it takes").window()
         .run(|a, _| a.print_job_sheet()),
     act("import_cut_list", "Import Cut List", "Draw a part for each row of a spreadsheet's cut list (saved as CSV): name, length, \
          width and how many, ready for Nest Parts. Sizes are in the units after the Length \
@@ -244,7 +244,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
          picture) each one cuts and calculate. A Merged or Array Copy toolpath uses the \
          toolpaths saved with it; one saved without them says to tick the ones to use").window().icon("toolpaths/load_toolpath_template.png")
         .run(|a, _| a.load_toolpath_template()),
-    act("save_selected_toolpath_as_template", "Save Toolpath as Template", "Save the selected toolpath's settings and tools, to make the same cut on another job").window().icon("toolpaths/save_toolpath_template.png")
+    act("save_selected_toolpath_as_template", "Save Toolpath as Template", "Save the selected toolpath's settings and bits, to make the same cut on another job").window().icon("toolpaths/save_toolpath_template.png")
         .when(|a| a.selected_toolpath.is_some(), "actions-why-pick-toolpath")
         .run(|a, _| a.save_toolpath_template(false)),
     act("save_as_template", "Save As Template", "Save As Template: saves the job as a template, to start new jobs from it with the same material and toolpaths").window()
@@ -270,7 +270,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("increment_and_save", "Increment and Save", "Increment and Save: saves the job as a new copy with the next number on its name (sign_1, sign_2), keeping the earlier versions. A year or date on the end of the name stays as it is (Smith-2024 becomes Smith-2024_1, order_2024-11-15 becomes order_2024-11-15_1)").keys("Ctrl+Alt+S")
         .when(CutCraftApp::job_open, "actions-why-job-first")
         .run(|a, _| a.increment_and_save()),
-    act("open_application_data_folder", "Open Application Data Folder", "Open Application Data Folder: opens the folder where Cut Craft keeps your settings, tools and machines")
+    act("open_application_data_folder", "Open Application Data Folder", "Open Application Data Folder: opens the folder where Cut Craft keeps your settings, bits and machines")
         .run(|a, _| a.open_application_data_folder()),
     act("keyboard_shortcuts", "Keyboard Shortcuts", "Keyboard Shortcuts: lists the keys that run each tool, so you can work without the menus")
         .run(|a, _| a.info = Some(Info::Shortcuts)),
@@ -282,6 +282,8 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .run(|a, _| a.info = Some(Info::Credits)),
     act("about_cut_craft", "About Cut Craft", "About Cut Craft: its version, its licence and the people who made it")
         .run(|a, _| a.info = Some(Info::About)),
+    act("back_up_settings", "Back Up Settings", "Back Up Settings: saves your settings, machines, bits and own files in one backup file, to keep safe or take to another computer").window()
+        .run(|a, _| a.open_back_up_window()),
     act("check_for_updates", "Check for Updates", "Check for Updates: asks straight away whether there is a newer version of Cut Craft").window()
         .run(CutCraftApp::check_for_updates),
     act("addons", "Add-ons", "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts").window()
@@ -355,7 +357,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("zoom_selected", "Zoom to Selection", "Zoom Selected: zooms in or out until the selected objects fill the view").icon("view/zoom_selected.png")
         .when(|a| a.doc.selection_bounds().is_some(), "actions-why-select-first")
         .run(CutCraftApp::zoom_selected),
-    act("tool_database", "Tool Database", "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it").window()
+    act("tool_database", "Bit Library", "Bit Library: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it").window()
         .run(CutCraftApp::open_tool_database),
     act("preview_toolpath", "Preview Toolpath", "Preview Toolpath: shows the selected toolpath, or every toolpath in the selected group, cutting the material in the 3D view")
         .when(|a| a.selected_toolpath.is_some() || a.selected_group.is_some(), "actions-why-pick-toolpath-or-group")
@@ -376,7 +378,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("edit_object", "Edit Object", "Edit Object: opens the selected object in the tool that made it, with its settings, to change them").keys("E")
         .when(|a| a.object_to_edit().is_some() || a.shape_to_edit(), "actions-why-select-shape")
         .run(CutCraftApp::edit_object),
-    act("job_sheet_editor", "Job Setup Sheet Editor", "Job Setup Sheet Editor: chooses what the printed job sheet shows: the job, its tools and its toolpaths").window()
+    act("job_sheet_editor", "Job Setup Sheet Editor", "Job Setup Sheet Editor: chooses what the printed job sheet shows: the job, its bits and its toolpaths").window()
         .run(|a, _| a.job_sheet_window = true),
     act("reset_preview", "Reset Preview", "Reset Preview: clears the preview back to uncut material; Undo Last Preview brings it back")
         .when(|a| a.simulation.is_some() || a.player.playback.is_some() || a.player.kept.is_some(), "actions-why-preview-first")
@@ -388,7 +390,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .run(|a, _| a.export("export_as_grayscale_bitmap")),
     act("export_as_3d_clipart", "Export Model as 3D Clipart", "Save the selected 3D parts as clipart, to drop into other jobs from the Library")
         .run(|a, _| a.export("export_as_3d_clipart")),
-    act("create_job_sheet", "Save Job Sheet", "Save a page for the machine: the job, the material, each toolpath's tool and how long \
+    act("create_job_sheet", "Save Job Sheet", "Save a page for the machine: the job, the material, each toolpath's bit and how long \
          it takes")
         .run(|a, _| a.create_job_sheet()),
     act("part_labels", "Print Part Labels", "Print a label for each named part, to stick on it once it is cut out").window()

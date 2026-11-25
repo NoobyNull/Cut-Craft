@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: material_setup, profile_toolpath, collisions
 ---
 
@@ -11,7 +11,7 @@ see-also: material_setup, profile_toolpath, collisions
 
    ![Step 1](pictures/keep_out_zones/step-1.png)
 
-2. On the Toolpaths page, press **Keep-Out Zones** (under Job and Tools).
+2. On the Toolpaths page, press **Keep-Out Zones** (under Job and Bits).
 
    ![Step 2](pictures/keep_out_zones/step-2.png)
 
@@ -24,3 +24,5 @@ see-also: material_setup, profile_toolpath, collisions
 5. Give the zones a **Name** (they are labelled Clamp 1, Clamp 2…), then press **OK**. A toolpath that would cut into a zone is not made.
 
    ![Naming the zones](pictures/keep_out_zones/step-4.png)
+
+A keep-out zone is an area the bit must not pass over, whichever toolpath it is cutting.

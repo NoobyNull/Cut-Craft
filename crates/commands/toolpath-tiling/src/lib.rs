@@ -4,11 +4,11 @@
 //! corner (the overlap never goes below zero; a cut past the material's edge further out
 //! than the overlap does, by the difference); the form says in red when a tile with its
 //! overlap is bigger than the machine's bed (not said for a machine whose bed size was not
-//! given). Where a cut runs off a tile the tool lifts straight up before moving across to
+//! given). Where a cut runs off a tile the bit lifts straight up before moving across to
 //! where it comes back in; a laser keeps each line's own power, and a drill bank drills only the holes of its tile.
 //! A cut past the material's edge (an outside profile's centreline, a lead-in) goes in the
 //! tile at that edge, so nothing is left out of every tile. A toolpath with nothing to cut
-//! in a tile is left out of that tile's file (no tool change or spindle start for it), and a
+//! in a tile is left out of that tile's file (no bit change or spindle start for it), and a
 //! tile with nothing to cut at all gets no file. Each tile is numbered in the 2D view as
 //! its file is named. Saving again where an earlier save left tile files (from another
 //! layout too, or from before tiling was turned off) asks to Replace or Archive them, as

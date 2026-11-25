@@ -54,7 +54,7 @@ pub struct Params {
     #[schemars(title = "Overlap", extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "What the bits before left", "x-hide-when" = {"bits_before.count": 0}))]
     pub overlap: f64,
-    /// Where the tool's tip may go
+    /// Where the bit's tip may go
     #[serde(default)]
     #[schemars(title = "Machining Limit Boundary")]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
@@ -77,7 +77,7 @@ fn starter_ball(diameter: f64) -> Tool {
         .tools
         .into_iter()
         .find(|t| t.shape == ToolShape::BallNose && (t.diameter - diameter).abs() < 1e-9)
-        .expect("the starter tools include 3 mm and 6 mm ball noses")
+        .expect("the starter bits include 3 mm and 6 mm ball noses")
 }
 
 impl Default for Params {
@@ -157,7 +157,7 @@ fn bit_notes(doc: &Document, p: &Params) -> (f64, Vec<String>) {
         stepover = FALLBACK_STEPOVER;
         notes.push(format!(
             "{}'s finishing stepover is not between 0% and 100%, so the extra passes are 10% \
-             of it apart: set it in the Tool Database",
+             of it apart: set it in the Bit Library",
             tool.name
         ));
     }
@@ -168,7 +168,7 @@ fn bit_notes(doc: &Document, p: &Params) -> (f64, Vec<String>) {
 /// and what to warn of. It is made whatever the bits: anything odd is said, not refused.
 fn pencil(doc: &Document, p: &Params, gouge: f64) -> Result<(Toolpath, Vec<String>), CommandError> {
     let tool = &p.tool;
-    ensure_positive("tool diameter", tool.diameter)?;
+    ensure_positive("bit diameter", tool.diameter)?;
     let (step, mut notes) = bit_notes(doc, p);
     progress::stage("Placing the model");
     let surface = placed_model(doc, tool)?;

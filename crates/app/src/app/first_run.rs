@@ -22,8 +22,8 @@ const THICKNESS_INCH: f64 = 0.75 * MM_PER_INCH;
 const BED_MM: [f64; 2] = [600.0, 400.0];
 const BED_INCH: [f64; 2] = [24.0 * MM_PER_INCH, 16.0 * MM_PER_INCH];
 /// The starter tool groups, by units.
-const METRIC_TOOLS: &str = "Metric Tools";
-const IMPERIAL_TOOLS: &str = "Imperial Tools";
+const METRIC_TOOLS: &str = cut_craft_core::toolpath::STARTER_METRIC;
+const IMPERIAL_TOOLS: &str = cut_craft_core::toolpath::STARTER_IMPERIAL;
 /// What a machine not in the list is called.
 const MY_MACHINE: &str = "My Machine";
 
@@ -282,6 +282,7 @@ impl CutCraftApp {
             self.status.set_message(&message);
         }
         self.options_path = crate::options::Options::path();
+        self.backups.config = super::files::config_dir();
         self.options.apply_to(&mut self.display);
         let first_run = wanted(&self.options, &self.machines);
         if first_run {
@@ -500,6 +501,8 @@ impl CutCraftApp {
     /// Start using Cut Craft: the machine added and made active, new jobs set to start as
     /// answered, and the starter tools in those units first.
     pub(super) fn finish_first_run(&mut self, setup: &Setup) {
+        // run again, setup rewrites My Machine and the layout: what was there is kept first
+        self.back_up_before(cut_craft_backup::Reason::BeforeSetup);
         let job = setup.job();
         let mut name = None;
         if let Some(machine) = setup.machine() {

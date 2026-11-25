@@ -318,10 +318,10 @@ mod tests {
             text: "Clicked Apply.".into(),
             at: (12.0, 34.0),
             regions: vec![(
-                "Tool Database".into(),
+                "Bit Library".into(),
                 "crates/tool-database/src/manager.rs:120".into(),
             )],
-            widget: Some("Button \"Apply\" in Window \"Tool Database\"".into()),
+            widget: Some("Button \"Apply\" in Window \"Bit Library\"".into()),
             state: "Screen: Job".into(),
             log: "12:00:00.000 WARN  wgpu: device lost".into(),
             screenshot: Some(vec![1, 2, 3]),
@@ -332,7 +332,7 @@ mod tests {
     #[test]
     fn the_issue_names_the_widget_clicked_and_carries_the_log() {
         let body = compose(&report(), &[]);
-        assert!(body.contains("Clicked: Button \"Apply\" in Window \"Tool Database\""));
+        assert!(body.contains("Clicked: Button \"Apply\" in Window \"Bit Library\""));
         assert!(body.contains("<summary>Log</summary>"));
         assert!(body.contains("wgpu: device lost"));
         let quiet = Report {
@@ -352,7 +352,7 @@ mod tests {
             &[("screenshot.png".into(), "https://x/s.png".into())],
         );
         assert!(body.starts_with("Clicked Apply."));
-        assert!(body.contains("- Tool Database — `crates/tool-database/src/manager.rs:120`"));
+        assert!(body.contains("- Bit Library — `crates/tool-database/src/manager.rs:120`"));
         assert!(body.contains("Screen: Job"));
         assert!(body.contains("![screenshot.png](https://x/s.png?raw=true)"));
     }

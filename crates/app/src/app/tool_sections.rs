@@ -8,9 +8,9 @@ use super::{
 /// What a toolpath form's Tool section asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ToolAsk {
-    /// Select…: the Tool Database to pick the tool in, opened on this one.
+    /// Select…: the Bit Library to pick the tool in, opened on this one.
     Select,
-    /// Edit…: the Tool Database to change this tool in.
+    /// Edit…: the Bit Library to change this tool in.
     Edit,
 }
 
@@ -21,7 +21,7 @@ pub(crate) const KNIFE_LINE: &str = "Drag knife: zero Z with the blade tip touch
                                      Spring Travel, so no flute length is needed";
 
 /// A toolpath form's tool, kept short: its name (with its tool changer holder), its size and
-/// pass in one line, Select… to pick it in the Tool Database (where the tool changer's
+/// pass in one line, Select… to pick it in the Bit Library (where the tool changer's
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
 /// `laser`: the form is a laser toolpath's, whose tool is a laser.
 pub(super) fn tool_picker(
@@ -64,14 +64,14 @@ pub(super) fn tool_picker(
             if tools.get(current).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
-                    t!("Not in the Tool Database: Select… one, or add it there"),
+                    t!("Not in the Bit Library: Select… one, or add it there"),
                 );
             }
         }
         None => {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
-                t!("No tool picked yet: Select… one"),
+                t!("No bit picked yet: Select… one"),
             );
         }
     }
@@ -120,15 +120,15 @@ pub(super) fn shows_rest(params: &Value) -> bool {
 /// What a form's list of tools asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum ListAsk {
-    /// Select Tool, for a tool of the list.
+    /// Select Bit, for a tool of the list.
     Select(ListSlot),
-    /// The Tool Database to change this tool in.
+    /// The Bit Library to change this tool in.
     Edit(String),
     /// Suggest: the quickest clearing bits from the user's own tools.
     Suggest,
 }
 
-/// A form's lists of tools, each picked in Select Tool as the form's own tool is.
+/// A form's lists of tools, each picked in Select Bit as the form's own tool is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ToolList {
     /// The clearing bits (`clearance_tools`), largest first.
@@ -151,7 +151,7 @@ impl ToolList {
     }
 }
 
-/// What Select Tool picks for, other than the open form's own tool.
+/// What Select Bit picks for, other than the open form's own tool.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum PickFor {
     /// A tool of one of the open form's lists.
@@ -163,7 +163,7 @@ pub(super) enum PickFor {
 }
 
 /// A form's clearing bits (`clearance_tools`): off, the form's tool cuts it all; on, bigger
-/// bits cut first, largest first, each picked with Select… in the Tool Database, and the
+/// bits cut first, largest first, each picked with Select… in the Bit Library, and the
 /// form's tool cuts only what they left. `finishing_smallest` (Pocket) wants each bigger than
 /// the form's tool; V-Carve's V-bit follows end mills of any size. Whether the list changed,
 /// and what was asked for.
@@ -348,7 +348,7 @@ pub(super) fn held_name(name: &str, slots: &[Option<String>]) -> String {
 
 /// A tool in one line for its form: how wide, its angle or tip if it has one, how deep a
 /// pass, and how many passes the cut takes (`passes`, when known). Lengths in the job's
-/// `units`: a tool keeps its own units in the Tool Database, but a toolpath shows it in the
+/// `units`: a tool keeps its own units in the Bit Library, but a toolpath shows it in the
 /// job's.
 pub(super) fn tool_line(
     tool: &Tool,
@@ -374,7 +374,7 @@ pub(super) fn tool_line(
             format!("{across} end mill, {} tip radius", length(tool.tip_radius))
         }
         ToolShape::ThreadMill => format!("{across} thread mill"),
-        ToolShape::FormTool => format!("{across} form tool"),
+        ToolShape::FormTool => format!("{across} form bit"),
         ToolShape::SurfacingBit => format!("{across} surfacing bit"),
         ToolShape::Laser => unreachable!("said above"),
     };
@@ -395,7 +395,7 @@ pub(super) fn tool_line(
 
 /// A list of tools (a set of finishing tools, rest machining's earlier tools), each as the
 /// form's own tool is shown: its name (with its tool changer holder) and size in one line,
-/// Select… to pick another in the Tool Database, Edit… to change it there, and × to remove
+/// Select… to pick another in the Bit Library, Edit… to change it there, and × to remove
 /// it; Add a tool… picks one more. `empty` is said while there are none. Whether it changed
 /// (a removal), and what was asked for.
 pub(super) fn tool_list(
@@ -419,7 +419,7 @@ pub(super) fn tool_list(
             if tools.get(&tool.name).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
-                    t!("Not in the Tool Database: Select… one, or add it there"),
+                    t!("Not in the Bit Library: Select… one, or add it there"),
                 );
             }
             ui.horizontal(|ui| {
@@ -485,10 +485,7 @@ pub(super) fn tools_section(
                  toolpath used, to cut only what it left"
                 ),
             ),
-            _ => (
-                t!("Tools"),
-                t!("No tool picked yet: Add a tool… to pick one"),
-            ),
+            _ => (t!("Tools"), t!("No bit picked yet: Add a bit… to pick one")),
         };
         ui.strong(heading);
         tool_list(ui, key, &mut params[key], tools, slots, &empty, units)

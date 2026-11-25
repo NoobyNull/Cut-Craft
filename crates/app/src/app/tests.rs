@@ -5,12 +5,14 @@ use eframe::egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
 
 #[path = "accessibility_tests.rs"]
 mod accessibility;
+mod backups;
 #[path = "web_api_tests.rs"]
 mod web_api;
 
 mod calculating;
 mod canvas;
 mod collisions;
+mod custom_toolbars;
 mod drawing;
 mod help_pages;
 mod how_to;
@@ -410,12 +412,12 @@ fn pyramid_stl(name: &str) -> std::path::PathBuf {
     path
 }
 
-/// Picks `name` in the open Select Tool window and clicks its Select.
+/// Picks `name` in the open Select Bit window and clicks its Select.
 fn select_in_tool_database(h: &mut Harness, name: &str) {
     h.frame(vec![]);
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
-    assert!(manager.selecting, "the Tool Database opens to pick in");
+    let manager = h.app.tool_manager.as_mut().expect("Select Bit");
+    assert!(manager.selecting, "the Bit Library opens to pick in");
     let at = manager
         .draft
         .tools

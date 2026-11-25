@@ -25,6 +25,7 @@ mod clipart;
 mod commands;
 mod compute;
 mod credits;
+mod custom_toolbars;
 mod depth;
 mod display;
 #[cfg(test)]
