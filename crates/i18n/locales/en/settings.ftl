@@ -3718,6 +3718,18 @@ setting-the-most-angles-a-locks-1f62a1 =
 setting-where-along-the-axis-it-b9de76 = Where along the axis it starts, from the job's start (the chuck end)
 setting-where-along-the-axis-it-0fada5 = Where along the axis it ends, from the job's start; 0 runs to the job's end
 
+## Rotary Details (rotary_details_toolpath)
+setting-a-smaller-bit-after-the-637bbd = A smaller bit after the finish, only where the bigger bits before it left material.
+setting-the-detail-bit-a-ball-1faaff =
+    The detail bit: a ball nose smaller than the bits that finished before, so it fits
+    where they could not. Its finishing stepover spaces the passes
+setting-the-bigger-bits-that-finished-9490ff =
+    The bigger bits that finished the part before this one: it cuts only what they could
+    not reach. With none, it cuts what the toolpaths above it leave
+setting-after-the-rings-the-most-42b088 =
+    After the rings, the most angles A locks at for what they could not reach, each
+    picked where it reaches the most. 0 for rings alone
+
 ## 4-Axis Rotary Machining (rotary_machining_toolpath)
 setting-the-bit-a-ball-nose-40e65e = The bit: a ball nose follows curves best. Its finishing stepover spaces the rings
 setting-how-the-bit-goes-round-a6e7cf = How the bit goes round the part
