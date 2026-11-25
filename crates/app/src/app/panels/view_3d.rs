@@ -333,8 +333,9 @@ impl CutCraftApp {
                         }
                         self.framing = self.framing.fitted();
                     }
-                    None => self.status.set_message(&format!(
-                        "SpaceMouse button {number} does nothing in Cut Craft yet"
+                    None => self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-spacemouse-button-unused",
+                        number = number
                     )),
                 },
                 Input::Button { .. } => {}

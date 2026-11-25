@@ -209,7 +209,8 @@ impl CutCraftApp {
         } else if import && placed {
             self.form = None;
             self.pages.done_with(page);
-            self.status.set_message("Model imported");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-model-imported"));
         }
     }
 
@@ -247,8 +248,10 @@ impl CutCraftApp {
             }
         }
         self.pages.done_with(form.page);
-        self.status
-            .set_message(&format!("{} cancelled", form.label));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-cancelled",
+            tool = crate::tool_names::form_name(&self.registry, form.id, form.label)
+        ));
     }
 
     /// A form's heading: its tool's icon and name, then what to do first while the tool has

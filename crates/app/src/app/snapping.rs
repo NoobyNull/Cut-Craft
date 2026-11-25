@@ -43,8 +43,14 @@ impl CutCraftApp {
         let last = (tool == Some("draw_polyline"))
             .then(|| self.polyline.points.last().copied())
             .flatten();
-        let find =
+        // on a rotary job the ghosts past each seam snap too, as the drawing they copy
+        let wrap = self.wrap();
+        let plain =
             |from: Option<Point>, at: Point| self.options.snapping.find(&self.doc, from, at, reach);
+        let find = |from: Option<Point>, at: Point| match wrap {
+            Some(w) => w.snap(at, from, plain),
+            None => plain(from, at),
+        };
         let to = |hit: Option<Snap>, at: Point| hit.map_or(at, |h| h.at);
         let mut marker = None;
         // where a point was placed on a snap: kept there once drawn
