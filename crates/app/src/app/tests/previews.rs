@@ -149,14 +149,14 @@ fn previewing_all_toolpaths_is_previewing_each_in_turn() {
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
     assert_eq!(h.app.view, View::ThreeD, "previewing shows the 3D view");
     h.frame(vec![]);
-    let all = h.app.simulation.clone().expect("a preview");
+    let all = h.app.preview.material.clone().expect("a preview");
     h.app.invoke(&h.ctx, "reset_preview");
-    assert!(h.app.simulation.is_none());
+    assert!(h.app.preview.material.is_none());
     for id in h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>() {
         h.app.selected_toolpath = Some(id);
         h.app.invoke(&h.ctx, "preview_toolpath");
     }
-    assert_eq!(h.app.simulation, Some(all));
+    assert_eq!(h.app.preview.material, Some(all));
 }
 
 #[test]
@@ -170,15 +170,15 @@ fn undo_last_preview_brings_back_a_reset_preview() {
     h.app.form = None;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
     h.frame(vec![]);
-    let previewed = h.app.simulation.clone().expect("a preview");
+    let previewed = h.app.preview.material.clone().expect("a preview");
     h.app.invoke(&h.ctx, "reset_preview");
-    assert!(h.app.simulation.is_none(), "reset");
+    assert!(h.app.preview.material.is_none(), "reset");
     assert!(
         h.app.available("undo_last_preview"),
         "the reset can be undone"
     );
     h.app.invoke(&h.ctx, "undo_last_preview");
-    assert_eq!(h.app.simulation, Some(previewed));
+    assert_eq!(h.app.preview.material, Some(previewed));
 }
 
 #[test]
@@ -225,19 +225,22 @@ fn a_preview_plays_pauses_scrubs_and_keeps_what_is_cut() {
     h.app.form = None;
     h.app.display.animate_preview = true;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    assert!(h.app.playing && h.app.playback.is_some(), "it plays");
+    assert!(
+        h.app.player.playing && h.app.player.playback.is_some(),
+        "it plays"
+    );
     assert_eq!(h.app.view, View::ThreeD);
     h.frame(vec![]);
     h.frame(vec![]);
-    let along = h.app.playback.as_ref().unwrap().at();
+    let along = h.app.player.playback.as_ref().unwrap().at();
     assert!(along > 0.0, "the tool moves on each frame");
     assert!(h.text_at("Pause").is_some() && h.text_at("Run to Retract").is_some());
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
-    assert!(!h.app.playing);
-    let paused = h.app.playback.as_ref().unwrap().at();
+    assert!(!h.app.player.playing);
+    let paused = h.app.player.playback.as_ref().unwrap().at();
     h.frame(vec![]);
     assert_eq!(
-        h.app.playback.as_ref().unwrap().at(),
+        h.app.player.playback.as_ref().unwrap().at(),
         paused,
         "paused stays put"
     );
@@ -245,12 +248,12 @@ fn a_preview_plays_pauses_scrubs_and_keeps_what_is_cut() {
     let progress = h.text_at("Progress").expect("a Progress slider");
     let from = progress + egui::vec2(80.0, 0.0);
     h.drag(from, from + egui::vec2(200.0, 0.0));
-    let on = h.app.playback.as_ref().unwrap().at();
+    let on = h.app.player.playback.as_ref().unwrap().at();
     assert!(on > paused, "dragged on: {paused} to {on}");
-    assert!(!h.app.playing, "a drag pauses it");
+    assert!(!h.app.player.playing, "a drag pauses it");
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
     assert!(
-        h.app.playback.is_none() && h.app.simulation.is_some(),
+        h.app.player.playback.is_none() && h.app.preview.material.is_some(),
         "kept as far as it went"
     );
 }
@@ -262,7 +265,7 @@ fn escape_stops_a_playing_preview_keeping_what_is_cut_and_leaves_the_form_open()
     h.frame(vec![]);
     h.frame(vec![key(Key::Escape)]);
     assert!(
-        h.app.playback.is_none() && h.app.simulation.is_some(),
+        h.app.player.playback.is_none() && h.app.preview.material.is_some(),
         "stopped, kept as far as it went"
     );
     assert!(
@@ -278,23 +281,23 @@ fn a_preview_can_be_stopped_from_the_2d_view_too() {
     let mut h = playing_preview();
     h.app.view = View::TwoD;
     h.frame(vec![]);
-    let along = h.app.playback.as_ref().unwrap().at();
+    let along = h.app.player.playback.as_ref().unwrap().at();
     h.frame(vec![]);
     assert!(
-        h.app.playback.as_ref().unwrap().at() > along,
+        h.app.player.playback.as_ref().unwrap().at() > along,
         "it plays on in the 2D view"
     );
     h.click(
         h.text_at("Stop").expect("Stop over the 2D view"),
         Modifiers::NONE,
     );
-    assert!(h.app.playback.is_none() && h.app.simulation.is_some());
+    assert!(h.app.player.playback.is_none() && h.app.preview.material.is_some());
 }
 
 #[test]
 fn a_playing_preview_says_how_long_it_has_left() {
     let mut h = playing_preview();
-    h.app.playback_speed = 1.0;
+    h.app.player.speed = 1.0;
     h.frame(vec![]);
     let note = |h: &Harness| {
         h.texts()
@@ -303,7 +306,7 @@ fn a_playing_preview_says_how_long_it_has_left() {
             .expect("the time the machine takes")
     };
     assert!(!note(&h).contains(" at ×"), "{}", note(&h));
-    h.app.playback_speed = 10.0;
+    h.app.player.speed = 10.0;
     h.frame(vec![]);
     assert!(note(&h).contains(" at ×10"), "{}", note(&h));
 }
@@ -313,7 +316,7 @@ fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
     let mut h = playing_preview();
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
     assert!(
-        h.app.playback.is_none() && h.app.simulation.is_some(),
+        h.app.player.playback.is_none() && h.app.preview.material.is_some(),
         "stopped"
     );
     assert!(h.text_at("Progress").is_some(), "the slider is still there");
@@ -323,7 +326,7 @@ fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
     let from = progress + egui::vec2(200.0, 0.0);
     h.drag(from, from - egui::vec2(100.0, 0.0));
     assert!(
-        h.app.playback.is_some() && !h.app.playing,
+        h.app.player.playback.is_some() && !h.app.player.playing,
         "scrubbing again"
     );
     h.app.invoke(&h.ctx, "reset_preview");
@@ -334,15 +337,15 @@ fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
 #[test]
 fn the_preview_controls_stay_once_it_has_played_to_the_end() {
     let mut h = playing_preview();
-    h.app.playback_speed = 1000.0;
+    h.app.player.speed = 1000.0;
     for _ in 0..600 {
-        if h.app.playback.is_none() {
+        if h.app.player.playback.is_none() {
             break;
         }
         h.frame(vec![]);
     }
     assert!(
-        h.app.playback.is_none() && h.app.simulation.is_some(),
+        h.app.player.playback.is_none() && h.app.preview.material.is_some(),
         "played through"
     );
     h.frame(vec![]);
@@ -351,7 +354,7 @@ fn the_preview_controls_stay_once_it_has_played_to_the_end() {
         h.text_at("Close").expect("Close hides them"),
         Modifiers::NONE,
     );
-    assert!(h.text_at("Progress").is_none() && h.app.simulation.is_some());
+    assert!(h.text_at("Progress").is_none() && h.app.preview.material.is_some());
 }
 
 #[test]
@@ -359,14 +362,14 @@ fn a_paused_preview_is_not_rebuilt_for_the_3d_view_every_frame() {
     let mut h = playing_preview();
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    let built = h.app.playback_builds;
+    let built = h.app.player.builds;
     for _ in 0..3 {
         h.frame(vec![]);
     }
-    assert_eq!(h.app.playback_builds, built, "kept while it shows the same");
+    assert_eq!(h.app.player.builds, built, "kept while it shows the same");
     h.click(h.text_at("Single Step").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.playback_builds > built, "made again once it cut on");
+    assert!(h.app.player.builds > built, "made again once it cut on");
 }
 
 #[test]
@@ -374,50 +377,50 @@ fn a_playing_preview_is_drawn_at_full_detail_and_redrawn_a_few_times_a_second() 
     let mut h = playing_preview();
     h.app.options.performance.adjust_to_frame_rate = false;
     // a test's frames are slow: the redraws are kept well apart to see them kept
-    h.app.playback_redraw = std::time::Duration::from_secs(3600);
+    h.app.player.redraw = std::time::Duration::from_secs(3600);
     h.frame(vec![]);
     h.frame(vec![]);
-    let ((_, cells, _), _) = h.app.playback_view.as_ref().expect("drawn");
+    let ((_, cells, _), _) = h.app.player.view.as_ref().expect("drawn");
     assert_eq!(
         *cells,
         h.app.options.performance.still_cells(),
         "as sharp as when still, not the moving detail"
     );
     // frames straight after one another: the cut so far is kept, not made again each one
-    let built = h.app.playback_builds;
+    let built = h.app.player.builds;
     for _ in 0..5 {
         h.frame(vec![]);
     }
     assert!(
-        h.app.playback_builds <= built + 1,
+        h.app.player.builds <= built + 1,
         "{built} then {}",
-        h.app.playback_builds
+        h.app.player.builds
     );
     // once it gets where it was sent, that is drawn at once
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
     h.click(h.text_at("Single Step").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    let shown = h.app.playback_view.as_ref().unwrap().0.0;
-    assert_eq!(shown, h.app.playback.as_ref().unwrap().revision());
+    let shown = h.app.player.view.as_ref().unwrap().0.0;
+    assert_eq!(shown, h.app.player.playback.as_ref().unwrap().revision());
 }
 
 #[test]
 fn a_long_jump_is_cut_a_little_each_frame_and_stop_ends_it() {
     let mut h = playing_preview();
     // a step a frame, as a toolpath of millions of moves would go
-    h.app.playback_budget = std::time::Duration::ZERO;
+    h.app.player.budget = std::time::Duration::ZERO;
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
-    let from = h.app.playback.as_ref().unwrap().at();
+    let from = h.app.player.playback.as_ref().unwrap().at();
     h.click(h.text_at("Run to Retract").unwrap(), Modifiers::NONE);
-    let goal = h.app.playback_goal.expect("on its way there");
-    let at = h.app.playback.as_ref().unwrap().at();
+    let goal = h.app.player.goal.expect("on its way there");
+    let at = h.app.player.playback.as_ref().unwrap().at();
     assert!(at > from && at < goal, "part way: {from} to {at} of {goal}");
     assert!(
         h.texts().iter().any(|t| t.contains("Esc")),
         "says how to stop it"
     );
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
-    assert!(h.app.playback.is_none() && h.app.playback_goal.is_none());
+    assert!(h.app.player.playback.is_none() && h.app.player.goal.is_none());
 }
 
 #[test]
@@ -431,11 +434,11 @@ fn preview_visible_leaves_hidden_toolpaths_out() {
     let profile = *h.app.doc.toolpaths.keys().last().unwrap();
     h.app.selected_toolpath = Some(profile);
     h.app.invoke(&h.ctx, "preview_toolpath");
-    let only_profile = h.app.simulation.clone();
+    let only_profile = h.app.preview.material.clone();
     let drilling = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.doc.toolpaths.get_mut(&drilling).unwrap().visible = false;
     h.app.invoke(&h.ctx, "preview_visible_toolpaths");
-    assert_eq!(h.app.simulation, only_profile);
+    assert_eq!(h.app.preview.material, only_profile);
 }
 
 #[test]
@@ -476,12 +479,12 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         fallbacks: vec![],
         across: vec![],
     });
-    h.app.simulation = Some(m);
+    h.app.preview.material = Some(m);
     h.app.orbit = view3d::Orbit::TOP;
     let fit = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 400.0));
     // the middle of the view is the part: it goes, the waste round it stays
     assert!(h.app.remove_preview_piece(fit, fit.center()));
-    let sim = h.app.simulation.as_ref().unwrap();
+    let sim = h.app.preview.material.as_ref().unwrap();
     let at = |x, y| sim.at(cut_craft_core::geometry::Point::new(x, y)).unwrap();
     assert!(at(50.0, 50.0).is_nan());
     assert_eq!(at(5.0, 5.0), 0.0);
@@ -499,7 +502,7 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
 #[test]
 fn double_clicking_an_uncut_preview_leaves_the_block() {
     let mut h = Harness::new();
-    h.app.simulation = Some(cut_craft_core::simulation::Material::new(
+    h.app.preview.material = Some(cut_craft_core::simulation::Material::new(
         &h.app.doc.job,
         200,
     ));
@@ -509,9 +512,9 @@ fn double_clicking_an_uncut_preview_leaves_the_block() {
         !h.app.remove_preview_piece(fit, fit.center()),
         "nothing cut free"
     );
-    let sim = h.app.simulation.as_ref().unwrap();
+    let sim = h.app.preview.material.as_ref().unwrap();
     assert!(sim.heights.iter().all(|h| !h.is_nan()), "the block stays");
-    assert!(h.app.before_preview.is_none());
+    assert!(h.app.preview.before.is_none());
 }
 
 #[test]
@@ -526,23 +529,23 @@ fn preview_visible_leaves_hidden_toolpaths_out_and_undo_last_steps_back_one_prev
     }
     let ids: Vec<EntityId> = h.app.doc.toolpaths.keys().copied().collect();
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    let all = h.app.simulation.clone().unwrap();
+    let all = h.app.preview.material.clone().unwrap();
     // hide the profile: Preview Visible cuts the drilling only, Preview All both
     h.app.doc.toolpaths.get_mut(&ids[1]).unwrap().visible = false;
     h.app.invoke(&h.ctx, "preview_visible_toolpaths");
-    let visible = h.app.simulation.clone().unwrap();
+    let visible = h.app.preview.material.clone().unwrap();
     assert_ne!(visible, all);
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    assert_eq!(h.app.simulation.as_ref(), Some(&all));
+    assert_eq!(h.app.preview.material.as_ref(), Some(&all));
     // undo goes back to before the last preview, once
     h.app.invoke(&h.ctx, "undo_last_preview");
-    assert_eq!(h.app.simulation.as_ref(), Some(&visible));
+    assert_eq!(h.app.preview.material.as_ref(), Some(&visible));
     assert!(!h.app.available("undo_last_preview"));
     h.app.selected_toolpath = Some(ids[1]);
     h.app.invoke(&h.ctx, "preview_toolpath");
-    assert_eq!(h.app.simulation.as_ref(), Some(&all));
+    assert_eq!(h.app.preview.material.as_ref(), Some(&all));
     h.app.invoke(&h.ctx, "undo_last_preview");
-    assert_eq!(h.app.simulation.as_ref(), Some(&visible));
+    assert_eq!(h.app.preview.material.as_ref(), Some(&visible));
 }
 
 #[test]
@@ -564,7 +567,7 @@ fn a_double_sided_preview_cuts_both_sides_and_turns_over_with_the_job() {
     h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
     assert_eq!(h.app.doc.other_side.toolpaths.len(), 1);
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    let preview = h.app.simulation.as_ref().expect("previewed");
+    let preview = h.app.preview.material.as_ref().expect("previewed");
     assert!(
         preview.other_side.is_some(),
         "the other side is previewed too"
@@ -577,9 +580,9 @@ fn a_double_sided_preview_cuts_both_sides_and_turns_over_with_the_job() {
         "the underside is cut"
     );
     // turned over, the other side's cuts are on top and this side's underneath
-    let before = h.app.simulation.clone().unwrap();
+    let before = h.app.preview.material.clone().unwrap();
     h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
-    let after = h.app.simulation.as_ref().expect("still previewed");
+    let after = h.app.preview.material.as_ref().expect("still previewed");
     assert_eq!(
         after.other_side.as_deref().map(|m| &m.heights),
         Some(&before.heights),
@@ -599,12 +602,17 @@ fn undoing_swap_sides_turns_the_preview_back_and_redo_turns_it_over_again() {
     h.app.apply("pocket_toolpath", &params).unwrap();
     h.app.form = None;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    let up = h.app.simulation.clone().expect("previewed").heights;
+    let up = h.app.preview.material.clone().expect("previewed").heights;
     assert!(up.iter().any(|&z| z < 0.0), "the pocket is cut");
     // only this side has toolpaths: turned over, its preview is kept underneath
     h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
     h.frame(vec![]);
-    let turned = h.app.simulation.as_ref().expect("the preview is kept");
+    let turned = h
+        .app
+        .preview
+        .material
+        .as_ref()
+        .expect("the preview is kept");
     assert!(
         turned.heights.iter().all(|&z| z == 0.0),
         "nothing cut on this side"
@@ -618,13 +626,13 @@ fn undoing_swap_sides_turns_the_preview_back_and_redo_turns_it_over_again() {
     h.frame(vec![]);
     assert!(!h.app.doc.bottom_side);
     assert_eq!(
-        h.app.simulation.as_ref().map(|m| &m.heights),
+        h.app.preview.material.as_ref().map(|m| &m.heights),
         Some(&up),
         "undone, the side that was up is up again"
     );
     h.app.invoke(&h.ctx, "redo");
     h.frame(vec![]);
-    let again = h.app.simulation.as_ref().expect("still previewed");
+    let again = h.app.preview.material.as_ref().expect("still previewed");
     assert_eq!(again.other_side.as_deref().map(|m| &m.heights), Some(&up));
 }
 
@@ -677,7 +685,7 @@ fn toolpath_groups_are_listed_picked_previewed_saved_as_one_and_joined_by_new_to
     h.app.display.animate_preview = false;
     assert!(h.app.available("preview_toolpath"));
     h.app.invoke(&h.ctx, "preview_toolpath");
-    assert!(h.app.simulation.is_some());
+    assert!(h.app.preview.material.is_some());
     // ungrouping keeps the toolpaths
     let ungroup = serde_json::json!({ "group": "Group 1", "delete_toolpaths": false });
     h.app.apply("ungroup_toolpaths", &ungroup).unwrap();
@@ -696,7 +704,7 @@ fn a_preview_cut_off_the_windows_thread_becomes_the_preview() {
     until_not_busy(&mut h);
     h.app.preview_all(false);
     until_not_busy(&mut h);
-    let cut = h.app.simulation.as_ref().expect("a preview");
+    let cut = h.app.preview.material.as_ref().expect("a preview");
     assert!(cut.heights.iter().any(|&z| z < 0.0), "the profile is cut");
     assert!(h.app.status.message.starts_with("Previewed"));
 }
@@ -737,7 +745,7 @@ fn a_double_sided_preview_cuts_the_other_side_off_the_windows_thread_too() {
     h.app.wait_before_showing = std::time::Duration::ZERO;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
     until_not_busy(&mut h);
-    let preview = h.app.simulation.as_ref().expect("previewed");
+    let preview = h.app.preview.material.as_ref().expect("previewed");
     assert!(
         preview.other_side.is_some(),
         "the other side is previewed too"
@@ -758,7 +766,7 @@ fn a_component_from_the_toolpath_preview_goes_on_the_top_shown_level_and_says_so
         },
     );
     let job = h.app.doc.job;
-    h.app.simulation = Some(cut_craft_core::simulation::Material::new(&job, 50));
+    h.app.preview.material = Some(cut_craft_core::simulation::Material::new(&job, 50));
     h.app.component_from_preview();
     assert_eq!(h.app.doc.components.values().last().unwrap().level, 1);
     assert!(
@@ -773,8 +781,8 @@ fn a_new_job_drops_the_old_jobs_preview_playback_and_its_undo() {
     // playing, then a new job
     let mut h = playing_preview();
     h.app.reset_job();
-    assert!(h.app.playback.is_none() && h.app.kept_playback.is_none());
-    assert!(!h.app.playing && h.app.playback_goal.is_none());
+    assert!(h.app.player.playback.is_none() && h.app.player.kept.is_none());
+    assert!(!h.app.player.playing && h.app.player.goal.is_none());
     assert!(
         !h.app.available("undo_last_preview"),
         "no old preview to undo"
@@ -782,7 +790,7 @@ fn a_new_job_drops_the_old_jobs_preview_playback_and_its_undo() {
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
-        h.app.simulation.is_none(),
+        h.app.preview.material.is_none(),
         "the old job's cuts not played in"
     );
     assert!(h.text_at("Progress").is_none(), "no old controls");
@@ -792,15 +800,15 @@ fn a_new_job_drops_the_old_jobs_preview_playback_and_its_undo() {
     assert!(h.app.available("reset_preview"));
     h.app.reset_job();
     h.frame(vec![]);
-    assert!(h.app.kept_playback.is_none() && h.text_at("Progress").is_none());
+    assert!(h.app.player.kept.is_none() && h.text_at("Progress").is_none());
 }
 
 #[test]
 fn reset_preview_is_there_while_a_stopped_previews_controls_are() {
     let mut h = playing_preview();
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
-    h.app.simulation = None;
-    assert!(h.app.kept_playback.is_some());
+    h.app.preview.material = None;
+    assert!(h.app.player.kept.is_some());
     assert!(
         h.app.available("reset_preview"),
         "its controls can be cleared"
@@ -812,16 +820,16 @@ fn a_change_to_the_job_closes_a_stopped_previews_controls() {
     let mut h = playing_preview();
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
     assert!(h.text_at("Progress").is_some(), "kept to scrub");
-    let cut = h.app.simulation.clone();
+    let cut = h.app.preview.material.clone();
     h.rectangle(60.0, 60.0, 10.0, 10.0);
     h.frame(vec![]);
     assert!(
-        h.app.kept_playback.is_none(),
+        h.app.player.kept.is_none(),
         "its old moves not played again"
     );
     assert!(h.text_at("Progress").is_none(), "no old controls");
     assert_eq!(
-        h.app.simulation.as_ref().map(|m| &m.heights),
+        h.app.preview.material.as_ref().map(|m| &m.heights),
         cut.as_ref().map(|m| &m.heights),
         "what was cut stays shown"
     );
@@ -832,8 +840,8 @@ fn a_change_to_the_job_stops_a_playing_preview_keeping_what_is_cut() {
     let mut h = playing_preview();
     h.rectangle(60.0, 60.0, 10.0, 10.0);
     h.frame(vec![]);
-    assert!(h.app.playback.is_none() && h.app.kept_playback.is_none());
-    assert!(h.app.simulation.is_some(), "kept as far as it went");
+    assert!(h.app.player.playback.is_none() && h.app.player.kept.is_none());
+    assert!(h.app.preview.material.is_some(), "kept as far as it went");
     assert!(h.text_at("Progress").is_none());
 }
 
@@ -841,10 +849,13 @@ fn a_change_to_the_job_stops_a_playing_preview_keeping_what_is_cut() {
 fn a_job_setup_change_starts_the_preview_again_on_the_new_block() {
     let mut h = playing_preview();
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
-    assert!(h.app.simulation.is_some());
+    assert!(h.app.preview.material.is_some());
     h.app.doc.job.thickness += 7.0;
     h.frame(vec![]);
-    assert!(h.app.simulation.is_none(), "the old block is not kept");
+    assert!(
+        h.app.preview.material.is_none(),
+        "the old block is not kept"
+    );
     assert!(!h.app.available("undo_last_preview"), "nor brought back");
     assert!(
         h.app.status.message.contains("Job Setup"),
@@ -858,7 +869,7 @@ fn a_job_setup_change_starts_the_preview_again_on_the_new_block() {
     let id = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.preview_toolpath(id);
     let fresh = h.app.fresh_material();
-    let start = h.app.playback.as_ref().expect("it plays").material();
+    let start = h.app.player.playback.as_ref().expect("it plays").material();
     assert_eq!((start.columns, start.origin), (fresh.columns, fresh.origin));
 }
 
@@ -873,7 +884,7 @@ fn undo_last_preview_after_swap_sides_brings_the_preview_back_turned_over_with_t
     h.app.apply("pocket_toolpath", &params).unwrap();
     h.app.form = None;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    let up = h.app.simulation.clone().expect("previewed").heights;
+    let up = h.app.preview.material.clone().expect("previewed").heights;
     assert!(up.iter().any(|&z| z < 0.0), "the pocket is cut");
     h.app.invoke(&h.ctx, "reset_preview");
     h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
@@ -881,7 +892,7 @@ fn undo_last_preview_after_swap_sides_brings_the_preview_back_turned_over_with_t
     assert!(h.app.doc.bottom_side);
     h.app.invoke(&h.ctx, "undo_last_preview");
     h.frame(vec![]);
-    let back = h.app.simulation.as_ref().expect("brought back");
+    let back = h.app.preview.material.as_ref().expect("brought back");
     assert!(
         back.heights.iter().all(|&z| z == 0.0),
         "the job is on its other side, so that side is up, uncut"
@@ -895,7 +906,10 @@ fn undo_last_preview_after_swap_sides_brings_the_preview_back_turned_over_with_t
     h.app.invoke(&h.ctx, "undo");
     h.frame(vec![]);
     assert!(!h.app.doc.bottom_side);
-    assert_eq!(h.app.simulation.as_ref().map(|m| &m.heights), Some(&up));
+    assert_eq!(
+        h.app.preview.material.as_ref().map(|m| &m.heights),
+        Some(&up)
+    );
 }
 
 #[test]
@@ -910,7 +924,7 @@ fn a_small_part_on_a_big_sheet_is_previewed_finely_where_it_is_cut() {
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
     h.frame(vec![]);
     let job = h.app.doc.job;
-    let m = h.app.simulation.clone().expect("a preview");
+    let m = h.app.preview.material.clone().expect("a preview");
     let area = m.area();
     assert!(
         area.max.x - area.min.x < job.width / 2.0 && area.max.y - area.min.y < job.height / 2.0,
@@ -930,7 +944,7 @@ fn a_small_part_on_a_big_sheet_is_previewed_finely_where_it_is_cut() {
     // Toolpaths ▸ Preview Simulation Quality ▸ Extremely High: the slider to 80%, the
     // preview worked out again finer, its tick on that pick
     h.app.invoke(&h.ctx, "preview_quality_8");
-    let finer = h.app.simulation.clone().expect("worked out again");
+    let finer = h.app.preview.material.clone().expect("worked out again");
     assert_eq!(h.app.display.detail, 80);
     assert!(finer.cell < m.cell, "{} then {}", m.cell, finer.cell);
     assert_eq!(h.app.display.checked("preview_quality_8"), Some(true));

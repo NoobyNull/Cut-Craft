@@ -200,7 +200,7 @@ impl CutCraftApp {
     ) -> Option<Point> {
         let (job, previewing) = (
             self.shown_job(),
-            self.simulation.is_some() || self.showing_uncut_material(),
+            self.preview.material.is_some() || self.showing_uncut_material(),
         );
         let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
         let surface = self.surface_3d()?.into_owned();
@@ -367,7 +367,7 @@ impl CutCraftApp {
                 .as_ref()
                 .map(|(m, _)| std::sync::Arc::as_ptr(m) as usize),
         );
-        if let Some((kept, model)) = &self.turned_3d
+        if let Some((kept, model)) = &self.meshes.turned
             && *kept == key
         {
             return Some(std::sync::Arc::clone(model));
@@ -377,17 +377,17 @@ impl CutCraftApp {
         if let Some(own) = &own {
             if all.is_empty() {
                 // only the import: its own faces, kept as they are
-                self.turned_3d = Some((key, std::sync::Arc::clone(own)));
+                self.meshes.turned = Some((key, std::sync::Arc::clone(own)));
                 return Some(std::sync::Arc::clone(own));
             }
             all.extend(own.iter().copied());
         }
         if all.is_empty() {
-            self.turned_3d = None;
+            self.meshes.turned = None;
             return None;
         }
         let all = std::sync::Arc::new(all);
-        self.turned_3d = Some((key, std::sync::Arc::clone(&all)));
+        self.meshes.turned = Some((key, std::sync::Arc::clone(&all)));
         Some(all)
     }
 
@@ -410,14 +410,11 @@ impl CutCraftApp {
             look,
             mark,
         };
-        if let Some((kept, mesh)) = &self.model_3d
-            && *kept == key
-        {
+        if let Some(mesh) = self.meshes.model.get(&key) {
             return std::sync::Arc::clone(mesh);
         }
         let mesh = std::sync::Arc::new(view3d::triangles(model, screen, orbit, &look, mark));
-        self.model_3d = Some((key, std::sync::Arc::clone(&mesh)));
-        mesh
+        std::sync::Arc::clone(self.meshes.model.keep(key, mesh))
     }
 
     #[expect(
@@ -437,8 +434,8 @@ impl CutCraftApp {
             // the block's sides: a preview's, the uncut material's, the block the model
             // sits on
             sides: shown.material_block
-                && (self.simulation.is_some()
-                    || self.playback.is_some()
+                && (self.preview.material.is_some()
+                    || self.player.playback.is_some()
                     || self.showing_uncut_material()
                     || self.model_on_material()),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
@@ -457,10 +454,12 @@ impl CutCraftApp {
         }
         let job = self.shown_job();
         // the uncut material wraps as a preview's stock does: its top at the surface
-        let previewing =
-            self.simulation.is_some() || self.playback.is_some() || self.showing_uncut_material();
+        let previewing = self.preview.material.is_some()
+            || self.player.playback.is_some()
+            || self.showing_uncut_material();
         // a playing preview's tool: where its tip is, and the parts it is drawn in
         let tool_at = self
+            .player
             .playback
             .as_ref()
             .and_then(cut_craft_core::playback::Playback::tool)
@@ -527,8 +526,8 @@ impl CutCraftApp {
         }
         // the model's body, under its surface: also while a model is imported, whose own
         // faces (all of them, or past the face limit those out of reach) are drawn as well
-        let body_draw = (slot.is_some() && self.simulation.is_none())
-            .then(|| self.solid_gpu.clone())
+        let body_draw = (slot.is_some() && self.preview.material.is_none())
+            .then(|| self.meshes.solid_gpu.clone())
             .flatten()
             .map(|geometry| {
                 let at = cut_craft_core::glam::DVec3::ZERO;
@@ -564,7 +563,7 @@ impl CutCraftApp {
             .and_then(|f| f.beyond.clone())
             .filter(|g| !g.is_empty())
         else {
-            self.ghost_gpu = None;
+            self.meshes.ghost_gpu = None;
             return None;
         };
         let red = self.options.import.out_of_bounds_colour();
@@ -578,7 +577,7 @@ impl CutCraftApp {
         };
         let origin = cut_craft_core::glam::DVec3::new(-surface.origin.x, -surface.origin.y, 0.0);
         if on_gpu {
-            let geometry = faces_geometry(&mut self.ghost_gpu, &ghost);
+            let geometry = faces_geometry(&mut self.meshes.ghost_gpu, &ghost);
             return Some(view3d::gpu::Draw::new(
                 geometry, camera, area, origin, &look, red,
             ));
@@ -747,8 +746,9 @@ impl CutCraftApp {
     /// on its own zero plane at 0 and the material's outline is drawn from there up to its
     /// thickness, so zero is measured from that top.
     pub(in super::super) fn origin_height_3d(&self) -> f64 {
-        let importing =
-            self.importing_model() && self.simulation.is_none() && self.playback.is_none();
+        let importing = self.importing_model()
+            && self.preview.material.is_none()
+            && self.player.playback.is_none();
         origin_3d(&self.doc.job, importing)
     }
 

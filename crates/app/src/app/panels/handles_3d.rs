@@ -22,8 +22,8 @@ impl CutCraftApp {
     ) {
         self.handles_3d.clear();
         let importing = self.form.as_ref().is_some_and(|f| f.model.is_some());
-        if self.simulation.is_some()
-            || self.playback.is_some()
+        if self.preview.material.is_some()
+            || self.player.playback.is_some()
             || importing
             || self.view_tool != Some(ViewTool::Transform)
         {
@@ -632,15 +632,19 @@ impl CutCraftApp {
             return false;
         };
         let p = surface.centre(column, row);
-        let before = self.simulation.clone();
-        let removed = self.simulation.as_mut().map_or(0, |m| m.remove_piece(p));
+        let before = self.preview.material.clone();
+        let removed = self
+            .preview
+            .material
+            .as_mut()
+            .map_or(0, |m| m.remove_piece(p));
         if removed > 0 {
             // scrubbing would put the piece back
-            self.kept_playback = None;
+            self.player.kept = None;
         }
         if removed > 0 {
-            self.before_preview = Some(super::super::BeforePreview(before, self.preview_side));
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.preview.before = Some(super::super::BeforePreview(before, self.preview.side));
+            self.preview_changed();
             self.status
                 .set_message(&cut_craft_i18n::tr!("status-removed-piece-cut-free"));
         }

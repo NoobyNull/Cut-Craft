@@ -605,6 +605,7 @@ impl CutCraftApp {
                                 let selected = picked.contains(&id);
                                 let swatch = swatches.then_some((places[&id], self.doc.job.colour));
                                 let collided = self
+                                    .preview
                                     .collisions
                                     .get(&id)
                                     .filter(|c| {

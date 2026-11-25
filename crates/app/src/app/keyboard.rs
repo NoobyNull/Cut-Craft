@@ -264,7 +264,7 @@ impl CutCraftApp {
                 .set_message(&cut_craft_i18n::tr!("status-end-let-go"));
         }
         // Escape stops a preview playing (keeping what it has cut), and does nothing else
-        if self.playback.is_some()
+        if self.player.playback.is_some()
             && !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| i.consume_shortcut(&escape))
         {

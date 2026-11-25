@@ -56,6 +56,7 @@ mod bit_changes;
 #[cfg(test)]
 pub(crate) mod hard_coded_text;
 mod help;
+mod help_browser;
 #[cfg(test)]
 mod help_coverage;
 #[path = "help_pictures.rs"]
@@ -71,6 +72,7 @@ mod layouts;
 mod mac;
 mod machine_fit;
 mod machine_setup;
+mod meshes_3d;
 mod node_editing;
 mod notes_panel;
 mod options_apply;
@@ -81,6 +83,8 @@ mod page_layout;
 mod panels;
 mod passes;
 mod placement;
+mod player;
+mod preview;
 mod reach;
 mod sample;
 #[path = "screenshots.rs"]
@@ -859,16 +863,8 @@ pub(crate) struct CutCraftApp {
     ring_grip: Option<(egui::Vec2, f32)>,
     /// An open Help window.
     info: Option<Info>,
-    /// Help Contents' rendered pages and the `help:` links it watches.
-    help_cache: egui_commonmark::CommonMarkCache,
-    /// What is typed in the Help window's search box.
-    help_search: String,
-    /// Every help page as (topic, title, Markdown), made the first time help is searched.
-    help_index: Vec<(&'static str, String, String)>,
-    /// The help search's ranked index of [`Self::help_index`], made with it.
-    help_ranked: Option<cut_craft_help::search::Index>,
-    /// The help pages read before and after the one shown: Back and Forward.
-    help_history: cut_craft_help::wiki::History<&'static str>,
+    /// The Help window's pages, search and Back and Forward.
+    help: help_browser::HelpBrowser,
     /// The Did You Know? window, open on this tip.
     tip: Option<usize>,
     /// The Did You Know? window's rendered tips.
@@ -887,11 +883,6 @@ pub(crate) struct CutCraftApp {
     summary: Summary,
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
     stroke: Vec<Point>,
-    /// The previewed material before the last preview, for Undo Last Preview.
-    before_preview: Option<BeforePreview>,
-    /// The side of a double-sided job the preview has up (`Document::bottom_side`): when
-    /// the job turns over (Swap Sides, or its undo or redo), the preview turns with it.
-    preview_side: bool,
     /// Node editing: the nodes picked with a box, which a drag of one moves together.
     picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
     /// Node editing's mirror lines, H and V: with the first, nodes either side of the
@@ -942,19 +933,8 @@ pub(crate) struct CutCraftApp {
     /// The preview grid last worked out, and what it was for: the job opened, the
     /// revision and the toolpaths' moves, the detail and the block.
     preview_grid_kept: std::cell::Cell<Option<(GridKey, crate::preview_detail::Grid)>>,
-    /// The material as cut by the previewed toolpaths, and its picture once drawn.
-    simulation: Option<Material>,
-    /// `simulation` at the 3D view's moving detail, and that detail (mesh cells).
-    simulation_coarse: Option<(usize, Material)>,
-    /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
-    /// made once a change, not every frame.
-    rough_3d: Option<(RoughKey, Material)>,
-    /// A rotary job's full 3D models as the view draws them round the axis, kept by the
-    /// change and the import they show.
-    turned_3d: Option<TurnedModels>,
-    /// What the collet nut, spindle or shank hit in the last preview, by toolpath: the
-    /// toolpath list marks them ⚠ in red and the 3D view shows the stock in the way red.
-    collisions: std::collections::BTreeMap<EntityId, Collided>,
+    /// The previewed material: what the previewed toolpaths cut, and its undo.
+    preview: preview::Preview,
     /// The model's height, lowest point to highest, and the history's revision it was
     /// measured at: Model Position in Material's picture and warning, measured once a change.
     model_tall: std::cell::Cell<Option<(u64, f64)>>,
@@ -981,9 +961,6 @@ pub(crate) struct CutCraftApp {
     /// What told the toolpaths apart at the last change, so a reorder, or its undo or redo,
     /// moving them between ids is seen (see [`follow`]).
     toolpath_keys: follow::Keys,
-    /// The mark each toolpath's cells take in the preview, where it is not its own id: the
-    /// one it was previewed under before a reorder moved it to another id.
-    preview_marks: std::collections::BTreeMap<EntityId, u32>,
     /// What a tool with no form (Group) warned of, in red at the foot of the tool panel, for
     /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
     /// too, takes it away.
@@ -1003,29 +980,11 @@ pub(crate) struct CutCraftApp {
     )>,
     /// The snap mark picked in the 2D view: Delete lets that point go.
     picked_constraint: Option<PickedSnap>,
-    /// The 3D view's fine mesh once it is still, with what it was made for.
-    fine_3d: Option<(FineKey, egui::Mesh)>,
-    /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,
-    /// with the history revision, job and detail when still (mesh cells) it was made for.
-    drawn_on: Option<(
-        (u64, cut_craft_core::document::Job, usize),
-        std::sync::Arc<Material>,
-    )>,
-    /// The imported model's triangles as last drawn, kept while nothing about the view or
-    /// the model changes: sorting and lighting a big model every frame is what made the
-    /// window drag while a model was being imported.
-    model_3d: Option<(ModelKey, std::sync::Arc<egui::Mesh>)>,
     /// The window's GPU, when it draws with wgpu, for the 3D view to draw on (the headless
     /// tests have none and draw the meshes above).
     gpu_3d: Option<view3d::gpu::Gpu>,
-    /// The 3D view's surface as the GPU draws it, with what it was built from.
-    surface_gpu: Option<SurfaceGpu>,
-    /// The model's walls and bottom, made with the surface they hang from (no preview).
-    solid_gpu: Option<std::sync::Arc<view3d::gpu::Geometry>>,
-    /// The imported model as the GPU draws it.
-    model_gpu: Option<ModelGpu>,
-    /// The same for the imported model's parts past the material's edges.
-    ghost_gpu: Option<ModelGpu>,
+    /// What the 3D view keeps of what it draws, each with what it was made from.
+    meshes: meshes_3d::Meshes3d,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
     /// While Auto-rotate spins the 3D view: when it last turned it (input time, seconds).
@@ -1048,38 +1007,10 @@ pub(crate) struct CutCraftApp {
     view_cube: Option<view3d::ViewCube>,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
-    /// A preview playing (or paused): the tool cutting the material a distance at a time.
-    playback: Option<cut_craft_core::playback::Playback>,
-    playing: bool,
-    /// Where the tool is being moved to (Single Step, Run to Retract, the Progress slider),
-    /// cut a little each frame until it gets there, or Stop.
-    playback_goal: Option<f64>,
-    /// A preview stopped or played to its end, kept so its controls stay to scrub it back
-    /// and forth, till another preview, Reset Preview or another job.
-    kept_playback: Option<cut_craft_core::playback::Playback>,
-    /// The job's history revision when the playing (or kept) preview was laid out: once
-    /// the job changes, its moves are old, so it stops and its controls close.
-    playback_revision: u64,
-    /// A playing preview's material as the 3D view draws it, and the GPU's surface of it,
-    /// kept by what they were made from (the playback's revision, the detail and the job's
-    /// revision; for the GPU, its wrap and sides too) so a paused preview is not made again
-    /// each frame, nor a moving one more than once a frame.
-    playback_view: Option<((u64, usize, u64), Material)>,
-    playback_gpu: Option<(PlaybackGpuKey, std::sync::Arc<view3d::gpu::Geometry>)>,
-    /// How many times the playback's view has been made (for tests).
-    playback_builds: usize,
-    /// The playback's revision the 3D view shows, and when it was taken: while it plays
-    /// it is taken again every [`PLAYBACK_REDRAW`], and at once when it stops somewhere.
-    playback_shown: Option<(u64, std::time::Instant)>,
-    /// How often that is, [`PLAYBACK_REDRAW`] (longer in tests, whose frames are slow).
-    playback_redraw: std::time::Duration,
+    /// The preview player: a preview playing, paused or kept, and how it plays.
+    player: player::Player,
     /// Where the Close up slider is centred, held while it is dragged so it stays put.
     close_up: Option<f64>,
-    /// How long a frame may spend cutting a playing preview; the rest waits for the next
-    /// frame, so a long toolpath plays slower instead of freezing the window.
-    playback_budget: std::time::Duration,
-    /// How many times faster than the machine the preview plays (1: the machine's speed).
-    playback_speed: f64,
     /// A rotary job's preview as the machine runs it: the file's own moves played into the
     /// material turning with A, kept in step with the playing (or kept) preview.
     turning: Option<turning::Turning>,

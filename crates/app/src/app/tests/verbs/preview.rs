@@ -10,12 +10,12 @@ impl Harness {
 
     /// The Preview Control's speed.
     pub(in super::super) fn set_playback_speed(&mut self, speed: f64) {
-        self.app.playback_speed = speed;
+        self.app.player.speed = speed;
     }
 
     /// The preview playing, if one is.
     pub(in super::super) fn playback(&self) -> Option<&cut_craft_core::playback::Playback> {
-        self.app.playback.as_ref()
+        self.app.player.playback.as_ref()
     }
 
     /// A rotary job's file played turning the material, if one is shown.
@@ -41,7 +41,8 @@ impl Harness {
     /// The previewed material's height at its first cell.
     pub(in super::super) fn previewed_height(&self) -> f64 {
         self.app
-            .simulation
+            .preview
+            .material
             .as_ref()
             .expect("a preview was played")
             .heights[0]
@@ -50,7 +51,8 @@ impl Harness {
     /// An earlier preview's cut left in the material: its first cell at `z`.
     pub(in super::super) fn given_previewed_height(&mut self, z: f64) {
         self.app
-            .simulation
+            .preview
+            .material
             .as_mut()
             .expect("a preview was played")
             .heights[0] = z;

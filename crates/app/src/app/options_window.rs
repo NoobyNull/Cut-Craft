@@ -341,7 +341,7 @@ impl CutCraftApp {
             self.forget_save_checks();
         }
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
-            self.playback_speed = options.toolpaths.preview_speed();
+            self.player.speed = options.toolpaths.preview_speed();
         }
         let language =
             (options.language != self.options.language).then(|| options.language.pack.clone());

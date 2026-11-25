@@ -9,27 +9,28 @@ impl CutCraftApp {
     /// A playing preview's material at the moving detail, painted, as the 3D view draws it:
     /// made again only once it has cut on (or the detail or the job changed).
     pub(super) fn playback_surface(&mut self) -> Option<Material> {
-        let playback = self.playback.as_ref()?;
+        let playback = self.player.playback.as_ref()?;
         let key = (
             self.shown_revision(playback),
             self.options.performance.still_cells(),
             self.history.revision(),
         );
-        if let Some((kept, surface)) = &self.playback_view
+        if let Some((kept, surface)) = &self.player.view
             && *kept == key
         {
             return Some(surface.clone());
         }
         let coarse = view3d::on_sheet(playback.material(), self.doc.job.area(), key.1);
         let surface = self.painted(coarse);
-        self.playback_view = Some((key, surface.clone()));
-        self.playback_builds += 1;
+        self.player.view = Some((key, surface.clone()));
+        self.player.builds += 1;
         Some(surface)
     }
 
     /// The playback's revision the 3D view is to show (`playback_shown`).
     pub(super) fn shown_revision(&self, playback: &cut_craft_core::playback::Playback) -> u64 {
-        self.playback_shown
+        self.player
+            .shown
             .map_or_else(|| playback.revision(), |(shown, _)| shown)
     }
 
@@ -38,22 +39,23 @@ impl CutCraftApp {
     /// frame, and a big model takes long to mix).
     pub(in super::super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
         let cells = self.options.performance.moving_cells();
-        if self.playback.is_some() {
+        if self.player.playback.is_some() {
             return self.playback_surface().map(Cow::Owned);
         }
-        if let Some(material) = &self.simulation {
+        if let Some(material) = &self.preview.material {
             if self
-                .simulation_coarse
+                .preview
+                .coarse
                 .as_ref()
                 .is_none_or(|(made, _)| *made != cells)
             {
                 let sheet = view3d::on_sheet(material, self.doc.job.area(), cells);
-                self.simulation_coarse = Some((cells, sheet));
+                self.preview.coarse = Some((cells, sheet));
             }
-            let (_, coarse) = self.simulation_coarse.as_ref().expect("made above");
+            let (_, coarse) = self.preview.coarse.as_ref().expect("made above");
             if self.doc.job.machined_area == MachinedArea::MaterialColor
                 && coarse.other_side.is_none()
-                && self.collisions.is_empty()
+                && self.preview.collisions.is_empty()
             {
                 return Some(Cow::Borrowed(coarse));
             }
@@ -68,26 +70,29 @@ impl CutCraftApp {
             cells,
             importing: (self.importing_model(), self.importing_whole()),
         };
-        if self.rough_3d.as_ref().is_none_or(|(kept, _)| *kept != key) {
+        if self.meshes.rough.get(&key).is_none() {
             let shape = self.model_shape(cells);
-            self.rough_3d = Some((key, shape));
+            self.meshes.rough.keep(key, shape);
         }
-        self.rough_3d
-            .as_ref()
-            .map(|(_, shape)| Cow::Borrowed(shape))
+        self.meshes.rough.get(&key).map(Cow::Borrowed)
     }
 
     /// Whether the 3D view shows the job's material uncut: no preview, and no model yet
     /// (the block Job Setup describes is there from the start, not made by the user).
     pub(in super::super) fn showing_uncut_material(&self) -> bool {
-        self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty()
+        self.preview.material.is_none()
+            && self.player.playback.is_none()
+            && self.doc.components.is_empty()
     }
 
     /// Whether the 3D view shows the job turned round its axis with its full 3D models as
     /// they really are: a rotary job with one (or one being imported), the model's own view
     /// (not a preview).
     pub(in super::super) fn shows_turned(&self) -> bool {
-        if self.doc.job.rotary.is_none() || self.simulation.is_some() || self.playback.is_some() {
+        if self.doc.job.rotary.is_none()
+            || self.preview.material.is_some()
+            || self.player.playback.is_some()
+        {
             return false;
         }
         let importing = self.form.as_ref().is_some_and(|f| {
@@ -181,7 +186,9 @@ impl CutCraftApp {
     /// `material` with the stock the collet, spindle or shank would hit painted red, once
     /// the preview has finished playing (before then the tool has not got there).
     pub(super) fn collisions_painted(&self, mut material: Material) -> Material {
-        if self.collisions.is_empty() || self.playback.as_ref().is_some_and(|p| !p.finished()) {
+        if self.preview.collisions.is_empty()
+            || self.player.playback.as_ref().is_some_and(|p| !p.finished())
+        {
             return material;
         }
         let hits: Vec<cut_craft_core::collision::Hit> = self
@@ -207,7 +214,7 @@ impl CutCraftApp {
     pub(in super::super) fn current_collisions(
         &self,
     ) -> impl Iterator<Item = (EntityId, &super::super::Collided)> {
-        self.collisions.iter().filter_map(|(&id, c)| {
+        self.preview.collisions.iter().filter_map(|(&id, c)| {
             self.doc
                 .toolpaths
                 .get(&id)
@@ -280,8 +287,8 @@ impl CutCraftApp {
     /// top round the model and its sides: on a flat job, not while a 3D model is imported
     /// (it is placed in the material, which would hide it) or a preview shows.
     pub(in super::super) fn model_on_material(&self) -> bool {
-        self.simulation.is_none()
-            && self.playback.is_none()
+        self.preview.material.is_none()
+            && self.player.playback.is_none()
             && self.doc.job.rotary.is_none()
             && !self.importing_model()
     }
@@ -633,11 +640,12 @@ impl CutCraftApp {
         let double = at.filter(|_| response.double_clicked());
         // a single click picks while the model shows, not over a preview, where a click
         // is the first half of a double-click taking a piece away
-        let clicked = at
-            .filter(|_| response.clicked() && self.simulation.is_none() && self.playback.is_none());
+        let clicked = at.filter(|_| {
+            response.clicked() && self.preview.material.is_none() && self.player.playback.is_none()
+        });
         // while a preview shows, a double-click takes away the piece cut free under it
         let removed = double
-            .filter(|_| self.playback.is_none() && self.simulation.is_some())
+            .filter(|_| self.player.playback.is_none() && self.preview.material.is_some())
             .is_some_and(|at| self.remove_preview_piece(fit, at));
         let picked = clicked
             .or(double)
@@ -706,7 +714,7 @@ impl CutCraftApp {
         let since = ui.input(|i| i.time) - self.moved_3d;
         let simplify = self.options.view_3d.simplify_while_moving;
         let settle = self.options.view_3d.settle();
-        if self.playback.is_none() && (!simplify || since >= settle) {
+        if self.player.playback.is_none() && (!simplify || since >= settle) {
             return self.fine_mesh(orbit, framing, look, fit);
         }
         ui.ctx()
@@ -733,22 +741,19 @@ impl CutCraftApp {
             look,
             importing: (self.importing_model(), self.importing_whole()),
         };
-        if let Some((kept, mesh)) = &self.fine_3d
-            && *kept == key
-        {
+        if let Some(mesh) = self.meshes.fine.get(&key) {
             return mesh.clone();
         }
         let surface = self.fine_surface();
         let mesh = view3d::mesh(&surface, orbit, framing, &look, fit);
-        self.fine_3d = Some((key, mesh.clone()));
-        mesh
+        self.meshes.fine.keep(key, mesh).clone()
     }
 
     /// The preview's material, or the model's shape, at its own detail up to Options' detail
     /// when still.
     pub(in super::super) fn fine_surface(&mut self) -> Material {
         let most = self.options.performance.still_cells();
-        if let Some(material) = &self.simulation {
+        if let Some(material) = &self.preview.material {
             return self.painted(view3d::on_sheet(material, self.doc.job.area(), most));
         }
         let job = &self.doc.job;
@@ -780,8 +785,8 @@ impl CutCraftApp {
         } else {
             self.turning_cells()
         };
-        if let Some(playback) = &self.playback {
-            self.solid_gpu = None;
+        if let Some(playback) = &self.player.playback {
+            self.meshes.solid_gpu = None;
             let key = (
                 self.shown_revision(playback),
                 self.options.performance.still_cells(),
@@ -789,30 +794,30 @@ impl CutCraftApp {
                 wrap,
                 sides,
             );
-            if let Some((kept, geometry)) = &self.playback_gpu
+            if let Some((kept, geometry)) = &self.player.gpu
                 && *kept == key
             {
                 return std::sync::Arc::clone(geometry);
             }
             let surface = self.playback_surface().expect("a playback");
             let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
-            self.playback_gpu = Some((key, std::sync::Arc::clone(&geometry)));
+            self.player.gpu = Some((key, std::sync::Arc::clone(&geometry)));
             return geometry;
         }
         // a finished preview on the card: the sheet round it, the preview drawn over it
         if let Some(sheet) = self.preview_pair(wrap, sides) {
-            self.solid_gpu = None;
+            self.meshes.solid_gpu = None;
             return sheet;
         }
         let key = self.geometry_key(wrap, sides);
-        let solid = self.simulation.is_none();
-        let kept = match &mut self.surface_gpu {
+        let solid = self.preview.material.is_none();
+        let kept = match &mut self.meshes.surface_gpu {
             Some(kept) if kept.key == key => kept,
             other => other.insert(super::super::SurfaceGpu::new(key)),
         };
         kept.collect();
         if let Some(level) = kept.at(cells) {
-            self.solid_gpu.clone_from(&level.solid);
+            self.meshes.solid_gpu.clone_from(&level.solid);
             return std::sync::Arc::clone(&level.surface);
         }
         // turning the view, coarser than the kept fine surface: made from that on another
@@ -820,7 +825,7 @@ impl CutCraftApp {
         if !dragging && cells < still && kept.fine.is_some() {
             kept.make(cells, solid, ctx);
             if let Some(level) = kept.nearest(cells) {
-                self.solid_gpu.clone_from(&level.solid);
+                self.meshes.solid_gpu.clone_from(&level.solid);
                 return std::sync::Arc::clone(&level.surface);
             }
         }
@@ -857,13 +862,13 @@ impl CutCraftApp {
         };
         // the model alone (no preview) is drawn solid down to the modeling plane
         let level = super::super::level_of(&surface, made, wrap, sides, solid);
-        let kept = self.surface_gpu.as_mut().expect("kept above");
+        let kept = self.meshes.surface_gpu.as_mut().expect("kept above");
         if fine {
             kept.fine = Some(std::sync::Arc::new(surface));
         }
         kept.levels.retain(|l| l.cells != made);
         kept.levels.push(level.clone());
-        self.solid_gpu = level.solid;
+        self.meshes.solid_gpu = level.solid;
         level.surface
     }
 
@@ -880,7 +885,7 @@ impl CutCraftApp {
         (sheet, pixels): (cut_craft_core::geometry::Point, f32),
     ) -> Option<view3d::gpu::Tiles> {
         self.preview_pair(look.wrap, look.sides)?;
-        let (_, tiled) = self.surface_gpu.as_mut()?.preview.as_mut()?;
+        let (_, tiled) = self.meshes.surface_gpu.as_mut()?.preview.as_mut()?;
         let screen = |p: cut_craft_core::glam::DVec3| camera.screen(p - sheet.extend(0.0));
         let frame = tiled.frame(screen, area, pixels)?;
         let at = (frame.origin - sheet).extend(0.0);
@@ -916,7 +921,7 @@ impl CutCraftApp {
         wrap: Option<view3d::Wrap>,
         sides: bool,
     ) -> Option<std::sync::Arc<view3d::gpu::Geometry>> {
-        if self.playback.is_some()
+        if self.player.playback.is_some()
             || wrap.is_some()
             || self.gpu_3d.is_none()
             || self.doc.job.double_sided.is_some()
@@ -924,13 +929,13 @@ impl CutCraftApp {
             return None;
         }
         let key = self.geometry_key(wrap, sides);
-        if let Some(kept) = &self.surface_gpu
+        if let Some(kept) = &self.meshes.surface_gpu
             && kept.key == key
             && let Some((sheet, _)) = &kept.preview
         {
             return Some(std::sync::Arc::clone(sheet));
         }
-        let material = self.simulation.as_ref()?;
+        let material = self.preview.material.as_ref()?;
         let (area, most) = (self.doc.job.area(), key.cells);
         let sheet = view3d::on_sheet(material, area, most);
         let hole = material.area();
@@ -940,7 +945,7 @@ impl CutCraftApp {
         let sheet = std::sync::Arc::new(view3d::gpu::surface(&sheet, None, sides));
         let budget = crate::preview_detail::kept_on_card(self.display.detail);
         let tiled = view3d::tiles::Tiled::new(&preview, budget);
-        let kept = match &mut self.surface_gpu {
+        let kept = match &mut self.meshes.surface_gpu {
             Some(kept) if kept.key == key => kept,
             other => other.insert(super::super::SurfaceGpu::new(key)),
         };
@@ -985,7 +990,7 @@ impl CutCraftApp {
         let (still, fps) = (speed.still_detail, speed.fps_wanted());
         let since = now - self.moved_3d;
         let moving = since < settle
-            || (self.playing && self.playback.is_some())
+            || (self.player.playing && self.player.playback.is_some())
             || self.drag_base.is_some()
             || self.drag_3d.is_some();
         let level = self.pacer.frame(seconds, moving, still, fps);
@@ -1012,6 +1017,6 @@ impl CutCraftApp {
         &mut self,
         model: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
-        faces_geometry(&mut self.model_gpu, model)
+        faces_geometry(&mut self.meshes.model_gpu, model)
     }
 }

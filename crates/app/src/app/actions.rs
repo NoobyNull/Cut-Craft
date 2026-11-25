@@ -7,9 +7,8 @@
 use super::built_ins;
 use super::{
     CONTRIBUTORS, Change, CutCraftApp, Document, EXPORT_LEVEL, EntityId, History, Icons, Info,
-    PLAYBACK_SPEED, Page, Pages, SELECT_LEVEL, SaveForm, Screen, Session, Shown, ToolDatabase,
-    Value, View, brush_dialog, commands, dialog_size, egui, files, gui, saving_path, summary_table,
-    view3d,
+    Page, Pages, SELECT_LEVEL, SaveForm, Screen, Session, Shown, ToolDatabase, Value, View,
+    brush_dialog, commands, dialog_size, egui, files, gui, saving_path, summary_table, view3d,
 };
 use cut_craft_i18n::tr;
 
@@ -192,11 +191,7 @@ impl CutCraftApp {
             turn_ring: None,
             ring_grip: None,
             info: None,
-            help_cache: egui_commonmark::CommonMarkCache::default(),
-            help_search: String::new(),
-            help_index: vec![],
-            help_ranked: None,
-            help_history: cut_craft_help::wiki::History::default(),
+            help: super::help_browser::HelpBrowser::default(),
             tip: None,
             tips_cache: egui_commonmark::CommonMarkCache::default(),
             credits: crate::credits::Window::default(),
@@ -218,8 +213,6 @@ impl CutCraftApp {
             save_form: None,
             machine_files: None,
             save_checks: vec![],
-            before_preview: None,
-            preview_side: false,
             picked_nodes: Vec::new(),
             node_mirror: [false, false],
             menu_at: None,
@@ -230,15 +223,11 @@ impl CutCraftApp {
             display: crate::display::Display::default(),
             held_detail: None,
             preview_grid_kept: std::cell::Cell::new(None),
-            simulation: None,
-            simulation_coarse: None,
+            preview: super::preview::Preview::default(),
             import_level: None,
             polyline: crate::polyline::Draft::default(),
             placed: Vec::new(),
             picked_constraint: None,
-            fine_3d: None,
-            rough_3d: None,
-            turned_3d: None,
             model_tall: std::cell::Cell::new(None),
             notes_ui: super::notes_panel::NotesUi::default(),
             note_vars: std::cell::RefCell::new(None),
@@ -246,19 +235,12 @@ impl CutCraftApp {
             height_applied_at: None,
             job_epoch: 0,
             toolpath_keys: super::follow::Keys::default(),
-            preview_marks: std::collections::BTreeMap::new(),
             tool_note: None,
-            collisions: std::collections::BTreeMap::new(),
             stale_known: 0,
             stale_while_form: false,
             recalculate_ask: None,
-            drawn_on: None,
-            model_3d: None,
             gpu_3d: None,
-            surface_gpu: None,
-            solid_gpu: None,
-            model_gpu: None,
-            ghost_gpu: None,
+            meshes: super::meshes_3d::Meshes3d::default(),
             trace_view: None,
             moved_3d: 0.0,
             spinning_3d: None,
@@ -271,19 +253,8 @@ impl CutCraftApp {
             framing: view3d::Framing::default(),
             view_cube: None,
             recent: vec![],
-            playback: None,
-            playing: false,
-            playback_goal: None,
-            kept_playback: None,
-            playback_revision: 0,
+            player: super::player::Player::default(),
             close_up: None,
-            playback_view: None,
-            playback_gpu: None,
-            playback_builds: 0,
-            playback_shown: None,
-            playback_redraw: super::PLAYBACK_REDRAW,
-            playback_budget: super::PLAYBACK_BUDGET,
-            playback_speed: PLAYBACK_SPEED,
             turning: None,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
@@ -782,7 +753,7 @@ impl CutCraftApp {
     /// Model > Create Component from Toolpath Preview: the block as previewed, standing on
     /// the material's bottom.
     pub(super) fn component_from_preview(&mut self) {
-        if let Some(preview) = &self.simulation {
+        if let Some(preview) = &self.preview.material {
             // the block as cut, standing on the material's bottom
             let mut block = preview.clone();
             for h in &mut block.heights {

@@ -7,20 +7,10 @@ fn a_preview_plays_as_long_as_the_toolpath_summary_says_the_machine_takes() {
     let h = playing_preview();
     let toolpath = h.app.doc.toolpaths.values().next().unwrap();
     let summary = toolpath.machining_minutes(h.app.summary.rapid) * 60.0;
-    let length = h.app.playback.as_ref().unwrap().length();
+    let length = h.app.player.playback.as_ref().unwrap().length();
     assert!(
         (length - summary).abs() < 1e-6,
         "{length} s, the summary {summary} s"
-    );
-}
-
-#[test]
-fn a_jump_gets_more_time_each_frame_than_playing_does() {
-    let h = playing_preview();
-    assert!(super::jump_budget(h.app.playback_budget) > h.app.playback_budget);
-    assert_eq!(
-        super::jump_budget(std::time::Duration::ZERO),
-        std::time::Duration::ZERO
     );
 }
 
@@ -274,7 +264,7 @@ fn a_double_clicked_tile_is_previewed_alone() {
     h.double_click(right);
     assert_eq!(h.app.doc.tiling.map(|t| t.active), Some(2));
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    let m = h.app.simulation.as_ref().expect("previewed");
+    let m = h.app.preview.material.as_ref().expect("previewed");
     let cut_beyond = |from_x: f64| {
         (0..m.rows).any(|r| {
             (0..m.columns).any(|c| m.centre(c, r).x > from_x && m.heights[r * m.columns + c] < -0.5)

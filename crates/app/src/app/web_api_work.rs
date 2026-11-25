@@ -179,10 +179,11 @@ impl CutCraftApp {
         self.framing = self.framing.fitted();
         self.spinning_3d = None;
         if picture.preview == Shown::Before
-            && (self.simulation.is_some() || self.playback.is_some())
+            && (self.preview.material.is_some() || self.player.playback.is_some())
         {
-            capture.was.set_aside = Some((self.simulation.take(), self.playback.take()));
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            capture.was.set_aside =
+                Some((self.preview.material.take(), self.player.playback.take()));
+            self.preview_changed();
         }
         Ok(capture)
     }
@@ -199,9 +200,9 @@ impl CutCraftApp {
         self.framing = was.framing;
         self.spinning_3d = was.spinning;
         if let Some((simulation, playback)) = was.set_aside {
-            self.simulation = simulation;
-            self.playback = playback;
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.preview.material = simulation;
+            self.player.playback = playback;
+            self.preview_changed();
         }
     }
 
@@ -423,7 +424,7 @@ impl CutCraftApp {
         }
         self.display.animate_preview = animate;
         self.after(wait, |app| {
-            if app.simulation.is_none() {
+            if app.preview.material.is_none() {
                 return Err(ApiError::refused(format!(
                     "The preview was not made: {}",
                     app.status.message

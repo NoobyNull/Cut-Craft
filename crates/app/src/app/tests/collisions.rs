@@ -1046,7 +1046,7 @@ fn a_preview_marks_the_collet_hitting_the_wood_in_the_list_and_in_red() {
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
     h.frame(vec![]);
     let id = *h.app.doc.toolpaths.keys().next().unwrap();
-    let collided = h.app.collisions.get(&id).expect("the nut hits");
+    let collided = h.app.preview.collisions.get(&id).expect("the nut hits");
     assert!(
         collided
             .sentence
@@ -1124,6 +1124,7 @@ fn the_collet_nut_coming_down_over_a_clamp_is_marked_after_a_preview() {
     let id = *h.app.doc.toolpaths.keys().next().unwrap();
     let collided = h
         .app
+        .preview
         .collisions
         .get(&id)
         .expect("the nut comes over the clamp");

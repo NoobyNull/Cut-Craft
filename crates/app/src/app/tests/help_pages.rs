@@ -271,7 +271,7 @@ fn help_search_finds_tools_by_name_not_by_their_icons_file() {
     let found = h.app.help_search_results("pencil");
     assert_eq!(found[0].0, "3d_pencil_toolpath", "{found:?}");
     // the search reads each page's words, never an icon's file path or folder
-    for (t, _, md) in &h.app.help_index {
+    for (t, _, md) in h.app.help.pages() {
         assert!(!md.contains("help-icons"), "{t}");
         assert!(!md.contains("create_vectors"), "{t}");
     }
@@ -289,7 +289,7 @@ fn the_help_window_shows_tool_icons_on_pages_and_in_search_results() {
         matches!(image, Ok(egui::load::BytesPoll::Ready { .. })),
         "the page's icon handed to egui"
     );
-    h.app.help_search = "pencil".into();
+    h.app.help.search = "pencil".into();
     h.frame(vec![]);
     h.frame(vec![]);
     let small = "bytes://help-icons/24/toolpaths/3d_pencil_toolpath.png";
@@ -1046,7 +1046,7 @@ fn help_search_lists_matching_pages_and_opens_one() {
         "the tips are a page of their own"
     );
     h.app.invoke(&h.ctx, "help_contents");
-    h.app.help_search = "job setup".into();
+    h.app.help.search = "job setup".into();
     h.frame(vec![]);
     h.frame(vec![]);
     // the first result, just under the count
@@ -1063,7 +1063,7 @@ fn help_search_lists_matching_pages_and_opens_one() {
     h.frame(vec![]);
     assert_eq!(h.app.info, Some(Info::Help("job_setup")));
     assert!(
-        h.app.help_search.is_empty(),
+        h.app.help.search.is_empty(),
         "the page shown in place of the list"
     );
 }
