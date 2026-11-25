@@ -115,9 +115,10 @@ impl Harness {
     /// Opens the Rail's list of the group with this name, as its button does.
     pub(in super::super) fn open_rail_group(&mut self, name: &str) {
         let at = (self.app.tool_model().all_groups().iter()).position(|g| g.name == name);
-        self.app.rail.open = at.map_or(crate::app::rail_list::List::Closed, |i| {
-            crate::app::rail_list::List::Group(i)
-        });
+        let Some(i) = at else {
+            panic!("no tool group {name}");
+        };
+        self.app.rail.open = crate::app::rail_list::List::Group(i);
     }
 
     /// The Design page's tab now showing.
