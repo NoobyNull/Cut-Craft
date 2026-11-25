@@ -664,7 +664,7 @@ fn rotary_setup(
             ),
         ));
     }
-    room(&job, &axis, toolpaths, found);
+    room(&job, doc.job.turning_gap(), &axis, toolpaths, found);
     if job.along != axis.along {
         found.push(Finding::warning(
             Check::RotarySetup,
@@ -709,9 +709,10 @@ fn too_far(
 
 /// Whether the material has room to turn on the rotary: below it down to the spoilboard
 /// (or the bed with the spoilboard out), above it up to the bit lifted all the way, and
-/// whether the toolpaths lift the bit clear of its corners before A turns.
+/// whether the bit has room to lift clear of its corners before A turns.
 fn room(
     job: &crate::document::Rotary,
+    turning_gap: f64,
     axis: &crate::rotary_axis::RotaryAxis,
     toolpaths: &[&Toolpath],
     found: &mut Vec<Finding>,
@@ -780,25 +781,34 @@ fn room(
             ));
         }
     }
-    // A turning with the bit lower than the material swings: it knocks into a corner
+    // A turning with the bit lower than the material swings: the file lifts it clear first,
+    // which needs that much room under Z all the way up
     let round = |p: DVec3| if job.along == Along::X { p.y } else { p.x };
+    let lift = radius + turning_gap;
+    let Some(above) = axis.room_above() else {
+        return;
+    };
+    if lift <= above + 1e-9 {
+        return;
+    }
     for t in toolpaths {
-        let low = t.moves.windows(2).find(|m| {
+        // held off the axis, a change of how far across turns A too
+        let across = |i: usize| t.across.get(i).copied().unwrap_or(0.0);
+        let low = t.moves.windows(2).enumerate().any(|(i, m)| {
             m[1].kind == MoveKind::Rapid
-                && (round(m[1].to) - round(m[0].to)).abs() > 1e-6
-                && radius + m[0].to.z.min(m[1].to.z) < swing - 1e-6
+                && ((round(m[1].to) - round(m[0].to)).abs() > 1e-6
+                    || (across(i + 1) - across(i)).abs() > 1e-6)
+                && radius + m[0].to.z.min(m[1].to.z) < lift - 1e-6
         });
-        if let Some(m) = low {
-            let high = radius + m[0].to.z.min(m[1].to.z);
+        if low {
             found.push(Finding::warning(
                 Check::RotarySetup,
                 format!(
-                    "\"{}\" turns A with the bit {high:.1} mm above the turning axis, but the \
-                     {shape} swing out to {swing:.1} mm: the bit knocks into the material. \
-                     Raise Clearance (Z1) in Job Setup to {:.1} mm or more, and calculate it \
-                     again",
+                    "\"{}\" turns A, and the file lifts the bit {lift:.1} mm above the turning \
+                     axis first so the {shape} swing under it, higher than Z can go \
+                     ({above:.1} mm). Use smaller material, or lower the clearance (Z1) in Job \
+                     Setup",
                     t.name,
-                    (swing - radius + 1.0).ceil()
                 ),
             ));
         }
