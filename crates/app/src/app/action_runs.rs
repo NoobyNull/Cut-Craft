@@ -3,8 +3,8 @@
 //! machine windows, and the menu items that are an existing tool reached another way.
 
 use super::{
-    BeforePreview, Change, CutCraftApp, DESIGN_TABS, Dialog, EntityId, Info, Page, Screen, Value,
-    ViewTool, egui, filtered_dialog, setup_material,
+    Change, CutCraftApp, DESIGN_TABS, Dialog, EntityId, Info, Page, Screen, Value, ViewTool, egui,
+    filtered_dialog, setup_material,
 };
 use cut_craft_i18n::tr;
 
@@ -19,6 +19,12 @@ impl CutCraftApp {
         if self.history.redo(&mut self.doc) {
             self.status.set_message(&tr!("status-redone"));
         }
+    }
+
+    /// The preview's material changed: its moving-detail copy and the 3D view's meshes of it
+    /// go, to be made again from it.
+    pub(super) fn preview_changed(&mut self) {
+        (self.preview.coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
     }
 
     /// A job is open, not the start page.
@@ -168,12 +174,11 @@ impl CutCraftApp {
     }
 
     pub(super) fn undo_last_preview(&mut self, _: &egui::Context) {
-        if let Some(BeforePreview(material, side)) = self.before_preview.take() {
-            self.simulation = material;
+        if let Some(side) = self.preview.undo() {
             self.player.kept = None;
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.preview_changed();
             // made before Swap Sides: turned over to the side the job is on now
-            self.preview_side = side;
+            self.preview.side = side;
             self.follow_side();
             self.status.set_message(&tr!("status-undid-last-preview"));
         }
@@ -183,8 +188,8 @@ impl CutCraftApp {
         // a playing preview stops first, keeping what it has cut, so Undo Last Preview brings
         // back what was showing
         self.finish_playback();
-        self.before_preview = Some(BeforePreview(self.simulation.take(), self.preview_side));
-        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        self.preview.keep_for_undo(true);
+        self.preview_changed();
         self.player.close();
         // the Preview tab's detail goes back to Options' default
         self.display.detail = self.options.performance.preview_detail.min(100);

@@ -264,7 +264,7 @@ fn a_double_clicked_tile_is_previewed_alone() {
     h.double_click(right);
     assert_eq!(h.app.doc.tiling.map(|t| t.active), Some(2));
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    let m = h.app.simulation.as_ref().expect("previewed");
+    let m = h.app.preview.material.as_ref().expect("previewed");
     let cut_beyond = |from_x: f64| {
         (0..m.rows).any(|r| {
             (0..m.columns).any(|c| m.centre(c, r).x > from_x && m.heights[r * m.columns + c] < -0.5)

@@ -669,8 +669,8 @@ impl CutCraftApp {
         (self.camera, self.view_tool) = (None, None);
         (
             self.selected_toolpath,
-            self.simulation,
-            self.simulation_coarse,
+            self.preview.material,
+            self.preview.coarse,
             self.fine_3d,
             self.surface_gpu,
             self.rough_3d,
@@ -678,8 +678,8 @@ impl CutCraftApp {
         self.turned_3d = None;
         // the old job's preview playback, its controls and its undo go with it
         self.player.close();
-        self.before_preview = None;
-        self.preview_side = self.doc.bottom_side;
+        self.preview.before = None;
+        self.preview.side = self.doc.bottom_side;
         // the G-code shown, and a save waiting or asked about, were the job that was open
         self.gcode_view = None;
         self.save_anyway = None;

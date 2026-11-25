@@ -80,7 +80,7 @@ impl CutCraftApp {
     /// while the document and job stay as they are; `None` while a preview shows, which is
     /// hit as [`Self::surface_3d`] has it.
     pub(super) fn drawing_surface(&mut self) -> Option<Arc<Material>> {
-        if self.simulation.is_some()
+        if self.preview.material.is_some()
             || self.player.playback.is_some()
             || self.doc.components.is_empty()
         {

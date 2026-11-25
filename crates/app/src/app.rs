@@ -82,6 +82,7 @@ mod panels;
 mod passes;
 mod placement;
 mod player;
+mod preview;
 mod reach;
 mod sample;
 #[path = "screenshots.rs"]
@@ -888,11 +889,6 @@ pub(crate) struct CutCraftApp {
     summary: Summary,
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
     stroke: Vec<Point>,
-    /// The previewed material before the last preview, for Undo Last Preview.
-    before_preview: Option<BeforePreview>,
-    /// The side of a double-sided job the preview has up (`Document::bottom_side`): when
-    /// the job turns over (Swap Sides, or its undo or redo), the preview turns with it.
-    preview_side: bool,
     /// Node editing: the nodes picked with a box, which a drag of one moves together.
     picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
     /// Node editing's mirror lines, H and V: with the first, nodes either side of the
@@ -943,19 +939,14 @@ pub(crate) struct CutCraftApp {
     /// The preview grid last worked out, and what it was for: the job opened, the
     /// revision and the toolpaths' moves, the detail and the block.
     preview_grid_kept: std::cell::Cell<Option<(GridKey, crate::preview_detail::Grid)>>,
-    /// The material as cut by the previewed toolpaths, and its picture once drawn.
-    simulation: Option<Material>,
-    /// `simulation` at the 3D view's moving detail, and that detail (mesh cells).
-    simulation_coarse: Option<(usize, Material)>,
+    /// The previewed material: what the previewed toolpaths cut, and its undo.
+    preview: preview::Preview,
     /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
     /// made once a change, not every frame.
     rough_3d: Option<(RoughKey, Material)>,
     /// A rotary job's full 3D models as the view draws them round the axis, kept by the
     /// change and the import they show.
     turned_3d: Option<TurnedModels>,
-    /// What the collet nut, spindle or shank hit in the last preview, by toolpath: the
-    /// toolpath list marks them ⚠ in red and the 3D view shows the stock in the way red.
-    collisions: std::collections::BTreeMap<EntityId, Collided>,
     /// The model's height, lowest point to highest, and the history's revision it was
     /// measured at: Model Position in Material's picture and warning, measured once a change.
     model_tall: std::cell::Cell<Option<(u64, f64)>>,
@@ -982,9 +973,6 @@ pub(crate) struct CutCraftApp {
     /// What told the toolpaths apart at the last change, so a reorder, or its undo or redo,
     /// moving them between ids is seen (see [`follow`]).
     toolpath_keys: follow::Keys,
-    /// The mark each toolpath's cells take in the preview, where it is not its own id: the
-    /// one it was previewed under before a reorder moved it to another id.
-    preview_marks: std::collections::BTreeMap<EntityId, u32>,
     /// What a tool with no form (Group) warned of, in red at the foot of the tool panel, for
     /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
     /// too, takes it away.

@@ -485,7 +485,7 @@ fn a_picture_before_the_preview_shows_the_model_and_the_preview_comes_back_after
     let (mut h, at) = switched_on();
     h.app.doc = cut_craft_core::testing::domed();
     let material = cut_craft_core::simulation::Material::new(&h.app.doc.job, 1000);
-    h.app.simulation = Some(material.clone());
+    h.app.preview.material = Some(material.clone());
     let mut seen = None;
     let path = format!(
         "{}view.png?view=iso&preview=before",
@@ -506,7 +506,7 @@ fn a_picture_before_the_preview_shows_the_model_and_the_preview_comes_back_after
         }
         h.frame(vec![]);
         if let Some(asked) = h.screenshot.take() {
-            seen = Some(h.app.simulation.is_some());
+            seen = Some(h.app.preview.material.is_some());
             asked.complete(std::sync::Arc::new(egui::ColorImage::filled(
                 [1280, 800],
                 egui::Color32::RED,
@@ -526,7 +526,7 @@ fn a_picture_before_the_preview_shows_the_model_and_the_preview_comes_back_after
         "the preview was set aside while it was taken"
     );
     assert_eq!(
-        h.app.simulation.as_ref(),
+        h.app.preview.material.as_ref(),
         Some(&material),
         "and put back after"
     );
@@ -602,7 +602,7 @@ fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
         Some(json!({ "toolpaths": [999] })),
     );
     assert_eq!(status, 404, "{e}");
-    assert!(h.app.simulation.is_none());
+    assert!(h.app.preview.material.is_none());
     let (status, previewed) = call(
         &mut h,
         at,
@@ -611,7 +611,7 @@ fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
         Some(json!({ "toolpaths": id })),
     );
     assert_eq!(status, 200, "{previewed}");
-    assert!(h.app.simulation.is_some(), "previewed");
+    assert!(h.app.preview.material.is_some(), "previewed");
     assert!(h.app.player.playback.is_none(), "cut at once, not played");
     let (status, progress) = call(&mut h, at, "GET", "progress", None);
     assert_eq!(status, 200);
@@ -620,7 +620,7 @@ fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
     assert_eq!(status, 409, "nothing to cancel: {e}");
     let (status, _) = call(&mut h, at, "POST", "preview/reset", Some(json!({})));
     assert_eq!(status, 200);
-    assert!(h.app.simulation.is_none(), "reset");
+    assert!(h.app.preview.material.is_none(), "reset");
     let (status, e) = call(&mut h, at, "POST", "preview/reset", Some(json!({})));
     assert_eq!(status, 409, "no preview to reset: {e}");
 }
