@@ -74,7 +74,9 @@ setting-saved-toolpaths-leave-out-cutting-2d5ca7 =
     shorter files; 0 keeps every point, 0.1 mm is the most. The keep-out zones are
     checked on what is saved. Profile, pocket and other 2D toolpaths
 setting-3d-toolpath-tolerance-3728e8 = 3D toolpath tolerance
-setting-the-same-for-3d-roughing-a348d7 = The same for 3D roughing, finishing, texture, moulding and the like
+setting-the-same-for-3d-roughing-7b50bc =
+    The same for 3D roughing, finishing, texture, moulding, rotary carving and turning, and
+    the like. A rotary toolpath's moves keep where the bit is held across the turning axis
 setting-v-carve-v-bit-carving-5d2ada = V-Carve (V-bit carving) toolpath tolerance
 setting-the-same-for-v-carving-a437b3 = The same for V-carving, prism, inlay and chamfer toolpaths
 setting-preview-multiplier-20da96 = Preview multiplier
@@ -3667,6 +3669,12 @@ setting-material-left-on-the-model-6111e1 = Material left on the model for the f
 setting-where-along-the-axis-the-c43487 = Where along the axis the roughing starts, from the job's start (the chuck end)
 setting-end-93764a = End
 setting-where-along-the-axis-the-5fe3ba = Where along the axis the roughing ends, from the job's start; 0 runs to the job's end
+setting-machining-limit-59a606 = Machining limit
+setting-where-on-the-material-the-79a212 =
+    Where on the material the bit may cut: all of it, or within the model's outline, a
+    level's, or the selected closed vectors. Drawn on the job, they wrap round the part
+setting-the-level-whose-components-make-2a6b24 = The level whose components make the limit
+setting-grows-the-limit-outward-by-d428c2 = Grows the limit outward by this much (negative shrinks it)
 
 ## Rotary Finishing (rotary_finishing_toolpath)
 setting-the-last-pass-over-a-8be518 =
@@ -3677,13 +3685,19 @@ setting-which-way-the-bit-goes-b4a0ef =
     Which way the bit goes over the part: round it, stepping along between passes, or
     along it, A turning a step between passes
 setting-bit-held-5d70bf = Bit held
-setting-where-the-bit-is-held-324509 = Where the bit is held: over the turning axis, or to one side of it
+setting-where-the-bit-is-held-af1ac8 =
+    Where the bit is held: over the turning axis, to one side of it, or following the
+    surface
 setting-over-the-axis-28664d = Over the axis
 setting-straight-over-the-turning-axis-8046b4 = Straight over the turning axis: the tip of the bit cuts
 setting-off-centre-07cf25 = Off centre
 setting-a-set-distance-to-one-cfc04e =
     A set distance to one side of the turning axis: the side of the ball cuts, not its
     slow-turning tip, for a cleaner finish, and walls that face sideways are reached
+setting-follows-the-surface-7505f9 = Follows the surface
+setting-a-and-the-bit-s-ea8d54 =
+    A and the bit's place across the axis change together, so the bit meets the model
+    square on: flat faces are cut with A still, steep sides by the side of the ball
 setting-how-far-to-one-side-3d44a4 =
     How far to one side of the turning axis the bit is held. Positive is the way the part
     comes up towards the bit as A turns back
@@ -3706,6 +3720,29 @@ setting-cut-away-the-centre-stock-3b5b5d =
     Cut away the centre stock Job Setup leaves along the axis (Holding the Part), down to
     the model: for the last toolpath, once everything else is cut. The ends the part is
     kept joined at stay as they are
+
+## Rotary Locked Angles (rotary_locked_angles_toolpath)
+setting-a-locked-at-one-angle-276e9e =
+    A locked at one angle after another, each where it reaches the most of what is left, and
+    the side facing the bit finished with A held still.
+setting-most-angles-1497ba = Most angles
+setting-the-most-angles-a-locks-1f62a1 =
+    The most angles A locks at. Each is picked where it reaches the most of what is left,
+    and it stops sooner when nothing worth another is left
+setting-where-along-the-axis-it-b9de76 = Where along the axis it starts, from the job's start (the chuck end)
+setting-where-along-the-axis-it-0fada5 = Where along the axis it ends, from the job's start; 0 runs to the job's end
+
+## Rotary Details (rotary_details_toolpath)
+setting-a-smaller-bit-after-the-637bbd = A smaller bit after the finish, only where the bigger bits before it left material.
+setting-the-detail-bit-a-ball-1faaff =
+    The detail bit: a ball nose smaller than the bits that finished before, so it fits
+    where they could not. Its finishing stepover spaces the passes
+setting-the-bigger-bits-that-finished-9490ff =
+    The bigger bits that finished the part before this one: it cuts only what they could
+    not reach. With none, it cuts what the toolpaths above it leave
+setting-after-the-rings-the-most-42b088 =
+    After the rings, the most angles A locks at for what they could not reach, each
+    picked where it reaches the most. 0 for rings alone
 
 ## 4-Axis Rotary Machining (rotary_machining_toolpath)
 setting-the-bit-a-ball-nose-40e65e = The bit: a ball nose follows curves best. Its finishing stepover spaces the rings
@@ -3770,9 +3807,13 @@ setting-cuts-a-groove-one-bit-39bfe9 =
 setting-where-along-the-axis-it-44e8c0 =
     Where along the axis it starts, from the job's start (the chuck end); for Part off,
     where the groove is
-setting-where-along-the-axis-it-0fada5 = Where along the axis it ends, from the job's start; 0 runs to the job's end
 setting-holding-stub-aa4acc = Holding stub
 setting-across-the-stub-left-on-ac7faa =
     Across the stub left on the turning axis, joining the part to the rest of the
     material until it is cut free (for Turn, where there is no model)
 setting-material-left-on-the-model-0c768e = Material left on the model's outline for the carving after
+setting-finish-the-outline-be4443 = Finish the outline
+setting-after-the-steps-down-one-8b1d6b =
+    After the steps down, one last pass along the outline, a finishing stepover apart, so
+    a turned part comes off smooth: for a part that is round all along, finished here with
+    no carving after

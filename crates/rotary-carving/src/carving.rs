@@ -4,9 +4,9 @@
 use cut_craft_core::CommandError;
 use cut_craft_core::document::{Along, Document, Rotary, Units};
 use cut_craft_core::toolpath::Tool;
-use cut_craft_rotary::Stock;
+use cut_craft_rotary::{Stock, Voxels};
 
-use crate::{Solid, Turned, Work, model_along, parts, supporting};
+use crate::{Limit, Solid, Turned, Work, model_along, parts, supporting};
 
 /// The part as a rotary carving toolpath sees it, ready to work passes out over
 /// ([`Self::work`]).
@@ -30,6 +30,8 @@ pub struct Carving {
     pub end: f64,
     pub step: f64,
     pub units: Units,
+    /// Where on the unrolled material the bit may cut: none for all of it.
+    pub limit: Option<Limit>,
 }
 
 /// Where a carving toolpath cuts along the part, how far apart its passes are, and what it
@@ -105,6 +107,7 @@ impl Carving {
             end,
             step: reach.step,
             units: doc.job.units,
+            limit: None,
         };
         // what Job Setup leaves to hold the part, kept like a model
         let origin = if along_x {
@@ -140,6 +143,76 @@ impl Carving {
             step: self.step,
             top: self.top,
             units: self.units,
+            limit: self.limit.as_ref(),
         }
+    }
+
+    /// Kept within `limit` (none for the whole material): the passes worked out only as far
+    /// along the part as it reaches, and a bit's width either side.
+    ///
+    /// # Errors
+    /// When the limit lies wholly outside Start and End.
+    pub fn limited(mut self, limit: Option<Limit>) -> Result<Self, CommandError> {
+        if let Some(l) = &limit {
+            let reach = self.tool.diameter / 2.0;
+            self.start = self.start.max(l.from - reach);
+            self.end = self.end.min(l.to + reach);
+            if self.end <= self.start {
+                return Err(CommandError::InvalidParams(
+                    "the machining limit lies outside Start and End: nothing to cut".into(),
+                ));
+            }
+        }
+        self.limit = limit;
+        Ok(self)
+    }
+}
+
+/// How far apart `tool`'s finishing passes are: its finishing stepover of its diameter.
+///
+/// # Errors
+/// When the stepover is not more than 0% and at most 100%.
+pub fn finishing_step(tool: &Tool) -> Result<f64, CommandError> {
+    cut_craft_core::ensure_positive("tool diameter", tool.diameter)?;
+    let stepover = tool.finishing_stepover();
+    if !(stepover > 0.0 && stepover <= 1.0) {
+        return Err(CommandError::InvalidParams(format!(
+            "the finishing stepover of {} must be more than 0% and at most 100%: set it in \
+             the Tool Database",
+            tool.name
+        )));
+    }
+    Ok(stepover * tool.diameter)
+}
+
+impl Carving {
+    /// What is left of the material for `tool` to cut, kept in cells no finer than a twelfth
+    /// of it (what is left between is not worth a pass): the whole blank when `whole_blank`
+    /// (Settings' advanced rotary mode), else what the toolpaths above the one being made
+    /// leave of it.
+    #[must_use]
+    pub fn left_of(&self, doc: &Document, stock: &Stock, whole_blank: bool) -> Voxels {
+        let mut material = Voxels::of(
+            stock,
+            Voxels::cell_for(stock, crate::CELLS).max(self.tool.diameter / 12.0),
+        );
+        if !whole_blank {
+            cut_craft_core::progress::stage("Working out what the toolpaths above leave");
+            crate::cut_by(
+                &mut material,
+                &doc.toolpaths_before_made(),
+                self.corner(doc),
+                self.radius,
+                self.along_x,
+            );
+        }
+        material
+    }
+
+    /// Where the material's corner is in the job: the passes are worked out from it.
+    #[must_use]
+    pub fn corner(&self, doc: &Document) -> cut_craft_core::glam::DVec3 {
+        let corner = doc.job.area().min;
+        cut_craft_core::glam::DVec3::new(corner.x, corner.y, 0.0)
     }
 }

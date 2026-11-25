@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-25
-see-also: rotary_roughing_toolpath, rotary_machining_toolpath, rotary_lathe_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths, tool_database
+see-also: rotary_roughing_toolpath, rotary_locked_angles_toolpath, rotary_details_toolpath, rotary_machining_toolpath, rotary_lathe_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths, tool_database
 ---
 
 **Rotary Finishing** is the last pass over a carved part on a rotary job: the bit stays on the
@@ -41,8 +41,15 @@ down; **Climb** and **Conventional** cut every pass the same way, lifting back t
   are reached. **One side** holds it there for the whole finish; **Both sides** goes over the
   whole part from one side, then again from the other, for walls facing either way, in twice
   the time.
+- **Follows the surface**: A and the bit's place across the axis change together at every
+  point, so the bit always meets the model square on. A flat face is cut with A still and the
+  bit moving across it. A steep side is cut by the side of the ball facing it, not its
+  slow-turning tip. It is the least to set up and reaches the most in one finish. A four-axis
+  machine can't tilt the bit, so the part is turned to face it instead, never more than 60°
+  from straight under the bit, so the collet nut stays clear of the part.
 
-An off-centre finish needs a post that moves the bit across the axis: the Rotary A posts do.
+An off-centre or surface-following finish needs a post that moves the bit across the axis:
+the Rotary A posts do.
 
 ## It cuts only what is left
 
@@ -61,6 +68,10 @@ goes over the whole blank, as if nothing were above it.
 - **Allowance**: material left on the model for a later pass. 0 for the finish.
 - **Start** and **End**: where along the axis it cuts, from the job's start (the chuck end).
   End 0 runs to the job's end.
+- **Machining limit**: where on the material it may cut. **Material** (the usual) is all of
+  it; **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline,
+  grown by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job
+  does. Selected vectors are kept with the toolpath, so it recalculates the same.
 - **Registration mark**: a small notch at A=0 just past End, so the part can be put back
   exactly as it was if a job has to be started again.
 - **Cut support**: cut away the centre stock Job Setup leaves along the axis, down to the

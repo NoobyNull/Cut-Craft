@@ -567,6 +567,7 @@ impl Registry {
             })?;
         let mut fresh = fresh;
         crate::rest::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
+        crate::locked_face::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
         if let Some(selector) = settings.get("selector") {
             fresh.params["selector"] = selector.clone();
         }

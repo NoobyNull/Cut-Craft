@@ -222,3 +222,142 @@ fn after_a_roughing_it_still_takes_the_allowance_left_down_to_the_model() {
     let deepest = after.iter().map(|c| c.z).fold(f64::INFINITY, f64::min);
     assert!(deepest < -7.5, "{deepest}");
 }
+
+/// `doc` with a closed rectangle drawn on the job from `x0` to `x1` along and `y0` to `y1`
+/// round, selected.
+fn with_selected_box(mut doc: Document, (x0, x1): (f64, f64), (y0, y1): (f64, f64)) -> Document {
+    let mut c = Change::builder(&doc);
+    let at = cut_craft_core::geometry::Point::new;
+    let id = c.add(cut_craft_core::geometry::Path::polyline(
+        &[at(x0, y0), at(x1, y0), at(x1, y1), at(x0, y1)],
+        true,
+    ));
+    c.select([id]);
+    doc.apply(&c.finish()).unwrap();
+    doc
+}
+
+#[test]
+fn a_machining_limit_of_selected_vectors_keeps_the_finish_inside_them_wrapped_round() {
+    let doc = with_selected_box(beaded(), (20.0, 40.0), (10.0, 50.0));
+    let p = Params {
+        machining_boundary: cut_craft_core::component::MachiningBoundary::SelectedVectors,
+        ..coarse()
+    };
+    let (toolpath, notes) = finish(&doc, &p);
+    let cuts = cuts(&toolpath);
+    assert_ne!(cuts.len(), 0, "{notes:?}");
+    for c in &cuts {
+        assert!((20.0 - 1e-6..=40.0 + 1e-6).contains(&c.x), "{c:?}");
+        assert!((10.0 - 1e-6..=50.0 + 1e-6).contains(&c.y), "{c:?}");
+    }
+    // kept with the toolpath, so recalculating with nothing selected cuts the same
+    assert_eq!(toolpath.vectors.len(), 1);
+    // and the whole material is the usual
+    assert_eq!(
+        Params::default().machining_boundary,
+        cut_craft_core::component::MachiningBoundary::Material
+    );
+}
+
+#[test]
+fn a_machining_limit_with_nothing_selected_says_what_to_do() {
+    let p = Params {
+        machining_boundary: cut_craft_core::component::MachiningBoundary::SelectedVectors,
+        ..coarse()
+    };
+    let why = made(&beaded(), &p).unwrap_err().to_string();
+    assert!(why.contains("closed vectors"), "{why}");
+}
+
+/// How far a square bar's flats are from the axis: its corners just touch the material's
+/// surface.
+const FLAT: f64 = 20.0 * std::f64::consts::FRAC_1_SQRT_2;
+
+/// A rotary job 40 mm across holding a square bar, its faces square to A=0, 90°, 180° and
+/// 270°.
+fn squared() -> Document {
+    let job = Job::rotary(60.0, 40.0, Along::X);
+    let mut doc = Document {
+        job,
+        ..Document::default()
+    };
+    let model = Component::from_fn("Square", Combine::Add, doc.job.area(), 0.25, |p| {
+        let angle = p.y / 20.0;
+        Some((FLAT / angle.cos().abs().max(angle.sin().abs())).min(20.0))
+    });
+    let mut c = Change::builder(&doc);
+    c.add_new_component(model);
+    doc.apply(&c.finish()).unwrap();
+    doc
+}
+
+/// Where A is (degrees, 0 to 360) at each cut of `t`.
+fn turns(t: &Toolpath) -> Vec<f64> {
+    let across = if t.across.is_empty() {
+        vec![0.0; t.moves.len()]
+    } else {
+        t.across.clone()
+    };
+    t.moves
+        .iter()
+        .zip(&across)
+        .filter(|(m, _)| m.kind == MoveKind::Cut)
+        .map(|(m, &across)| {
+            let (round, _) = cut_craft_core::rotary_axis::held_at(20.0, m.to.y, m.to.z, across);
+            (round / 20.0).to_degrees().rem_euclid(360.0)
+        })
+        .collect()
+}
+
+/// How many of `turns` are within 5° of a square bar's faces facing straight up.
+fn facing_up(turns: &[f64]) -> f64 {
+    #[expect(clippy::cast_precision_loss, reason = "a share of the cuts")]
+    let share = turns
+        .iter()
+        .filter(|a| {
+            let off = a.rem_euclid(90.0);
+            off.min(90.0 - off) < 5.0
+        })
+        .count() as f64
+        / turns.len().max(1) as f64;
+    share
+}
+
+#[test]
+fn following_the_surface_cuts_flat_faces_with_a_still_and_never_into_the_model() {
+    let doc = squared();
+    let over = finish(&doc, &coarse()).0;
+    let p = Params {
+        held: Held::FollowsTheSurface,
+        ..coarse()
+    };
+    let (followed, notes) = finish(&doc, &p);
+    assert!(
+        !followed.across.is_empty(),
+        "held across the axis: {notes:?}"
+    );
+    // over the axis A turns steadily, so few cuts are with a face straight up; following,
+    // most are: the bit moves across each face with A held
+    let (before, after) = (facing_up(&turns(&over)), facing_up(&turns(&followed)));
+    assert!(before < 0.3, "over the axis: {before}");
+    assert!(after > 0.6, "following: {after}");
+    for (m, &across) in followed.moves.iter().zip(&followed.across) {
+        if m.kind != MoveKind::Cut {
+            continue;
+        }
+        let angle = m.to.y / 20.0;
+        let model = (FLAT / angle.cos().abs().max(angle.sin().abs())).min(20.0) - 20.0;
+        assert!(
+            m.to.z >= model - 0.3,
+            "{:?} held {across} under {model}",
+            m.to
+        );
+    }
+    // and it gets right down onto the faces
+    let deepest = cuts(&followed)
+        .iter()
+        .map(|c| c.z)
+        .fold(f64::INFINITY, f64::min);
+    assert!(deepest < FLAT - 20.0 + 0.3, "{deepest}");
+}
