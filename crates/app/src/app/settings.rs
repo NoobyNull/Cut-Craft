@@ -41,7 +41,7 @@ pub(super) const CARVE_AREA_ALPHA: f32 = 0.35;
 /// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
 pub(super) const RING_SHARE: f64 = 0.6;
 
-pub(super) const BUILT_INS: [&str; 106] = [
+pub(super) const BUILT_INS: [&str; 107] = [
     "setup_material",
     "import_into_shape",
     "try_sample_project",
@@ -109,6 +109,7 @@ pub(super) const BUILT_INS: [&str; 106] = [
     "credits",
     "about_cut_craft",
     "check_for_updates",
+    "back_up_settings",
     "addons",
     "open_gadgets_folder",
     "undo",

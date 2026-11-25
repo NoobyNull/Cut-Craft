@@ -610,6 +610,10 @@ pub const HINTS: &[(&str, &str)] = &[
         "Did You Know?: short tips for getting more out of Cut Craft, one at a time",
     ),
     (
+        "back_up_settings",
+        "Back Up Settings: saves your settings, machines, bits and own files in one backup file, to keep safe or take to another computer",
+    ),
+    (
         "check_for_updates",
         "Check for Updates: asks straight away whether there is a newer version of Cut Craft",
     ),

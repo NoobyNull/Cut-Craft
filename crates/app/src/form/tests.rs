@@ -525,7 +525,7 @@ const UNITLESS: [&str; 65] = [
 
 /// Numbers with no unit that are measurements of something other than the job's
 /// lengths, each with why it does not change with mm / inches.
-const UNITLESS_BY_FORM: [(&str, &str, &str); 11] = [
+const UNITLESS_BY_FORM: [(&str, &str, &str); 12] = [
     (
         "generate_border",
         "depth_curve",
@@ -553,6 +553,7 @@ const UNITLESS_BY_FORM: [(&str, &str, &str); 11] = [
     ("Options", "rapid_rate", "set with its own feed-rate units"),
     ("Options", "scale_factor", "a multiplier"),
     ("Options", "web_api.port", "a network port number"),
+    ("Options", "backups.keep", "a count of backups"),
 ];
 
 #[test]

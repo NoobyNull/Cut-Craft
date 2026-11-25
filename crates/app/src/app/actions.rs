@@ -100,6 +100,7 @@ impl CutCraftApp {
             ribbon_tab: 0,
             canvas: super::canvas_layout::CanvasState::default(),
             options_path: None,
+            backups: super::backups::Backups::default(),
             words_path: None,
             job_times_path: None,
             speller: None,
@@ -722,6 +723,7 @@ impl CutCraftApp {
             }
             "addons" => self.addons.show(ctx),
             gui::OPEN_GADGETS_FOLDER => self.open_gadgets_folder(),
+            "back_up_settings" => self.open_back_up_window(),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);

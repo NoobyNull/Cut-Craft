@@ -137,6 +137,9 @@ impl CutCraftApp {
     /// next frame and the answer is saved.
     pub(super) fn answer_layout(&mut self, chosen: Option<WindowLayout>) {
         self.layout_question = None;
+        if chosen.is_some_and(|layout| layout != self.options.general.layout) {
+            self.back_up_before(cut_craft_backup::Reason::BeforeLayoutChange);
+        }
         answer(&mut self.options, chosen);
         self.save_options();
     }

@@ -282,6 +282,7 @@ impl CutCraftApp {
             self.status.set_message(&message);
         }
         self.options_path = crate::options::Options::path();
+        self.backups.config = super::files::config_dir();
         self.options.apply_to(&mut self.display);
         let first_run = wanted(&self.options, &self.machines);
         if first_run {
@@ -500,6 +501,8 @@ impl CutCraftApp {
     /// Start using Cut Craft: the machine added and made active, new jobs set to start as
     /// answered, and the starter tools in those units first.
     pub(super) fn finish_first_run(&mut self, setup: &Setup) {
+        // run again, setup rewrites My Machine and the layout: what was there is kept first
+        self.back_up_before(cut_craft_backup::Reason::BeforeSetup);
         let job = setup.job();
         let mut name = None;
         if let Some(machine) = setup.machine() {

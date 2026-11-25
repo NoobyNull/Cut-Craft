@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: web_api, contents, settings
+reviewed: 2026-11-25
+see-also: web_api, contents, settings, backups
 ---
 
 # Updates
@@ -46,7 +46,9 @@ numbers. That is expected: each is offered the newest version made for it.
 2. **Checks** the download is a genuine Cut Craft release, signed by its maker, and that it
    arrived whole. A download that fails either check is thrown away.
 3. **Installs** it in place of the version you are running.
-4. **Closes and reopens Cut Craft, keeping your work.** You are not asked to save first.
+4. **Backs up your settings** before the new version starts, in case it changes them. See
+   [Backing up your settings](help:backups).
+5. **Closes and reopens Cut Craft, keeping your work.** You are not asked to save first.
    Changes you have not saved yet are kept in a copy in Cut Craft's settings folder, and
    the new version opens them just as you left them: the same job name, still marked as
    not saved (the **\*** in the title). A job you never saved comes back as **Untitled**.

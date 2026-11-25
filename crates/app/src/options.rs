@@ -59,6 +59,9 @@ pub struct Options {
     #[schemars(title = "Updates", extend("x-section" = true))]
     pub updates: Updates,
     #[serde(default)]
+    #[schemars(title = "Backups", extend("x-section" = true))]
+    pub backups: Backups,
+    #[serde(default)]
     #[schemars(title = "Bug Reports", extend("x-section" = true))]
     pub bug_reports: BugReports,
     #[serde(default)]
@@ -234,6 +237,7 @@ impl Default for Options {
             controls: Controls::default(),
             space_mouse: SpaceMouse::default(),
             updates: Updates::default(),
+            backups: Backups::default(),
             bug_reports: BugReports::default(),
             web_api: WebApi::default(),
             default_job: None,

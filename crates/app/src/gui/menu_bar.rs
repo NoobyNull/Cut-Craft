@@ -371,6 +371,7 @@ impl MenuSystem {
                                 .collect(),
                         ),
                         sep(),
+                        MenuItem::with_action("Back Up Settings...", "back_up_settings"),
                         MenuItem::with_action("Check for Updates...", "check_for_updates"),
                         MenuItem::with_action("Run First-Time Setup Again...", "first_run_setup"),
                         i("About Cut Craft"),

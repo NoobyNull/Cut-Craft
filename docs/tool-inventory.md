@@ -241,6 +241,11 @@ say "not implemented yet".
   the model off the plane, up to the material's top. Every dragged value moves the model as
   it is dragged. [inf: Aspire's slider
   beside the picture is not drawn; Overcut Distance is not offered.]
+- Help ▸ Back Up Settings (crate `crates/backup`, app side `crates/app/src/app/backups.rs`):
+  one `.ccbackup` zip of the parts ticked, Web API token left out unless asked; automatic
+  backups into `<settings folder>/backups` before updates, layout changes, first-time setup
+  again and library rewrites, plus weekly (Options ▸ Backups). Restore with preview: stage 2,
+  designed, not built.
 - Help: About, Keyboard Shortcuts, Credits (searchable, from the committed `credits` folder:
   `scripts/credits` remakes it from Cargo.lock with cargo-about, CI checks it), Check for Updates (crate
   `crates/updater`). Asks GitHub's releases (never a mirror) for a newer stable version,
