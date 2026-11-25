@@ -74,7 +74,9 @@ setting-saved-toolpaths-leave-out-cutting-2d5ca7 =
     shorter files; 0 keeps every point, 0.1 mm is the most. The keep-out zones are
     checked on what is saved. Profile, pocket and other 2D toolpaths
 setting-3d-toolpath-tolerance-3728e8 = 3D toolpath tolerance
-setting-the-same-for-3d-roughing-a348d7 = The same for 3D roughing, finishing, texture, moulding and the like
+setting-the-same-for-3d-roughing-7b50bc =
+    The same for 3D roughing, finishing, texture, moulding, rotary carving and turning, and
+    the like. A rotary toolpath's moves keep where the bit is held across the turning axis
 setting-v-carve-v-bit-carving-5d2ada = V-Carve (V-bit carving) toolpath tolerance
 setting-the-same-for-v-carving-a437b3 = The same for V-carving, prism, inlay and chamfer toolpaths
 setting-preview-multiplier-20da96 = Preview multiplier
