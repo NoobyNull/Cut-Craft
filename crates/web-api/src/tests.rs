@@ -800,7 +800,7 @@ fn the_new_calls_are_read_from_their_path_query_and_body() {
     assert_eq!(
         call(post(address, "/api/v1/gcode", "{}")),
         "Gcode(Gcode { toolpath: None, group: None, each: false, post: None, save_to: None, \
-         replace: false, accept_warnings: false })"
+         replace: false, accept_warnings: false, accept_errors: false })"
     );
     assert_eq!(
         call(post(
@@ -809,7 +809,7 @@ fn the_new_calls_are_read_from_their_path_query_and_body() {
             r#"{"toolpath":2,"post":"GRBL (mm)","save_to":"/tmp/a.nc","accept_warnings":true}"#
         )),
         "Gcode(Gcode { toolpath: Some(2), group: None, each: false, post: Some(\"GRBL (mm)\"), \
-         save_to: Some(\"/tmp/a.nc\"), replace: false, accept_warnings: true })"
+         save_to: Some(\"/tmp/a.nc\"), replace: false, accept_warnings: true, accept_errors: false })"
     );
     assert_eq!(
         call(post(address, "/api/v1/job/save", "{}")),

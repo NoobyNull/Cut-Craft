@@ -17,5 +17,5 @@ back and forth in rows. The **stepover** (S) is how far over each new row moves.
 - 40 to 50 % of the bit's width is a safe start for most wood. A finishing pass can go
   smaller, around 10 to 20 %.
 
-Stepover is saved with each bit in the Tool Database, so picking a bit in a toolpath's form
+Stepover is saved with each bit in the Bit Library, so picking a bit in a toolpath's form
 brings its stepover with it.

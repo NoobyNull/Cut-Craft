@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-23
 see-also: checks_before_cutting, check_air_cutting
 ---
 
@@ -26,6 +26,6 @@ loses its place. This is a crash.
 - Check the toolpath order: a toolpath that relies on another having cut first must come
   after it in the list.
 
-This is a **Must fix**. A rotary job is not cut through in order yet, so this check says *not checked* there: watch its first moves.
+This is a **Must fix**: Save asks every time, and you tick it to save anyway. A rotary job is not cut through in order yet, so this check says *not checked* there: watch its first moves.
 
 See also [Checks before cutting](help:checks_before_cutting).

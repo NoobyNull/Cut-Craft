@@ -35,6 +35,10 @@ const AIR_LENGTH: f64 = 100.0;
 /// little into the spoilboard on purpose.
 const SPOILBOARD: f64 = 1.0;
 
+/// How far past the depth allowed into the spoilboard a cut may seem to go before it is
+/// refused, mm: rounding in the moves, not a deeper cut.
+const DEPTH_SLACK: f64 = 0.001;
+
 /// How far from a toolpath's own moves the simulation's may stray, mm: a 3D finish's steps
 /// of a fiftieth of a millimetre come to a tenth as many moves, well within [`CUTS`].
 const SIMPLIFIED: f64 = 0.01;
@@ -59,8 +63,12 @@ pub enum Severity {
     /// Saved only once the user agrees to Save Anyway, even when ticked: the collet or
     /// spindle hitting the material.
     MustAsk,
-    /// Not saved until it is put right.
+    /// Saved only once the user ticks it and agrees to Save Anyway: the operator decides.
     Error,
+    /// Never saved, sent or made through the Web API: a risk of damage to the machine (a
+    /// keep-out zone, past the bed or the Z travel, too deep into the spoilboard). Only
+    /// switching its check off for the machine in Machine Configuration lets it past.
+    Damage,
 }
 
 /// One thing found, as a sentence saying what is wrong and how to fix it, and the check
@@ -73,6 +81,14 @@ pub struct Finding {
 }
 
 impl Finding {
+    pub fn damage(check: Check, message: String) -> Self {
+        Self {
+            severity: Severity::Damage,
+            message,
+            check,
+        }
+    }
+
     pub fn error(check: Check, message: String) -> Self {
         Self {
             severity: Severity::Error,
@@ -95,6 +111,61 @@ impl Finding {
             message,
             check,
         }
+    }
+}
+
+/// Which checks protect the machine from damage, as its Machine Configuration has them:
+/// each refuses what it finds (no Save Anyway) while on, and is said to be switched off in
+/// the checks list and the G-code while off.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each is a switch of its own in Machine Configuration"
+)]
+pub struct Protect {
+    /// A cut into a keep-out zone, the job's or the machine's, is refused.
+    pub keep_out: bool,
+    /// Toolpaths bigger than the bed are refused.
+    pub bed: bool,
+    /// Toolpaths going further up and down than the Z axis travels are refused.
+    pub z_travel: bool,
+    /// A cut deeper into the spoilboard than [`Self::spoilboard_depth`] is refused.
+    pub spoilboard: bool,
+    /// How far below the material a cut may go into the spoilboard, mm.
+    pub spoilboard_depth: f64,
+    /// A cut more than 1 mm into the spoilboard, within the depth allowed, is a warning to
+    /// read and tick: a wrong material thickness shows first this way.
+    pub warn_spoilboard: bool,
+}
+
+impl Default for Protect {
+    fn default() -> Self {
+        Self {
+            keep_out: true,
+            bed: true,
+            z_travel: true,
+            spoilboard: true,
+            spoilboard_depth: SPOILBOARD,
+            warn_spoilboard: true,
+        }
+    }
+}
+
+impl Protect {
+    /// The checks switched off, by name, as the G-code and the checks list say them.
+    #[must_use]
+    pub fn switched_off(&self) -> Vec<&'static str> {
+        [
+            (self.keep_out, "keep-out zones"),
+            (self.bed, "bed size"),
+            (self.z_travel, "Z travel"),
+            (self.spoilboard, "spoilboard depth"),
+        ]
+        .into_iter()
+        .filter(|(on, _)| !on)
+        .map(|(_, name)| name)
+        .collect()
     }
 }
 
@@ -121,15 +192,17 @@ pub struct Limits {
     /// Material left behind is mentioned only where it is more than this, mm (Options ▸
     /// Confirmation Choices); `None` for the usual [`crate::checks::LEFT`].
     pub left: Option<f64>,
-    /// The Tool Database's copy of each bit the toolpaths use, by name, with the cutting
+    /// The Bit Library's copy of each bit the toolpaths use, by name, with the cutting
     /// data for the active material: a maker's catalogue copy where there is one. A bit
-    /// not in it is not in the Tool Database. `None` when the bits are not compared with
-    /// the Tool Database at all.
+    /// not in it is not in the Bit Library. `None` when the bits are not compared with
+    /// the Bit Library at all.
     pub library: Option<std::collections::BTreeMap<String, Tool>>,
     /// How the machine holds its bits, for the collet and holder checks.
     pub holding: crate::collision::Holding,
     /// The machine's rotary (4th axis), when it has one its firmware can drive.
     pub rotary: Option<crate::rotary_axis::RotaryAxis>,
+    /// Which checks refuse as a risk of damage to the machine.
+    pub protect: Protect,
 }
 
 /// Everything found checking `toolpaths`, cut in the order given, on `limits`' machine:
@@ -160,7 +233,7 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
         progress::stage(&Phase::Machine.stage(""));
         zeroing(doc, &mut found);
         machine(doc, toolpaths, limits, &mut found);
-        keep_out(doc, toolpaths, &mut found);
+        keep_out(doc, toolpaths, limits, &mut found);
         tool_numbers(toolpaths, &mut found);
         rotary_setup(doc, toolpaths, limits, &mut found);
         support_last(doc, toolpaths, &mut found);
@@ -216,12 +289,13 @@ fn told_apart(toolpaths: &[&Toolpath]) -> Vec<Option<Toolpath>> {
 /// What one toolpath's own settings will not cut with.
 fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Vec<Finding>) {
     let (name, tool) = (&toolpath.name, &toolpath.tool);
+    // nothing written for it (left out of the files), so nothing harmful: said as a warning
     if toolpath.moves.is_empty() {
-        found.push(Finding::error(
+        found.push(Finding::warning(
             Check::CanCut,
             format!(
-                "{name} has no moves: recalculate it, or untick it in the toolpath list so it \
-             is not saved"
+                "{name} has no moves, so it is left out of the files: recalculate it, or \
+             untick it in the toolpath list"
             ),
         ));
         return;
@@ -284,6 +358,20 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
         ));
     }
     on_machine(toolpath, laser, limits, doc.job.units, found);
+    spoilboard(doc, toolpath, limits, found);
+    found.extend(
+        problems_by_check(doc, toolpath, limits.left.unwrap_or(LEFT))
+            .into_iter()
+            .map(|(check, problem)| Finding::warning(check, problem)),
+    );
+    library(toolpath, limits, doc.job.units, found);
+}
+
+/// How far below the material `toolpath` cuts, into the spoilboard: refused deeper than the
+/// machine allows (unless switched off), a warning past 1 mm, and a reminder when it
+/// flattens the spoilboard itself.
+fn spoilboard(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Vec<Finding>) {
+    let name = &toolpath.name;
     let deepest = toolpath
         .moves
         .iter()
@@ -299,22 +387,32 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
              zero X and Y at the spoilboard's front-left corner and Z on top of it"
             ),
         ));
-    } else if doc.job.thickness > 0.0 && below > SPOILBOARD {
-        found.push(Finding::warning(
-            Check::Spoilboard,
-            format!(
-                "{name} cuts {} below the material, into the spoilboard. Check the material \
-             thickness in Job Setup and the toolpath's cut depth",
-                doc.job.units.length(below, 1)
-            ),
-        ));
+    } else if doc.job.thickness > 0.0 {
+        let protect = limits.protect;
+        let units = doc.job.units;
+        if protect.spoilboard && below > protect.spoilboard_depth + DEPTH_SLACK {
+            found.push(Finding::damage(
+                Check::Spoilboard,
+                format!(
+                    "{name} cuts {} below the material, deeper into the spoilboard than the {} \
+                     {} allows, and could cut into the bed. Check the material thickness in \
+                     Job Setup and the toolpath's cut depth",
+                    units.length(below, 1),
+                    units.length(protect.spoilboard_depth, 1),
+                    machine_name(limits),
+                ),
+            ));
+        } else if protect.warn_spoilboard && below > SPOILBOARD {
+            found.push(Finding::warning(
+                Check::Spoilboard,
+                format!(
+                    "{name} cuts {} below the material, into the spoilboard. Check the material \
+                 thickness in Job Setup and the toolpath's cut depth",
+                    units.length(below, 1)
+                ),
+            ));
+        }
     }
-    found.extend(
-        problems_by_check(doc, toolpath, limits.left.unwrap_or(LEFT))
-            .into_iter()
-            .map(|(check, problem)| Finding::warning(check, problem)),
-    );
-    library(toolpath, limits, doc.job.units, found);
 }
 
 /// Whether `toolpath` is a Surfacing Toolpath flattening the spoilboard: it cuts below the
@@ -402,7 +500,7 @@ fn on_machine(
             format!(
                 "{name}: {} is not loaded in the tool changer of {}, so the machine will stop \
              and ask for it. Load it in a slot in Machine Configuration; if it is no longer \
-             in the Tool Database, pick a tool again with the toolpath's Select…",
+             in the Bit Library, pick a tool again with the toolpath's Select…",
                 tool.name, limits.name
             ),
         ));
@@ -410,7 +508,7 @@ fn on_machine(
 }
 
 /// Whether each bit is from a maker's catalogue, and its feeds and speeds near the maker's
-/// figures, as the Tool Database has them ([`Limits::library`]).
+/// figures, as the Bit Library has them ([`Limits::library`]).
 fn library(
     toolpath: &Toolpath,
     limits: &Limits,
@@ -425,9 +523,9 @@ fn library(
         found.push(Finding::warning(
             Check::GenericTool,
             format!(
-                "{name}: {} is not in the Tool Database, so its feeds and speeds cannot be \
+                "{name}: {} is not in the Bit Library, so its feeds and speeds cannot be \
                  compared with a maker's figures. Pick the bit with the toolpath's Select…, \
-                 or add it to the Tool Database",
+                 or add it to the Bit Library",
                 tool.name
             ),
         ));
@@ -441,7 +539,7 @@ fn library(
                 "{name}: {} is a generic bit, not one from a maker's catalogue, so its feeds \
                  and speeds are starting values, not figures made for your bit. Watch the \
                  first cut with a hand near the stop button, or pick your own bit from a \
-                 maker's catalogue in the Tool Database",
+                 maker's catalogue in the Bit Library",
                 tool.name
             ),
         ));
@@ -484,29 +582,106 @@ fn library(
     }
 }
 
-/// Whether the toolpaths keep out of the keep-out zones, the job's and the machine's.
-fn keep_out(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
-    for toolpath in toolpaths {
+/// Whether the toolpaths keep out of the keep-out zones, the job's and the machine's: a
+/// risk of damage to the machine unless its keep-out check is switched off. In a tiled job
+/// the machine's zones, fixed to the bed, are checked against each tile's moves where its
+/// file has them.
+fn keep_out(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits, found: &mut Vec<Finding>) {
+    if !limits.protect.keep_out {
+        return;
+    }
+    let per_tile = doc
+        .tiling
+        .map(|tiling| tiles_as_written(doc, toolpaths, tiling));
+    for (i, toolpath) in toolpaths.iter().enumerate() {
         let radius = toolpath.tool.diameter / 2.0;
-        let zones = crate::keep_out::entered(doc.named_keep_out(), &toolpath.moves, radius);
-        if zones.is_empty() {
+        let mut names: Vec<String> = vec![];
+        let mut add = |zones: Vec<&crate::keep_out::KeepOutZone>| {
+            for zone in zones {
+                let name = format!("\"{}\"", zone.name);
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        };
+        match &per_tile {
+            None => add(crate::keep_out::entered(
+                doc.named_keep_out(),
+                &toolpath.moves,
+                radius,
+            )),
+            Some(written) => {
+                add(crate::keep_out::entered(
+                    doc.keep_out.iter(),
+                    &toolpath.moves,
+                    radius,
+                ));
+                for tile in written {
+                    if let Some(moves) = tile.get(i) {
+                        add(crate::keep_out::entered(
+                            doc.machine_keep_out.iter(),
+                            moves,
+                            radius,
+                        ));
+                    }
+                }
+            }
+        }
+        if names.is_empty() {
             continue;
         }
-        let names: Vec<String> = zones.iter().map(|z| format!("\"{}\"", z.name)).collect();
-        found.push(Finding::error(
+        found.push(Finding::damage(
             Check::KeepOut,
             format!(
-                "{} would cut into the keep-out zone{} {}, where the bit could hit a clamp. \
-                 Move the part or the zone, then recalculate the toolpath",
+                "{} would cut into the keep-out zone{} {}, where the bit could hit a clamp \
+                 or the machine. Move the part or the zone, then recalculate the toolpath",
                 toolpath.name,
-                if zones.len() == 1 { "" } else { "s" },
+                if names.len() == 1 { "" } else { "s" },
                 names.join(" and ")
             ),
         ));
     }
 }
 
-/// Whether two different bits share a tool number other than 0 (changed by hand).
+/// Each tile's moves of each of `toolpaths` (in their order), moved as the tile's file
+/// writes them.
+fn tiles_as_written(
+    doc: &Document,
+    toolpaths: &[&Toolpath],
+    tiling: crate::tiling::Tiling,
+) -> Vec<Vec<Vec<crate::toolpath::Move>>> {
+    let saved = Document {
+        job: doc.job,
+        toolpaths: (1..)
+            .map(crate::document::EntityId)
+            .zip(toolpaths.iter().map(|&t| t.clone()))
+            .collect(),
+        ..Document::default()
+    };
+    (tiling.tiles(doc.job.area()).into_iter())
+        .map(|tile| {
+            let part = tiling.tiled(&saved, tile);
+            (1..=toolpaths.len())
+                .map(|n| {
+                    part.toolpaths
+                        .get(&crate::document::EntityId(n as u64))
+                        .map_or_default(|t| t.moves.clone())
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// The machine's name for the messages, or "the machine" without one.
+fn machine_name(limits: &Limits) -> String {
+    if limits.name.is_empty() {
+        "the machine".to_owned()
+    } else {
+        limits.name.clone()
+    }
+}
+
+/// Whether two different bits share a bit number other than 0 (changed by hand).
 fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     let mut by_number: std::collections::BTreeMap<u32, Vec<&str>> =
         std::collections::BTreeMap::new();
@@ -528,9 +703,9 @@ fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
         found.push(Finding::warning(
             Check::ToolNumbers,
             format!(
-                "Tool number {number} is given to both {} and {last}: a tool changer picks \
+                "Bit number {number} is given to both {} and {last}: a tool changer picks \
                  bits by number, so one of them would cut with the wrong bit. Give each bit \
-                 its own number in the Tool Database (0 means the bit is changed by hand, \
+                 its own number in the Bit Library (0 means the bit is changed by hand, \
                  and any number of bits may share 0)",
                 rest.join(", ")
             ),
@@ -905,15 +1080,15 @@ pub fn not_checked(
     toolpaths: &[&Toolpath],
     limits: &Limits,
 ) -> Vec<(Check, String)> {
-    let machine = if limits.name.is_empty() {
-        "the machine".to_owned()
-    } else {
-        limits.name.clone()
-    };
+    let machine = machine_name(limits);
     let config = |what: &str| format!("{machine} has no {what} in Machine Configuration");
+    let off = format!("Switched off for {machine} in Machine Configuration");
+    let protect = limits.protect;
     let rotary = doc.job.rotary.is_some();
     let mut skipped = vec![];
-    if rotary {
+    if !protect.bed {
+        skipped.push((Check::Bed, off.clone()));
+    } else if rotary {
         skipped.push((
             Check::Bed,
             "A rotary job wraps round the material, not along the bed".to_owned(),
@@ -921,8 +1096,13 @@ pub fn not_checked(
     } else if limits.bed[0] <= 0.0 || limits.bed[1] <= 0.0 {
         skipped.push((Check::Bed, config("bed size")));
     }
-    if limits.z_travel <= 0.0 {
+    if !protect.z_travel {
+        skipped.push((Check::ZTravel, off.clone()));
+    } else if limits.z_travel <= 0.0 {
         skipped.push((Check::ZTravel, config("Z travel")));
+    }
+    if !protect.spoilboard {
+        skipped.push((Check::Spoilboard, off.clone()));
     }
     if limits.max_rate.iter().all(|&r| r <= 0.0) {
         skipped.push((Check::MachineSpeeds, config("top speeds")));
@@ -936,7 +1116,9 @@ pub fn not_checked(
             "No tool changer is used: you change the bits".to_owned(),
         ));
     }
-    if doc.named_keep_out().next().is_none() {
+    if !protect.keep_out {
+        skipped.push((Check::KeepOut, off));
+    } else if doc.named_keep_out().next().is_none() {
         skipped.push((
             Check::KeepOut,
             "The job and the machine have no keep-out zones".to_owned(),
@@ -959,14 +1141,14 @@ pub fn not_checked(
         for check in [Check::GenericTool, Check::MakersFigures] {
             skipped.push((
                 check,
-                "The bits were not compared with the Tool Database".to_owned(),
+                "The bits were not compared with the Bit Library".to_owned(),
             ));
         }
     }
     if toolpaths.iter().all(|t| t.tool.number == 0) {
         skipped.push((
             Check::ToolNumbers,
-            "Every bit is changed by hand (tool number 0)".to_owned(),
+            "Every bit is changed by hand (bit number 0)".to_owned(),
         ));
     }
     skipped
@@ -1004,20 +1186,9 @@ fn bed_span(doc: &Document, toolpaths: &[&Toolpath]) -> Option<DVec3> {
         let (lo, hi) = bounds(toolpaths.iter().flat_map(|t| &t.moves))?;
         return Some(hi - lo);
     };
-    let saved = Document {
-        job: doc.job,
-        toolpaths: (1..)
-            .map(crate::document::EntityId)
-            .zip(toolpaths.iter().map(|&t| t.clone()))
-            .collect(),
-        ..Document::default()
-    };
-    tiling
-        .tiles(doc.job.area())
-        .into_iter()
+    (tiles_as_written(doc, toolpaths, tiling).into_iter())
         .filter_map(|tile| {
-            let part = tiling.tiled(&saved, tile);
-            let (lo, hi) = bounds(part.toolpaths.values().flat_map(|t| &t.moves))?;
+            let (lo, hi) = bounds(tile.iter().flatten())?;
             Some(hi - lo)
         })
         .reduce(DVec3::max)
@@ -1033,8 +1204,9 @@ fn machine(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits, found: &mut
     // a rotary job's moves go round the material, not along the bed
     let wraps = doc.job.rotary.is_some();
     let units = doc.job.units;
-    if !wraps && width > 0.0 && height > 0.0 && (span.x > width || span.y > height) {
-        found.push(Finding::error(
+    let protect = limits.protect;
+    if protect.bed && !wraps && width > 0.0 && height > 0.0 && (span.x > width || span.y > height) {
+        found.push(Finding::damage(
             Check::Bed,
             format!(
                 "The toolpaths cover {} × {}, more than the bed of {} ({} × {}). Make the job \
@@ -1048,8 +1220,8 @@ fn machine(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits, found: &mut
             ),
         ));
     }
-    if limits.z_travel > 0.0 && span.z > limits.z_travel {
-        found.push(Finding::error(
+    if protect.z_travel && limits.z_travel > 0.0 && span.z > limits.z_travel {
+        found.push(Finding::damage(
             Check::ZTravel,
             format!(
                 "The toolpaths go from {} above the material to {} below it, more than the {} \

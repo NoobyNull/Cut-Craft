@@ -197,7 +197,7 @@ fn setting_gaps(fields: &[Field], path: &str, out: &mut Vec<What>) {
         while let Kind::List(inner) = kind {
             kind = inner;
         }
-        // a tool's own settings are the Tool Database's, drawn by the tool picker
+        // a tool's own settings are the Bit Library's, drawn by the tool picker
         let picked = f.key == "tool" || form::TOOL_LISTS.contains(&f.key.as_str());
         match kind {
             Kind::Group(_) if picked => {}

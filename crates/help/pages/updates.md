@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: web_api, contents, settings
+reviewed: 2026-11-25
+see-also: web_api, contents, settings, backups
 ---
 
 # Updates
@@ -46,7 +46,9 @@ numbers. That is expected: each is offered the newest version made for it.
 2. **Checks** the download is a genuine Cut Craft release, signed by its maker, and that it
    arrived whole. A download that fails either check is thrown away.
 3. **Installs** it in place of the version you are running.
-4. **Closes and reopens Cut Craft, keeping your work.** You are not asked to save first.
+4. **Backs up your settings** before the new version starts, in case it changes them. See
+   [Backing up your settings](help:backups).
+5. **Closes and reopens Cut Craft, keeping your work.** You are not asked to save first.
    Changes you have not saved yet are kept in a copy in Cut Craft's settings folder, and
    the new version opens them just as you left them: the same job name, still marked as
    not saved (the **\*** in the title). A job you never saved comes back as **Untitled**.
@@ -69,7 +71,7 @@ Keeping your work without asking is done by the version you are updating **from*
 starts with updates made from version 0.7.6 or later. Updating from an older version still
 asks whether to save first.
 
-Nothing is downloaded until you press **Install Now**, and your jobs, settings, tools and
+Nothing is downloaded until you press **Install Now**, and your jobs, settings, bits and
 machines are never touched by an update.
 
 ## If something goes wrong
@@ -93,7 +95,7 @@ as it was and the window says what happened. Most of the time the fix is one of 
 ## Where updates come from
 
 Cut Craft's releases are on GitHub, and they are moving to the Power-Whittle organisation's
-page, `github.com/Power-Whittle/Cut-Craft`. While they move, each release goes on both
+page, `github.com/Power-Whittle/PowerWhittle`. While they move, each release goes on both
 pages. Cut Craft looks at both and offers you the newest one built for your computer,
 whichever page has it first, so there is nothing to change on your side. Every download
 is still checked against Cut Craft's own signature before anything is installed, whichever

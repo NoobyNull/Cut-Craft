@@ -4,6 +4,9 @@ use super::{CutCraftApp, Value, dialog_size, egui};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
+/// Options ▸ Backups' key: its settings, then [`super::backups::list_ui`].
+const BACKUPS: &str = "backups";
+
 impl CutCraftApp {
     /// Edit ▸ Options: the sections; changes wait for Apply, and Cancel throws them away.
     #[expect(
@@ -67,6 +70,16 @@ impl CutCraftApp {
             self.language_packs = None;
         }
         let language_packs = self.language_packs.clone().unwrap_or_default();
+        let on_backups = fields
+            .get(self.options_page)
+            .is_some_and(|f| f.key == BACKUPS);
+        let backups_listed = if on_backups {
+            self.backups_listed()
+        } else {
+            self.forget_backups_listed();
+            vec![]
+        };
+        let mut backups_pressed = None;
         let chosen_language = self.edited_options().language.pack.clone();
         let mut language_picked = None;
         let capture = self.capture.clone();
@@ -151,6 +164,9 @@ impl CutCraftApp {
                     if category.key == "confirmations" {
                         forget_unsigned = unsigned_code_section(ui, unsigned_remembered);
                     }
+                    if category.key == BACKUPS {
+                        backups_pressed = super::backups::list_ui(ui, &backups_listed);
+                    }
                     if category.key == "web_api" {
                         web_api_pressed =
                             super::web_api::options_section(ui, &web_api_state, &edited_web_api);
@@ -207,6 +223,9 @@ impl CutCraftApp {
         }
         if let Some(pressed) = web_api_pressed {
             self.web_api_pressed(pressed);
+        }
+        if let Some(pressed) = backups_pressed {
+            self.backups_pressed(pressed);
         }
         // after the page's settings, so they don't put back the shortcuts as they were
         if let Some(edit) = shortcut_edit {
@@ -295,7 +314,7 @@ impl CutCraftApp {
     pub(super) fn options_changed(
         &mut self,
         ctx: &egui::Context,
-        options: crate::options::Options,
+        mut options: crate::options::Options,
     ) {
         // the Preview tab's detail stays as it was moved, unless the default changed
         let now = self.display.detail;
@@ -314,12 +333,21 @@ impl CutCraftApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
         }
+        // the checks ran on the moves thinned as they were: checked again as now saved
+        let (new, old) = (&options.toolpaths, &self.options.toolpaths);
+        if (new.tolerance_2d, new.tolerance_3d, new.tolerance_vcarve)
+            != (old.tolerance_2d, old.tolerance_3d, old.tolerance_vcarve)
+        {
+            self.forget_save_checks();
+        }
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
             self.player.speed = options.toolpaths.preview_speed();
         }
         let language =
             (options.language != self.options.language).then(|| options.language.pack.clone());
         options.apply();
+        // the window never changes the toolbars of your own: ones made while it was open stay
+        options.toolbars.clone_from(&self.options.toolbars);
         self.options = options;
         self.save_options();
         if let Some(pack) = language {

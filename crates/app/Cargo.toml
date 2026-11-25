@@ -18,6 +18,7 @@ cut-craft-help.workspace = true
 # every word the app shows, in the language picked, English where a pack has none
 cut-craft-i18n.workspace = true
 cut-craft-updater = { path = "../updater" }
+cut-craft-backup.workspace = true
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
 cut-craft-rotary.workspace = true

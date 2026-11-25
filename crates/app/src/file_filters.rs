@@ -97,12 +97,14 @@ pub enum Dialog<'a> {
     JobSheetLogo,
     /// Upload on the machine's files window.
     UploadToMachine,
+    /// Help ▸ Back Up Settings' Save Backup….
+    SaveBackup,
 }
 
 #[cfg(test)]
 impl Dialog<'static> {
     /// Every dialog, for the tests; exporters are covered by [`Dialog::Export`] on each one.
-    pub const ALL: [Dialog<'static>; 26] = [
+    pub const ALL: [Dialog<'static>; 27] = [
         Dialog::OpenJob,
         Dialog::SaveJob,
         Dialog::JobTemplate,
@@ -132,6 +134,7 @@ impl Dialog<'static> {
         Dialog::BugReportPictures,
         Dialog::JobSheetLogo,
         Dialog::UploadToMachine,
+        Dialog::SaveBackup,
     ];
 }
 
@@ -179,10 +182,10 @@ pub fn filters(dialog: Dialog<'_>, registry: &Registry) -> Vec<Filter> {
         Dialog::InstallPostProcessor => vec![Filter::new("Post-processor", &["pp"])],
         Dialog::MachinePackage => vec![Filter::new("Machine package", &["json"])],
         Dialog::OpenToolDatabase => vec![Filter::new(
-            "Tool databases",
+            "Bit libraries",
             &crate::files::TOOL_FILE_EXTENSIONS,
         )],
-        Dialog::SaveToolDatabase => vec![Filter::new("Cut Craft tool database", &["json"])],
+        Dialog::SaveToolDatabase => vec![Filter::new("Cut Craft bit library", &["json"])],
         Dialog::SaveShadedImage => vec![Filter::new("PNG image", &["png"])],
         Dialog::SculptingBrush => vec![Filter::new("Sculpting brush", &["ccclip"])],
         Dialog::Texture => vec![Filter::new(
@@ -214,6 +217,10 @@ pub fn filters(dialog: Dialog<'_>, registry: &Registry) -> Vec<Filter> {
             Filter::new("G-code programs", &GCODE_EXTENSIONS),
             Filter::new("All files", &["*"]),
         ],
+        Dialog::SaveBackup => vec![Filter::new(
+            "Cut Craft backup",
+            &[cut_craft_backup::EXTENSION],
+        )],
     }
 }
 
@@ -352,6 +359,7 @@ mod tests {
             ),
             (Dialog::JobSheetLogo, &["png", "jpg", "jpeg", "gif"]),
             (Dialog::UploadToMachine, &GCODE_EXTENSIONS),
+            (Dialog::SaveBackup, &["ccbackup"]),
         ];
         assert_eq!(
             expected.len(),

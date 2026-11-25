@@ -106,7 +106,7 @@ pub fn apply(
     toolpath.moves = rest_moves(job, &toolpath.tool, &toolpath.moves, &rest);
     if toolpath.moves.is_empty() {
         return Err(CommandError::Failed(format!(
-            "the earlier tools leave nothing for {} to cut. Turn off rest machining, or pick another tool",
+            "the earlier bits leave nothing for {} to cut. Turn off rest machining, or pick another bit",
             toolpath.name
         )));
     }
