@@ -1,0 +1,10 @@
+# The Pig Latin test pack: every English word in Pig Latin, so any text still written into the
+# code (left in plain English) shows at a glance. Its .ftl files are made from English by the
+# Language packs workflow (crates/i18n/src/pig_latin.rs) and never kept here. See
+# docs/translating.md.
+id = "language-en-piglatin"
+name = "Igpay Atinlay (test)"
+kind = "language"
+language = "en-piglatin"
+version = "0.1.0"
+needs_cutcraft = ">=0.7.0"

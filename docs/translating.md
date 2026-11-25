@@ -113,6 +113,12 @@ Keep tool names short. A Ribbon or Rail button has room for about as much as the
   cut off. Shorten them, as nothing in Cut Craft moves to make room.
 - Edit ▸ Options ▸ Language ▸ **Test language** (with Show advanced settings ticked) shows
   English stretched by 40%. It's a quick way to see where long words won't fit.
+- The **Igpay Atinlay (test)** pack, installed from Gadgets ▸ Add-ons ▸ Languages like any
+  other, shows every word in Pig Latin. Anything still in plain English is written into the
+  code and needs a key. Its words are made from English by the Language packs workflow
+  (`crates/i18n/src/pig_latin.rs`), so it always has every key; its folder,
+  `language-packs/en-piglatin/`, holds only its `addon.toml`. To make its files yourself:
+  `cargo test -p cut-craft-i18n write_pig_latin_pack -- --ignored`.
 
 ## Publish
 

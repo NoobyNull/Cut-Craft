@@ -105,6 +105,10 @@ each and pick one, or use **View ▸ Window Layout** or **Options ▸ General �
 Every tool is in every layout; only where the buttons sit changes. **Ctrl+K** finds a tool by
 name whichever you use.
 
+**General ▸ Show a tip when Cut Craft starts** shows a [Did You Know?](help:tips) tip you have
+not seen yet each time Cut Craft opens. Which tips you have seen is kept with these settings,
+on this computer only.
+
 Each layout also comes light or dark: **Options ▸ Appearance ▸ Theme** picks **Light**,
 **Dark**, or **System** to follow your desktop. In the pictures below the light theme is on
 the left and the dark theme on the right. **Options ▸ Appearance ▸ Rotary wrap bands** sets
@@ -120,6 +124,10 @@ such as **Create Vectors ▾**, to list every tool in it; the pin beside each on
 the Ribbon or takes it off. **General ▸ Ribbon icons** set to **Every Tool** shows every
 tool as an icon instead (**Compact** is the starting choice). When the window is too narrow for every group on a tab, the groups
 carry on along a second row, in the same order, so nothing is hidden.
+
+In the Canvas layout a palette group lists its tools as soon as you point at it. Set
+**General ▸ Canvas tool lists open** to **On Click** to open a list only when you click
+its group.
 
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
 
