@@ -69,6 +69,11 @@ pub struct Params {
     /// Material left on the model's outline for the carving after
     #[schemars(extend("x-unit" = "mm", "x-group" = "Lathe", "x-show-when" = {"operation": "turn"}), range(min = 0))]
     pub allowance: f64,
+    /// After the steps down, one last pass along the outline, a finishing stepover apart, so
+    /// a turned part comes off smooth: for a part that is round all along, finished here with
+    /// no carving after
+    #[schemars(title = "Finish the outline", extend("x-group" = "Lathe", "x-show-when" = {"operation": "turn"}))]
+    pub finish: bool,
     /// The holder above the bit, and the chuck and tailstock: filled in from Machine
     /// Configuration as the toolpath is made (the usual ones without)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,6 +91,7 @@ impl Default for Params {
             end: 0.0,
             holding_stub: 8.0,
             allowance: 0.5,
+            finish: false,
             surroundings: None,
         }
     }
@@ -351,6 +357,26 @@ fn turned(
     let points = ((circumference / round_cell).ceil() as usize).max(8);
     let mut passes: Vec<Vec<DVec3>> = vec![];
     let mut short: Vec<(f64, f64)> = vec![];
+    // round the part once `along` at `r` from the axis, cutting only where the material
+    // reaches past the bit
+    let ring = |along: f64, r: f64| -> Vec<Vec<DVec3>> {
+        let ring: Vec<(DVec3, bool)> = (0..=points)
+            .map(|j| {
+                let round = j as f64 * circumference / points as f64;
+                let turn = round / radius;
+                let cuts = stock
+                    .drop(&cutter, along, 0.0, turn)
+                    .is_some_and(|top| r < top - GRAZE);
+                let p = if along_x {
+                    DVec3::new(along, round, r - radius)
+                } else {
+                    DVec3::new(round, along, r - radius)
+                };
+                (p, cuts)
+            })
+            .collect();
+        stretches(&ring, reach)
+    };
     let mut level = swing;
     progress::stage("Turning");
     while level > lowest_target + 1e-9 {
@@ -375,23 +401,40 @@ fn turned(
             if r >= left.under(along, half) - GRAZE {
                 continue;
             }
-            // round the part once, cutting only where the material reaches past the bit
-            let ring: Vec<(DVec3, bool)> = (0..=points)
-                .map(|j| {
-                    let round = j as f64 * circumference / points as f64;
-                    let turn = round / radius;
-                    let cuts = stock
-                        .drop(&cutter, along, 0.0, turn)
-                        .is_some_and(|top| r < top - GRAZE);
-                    let p = if along_x {
-                        DVec3::new(along, round, r - radius)
-                    } else {
-                        DVec3::new(round, along, r - radius)
-                    };
-                    (p, cuts)
-                })
-                .collect();
-            passes.extend(stretches(&ring, reach));
+            passes.extend(ring(along, r));
+            left.lower(along, half, r);
+        }
+    }
+    if p.finish && p.operation == Operation::Turn {
+        // the outline once more, a finishing stepover apart: the steps the turns left on
+        // its slopes taken off
+        progress::stage("Finishing the outline");
+        let fine = (tool.finishing_stepover() * tool.diameter).max(cell);
+        let n = ((to - from) / fine).ceil().max(0.0) as usize;
+        let mut line: Vec<f64> = (0..=n)
+            .map(|k| {
+                if n == 0 {
+                    f64::midpoint(from, to)
+                } else {
+                    from + (to - from) * k as f64 / n as f64
+                }
+            })
+            .collect();
+        if passes.len() % 2 == 1 {
+            line.reverse();
+        }
+        for along in line {
+            progress::stop_if_cancelled()?;
+            let goal = target.under(along, half);
+            let room = head.lowest_over(along, |a| left.at(a), cell);
+            let r = goal.max(room);
+            if r > goal + 1e-6 {
+                short.push((along, r - goal));
+            }
+            if r >= left.under(along, half) - GRAZE {
+                continue;
+            }
+            passes.extend(ring(along, r));
             left.lower(along, half, r);
         }
     }
@@ -887,6 +930,56 @@ mod tests {
             .map(|c| 20.0 + c.z)
             .fold(f64::INFINITY, f64::min);
         assert!((lowest - 6.5).abs() < 0.3, "{lowest}");
+    }
+
+    #[test]
+    fn finishing_the_outline_takes_off_the_steps_the_turns_left_on_a_slope() {
+        // a cone, 8 out from the axis at the start rising to the bar's 20 at the end
+        let cone = |x: f64| 8.0 + 0.12 * x;
+        let mut doc = round_job(100.0, 40.0);
+        let model = Component::from_fn("Cone", Combine::Add, doc.job.area(), 0.5, |p| {
+            Some(cone(p.x))
+        });
+        let mut c = Change::builder(&doc);
+        c.add_new_component(model);
+        doc.apply(&c.finish()).unwrap();
+        let rough = Params {
+            operation: Operation::Turn,
+            allowance: 0.0,
+            tool: Tool {
+                finish_stepover: 0.1,
+                ..Tool::starter()
+            },
+            ..Params::default()
+        };
+        let finished = Params {
+            finish: true,
+            ..rough.clone()
+        };
+        let (roughed, _) = cuts_of(&doc, &rough);
+        let (cuts, notes) = cuts_of(&doc, &finished);
+        assert!(cuts.len() > roughed.len(), "{notes:?}");
+        let half = rough.tool.diameter / 2.0;
+        // never into the cone under any of the bit
+        for c in &cuts {
+            let r = 20.0 + c.z;
+            let under = cone((c.x + half).min(100.0));
+            assert!(r >= under - 0.6, "{c:?} over {under}");
+        }
+        // the finish's rings are a finishing stepover apart along the slope, each right on it
+        let step = rough.tool.finishing_stepover() * rough.tool.diameter;
+        let mut alongs: Vec<f64> = cuts
+            .iter()
+            .filter(|c| (20.0 + c.z - cone((c.x + half).min(100.0))).abs() < 0.6)
+            .map(|c| c.x)
+            .collect();
+        alongs.sort_by(f64::total_cmp);
+        alongs.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+        let widest = alongs
+            .windows(2)
+            .map(|w| w[1] - w[0])
+            .fold(0.0f64, f64::max);
+        assert!(widest <= step + 0.5, "{widest} apart, {step} asked");
     }
 
     #[test]

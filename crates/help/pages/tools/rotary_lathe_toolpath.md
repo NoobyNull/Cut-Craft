@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: rotary_machining_toolpath, orientate_3d_model, rounding_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths
+reviewed: 2026-11-25
+see-also: rotary_roughing_toolpath, rotary_finishing_toolpath, rotary_machining_toolpath, orientate_3d_model, rounding_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths
 ---
 
 **Rotary Lathe** works a rotary job like a lathe: A spins the material steadily while the bit
@@ -53,8 +53,10 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   as far out as any of the model reaches at each point along, plus the **Allowance**. A full
   3D model (see [Orientate 3D Model](help:orientate_3d_model)) counts as it really is in
   space, wherever Material Setup's flat-job model position says. Where there is no model it
-  goes down to the stub. It is the quickest way to rough a round part
-  before [4-Axis Rotary Machining](help:rotary_machining_toolpath) carves it.
+  goes down to the stub. It is the quickest way to rough a round part before
+  [Rotary Finishing](help:rotary_finishing_toolpath) carves it. For a part that is round all
+  along, tick **Finish the outline** and set the Allowance to 0, and Turn finishes it with no
+  carving after.
 - **Part off** cuts one groove, a bit wide, at **Start**, down to the stub, so the finished
   piece can be snapped or sawn free.
 
@@ -72,6 +74,20 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   rest of the material until it is cut free. 0 cuts right through. Turn comes down to it too,
   wherever there is no model.
 - **Allowance** (Turn): material left on the model's outline for the carving after.
+- **Finish the outline** (Turn): after the steps down, one last pass along the outline, the
+  bit's **finishing stepover** apart, which takes off the steps the turns leave on slopes and
+  curves.
+
+## How fast A turns
+
+A turns faster the nearer the axis the bit cuts, so the bit moves through the material at its
+feed rate there too, and its chips stay the size they should be. The form shows how fast A
+turns nearest the axis it cuts (the holding stub).
+
+A can only turn as fast as the **Max rate** set for A in
+[Machine Configuration](help:rotary_firmware). When that isn't fast enough, the form says so in
+red: nearer the axis than the radius it names, the bit cuts slower than its feed and its chips
+get thinner, which can rub and burn. A slower feed rate or a bigger holding stub keeps them.
 
 ## What it keeps clear of
 
