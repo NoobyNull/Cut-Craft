@@ -22,8 +22,8 @@ const THICKNESS_INCH: f64 = 0.75 * MM_PER_INCH;
 const BED_MM: [f64; 2] = [600.0, 400.0];
 const BED_INCH: [f64; 2] = [24.0 * MM_PER_INCH, 16.0 * MM_PER_INCH];
 /// The starter tool groups, by units.
-const METRIC_TOOLS: &str = "Metric Tools";
-const IMPERIAL_TOOLS: &str = "Imperial Tools";
+const METRIC_TOOLS: &str = cut_craft_core::toolpath::STARTER_METRIC;
+const IMPERIAL_TOOLS: &str = cut_craft_core::toolpath::STARTER_IMPERIAL;
 /// What a machine not in the list is called.
 const MY_MACHINE: &str = "My Machine";
 

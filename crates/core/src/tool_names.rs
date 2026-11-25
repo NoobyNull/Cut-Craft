@@ -1,5 +1,5 @@
-//! Tool Database name formats (Tool Database ▸ Name Format): a tool's name made
-//! from a template of `{Variable}` or `{Variable|Modifier}`, so `{Tool Type} {Diameter|F}`
+//! Bit Library name formats (Bit Library ▸ Name Format): a tool's name made
+//! from a template of `{Variable}` or `{Variable|Modifier}`, so `{Bit Type} {Diameter|F}`
 //! names a 1/8 inch end mill "End Mill 1/8". Modifiers: `U` and `L` upper and lower case a
 //! word, `0.00` pads and rounds a number (zeros before the point pad it, after it the
 //! decimals), and `F` writes inches as a fraction. A variable that has no value here stays
@@ -10,7 +10,7 @@ use crate::toolpath::{Tool, ToolShape};
 
 /// Every variable a format can use, for the form's list.
 pub const VARIABLES: [&str; 20] = [
-    "Tool Type",
+    "Bit Type",
     "Manufacturer",
     "Units",
     "Units Short",
@@ -73,7 +73,8 @@ fn value(name: &str, tool: &Tool, material: &str, machine: &str) -> Option<Value
     let text = |s: &str| Some(Value::Text(s.to_owned()));
     let rate = |mm_per_min: f64| Value::Number(mm_per_min / tool.rate_units.mm_per_min());
     match name {
-        "Tool Type" => text(match tool.shape {
+        // `Tool Type`: formats saved before a cutter was a bit, and other programs' libraries
+        "Bit Type" | "Tool Type" => text(match tool.shape {
             ToolShape::EndMill => "End Mill",
             ToolShape::BallNose => "Ball Nose",
             ToolShape::VBit => "V-Bit",
@@ -172,7 +173,10 @@ mod tests {
     fn variables_and_modifiers_fill_in() {
         let t = eighth_inch_end_mill();
         let e = |f: &str| expand(f, &t, "Oak", "");
+        assert_eq!(e("{Bit Type} {Diameter|F}"), "End Mill 1/8");
+        // formats saved before a cutter was a bit, and other programs' libraries, say Tool Type
         assert_eq!(e("{Tool Type} {Diameter|F}"), "End Mill 1/8");
+        assert!(VARIABLES.contains(&"Bit Type") && !VARIABLES.contains(&"Tool Type"));
         assert_eq!(
             e("{Tool Type|U} {Diameter} {Units Short}"),
             "END MILL 0.125 in"

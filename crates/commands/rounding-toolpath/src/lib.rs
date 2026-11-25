@@ -44,7 +44,7 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Blank"))]
     pub blank_size: f64,
-    /// The pattern the tool follows round the cylinder
+    /// The pattern the bit follows round the cylinder
     #[schemars(extend("x-group" = "Rounding"))]
     pub method: Method,
     /// Left on the finished cylinder
@@ -119,12 +119,12 @@ impl Command for RoundingToolpath {
                 "rounding needs a rotary job: set one up in Job Setup".into(),
             ));
         };
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         ensure_positive("pass depth", p.tool.pass_depth)?;
         let stepover = p.tool.finishing_stepover();
         if !(stepover > 0.0 && stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
+                "the bit's finishing stepover must be more than 0% and at most 100%: set it in the Bit Library".into(),
             ));
         }
         if p.method == Method::OptimizedRaster && p.blank == Blank::Round {

@@ -40,5 +40,5 @@ Configuration**, tick **Laser fitted** for your machine and press **OK**: the **
 appears. A laser toolpath already in a job stays in the list either way. If the active
 machine has no laser, its form says so in red at the foot, and you can still edit it.
 
-**Select…** on a laser toolpath shows only the lasers in the [Tool Database](help:tool_database);
+**Select…** on a laser toolpath shows only the lasers in the [Bit Library](help:tool_database);
 on any other toolpath it shows only bits.

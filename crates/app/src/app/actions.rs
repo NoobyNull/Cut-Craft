@@ -99,6 +99,7 @@ impl CutCraftApp {
             buttons_across: std::cell::Cell::new(0.0),
             ribbon_tab: 0,
             canvas: super::canvas_layout::CanvasState::default(),
+            toolbars: super::custom_toolbars::ToolbarState::default(),
             options_path: None,
             backups: super::backups::Backups::default(),
             words_path: None,
@@ -325,6 +326,11 @@ impl CutCraftApp {
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(gui::SELECT_COMPONENT) => true,
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
+            id if id.starts_with(crate::custom_toolbars::ACTION)
+                || id.starts_with(crate::custom_toolbars::RENAME) =>
+            {
+                true
+            }
             id if id.starts_with(gui::SUBTAB_PLACE)
                 || id.starts_with(gui::TOOLPATH_SUBTAB_PLACE)
                 || id.starts_with(gui::FOLD_TOOL_GROUPS) =>
@@ -869,6 +875,11 @@ impl CutCraftApp {
             id if id.starts_with(gui::SAVE_BRUSH) => self.save_brush(id),
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
+            }
+            id if id.starts_with(crate::custom_toolbars::ACTION)
+                || id.starts_with(crate::custom_toolbars::RENAME) =>
+            {
+                self.toolbar_action(id);
             }
             id if id.starts_with(gui::FOLD_TOOL_GROUPS) => {
                 self.options.general.fold_tool_groups = id.ends_with("true");

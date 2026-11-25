@@ -40,7 +40,7 @@ pub struct ToolpathSettings {
     #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_vcarve: f64,
     /// How many times faster than the machine a toolpath preview plays when it starts: 1
-    /// plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the
+    /// plays each move at its bit's feed or plunge rate, rapids at the rapid rate; the
     /// slider over the preview changes it while it plays
     #[serde(default = "preview_speed")]
     #[schemars(extend("x-unit" = "×"), range(min = 0.25, max = 1000))]
@@ -51,7 +51,7 @@ pub struct ToolpathSettings {
     #[schemars(title = "Show keep-out zone labels")]
     pub keep_out_labels: bool,
     /// Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
-    /// made. On: it is made with the part under the zone left uncut, the tool lifting over
+    /// made. On: it is made with the part under the zone left uncut, the bit lifting over
     /// the zone, as if the zone were cut out of whatever is under it. Either way, moves
     /// across a zone go round it. Laser and drill bank toolpaths are never clipped: move the
     /// part or the zone for those

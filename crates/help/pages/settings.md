@@ -66,7 +66,7 @@ processor's cores to start with, at a priority that gives way to your other prog
 holds the speed-or-detail choices for previews and the 3D view. See
 [Keeping the computer responsive](help:performance).
 
-## Snapping Options, Machine Configuration and the Tool Database
+## Snapping Options, Machine Configuration and the Bit Library
 
 The other windows that hold settings work the same way:
 
@@ -75,7 +75,7 @@ The other windows that hold settings work the same way:
 
 ![Snapping Options with a change not applied yet](pictures/snapping-not-applied.png)
 
-- **Machine Configuration**, the **Tool Database** and the **Materials Library** keep their
+- **Machine Configuration**, the **Bit Library** and the **Materials Library** keep their
   **OK**, **Cancel** and **Apply** where they always were. **Apply** is greyed out until you
   change something, the same **● Changes not applied yet** note shows beside it while
   changes wait, and **OK** keeps them and closes.

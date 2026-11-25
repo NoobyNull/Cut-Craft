@@ -314,7 +314,7 @@ impl CutCraftApp {
     pub(super) fn options_changed(
         &mut self,
         ctx: &egui::Context,
-        options: crate::options::Options,
+        mut options: crate::options::Options,
     ) {
         // the Preview tab's detail stays as it was moved, unless the default changed
         let now = self.display.detail;
@@ -339,6 +339,8 @@ impl CutCraftApp {
         let language =
             (options.language != self.options.language).then(|| options.language.pack.clone());
         options.apply();
+        // the window never changes the toolbars of your own: ones made while it was open stay
+        options.toolbars.clone_from(&self.options.toolbars);
         self.options = options;
         self.save_options();
         if let Some(pack) = language {

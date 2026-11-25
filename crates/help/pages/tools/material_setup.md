@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: job_setup, save_toolpaths, view_3d, orientate_3d_model
 ---
 
@@ -7,7 +7,7 @@ see-also: job_setup, save_toolpaths, view_3d, orientate_3d_model
 
 ![The steps, one after another](pictures/material_setup/tour.gif)
 
-1. Before the first toolpath, tell Cut Craft about the board on the machine. On the Toolpaths page, press **Material Setup** (under Job and Tools). It also opens by itself the first time you make a toolpath.
+1. Before the first toolpath, tell Cut Craft about the board on the machine. On the Toolpaths page, press **Material Setup** (under Job and Bits). It also opens by itself the first time you make a toolpath.
 
    ![Step 1](pictures/material_setup/step-1.png)
 
@@ -84,3 +84,5 @@ largest gap that fits.
   Import tools, whose form has the same setting
 - [3D View ▸ Changing a model's height](help:view_3d): the height buttons on a picked
   model, to change the model itself rather than where it sits
+
+Throughout the forms, the **bit** is what is in the spindle; the tools are the buttons you press.

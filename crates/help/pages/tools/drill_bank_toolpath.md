@@ -24,3 +24,5 @@ see-also: drilling_toolpath, keyhole_toolpath
    ![Step 4](pictures/drill_bank_toolpath/step-4.png)
 
 No drill bank? Use [Drilling](help:drilling_toolpath): one bit drills the holes one at a time.
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

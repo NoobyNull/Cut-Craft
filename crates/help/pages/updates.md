@@ -71,7 +71,7 @@ Keeping your work without asking is done by the version you are updating **from*
 starts with updates made from version 0.7.6 or later. Updating from an older version still
 asks whether to save first.
 
-Nothing is downloaded until you press **Install Now**, and your jobs, settings, tools and
+Nothing is downloaded until you press **Install Now**, and your jobs, settings, bits and
 machines are never touched by an update.
 
 ## If something goes wrong
@@ -95,7 +95,7 @@ as it was and the window says what happened. Most of the time the fix is one of 
 ## Where updates come from
 
 Cut Craft's releases are on GitHub, and they are moving to the Power-Whittle organisation's
-page, `github.com/Power-Whittle/Cut-Craft`. While they move, each release goes on both
+page, `github.com/Power-Whittle/PowerWhittle`. While they move, each release goes on both
 pages. Cut Craft looks at both and offers you the newest one built for your computer,
 whichever page has it first, so there is nothing to change on your side. Every download
 is still checked against Cut Craft's own signature before anything is installed, whichever

@@ -1,7 +1,7 @@
 # Cut Craft
 
 A desktop app for designing 2D and 3D work and turning it into CNC toolpaths and G-code.
-Draw vectors, build relief models, pick tools from a tool database, preview the cut in 3D and
+Draw vectors, build relief models, pick bits from a bit library, preview the cut in 3D and
 save G-code for your machine, all in one window. Written in Rust; runs on Linux, macOS and Windows.
 
 Cut Craft is free for people and one-person businesses, even to make things to sell (see [License](#license)). It is an early **alpha**: expect rough edges, and
@@ -98,12 +98,12 @@ please report them (see [Reporting bugs](#reporting-bugs)).
 
 ### Tools and machines
 
-- A **Tool Database** of tools in groups, each with its geometry (tapered ball noses and
-  flute lengths too), tool number, cutting parameters, feeds and speeds, and chip load. It imports `.vtdb` tool databases and Fusion 360 `.tools`
+- A **Bit Library** of bits in groups, each with its geometry (tapered ball noses and
+  flute lengths too), bit number, cutting parameters, feeds and speeds, and chip load. It imports `.vtdb` tool databases and Fusion 360 `.tools`
   libraries, keeping their groups.
 - **Machine Configuration**: your machines, with bed size, controller and post-processors.
 - **Automatic tool changers**: give a machine its slots, load tools into them in Machine ▸
-  Tool Changer (by hand, or by tool number), and the G-code calls each tool by its slot.
+  Tool Changer (by hand, or by bit number), and the G-code calls each bit by its slot.
   Without a changer, a tool's own number is used. Saving refuses tools that aren't loaded.
 - **Post-Processor Management**: Cut Craft's own grbl / FluidNC posts (flat, and rotary on
   A), plus any `.pp` post-processor you install or customise.
@@ -145,10 +145,10 @@ A profile round the rectangle and a pocket in the circle, previewed cut into the
 
 ![A toolpath preview](docs/screenshots/06-toolpath-preview.png)
 
-The Tool Database: groups on the left, the picked tool's details on the right. Changes are
+The Bit Library: groups on the left, the picked bit's details on the right. Changes are
 kept only on **Apply** or **OK**.
 
-![The Tool Database](docs/screenshots/07-tool-database.png)
+![The Bit Library](docs/screenshots/07-tool-database.png)
 
 Machine Configuration: a machine with a five-slot tool changer and three tools loaded.
 
@@ -231,7 +231,7 @@ can be opened again later from the File Operations group.
   double-click a model to select it; **F** fits the view.
 - **Tab** and **Shift + Tab** move between controls without the mouse; the one with focus is
   ringed.
-- **Dialogs** (the Tool Database, Machine Configuration, Post-Processor Management, Options,
+- **Dialogs** (the Bit Library, Machine Configuration, Post-Processor Management, Options,
   Report a Bug, the Help windows) open in windows of their own, so they can sit beside the
   main window or on another screen.
 - **Ctrl + X / C / V** cut, copy and paste the selected vectors. Copy puts them on the system
@@ -239,7 +239,7 @@ can be opened again later from the File Operations group.
 - **Units:** the `mm` / `in` button at the right of the status bar, or **Edit ▸ Units**,
   switches the whole job between millimetres and inches: the material, depths, tab
   heights, every length reads in the new units and the part stays the same size. Each
-  tool in the Tool Database has units of its own and reads in those whatever the job's.
+  bit in the Bit Library has units of its own and reads in those whatever the job's.
 
 ### Drag and drop
 
@@ -250,7 +250,7 @@ can be opened again later from the File Operations group.
 | Pictures (PNG, JPG, GIF, BMP, TIFF; 16-bit and float depth maps too) | Imported as a picture |
 | DXF, SVG and other files Import reads | Imported |
 | `.pp` | Installed as a post-processor |
-| `.vtdb`, `.tools` | Tools added to the Tool Database |
+| `.vtdb`, `.tools` | Bits added to the Bit Library |
 
 On Linux, Cut Craft opens through XWayland on a Wayland desktop, since that is where dropped
 files reach it. **Edit ▸ Options ▸ Use Wayland directly** turns this off (without drag and drop).
@@ -259,7 +259,7 @@ files reach it. **Edit ▸ Options ▸ Use Wayland directly** turns this off (wi
 
 1. **Machine ▸ Machine Configuration:** add your machine. Tick **This machine has a tool
    changer** and set its slots if it has one.
-2. **Toolpaths ▸ Tool Database:** add or import your tools; load them into the tool changer's
+2. **Toolpaths ▸ Bit Library:** add or import your bits; load them into the tool changer's
    slots.
 3. **Machine ▸ Install Post-Processor** (or drop a `.pp` on the window) if Cut Craft's own
    FluidNC post doesn't suit your controller; make it the machine's default.
@@ -377,7 +377,7 @@ crates/core/              the document, invertible changes (undo), the Command c
 crates/commands/<name>/   one crate per command (or per family: align, select, convert-span): its settings, run(), tests
 crates/formats/<name>/    one crate per importer or exporter
 crates/post/              post-processors: toolpaths to G-code
-crates/tool-database/     the Tool Database window, tool groups, tool library imports
+crates/tool-database/     the Bit Library window, tool groups, tool library imports
 crates/machines/          machines, tool changers, the post-processor library
 crates/bug-report/        Report a Bug Here… and GitHub issues
 crates/vtdb/              .vtdb tool database reading

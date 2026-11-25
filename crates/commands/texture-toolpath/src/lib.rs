@@ -60,7 +60,7 @@ pub struct Params {
     #[schemars(extend("x-unit" = "°"))]
     #[schemars(extend("x-group" = "Texture"))]
     pub angle: f64,
-    /// Keeps the texture this far in from the boundary (up to the tool radius in a recess)
+    /// Keeps the texture this far in from the boundary (up to the bit radius in a recess)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Boundary"))]
     pub boundary_offset: f64,
@@ -113,7 +113,7 @@ fn dip(a: Point, b: Point, depth: f64) -> impl Iterator<Item = DVec3> {
 impl Params {
     fn validate(&self) -> Result<(), CommandError> {
         ensure_positive("max cut depth", self.max_cut_depth)?;
-        ensure_positive("tool diameter", self.tool.diameter)?;
+        ensure_positive("bit diameter", self.tool.diameter)?;
         if !self.use_selected_vectors_as_pattern {
             ensure_positive("max cut length", self.max_cut_length)?;
             ensure_positive("stepover", self.stepover)?;
@@ -190,7 +190,7 @@ const TEXTURE_HEADER: &str = "Vectric Vector Texture Definition";
 
 impl Params {
     /// The texture as a `.vtexture` file: its lengths, depths, overlap and angle, each with
-    /// its percentage; not the name, tool, seed or boundary offset.
+    /// its percentage; not the name, bit, seed or boundary offset.
     #[must_use]
     pub fn to_vtexture(&self) -> String {
         // ponytail: Type 1, Units 1 and the second numbers of Stepover and Angle as in every

@@ -6,6 +6,7 @@ use super::{
     Align, CutCraftApp, INSPECTOR_TABS, Layout, Page, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui,
     side_panel,
 };
+use crate::custom_toolbars::Item;
 use crate::options::WindowLayout;
 use crate::tool_model::{Place, ToolModel};
 use crate::tool_names::{group_name, page_tab_name};
@@ -71,16 +72,16 @@ impl CutCraftApp {
         crate::tool_names::name_of(&self.registry, id)
     }
 
-    /// The available tools offered on the active machine whose names contain `text` (any case), in group order.
+    /// The available tools offered on the active machine whose names, or other words they are
+    /// known by, contain `text` (any case), in group order.
     pub(super) fn search_matches(&self, text: &str) -> Vec<(&'static str, String)> {
-        let text = text.trim().to_lowercase();
         self.tool_model()
             .all_groups()
             .iter()
             .flat_map(|g| g.tools.iter().copied())
             .filter(|id| self.available(id) && self.offered(id))
             .map(|id| (id, self.tool_label(id)))
-            .filter(|(_, label)| label.to_lowercase().contains(&text))
+            .filter(|(id, label)| crate::tool_names::found_by(id, label, text))
             .collect()
     }
 
@@ -185,8 +186,10 @@ impl CutCraftApp {
 
     /// A Rail row's right-click menu, as every layout gives a tool in a list by name.
     pub(super) fn row_menu(&self, id: &str) -> Vec<gui::MenuItem> {
-        self.tool_model()
-            .menu(id, Place::Row, &self.options.favourites, false)
+        let menu = self
+            .tool_model()
+            .menu(id, Place::Row, &self.options.favourites, false);
+        self.with_toolbar_menu(menu, &Item::Tool(id.to_owned()))
     }
 
     /// Tools by icon and name, one per row, each with its right-click menu; whether one was
@@ -266,9 +269,13 @@ impl CutCraftApp {
                                     .wrap_mode(egui::TextWrapMode::Truncate),
                             }
                             .selected(self.rail_group == Some(i));
-                            if ui.add(button).on_hover_hint(&name).clicked() {
+                            let response = ui.add(button).on_hover_hint(&name);
+                            if response.clicked() {
                                 self.rail_group = (self.rail_group != Some(i)).then_some(i);
                                 (self.rail_favourites, self.rail_gadgets) = (false, false);
+                            }
+                            if let Some(action) = self.group_menu_on(&response, group.name) {
+                                self.invoke(ui.ctx(), &action);
                             }
                         }
                         // after the groups, so none of their buttons moves for it
@@ -284,11 +291,17 @@ impl CutCraftApp {
                             self.rail_group = None;
                             self.rail_gadgets = false;
                         }
-                        // last of all, once something is installed
+                        // then the toolbars of your own, and last of all, once something is
+                        // installed, Gadgets
+                        self.rail_toolbar_buttons(ui, edge);
                         self.rail_gadgets_button(ui, &gadgets, edge);
                     });
             });
-        let list = if self.rail_favourites {
+        let toolbar = self.rail_toolbar();
+        // a toolbar's list is its own strip, under its name
+        let list = if toolbar.is_some() {
+            Some(("", vec![]))
+        } else if self.rail_favourites {
             Some((
                 "Favourites",
                 self.tool_model().every_favourite(&self.options.favourites),
@@ -301,41 +314,63 @@ impl CutCraftApp {
                 .map(|g| (g.name, g.tools.to_vec()))
         };
         if let Some((name, tools)) = list {
-            side_panel(egui::Panel::left("rail_flyout"), ui.ctx()).show(ui, |ui| {
-                cut_craft_bug_report::mark(ui, "Rail flyout");
-                ui.horizontal(|ui| {
-                    ui.strong(group_name(name));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        let row = ui.spacing().interact_size.y;
-                        if ui
-                            .add(self.pin_button(self.rail_pinned, row))
-                            .on_hover_hint(tr!("layouts-keep-this-list-open-after"))
-                            .clicked()
-                        {
-                            self.rail_pinned = !self.rail_pinned;
-                        }
-                    });
+            self.rail_flyout(ui, toolbar, name, &tools);
+        }
+        side_panel(egui::Panel::right("inspector"), ui.ctx()).show(ui, |ui| self.inspector(ui));
+    }
+
+    /// The Rail's list beside its column: a group's tools, the favourites, the gadgets or a
+    /// toolbar of your own, under its name and a pin to keep it open.
+    fn rail_flyout(
+        &mut self,
+        ui: &mut egui::Ui,
+        toolbar: Option<usize>,
+        name: &str,
+        tools: &[&'static str],
+    ) {
+        side_panel(egui::Panel::left("rail_flyout"), ui.ctx()).show(ui, |ui| {
+            cut_craft_bug_report::mark(ui, "Rail flyout");
+            ui.horizontal(|ui| {
+                match toolbar {
+                    Some(n) => self.toolbar_title(ui, n),
+                    None => {
+                        ui.strong(group_name(name));
+                    }
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let row = ui.spacing().interact_size.y;
+                    if ui
+                        .add(self.pin_button(self.rail_pinned, row))
+                        .on_hover_hint(tr!("layouts-keep-this-list-open-after"))
+                        .clicked()
+                    {
+                        self.rail_pinned = !self.rail_pinned;
+                    }
                 });
-                ui.separator();
-                let picked = egui::ScrollArea::vertical()
-                    .show(ui, |ui| {
+            });
+            ui.separator();
+            let picked = egui::ScrollArea::vertical()
+                .show(ui, |ui| {
+                    let picked = if let Some(n) = toolbar {
+                        self.toolbar_strip(ui, n, super::custom_toolbars::Strip::Rows)
+                    } else {
                         if tools.is_empty() {
                             ui.weak(NO_FAVOURITES);
                         }
-                        let picked = self.tool_rows(ui, &tools);
-                        // the hovered tool's guidance under its list, as under Classic's icons
-                        ui.add_space(ui.spacing().item_spacing.y);
-                        self.tip_contents(ui);
-                        picked
-                    })
-                    .inner;
-                if picked && !self.rail_pinned {
-                    self.rail_group = None;
-                    (self.rail_favourites, self.rail_gadgets) = (false, false);
-                }
-            });
-        }
-        side_panel(egui::Panel::right("inspector"), ui.ctx()).show(ui, |ui| self.inspector(ui));
+                        self.tool_rows(ui, tools)
+                    };
+                    // the hovered tool's guidance under its list, as under Classic's icons
+                    ui.add_space(ui.spacing().item_spacing.y);
+                    self.tip_contents(ui);
+                    picked
+                })
+                .inner;
+            if picked && !self.rail_pinned {
+                self.rail_group = None;
+                self.toolbars.rail = None;
+                (self.rail_favourites, self.rail_gadgets) = (false, false);
+            }
+        });
     }
 
     /// The Rail's last button, after Favourites, once something is installed: opens the
@@ -384,18 +419,12 @@ impl CutCraftApp {
         egui::Panel::top("ribbon").show(ui, |ui| {
             cut_craft_bug_report::mark(ui, "Ribbon");
             let gadgets = self.gadget_tools();
-            // Gadgets is the last tab, there once something is installed
-            if gadgets.is_empty() && RIBBON_TABS[self.ribbon_tab] == GADGETS {
-                self.ribbon_tab = 0;
-            }
-            ui.horizontal(|ui| {
-                for (i, tab) in RIBBON_TABS.iter().enumerate() {
-                    if *tab != GADGETS || !gadgets.is_empty() {
-                        ui.selectable_value(&mut self.ribbon_tab, i, page_tab_name(tab));
-                    }
-                }
-            });
+            ui.horizontal(|ui| self.tab_row(ui));
             ui.separator();
+            if let Some(n) = self.toolbars.ribbon {
+                self.toolbar_strip(ui, n, super::custom_toolbars::Strip::Across);
+                return;
+            }
             match RIBBON_TABS[self.ribbon_tab] {
                 "Favourites" => {
                     self.ribbon_favourites(ui, edge);
@@ -629,10 +658,15 @@ impl CutCraftApp {
                 self.invoke(ui.ctx(), &[gui::RIBBON_PIN, &pin].concat());
             }
         });
-        response.response.on_hover_hint(tr!(
+        let label = response.response.on_hover_hint(tr!(
             "layouts-ribbon-group-list",
             group = group_name(group.name)
         ));
+        // its right-click menu under an id of its own, so it and the list it opens on a
+        // click stay apart
+        let mut label = label;
+        label.id = label.id.with("toolbar menu");
+        chosen = chosen.or_else(|| self.group_menu_on(&label, group.name));
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
         }
@@ -690,7 +724,7 @@ pub(super) const NO_FAVOURITES: &str = "No favourites yet: right-click a tool â–
 const RIBBON_TIP_ROWS: f32 = 6.0;
 
 /// A Ribbon group's name under its icons, with the arrow that lists its tools.
-fn group_label(name: &str) -> String {
+pub(super) fn group_label(name: &str) -> String {
     format!("{} â–¾", group_name(name))
 }
 

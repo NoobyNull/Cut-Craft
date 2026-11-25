@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: interface_layout, settings, find_tool
+reviewed: 2026-11-25
+see-also: toolbars, interface_layout, settings, find_tool
 ---
 
 # Favourites
@@ -35,3 +35,6 @@ Favourites are kept between runs and are the same in every layout. In the Ribbon
 group's list also lets you pin a tool to show it as an icon (see
 [Ribbon layout](help:layout_ribbon)). To pick another layout,
 use [Interface Layout](help:interface_layout).
+
+Want more than one set, or whole groups of tools together? Make
+[toolbars of your own](help:toolbars).

@@ -33,7 +33,7 @@ or if you set it up wrong the first time.
 
 Press **Start using Cut Craft**. It adds the machine and makes it the one you use, sets
 the job every new file starts with, and puts the starter bits in your units at the top of
-the Tool Database, and arranges the window as picked. The status bar says what was set
+the Bit Library, and arranges the window as picked. The status bar says what was set
 up.
 
 **Skip for now** starts with Cut Craft's usual 600 × 400 × 20 mm job and no machine, and

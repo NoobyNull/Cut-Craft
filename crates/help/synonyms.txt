@@ -13,10 +13,10 @@ surfacing, flattening, flatten, spoilboard, skim
 stepover, step over, overlap, cut width
 stepdown, step down, pass depth, depth per pass, depth of cut
 feed rate, feed, feeds, speed, speeds, feeds and speeds, spindle speed, rpm
-bit, bits, cutter, end mill, endmill, router bit
+bit, bits, cutter, cutters, end mill, endmill, router bit, tooling, cutting tool, cutting tools
 ball nose, ballnose, round nose
 v-bit, v bit, vee bit, chamfer bit
-tool database, tool library, bit library
+bit library, tool database, tool library, tooling library, cutter library
 job setup, material, stock, blank, workpiece, board
 material thickness, thickness, board thickness
 zero, origin, home, datum, xy zero, z zero
@@ -51,7 +51,7 @@ array, copy along, repeat, duplicate
 measure, ruler, distance, dimension, dimensions
 crash, crashing, collision, hit, hitting, rapid into material
 checks, pre-cut checks, preflight, verify, safety check, sanity check, acknowledge, tick
-tool number, tool numbers, t number, atc, tool changer, automatic tool change
+bit number, bit numbers, tool number, tool numbers, t number, atc, tool changer, automatic tool change
 generic bit, generic tool, maker's figures, manufacturer, catalogue, library
 bug report, report a bug, crash, crash report, crash log, error report, problem
 system, operating system, os, windows version, macos version, linux distribution, distro, computer details

@@ -44,7 +44,7 @@ pub struct Params {
         "x-widget" = "named-icons",
         "x-icon" = "toolpaths/cut_{}_outside.png"
     ))]
-    /// Which way round the shapes the tool travels
+    /// Which way round the shapes the bit travels
     pub cut_direction: CutDirection,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
@@ -74,7 +74,7 @@ impl Default for Params {
                 .tools
                 .into_iter()
                 .find(|t| t.shape == ToolShape::VBit)
-                .expect("the starter tools include a V-bit"),
+                .expect("the starter bits include a V-bit"),
         }
     }
 }
@@ -124,7 +124,7 @@ impl Command for PrismToolpath {
                 "pick a V-bit: prism carving needs one".into(),
             ));
         }
-        ensure_positive("tool diameter", tool.diameter)?;
+        ensure_positive("bit diameter", tool.diameter)?;
         ensure_positive("pass depth", tool.pass_depth)?;
         if p.start_depth < 0.0 {
             return Err(CommandError::InvalidParams(

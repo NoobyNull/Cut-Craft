@@ -1,6 +1,6 @@
 //! Thread Milling Toolpath: a single-point thread mill spirals round the centre of each
 //! selected vector, cutting an internal thread (a nut) or an external one (a bolt). The
-//! thread mill's tooth comes from the tool; jobs saved before thread mills were tools give
+//! thread mill's tooth comes from the bit; jobs saved before thread mills were bits give
 //! its offset on the form.
 
 use cut_craft_core::document::{Document, Units};
@@ -212,7 +212,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_thread.png"))]
     pub start_depth: f64,
-    /// Deepest the bottom of the tool goes below the start depth
+    /// Deepest the bottom of the bit goes below the start depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D"))]
@@ -244,7 +244,7 @@ pub struct Params {
     /// Which way the thread turns to tighten
     #[schemars(extend("x-group" = "Thread"))]
     pub thread_direction: Hand,
-    /// Which way the tool spirals along the thread
+    /// Which way the bit spirals along the thread
     #[schemars(extend("x-group" = "Thread"))]
     pub cut_direction: CutDirection,
     /// Internal threads: also draws a circle of the thread's minor diameter at each centre,
@@ -258,7 +258,7 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Use Vector Selection Order")]
     pub use_selection_order: bool,
-    /// From the bottom of the thread mill up to the tip of its tooth, for a tool that is not
+    /// From the bottom of the thread mill up to the tip of its tooth, for a bit that is not
     /// a thread mill (a thread mill gives its own)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Thread"))]
@@ -287,7 +287,7 @@ impl Default for Params {
                 .tools
                 .into_iter()
                 .find(|t| t.shape == ToolShape::ThreadMill)
-                .expect("the starter tools include a thread mill"),
+                .expect("the starter bits include a thread mill"),
         }
     }
 }
@@ -296,7 +296,7 @@ impl Default for Params {
 const TURN_STEPS: u32 = 72;
 
 impl Params {
-    /// From the bottom of the tool to the tip of its tooth: the thread mill's own, else the
+    /// From the bottom of the bit to the tip of its tooth: the thread mill's own, else the
     /// form's.
     fn tooth_offset(&self) -> f64 {
         match self.tool.shape {
@@ -322,7 +322,7 @@ impl Params {
         self.max_depth - self.tooth_offset()
     }
 
-    /// Radius of the circle the tool's centre runs round.
+    /// Radius of the circle the bit's centre runs round.
     fn centre_radius(&self) -> f64 {
         let r = self.tool.diameter / 2.0;
         match self.thread_type {
@@ -465,7 +465,7 @@ impl Command for ThreadMillingToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("pitch", p.pitch())?;
         ensure_positive("diameter", p.diameter())?;
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         ensure_positive("tooth offset", p.tooth_offset())?;
         // The rule for a single-point tool's offset
         if p.tool.shape == ToolShape::ThreadMill && p.tool.tooth_offset < p.tool.tooth_size / 2.0 {

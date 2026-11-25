@@ -66,7 +66,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Fill"))]
     #[schemars(extend("x-show-when" = {"strategy": "hatch_fill"}))]
     pub outline: bool,
-    /// The laser, a Laser in the Tool Database (Select… picks another): its diameter is the
+    /// The laser, a Laser in the Bit Library (Select… picks another): its diameter is the
     /// kerf, its feed rate the move speed
     pub tool: Tool,
 }
@@ -88,7 +88,7 @@ impl Default for Params {
     }
 }
 
-/// A laser as a tool (the Tool Database's starter laser): its diameter is the kerf.
+/// A laser as a bit (the Bit Library's starter laser): its diameter is the kerf.
 pub fn laser() -> Tool {
     Tool::laser()
 }
