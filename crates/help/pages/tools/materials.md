@@ -7,7 +7,7 @@ see-also: material_setup, job_setup
 
 ![The steps, one after another](pictures/materials/tour.gif)
 
-1. Materials shows the job in the wood (or plastic or metal) you will cut. On the Toolpaths page, press **Materials** (under Job and Tools).
+1. Materials shows the job in the wood (or plastic or metal) you will cut. On the Toolpaths page, press **Materials** (under Job and Bits).
 
    ![Step 1](pictures/materials/step-1.png)
 

@@ -19,7 +19,7 @@ takes minutes, not the hours a second full finish with a small bit would.
 
 1. Make your [3D Finishing Toolpath](help:3d_finishing_toolpath) first, with the bigger
    ball nose.
-2. Open **3D Pencil Toolpath**. Under **Tool**, press **Select…** and pick a ball nose
+2. Open **3D Pencil Toolpath**. Under **Bit**, press **Select…** and pick a ball nose
    about half the size of the finishing bit (a 3 mm ball after a 6 mm one, or 1/16" after
    1/8").
 3. Under **Bits that finished before**, make sure the finishing bit is listed (the
@@ -32,7 +32,7 @@ takes minutes, not the hours a second full finish with a small bit would.
 ## Good to know
 
 - **Extra passes** run beside each valley line, a stepover apart (the pencil bit's own
-  finishing stepover from the Tool Database), and stop where the finishing bit already
+  finishing stepover from the Bit Library), and stop where the finishing bit already
   cut. More passes clean a wider strip; 0 cuts the valley line alone.
 - With nothing under **Bits that finished before**, the pencil bit runs along every valley
   of the model sharper than the angle, even where nothing was left. That is slower, but

@@ -20,7 +20,7 @@ the wood.
 
 ## How to fix it
 
-Change the spindle speed in the toolpath's tool settings, and the feed rate with it so
+Change the spindle speed in the toolpath's bit settings, and the feed rate with it so
 each tooth still takes the same bite (the chip load). If it says *not checked*, give the
 machine its spindle range in Machine Configuration.
 

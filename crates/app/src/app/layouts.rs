@@ -68,16 +68,16 @@ impl CutCraftApp {
         crate::tool_names::name_of(&self.registry, id)
     }
 
-    /// The available tools offered on the active machine whose names contain `text` (any case), in group order.
+    /// The available tools offered on the active machine whose names, or other words they are
+    /// known by, contain `text` (any case), in group order.
     pub(super) fn search_matches(&self, text: &str) -> Vec<(&'static str, String)> {
-        let text = text.trim().to_lowercase();
         self.tool_model()
             .all_groups()
             .iter()
             .flat_map(|g| g.tools.iter().copied())
             .filter(|id| self.available(id) && self.offered(id))
             .map(|id| (id, self.tool_label(id)))
-            .filter(|(_, label)| label.to_lowercase().contains(&text))
+            .filter(|(id, label)| crate::tool_names::found_by(id, label, text))
             .collect()
     }
 

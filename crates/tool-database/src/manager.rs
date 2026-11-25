@@ -1,4 +1,4 @@
-//! The manager window, laid out as the Tool Database: the tool tree with its buttons
+//! The manager window, laid out as the Bit Library: the tool tree with its buttons
 //! on the left, the picked group's or tool's settings on the right, OK / Cancel under both.
 //! Edits are made to a copy; only Apply and OK hand it back.
 
@@ -45,7 +45,7 @@ pub enum Outcome {
     Ok,
     /// Close the window, dropping the edits.
     Cancel,
-    /// Pick a tool database file and hand it to [`Manager::import`].
+    /// Pick a bit library file and hand it to [`Manager::import`].
     Import,
     /// Pick where to save these tools.
     Export(ToolDatabase),
@@ -76,14 +76,14 @@ pub struct Manager {
     pub changer: Option<Changer>,
     /// The name typed for a new material.
     pub new_material: String,
-    /// Duplicate Material copies every tool's cutting data for the material too.
+    /// Duplicate Material copies every bit's cutting data for the material too.
     pub copy_cutting_data: bool,
     /// The tree leaves out the tools with no cutting data for the active material (else
-    /// they are greyed); the tree's right-click Hide Unset Tools.
+    /// they are greyed); the tree's right-click Hide Unset Bits.
     pub hide_unset: bool,
     /// What is typed in the search box over the tree: tools are found by name.
     pub search: String,
-    /// Opened from a toolpath form's Select…: titled Select Tool, with Select for the tool
+    /// Opened from a toolpath form's Select…: titled Select Bit, with Select for the tool
     /// shown in place of OK.
     pub selecting: bool,
     /// What a toolpath form's Select… may pick: `Some(true)` only lasers (a laser
@@ -205,7 +205,7 @@ pub fn picture_path(tool: &Tool) -> &'static str {
     }
 }
 
-/// The Tool Type list: each type's trade name with what woodworkers call it, so either
+/// The Bit Type list: each type's trade name with what woodworkers call it, so either
 /// one finds it.
 const SHAPES: [(ToolShape, &str); 8] = [
     (ToolShape::EndMill, "End Mill (flat / straight bit)"),
@@ -216,7 +216,7 @@ const SHAPES: [(ToolShape, &str); 8] = [
         "Radiused End Mill (bowl / bull nose)",
     ),
     (ToolShape::ThreadMill, "Thread Mill (cuts screw threads)"),
-    (ToolShape::FormTool, "Form Tool (custom profile)"),
+    (ToolShape::FormTool, "Form Bit (custom profile)"),
     (
         ToolShape::SurfacingBit,
         "Surfacing Bit (spoilboard bit / fly cutter)",
@@ -231,7 +231,7 @@ fn tapered_ball(tool: &Tool) -> bool {
     tool.shape == ToolShape::BallNose && tool.taper > 0.0
 }
 
-/// The Tool Type list: the shapes, with Tapered Ball Nose under Ball Nose.
+/// The Bit Type list: the shapes, with Tapered Ball Nose under Ball Nose.
 fn tool_type(ui: &mut egui::Ui, tool: &mut Tool) {
     let tapered = tapered_ball(tool);
     let shown = if tapered {
@@ -378,7 +378,7 @@ impl Manager {
         }
     }
 
-    /// Copies the catalogue tool shown into My Tools and shows the copy.
+    /// Copies the catalogue tool shown into My Bits and shows the copy.
     fn copy_shown_to_mine(&mut self) {
         if let Some(Pick::Tool(i)) = self.pick
             && self.shown_is_catalogue()
@@ -388,7 +388,7 @@ impl Manager {
     }
 
     /// Select: what the window asks for, when a tool is shown. A catalogue's tool is
-    /// copied into My Tools first, toolpaths cutting with My Tools.
+    /// copied into My Bits first, toolpaths cutting with My Bits.
     pub fn select(&mut self) -> Option<Outcome> {
         self.copy_shown_to_mine();
         self.shown_tool()
@@ -396,12 +396,12 @@ impl Manager {
     }
 
     /// Loads tool `i` into the tool changer's `slot` (counted from 1; `None` takes it out),
-    /// the slot becoming its tool number so the number shown is the holder it is in.
+    /// the slot becoming its bit number so the number shown is the holder it is in.
     pub fn load_into(&mut self, i: usize, slot: Option<usize>) {
         let (Some(changer), Some(tool)) = (&mut self.changer, self.draft.tools.get(i)) else {
             return;
         };
-        // a tool changer holds My Tools only
+        // a tool changer holds My Bits only
         if self.draft.is_catalogue(tool) {
             return;
         }
@@ -410,7 +410,7 @@ impl Manager {
     }
 
     /// The Duplicate Material: the active material copied under the typed name, or
-    /// its own with " copy", with every tool's cutting data for it when asked, and made
+    /// its own with " copy", with every bit's cutting data for it when asked, and made
     /// active.
     pub fn duplicate_material(&mut self) {
         let from = self.draft.material.clone();
@@ -493,14 +493,14 @@ impl Manager {
             ctx,
             tool_window(),
             if self.selecting {
-                "Select Tool"
+                "Select Bit"
             } else {
-                "Tool Database"
+                "Bit Library"
             },
             size,
             &mut open,
             |ui| {
-                cut_craft_bug_report::mark(ui, "Tool Database window");
+                cut_craft_bug_report::mark(ui, "Bit Library window");
                 unapplied::hold_close(ui, dirty);
                 outcome = self.close_question(ui.ctx());
                 egui::Panel::bottom("tool_database_buttons").show(ui, |ui| {
@@ -515,7 +515,7 @@ impl Manager {
                             return;
                         }
                         let text = if self.shown_is_catalogue() {
-                            "Copy to My Tools and Select"
+                            "Copy to My Bits and Select"
                         } else {
                             "Select"
                         };
@@ -524,17 +524,17 @@ impl Manager {
                             .on_hover_hint(cut_craft_i18n::t!(
                                 "Cut with the tool shown, with its saved feeds, speeds and \
                                  pass depth (any edits made here are kept); a catalogue's \
-                                 tool is copied into My Tools first"
+                                 tool is copied into My Bits first"
                             ))
                             .on_disabled_hover_text(cut_craft_i18n::t!(
-                                "Pick a tool in the list first"
+                                "Pick a bit in the list first"
                             ));
                         if select.clicked() {
                             outcome = self.select();
                         }
                         match self.shown_tool() {
                             Some(name) => ui.label(name),
-                            None => ui.weak(cut_craft_i18n::t!("Pick a tool in the list")),
+                            None => ui.weak(cut_craft_i18n::t!("Pick a bit in the list")),
                         };
                     });
                 });
@@ -656,7 +656,7 @@ impl Manager {
         };
         let mut out = vec![];
         if !tools.is_empty() {
-            out.push(named(&tools, "tool"));
+            out.push(named(&tools, "bit"));
         }
         if !materials.is_empty() {
             out.push(named(&materials, "material"));
@@ -679,18 +679,18 @@ impl Manager {
 
     /// The tree: groups that open and close, each over its groups and tools.
     fn tree(&mut self, ui: &mut egui::Ui, look: &Look) {
-        cut_craft_bug_report::mark(ui, "Tool Database tree");
+        cut_craft_bug_report::mark(ui, "Bit Library tree");
         self.changer_list(ui);
         ui.add(
             egui::TextEdit::singleline(&mut self.search)
-                .hint_text(cut_craft_i18n::t!("Search tool names"))
+                .hint_text(cut_craft_i18n::t!("Search bit names"))
                 .desired_width(f32::INFINITY),
         );
         if self.search.trim().is_empty() {
             let all = tree::groups(&self.draft);
-            ui.strong(cut_craft_i18n::t!("My Tools"))
+            ui.strong(cut_craft_i18n::t!("My Bits"))
                 .on_hover_hint(cut_craft_i18n::t!(
-                    "Your own tools: the ones toolpaths and the tool changer use"
+                    "Your own bits: the ones toolpaths and the tool changer use"
                 ));
             for sub in tree::subgroups(&all, "") {
                 if sub != CATALOGUES {
@@ -715,7 +715,7 @@ impl Manager {
         let mut found = self.index.find(&self.search);
         found.retain(|&i| self.may_pick(&self.draft.tools[i]));
         if found.is_empty() {
-            ui.weak(cut_craft_i18n::t!("No tool has that name"));
+            ui.weak(cut_craft_i18n::t!("No bit has that name"));
         }
         let row = ui.spacing().interact_size.y;
         for i in found {
@@ -785,12 +785,12 @@ impl Manager {
                 let label = ui.selectable_label(picked, egui::RichText::new(text).strong());
                 if sub == CATALOGUES {
                     label.clone().on_hover_hint(cut_craft_i18n::t!(
-                        "Tool databases imported from makers, kept as they came: copy a tool \
-                         into My Tools to edit it, cut with it or load it in the tool changer"
+                        "Bit libraries imported from makers, kept as they came: copy a tool \
+                         into My Bits to edit it, cut with it or load it in the tool changer"
                     ));
                 }
                 cut_craft_bug_report::context_menu(&label, |ui| {
-                    ui.checkbox(&mut self.hide_unset, cut_craft_i18n::t!("Hide Unset Tools"));
+                    ui.checkbox(&mut self.hide_unset, cut_craft_i18n::t!("Hide Unset Bits"));
                 });
                 if label.clicked() {
                     self.pick = Some(Pick::Group(sub.to_owned()));
@@ -825,7 +825,7 @@ impl Manager {
                     ));
                 }
                 cut_craft_bug_report::context_menu(&label, |ui| {
-                    ui.checkbox(&mut self.hide_unset, cut_craft_i18n::t!("Hide Unset Tools"));
+                    ui.checkbox(&mut self.hide_unset, cut_craft_i18n::t!("Hide Unset Bits"));
                 });
                 if label.clicked() {
                     self.pick = Some(Pick::Tool(i));
@@ -845,28 +845,23 @@ impl Manager {
         let tool = matches!(self.pick, Some(Pick::Tool(_)));
         let deletable = self.deletable();
         let copy = if self.shown_is_catalogue() {
-            "Copy to My Tools"
+            "Copy to My Bits"
         } else {
-            "Copy Tool"
+            "Copy Bit"
         };
         let mut action = None;
         ui.horizontal(|ui| {
             let buttons = [
-                ("common/add.png", "New Tool", true, TreeAction::NewTool),
+                ("common/add.png", "New Bit", true, TreeAction::NewTool),
                 (
                     "common/add_tool.png",
-                    "New Tool Group",
+                    "New Bit Group",
                     true,
                     TreeAction::NewGroup,
                 ),
                 ("common/copy_duplicate.png", copy, tool, TreeAction::Copy),
-                ("common/open.png", "Import Tools", true, TreeAction::Import),
-                (
-                    "common/save.png",
-                    "Export Tools",
-                    picked,
-                    TreeAction::Export,
-                ),
+                ("common/open.png", "Import Bits", true, TreeAction::Import),
+                ("common/save.png", "Export Bits", picked, TreeAction::Export),
                 ("common/delete.png", "Delete", deletable, TreeAction::Delete),
             ];
             for (icon, label, enabled, asked) in buttons {
@@ -892,7 +887,7 @@ impl Manager {
         action
     }
 
-    /// Whether the pick can be deleted: anything in My Tools, or a whole catalogue (not
+    /// Whether the pick can be deleted: anything in My Bits, or a whole catalogue (not
     /// a catalogue's tools or groups one by one).
     fn deletable(&self) -> bool {
         match &self.pick {
@@ -910,7 +905,7 @@ impl Manager {
     }
 
     fn act(&mut self, action: TreeAction) -> Option<Outcome> {
-        // new things go in the picked group, or the picked tool's; in My Tools, a new
+        // new things go in the picked group, or the picked tool's; in My Bits, a new
         // tool picked in a catalogue going in its maker ▸ type group
         let group = match &self.pick {
             Some(Pick::Group(g)) => g.clone(),
@@ -975,13 +970,13 @@ impl Manager {
                 format!("{n} {one}s")
             }
         };
-        let mut what = plural(inside.len(), "tool");
+        let mut what = plural(inside.len(), "bit");
         if groups > 0 {
             what = format!("{what} in {}", plural(groups, "group"));
         }
         let mut notes = vec![];
         if hidden > 0 {
-            notes.push(format!("{hidden} hidden by Hide Unset Tools"));
+            notes.push(format!("{hidden} hidden by Hide Unset Bits"));
         }
         if loaded > 0 {
             notes.push(format!(
@@ -1114,7 +1109,7 @@ impl Manager {
 
     /// The picked group's name and notes, or the picked tool's settings.
     fn details(&mut self, ui: &mut egui::Ui, look: &Look) {
-        cut_craft_bug_report::mark(ui, "Tool Database details");
+        cut_craft_bug_report::mark(ui, "Bit Library details");
         match self.pick.clone() {
             Some(Pick::Group(group)) => self.group_details(ui, &group),
             Some(Pick::Tool(i)) if i < self.draft.tools.len() && self.shown_is_catalogue() => {
@@ -1157,7 +1152,7 @@ impl Manager {
                 }
             }
             _ => {
-                ui.weak(cut_craft_i18n::t!("Pick a group or tool in the tree"));
+                ui.weak(cut_craft_i18n::t!("Pick a group or bit in the tree"));
             }
         }
     }
@@ -1235,7 +1230,7 @@ impl Manager {
                     egui::Button::new(cut_craft_i18n::t!("Delete Material")),
                 )
                 .on_hover_hint(cut_craft_i18n::t!(
-                    "Deletes every tool's cutting data for it"
+                    "Deletes every bit's cutting data for it"
                 ))
                 .clicked()
             {
@@ -1259,21 +1254,21 @@ impl Manager {
                 cut_craft_i18n::t!("with cutting data"),
             )
             .on_hover_hint(cut_craft_i18n::t!(
-                "The copy gets every tool's cutting data for the material"
+                "The copy gets every bit's cutting data for the material"
             ));
         });
     }
 
-    /// A catalogue's tool, read only, with Copy to My Tools.
+    /// A catalogue's tool, read only, with Copy to My Bits.
     fn catalogue_tool(&mut self, ui: &mut egui::Ui, look: &Look, i: usize) {
         let mut copy = false;
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label(cut_craft_i18n::t!(
                     "This tool is in a maker's catalogue, which stays as it came. Copy it into \
-                     My Tools to change it, cut with it or load it in the tool changer."
+                     My Bits to change it, cut with it or load it in the tool changer."
                 ));
-                copy = ui.button(cut_craft_i18n::t!("Copy to My Tools")).clicked();
+                copy = ui.button(cut_craft_i18n::t!("Copy to My Bits")).clicked();
             });
         });
         let groups = tree::groups(&self.draft);
@@ -1296,7 +1291,7 @@ impl Manager {
         }
     }
 
-    /// Copies every catalogue tool in `group` into My Tools (each once).
+    /// Copies every catalogue tool in `group` into My Bits (each once).
     pub fn copy_group_to_mine(&mut self, group: &str) {
         let inside: Vec<usize> = (0..self.draft.tools.len())
             .filter(|&i| tree::within(&self.draft.tools[i].group, group))
@@ -1306,7 +1301,7 @@ impl Manager {
         }
     }
 
-    /// A My Tools tool's group follows its maker and type while it is still the group they
+    /// A My Bits tool's group follows its maker and type while it is still the group they
     /// gave it (the user moving it to another group keeps it there).
     fn follow_own_group(&mut self, i: usize) {
         let tool = &mut self.draft.tools[i];
@@ -1324,8 +1319,8 @@ impl Manager {
         if self.in_catalogues(group) {
             ui.label(egui::RichText::new(tree::leaf(group)).strong());
             ui.weak(cut_craft_i18n::t!(
-                "A maker's catalogue, kept as it came: copy its tools into My Tools to edit \
-                 them. Delete takes a whole catalogue out (copies in My Tools stay)."
+                "A maker's catalogue, kept as it came: copy its tools into My Bits to edit \
+                 them. Delete takes a whole catalogue out (copies in My Bits stay)."
             ));
             if let Some(notes) = self.draft.groups.iter().find(|g| g.path == group)
                 && !notes.notes.is_empty()
@@ -1333,9 +1328,9 @@ impl Manager {
                 ui.label(&notes.notes);
             }
             if ui
-                .button(cut_craft_i18n::t!("Copy All to My Tools"))
+                .button(cut_craft_i18n::t!("Copy All to My Bits"))
                 .on_hover_hint(cut_craft_i18n::t!(
-                    "Every tool in this group, each into its maker ▸ type group"
+                    "Every bit in this group, each into its maker ▸ type group"
                 ))
                 .clicked()
             {

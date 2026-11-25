@@ -753,10 +753,10 @@ struct CutCraftApp {
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
     tools_path: Option<std::path::PathBuf>,
-    /// The tool database file that could not be read at start: nothing is saved over it,
+    /// The bit library file that could not be read at start: nothing is saved over it,
     /// and every save says so.
     tools_unreadable: Option<std::path::PathBuf>,
-    /// The open Tool Database window.
+    /// The open Bit Library window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// The Materials Library: materials by class and hardness.
     materials: cut_craft_core::material_library::MaterialLibrary,
@@ -766,7 +766,7 @@ struct CutCraftApp {
     materials_unreadable: Option<std::path::PathBuf>,
     /// The open Materials Library window.
     materials_window: Option<cut_craft_tool_database::materials::MaterialsWindow>,
-    /// What the open Select Tool picks for: a tool in one of the form's lists, or a tool
+    /// What the open Select Bit picks for: a tool in one of the form's lists, or a tool
     /// changer holder; `None` picks the form's own tool.
     picking: Option<PickFor>,
     /// A Calculate waiting on the deeper-than-the-material warning.

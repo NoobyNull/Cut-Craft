@@ -75,6 +75,16 @@ pack has no words for yet.
   longer than English. `cut_craft_i18n::pseudo()` is a test language that stretches every word
   by that much.
 
+### Tools and bits
+
+A **tool** is a button on the screen (Draw Circle, Pocket Toolpath, Find Tool). What goes in
+the spindle is a **bit**: the Bit Library, Select Bit, a bit's diameter, bit changes, Bit
+Number (the `T` in G-code, shown as `T1`, `T2`...). **Tool changer** keeps its name, as it is
+the machine part's own, with "(ATC)" where it is named on its own. Other programs' file kinds
+keep their names (a "Vectric tool database"). The test `cutters_are_called_bits_in_the_english_words`
+(`crates/app/src/tool_names/bit_words.rs`) fails on the old cutter words in the English text,
+the help pages and the text the code shows.
+
 Languages have their own test suite, run by the **Languages** workflow:
 
     cargo nextest run -p cut-craft -p cut-craft-i18n --profile languages

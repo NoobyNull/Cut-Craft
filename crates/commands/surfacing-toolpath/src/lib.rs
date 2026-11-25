@@ -115,7 +115,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_surfacing.png"))]
     pub depth: f64,
-    /// A surfacing bit (spoilboard bit or fly cutter) from your tools; its stepover and
+    /// A surfacing bit (spoilboard bit or fly cutter) from your bits; its stepover and
     /// feeds are used
     pub tool: Tool,
     /// Rows along X or Y, or a spiral from the outside in
@@ -192,7 +192,7 @@ impl Command for SurfacingToolpath {
         let stepover = p.tool.stepover;
         if !(stepover > 0.0 && stepover <= 1.0) {
             return Err(CommandError::Failed(
-                "set the bit's stepover between 1% and 100% of its width (Edit… under Tool)".into(),
+                "set the bit's stepover between 1% and 100% of its width (Edit… under Bit)".into(),
             ));
         }
         let (ids, area) = area(doc, p)?;

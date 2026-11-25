@@ -32,3 +32,5 @@ see-also: profile_toolpath, prism_toolpath, moulding_toolpath
    ![Step 6](pictures/chamfer_toolpath/step-6.png)
 
 Cut the part out afterwards with a [Profile](help:profile_toolpath). When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

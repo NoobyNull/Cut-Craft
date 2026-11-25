@@ -22,7 +22,7 @@ pub const GROUPS: [&str; 8] = [
     "Material",
     "Model",
     "Machine",
-    "Tools",
+    "Bits",
     "Toolpaths",
     "Document Variables",
     "System",
@@ -67,7 +67,7 @@ pub struct Context {
     pub date: String,
     pub time: String,
     /// What run times go by (the rapid rate, the machine's speeds, accelerations and
-    /// cornering, and tool change times), and the Toolpath Summary's scale factor.
+    /// cornering, and bit change times), and the Toolpath Summary's scale factor.
     pub motion: crate::cut_time::Motion,
     pub scale: f64,
     /// How tall the 3D model is, mm; `None` when there is none.
@@ -151,7 +151,7 @@ fn shape_name(shape: ToolShape) -> &'static str {
         ToolShape::VBit => "V-Bit",
         ToolShape::RadiusedEndMill => "Radiused End Mill",
         ToolShape::ThreadMill => "Thread Mill",
-        ToolShape::FormTool => "Form Tool",
+        ToolShape::FormTool => "Form Bit",
         ToolShape::SurfacingBit => "Surfacing Bit",
         ToolShape::Laser => "Laser",
     }
@@ -205,7 +205,7 @@ pub fn run_minutes(doc: &Document, toolpaths: &[&Toolpath], ctx: &Context) -> (V
 }
 
 /// Every toolpath's run time in minutes, by id: the shown ones cut one after another from
-/// the job's home (getting to each and its tool change included), a hidden one on its own;
+/// the job's home (getting to each and its bit change included), a hidden one on its own;
 /// and the whole job's, every shown toolpath and the trip back home.
 pub fn job_minutes(
     doc: &Document,
@@ -346,7 +346,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         "",
         "material.z_zero".into(),
         "Z zero",
-        "Where the tool is zeroed in Z",
+        "Where the bit is zeroed in Z",
         match job.z_zero {
             ZZero::MaterialSurface => "Material surface".into(),
             ZZero::MachineBed => "Machine bed".into(),
@@ -372,7 +372,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         "",
         "material.clearance".into(),
         "Safe Z",
-        "How high above the material the tool moves between cuts",
+        "How high above the material the bit moves between cuts",
         length(job.clearance, units),
     );
 
@@ -465,7 +465,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         bed,
     );
     let changer = if ctx.slots.is_empty() {
-        "None: tools are changed by hand".into()
+        "None: bits are changed by hand".into()
     } else {
         format!("{} slots", ctx.slots.len())
     };
@@ -474,7 +474,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         "",
         "machine.tool_changer".into(),
         "Tool changer",
-        "Whether the machine changes tools itself",
+        "Whether the machine changes bits itself",
         changer,
     );
     add(
@@ -498,7 +498,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         "",
         "machine.holder_per_bit".into(),
         "Holder per bit",
-        "Whether a bit's own holder in the Tool Database counts instead",
+        "Whether a bit's own holder in the Bit Library counts instead",
         if ctx.holding.per_bit { "Yes" } else { "No" }.into(),
     );
 
@@ -512,11 +512,11 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         }
     };
     add(
-        "Tools",
+        "Bits",
         "",
         "tools.count".into(),
-        "Number of tools",
-        "How many tools the toolpaths use",
+        "Number of bits",
+        "How many bits the toolpaths use",
         tools.len().to_string(),
     );
     let list = tools
@@ -525,35 +525,35 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         .collect::<Vec<_>>()
         .join("\n");
     add(
-        "Tools",
+        "Bits",
         "",
         "tools.list".into(),
-        "Tool list",
-        "Each tool, one a line, with its number",
-        none(&list, "No tools yet"),
+        "Bit list",
+        "Each bit, one a line, with its number",
+        none(&list, "No bits yet"),
     );
     for (place, (n, tool)) in tools.iter().enumerate() {
         let i = place + 1;
         let under = format!("{i}. {}", tool.name);
         let key = |what: &str| format!("tool.{i}.{what}");
         add(
-            "Tools",
+            "Bits",
             &under,
             key("name"),
             "Name",
-            "The tool's name",
+            "The bit's name",
             tool.name.clone(),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("number"),
-            "Tool number",
+            "Bit number",
             "Its slot or number (T)",
             number(*n),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("type"),
             "Type",
@@ -561,7 +561,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             shape_name(tool.shape).into(),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("diameter"),
             "Diameter",
@@ -569,7 +569,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             length(tool.diameter, units),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("pass_depth"),
             "Pass depth",
@@ -577,7 +577,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             length(tool.pass_depth, units),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("stepover"),
             "Stepover",
@@ -589,7 +589,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             ),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("feed"),
             "Feed rate",
@@ -597,7 +597,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             feed(tool.feed_rate, units),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("plunge"),
             "Plunge rate",
@@ -605,7 +605,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             feed(tool.plunge_rate, units),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("spindle"),
             "Spindle speed",
@@ -613,7 +613,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             format!("{} rpm", trimmed(tool.spindle_speed)),
         );
         add(
-            "Tools",
+            "Bits",
             &under,
             key("flutes"),
             "Flutes",
@@ -622,7 +622,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         );
         let (stickout, guessed) = crate::collision::stickout(tool);
         add(
-            "Tools",
+            "Bits",
             &under,
             key("stick_out"),
             "Stick-out",
@@ -635,7 +635,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         );
         let holder = crate::collision::holder_of(tool, &ctx.holding);
         add(
-            "Tools",
+            "Bits",
             &under,
             key("holder"),
             "Holder",
@@ -683,16 +683,16 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
             "Toolpaths",
             &under,
             key("tool"),
-            "Tool",
-            "The tool it cuts with",
+            "Bit",
+            "The bit it cuts with",
             t.tool.name.clone(),
         );
         add(
             "Toolpaths",
             &under,
             key("tool_number"),
-            "Tool number",
-            "The tool's slot or number (T)",
+            "Bit number",
+            "The bit's slot or number (T)",
             number(n),
         );
         add(
@@ -769,7 +769,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         "",
         "toolpaths.list".into(),
         "Toolpath list",
-        "Each toolpath, one a line, with its tool and run time",
+        "Each toolpath, one a line, with its bit and run time",
         none(&lines.join("\n"), "No toolpaths yet"),
     );
     add(
@@ -777,7 +777,7 @@ pub fn variables(doc: &Document, ctx: &Context) -> Vec<Variable> {
         "",
         "toolpaths.run_time".into(),
         "Total run time",
-        "About how long the whole job takes: every move, tool changes and the trip home",
+        "About how long the whole job takes: every move, bit changes and the trip home",
         duration(total),
     );
 

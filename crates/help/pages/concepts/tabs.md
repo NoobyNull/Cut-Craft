@@ -35,7 +35,7 @@ another way (screws, tape or a vacuum table).
 
 ## Size
 
-- **Size from the tool** (on to start): each tab is as thick as one pass of the bit (at most
+- **Size from the bit** (on to start): each tab is as thick as one pass of the bit (at most
   half the cut) and twice as long as it is thick. A 1/4" bit taking 1/4" passes leaves tabs
   1/2" long and 1/4" thick.
 - Turn it off to type a **Length** (along the path) and **Thickness** (up from the bottom

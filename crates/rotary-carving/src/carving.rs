@@ -173,12 +173,12 @@ impl Carving {
 /// # Errors
 /// When the stepover is not more than 0% and at most 100%.
 pub fn finishing_step(tool: &Tool) -> Result<f64, CommandError> {
-    cut_craft_core::ensure_positive("tool diameter", tool.diameter)?;
+    cut_craft_core::ensure_positive("bit diameter", tool.diameter)?;
     let stepover = tool.finishing_stepover();
     if !(stepover > 0.0 && stepover <= 1.0) {
         return Err(CommandError::InvalidParams(format!(
             "the finishing stepover of {} must be more than 0% and at most 100%: set it in \
-             the Tool Database",
+             the Bit Library",
             tool.name
         )));
     }

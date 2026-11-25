@@ -88,7 +88,7 @@ fn visible(doc: &Document, strategy: &str) -> Vec<EntityId> {
 }
 
 /// What to say when copies of `bounds`, `step` apart, run off the material: how many rows
-/// and columns fit. A cut's centre may go `slack` past the edge (a tool radius, as a part
+/// and columns fit. A cut's centre may go `slack` past the edge (a bit radius, as a part
 /// cut out right at the edge does).
 fn past_edge(
     doc: &Document,
@@ -207,7 +207,7 @@ impl Command for ArrayCopyToolpath {
             c.note(note);
         }
         // ponytail: one array toolpath per source, so each tool's copies run together (the
-        // "minimize tool changes"); copy by copy would need a toolpath per copy and source
+        // "minimize bit changes"); copy by copy would need a toolpath per copy and source
         for (id, source) in sources
             .iter()
             .filter(|(id, _)| p.only.is_none_or(|o| o == *id))

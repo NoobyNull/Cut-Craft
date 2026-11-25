@@ -29,14 +29,14 @@ pub struct Params {
     #[schemars(skip)]
     #[serde(default)]
     pub rotary: bool,
-    /// Where the tool is zeroed in Z: on top of the material, or under it on the machine bed
+    /// Where the bit is zeroed in Z: on top of the material, or under it on the machine bed
     #[schemars(
         title = "Z Zero Position",
         extend("x-section" = true, "x-hide-when" = {"rotary": true}),
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
-    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis. The
+    /// Rotary jobs: where the bit is zeroed in Z, on top of the cylinder or on its axis. The
     /// picture shows where. Pick the one you touch the bit off on at the machine: the G-code
     /// heights depend on it, and a wrong pick cuts too deep or in the air
     #[schemars(
@@ -59,14 +59,14 @@ pub struct Params {
     /// model to it (Set). 0 when there is no model, or to leave it alone
     #[schemars(title = "Model Thickness", extend("x-unit" = "mm"), range(min = 0))]
     pub model_thickness: f64,
-    /// How high the tool travels between cuts
+    /// How high the bit travels between cuts
     #[schemars(
         title = "Rapid Z Gaps above Material",
         extend("x-section" = true),
         extend("x-icon" = "job_setup/clearance_z1.png")
     )]
     pub gaps: RapidGaps,
-    /// Where the tool starts from and goes back to at the end
+    /// Where the bit starts from and goes back to at the end
     #[schemars(title = "Home / Start Position", extend("x-section" = true))]
     pub home: Home,
 }

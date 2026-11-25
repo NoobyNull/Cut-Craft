@@ -566,7 +566,7 @@ fn the_settings_help_says_changes_wait_for_apply_with_pictures() {
     for words in [
         "Snapping Options",
         "Machine Configuration",
-        "Tool Database",
+        "Bit Library",
         "Materials Library",
     ] {
         assert!(page.contains(words), "{words}");

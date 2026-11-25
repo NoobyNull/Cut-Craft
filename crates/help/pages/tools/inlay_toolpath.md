@@ -32,3 +32,5 @@ see-also: vcarve_inlay_toolpath, pocket_toolpath, profile_toolpath
    ![Step 6](pictures/inlay_toolpath/step-6.png)
 
 For sharp corners, use a [V-Carve Inlay](help:vcarve_inlay_toolpath) instead. When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

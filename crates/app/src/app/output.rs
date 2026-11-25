@@ -56,7 +56,7 @@ impl Output<'_> {
     }
 
     /// The post the form saves through: the one picked, else the machine's default, with
-    /// its tool changes made pauses when the form says to pause, or tools are changed by
+    /// its bit changes made pauses when the form says to pause, or tools are changed by
     /// hand between files on a machine without a tool changer.
     pub(super) fn post(&self, form: &SaveForm) -> Result<Post, String> {
         let post = cut_craft_machines::post_for(
@@ -245,7 +245,7 @@ impl Output<'_> {
     }
 }
 
-/// Whether each tool gets files of its own: chosen, or the post cannot change tools.
+/// Whether each tool gets files of its own: chosen, or the post cannot change bits.
 fn by_tool(form: &SaveForm, post: &Post) -> bool {
     form.changes == files::ToolChanges::SeparateFiles || !post.changes_tools()
 }
@@ -274,8 +274,8 @@ pub(super) fn no_tool_changer() -> Finding {
     Finding {
         severity: Severity::Warning,
         message: "Tool changer (ATC) is chosen, but the machine has no tool changer set up: \
-                  the file changes tools with M6, which a machine without one stops on or \
-                  ignores, cutting on with the wrong bit. Choose Separate file for each tool, \
+                  the file changes bits with M6, which a machine without one stops on or \
+                  ignores, cutting on with the wrong bit. Choose Separate file for each bit, \
                   or add the tool changer's slots in Machine Configuration"
             .into(),
         check: Check::ToolChanger,

@@ -361,7 +361,7 @@ impl CutCraftApp {
         if laser_form && !tool.is_laser() {
             Some(format!(
                 "{} is not a laser: this toolpath takes its diameter as the kerf and its feed \
-                 as the laser's speed. Select… a Laser from the Tool Database",
+                 as the laser's speed. Select… a Laser from the Bit Library",
                 tool.name
             ))
         } else if !laser_form && tool.shape == cut_craft_core::toolpath::ToolShape::Laser {
