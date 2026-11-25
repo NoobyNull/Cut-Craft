@@ -352,6 +352,7 @@ tooltip-create-job-sheet = Save a page for the machine: the job, the material, e
 tooltip-print-job-sheet = Open the job sheet in the web browser to print it: the job, the material, each toolpath's tool and how long it takes
 tooltip-part-labels = Print a label for each named part, to stick on it once it is cut out
 tooltip-clearing-settings = How adaptive and trochoidal clearing cut in this job: the light step, the loops, and whether rows and loops keep climb on the way back
+tooltip-advanced-rotary-mode = Open Options at Advanced rotary mode: each rotary toolpath then cuts the whole blank, not only what the toolpaths above it leave
 tooltip-cut-list = Save a list of the job's parts and their sizes, as a spreadsheet (CSV)
 tooltip-show-open-vector-ends = Put a circle on each end of every open vector, so a gap that stops a shape being pocketed or carved stands out
 tooltip-show-construction-lines = Show or hide the dashed construction lines: lines that only place things and are never cut. Hidden, they cannot be picked either
