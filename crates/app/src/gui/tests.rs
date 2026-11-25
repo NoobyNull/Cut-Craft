@@ -126,6 +126,7 @@ fn the_toolpaths_page_keeps_every_tool_it_had() {
         "rotary_roughing_toolpath",
         "rotary_finishing_toolpath",
         "rotary_locked_angles_toolpath",
+        "rotary_details_toolpath",
         "rotary_machining_toolpath",
         "rotary_lathe_toolpath",
         "laser_cut_fill_toolpath",

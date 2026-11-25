@@ -156,6 +156,7 @@ tools-rounding-toolpath = Rounding Toolpath
 tools-rotary-roughing-toolpath = Rotary Roughing
 tools-rotary-finishing-toolpath = Rotary Finishing
 tools-rotary-locked-angles-toolpath = Rotary Locked Angles
+tools-rotary-details-toolpath = Rotary Details
 tools-rotary-machining-toolpath = 4-Axis Rotary Machining
 tools-rotary-lathe-toolpath = Rotary Lathe
 tools-laser-cut-fill-toolpath = Laser Cut / Fill

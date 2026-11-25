@@ -411,6 +411,12 @@ say "not implemented yet".
   stops sooner when no angle reaches enough to be worth it (a square bar takes four). Cuts
   only what the toolpaths above it leave; says in red where the holder kept it from the model
   at every angle, and when the angles allowed ran out with more left.
+- Rotary Details (Cut Craft's own, `rotary_details_toolpath`): on a rotary job, rest machining
+  for carved parts. Each of the Bits that finished before is run as a finish all the way round
+  over a voxel copy of what is left (in thought), then the smaller detail bit goes round the
+  part ring by ring where some is still left, then up to Most angles locked angles
+  (`locked_angles`) for what the rings could not reach. Also cuts only what the toolpaths above
+  it leave (Advanced rotary mode starts from the whole blank; the bits before still count).
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits

@@ -730,18 +730,20 @@ pub(super) const CLIP_SETTING: &str =
     "Edit ▸ Options ▸ Toolpath Settings ▸ Clip toolpaths at keep-out zones";
 
 /// Rotary toolpaths, given the machine's holder, chuck and tailstock to keep clear of.
-pub(super) const ROTARY_SURROUNDED: [&str; 5] = [
+pub(super) const ROTARY_SURROUNDED: [&str; 6] = [
     "rotary_roughing_toolpath",
     "rotary_finishing_toolpath",
     "rotary_locked_angles_toolpath",
+    "rotary_details_toolpath",
     "rotary_machining_toolpath",
     "rotary_lathe_toolpath",
 ];
 
 /// Rotary toolpaths that cut only what the toolpaths above them leave, unless Settings'
 /// advanced rotary mode is on.
-pub(super) const ROTARY_CARRIED: [&str; 3] = [
+pub(super) const ROTARY_CARRIED: [&str; 4] = [
     "rotary_roughing_toolpath",
     "rotary_finishing_toolpath",
     "rotary_locked_angles_toolpath",
+    "rotary_details_toolpath",
 ];
