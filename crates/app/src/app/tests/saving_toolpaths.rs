@@ -7,20 +7,10 @@ fn a_preview_plays_as_long_as_the_toolpath_summary_says_the_machine_takes() {
     let h = playing_preview();
     let toolpath = h.app.doc.toolpaths.values().next().unwrap();
     let summary = toolpath.machining_minutes(h.app.summary.rapid) * 60.0;
-    let length = h.app.playback.as_ref().unwrap().length();
+    let length = h.app.player.playback.as_ref().unwrap().length();
     assert!(
         (length - summary).abs() < 1e-6,
         "{length} s, the summary {summary} s"
-    );
-}
-
-#[test]
-fn a_jump_gets_more_time_each_frame_than_playing_does() {
-    let h = playing_preview();
-    assert!(super::jump_budget(h.app.playback_budget) > h.app.playback_budget);
-    assert_eq!(
-        super::jump_budget(std::time::Duration::ZERO),
-        std::time::Duration::ZERO
     );
 }
 

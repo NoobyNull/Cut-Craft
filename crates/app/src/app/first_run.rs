@@ -277,7 +277,7 @@ impl CutCraftApp {
         } = crate::options::Options::load_checked();
         self.options = options;
         self.options.apply();
-        self.playback_speed = self.options.toolpaths.preview_speed();
+        self.player.speed = self.options.toolpaths.preview_speed();
         if let Some(message) = crate::options::load_message(&unread, tampered) {
             self.status.set_message(&message);
         }

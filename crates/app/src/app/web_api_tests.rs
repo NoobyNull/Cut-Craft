@@ -612,7 +612,7 @@ fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
     );
     assert_eq!(status, 200, "{previewed}");
     assert!(h.app.simulation.is_some(), "previewed");
-    assert!(h.app.playback.is_none(), "cut at once, not played");
+    assert!(h.app.player.playback.is_none(), "cut at once, not played");
     let (status, progress) = call(&mut h, at, "GET", "progress", None);
     assert_eq!(status, 200);
     assert_eq!(progress["busy"], false, "{progress}");

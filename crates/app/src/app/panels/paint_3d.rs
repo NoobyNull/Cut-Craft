@@ -438,7 +438,7 @@ impl CutCraftApp {
             // sits on
             sides: shown.material_block
                 && (self.simulation.is_some()
-                    || self.playback.is_some()
+                    || self.player.playback.is_some()
                     || self.showing_uncut_material()
                     || self.model_on_material()),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
@@ -457,10 +457,12 @@ impl CutCraftApp {
         }
         let job = self.shown_job();
         // the uncut material wraps as a preview's stock does: its top at the surface
-        let previewing =
-            self.simulation.is_some() || self.playback.is_some() || self.showing_uncut_material();
+        let previewing = self.simulation.is_some()
+            || self.player.playback.is_some()
+            || self.showing_uncut_material();
         // a playing preview's tool: where its tip is, and the parts it is drawn in
         let tool_at = self
+            .player
             .playback
             .as_ref()
             .and_then(cut_craft_core::playback::Playback::tool)
@@ -748,7 +750,7 @@ impl CutCraftApp {
     /// thickness, so zero is measured from that top.
     pub(in super::super) fn origin_height_3d(&self) -> f64 {
         let importing =
-            self.importing_model() && self.simulation.is_none() && self.playback.is_none();
+            self.importing_model() && self.simulation.is_none() && self.player.playback.is_none();
         origin_3d(&self.doc.job, importing)
     }
 

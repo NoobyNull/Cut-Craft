@@ -68,8 +68,8 @@ app struct is split into parts of about 40 fields or fewer.
 | 3.1 | One toolpath output module for every way of saving | PRs #672 to #675 open (same as 2.3) |
 | 3.2 | Commands describe their own form; laser and rotary toolpaths only for machines that have them | PRs #676, #679 open; run-context PR after #675 |
 | 3.3 | One check before unsigned gadgets and add-ons run | PR #678 open |
-| 3.4 | One list for built-in actions, one name everywhere | Waiting on Matthew (build go) |
-| 3.5 | Break up the app struct, with the playback player folded in | Not started |
+| 3.4 | One list for built-in actions, one name everywhere | PRs #722, #723 open |
+| 3.5 | Break up the app struct, with the playback player folded in | Playback player PR open; more groups to follow |
 | 3.6 | Stable toolpath ids, so cut order stops relying on a guess | Not started |
 | 3.7 | Model import session and one test driver | Deferred to after 1.0 |
 

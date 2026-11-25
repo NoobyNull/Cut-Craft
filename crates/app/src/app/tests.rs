@@ -544,7 +544,10 @@ fn playing_preview() -> Harness {
     h.app.form = None;
     h.app.display.animate_preview = true;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    assert!(h.app.playing && h.app.playback.is_some(), "it plays");
+    assert!(
+        h.app.player.playing && h.app.player.playback.is_some(),
+        "it plays"
+    );
     h.frame(vec![]);
     h
 }

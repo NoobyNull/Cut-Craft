@@ -7,9 +7,8 @@
 use super::built_ins;
 use super::{
     CONTRIBUTORS, Change, CutCraftApp, Document, EXPORT_LEVEL, EntityId, History, Icons, Info,
-    PLAYBACK_SPEED, Page, Pages, SELECT_LEVEL, SaveForm, Screen, Session, Shown, ToolDatabase,
-    Value, View, brush_dialog, commands, dialog_size, egui, files, gui, saving_path, summary_table,
-    view3d,
+    Page, Pages, SELECT_LEVEL, SaveForm, Screen, Session, Shown, ToolDatabase, Value, View,
+    brush_dialog, commands, dialog_size, egui, files, gui, saving_path, summary_table, view3d,
 };
 use cut_craft_i18n::tr;
 
@@ -266,19 +265,8 @@ impl CutCraftApp {
             framing: view3d::Framing::default(),
             view_cube: None,
             recent: vec![],
-            playback: None,
-            playing: false,
-            playback_goal: None,
-            kept_playback: None,
-            playback_revision: 0,
+            player: super::player::Player::default(),
             close_up: None,
-            playback_view: None,
-            playback_gpu: None,
-            playback_builds: 0,
-            playback_shown: None,
-            playback_redraw: super::PLAYBACK_REDRAW,
-            playback_budget: super::PLAYBACK_BUDGET,
-            playback_speed: PLAYBACK_SPEED,
             turning: None,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,

@@ -79,6 +79,7 @@ mod page_layout;
 mod panels;
 mod passes;
 mod placement;
+mod player;
 mod reach;
 mod sample;
 #[path = "screenshots.rs"]
@@ -1033,38 +1034,10 @@ pub(crate) struct CutCraftApp {
     view_cube: Option<view3d::ViewCube>,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
-    /// A preview playing (or paused): the tool cutting the material a distance at a time.
-    playback: Option<cut_craft_core::playback::Playback>,
-    playing: bool,
-    /// Where the tool is being moved to (Single Step, Run to Retract, the Progress slider),
-    /// cut a little each frame until it gets there, or Stop.
-    playback_goal: Option<f64>,
-    /// A preview stopped or played to its end, kept so its controls stay to scrub it back
-    /// and forth, till another preview, Reset Preview or another job.
-    kept_playback: Option<cut_craft_core::playback::Playback>,
-    /// The job's history revision when the playing (or kept) preview was laid out: once
-    /// the job changes, its moves are old, so it stops and its controls close.
-    playback_revision: u64,
-    /// A playing preview's material as the 3D view draws it, and the GPU's surface of it,
-    /// kept by what they were made from (the playback's revision, the detail and the job's
-    /// revision; for the GPU, its wrap and sides too) so a paused preview is not made again
-    /// each frame, nor a moving one more than once a frame.
-    playback_view: Option<((u64, usize, u64), Material)>,
-    playback_gpu: Option<(PlaybackGpuKey, std::sync::Arc<view3d::gpu::Geometry>)>,
-    /// How many times the playback's view has been made (for tests).
-    playback_builds: usize,
-    /// The playback's revision the 3D view shows, and when it was taken: while it plays
-    /// it is taken again every [`PLAYBACK_REDRAW`], and at once when it stops somewhere.
-    playback_shown: Option<(u64, std::time::Instant)>,
-    /// How often that is, [`PLAYBACK_REDRAW`] (longer in tests, whose frames are slow).
-    playback_redraw: std::time::Duration,
+    /// The preview player: a preview playing, paused or kept, and how it plays.
+    player: player::Player,
     /// Where the Close up slider is centred, held while it is dragged so it stays put.
     close_up: Option<f64>,
-    /// How long a frame may spend cutting a playing preview; the rest waits for the next
-    /// frame, so a long toolpath plays slower instead of freezing the window.
-    playback_budget: std::time::Duration,
-    /// How many times faster than the machine the preview plays (1: the machine's speed).
-    playback_speed: f64,
     /// A rotary job's preview as the machine runs it: the file's own moves played into the
     /// material turning with A, kept in step with the playing (or kept) preview.
     turning: Option<turning::Turning>,

@@ -179,9 +179,9 @@ impl CutCraftApp {
         self.framing = self.framing.fitted();
         self.spinning_3d = None;
         if picture.preview == Shown::Before
-            && (self.simulation.is_some() || self.playback.is_some())
+            && (self.simulation.is_some() || self.player.playback.is_some())
         {
-            capture.was.set_aside = Some((self.simulation.take(), self.playback.take()));
+            capture.was.set_aside = Some((self.simulation.take(), self.player.playback.take()));
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
         }
         Ok(capture)
@@ -200,7 +200,7 @@ impl CutCraftApp {
         self.spinning_3d = was.spinning;
         if let Some((simulation, playback)) = was.set_aside {
             self.simulation = simulation;
-            self.playback = playback;
+            self.player.playback = playback;
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
         }
     }

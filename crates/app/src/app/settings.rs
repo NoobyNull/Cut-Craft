@@ -1,7 +1,7 @@
 //! The app's fixed values (sizes, timings, built-in names, links and services) and the small
 //! records its state keeps.
 
-use super::{EntityId, Material, Units, egui, files, shortcut, view3d};
+use super::{EntityId, Material, Units, egui, files, shortcut};
 
 /// Model ▸ Model Resolution's items, the resolution each sets and its name.
 /// Edit ▸ Units' items: action, units and name.
@@ -265,20 +265,6 @@ pub(super) const UI_FONTS: [&str; 5] =
 /// A preview starts at ten times the machine's own speed (×1: each move at its tool's feed
 /// or plunge rate, rapids at the Toolpath Summary's rapid rate).
 pub(crate) const PLAYBACK_SPEED: f64 = 10.0;
-/// What a playing preview's GPU surface was made from: the playback's revision, the detail,
-/// the job's revision, the wrap and whether the sides are drawn.
-pub(super) type PlaybackGpuKey = (u64, usize, u64, Option<view3d::Wrap>, bool);
-/// A frame's time for cutting a playing preview: the window still answers at once.
-pub(super) const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30);
-/// How often a playing preview's 3D view is made again from the cut so far: at full detail
-/// that takes a while, so not every frame (the tool still moves every frame).
-pub(super) const PLAYBACK_REDRAW: std::time::Duration = std::time::Duration::from_millis(100);
-
-/// A frame's time for a jump (the Progress slider, Run to Retract): more than for playing,
-/// so it gets there within a second or so; the window answers less often meanwhile.
-pub(super) fn jump_budget(budget: std::time::Duration) -> std::time::Duration {
-    budget * 4
-}
 /// How many times faster than the machine a preview can play: a long finishing toolpath
 /// takes hours at the machine's speed.
 pub(super) const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 0.25..=1000.0;

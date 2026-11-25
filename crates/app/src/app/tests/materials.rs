@@ -215,7 +215,7 @@ fn a_rotary_preview_plays_the_file_turning_the_material_with_a_in_step_with_its_
     h.frame(vec![]);
     // in step with the Preview Control: as far through the file as it is through the job
     let fraction = |h: &Harness| {
-        let p = h.app.playback.as_ref().unwrap();
+        let p = h.app.player.playback.as_ref().unwrap();
         let r = &h.app.turning.as_ref().unwrap().replay;
         (p.at() / p.length(), r.at() / r.length())
     };
@@ -246,10 +246,10 @@ fn a_rotary_preview_plays_the_file_turning_the_material_with_a_in_step_with_its_
     let from = progress + egui::vec2(80.0, 0.0);
     h.drag(from, from + egui::vec2(200.0, 0.0));
     assert!(caught_up(&mut h), "dragged, it follows: {:?}", fraction(&h));
-    h.app.playback_speed = 1000.0;
+    h.app.player.speed = 1000.0;
     h.click(h.text_at("Run").unwrap(), Modifiers::NONE);
     for _ in 0..600 {
-        if h.app.playback.is_none() {
+        if h.app.player.playback.is_none() {
             break;
         }
         h.frame(vec![]);
@@ -270,7 +270,7 @@ fn a_rotary_preview_plays_the_file_turning_the_material_with_a_in_step_with_its_
     // a flat job plays as before
     h.app.doc.job = Job::default();
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    assert!(h.app.playback.is_some() && h.app.turning.is_none());
+    assert!(h.app.player.playback.is_some() && h.app.turning.is_none());
 }
 
 #[test]
@@ -590,14 +590,14 @@ fn preview_all_played_starts_again_from_uncut_material() {
     let top = h.app.simulation.as_ref().unwrap().heights[0];
     h.app.simulation.as_mut().unwrap().heights[0] = top - 5.0;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    let playing = h.app.playback.as_ref().expect("it plays");
+    let playing = h.app.player.playback.as_ref().expect("it plays");
     assert_eq!(playing.material().heights[0], top, "old cuts gone");
     // Preview of one toolpath still cuts into what is there
     h.app.finish_playback();
     h.app.simulation.as_mut().unwrap().heights[0] = top - 5.0;
     let id = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.preview_toolpath(id);
-    let playing = h.app.playback.as_ref().expect("it plays");
+    let playing = h.app.player.playback.as_ref().expect("it plays");
     assert_eq!(playing.material().heights[0], top - 5.0, "cut into");
 }
 
@@ -609,7 +609,7 @@ fn previewing_a_group_played_starts_from_uncut_material() {
     h.app.simulation.as_mut().unwrap().heights[0] = top - 5.0;
     let ids: Vec<_> = h.app.doc.toolpaths.keys().copied().collect();
     h.app.preview_ids(&ids);
-    let playing = h.app.playback.as_ref().expect("it plays");
+    let playing = h.app.player.playback.as_ref().expect("it plays");
     assert_eq!(playing.material().heights[0], top, "old cuts gone");
 }
 

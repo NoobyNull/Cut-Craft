@@ -170,7 +170,7 @@ impl CutCraftApp {
     pub(super) fn undo_last_preview(&mut self, _: &egui::Context) {
         if let Some(BeforePreview(material, side)) = self.before_preview.take() {
             self.simulation = material;
-            self.kept_playback = None;
+            self.player.kept = None;
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
             // made before Swap Sides: turned over to the side the job is on now
             self.preview_side = side;
@@ -185,8 +185,7 @@ impl CutCraftApp {
         self.finish_playback();
         self.before_preview = Some(BeforePreview(self.simulation.take(), self.preview_side));
         (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-        (self.playback, self.playing, self.playback_goal) = (None, false, None);
-        self.kept_playback = None;
+        self.player.close();
         // the Preview tab's detail goes back to Options' default
         self.display.detail = self.options.performance.preview_detail.min(100);
         self.status.set_message(&tr!("status-preview-reset"));
