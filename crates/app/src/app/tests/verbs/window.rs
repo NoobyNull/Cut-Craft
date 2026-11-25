@@ -129,4 +129,14 @@ impl Harness {
     pub(in super::super) fn bug_report_open(&self) -> bool {
         self.app.reporter.is_open()
     }
+
+    /// Starts on the job screen, past the start screen.
+    pub(in super::super) fn given_job_screen(&mut self) {
+        self.app.screen = Screen::Job;
+    }
+
+    /// Closes the Options window, as its Close does.
+    pub(in super::super) fn close_options_window(&mut self) {
+        self.app.options_window = false;
+    }
 }

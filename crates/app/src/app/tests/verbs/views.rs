@@ -251,4 +251,23 @@ impl Harness {
     pub(in super::super) fn clipboard(&self) -> &[Path] {
         &self.app.clipboard
     }
+
+    /// Turns the 3D view to `orbit`, as its view buttons do.
+    pub(in super::super) fn given_orbit(&mut self, orbit: view3d::Orbit) {
+        self.app.orbit = orbit;
+    }
+
+    /// Changes the open 3D settings popup's values, as dragging them does.
+    pub(in super::super) fn edit_3d_settings(
+        &mut self,
+        edit: impl FnOnce(&mut cmd_component_properties::Params),
+    ) {
+        let s = self
+            .app
+            .settings_3d
+            .as_mut()
+            .expect("the 3D settings are open");
+        edit(&mut s.params);
+        s.dirty = true;
+    }
 }

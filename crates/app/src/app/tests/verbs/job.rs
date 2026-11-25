@@ -72,4 +72,9 @@ impl Harness {
             .expect("it recalculates");
         self.app.record(Ok(again), "recalculate");
     }
+
+    /// Counts the job put in with `open_document` as a newly opened one, as opening a file does.
+    pub(in super::super) fn given_it_opened_as_a_new_job(&mut self) {
+        self.app.job_epoch += 1;
+    }
 }

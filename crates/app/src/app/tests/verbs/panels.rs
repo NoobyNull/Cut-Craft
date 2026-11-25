@@ -68,4 +68,37 @@ impl Harness {
         self.app
             .lathe_a_speed(self.app.form.as_ref().expect("a form is open"))
     }
+
+    // ---- the Toolpaths page ----
+
+    /// Which of the Toolpaths page's tabs (Create, Preview, ...) is open.
+    pub(in super::super) fn toolpath_tab(&self) -> &'static str {
+        gui::TOOLPATH_SUBTABS[self.app.toolpath_subtab].name
+    }
+
+    /// Opens the Toolpaths page's tab named `name`.
+    pub(in super::super) fn show_toolpath_tab(&mut self, name: &str) {
+        self.app.toolpath_subtab = gui::TOOLPATH_SUBTABS
+            .iter()
+            .position(|t| t.name == name)
+            .unwrap_or_else(|| panic!("no Toolpaths tab {name}"));
+    }
+
+    /// The toolpath group picked in the Toolpaths list, if one is.
+    pub(in super::super) fn selected_toolpath_group(&self) -> Option<&str> {
+        self.app.selected_group.as_deref()
+    }
+
+    /// Puts the toolpaths in a new order, as a drag in the Toolpaths list does.
+    pub(in super::super) fn arrange_toolpaths(
+        &mut self,
+        arranged: crate::toolpath_order::Arranged,
+    ) {
+        self.app.arrange(Some(arranged));
+    }
+
+    /// Ticks the Layers panel's "only layers on this sheet".
+    pub(in super::super) fn show_only_layers_on_sheet(&mut self) {
+        self.app.layers_on_sheet = true;
+    }
 }

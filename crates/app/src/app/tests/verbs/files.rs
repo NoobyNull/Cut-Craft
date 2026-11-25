@@ -94,4 +94,31 @@ impl Harness {
         let (_, writing) = self.app.autosave.take().expect("a copy is being written");
         writing.join().unwrap().unwrap();
     }
+
+    // ---- importing and recent files ----
+
+    /// Imports the cut list at `path`, as File ▸ Import ▸ Cut List does.
+    pub(in super::super) fn import_cut_list(&mut self, path: &std::path::Path) {
+        self.app.import_cut_list(path);
+    }
+
+    /// The recent files list, as earlier sessions left it.
+    pub(in super::super) fn given_recent_files(&mut self, files: Vec<std::path::PathBuf>) {
+        self.app.recent = files;
+    }
+
+    /// The recent files the File menu shows.
+    pub(in super::super) fn recent_shown(&self) -> &[std::path::PathBuf] {
+        self.app.recent_shown()
+    }
+
+    /// Whether the Save Toolpaths form is open.
+    pub(in super::super) fn save_form_open(&self) -> bool {
+        self.app.save_form.is_some()
+    }
+
+    /// Closes the Save Toolpaths form.
+    pub(in super::super) fn close_save_form(&mut self) {
+        self.app.save_form = None;
+    }
 }
