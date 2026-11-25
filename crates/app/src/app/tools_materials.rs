@@ -19,7 +19,7 @@ impl CutCraftApp {
                 Err(e) => {
                     self.status.set_message(&cut_craft_i18n::tr!(
                         "status-materials-not-saved",
-                        error = e.to_string()
+                        error = e.clone()
                     ));
                     self.materials_unreadable = self.materials_path.take();
                 }
@@ -96,7 +96,7 @@ impl CutCraftApp {
                 Err(e) => {
                     self.status.set_message(&cut_craft_i18n::tr!(
                         "status-tools-not-saved",
-                        error = e.to_string()
+                        error = e.clone()
                     ));
                     self.tools_unreadable = self.tools_path.take();
                 }

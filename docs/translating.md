@@ -75,7 +75,8 @@ can translate them on their own:
 | `tools.ftl` | Every tool's name: its button, Find Tool (Ctrl+K), the menus and its help page | `tools-` and the tool's id, such as `tools-draw-circle` |
 | `tool-groups.ftl` | The names over groups of tools, and the captioned boxes of tools that do one job different ways | `group-` and the English name, such as `group-create-vectors` |
 | `subtabs.ftl` | The Design and Toolpaths sub-tabs (with `.hint`, their tooltip), the side tabs, the browser tabs and the Ribbon's tabs | `design-subtab-…`, `toolpaths-subtab-…`, `page-tab-…` |
-| `menu-items.ftl` | The menu bar's items and a tool's and a sub-tab's right-click menus | `menu-item-` and the English name |
+| `menu-items.ftl` | The menu bar's items, a tool's and a sub-tab's right-click menus, and the job's right-click menus (toolpaths, layers, sheets, levels, components, groups) | `menu-item-` and the English name |
+| `tooltips.ftl` | What each tool does: its tooltip, and the status line while it is pointed at | `tooltip-` and the tool's id, such as `tooltip-draw-circle` |
 
 A menu item named just as the tool it runs (Edit ▸ Draw Circle) isn't in `menu-items.ftl`:
 it uses the tool's words from `tools.ftl`, so you translate each tool once.
@@ -85,6 +86,13 @@ English name is reworded. Group and menu keys come from their English names: if 
 reworded, its key changes too, and the new one shows in English until it's translated.
 
 Keep tool names short. A Ribbon or Rail button has room for about as much as the English.
+
+## The status line
+
+`status.ftl` holds what the status line along the window's foot says a tool or a command
+did, or why it did not. A value put in, such as `{ $tool }`, `{ $path }` or `{ $error }`, is
+filled in by Cut Craft: keep it, and move it to wherever your language puts it. An error
+put in may still show in English until the part of Cut Craft it comes from is translated.
 
 ## Tool forms and settings
 

@@ -54,7 +54,7 @@ impl CutCraftApp {
                 .set_message(&cut_craft_i18n::tr!("status-sample-opened")),
             Err(e) => self.status.set_message(&cut_craft_i18n::tr!(
                 "status-sample-toolpaths-not-made",
-                error = e.to_string()
+                error = e.clone()
             )),
         }
         self.doc.selection = cut_craft_core::selection::Selection::new();

@@ -591,7 +591,7 @@ impl CutCraftApp {
                 if let Err(e) = opened {
                     self.status.set_message(&cut_craft_i18n::tr!(
                         "status-could-not-print",
-                        error = e.to_string()
+                        error = e.clone()
                     ));
                 }
             }
@@ -606,7 +606,7 @@ impl CutCraftApp {
                 if let Err(e) = opened {
                     self.status.set_message(&cut_craft_i18n::tr!(
                         "status-could-not-open-folder",
-                        error = e.to_string()
+                        error = e.clone()
                     ));
                 }
             }

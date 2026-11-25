@@ -582,7 +582,7 @@ impl CutCraftApp {
             self.import_after_setup = Some(path.to_owned());
             self.status.set_message(&cut_craft_i18n::tr!(
                 "status-set-up-then-import",
-                file = file_name(path).to_string()
+                file = file_name(path).clone()
             ));
         }
     }

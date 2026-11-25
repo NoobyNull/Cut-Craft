@@ -66,7 +66,9 @@ Translating takes time, so a pack can be partway done. Anything a pack has no tr
 for shows in English, so nothing is ever missing or blank. A pack can translate the tools'
 names too: the tool buttons, their groups, the sub-tabs and page tabs, the menus, **Find
 Tool** (**Ctrl+K**) and the help pages' titles all use the same words, so a tool is named the
-same way wherever you see it. When a newer pack is published,
+same way wherever you see it. It translates what each tool does in its tooltip, every
+tool's form and settings, the right-click menus of your layers, sheets, levels and
+toolpaths, and what the status bar says, too. When a newer pack is published,
 **Gadgets ▸ Add-ons** offers to update it.
 
 If a pack you picked is removed, Cut Craft goes back to English the next time it starts

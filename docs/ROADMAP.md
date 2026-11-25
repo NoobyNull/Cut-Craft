@@ -86,7 +86,7 @@ is merged or closed.
 | 4.5 | Decide or shelve older open questions: depth warning on Pocket, shortcut keys in tooltips, DXF blocks, direction arrow in node editing | Waiting on Matthew |
 | 4.6 | #702: tool names, tool groups, sub-tabs, page tabs and menu items move into Fluent so language packs translate them (a translator has Russian ready) | Done (PR #703) |
 | 4.7 | Pig Latin test pack (Igpay Atinlay), made from English by the Language packs workflow, so text still in the code shows in plain English | Done (PR #709) |
-| 4.8 | All on-screen text into Fluent (~3,000 strings: tool forms, app, other parts, help tours), with a CI check that warns on new hard-coded text | Building: tool forms and the warn-only check first |
+| 4.8 | All on-screen text into Fluent (~3,000 strings: tool forms, app, other parts, help tours), with a CI check that warns on new hard-coded text | Building: tool forms and the warn-only check (PR #710); tooltips, status line and the job's right-click menus next |
 
 ### 5. Licence and credits settled
 

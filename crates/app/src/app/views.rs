@@ -240,7 +240,7 @@ impl CutCraftApp {
             e if files::TOOL_FILE_EXTENSIONS.contains(&e) && e != "json" => self.import_tools(path),
             _ if self.screen != Screen::Job => self.status.set_message(&cut_craft_i18n::tr!(
                 "status-open-a-job-to-import",
-                file = file_name(path).to_string()
+                file = file_name(path).clone()
             )),
             _ => self.import_file(path),
         }
