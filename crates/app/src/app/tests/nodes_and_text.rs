@@ -427,7 +427,7 @@ fn options_changes_wait_for_apply_which_keeps_the_window_open() {
         "used now"
     );
     assert!(!h.app.options_dirty());
-    assert!(h.app.options_window, "still open");
+    assert!(h.app.options_editor.open, "still open");
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
 }

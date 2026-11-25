@@ -63,13 +63,14 @@ impl Harness {
 
     /// Opens Options at its Shortcuts page.
     pub(in super::super) fn open_shortcut_options(&mut self) {
-        self.app.options_window = true;
-        self.app.options_goto = Some(crate::app::shortcuts_page::CATEGORY);
+        self.app
+            .options_editor
+            .open_at(crate::app::shortcuts_page::CATEGORY);
     }
 
     /// Whether the Options window is open.
     pub(in super::super) fn options_window_open(&self) -> bool {
-        self.app.options_window
+        self.app.options_editor.open
     }
 
     /// A press on the Shortcuts page: Add…, Reset, Move it here, ...
@@ -137,6 +138,6 @@ impl Harness {
 
     /// Closes the Options window, as its Close does.
     pub(in super::super) fn close_options_window(&mut self) {
-        self.app.options_window = false;
+        self.app.options_editor.open = false;
     }
 }

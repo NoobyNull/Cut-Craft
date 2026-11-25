@@ -260,14 +260,8 @@ impl CutCraftApp {
             guide_drag: None,
             rotating: false,
             options: crate::options::Options::default(),
-            options_window: false,
-            options_draft: None,
-            job_defaults_form: None,
-            options_closing: false,
-            options_page: 0,
-            show_advanced: false,
+            options_editor: super::options_editor::OptionsEditor::default(),
             web_api: super::web_api::WebApi::default(),
-            options_goto: None,
             capture: None,
             shortcut_search: String::new(),
             split: None,
@@ -860,8 +854,7 @@ impl CutCraftApp {
         }
         if change_shortcuts {
             self.info = None;
-            self.options_window = true;
-            self.options_goto = Some(super::shortcuts_page::CATEGORY);
+            self.options_editor.open_at(super::shortcuts_page::CATEGORY);
         }
     }
 }

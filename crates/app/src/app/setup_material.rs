@@ -178,13 +178,17 @@ impl CutCraftApp {
             return (vec![], Value::Null, None);
         };
         let fields = crate::form::fields(&cmd.schema());
-        let (params, error) = self.job_defaults_form.clone().unwrap_or_else(|| {
-            let empty = Document {
-                job: self.edited_options().default_job.unwrap_or_default(),
-                ..Document::default()
-            };
-            (cmd.initial_params(&empty), None)
-        });
+        let (params, error) = self
+            .options_editor
+            .job_defaults_form
+            .clone()
+            .unwrap_or_else(|| {
+                let empty = Document {
+                    job: self.edited_options().default_job.unwrap_or_default(),
+                    ..Document::default()
+                };
+                (cmd.initial_params(&empty), None)
+            });
         (fields, params, error)
     }
 
@@ -213,16 +217,15 @@ impl CutCraftApp {
                 let mut edited = self.edited_options().clone();
                 edited.default_job = Some(job);
                 self.options_edited(edited);
-                self.job_defaults_form = Some((params, None));
+                self.options_editor.job_defaults_form = Some((params, None));
             }
-            Err(e) => self.job_defaults_form = Some((params, Some(e))),
+            Err(e) => self.options_editor.job_defaults_form = Some((params, Some(e))),
         }
     }
 
     /// Edit ▸ Options at its Job Defaults page.
     pub(super) fn open_job_defaults(&mut self) {
-        self.options_goto = Some(crate::options::JOB_DEFAULTS);
-        self.options_window = true;
+        self.options_editor.open_at(crate::options::JOB_DEFAULTS);
     }
 }
 

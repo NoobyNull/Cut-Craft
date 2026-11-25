@@ -74,8 +74,7 @@ impl CutCraftApp {
             .on_hover_hint(hint);
         crate::marks::note(ui, "status:pace", response.rect);
         if response.clicked() {
-            self.options_window = true;
-            self.options_goto = Some(crate::options::PAGE);
+            self.options_editor.open_at(crate::options::PAGE);
         }
         true
     }
