@@ -5,10 +5,10 @@
 //! `page_layout`, `form_panel`, `command_form` and `tools_materials`.
 
 use super::{
-    BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Dialog, Document, EXPORT_LEVEL,
-    EntityId, History, Icons, Info, PLAYBACK_SPEED, Page, Pages, SELECT_LEVEL, SaveForm, Screen,
-    Session, Shown, TOP_BAR_TOGGLES, ToolDatabase, Value, View, brush_dialog, commands,
-    dialog_size, egui, files, filtered_dialog, gui, saving_path, summary_table, view3d,
+    CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Dialog, Document, EXPORT_LEVEL, EntityId,
+    History, Icons, Info, PLAYBACK_SPEED, Page, Pages, SELECT_LEVEL, SaveForm, Screen, Session,
+    Shown, TOP_BAR_TOGGLES, ToolDatabase, Value, View, brush_dialog, commands, dialog_size, egui,
+    files, filtered_dialog, gui, saving_path, summary_table, view3d,
 };
 use cut_craft_i18n::tr;
 
@@ -393,7 +393,7 @@ impl CutCraftApp {
                     && self.screen != Screen::Start
             }
             _ => {
-                BUILT_INS.contains(&id)
+                crate::built_ins::get(id).is_some()
                     // a command's form shows in a job's pages: with no job it could not be seen
                     || (self.registry.get(id).is_some() && self.screen != Screen::Start)
                     || self.registry.exporter(id).is_some()
@@ -441,7 +441,7 @@ impl CutCraftApp {
                 || self.registry.exporter(id).is_some()
                 || crate::flyout::variant(id).is_some()
                 || gui::command_action(id).is_some()
-                || BUILT_INS.contains(&id)
+                || crate::built_ins::get(id).is_some()
                 || self.resolution_checked(id).is_some()
                 || self.units_checked(id).is_some() =>
             {

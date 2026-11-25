@@ -3,7 +3,7 @@ use crate::gui::{self, MenuSystem, Toolbar};
 use crate::pages::Page;
 use cut_craft_i18n::english;
 
-/// Every tool on the pages, in group order, then those with no button of their own and every
+/// Every tool on the pages, in group order, then those with no button of their own: every
 /// command, each once.
 fn every_tool() -> Vec<&'static str> {
     let toolbar = Toolbar::new();
@@ -22,6 +22,11 @@ fn every_tool() -> Vec<&'static str> {
     for c in registry.commands() {
         if !ids.contains(&c.id()) {
             ids.push(c.id());
+        }
+    }
+    for b in crate::built_ins::BUILT_INS {
+        if !ids.contains(&b.id) {
+            ids.push(b.id);
         }
     }
     ids
@@ -111,7 +116,11 @@ fn menu_item_names(items: &[gui::MenuItem], out: &mut Vec<String>) {
     let registry = crate::commands::registry();
     let tools = every_tool();
     let named_as_tool = |item: &gui::MenuItem| {
-        tools.contains(&item.action.as_str()) && english_name(&registry, &item.action) == item.name
+        let built_in =
+            crate::built_ins::get(&item.action).is_some_and(|b| item.name == b.menu_name());
+        built_in
+            || (tools.contains(&item.action.as_str())
+                && english_name(&registry, &item.action) == item.name)
     };
     for item in items {
         if !item.name.is_empty() && !item.named && !named_as_tool(item) && !out.contains(&item.name)
@@ -154,7 +163,7 @@ fn every_tool_has_its_name_in_english() {
 fn every_tooltip() -> Vec<(&'static str, &'static str)> {
     let mut ids: Vec<&'static str> = crate::hints::HINTS.iter().map(|(id, _)| *id).collect();
     ids.extend(gui::command_ids());
-    ids.extend(gui::BUILT_IN_ABOUTS.iter().map(|(id, _, _)| *id));
+    ids.extend(crate::built_ins::BUILT_INS.iter().map(|b| b.id));
     ids.extend(crate::flyout::VARIANTS.iter().map(|v| v.id));
     ids.extend(every_tool());
     let mut out: Vec<(&'static str, &'static str)> = vec![];

@@ -346,9 +346,9 @@ mod tests {
         for entry in registry.importers() {
             check(format!("{} file kind", entry.id), entry.format.label);
         }
-        for (id, label, about) in crate::gui::BUILT_IN_ABOUTS {
-            check(format!("{id} name"), label);
-            check(format!("{id} description"), about);
+        for b in crate::built_ins::BUILT_INS {
+            check(format!("{} name", b.id), b.name);
+            check(format!("{} description", b.id), b.about);
         }
         let schemas = [
             ("Options", schemars::schema_for!(crate::options::Options)),
