@@ -19,7 +19,7 @@ impl CutCraftApp {
     pub(super) fn rings_3d(&mut self, ui: &egui::Ui, area: egui::Rect, fit: egui::Rect) {
         use crate::axes::Axis;
         use cut_craft_core::glam::DVec3;
-        self.rings_3d = (vec![], None);
+        self.turn_rings.clear();
         let model = self
             .form
             .as_ref()
@@ -79,15 +79,15 @@ impl CutCraftApp {
                 Axis::Y => "y",
                 Axis::Z => "z",
             };
-            let hot = self.turn_ring == Some(key);
+            let hot = self.turn_rings.held() == Some(key);
             let colour = axis.colour();
             let stroke = egui::Stroke::new(if hot { 2.0 * width } else { width }, colour);
             painter.add(egui::Shape::line(points.clone(), stroke));
-            self.rings_3d.0.push((key, points));
+            self.turn_rings.add_ring(key, points);
             looks.push((stroke, name));
         }
         // each ring's + and − arrows, kept clear of each other's
-        let rings: Vec<&[egui::Pos2]> = self.rings_3d.0.iter().map(|(_, p)| p.as_slice()).collect();
+        let rings = self.turn_rings.ring_points();
         let marks = crate::axes::rings_marks(&rings, centre, RING_MARK_GAP * head);
         for ((points, mark), (stroke, name)) in rings.iter().zip(marks).zip(looks) {
             if let Some((at, _)) = mark {
@@ -101,58 +101,21 @@ impl CutCraftApp {
             ui.visuals().widgets.inactive.bg_fill,
             ui.visuals().widgets.inactive.bg_stroke,
         );
-        self.rings_3d.1 = Some((centre, radius));
+        self.turn_rings.set_sphere(centre, radius);
     }
 
     /// A left drag starting on a rotation handle takes it for the drag; let go, none.
     pub(super) fn take_ring(&mut self, ui: &egui::Ui, response: &egui::Response) {
         if response.drag_started_by(egui::PointerButton::Primary) {
-            self.turn_ring = ui
-                .input(|i| i.pointer.press_origin())
-                .and_then(|at| self.ring_at(at, ui.spacing().interact_size.y / 2.0));
+            let pressed = ui.input(|i| i.pointer.press_origin());
+            self.turn_rings
+                .press(pressed, ui.spacing().interact_size.y / 2.0);
         } else if !response.dragged() {
-            self.turn_ring = None;
+            self.turn_rings.let_go();
         }
         // while a ring is held, the way + runs round it under the pointer and how far it
         // reaches from its middle: the drag turns the model the way it goes round the ring
-        self.ring_grip = self.turn_ring.and_then(|axis| {
-            let (_, points) = self.rings_3d.0.iter().find(|(a, _)| *a == axis)?;
-            let (centre, _) = self.rings_3d.1?;
-            let at = ui.input(|i| i.pointer.latest_pos())?;
-            let along = crate::axes::ring_tangent(points, at)?;
-            let radius = points
-                .iter()
-                .map(|p| p.distance(centre))
-                .fold(0.0, f32::max);
-            Some((along, radius))
-        });
-    }
-
-    /// The rotation handle within `reach` of `at` as last drawn: the sphere (`xyz`) first,
-    /// else the nearest ring.
-    pub(in super::super) fn ring_at(&self, at: egui::Pos2, reach: f32) -> Option<&'static str> {
-        if let Some((centre, radius)) = self.rings_3d.1
-            && centre.distance(at) <= radius
-        {
-            return Some("xyz");
-        }
-        let off = |points: &[egui::Pos2]| {
-            points
-                .windows(2)
-                .map(|w| {
-                    let (a, b) = (w[0], w[1]);
-                    let along = (at - a).dot(b - a) / (b - a).length_sq().max(f32::EPSILON);
-                    at.distance(a + (b - a) * along.clamp(0.0, 1.0))
-                })
-                .fold(f32::INFINITY, f32::min)
-        };
-        self.rings_3d
-            .0
-            .iter()
-            .map(|(axis, points)| (*axis, off(points)))
-            .filter(|(_, d)| *d <= reach)
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(axis, _)| axis)
+        self.turn_rings.follow(ui.input(|i| i.pointer.latest_pos()));
     }
 
     /// Set in the settings popup: two clicks on the model place the fade's or tilt's

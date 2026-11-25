@@ -459,8 +459,8 @@ impl CutCraftApp {
     ) -> bool {
         let (diameter, ring, grip) = (
             self.doc.job.rotary.map(|r| r.diameter),
-            self.turn_ring,
-            self.ring_grip,
+            self.turn_rings.held(),
+            self.turn_rings.grip(),
         );
         let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") else {
             return false;
