@@ -101,10 +101,16 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[schemars(skip)]
     pub layout_asked: bool,
-    /// The Did You Know? tip shown at the next start, so each start shows another.
-    #[serde(default, skip_serializing_if = "is_zero")]
+    /// No longer read (startup picks an unseen tip by weight); kept so settings saved by
+    /// older versions load without a word about it.
+    #[serde(default, skip_serializing)]
     #[schemars(skip)]
     pub next_tip: usize,
+    /// The Did You Know? tips shown on this computer, by `Tip::key`, so each start shows one
+    /// not seen yet; emptied once all have been.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub seen_tips: Vec<u64>,
     /// The favourite tools of the Design and Toolpaths tabs, and whether each shows only
     /// them (right-click the tab).
     #[serde(default)]
@@ -234,6 +240,7 @@ impl Default for Options {
             first_run_done: false,
             layout_asked: false,
             next_tip: 0,
+            seen_tips: Vec::new(),
             favourites: Favourites::default(),
             design_sections: vec![],
             toolpath_sections: vec![],
