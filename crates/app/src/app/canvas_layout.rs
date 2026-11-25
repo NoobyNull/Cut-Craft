@@ -4,7 +4,7 @@
 
 use super::installed::GADGETS;
 use super::{CutCraftApp, INSPECTOR_TABS, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui};
-use crate::options::WindowLayout;
+use crate::options::{CanvasFlyouts, WindowLayout};
 use crate::tool_names::{group_name, page_tab_name};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
@@ -44,7 +44,7 @@ impl CutCraftApp {
         if tab == "Favourites" || tab == GADGETS {
             self.canvas.group = None;
             let left = egui::pos2(room.left() + margin, top);
-            self.canvas_flyout(ui, left, tab, &self.canvas_list(tab));
+            let _ = self.canvas_flyout(ui, left, tab, &self.canvas_list(tab));
         } else {
             self.canvas_palette(ui, egui::pos2(room.left() + margin, top));
         }
@@ -182,38 +182,51 @@ impl CutCraftApp {
         let edge = TOOL_ICON_ROWS * row;
         // down to just above the chips at the foot
         let room = (ui.ctx().content_rect().bottom() - at.y - 3.0 * row).max(edge);
+        let hover = self.options.general.canvas_flyouts == CanvasFlyouts::OnHover;
+        // as tall as its groups need; a window too short for them goes on to more columns
+        let per_column = palette_rows(room, edge + ui.spacing().item_spacing.y);
         let shown = egui::Area::new(egui::Id::unique("canvas_palette"))
             .default_pos(at)
             .show(ui.ctx(), |ui| {
                 floating(ui).show(ui, |ui| {
                     cut_craft_bug_report::mark(ui, "Canvas palette");
-                    // a short window scrolls the palette rather than losing its foot
-                    egui::ScrollArea::vertical()
-                        .max_height(room)
-                        .show(ui, |ui| {
-                            for group in &groups {
-                                let name = group_name(group.name);
-                                let icon = group
-                                    .tools
-                                    .iter()
-                                    .find_map(|&id| self.icons.find(self.explicit_icon(id), id));
-                                let button = match icon {
-                                    Some(path) => egui::Button::image(
-                                        self.icons
-                                            .image(path)
-                                            .fit_to_exact_size(egui::vec2(edge, edge)),
-                                    ),
-                                    None => egui::Button::new(name.as_str())
-                                        .wrap_mode(egui::TextWrapMode::Truncate),
-                                }
-                                .min_size(egui::vec2(edge, edge))
-                                .selected(self.canvas.group == Some(group.name));
-                                if ui.add(button).on_hover_hint(&name).clicked() {
-                                    self.canvas.group = (self.canvas.group != Some(group.name))
+                    ui.horizontal_top(|ui| {
+                        for column in groups.chunks(per_column) {
+                            ui.vertical(|ui| {
+                                for group in column {
+                                    let name = group_name(group.name);
+                                    let icon = group.tools.iter().find_map(|&id| {
+                                        self.icons.find(self.explicit_icon(id), id)
+                                    });
+                                    let button = match icon {
+                                        Some(path) => egui::Button::image(
+                                            self.icons
+                                                .image(path)
+                                                .fit_to_exact_size(egui::vec2(edge, edge)),
+                                        ),
+                                        None => egui::Button::new(name.as_str())
+                                            .wrap_mode(egui::TextWrapMode::Truncate),
+                                    }
+                                    .min_size(egui::vec2(edge, edge))
+                                    .selected(self.canvas.group == Some(group.name));
+                                    let response = ui.add(button);
+                                    // on hover the list beside it names the group
+                                    let response = if hover {
+                                        response
+                                    } else {
+                                        response.on_hover_hint(&name)
+                                    };
+                                    if hover && response.hovered() {
+                                        self.canvas.group = Some(group.name);
+                                    } else if response.clicked() {
+                                        self.canvas.group = (hover
+                                            || self.canvas.group != Some(group.name))
                                         .then_some(group.name);
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        }
+                    });
                 });
             });
         let Some(group) = self
@@ -230,42 +243,63 @@ impl CutCraftApp {
             .filter(|id| self.offered(id))
             .collect();
         let beside = shown.response.rect.right_top() + egui::vec2(ui.spacing().item_spacing.x, 0.0);
-        self.canvas_flyout(ui, beside, group.name, &tools);
+        let list = self.canvas_flyout(ui, beside, group.name, &tools);
+        // on hover, the list closes once the pointer moves away from both it and the palette
+        let gap = 2.0 * ui.spacing().item_spacing.x;
+        let near = |rect: egui::Rect, at: egui::Pos2| rect.expand(gap).contains(at);
+        if hover
+            && ui.input(|i| i.pointer.delta() != egui::Vec2::ZERO)
+            && let Some(at) = ui.ctx().pointer_hover_pos()
+            && !near(shown.response.rect, at)
+            && !near(list, at)
+            && !egui::Popup::is_any_open(ui.ctx())
+        {
+            self.canvas.group = None;
+        }
     }
 
     /// A list of tools by icon and name, floating at `at` under its name, with the pointed-at
-    /// tool's guidance under it; picking one closes the list.
+    /// tool's guidance beside it; picking one closes the list. Where it was drawn.
     fn canvas_flyout(
         &mut self,
         ui: &mut egui::Ui,
         at: egui::Pos2,
         name: &str,
         tools: &[&'static str],
-    ) {
+    ) -> egui::Rect {
         let row = ui.spacing().interact_size.y;
         let width = super::DESIGN_PANEL_WIDTHS * ui.spacing().interact_size.x * 0.6;
-        egui::Area::new(egui::Id::unique("canvas_flyout"))
+        let shown = egui::Area::new(egui::Id::unique("canvas_flyout"))
             .fixed_pos(at)
             .show(ui.ctx(), |ui| {
                 floating(ui).show(ui, |ui| {
                     cut_craft_bug_report::mark(ui, "Canvas flyout");
-                    ui.set_width(width);
                     ui.strong(group_name(name));
                     ui.separator();
                     if tools.is_empty() {
                         ui.weak(super::layouts::NO_FAVOURITES);
                     }
-                    let picked = egui::ScrollArea::vertical()
-                        .max_height(16.0 * row)
-                        .show(ui, |ui| self.tool_rows(ui, tools))
-                        .inner;
-                    ui.add_space(ui.spacing().item_spacing.y);
-                    self.tip_contents(ui);
+                    // every tool shows: down to the chips, then on to another column, with
+                    // the pointed-at tool's guidance beside them
+                    let room = ui.ctx().content_rect().bottom() - ui.cursor().top() - 3.0 * row;
+                    let per_column = palette_rows(room, 1.7 * row + ui.spacing().item_spacing.y);
+                    let mut picked = false;
+                    ui.horizontal_top(|ui| {
+                        for column in tools.chunks(per_column) {
+                            ui.vertical(|ui| picked |= self.tool_rows(ui, column));
+                        }
+                        ui.separator();
+                        ui.vertical(|ui| {
+                            ui.set_width(width);
+                            self.tip_contents(ui);
+                        });
+                    });
                     if picked {
                         self.canvas.group = None;
                     }
                 });
             });
+        shown.response.rect
     }
 
     /// The chips along the view's foot, one for each of the job's lists; a click opens that
@@ -318,4 +352,13 @@ impl CutCraftApp {
                 });
             });
     }
+}
+
+/// How many palette groups go down a column `room` high, each `step` tall: all that fit,
+/// at least one.
+fn palette_rows(room: f32, step: f32) -> usize {
+    // whole groups only; the float is small and positive
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let rows = (room / step.max(1.0)).floor().max(1.0) as usize;
+    rows
 }

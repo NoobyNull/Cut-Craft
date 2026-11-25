@@ -176,6 +176,38 @@ impl CutCraftApp {
         }
     }
 
+    /// While the small view is dragged: its outline follows the pointer (`moved` from where
+    /// it sits) and the corner it will snap to when let go is shaded.
+    fn picture_drop_preview(
+        ui: &egui::Ui,
+        room: egui::Rect,
+        small: egui::Rect,
+        corner: egui::Align2,
+        moved: egui::Vec2,
+    ) {
+        let margin = ui.spacing().item_spacing.y;
+        let target = picture_rect(room, corner, margin);
+        let colour = ui.visuals().selection.bg_fill;
+        let painter = ui.painter().clone().with_layer_id(egui::LayerId::new(
+            egui::Order::Foreground,
+            ui.scope_id().with("picture_drop"),
+        ));
+        painter.rect(
+            target,
+            0.0,
+            colour.gamma_multiply(0.25),
+            egui::Stroke::new(2.0, colour),
+            egui::StrokeKind::Inside,
+        );
+        painter.rect_stroke(
+            small.translate(moved),
+            0.0,
+            egui::Stroke::new(1.0, ui.visuals().text_color()),
+            egui::StrokeKind::Outside,
+        );
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    }
+
     /// The view picked (2D or 3D) fills the room; the other sits small in a corner. Drag
     /// the small view's bar to another corner; ⇄ on it swaps which view is big.
     fn picture_in_picture(&mut self, ui: &mut egui::Ui, room: egui::Rect) {
@@ -197,10 +229,13 @@ impl CutCraftApp {
             .interact(bar, ui.scope_id().with("picture_bar"), egui::Sense::drag())
             .on_hover_cursor(egui::CursorIcon::Grab)
             .on_hover_hint(tr!("views-picture-bar"));
-        if grab.drag_stopped()
-            && let Some(at) = grab.interact_pointer_pos()
-        {
-            self.split_layout.corner = nearest_corner(room, at);
+        if let Some(at) = grab.interact_pointer_pos() {
+            let corner = nearest_corner(room, at);
+            if grab.drag_stopped() {
+                self.split_layout.corner = corner;
+            } else if grab.dragged() {
+                Self::picture_drop_preview(ui, room, small, corner, at - grab.rect.center());
+            }
         }
         let name = if big_2d {
             tr!("views-3d-view-f3")

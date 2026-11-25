@@ -141,3 +141,60 @@ fn every_palette_group_can_be_reached_in_a_short_window() {
         "the palette scrolls within the window: {palette:?}"
     );
 }
+
+/// The palette's place on screen.
+fn palette(h: &Harness) -> egui::Rect {
+    h.ctx
+        .memory(|m| m.area_rect(egui::Id::unique("canvas_palette")))
+        .expect("the palette is drawn")
+}
+
+#[test]
+fn pointing_at_a_palette_group_lists_its_tools_and_moving_away_closes_them() {
+    let mut h = canvas();
+    assert_eq!(
+        h.app.options.general.canvas_flyouts,
+        crate::options::CanvasFlyouts::OnHover
+    );
+    let first = palette(&h).left_top() + egui::vec2(20.0, 20.0);
+    h.frame(vec![Event::PointerMoved(first)]);
+    h.frame(vec![]);
+    let group = h.app.canvas_groups()[0].name;
+    assert_eq!(h.app.canvas.group, Some(group), "no click needed");
+    h.frame(vec![]);
+    let far = egui::pos2(0.6 * h.window.x, 0.5 * h.window.y);
+    h.frame(vec![Event::PointerMoved(far)]);
+    h.frame(vec![]);
+    assert!(h.app.canvas.group.is_none(), "the list closes");
+}
+
+#[test]
+fn on_click_a_palette_group_waits_for_its_click() {
+    let mut h = canvas();
+    h.app.options.general.canvas_flyouts = crate::options::CanvasFlyouts::OnClick;
+    let first = palette(&h).left_top() + egui::vec2(20.0, 20.0);
+    h.frame(vec![Event::PointerMoved(first)]);
+    h.frame(vec![]);
+    assert!(h.app.canvas.group.is_none(), "pointing opens nothing");
+    h.press(first, true, Modifiers::NONE);
+    h.press(first, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.canvas.group, Some(h.app.canvas_groups()[0].name));
+}
+
+#[test]
+fn a_tall_enough_window_shows_the_palette_in_one_column() {
+    let mut h = canvas();
+    h.app.ribbon_tab = RIBBON_TABS.iter().position(|t| *t == "Toolpaths").unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let tall = palette(&h);
+    h.window = egui::vec2(h.window.x, 420.0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let short = palette(&h);
+    assert!(
+        short.width() > 1.5 * tall.width(),
+        "{tall:?} then {short:?}"
+    );
+}
