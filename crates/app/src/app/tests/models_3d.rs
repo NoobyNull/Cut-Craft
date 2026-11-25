@@ -219,16 +219,16 @@ fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
     let id = *h.app.doc.bitmaps.keys().next().unwrap();
     let installed = crate::depth::find(&addons).expect("installed");
     let photo = h.app.doc.bitmaps[&id].clone();
-    h.app.depth_estimate =
+    h.app.photo_depth.estimate =
         Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
     for _ in 0..200 {
-        if h.app.depth_estimate.is_none() {
+        if !h.app.photo_depth.estimating() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
         h.frame(vec![]);
     }
-    assert!(h.app.depth_estimate.is_none(), "the add-on answered");
+    assert!(!h.app.photo_depth.estimating(), "the add-on answered");
     assert_eq!(h.app.doc.bitmaps[&id].depth, [0.0, 1.0]);
     assert!(h.app.history.undo(&mut h.app.doc));
     assert!(h.app.doc.bitmaps[&id].depth.is_empty(), "undone");
@@ -239,16 +239,16 @@ fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
     let mut c = Change::builder(&h.app.doc);
     c.replace_bitmap(id, other);
     h.app.record(Ok(c.finish()), "edited");
-    h.app.depth_estimate =
+    h.app.photo_depth.estimate =
         Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
     for _ in 0..200 {
-        if h.app.depth_estimate.is_none() {
+        if !h.app.photo_depth.estimating() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
         h.frame(vec![]);
     }
-    assert!(h.app.depth_estimate.is_none(), "the add-on answered");
+    assert!(!h.app.photo_depth.estimating(), "the add-on answered");
     assert!(
         h.app.doc.bitmaps[&id].depth.is_empty(),
         "not given to another picture"
@@ -303,7 +303,7 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
     let id = *h.app.doc.bitmaps.keys().next().unwrap();
     let installed = crate::depth::find(&addons).expect("installed");
     let photo = h.app.doc.bitmaps[&id].clone();
-    h.app.depth_estimate =
+    h.app.photo_depth.estimate =
         Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
     wait_for_depth(&mut h);
     assert_eq!(
@@ -322,7 +322,7 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
         .save(&answer)
         .unwrap();
     let photo = h.app.doc.bitmaps[&id].clone();
-    h.app.depth_estimate =
+    h.app.photo_depth.estimate =
         Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
     wait_for_depth(&mut h);
     assert_eq!(h.app.doc.components.len(), 1, "made again in place");
@@ -347,7 +347,7 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
     h.frame(vec![]);
     h.app.form.as_mut().unwrap().params["depth_from"] = "estimated".into();
     let photo = h.app.doc.bitmaps[&id].clone();
-    h.app.depth_estimate =
+    h.app.photo_depth.estimate =
         Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
     h.app.doc.selected_bitmaps = [other].into();
     wait_for_depth(&mut h);
@@ -362,7 +362,7 @@ fn estimate_depth_makes_the_relief_when_none_is_made_yet() {
 #[cfg(unix)]
 fn wait_for_depth(h: &mut Harness) {
     for _ in 0..200 {
-        if h.app.depth_estimate.is_none() {
+        if !h.app.photo_depth.estimating() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(20));

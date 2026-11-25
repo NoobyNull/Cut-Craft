@@ -488,7 +488,7 @@ impl CutCraftApp {
                 self.depth_install(ui);
                 return;
             };
-            if self.depth_estimate.is_some() {
+            if self.photo_depth.estimating() {
                 ui.horizontal(|ui| {
                     ui.spinner();
                     ui.label(tr!("depth-estimating"));
@@ -516,14 +516,14 @@ impl CutCraftApp {
         let name = "The Depth add-on";
         let high_detail = installed
             .as_ref()
-            .is_some_and(|i| self.depth_high_detail.unwrap_or(i.detailed.is_some()));
+            .is_some_and(|i| self.photo_depth.high_detail(i.detailed.is_some()));
         if let (true, Some(installed), Some(id)) = (start, installed, chosen)
             && self.may_run_add_on(crate::depth::ADDON_ID, name, &installed.program)
         {
             let installed = installed.with_high_detail(high_detail);
             match crate::depth::Estimating::start(&installed, id, &self.doc.bitmaps[&id], ui.ctx())
             {
-                Ok(running) => self.depth_estimate = Some(running),
+                Ok(running) => self.photo_depth.estimate = Some(running),
                 Err(e) => self.status.set_message(&e),
             }
         }
@@ -532,33 +532,20 @@ impl CutCraftApp {
     /// Relief from Photo's High detail: the tick once the model is here (`have`), else the
     /// offer to fetch it, or how its download is going.
     fn depth_detail(&mut self, ui: &mut egui::Ui, have: bool) {
-        if let Some(answer) = self
-            .depth_detail_fetch
-            .as_ref()
-            .and_then(crate::depth::FetchingDetail::answer)
-        {
-            self.depth_detail_fetch = None;
-            match answer {
-                Ok(()) => {
-                    self.depth_detail_failed = None;
-                    self.depth_high_detail = Some(true);
-                }
-                Err(e) => self.depth_detail_failed = Some(e),
-            }
-        }
-        if let Some(fetch) = &self.depth_detail_fetch {
+        self.photo_depth.check_fetch();
+        if let Some(fraction) = self.photo_depth.fetching() {
             ui.label(tr!("depth-downloading-high-detail"));
-            ui.add(egui::ProgressBar::new(fetch.fraction()).show_percentage());
+            ui.add(egui::ProgressBar::new(fraction).show_percentage());
             return;
         }
         if have {
-            let mut on = self.depth_high_detail.unwrap_or(true);
+            let mut on = self.photo_depth.high_detail(true);
             if ui
                 .checkbox(&mut on, tr!("depth-high-detail"))
                 .on_hover_hint(crate::depth::DETAILED_NOTE)
                 .changed()
             {
-                self.depth_high_detail = Some(on);
+                self.photo_depth.set_high_detail(on);
             }
             if on {
                 ui.label(tr!("depth-high-detail-note"));
@@ -566,7 +553,7 @@ impl CutCraftApp {
             return;
         }
         ui.label(tr!("depth-want-finer"));
-        if let Some(e) = &self.depth_detail_failed {
+        if let Some(e) = self.photo_depth.failed() {
             ui.colored_label(ui.visuals().error_fg_color, e);
         }
         if ui
@@ -575,13 +562,8 @@ impl CutCraftApp {
             .clicked()
             && let Some(addons) = self.addons.dir().map(std::path::Path::to_path_buf)
         {
-            match crate::depth::FetchingDetail::start(&addons, ui.ctx()) {
-                Ok(fetch) => {
-                    self.depth_detail_failed = None;
-                    self.depth_detail_fetch = Some(fetch);
-                }
-                Err(e) => self.depth_detail_failed = Some(e),
-            }
+            self.photo_depth
+                .fetch_started(crate::depth::FetchingDetail::start(&addons, ui.ctx()));
         }
     }
 
@@ -637,14 +619,9 @@ impl CutCraftApp {
     /// Gives the picture its depth once the Depth add-on answers (undoable), and shows the
     /// form's preview again.
     pub(super) fn take_depth(&mut self) {
-        let Some(answer) = self
-            .depth_estimate
-            .as_ref()
-            .and_then(crate::depth::Estimating::answer)
-        else {
+        let Some((sent, answer)) = self.photo_depth.take_answer() else {
             return;
         };
-        let sent = self.depth_estimate.take().expect("answered");
         let id = sent.bitmap;
         let result = answer.and_then(|depth| {
             let bitmap = self
