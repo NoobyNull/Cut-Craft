@@ -1072,6 +1072,11 @@ fn help_search_lists_matching_pages_and_opens_one() {
 fn did_you_know_steps_through_the_tips() {
     let mut h = Harness::at_start();
     assert_eq!(h.app.tip, None, "tests start without it");
+    // it opens on a tip not seen yet: here, only the first
+    h.app.options.seen_tips = super::tips::TIPS[1..]
+        .iter()
+        .map(super::tips::Tip::key)
+        .collect();
     h.choose(help_menu, &["Did You Know?..."]);
     assert_eq!(h.app.tip, Some(0));
     h.frame(vec![]);
@@ -1139,7 +1144,7 @@ fn each_start_shows_a_tip_not_seen_yet_unless_turned_off() {
 #[test]
 fn paging_through_tips_counts_them_as_seen() {
     let mut h = Harness::at_start();
-    h.choose(help_menu, &["Did You Know?..."]);
+    h.app.open_tips(0);
     h.frame(vec![]);
     h.frame(vec![]);
     for _ in 0..3 {
@@ -1316,7 +1321,7 @@ fn a_tip_about_a_tool_shows_that_tools_icon() {
 #[test]
 fn the_tips_window_shows_the_illustration_above_the_words() {
     let mut h = Harness::at_start();
-    h.choose(help_menu, &["Did You Know?..."]);
+    h.app.open_tips(0);
     h.frame(vec![]);
     h.frame(vec![]);
     let starting = |start: &str| {

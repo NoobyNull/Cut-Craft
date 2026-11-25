@@ -250,6 +250,12 @@ impl CutCraftApp {
         if !self.options.general.show_tips_at_startup || self.first_run.is_some() {
             return;
         }
+        self.open_unseen_tip();
+    }
+
+    /// Help ▸ Did You Know?, and startup: the tips window on a tip not seen yet, picked by
+    /// weight.
+    pub(super) fn open_unseen_tip(&mut self) {
         let layout = self.options.general.layout;
         if let Some(n) = startup_tip(layout, &mut self.options.seen_tips, roll()) {
             self.open_tips(n);
