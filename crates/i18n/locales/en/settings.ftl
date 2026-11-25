@@ -3667,6 +3667,12 @@ setting-material-left-on-the-model-6111e1 = Material left on the model for the f
 setting-where-along-the-axis-the-c43487 = Where along the axis the roughing starts, from the job's start (the chuck end)
 setting-end-93764a = End
 setting-where-along-the-axis-the-5fe3ba = Where along the axis the roughing ends, from the job's start; 0 runs to the job's end
+setting-machining-limit-59a606 = Machining limit
+setting-where-on-the-material-the-79a212 =
+    Where on the material the bit may cut: all of it, or within the model's outline, a
+    level's, or the selected closed vectors. Drawn on the job, they wrap round the part
+setting-the-level-whose-components-make-2a6b24 = The level whose components make the limit
+setting-grows-the-limit-outward-by-d428c2 = Grows the limit outward by this much (negative shrinks it)
 
 ## Rotary Finishing (rotary_finishing_toolpath)
 setting-the-last-pass-over-a-8be518 =

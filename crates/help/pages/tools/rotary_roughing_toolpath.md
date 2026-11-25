@@ -64,6 +64,10 @@ cuts with its **Start**, **End** and **Allowance**.
 - **Allowance**: material left on the model, all the way round, for the finish to take off.
 - **Start** and **End**: where along the axis it cuts, from the job's start (the chuck end).
   End 0 runs to the job's end.
+- **Machining limit**: where on the material it may cut. **Material** (the usual) is all of
+  it; **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline,
+  grown by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job
+  does. Selected vectors are kept with the toolpath, so it recalculates the same.
 
 ## What it keeps clear of
 

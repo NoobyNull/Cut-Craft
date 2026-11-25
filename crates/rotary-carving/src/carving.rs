@@ -4,7 +4,7 @@
 use cut_craft_core::CommandError;
 use cut_craft_core::document::{Along, Document, Rotary, Units};
 use cut_craft_core::toolpath::Tool;
-use cut_craft_rotary::Stock;
+use cut_craft_rotary::{Stock, Voxels};
 
 use crate::{Limit, Solid, Turned, Work, model_along, parts, supporting};
 
@@ -165,5 +165,54 @@ impl Carving {
         }
         self.limit = limit;
         Ok(self)
+    }
+}
+
+/// How far apart `tool`'s finishing passes are: its finishing stepover of its diameter.
+///
+/// # Errors
+/// When the stepover is not more than 0% and at most 100%.
+pub fn finishing_step(tool: &Tool) -> Result<f64, CommandError> {
+    cut_craft_core::ensure_positive("tool diameter", tool.diameter)?;
+    let stepover = tool.finishing_stepover();
+    if !(stepover > 0.0 && stepover <= 1.0) {
+        return Err(CommandError::InvalidParams(format!(
+            "the finishing stepover of {} must be more than 0% and at most 100%: set it in \
+             the Tool Database",
+            tool.name
+        )));
+    }
+    Ok(stepover * tool.diameter)
+}
+
+impl Carving {
+    /// What is left of the material for `tool` to cut, kept in cells no finer than a twelfth
+    /// of it (what is left between is not worth a pass): the whole blank when `whole_blank`
+    /// (Settings' advanced rotary mode), else what the toolpaths above the one being made
+    /// leave of it.
+    #[must_use]
+    pub fn left_of(&self, doc: &Document, stock: &Stock, whole_blank: bool) -> Voxels {
+        let mut material = Voxels::of(
+            stock,
+            Voxels::cell_for(stock, crate::CELLS).max(self.tool.diameter / 12.0),
+        );
+        if !whole_blank {
+            cut_craft_core::progress::stage("Working out what the toolpaths above leave");
+            crate::cut_by(
+                &mut material,
+                &doc.toolpaths_before_made(),
+                self.corner(doc),
+                self.radius,
+                self.along_x,
+            );
+        }
+        material
+    }
+
+    /// Where the material's corner is in the job: the passes are worked out from it.
+    #[must_use]
+    pub fn corner(&self, doc: &Document) -> cut_craft_core::glam::DVec3 {
+        let corner = doc.job.area().min;
+        cut_craft_core::glam::DVec3::new(corner.x, corner.y, 0.0)
     }
 }

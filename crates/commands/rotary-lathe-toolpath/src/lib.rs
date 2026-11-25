@@ -14,7 +14,9 @@
 //! beside the cut. Where they would not let the bit down as far as it should go it stops
 //! short, and says so in red.
 
-use cut_craft_core::component::{Combine, model_shape_at_resolution, placed_model};
+use cut_craft_core::component::{
+    Combine, MachiningBoundary, model_shape_at_resolution, placed_model,
+};
 use cut_craft_core::document::{Along, Document, Units};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
@@ -62,6 +64,19 @@ pub struct Params {
     /// Where along the axis it ends, from the job's start; 0 runs to the job's end
     #[schemars(extend("x-unit" = "mm", "x-group" = "Along the part", "x-hide-when" = {"operation": "part_off"}), range(min = 0))]
     pub end: f64,
+    /// Where on the material the bit may cut: all of it, or within the model's outline, a
+    /// level's, or the selected closed vectors. Drawn on the job, they wrap round the part
+    #[serde(default)]
+    #[schemars(title = "Machining limit", extend("x-group" = "Machining Limit Boundary"))]
+    pub machining_boundary: MachiningBoundary,
+    /// The level whose components make the limit
+    #[serde(default)]
+    #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}, "x-group" = "Machining Limit Boundary"))]
+    pub boundary_level: String,
+    /// Grows the limit outward by this much (negative shrinks it)
+    #[serde(default)]
+    #[schemars(title = "Boundary Offset", extend("x-unit" = "mm", "x-group" = "Machining Limit Boundary", "x-hide-when" = {"machining_boundary": "material"}))]
+    pub machining_boundary_offset: f64,
     /// Across the stub left on the turning axis, joining the part to the rest of the
     /// material until it is cut free (for Turn, where there is no model)
     #[schemars(extend("x-unit" = "mm", "x-group" = "Lathe"), range(min = 0))]
@@ -89,6 +104,9 @@ impl Default for Params {
             operation: Operation::Face,
             start: 0.0,
             end: 0.0,
+            machining_boundary: MachiningBoundary::Material,
+            boundary_level: String::new(),
+            machining_boundary_offset: 0.0,
             holding_stub: 8.0,
             allowance: 0.5,
             finish: false,
@@ -209,24 +227,14 @@ fn turned(
     let mut notes = vec![];
 
     // where it cuts along the part: kept out of the chuck and tailstock
-    let (start, end) = if p.operation == Operation::PartOff {
-        let at = p.start.clamp(0.0, length);
-        (at - reach, at + reach)
-    } else {
-        let end = if p.end > 0.0 {
-            p.end.min(length)
-        } else {
-            length
-        };
-        (p.start.clamp(0.0, length), end)
-    };
+    let (start, end) = span_along(doc, p, length, reach)?;
     if end <= start {
         notes.push(format!(
             "End ({}) must be further along than Start ({}), so there is nothing to cut.",
             units.length(end, 1),
             units.length(start, 1),
         ));
-        return Ok((made(p, tool, vec![]), notes));
+        return Ok((made(doc, p, tool, vec![]), notes));
     }
     let (free_from, free_to) = head.free();
     let (from, to) = (start.max(free_from), end.min(free_to));
@@ -239,7 +247,7 @@ fn turned(
         ));
     }
     if to < from + 1e-9 {
-        return Ok((made(p, tool, vec![]), notes));
+        return Ok((made(doc, p, tool, vec![]), notes));
     }
 
     // where the material is to come down to
@@ -264,7 +272,7 @@ fn turned(
                  job first, or use Face to take the material down to the holding stub."
                     .into(),
             );
-            return Ok((made(p, tool, vec![]), notes));
+            return Ok((made(doc, p, tool, vec![]), notes));
         }
         progress::stage("Placing the model");
         let origin = doc.job.area().min;
@@ -333,7 +341,7 @@ fn turned(
              is cut: move them further apart, or use a narrower bit.",
             units.length(tool.diameter, 1),
         ));
-        return Ok((made(p, tool, vec![]), notes));
+        return Ok((made(doc, p, tool, vec![]), notes));
     }
     let places: Vec<f64> = if to - from <= 1e-9 {
         vec![f64::midpoint(from, to)]
@@ -458,12 +466,49 @@ fn turned(
             m
         })
         .collect();
-    Ok((made(p, tool, moves), notes))
+    Ok((made(doc, p, tool, moves), notes))
+}
+
+/// Where along the part the lathe cuts, from the job's start: Start to End (a bit's width
+/// round Start for Part off), kept within how far along a machining limit reaches. The lathe
+/// turns all the way round, so only that counts.
+fn span_along(
+    doc: &Document,
+    p: &Params,
+    length: f64,
+    reach: f64,
+) -> Result<(f64, f64), CommandError> {
+    if p.operation == Operation::PartOff {
+        let at = p.start.clamp(0.0, length);
+        return Ok((at - reach, at + reach));
+    }
+    let end = if p.end > 0.0 {
+        p.end.min(length)
+    } else {
+        length
+    };
+    let start = p.start.clamp(0.0, length);
+    let limit = cut_craft_rotary_carving::Limit::of(
+        doc,
+        p.machining_boundary,
+        p.machining_boundary_offset,
+        &p.boundary_level,
+    )?;
+    Ok(match limit {
+        Some(l) => (start.max(l.from), end.min(l.to)),
+        None => (start, end),
+    })
 }
 
 /// The toolpath made of `moves`.
-fn made(p: &Params, tool: &Tool, moves: Vec<Move>) -> cut_craft_core::toolpath::Toolpath {
-    made_by::<RotaryLatheToolpath>(p, p.name.clone(), tool.clone(), vec![], moves)
+fn made(
+    doc: &Document,
+    p: &Params,
+    tool: &Tool,
+    moves: Vec<Move>,
+) -> cut_craft_core::toolpath::Toolpath {
+    let vectors = cut_craft_rotary_carving::limit_vectors(doc, p.machining_boundary);
+    made_by::<RotaryLatheToolpath>(p, p.name.clone(), tool.clone(), vectors, moves)
 }
 
 /// In red: the holder stopped the bit short of where it should go.
@@ -980,6 +1025,35 @@ mod tests {
             .map(|w| w[1] - w[0])
             .fold(0.0f64, f64::max);
         assert!(widest <= step + 0.5, "{widest} apart, {step} asked");
+    }
+
+    #[test]
+    fn a_machining_limit_keeps_the_lathe_within_how_far_along_it_reaches() {
+        let mut doc = round_job(100.0, 40.0);
+        let mut c = Change::builder(&doc);
+        let at = Point::new;
+        // a box from 30 to 60 along, only part of the way round: the lathe goes all the way
+        let id = c.add(cut_craft_core::geometry::Path::polyline(
+            &[
+                at(30.0, 10.0),
+                at(60.0, 10.0),
+                at(60.0, 40.0),
+                at(30.0, 40.0),
+            ],
+            true,
+        ));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        let p = Params {
+            machining_boundary: MachiningBoundary::SelectedVectors,
+            ..Params::default()
+        };
+        let (cuts, notes) = cuts_of(&doc, &p);
+        assert!(!cuts.is_empty(), "{notes:?}");
+        for c in &cuts {
+            assert!((30.0 - 1e-6..=60.0 + 1e-6).contains(&c.x), "{c:?}");
+        }
+        assert!(cuts.iter().any(|c| c.y > 100.0), "all the way round");
     }
 
     #[test]

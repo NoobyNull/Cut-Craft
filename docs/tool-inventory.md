@@ -417,6 +417,14 @@ say "not implemented yet".
   part ring by ring where some is still left, then up to Most angles locked angles
   (`locked_angles`) for what the rings could not reach. Also cuts only what the toolpaths above
   it leave (Advanced rotary mode starts from the whole blank; the bits before still count).
+- Rotary machining limit: every rotary toolpath (Roughing, Finishing, Locked Angles, Details,
+  4-Axis Rotary Machining, Lathe) has Machining limit Material (the usual) / Model / Selected
+  Level / Selected Vector(s), with Boundary Offset (`cut_craft_rotary_carving::Limit`). The
+  outlines are read on the unrolled sheet, so vectors drawn on the job wrap round the part; the
+  carving keeps the bit out wherever its tip would land outside them (`Work::cutting`), and
+  4-Axis Rotary Machining splits its passes there (`Limit::keep`). The Lathe turns all the way
+  round, so it uses only how far along the outlines reach (Part off ignores it). Selected
+  vectors are kept with the toolpath by id.
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits

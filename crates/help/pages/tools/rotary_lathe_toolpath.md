@@ -70,6 +70,9 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   End 0 runs to the job's end. For Part off, Start is where the groove goes. They count from
   the material's start whatever XY zero [Job Setup](help:job_setup) uses: zeroed on the middle,
   the toolpath is written where the material is, just as with a corner.
+- **Machining limit**: keeps the lathe within how far along the part the Model, a Selected
+  Level or Selected Vector(s) reach (it turns all the way round, so only that counts).
+  **Material** (the usual) is all of it.
 - **Holding stub**: how thick a stub is left on the turning axis, joining the part to the
   rest of the material until it is cut free. 0 cuts right through. Turn comes down to it too,
   wherever there is no model.

@@ -2027,6 +2027,7 @@ version = "0.7.6"
 dependencies = [
  "cut-craft-core",
  "cut-craft-rotary",
+ "cut-craft-rotary-carving",
  "schemars",
  "serde",
 ]

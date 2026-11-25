@@ -7,6 +7,7 @@ edition.workspace = true
 [dependencies]
 cut-craft-core.workspace = true
 cut-craft-rotary.workspace = true
+cut-craft-rotary-carving.workspace = true
 schemars.workspace = true
 serde.workspace = true
 

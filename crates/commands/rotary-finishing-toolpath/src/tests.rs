@@ -222,3 +222,50 @@ fn after_a_roughing_it_still_takes_the_allowance_left_down_to_the_model() {
     let deepest = after.iter().map(|c| c.z).fold(f64::INFINITY, f64::min);
     assert!(deepest < -7.5, "{deepest}");
 }
+
+/// `doc` with a closed rectangle drawn on the job from `x0` to `x1` along and `y0` to `y1`
+/// round, selected.
+fn with_selected_box(mut doc: Document, (x0, x1): (f64, f64), (y0, y1): (f64, f64)) -> Document {
+    let mut c = Change::builder(&doc);
+    let at = cut_craft_core::geometry::Point::new;
+    let id = c.add(cut_craft_core::geometry::Path::polyline(
+        &[at(x0, y0), at(x1, y0), at(x1, y1), at(x0, y1)],
+        true,
+    ));
+    c.select([id]);
+    doc.apply(&c.finish()).unwrap();
+    doc
+}
+
+#[test]
+fn a_machining_limit_of_selected_vectors_keeps_the_finish_inside_them_wrapped_round() {
+    let doc = with_selected_box(beaded(), (20.0, 40.0), (10.0, 50.0));
+    let p = Params {
+        machining_boundary: cut_craft_core::component::MachiningBoundary::SelectedVectors,
+        ..coarse()
+    };
+    let (toolpath, notes) = finish(&doc, &p);
+    let cuts = cuts(&toolpath);
+    assert_ne!(cuts.len(), 0, "{notes:?}");
+    for c in &cuts {
+        assert!((20.0 - 1e-6..=40.0 + 1e-6).contains(&c.x), "{c:?}");
+        assert!((10.0 - 1e-6..=50.0 + 1e-6).contains(&c.y), "{c:?}");
+    }
+    // kept with the toolpath, so recalculating with nothing selected cuts the same
+    assert_eq!(toolpath.vectors.len(), 1);
+    // and the whole material is the usual
+    assert_eq!(
+        Params::default().machining_boundary,
+        cut_craft_core::component::MachiningBoundary::Material
+    );
+}
+
+#[test]
+fn a_machining_limit_with_nothing_selected_says_what_to_do() {
+    let p = Params {
+        machining_boundary: cut_craft_core::component::MachiningBoundary::SelectedVectors,
+        ..coarse()
+    };
+    let why = made(&beaded(), &p).unwrap_err().to_string();
+    assert!(why.contains("closed vectors"), "{why}");
+}

@@ -98,7 +98,11 @@ impl Limit {
 
     /// Whether the bit may cut at a point of a pass: where its tip cuts, held across or not.
     #[must_use]
-    pub fn holds_point(&self, along_x: bool, &(point, across): &(cut_craft_core::glam::DVec3, f64)) -> bool {
+    pub fn holds_point(
+        &self,
+        along_x: bool,
+        &(point, across): &(cut_craft_core::glam::DVec3, f64),
+    ) -> bool {
         let (along, round) = if along_x {
             (point.x, point.y)
         } else {
