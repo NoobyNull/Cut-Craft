@@ -50,7 +50,7 @@ mod settings;
 pub use settings::*;
 mod bit_changes;
 #[cfg(test)]
-mod hard_coded_text;
+pub(crate) mod hard_coded_text;
 mod help;
 #[cfg(test)]
 mod help_coverage;

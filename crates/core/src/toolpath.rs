@@ -99,6 +99,9 @@ const CARRIED_STRATEGIES: [&str; 4] = [
     "rotary_details_toolpath",
 ];
 
+/// The strategies that cut only what the toolpaths above them leave.
+const CARRIED_STRATEGIES: [&str; 2] = ["rotary_roughing_toolpath", "rotary_finishing_toolpath"];
+
 /// The key a toolpath's own preview colour is kept under in its params: `[r, g, b]`, or
 /// null for no fill (the material's colour).
 pub const PREVIEW_COLOUR: &str = "preview_colour";

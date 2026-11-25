@@ -364,10 +364,10 @@ fn waiting_note(
     if let Some((t, other)) = &c.clash {
         ui.colored_label(
             ui.visuals().warn_fg_color,
-            format!(
-                "⚠ {} already runs {}. Move it here, so it runs this instead?",
-                t.text(),
-                label_of(other)
+            cut_craft_i18n::tr!(
+                "shortcuts-page-already-runs",
+                keys = t.text(),
+                action = label_of(other)
             ),
         );
         ui.horizontal(|ui| {

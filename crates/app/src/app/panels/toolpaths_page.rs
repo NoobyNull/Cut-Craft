@@ -105,11 +105,7 @@ impl CutCraftApp {
         } else {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
-                format!(
-                    "⚠ {stale} toolpath{} changed since {} made: recalculate before cutting",
-                    if stale == 1 { "" } else { "s" },
-                    if stale == 1 { "it was" } else { "they were" },
-                ),
+                cut_craft_i18n::tr!("panels-toolpaths-changed", count = stale),
             );
             let id = "recalculate_all_toolpaths";
             if ui

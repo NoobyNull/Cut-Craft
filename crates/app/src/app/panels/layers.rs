@@ -18,12 +18,12 @@ impl CutCraftApp {
                 (
                     Direction::Up,
                     tr!("panels-move-up"),
-                    "Move the active layer up the list",
+                    t!("Move the active layer up the list"),
                 ),
                 (
                     Direction::Down,
                     tr!("panels-move-down"),
-                    "Move the active layer down the list",
+                    t!("Move the active layer down the list"),
                 ),
             ] {
                 let can = moved_to(&self.doc, layer, direction).is_some();
@@ -65,24 +65,24 @@ impl CutCraftApp {
         for layer in self.doc.layers.iter().rev().filter(shown) {
             ui.horizontal(|ui| {
                 let (eye, eye_tip) = if layer.visible {
-                    ("layers/visible.png", "Hide")
+                    ("layers/visible.png", t!("Hide"))
                 } else {
-                    ("layers/hidden.png", "Show")
+                    ("layers/hidden.png", t!("Show"))
                 };
                 let (lock, lock_tip) = if layer.locked {
-                    ("layers/locked.png", "Unlock")
+                    ("layers/locked.png", t!("Unlock"))
                 } else {
-                    ("layers/unlocked.png", "Lock")
+                    ("layers/unlocked.png", t!("Lock"))
                 };
                 if ui
-                    .add(self.icon_button(eye, "", eye_tip, edge))
+                    .add(self.icon_button(eye, "", &eye_tip, edge))
                     .on_hover_hint(eye_tip)
                     .clicked()
                 {
                     clicked = Some((layer.id, "toggle_visible"));
                 }
                 if ui
-                    .add(self.icon_button(lock, "", lock_tip, edge))
+                    .add(self.icon_button(lock, "", &lock_tip, edge))
                     .on_hover_hint(lock_tip)
                     .clicked()
                 {
@@ -101,9 +101,9 @@ impl CutCraftApp {
                     egui::StrokeKind::Inside,
                 );
                 let tip = if layer.colour.is_some() {
-                    "The layer's own colour: click to change it"
+                    t!("The layer's own colour: click to change it")
                 } else {
-                    "The usual vector colour: click to give the layer its own"
+                    t!("The usual vector colour: click to give the layer its own")
                 };
                 if chip.on_hover_hint(tip).clicked() {
                     clicked = Some((layer.id, "layer_properties"));
