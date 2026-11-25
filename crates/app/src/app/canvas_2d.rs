@@ -58,7 +58,7 @@ impl CutCraftApp {
         self.forget_gone_group();
         let job = self.shown_job();
         self.follow_view_2d(ui);
-        let mut canvas = Canvas::new(ui, &job, self.camera);
+        let mut canvas = Canvas::new(ui, &job, self.camera, self.wrap());
         self.clipart_dropped_2d(ui, &canvas);
         let area = canvas.area;
         self.zoom_and_pan(ui, &mut canvas);
@@ -162,6 +162,12 @@ impl CutCraftApp {
         self.view_area = Some(area);
         self.cursor = canvas.cursor();
         self.act_2d(ui, gesture, &canvas, reach, area, modes);
+    }
+
+    /// A rotary job's wrap, as the 2D view shows it: none on a flat job, or with Options ▸
+    /// Appearance's rotary wrap bands off.
+    pub(super) fn wrap(&self) -> Option<view2d::Wrap> {
+        view2d::Wrap::of(&self.shown_job(), self.options.appearance.rotary_wrap)
     }
 
     /// Whether the sheet has nothing on it yet: no vectors, pictures or 3D components.
