@@ -72,9 +72,9 @@ pub(super) fn hovered(ctx: &egui::Context) -> Option<Tip> {
 /// complaint (a missing toolpath, a bad setting) is no step at all.
 pub(super) fn step_from_error(error: &CommandError) -> Option<String> {
     match error {
-        CommandError::NothingSelected => Some(SELECT_FIRST.to_owned()),
+        CommandError::NothingSelected => Some(cut_craft_core::error_words(SELECT_FIRST)),
         CommandError::Failed(why) if why.to_lowercase().starts_with("select ") => {
-            Some(capitalised(why))
+            Some(capitalised(&cut_craft_core::error_words(why)))
         }
         CommandError::Failed(_) | CommandError::InvalidParams(_) => None,
     }
