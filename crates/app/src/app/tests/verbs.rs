@@ -341,22 +341,22 @@ fn reaching_in(source: &str) -> Vec<(usize, &str)> {
         .collect()
 }
 
-/// Whether `line` names a harness's `.app` (`h.app.doc`, `next.app`, a wrapped `.app.form`),
-/// not a path such as `crate::app::` or a name such as `h.app_state`.
+/// Whether `line` names a harness's `.app` (`h.app.doc`, `next.app`, `hs[0].app`, a wrapped
+/// `.app.form`), not a path such as `crate::app::` or a name such as `h.app_state`.
 fn reaches_app(line: &str) -> bool {
     let word = |c: char| c.is_alphanumeric() || c == '_';
     line.match_indices(".app").any(|(at, _)| {
         let before = line[..at].chars().next_back();
         let after = line[at + ".app".len()..].chars().next();
-        after.is_none_or(|c| !word(c)) && before.is_none_or(|c| word(c) || c == ')')
+        after.is_none_or(|c| !word(c)) && before.is_none_or(|c| word(c) || c == ')' || c == ']')
     })
 }
 
 #[test]
 fn reaching_in_finds_the_app_however_the_line_is_wrapped() {
-    let source = "h.app.doc.notes = x;\nlet m = h\n    .app\n    .form;\nh\n    .app.apply(a);\n|app: &CutCraftApp| 1\nh.doc().notes\nnext.app.session\nuse crate::app::job_files;\nh.app_state()\n";
+    let source = "h.app.doc.notes = x;\nlet m = h\n    .app\n    .form;\nh\n    .app.apply(a);\n|app: &CutCraftApp| 1\nh.doc().notes\nnext.app.session\nuse crate::app::job_files;\nh.app_state()\nharnesses[0].app.doc\n";
     let lines: Vec<usize> = reaching_in(source).iter().map(|(n, _)| *n).collect();
-    assert_eq!(lines, [1, 3, 6, 7, 9]);
+    assert_eq!(lines, [1, 3, 6, 7, 9, 12]);
 }
 
 #[test]
