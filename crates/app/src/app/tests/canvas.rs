@@ -6,7 +6,7 @@ use crate::options::WindowLayout;
 
 fn canvas() -> Harness {
     let mut h = Harness::new();
-    h.app.options.general.layout = WindowLayout::Canvas;
+    h.given_options(|o| o.general.layout = WindowLayout::Canvas);
     h.frame(vec![]);
     h.frame(vec![]);
     h
@@ -36,13 +36,13 @@ fn the_view_has_the_whole_width() {
 fn a_palette_group_lists_its_tools_and_a_pick_floats_its_form() {
     let mut h = canvas();
     assert!(h.text_at("Draw Circle").is_none(), "no list open at first");
-    h.app.canvas.group = Some("Create Vectors");
+    h.open_canvas_group_list("Create Vectors");
     // a box that just opened is measured first, then drawn
     h.frame(vec![]);
     h.frame(vec![]);
     click_text(&mut h, "Draw Circle");
-    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
-    assert!(h.app.canvas.group.is_none(), "the list closes on a pick");
+    assert_eq!(h.form_id(), Some("draw_circle"));
+    assert!(h.open_canvas_group().is_none(), "the list closes on a pick");
     let form = h
         .text_at("Draw Circle")
         .expect("the form floats over the view");
@@ -52,10 +52,10 @@ fn a_palette_group_lists_its_tools_and_a_pick_floats_its_form() {
 #[test]
 fn a_chip_opens_its_list_over_the_view_and_closes_again() {
     let mut h = canvas();
-    assert!(h.app.canvas.chip.is_none());
+    assert!(h.open_canvas_chip().is_none());
     click_text(&mut h, "Layers");
     let layers = INSPECTOR_TABS.iter().position(|t| *t == "Layers");
-    assert_eq!(h.app.canvas.chip, layers);
+    assert_eq!(h.open_canvas_chip(), layers);
     assert!(h.text_at("Layer 1").is_some(), "the layer list shows");
     let chip = h
         .texts_at("Layers")
@@ -66,7 +66,7 @@ fn a_chip_opens_its_list_over_the_view_and_closes_again() {
     h.press(chip, true, Modifiers::NONE);
     h.press(chip, false, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.canvas.chip.is_none());
+    assert!(h.open_canvas_chip().is_none());
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn find_a_tool_is_in_the_header_and_enter_runs_the_first_match() {
     let mut h = canvas();
     let hint = cut_craft_i18n::tr!("layouts-canvas-find");
     assert!(h.text_at(&hint).is_some(), "the box shows in the header");
-    h.app.invoke(&h.ctx, "find_tool");
+    h.invoke("find_tool");
     h.frame(vec![]);
     h.frame(vec![Event::Text("circle".into())]);
     h.frame(vec![]);
@@ -92,22 +92,18 @@ fn find_a_tool_is_in_the_header_and_enter_runs_the_first_match() {
         modifiers: Modifiers::NONE,
     }]);
     h.frame(vec![]);
-    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
-    assert!(h.app.search.is_none());
+    assert_eq!(h.form_id(), Some("draw_circle"));
+    assert!(!h.finding_a_tool());
 }
 
 #[test]
 fn enter_in_an_empty_find_box_runs_nothing() {
     let mut h = canvas();
-    h.app.invoke(&h.ctx, "find_tool");
+    h.invoke("find_tool");
     h.frame(vec![]);
     h.frame(vec![key(Key::Enter)]);
     h.frame(vec![]);
-    assert!(
-        h.app.form.is_none(),
-        "{:?}",
-        h.app.form.as_ref().map(|f| f.id)
-    );
+    assert!(h.form_id().is_none(), "{:?}", h.form_id());
 }
 
 #[test]
@@ -118,9 +114,9 @@ fn the_library_components_and_toolpaths_actions_open_their_chips() {
         ("component_levels", "Components"),
         ("show_toolpaths_tab", "Toolpaths"),
     ] {
-        h.app.invoke(&h.ctx, id);
+        h.invoke(id);
         let chip = INSPECTOR_TABS.iter().position(|t| *t == tab);
-        assert_eq!(h.app.canvas.chip, chip, "{id}");
+        assert_eq!(h.open_canvas_chip(), chip, "{id}");
         h.frame(vec![]);
     }
 }
@@ -128,7 +124,7 @@ fn the_library_components_and_toolpaths_actions_open_their_chips() {
 #[test]
 fn every_palette_group_can_be_reached_in_a_short_window() {
     let mut h = canvas();
-    h.app.ribbon_tab = RIBBON_TABS.iter().position(|t| *t == "Toolpaths").unwrap();
+    h.show_ribbon_tab("Toolpaths");
     h.window = egui::vec2(h.window.x, 420.0);
     h.frame(vec![]);
     h.frame(vec![]);
@@ -153,39 +149,39 @@ fn palette(h: &Harness) -> egui::Rect {
 fn pointing_at_a_palette_group_lists_its_tools_and_moving_away_closes_them() {
     let mut h = canvas();
     assert_eq!(
-        h.app.options.general.canvas_flyouts,
+        h.options().general.canvas_flyouts,
         crate::options::CanvasFlyouts::OnHover
     );
     let first = palette(&h).left_top() + egui::vec2(20.0, 20.0);
     h.frame(vec![Event::PointerMoved(first)]);
     h.frame(vec![]);
-    let group = h.app.canvas_groups()[0].name;
-    assert_eq!(h.app.canvas.group, Some(group), "no click needed");
+    let group = h.canvas_groups()[0].name;
+    assert_eq!(h.open_canvas_group(), Some(group), "no click needed");
     h.frame(vec![]);
     let far = egui::pos2(0.6 * h.window.x, 0.5 * h.window.y);
     h.frame(vec![Event::PointerMoved(far)]);
     h.frame(vec![]);
-    assert!(h.app.canvas.group.is_none(), "the list closes");
+    assert!(h.open_canvas_group().is_none(), "the list closes");
 }
 
 #[test]
 fn on_click_a_palette_group_waits_for_its_click() {
     let mut h = canvas();
-    h.app.options.general.canvas_flyouts = crate::options::CanvasFlyouts::OnClick;
+    h.given_options(|o| o.general.canvas_flyouts = crate::options::CanvasFlyouts::OnClick);
     let first = palette(&h).left_top() + egui::vec2(20.0, 20.0);
     h.frame(vec![Event::PointerMoved(first)]);
     h.frame(vec![]);
-    assert!(h.app.canvas.group.is_none(), "pointing opens nothing");
+    assert!(h.open_canvas_group().is_none(), "pointing opens nothing");
     h.press(first, true, Modifiers::NONE);
     h.press(first, false, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.canvas.group, Some(h.app.canvas_groups()[0].name));
+    assert_eq!(h.open_canvas_group(), Some(h.canvas_groups()[0].name));
 }
 
 #[test]
 fn a_tall_enough_window_shows_the_palette_in_one_column() {
     let mut h = canvas();
-    h.app.ribbon_tab = RIBBON_TABS.iter().position(|t| *t == "Toolpaths").unwrap();
+    h.show_ribbon_tab("Toolpaths");
     h.frame(vec![]);
     h.frame(vec![]);
     let tall = palette(&h);
@@ -203,14 +199,13 @@ fn a_tall_enough_window_shows_the_palette_in_one_column() {
 fn a_long_favourites_list_in_a_short_window_stays_inside_it() {
     let mut h = canvas();
     let every: Vec<String> = h
-        .app
         .canvas_groups()
         .iter()
         .flat_map(|group| group.tools.iter().map(|id| (*id).to_string()))
         .collect();
     assert!(every.len() > 20, "{}", every.len());
-    h.app.options.favourites.design = every;
-    h.app.ribbon_tab = RIBBON_TABS.iter().position(|t| *t == "Favourites").unwrap();
+    h.given_options(|o| o.favourites.design = every);
+    h.show_ribbon_tab("Favourites");
     h.window = egui::vec2(900.0, 420.0);
     h.frame(vec![]);
     h.frame(vec![]);

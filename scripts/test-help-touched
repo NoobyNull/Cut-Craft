@@ -24,6 +24,8 @@ expect fail "a crate of several tools needs every page" crates/commands/draw-tex
   crates/help/pages/tools/draw_text.md
 expect pass "tests only" crates/commands/pocket-toolpath/src/tests.rs \
   crates/commands/pocket-toolpath/tests/cut.rs crates/app/src/app/tests.rs
+expect pass "test modules named for what they test" crates/app/src/app/accessibility_tests.rs \
+  crates/app/src/app/web_api_tests.rs
 expect pass "Cargo and build files" crates/commands/pocket-toolpath/Cargo.toml crates/app/build.rs
 expect fail "app code with no page" crates/app/src/app/help.rs
 expect pass "app code and some page" crates/app/src/app/help.rs crates/help/pages/contents.md
