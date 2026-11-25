@@ -463,6 +463,14 @@ impl Post {
             }
             _ => None,
         };
+        // a square's corners or a board's edges swing out past the material's top: a rapid
+        // that turns A lower than that lifts clear first, turns, and comes back down
+        let corners = match (&self.wrap, job.rotary) {
+            (Some((axis, _)), Some(_)) if job.turning_gap() > job.clearance + 1e-9 => {
+                Some((usize::from(*axis == "Y"), job.turning_gap()))
+            }
+            _ => None,
+        };
         // (kind, to, laser power, across)
         let mut lines = Vec::with_capacity(toolpath.moves.len());
         let mut from = at;
@@ -477,6 +485,14 @@ impl Post {
             if m.kind != MoveKind::Rapid && from.z > gap + 1e-9 && to.z < gap {
                 let down = from.lerp(to, (from.z - gap) / (from.z - to.z));
                 lines.push((MoveKind::Rapid, down, 0.0, across));
+            }
+            if let Some((round, high)) = corners
+                && m.kind == MoveKind::Rapid
+                && (to[round] - from[round]).abs() > 1e-9
+                && from.z.min(to.z) < high - 1e-9
+            {
+                lines.push((MoveKind::Rapid, from.with_z(from.z.max(high)), 0.0, across));
+                lines.push((MoveKind::Rapid, to.with_z(to.z.max(high)), 0.0, across));
             }
             let power = toolpath.power.get(i).copied().unwrap_or(0.0);
             lines.push((m.kind, to, power, across));
