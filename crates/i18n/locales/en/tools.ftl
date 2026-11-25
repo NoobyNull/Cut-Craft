@@ -285,6 +285,7 @@ tools-help-contents = Help Contents
 tools-did-you-know = Did You Know?
 tools-credits = Credits
 tools-about-cut-craft = About Cut Craft
+tools-back-up-settings = Back Up Settings
 tools-check-for-updates = Check for Updates
 tools-addons = Add-ons
 tools-open-gadgets-folder = Open Gadgets Folder

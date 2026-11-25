@@ -282,6 +282,8 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .run(|a, _| a.info = Some(Info::Credits)),
     act("about_cut_craft", "About Cut Craft", "About Cut Craft: its version, its licence and the people who made it")
         .run(|a, _| a.info = Some(Info::About)),
+    act("back_up_settings", "Back Up Settings", "Back Up Settings: saves your settings, machines, bits and own files in one backup file, to keep safe or take to another computer").window()
+        .run(|a, _| a.open_back_up_window()),
     act("check_for_updates", "Check for Updates", "Check for Updates: asks straight away whether there is a newer version of Cut Craft").window()
         .run(CutCraftApp::check_for_updates),
     act("addons", "Add-ons", "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts").window()

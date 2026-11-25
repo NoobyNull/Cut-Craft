@@ -5,6 +5,7 @@ use eframe::egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
 
 #[path = "accessibility_tests.rs"]
 mod accessibility;
+mod backups;
 #[path = "web_api_tests.rs"]
 mod web_api;
 

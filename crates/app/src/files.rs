@@ -895,6 +895,19 @@ pub fn load_tools_joining(path: &Path) -> Result<(ToolDatabase, Vec<String>), St
     let before = db.tools.len();
     let report = db.join_material_copies();
     if db.tools.len() != before && path.exists() {
+        if let Some(config) = path.parent() {
+            let auto = cut_craft_backup::Automatic::new(
+                config.to_path_buf(),
+                cut_craft_backup::KEEP,
+                env!("CARGO_PKG_VERSION"),
+            );
+            if let Err(e) = auto.make(
+                cut_craft_backup::Reason::BeforeLibraryChange,
+                cut_craft_backup::now(),
+            ) {
+                log::warn!("backup before joining bits: {e}");
+            }
+        }
         let backup = tools_backup_path(path);
         if !backup.exists() {
             std::fs::copy(path, &backup).map_err(|e| format!("{}: {e}", backup.display()))?;

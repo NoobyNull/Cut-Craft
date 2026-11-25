@@ -102,6 +102,7 @@ impl CutCraftApp {
             canvas: super::canvas_layout::CanvasState::default(),
             toolbars: super::custom_toolbars::ToolbarState::default(),
             options_path: None,
+            backups: super::backups::Backups::default(),
             words_path: None,
             job_times_path: None,
             speller: None,

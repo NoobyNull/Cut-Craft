@@ -431,6 +431,19 @@ setting-check-for-updates-when-cut-a5a721 = Check for updates when Cut Craft sta
 setting-every-time-cut-craft-starts-933f9f =
     Every time Cut Craft starts, ask GitHub whether there is a new version,
     and say so if there is. Nothing is downloaded or installed until you choose Install Now
+setting-backups-ddaf64 = Backups
+setting-options-backups-the-backups-cut-f962c7 =
+    Options ▸ Backups: the backups Cut Craft makes by itself. Help ▸ Back Up Settings makes one
+    any time.
+setting-back-up-every-week-df868c = Back up every week
+setting-also-back-up-once-a-74b2df =
+    Also back up once a week, when Cut Craft starts. A backup is always made before an
+    update is installed, before the window layout changes, before first-time setup is run
+    again, and before Cut Craft rewrites a library itself
+setting-backups-to-keep-73979e = Backups to keep
+setting-how-many-automatic-backups-to-3abf39 =
+    How many automatic backups to keep. When there are more, the oldest is removed.
+    Backups you save yourself are never removed
 setting-bug-reports-1ebb86 = Bug Reports
 setting-bug-reports-and-what-happens-5d7ed1 = Bug reports, and what happens after Cut Craft closes because of an error.
 setting-if-cut-craft-crashes-62c84b = If Cut Craft crashes
