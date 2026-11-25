@@ -5,8 +5,8 @@
 
 use super::{
     APP_NAME, Align, Change, CutCraftApp, DESIGN_TABS, DROP_SHADE, EntityId, JOB_EXTENSION, Layout,
-    OLD_JOB_EXTENSION, RESOLUTIONS, Screen, Split, UNITS, Value, View, ViewTool, ViewTransform,
-    bordered, egui, file_name, files, page_width, paint_focus_ring, show_page,
+    OLD_JOB_EXTENSION, RESOLUTIONS, Screen, Split, UNITS, Value, View, ViewTransform, bordered,
+    egui, file_name, files, page_width, paint_focus_ring, show_page,
 };
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
@@ -544,26 +544,12 @@ impl CutCraftApp {
         clicked: &mut Option<&'static str>,
     ) {
         let s = &self.options.snapping;
-        for (id, on, icon, tip) in [
-            (
-                "toggle_grid_snapping",
-                s.snap_to_grid,
-                "grid",
-                "Grid Snapping",
-            ),
-            (
-                "toggle_smart_snapping",
-                s.smart_snapping,
-                "smart",
-                "Smart Snapping",
-            ),
-            (
-                "toggle_geometry_snapping",
-                s.geometry_snapping,
-                "geometry",
-                "Geometry Snapping",
-            ),
+        for (id, on, icon) in [
+            ("toggle_grid_snapping", s.snap_to_grid, "grid"),
+            ("toggle_smart_snapping", s.smart_snapping, "smart"),
+            ("toggle_geometry_snapping", s.geometry_snapping, "geometry"),
         ] {
+            let tip = &self.tool_label(id);
             let state = if on { "on" } else { "off" };
             let path = format!("snapping/{icon}_snapping_{state}.png");
             let button = self.icon_button(&path, "", tip, edge).selected(on);
@@ -573,24 +559,18 @@ impl CutCraftApp {
         }
     }
 
-    /// The top bar's split and snapping toggles.
-    pub(super) fn top_bar_toggle(&mut self, id: &str) {
-        match id {
-            "split_stacked" | "split_side_by_side" | "split_picture" => {
-                let split = match id {
-                    "split_stacked" => Split::Stacked,
-                    "split_side_by_side" => Split::SideBySide,
-                    _ => Split::Picture,
-                };
-                self.split = (self.split != Some(split)).then_some(split);
-            }
-            "toggle_geometry_snapping" => self.options.snapping.geometry_snapping ^= true,
-            "toggle_smart_snapping" => self.options.snapping.smart_snapping ^= true,
-            _ => self.options.snapping.snap_to_grid ^= true,
-        }
-        if id.starts_with("toggle_") {
-            self.save_options();
-        }
+    /// A split of the views, or back to one view when it is the split showing.
+    pub(super) fn split_toggle(&mut self, split: Split) {
+        self.split = (self.split != Some(split)).then_some(split);
+    }
+
+    /// One of the top bar's snapping switches, the other way, kept with the options.
+    pub(super) fn toggle_snapping(
+        &mut self,
+        which: fn(&mut cut_craft_core::snap::SnapOptions) -> &mut bool,
+    ) {
+        *which(&mut self.options.snapping) ^= true;
+        self.save_options();
     }
 
     /// The top bar over the views: 2D / 3D and the split, the sheet, layer and level
@@ -609,26 +589,24 @@ impl CutCraftApp {
             ui.horizontal_centered(|ui| {
                 ui.selectable_value(&mut self.view, View::TwoD, tr!("views-2d-view-f2"));
                 ui.selectable_value(&mut self.view, View::ThreeD, tr!("views-3d-view-f3"));
-                for (id, icon, tip, split) in [
+                for (id, icon, split) in [
                     (
                         "split_stacked",
                         "view/split_over_and_under.png",
-                        t!("2D over 3D"),
                         Split::Stacked,
                     ),
                     (
                         "split_side_by_side",
                         "view/split_side_by_side.png",
-                        t!("2D beside 3D"),
                         Split::SideBySide,
                     ),
                     (
                         "split_picture",
                         "view/split_picture_in_picture.png",
-                        t!("One view in a corner of the other"),
                         Split::Picture,
                     ),
                 ] {
+                    let tip = self.tool_label(id);
                     let button = self
                         .icon_button(icon, "", &tip, edge)
                         .selected(self.split == Some(split));
@@ -696,60 +674,17 @@ impl CutCraftApp {
             .unwrap_or(self.doc.job)
     }
 
-    /// Zoom and pan: the 2D view controls.
-    pub(super) fn view_action(&mut self, ctx: &egui::Context, id: &str) {
-        let tool = match id {
-            "pan" => {
-                self.view_tool = Some(ViewTool::Pan);
-                "pan"
+    /// Zoom to Selection: the picked shapes fill the 2D view.
+    pub(super) fn zoom_selected(&mut self, ctx: &egui::Context) {
+        let margin = ctx.global_style().spacing.interact_size.y;
+        match (self.doc.selection_bounds(), self.view_area) {
+            (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
+                self.camera = Some(ViewTransform::fit(area, margin, bounds));
             }
-            "measure_inspect" => {
-                self.view_tool = Some(ViewTool::Measure);
-                "measure_inspect"
-            }
-            "transform" => {
-                self.rotating = false;
-                if self.view_tool == Some(ViewTool::Transform) {
-                    self.view_tool = None;
-                    "select"
-                } else {
-                    self.view_tool = Some(ViewTool::Transform);
-                    "transform"
-                }
-            }
-            "node_edit" => {
-                self.node_mirror = [false, false];
-                if self.view_tool == Some(ViewTool::NodeEdit) {
-                    self.view_tool = None;
-                    "select"
-                } else {
-                    self.view_tool = Some(ViewTool::NodeEdit);
-                    "node_edit"
-                }
-            }
-            "zoom_box" => {
-                self.view_tool = Some(ViewTool::ZoomBox);
-                "zoom_box"
-            }
-            "zoom_selected" => {
-                let margin = ctx.global_style().spacing.interact_size.y;
-                match (self.doc.selection_bounds(), self.view_area) {
-                    (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
-                        self.camera = Some(ViewTransform::fit(area, margin, bounds));
-                    }
-                    _ => self
-                        .status
-                        .set_message(&cut_craft_i18n::tr!("status-select-to-zoom")),
-                }
-                return;
-            }
-            // zoom to job, zoom to drawing (F6)
-            _ => {
-                self.camera = None;
-                return;
-            }
-        };
-        self.status.current_tool = self.tool_label(tool);
+            _ => self
+                .status
+                .set_message(&cut_craft_i18n::tr!("status-select-to-zoom")),
+        }
     }
 }
 

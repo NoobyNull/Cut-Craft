@@ -106,7 +106,6 @@ menu-item-ungroup-onto-original-object-layers = Ungroup onto Original Object Lay
 menu-item-align = Align
 menu-item-text = Text
 menu-item-break-block-into-lines = Break Block into Lines
-menu-item-object-properties = Object Properties
 menu-item-guidelines = Guidelines
 menu-item-insert-horizontal-guide = Insert Horizontal Guide
 menu-item-insert-vertical-guide = Insert Vertical Guide

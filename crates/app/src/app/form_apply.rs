@@ -275,69 +275,71 @@ impl CutCraftApp {
         }
     }
 
-    /// The file icons beside the menus: Import Vectors and Export Vectors (vector
-    /// formats only), Open Folder (the job's folder) and Open Clipart Folder.
-    pub(super) fn file_icon_action(&mut self, id: &str) {
-        let result = match id {
-            "import_vectors" => {
-                let dialog = filtered_dialog(Dialog::ImportVectors, &self.registry);
-                if let Some(path) = dialog.pick_file() {
-                    self.import_file(&path);
+    /// Export Vectors: the vectors saved in the format the file name's extension picks, DXF
+    /// when it has none.
+    pub(super) fn export_vectors_picked(&mut self) {
+        let result = {
+            let dialog = filtered_dialog(Dialog::ExportVectors, &self.registry);
+            let exporters: Vec<_> = VECTOR_EXPORTERS
+                .iter()
+                .filter_map(|id| self.registry.exporter(id))
+                .map(|e| (e.id, e.format))
+                .collect();
+            match dialog.save_file() {
+                // the extension picks the format; DXF when there is none
+                Some(path) => {
+                    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase());
+                    let (id, path) = exporters
+                        .iter()
+                        .find(|(_, f)| ext.as_deref().is_some_and(|x| f.extensions.contains(&x)))
+                        .map_or(
+                            ("export_dxf", files::named_for_saving(&path, &["dxf"])),
+                            |(id, _)| (*id, path.clone()),
+                        );
+                    files::export(&self.registry, id, &self.doc, &path).map(|()| {
+                        self.status.set_message(&cut_craft_i18n::tr!(
+                            "status-exported",
+                            path = path.display().to_string()
+                        ));
+                    })
                 }
-                Ok(())
+                None => Ok(()),
             }
-            "export_vectors" => {
-                let dialog = filtered_dialog(Dialog::ExportVectors, &self.registry);
-                let exporters: Vec<_> = VECTOR_EXPORTERS
-                    .iter()
-                    .filter_map(|id| self.registry.exporter(id))
-                    .map(|e| (e.id, e.format))
-                    .collect();
-                match dialog.save_file() {
-                    // the extension picks the format; DXF when there is none
-                    Some(path) => {
-                        let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase());
-                        let (id, path) = exporters
-                            .iter()
-                            .find(|(_, f)| {
-                                ext.as_deref().is_some_and(|x| f.extensions.contains(&x))
-                            })
-                            .map_or(
-                                ("export_dxf", files::named_for_saving(&path, &["dxf"])),
-                                |(id, _)| (*id, path.clone()),
-                            );
-                        files::export(&self.registry, id, &self.doc, &path).map(|()| {
-                            self.status.set_message(&cut_craft_i18n::tr!(
-                                "status-exported",
-                                path = path.display().to_string()
-                            ));
-                        })
-                    }
-                    None => Ok(()),
-                }
-            }
-            "open_folder" => {
-                let folder = self
-                    .session
-                    .path
-                    .as_deref()
-                    .and_then(std::path::Path::parent)
-                    .map(std::path::Path::to_path_buf)
-                    .or_else(files::config_dir);
-                folder.map_or(Err("no folder to open".to_owned()), |f| {
-                    on_the_desktop();
-                    files::show_folder(&f).map_err(|e| e.to_string())
-                })
-            }
-            // the folder looked in, or the first when looking in all of them
-            _ => match (self.clipart.open.as_ref()).or(self.clipart.folders.first()) {
-                Some(folder) => {
-                    on_the_desktop();
-                    files::show_folder(folder).map_err(|e| e.to_string())
-                }
-                None => Err("add a folder to the Library first".to_owned()),
-            },
         };
+        self.say_failure(result);
+    }
+
+    /// Open Folder: the job's folder, else the settings folder before the job is saved.
+    pub(super) fn open_job_folder(&mut self) {
+        let result = {
+            let folder = self
+                .session
+                .path
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .map(std::path::Path::to_path_buf)
+                .or_else(files::config_dir);
+            folder.map_or(Err("no folder to open".to_owned()), |f| {
+                on_the_desktop();
+                files::show_folder(&f).map_err(|e| e.to_string())
+            })
+        };
+        self.say_failure(result);
+    }
+
+    /// Open Clipart Folder: the folder looked in, or the first when looking in all of them.
+    pub(super) fn open_clipart_folder(&mut self) {
+        let result = match (self.clipart.open.as_ref()).or(self.clipart.folders.first()) {
+            Some(folder) => {
+                on_the_desktop();
+                files::show_folder(folder).map_err(|e| e.to_string())
+            }
+            None => Err("add a folder to the Library first".to_owned()),
+        };
+        self.say_failure(result);
+    }
+
+    fn say_failure(&mut self, result: Result<(), String>) {
         if let Err(e) = result {
             self.status.set_message(&e);
         }

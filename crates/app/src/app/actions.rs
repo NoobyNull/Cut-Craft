@@ -4,11 +4,12 @@
 //! `job_files`, `toolpath_output`, `machine_setup`, `form_apply`, `edit_apply`, `keyboard`,
 //! `page_layout`, `form_panel`, `command_form` and `tools_materials`.
 
+use super::built_ins;
 use super::{
-    CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Dialog, Document, EXPORT_LEVEL, EntityId,
-    History, Icons, Info, PLAYBACK_SPEED, Page, Pages, SELECT_LEVEL, SaveForm, Screen, Session,
-    Shown, TOP_BAR_TOGGLES, ToolDatabase, Value, View, brush_dialog, commands, dialog_size, egui,
-    files, filtered_dialog, gui, saving_path, summary_table, view3d,
+    CONTRIBUTORS, Change, CutCraftApp, Document, EXPORT_LEVEL, EntityId, History, Icons, Info,
+    PLAYBACK_SPEED, Page, Pages, SELECT_LEVEL, SaveForm, Screen, Session, Shown, ToolDatabase,
+    Value, View, brush_dialog, commands, dialog_size, egui, files, gui, saving_path, summary_table,
+    view3d,
 };
 use cut_craft_i18n::tr;
 
@@ -313,10 +314,10 @@ impl CutCraftApp {
         if let Some((_, command, _)) = gui::command_action(id) {
             return self.registry.get(command).is_some();
         }
+        if let Some(action) = built_ins::get(id) {
+            return (action.when)(self);
+        }
         match id {
-            "undo" => self.history.can_undo(),
-            "close" => self.screen != Screen::Start,
-            "zoom_selected" => self.doc.selection_bounds().is_some(),
             id if id.starts_with("open_recent:") || id.starts_with(gui::EDIT_POLYLINE) => true,
             id if id.starts_with(gui::REIMPORT_MODEL) => self
                 .model_source(id)
@@ -329,73 +330,19 @@ impl CutCraftApp {
             {
                 true
             }
-            "add_clipart_folder" | "tool_help" | "view_2d" | "view_3d" => true,
-            id if id.starts_with(gui::COMMUNITY) => true,
-            id if TOP_BAR_TOGGLES.contains(&id) => true,
-            id if id.starts_with(gui::GUIDE) => true,
+            id if id.starts_with(gui::COMMUNITY) || id.starts_with(gui::GUIDE) => true,
             id if id.starts_with(gui::SAVE_BRUSH) => self.brush_component(id).is_some(),
             id if id.starts_with(EXPORT_LEVEL) => {
                 self.registry.exporter("export_as_3d_clipart").is_some()
-            }
-            "redo" => self.history.can_redo(),
-            "recalculate_toolpath"
-            | "delete_toolpath"
-            | "save_selected_toolpath_as_template"
-            | "edit_toolpath" => self.selected_toolpath.is_some(),
-            "preview_toolpath" => self.selected_toolpath.is_some() || self.selected_group.is_some(),
-            "edit_text" => self.doc.selection.iter().any(|id| {
-                self.doc.vector_groups.get(id).is_some_and(|g| {
-                    self.doc
-                        .texts
-                        .get(g)
-                        .is_some_and(|t| t.get("text").is_some())
-                })
-            }),
-            "save_all_visible_toolpaths_as_template" => {
-                self.doc.toolpaths.values().any(|t| t.visible)
-            }
-            "recalculate_all_toolpaths" | "preview_all_toolpaths" | "save_toolpaths" => {
-                !self.doc.toolpaths.is_empty()
-            }
-            "recalculate_visible_toolpaths" | "preview_visible_toolpaths" => {
-                self.doc.toolpaths.values().any(|t| t.visible)
-            }
-            "undo_last_preview" => self.before_preview.is_some() && self.playback.is_none(),
-            "save_shaded_image" => {
-                self.simulation.is_some()
-                    || self.playback.is_some()
-                    || !self.doc.components.is_empty()
-            }
-            "edit_object" => self.object_to_edit().is_some() || self.shape_to_edit(),
-            "object_properties" => self.object_properties().is_some(),
-            "tile_windows_horizontal" | "tile_windows_vertical" | "cascade_windows" => {
-                self.screen == Screen::Job
-            }
-            "job_sheet_editor" => true,
-            "reset_preview" => {
-                self.simulation.is_some() || self.playback.is_some() || self.kept_playback.is_some()
             }
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
             id if self.units_checked(id).is_some() => self.screen == Screen::Job,
             id if self.layout_checked(id).is_some() => true,
-            "cut" | "copy" => {
-                !self.doc.selection.is_empty() || !self.doc.selected_components.is_empty()
-            }
-            "create_component_from_toolpath_preview" => self.simulation.is_some(),
-            "paste" | "paste_in_place" => {
-                !self.clipboard.is_empty() || !self.clipboard_components.is_empty()
-            }
-            "activate_layer_of_selection" => !self.doc.selection.is_empty(),
-            "increment_and_save" | "find_tool" => self.screen == Screen::Job,
-            id if crate::flyout::variant(id).is_some() => {
-                crate::flyout::variant(id).is_some_and(|v| self.registry.get(v.command).is_some())
-                    && self.screen != Screen::Start
-            }
+            id if crate::flyout::variant(id).is_some() => self.variant_ready(id),
+            // a command's form shows in a job's pages: with no job it could not be seen
             _ => {
-                crate::built_ins::get(id).is_some()
-                    // a command's form shows in a job's pages: with no job it could not be seen
-                    || (self.registry.get(id).is_some() && self.screen != Screen::Start)
+                (self.registry.get(id).is_some() && self.screen != Screen::Start)
                     || self.registry.exporter(id).is_some()
             }
         }
@@ -405,60 +352,30 @@ impl CutCraftApp {
     /// picked, something to undo, a job open). "Not implemented yet" only for an action
     /// nothing runs.
     pub(super) fn unavailable_why(&self, id: &str) -> String {
-        const PICK: &str = "Pick a toolpath in the Toolpath List first";
-        const SHOWN: &str = "No toolpath is shown: tick one in the Toolpath List first";
-        const PREVIEW: &str = "Preview a toolpath first";
-        let job_first = "Open or start a job first";
-        let why = match id {
-            "undo" => "Nothing to undo yet",
-            "redo" => "Nothing to redo: undo something first",
-            "close" => "No job is open",
-            "zoom_selected" | "activate_layer_of_selection" => "Select something first",
-            "cut" => "Select the vectors or 3D parts to cut first",
-            "copy" => "Select the vectors or 3D parts to copy first",
-            "paste" | "paste_in_place" => "Nothing copied yet: copy something first",
-            "recalculate_toolpath"
-            | "delete_toolpath"
-            | "save_selected_toolpath_as_template"
-            | "edit_toolpath" => PICK,
-            "preview_toolpath" => "Pick a toolpath or a group in the Toolpath List first",
-            "edit_text" => "Select a piece of text first",
-            "save_all_visible_toolpaths_as_template"
-            | "recalculate_visible_toolpaths"
-            | "preview_visible_toolpaths" => SHOWN,
-            "recalculate_all_toolpaths" | "preview_all_toolpaths" | "save_toolpaths" => {
-                "No toolpaths yet: make one first"
+        let key = match id {
+            id if built_ins::get(id).is_some_and(|a| !a.why.is_empty()) => {
+                built_ins::get(id).map_or_default(|a| a.why)
             }
-            "undo_last_preview" => "No preview to undo",
-            "save_shaded_image" => "Preview a toolpath or bring in a 3D model first",
-            "edit_object" | "object_properties" => "Select a shape first",
-            "reset_preview" | "create_component_from_toolpath_preview" => PREVIEW,
-            id if id.starts_with(gui::REIMPORT_MODEL) => {
-                "The model's file is not in the job's folder any more"
-            }
-            id if id.starts_with(EXPORT_LEVEL) => "Export as 3D clipart is not available",
-            id if self.registry.get(id).is_some()
+            id if id.starts_with(gui::REIMPORT_MODEL) => "actions-why-model-file-moved",
+            id if id.starts_with(EXPORT_LEVEL) => "actions-why-no-clipart-export",
+            id if built_ins::get(id).is_some()
+                || self.registry.get(id).is_some()
                 || self.registry.exporter(id).is_some()
                 || crate::flyout::variant(id).is_some()
                 || gui::command_action(id).is_some()
-                || crate::built_ins::get(id).is_some()
                 || self.resolution_checked(id).is_some()
                 || self.units_checked(id).is_some() =>
             {
-                job_first
+                "actions-why-job-first"
             }
-            _ => return format!("{}: not implemented yet", self.tool_label(id)),
+            _ => return tr!("actions-why-not-made", tool = self.tool_label(id)),
         };
-        why.to_owned()
+        cut_craft_i18n::tr(key)
     }
 
-    /// Menu items, tool buttons and shortcuts all end up here: built-in actions first, then
-    /// the command registry.
-    #[expect(
-        clippy::too_many_lines,
-        clippy::cognitive_complexity,
-        reason = "the one dispatch of every action; to be split by the action table work"
-    )]
+    /// Menu items, tool buttons and shortcuts all end up here: a few special cases, then the
+    /// built-in actions ([`built_ins`]), then the actions that come in families (a recent
+    /// file, a layout, a display switch...) and last the command registry.
     pub(super) fn invoke(&mut self, ctx: &egui::Context, id: &str) {
         // the log says which tool was used, so a crash's log shows what led up to it
         cut_craft_bug_report::logs::step(&format!("Tool: {} ({id})", self.tool_label(id)));
@@ -496,177 +413,24 @@ impl CutCraftApp {
             }
             return;
         }
+        if let Some(action) = built_ins::get(id) {
+            (action.run)(self, ctx);
+            return;
+        }
+        self.invoke_family(ctx, id);
+    }
+
+    /// The actions that come in families, each named by a prefix and what follows it or
+    /// found in a list of its own (the display switches, the layouts...), else a command.
+    fn invoke_family(&mut self, ctx: &egui::Context, id: &str) {
         match id {
-            "undo" => {
-                if self.history.undo(&mut self.doc) {
-                    self.status
-                        .set_message(&cut_craft_i18n::tr!("status-undone"));
-                }
-            }
-            "redo" => {
-                if self.history.redo(&mut self.doc) {
-                    self.status
-                        .set_message(&cut_craft_i18n::tr!("status-redone"));
-                }
-            }
-            // closing goes through the close request, which checks for unsaved work
-            "exit" => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            "new"
-            | "open"
-            | "close"
-            | "save"
-            | "save_as"
-            | "import_vectors_bitmap"
-            | "import_component_3d_model"
-            | "segment_3d_model_file"
-            | "import_toolpaths_file"
-            | "import_cut_list"
-            | "install_post_processor"
-            | "add_clipart_folder" => self.file_action(id),
-            "save_as_template"
-            | "new_from_template"
-            | "save_selected_toolpath_as_template"
-            | "save_all_visible_toolpaths_as_template"
-            | "load_template" => self.template_action(id),
-            id if TOP_BAR_TOGGLES.contains(&id) => self.top_bar_toggle(id),
-            // The four Create Shape icons: the form with that profile chosen
-            "create_shape_round"
-            | "create_shape_angled"
-            | "create_shape_smooth"
-            | "create_shape_flat" => {
-                let profile = match id {
-                    "create_shape_angled" => "angular",
-                    _ => &id["create_shape_".len()..],
-                };
-                self.start_command("create_shape");
-                if let Some(form) = self.form.as_mut().filter(|f| f.id == "create_shape") {
-                    form.params["profile"] = Value::from(profile);
-                }
-            }
-            // the Align Objects group's spacing buttons, by pick order
-            "left_to_right" | "right_to_left" | "top_to_bottom" | "bottom_to_top" => {
-                let command = if id.contains("left") {
-                    "space_horizontally"
-                } else {
-                    "space_vertically"
-                };
-                if let Err(e) = self.apply(command, &serde_json::json!({ "order": id })) {
-                    self.status.set_message(&e);
-                }
-            }
-            "edit_toolpath" => self.edit_toolpath(),
             // a drawing tool's toolbox variant: its form, the drag read the variant's way
             id if crate::flyout::variant(id).is_some() => self.start_variant(id),
-            // Edit Text: Draw Text opens on the selected text's settings
-            "edit_text" => self.start_command("draw_text"),
-            // The three Join icons: Join / Close Vectors their way
-            "join_straight_line" | "join_smooth_curve" | "join_move_end_points" => {
-                let method = id.trim_start_matches("join_");
-                let params = serde_json::json!({ "method": method });
-                if let Err(e) = self.apply("join_close_vectors", &params) {
-                    self.status.set_message(&e);
-                }
-            }
-            "import_vectors" | "export_vectors" | "open_folder" | "open_clipart_folder" => {
-                self.file_icon_action(id);
-            }
-            // the Library tab, where the clipart is
-            "clipart_library" => {
-                self.set_design_tab(
-                    DESIGN_TABS
-                        .iter()
-                        .position(|&t| t == "Library")
-                        .unwrap_or_default(),
-                );
-                self.pages.open(Page::Design);
-                self.show_inspector_tab("Library");
-            }
-            // the Components tab, as its Component Levels icon shows
-            "component_levels" => {
-                self.set_design_tab(
-                    DESIGN_TABS
-                        .iter()
-                        .position(|&t| t == "Components")
-                        .unwrap_or_default(),
-                );
-                self.pages.open(Page::Design);
-                self.show_inspector_tab("Components");
-            }
-            "delete_all_guides" => self.set_guides(vec![]),
-            // the current layer becomes the selected vectors' (the first picked)
-            "activate_layer_of_selection" => {
-                if let Some(&id) = self.doc.selection.iter().next() {
-                    let layer = self.doc.layer_of(id);
-                    self.layer_action(ctx, layer, "set_current_layer");
-                }
-            }
-            "lock_all_existing_guides" | "unlock_all_existing_guides" => {
-                let locked = id.starts_with("lock");
-                let guides = self
-                    .doc
-                    .guides
-                    .iter()
-                    .map(|g| cut_craft_core::document::Guide { locked, ..*g })
-                    .collect();
-                self.set_guides(guides);
-            }
-            "machine_configuration" => {
-                self.machine_window = Some(cut_craft_machines::MachineManager::new(&self.machines));
-            }
-            "tool_changer" => self.tool_changer_window = true,
-            "import_into_shape" => self.import_into_shape(),
-            "machine_files" => match self.machines.active() {
-                Some(machine) => {
-                    let (name, send_to) = (machine.name.clone(), machine.send_to.clone());
-                    self.open_machine_files(&name, &send_to);
-                }
-                None => self
-                    .status
-                    .set_message(&cut_craft_i18n::tr!("status-no-machine-yet")),
-            },
-            "add_machine" => {
-                self.machine_window =
-                    Some(cut_craft_machines::MachineManager::adding(&self.machines));
-            }
-            "install_offline_package" => {
-                let dialog = filtered_dialog(Dialog::MachinePackage, &self.registry);
-                if let Some(path) = dialog.pick_file() {
-                    self.install_package(&path);
-                }
-            }
-            "search_for_machine_online" => {
-                ctx.open_url(egui::OpenUrl::new_tab(super::MACHINES_ONLINE));
-            }
-            "post_processor_management" => {
-                self.post_window = Some(cut_craft_machines::PostManager::for_machine(
-                    self.machines.active(),
-                ));
-            }
-            "tool_database" => {
-                let manager = cut_craft_tool_database::Manager::new(&self.tools);
-                self.open_tool_manager(manager);
-            }
             // the labels' setting is kept with the options, so they stay as left
             "show_keep_out_zone_labels" => {
                 self.display.toggle(id);
                 self.options.toolpaths.keep_out_labels = self.display.keep_out_labels;
                 self.save_options();
-                ctx.request_repaint();
-            }
-            // hidden construction lines cannot stay picked: they are let go
-            "show_construction_lines" => {
-                self.display.toggle(id);
-                self.doc.hide_construction = !self.display.construction;
-                if !self.display.construction {
-                    let kept: Vec<_> = (self.doc.selection.iter().copied())
-                        .filter(|v| !self.doc.is_construction(*v))
-                        .collect();
-                    if kept.len() < self.doc.selection.len() {
-                        let mut c = Change::builder(&self.doc);
-                        c.select(kept);
-                        self.record(Ok(c.finish()), "Construction lines hidden");
-                    }
-                }
                 ctx.request_repaint();
             }
             "draw_vectors_in_3d_view" => {
@@ -684,149 +448,19 @@ impl CutCraftApp {
             id if self.resolution_checked(id).is_some() => self.set_resolution(id),
             id if self.units_checked(id).is_some() => self.set_units(id),
             id if self.layout_checked(id).is_some() => self.set_layout(id),
-            "find_tool" => self.search = Some(String::new()),
-            "refresh_2d_view" => ctx.request_repaint(),
-            "create_component_from_toolpath_preview" => self.component_from_preview(),
-            "copy"
-            | "cut"
-            | "paste"
-            | "paste_in_place"
-            | "increment_and_save"
-            | "open_application_data_folder"
-            | "print" => {
-                self.clipboard_or_file_action(ctx, id);
-            }
-            "keyboard_shortcuts" | "credits" | "toolpath_summary" | "about_cut_craft"
-            | "help_contents" | "snap_options" => self.open_window(id),
-            "options" => self.options_window = true,
-            // F1: the open form's help page, else the contents
-            "tool_help" => {
-                let topic = self.form.as_ref().map_or("contents", |f| {
-                    if f.brief {
-                        super::setup_material::ID
-                    } else {
-                        f.id
-                    }
-                });
-                self.info = Some(Info::Help(topic));
-            }
-            "view_2d" => self.view = View::TwoD,
-            "view_3d" => self.view = View::ThreeD,
-            "first_run_setup" => self.open_first_run(),
-            "did_you_know" => self.open_unseen_tip(),
-            "try_sample_project" => self.open_sample(),
-            super::setup_material::ID => self.open_setup_material(),
+            _ => self.invoke_prefixed(ctx, id),
+        }
+    }
+
+    /// The families named by a prefix with a value after it (a link's number, a recent
+    /// file's place, a level...), else a command.
+    fn invoke_prefixed(&mut self, ctx: &egui::Context, id: &str) {
+        match id {
             id if id.starts_with(gui::COMMUNITY) => {
                 let link = id[gui::COMMUNITY.len()..].parse::<usize>().ok();
                 if let Some((_, url, _)) = link.and_then(|n| super::LINKS.get(n)) {
                     ctx.open_url(egui::OpenUrl::new_tab(*url));
                 }
-            }
-            "addons" => self.addons.show(ctx),
-            gui::OPEN_GADGETS_FOLDER => self.open_gadgets_folder(),
-            "check_for_updates" => {
-                let skipped = self.options.updates.skipped_version.clone();
-                self.updates.check(ctx, true, skipped);
-            }
-            // the Select tool: put away whatever tool is in hand
-            "select" => {
-                (self.form, self.view_tool) = (None, None);
-                self.status.current_tool = self.tool_label("select");
-            }
-            // menu items that are an existing tool reached another way
-            "select_all_vectors_on_current_layer" => {
-                let layer = serde_json::json!({ "layer": self.doc.current_layer });
-                if let Err(e) = self.apply("select_layer_vectors", &layer) {
-                    self.status.set_message(&e);
-                }
-            }
-            "job_size_and_position" => self.start_command("job_setup"),
-            "show_toolpaths_tab" => {
-                self.pages.open(Page::Toolpaths);
-                self.show_inspector_tab("Toolpaths");
-            }
-            "design_layout" => self.pages = Pages::design_layout(),
-            "machining_layout" => self.pages = Pages::machining_layout(),
-            "interface_layout" => self.open_layout_picker(),
-            "pan" | "zoom_box" | "zoom_to_job" | "zoom_to_drawing" | "zoom_selected"
-            | "node_edit" | "measure_inspect" | "transform" => {
-                self.view_action(ctx, id);
-            }
-            "recalculate_toolpath"
-            | "recalculate_visible_toolpaths"
-            | "recalculate_all_toolpaths"
-            | "delete_toolpath"
-            | "save_toolpaths" => {
-                self.toolpath_action(id);
-            }
-            "preview_toolpath" => {
-                if let Some(id) = self.selected_toolpath {
-                    self.preview_toolpath(id);
-                } else if let Some(group) = &self.selected_group {
-                    // a picked group: its toolpaths (its sub-groups' too) in list order, as one preview
-                    self.preview_ids(&self.doc.toolpaths_under_group(group));
-                }
-            }
-            "job_sheet_editor" => self.job_sheet_window = true,
-            "part_labels" => self.part_labels_window = true,
-            "clearing_settings" => self.clearing_window = true,
-            "create_job_sheet" => self.create_job_sheet(),
-            "print_job_sheet" => self.print_job_sheet(),
-            "edit_object" => {
-                if let Some(command) = self.made_to_edit() {
-                    // the form opens on what it made, with its own settings
-                    self.form = None;
-                    self.start_command(command);
-                } else if let Some((id, command, params)) = self.object_to_edit() {
-                    self.edit_shape(id, command, params);
-                }
-            }
-            "object_properties" => {
-                if let Some(id) = self.object_properties() {
-                    self.invoke(ctx, id);
-                }
-            }
-            // the 2D and 3D views tiled one above the other, side by side, or back to tabs
-            "tile_windows_horizontal" => self.split = Some(super::Split::Stacked),
-            "tile_windows_vertical" => self.split = Some(super::Split::SideBySide),
-            "cascade_windows" => self.split = None,
-            "save_shaded_image" => {
-                if let Some(path) = filtered_dialog(Dialog::SaveShadedImage, &self.registry)
-                    .set_file_name("shaded.png")
-                    .save_file()
-                {
-                    self.save_shaded_image(path);
-                }
-            }
-            "preview_all_toolpaths" => self.preview_all(false),
-            "preview_visible_toolpaths" => self.preview_all(true),
-            "undo_last_preview" => {
-                if let Some(super::BeforePreview(material, side)) = self.before_preview.take() {
-                    self.simulation = material;
-                    self.kept_playback = None;
-                    (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-                    // made before Swap Sides: turned over to the side the job is on now
-                    self.preview_side = side;
-                    self.follow_side();
-                    self.status
-                        .set_message(&cut_craft_i18n::tr!("status-undid-last-preview"));
-                }
-            }
-            "reset_preview" => {
-                // a playing preview stops first, keeping what it has cut, so Undo Last
-                // Preview brings back what was showing
-                self.finish_playback();
-                self.before_preview = Some(super::BeforePreview(
-                    self.simulation.take(),
-                    self.preview_side,
-                ));
-                (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-                (self.playback, self.playing, self.playback_goal) = (None, false, None);
-                self.kept_playback = None;
-                // the Preview tab's detail goes back to Options' default
-                self.display.detail = self.options.performance.preview_detail.min(100);
-                self.status
-                    .set_message(&cut_craft_i18n::tr!("status-preview-reset"));
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
@@ -850,7 +484,6 @@ impl CutCraftApp {
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(EXPORT_LEVEL) => {
                 self.level_action(id);
             }
-            "export_as_stl" => (self.stl_window, self.stl_result) = (true, None),
             id if self.registry.exporter(id).is_some() => self.export(id),
             id if id.starts_with(gui::REIMPORT_MODEL) => self.reimport_model(id),
             id if id.starts_with(gui::GUIDE) => self.guide_action(id),

@@ -58,7 +58,7 @@ pub fn form_name(registry: &Registry, id: &str, english: &str) -> String {
         .iter()
         .find(|v| v.command == id && v.label == english)
         .map(|v| v.id);
-    let built_in = crate::built_ins::BUILT_INS
+    let built_in = crate::app::built_ins::BUILT_INS
         .iter()
         .find(|b| b.name == english)
         .map(|b| b.id);
@@ -145,7 +145,8 @@ pub fn menu_item_name(item: &MenuItem) -> String {
     }
     // a built-in action's item is named as the action is everywhere, "..." on one that opens
     // a window
-    if let Some(b) = crate::built_ins::get(&item.action).filter(|b| item.name == b.menu_name()) {
+    if let Some(b) = crate::app::built_ins::get(&item.action).filter(|b| item.name == b.menu_name())
+    {
         let name = tr(&tool_key(b.id));
         return if b.window { format!("{name}...") } else { name };
     }

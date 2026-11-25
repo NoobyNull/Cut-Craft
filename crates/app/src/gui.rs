@@ -235,12 +235,12 @@ pub const SUBTAB_PLACE: &str = "subtab_place:";
 
 /// A built-in tool's own icon, where no file is named for its id.
 pub fn built_in_icon(id: &str) -> Option<&'static str> {
-    crate::built_ins::get(id).and_then(|b| b.icon)
+    crate::app::built_ins::get(id).and_then(|b| b.icon)
 }
 
-/// A built-in action's own name ([`crate::built_ins`]).
+/// A built-in action's own name ([`crate::app::built_ins`]).
 pub fn built_in_label(id: &str) -> Option<&'static str> {
-    crate::built_ins::get(id).map(|b| b.name)
+    crate::app::built_ins::get(id).map(|b| b.name)
 }
 
 impl Toolbar {
@@ -351,7 +351,7 @@ pub fn english_about(id: &str) -> Option<&'static str> {
                 .find(|(command, _)| *command == id)
                 .map(|(_, about)| *about)
         })
-        .or_else(|| crate::built_ins::get(id).map(|b| b.about))
+        .or_else(|| crate::app::built_ins::get(id).map(|b| b.about))
         .or_else(|| crate::flyout::variant(id).map(|v| v.hint))
 }
 
@@ -866,14 +866,15 @@ impl MenuItem {
         }
     }
 
-    /// Built-in action `id`'s item, named and with the shortcut its [`crate::built_ins`] entry
+    /// Built-in action `id`'s item, named and with the shortcut its [`crate::app::built_ins`] entry
     /// gives.
     ///
     /// # Panics
     /// When `id` is no built-in action: the menus are made the same way every run, so a test
     /// meets it first.
     pub fn built_in(id: &str) -> Self {
-        let b = crate::built_ins::get(id).unwrap_or_else(|| panic!("{id} is no built-in action"));
+        let b =
+            crate::app::built_ins::get(id).unwrap_or_else(|| panic!("{id} is no built-in action"));
         Self {
             action: id.to_owned(),
             ..Self::new(&b.menu_name(), b.keys)

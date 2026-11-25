@@ -385,7 +385,7 @@ impl CutCraftApp {
             .registry
             .iter()
             .filter_map(|c| Some((c.id().to_owned(), shortcut::parse(c.meta().shortcut)?)));
-        let built_ins = (crate::built_ins::BUILT_INS.iter())
+        let built_ins = (crate::app::built_ins::BUILT_INS.iter())
             .filter_map(|b| Some((b.id.to_owned(), shortcut::parse(b.keys)?)));
         let keys = commands.chain(built_ins);
         let mut bindings: Vec<_> = keys
@@ -463,7 +463,7 @@ impl CutCraftApp {
                 .iter()
                 .map(|c| (c.id().to_owned(), self.tool_label(c.id()))),
         );
-        for b in crate::built_ins::BUILT_INS {
+        for b in crate::app::built_ins::BUILT_INS {
             if !actions.iter().any(|(a, _)| a == b.id) {
                 actions.push((b.id.to_owned(), self.tool_label(b.id)));
             }
@@ -484,115 +484,114 @@ impl CutCraftApp {
         match self.options.controls.shortcuts.get(id) {
             Some(set) => Some(set.first().cloned().unwrap_or_default()),
             None => (self.registry.get(id).map(|c| c.meta().shortcut))
-                .or_else(|| crate::built_ins::get(id).map(|b| b.keys))
+                .or_else(|| crate::app::built_ins::get(id).map(|b| b.keys))
                 .map(str::to_owned),
         }
     }
 
-    /// Cut, Copy, Paste, Increment and Save, Open Application Data Folder.
-    pub(super) fn clipboard_or_file_action(&mut self, ctx: &egui::Context, id: &str) {
-        match id {
-            "copy" | "cut" => {
-                self.clipboard = self
-                    .doc
-                    .selection
-                    .iter()
-                    .map(|id| self.doc.vectors[id].clone())
-                    .collect();
-                let doc = &self.doc;
-                let picked: std::collections::BTreeSet<EntityId> =
-                    doc.selection.iter().copied().collect();
-                let groups: Vec<Vec<u64>> = doc
-                    .selection
-                    .iter()
-                    .map(|&id| doc.chain_within(id, &picked))
-                    .collect();
-                self.clipboard_from = super::Copied {
-                    layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
-                    job: self.job_epoch,
-                    texts: records_of(&groups, &doc.texts),
-                    names: records_of(&groups, &doc.part_names),
-                    groups,
-                };
-                self.clipboard_components = self
-                    .doc
-                    .selected_components
-                    .iter()
-                    .filter_map(|id| self.doc.components.get(id).cloned())
-                    .collect();
-                let text = serde_json::to_string(&self.clipboard).expect("paths serialize");
-                ctx.copy_text(text);
-                if id == "cut"
-                    && let Err(e) = self.apply("delete", &serde_json::json!({}))
-                {
-                    self.status.set_message(&e);
-                }
+    /// Copy, or Cut (`cut`): the selected vectors and 3D parts onto the clipboard, the
+    /// vectors as text too so they paste into another window.
+    pub(super) fn copy_selection(&mut self, ctx: &egui::Context, cut: bool) {
+        self.clipboard = self
+            .doc
+            .selection
+            .iter()
+            .map(|id| self.doc.vectors[id].clone())
+            .collect();
+        let doc = &self.doc;
+        let picked: std::collections::BTreeSet<EntityId> = doc.selection.iter().copied().collect();
+        let groups: Vec<Vec<u64>> = doc
+            .selection
+            .iter()
+            .map(|&id| doc.chain_within(id, &picked))
+            .collect();
+        self.clipboard_from = super::Copied {
+            layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
+            job: self.job_epoch,
+            texts: records_of(&groups, &doc.texts),
+            names: records_of(&groups, &doc.part_names),
+            groups,
+        };
+        self.clipboard_components = self
+            .doc
+            .selected_components
+            .iter()
+            .filter_map(|id| self.doc.components.get(id).cloned())
+            .collect();
+        let text = serde_json::to_string(&self.clipboard).expect("paths serialize");
+        ctx.copy_text(text);
+        if cut && let Err(e) = self.apply("delete", &serde_json::json!({})) {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Paste and Paste in Place: pasted where they were copied from, in this job or another.
+    pub(super) fn paste_clipboard(&mut self) {
+        let mut c = Change::builder(&self.doc);
+        // a copied group pastes as a group of its own, on its layer, text still text
+        let from = &self.clipboard_from;
+        let ids = if from.groups.len() == self.clipboard.len() {
+            let paths = self.clipboard.iter().cloned().zip(from.groups.clone());
+            let shift = Some(Point::ZERO);
+            c.add_regrouped(paths.collect(), &from.texts, &from.names, shift)
+        } else {
+            self.clipboard.iter().map(|p| c.add(p.clone())).collect()
+        };
+        // on the layer it came from in this job; in another, on the current layer
+        let layers = if from.job == self.job_epoch {
+            from.layers.as_slice()
+        } else {
+            &[]
+        };
+        for (&id, layer) in ids.iter().zip(layers) {
+            if self.doc.layer(*layer).is_some() {
+                c.move_to_layer(id, *layer);
             }
-            // pasted where they were copied from, in this job or another (Paste in Place)
-            "paste" | "paste_in_place" => {
-                let mut c = Change::builder(&self.doc);
-                // a copied group pastes as a group of its own, on its layer, text still text
-                let from = &self.clipboard_from;
-                let ids = if from.groups.len() == self.clipboard.len() {
-                    let paths = self.clipboard.iter().cloned().zip(from.groups.clone());
-                    let shift = Some(Point::ZERO);
-                    c.add_regrouped(paths.collect(), &from.texts, &from.names, shift)
-                } else {
-                    self.clipboard.iter().map(|p| c.add(p.clone())).collect()
-                };
-                // on the layer it came from in this job; in another, on the current layer
-                let layers = if from.job == self.job_epoch {
-                    from.layers.as_slice()
-                } else {
-                    &[]
-                };
-                for (&id, layer) in ids.iter().zip(layers) {
-                    if self.doc.layer(*layer).is_some() {
-                        c.move_to_layer(id, *layer);
-                    }
-                }
-                c.select(ids);
-                for k in &self.clipboard_components {
-                    c.add_component(k.clone());
-                }
-                self.record(Ok(c.finish()), "Pasted");
-            }
-            "increment_and_save" => match self.session.path.clone() {
-                Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
-                None => self.file_action("save_as"),
-            },
-            // the drawing as a PDF opened in the system viewer, which previews and prints it
-            // (a print window of our own, with scale and tiling, is not done)
-            "print" => {
-                let path = std::env::temp_dir().join("cut-craft-print.pdf");
-                let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)
-                    .and_then(|()| {
-                        on_the_desktop();
-                        files::show_folder(&path).map_err(|e| e.to_string())
-                    });
-                if let Err(e) = opened {
-                    self.status.set_message(&cut_craft_i18n::tr!(
-                        "status-could-not-print",
-                        error = e.clone()
-                    ));
-                }
-            }
-            "open_application_data_folder" => {
-                let opened = files::config_dir()
-                    .ok_or_else(|| "no home folder".to_owned())
-                    .and_then(|dir| {
-                        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-                        on_the_desktop();
-                        files::show_folder(&dir).map_err(|e| e.to_string())
-                    });
-                if let Err(e) = opened {
-                    self.status.set_message(&cut_craft_i18n::tr!(
-                        "status-could-not-open-folder",
-                        error = e.clone()
-                    ));
-                }
-            }
-            _ => {}
+        }
+        c.select(ids);
+        for k in &self.clipboard_components {
+            c.add_component(k.clone());
+        }
+        self.record(Ok(c.finish()), "Pasted");
+    }
+
+    /// Increment and Save: saved under the next free numbered name.
+    pub(super) fn increment_and_save(&mut self) {
+        match self.session.path.clone() {
+            Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
+            None => self.save_as(),
+        }
+    }
+
+    /// Print: the drawing as a PDF opened in the system viewer, which previews and prints it
+    /// (a print window of our own, with scale and tiling, is not done).
+    pub(super) fn print_drawing(&mut self) {
+        let path = std::env::temp_dir().join("cut-craft-print.pdf");
+        let opened = files::export(&self.registry, "export_pdf", &self.doc, &path).and_then(|()| {
+            on_the_desktop();
+            files::show_folder(&path).map_err(|e| e.to_string())
+        });
+        if let Err(e) = opened {
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-could-not-print",
+                error = e.clone()
+            ));
+        }
+    }
+
+    pub(super) fn open_application_data_folder(&mut self) {
+        let opened = files::config_dir()
+            .ok_or_else(|| "no home folder".to_owned())
+            .and_then(|dir| {
+                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                on_the_desktop();
+                files::show_folder(&dir).map_err(|e| e.to_string())
+            });
+        if let Err(e) = opened {
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-could-not-open-folder",
+                error = e.clone()
+            ));
         }
     }
 

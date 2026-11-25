@@ -2,7 +2,7 @@
 //! STL, previews and saving straight away.
 
 use super::views::{TICK_TO_SAVE, files_section, post_combo, tool_changes_section};
-use super::{CutCraftApp, Drag, EntityId, Info, Path, dialog_size, egui, saving_path};
+use super::{CutCraftApp, Drag, EntityId, Path, dialog_size, egui, saving_path};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
@@ -97,21 +97,6 @@ impl CutCraftApp {
         self.selected_group = None;
         let form = self.immediate_output.clone();
         self.save_toolpaths(&form);
-    }
-
-    /// The Help windows, Toolpath Summary and Snapping Options.
-    pub(super) fn open_window(&mut self, id: &str) {
-        self.info = match id {
-            "keyboard_shortcuts" => Some(Info::Shortcuts),
-            "credits" => Some(Info::Credits),
-            "toolpath_summary" => Some(Info::Summary),
-            "about_cut_craft" => Some(Info::About),
-            "help_contents" => Some(Info::Help("contents")),
-            _ => {
-                self.snap_window = true;
-                return;
-            }
-        };
     }
 
     /// Save Toolpaths: the machine and post, which toolpaths go in which file, and Save.
