@@ -167,6 +167,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 
 ### Job model [obs]
 - **Job type:** Single-sided, Double-sided (both sides in one file, `Sd` subsystem) or Rotary (4th axis, wrapped view).
+  - **Rotary wrap bands** (Cut Craft addition, Matthew 2026-11-25): a rotary job's 2D view marks both seams in blue with the A angle there, and shows a shaded band past each (above and below along X, left and right along Y) where the drawing near the other seam is drawn again, faded, a turn away. A click on a ghost picks the real vector and drawing snaps to ghosts (as a free point, not tied to the vector). Zoom to fit includes the bands. Band size is **Options ▸ Appearance ▸ Rotary wrap bands**: Quarter turn (default), Half turn or Off. Toolpaths are not ghosted: the 3D rotary preview shows them wrapped.
 - **Material block:** width X, height Y, thickness Z, and units (mm or inch).
 - **Z-zero:** on the material surface or on the machine bed. A rotary job's choices are Cylinder Surface or Cylinder Axis instead [inf: rotary job setup help]. Cut Craft deliberately names them **Material Top** and **Turning Axis** (Job Setup, Setup Material, the post's `[Z_ORIGIN]` and the job sheet), because its rotary material may be square or a board, not only a cylinder; the size is named for the shape too (Diameter, Side or Thickness).
 - **XY datum:** any corner or the centre, with an optional offset. A red square marks it while Job Setup is open.

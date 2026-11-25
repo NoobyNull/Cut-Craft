@@ -86,6 +86,22 @@ reworded, its key changes too, and the new one shows in English until it's trans
 
 Keep tool names short. A Ribbon or Rail button has room for about as much as the English.
 
+## Tool forms and settings
+
+`settings.ftl` holds the words of every tool's form, and of the Options, Snapping Options,
+Job Setup Sheet, Part Labels and Export as STL windows. That covers each setting's name, its
+tooltip, the choices it offers, and the headings over groups and tabs of settings. It is
+grouped by form (`## Pocket (pocket_toolpath)`), and each text is listed once, under the
+first form that has it. Other forms with the same words show the same translation.
+
+These texts have no names of their own, so a key is `setting-`, the text's first five words
+and a short check of the whole text: `setting-cut-depth-b1c2d3`. When the English is
+reworded, its key changes, and the new words show in English until they are translated.
+That way an old translation never shows for words that now say something else.
+
+Keep anything written `{ "{" }` or `{ "[" }` as it is. That is how a brace, or a `[` at the
+start of a line, is written in Fluent.
+
 ## Words to keep in English
 
 - **G-code, GRBL, Mach, FluidNC, DXF, SVG, STL** and other file and machine names.

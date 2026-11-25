@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-25
-see-also: backups, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
+see-also: backups, view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
 # Changing settings
@@ -111,7 +111,9 @@ on this computer only.
 
 Each layout also comes light or dark: **Options ▸ Appearance ▸ Theme** picks **Light**,
 **Dark**, or **System** to follow your desktop. In the pictures below the light theme is on
-the left and the dark theme on the right.
+the left and the dark theme on the right. **Options ▸ Appearance ▸ Rotary wrap bands** sets
+how far past each seam a rotary job's 2D view shows the other side of the material (see
+[Moving around the 2D view](help:view_2d)).
 
 **[Ribbon](help:layout_ribbon)**: Design, Model and Toolpaths tabs across the top, each a row
 of tool groups, the sheets, layers and toolpath list on the left, and the open form on the
