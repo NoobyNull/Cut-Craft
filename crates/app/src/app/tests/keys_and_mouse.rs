@@ -90,7 +90,12 @@ fn the_view_buttons_sit_at_the_top_right_of_the_2d_view_starting_with_pan() {
         .iter()
         .find(|p| over_view(p))
         .expect("Pan over the view");
-    let selection = h.text_at("Zoom to Selection").unwrap();
+    // its name is the tool's everywhere, so it is on the tool pages too: the one over the view
+    let selection = *h
+        .texts_at("Zoom to Selection")
+        .iter()
+        .find(|p| over_view(p))
+        .expect("Zoom to Selection over the view");
     assert!(
         pan.x > area.center().x && selection.x > pan.x,
         "on the right, Pan first: {pan:?} {selection:?} in {area:?}"

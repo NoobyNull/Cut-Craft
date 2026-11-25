@@ -2,8 +2,8 @@
 //! cut and paste.
 
 use super::{
-    BUILT_INS, Change, CutCraftApp, EntityId, KEY_ACTION_NAMES, Key, KeyboardShortcut, LAYOUT_KEYS,
-    Modifiers, Page, Point, Screen, Shown, egui, files, gui, on_the_desktop, shortcut,
+    Change, CutCraftApp, EntityId, Key, KeyboardShortcut, Modifiers, Page, Point, Screen, Shown,
+    egui, files, on_the_desktop, shortcut,
 };
 
 impl CutCraftApp {
@@ -378,23 +378,16 @@ impl CutCraftApp {
         }
     }
 
-    /// Every action's own shortcuts: each command's, the built-ins' as the menus spell them,
-    /// the layouts', and dragging with the wheel pressed to pan.
+    /// Every action's own shortcuts: each command's, each built-in action's, and dragging with
+    /// the wheel pressed to pan.
     pub(super) fn default_bindings(&self) -> Vec<(String, shortcut::Trigger)> {
         let commands = self
             .registry
             .iter()
             .filter_map(|c| Some((c.id().to_owned(), shortcut::parse(c.meta().shortcut)?)));
-        let built_ins = self
-            .menus
-            .items()
-            .into_iter()
-            .filter(|i| BUILT_INS.contains(&i.action.as_str()))
-            .filter_map(|i| Some((i.action.clone(), shortcut::parse(&i.shortcut)?)));
-        let layouts = LAYOUT_KEYS
-            .iter()
-            .filter_map(|&(id, keys)| Some((id.to_owned(), shortcut::parse(keys)?)));
-        let keys = commands.chain(built_ins).chain(layouts);
+        let built_ins = (crate::built_ins::BUILT_INS.iter())
+            .filter_map(|b| Some((b.id.to_owned(), shortcut::parse(b.keys)?)));
+        let keys = commands.chain(built_ins);
         let mut bindings: Vec<_> = keys
             .map(|(id, keys)| (id, shortcut::Trigger::Key(keys)))
             .collect();
@@ -461,31 +454,18 @@ impl CutCraftApp {
         ctx.input(|i| buttons.iter().any(|&b| i.pointer.button_down(b)))
     }
 
-    /// Every action a shortcut can be set for, by id, with its name as the menus write it:
-    /// panning by dragging first, then the commands and the built-in menu items by name.
+    /// Every action a shortcut can be set for, by id, with its name: panning by dragging first,
+    /// then the commands and the built-in actions by name.
     pub(super) fn shortcut_actions(&self) -> Vec<(String, String)> {
         let mut actions: Vec<(String, String)> = vec![];
-        let named = self.menus.items();
-        let name_of = |id: &str| {
-            named
-                .iter()
-                .find(|i| i.action == id)
-                .map(|i| i.name.clone())
-                .or_else(|| {
-                    (KEY_ACTION_NAMES.iter())
-                        .find(|(a, _)| *a == id)
-                        .map(|(_, name)| (*name).to_owned())
-                })
-                .unwrap_or_else(|| gui::title_case(id))
-        };
         actions.extend(
             self.registry
                 .iter()
                 .map(|c| (c.id().to_owned(), self.tool_label(c.id()))),
         );
-        for id in BUILT_INS.iter().chain(LAYOUT_KEYS.iter().map(|(id, _)| id)) {
-            if !actions.iter().any(|(a, _)| a == id) {
-                actions.push(((*id).to_owned(), name_of(id)));
+        for b in crate::built_ins::BUILT_INS {
+            if !actions.iter().any(|(a, _)| a == b.id) {
+                actions.push((b.id.to_owned(), self.tool_label(b.id)));
             }
         }
         actions.sort_by(|a, b| a.1.cmp(&b.1));
@@ -498,12 +478,14 @@ impl CutCraftApp {
         actions
     }
 
-    /// The shortcut a menu shows for `id`: the first one set in Options, else the command's
-    /// own; `None` leaves the menu item's own.
+    /// The shortcut a menu shows for `id`: the first one set in Options, else the command's or
+    /// the built-in action's own; `None` leaves the menu item's own.
     pub(super) fn shortcut_text(&self, id: &str) -> Option<String> {
         match self.options.controls.shortcuts.get(id) {
             Some(set) => Some(set.first().cloned().unwrap_or_default()),
-            None => self.registry.get(id).map(|c| c.meta().shortcut.to_owned()),
+            None => (self.registry.get(id).map(|c| c.meta().shortcut))
+                .or_else(|| crate::built_ins::get(id).map(|b| b.keys))
+                .map(str::to_owned),
         }
     }
 

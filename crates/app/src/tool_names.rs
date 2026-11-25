@@ -58,10 +58,10 @@ pub fn form_name(registry: &Registry, id: &str, english: &str) -> String {
         .iter()
         .find(|v| v.command == id && v.label == english)
         .map(|v| v.id);
-    let built_in = crate::gui::BUILT_IN_ABOUTS
+    let built_in = crate::built_ins::BUILT_INS
         .iter()
-        .find(|(_, label, _)| *label == english)
-        .map(|(tool, _, _)| *tool);
+        .find(|b| b.name == english)
+        .map(|b| b.id);
     match variant.or(built_in) {
         Some(tool) => name_of(registry, tool),
         None => tool_name(id, english),
@@ -142,6 +142,12 @@ pub fn menu_item_name(item: &MenuItem) -> String {
     }
     if named_as_its_tool(item) {
         return tr(&tool_key(&item.action));
+    }
+    // a built-in action's item is named as the action is everywhere, "..." on one that opens
+    // a window
+    if let Some(b) = crate::built_ins::get(&item.action).filter(|b| item.name == b.menu_name()) {
+        let name = tr(&tool_key(b.id));
+        return if b.window { format!("{name}...") } else { name };
     }
     tr_or(&menu_item_key(&item.name), &item.name)
 }
