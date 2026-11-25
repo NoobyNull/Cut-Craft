@@ -41,6 +41,9 @@ pub(super) struct ToolbarState {
     pub group: Option<(usize, usize)>,
     /// The toolbar being renamed and the name typed so far.
     pub rename: Option<(usize, String)>,
+    /// A change to the toolbars picked while they are being drawn, made once the frame's
+    /// toolbars are all drawn (so none is deleted or moved under the loop drawing them).
+    pending: Option<String>,
 }
 
 impl CutCraftApp {
@@ -77,7 +80,14 @@ impl CutCraftApp {
         if let Some(action) = self.popup(response, || {
             toolbars::toolbar_menu(&self.options.toolbars, n)
         }) {
-            self.invoke(&response.ctx, &action);
+            self.toolbars.pending = Some(action);
+        }
+    }
+
+    /// What was picked from a toolbar's menus this frame, now they are all drawn.
+    pub(super) fn toolbar_changes(&mut self, ctx: &egui::Context) {
+        if let Some(action) = self.toolbars.pending.take() {
+            self.invoke(ctx, &action);
         }
     }
 
@@ -287,7 +297,11 @@ impl CutCraftApp {
         }
         let listed = self.open_group_list(ui, n, &items, &buttons, strip);
         if let Some(action) = action {
-            self.invoke(ui.ctx(), &action);
+            if action.starts_with(toolbars::ACTION) || action.starts_with(toolbars::RENAME) {
+                self.toolbars.pending = Some(action);
+            } else {
+                self.invoke(ui.ctx(), &action);
+            }
         }
         if let Some(id) = picked {
             self.toolbars.group = None;

@@ -450,6 +450,7 @@ impl CutCraftApp {
         // in every layout, over the drawing
         self.floating_toolbars(ui.ctx());
         self.toolbar_rename_window(ui.ctx());
+        self.toolbar_changes(ui.ctx());
     }
 
     /// The top bar's sheet, layer and level drop-downs: a command to apply, if one was

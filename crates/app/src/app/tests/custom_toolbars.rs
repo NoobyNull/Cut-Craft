@@ -219,3 +219,24 @@ fn a_ribbon_group_name_offers_the_group_on_a_right_click() {
     assert!(h.text_at("Add to Toolbar").is_some(), "its menu");
     assert!(h.text_at("Draw Circle").is_none(), "not its list");
 }
+
+#[test]
+fn deleting_a_toolbar_from_its_tab_leaves_the_others() {
+    let mut h = with_toolbar(WindowLayout::Ribbon);
+    h.app.invoke(&h.ctx, "toolbar:new:tool:draw_rectangle");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let tab = h.text_at("My Tools").expect("the first toolbar's tab");
+    h.right_click(tab);
+    click_text(&mut h, "Delete Toolbar");
+    h.frame(vec![]);
+    let names: Vec<&str> = h
+        .app
+        .options
+        .toolbars
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect();
+    assert_eq!(names, ["My Tools 2"]);
+    assert!(h.text_at("My Tools 2").is_some(), "its tab is still there");
+}
