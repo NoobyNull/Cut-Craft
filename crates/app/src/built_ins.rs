@@ -205,6 +205,8 @@ pub const BUILT_INS: &[BuiltIn] = &[
     act("part_labels", "Print Part Labels", "Print a label for each named part, to stick on it once it is cut out").window(),
     act("clearing_settings", "Clearing Settings", "How adaptive and trochoidal clearing cut in this job: the light step, the loops, \
          and whether rows and loops keep climb on the way back").window(),
+    act("advanced_rotary_mode", "Turn On Advanced Rotary Mode", "Open Options at Advanced rotary mode: each rotary toolpath then cuts the whole blank, \
+         not only what the toolpaths above it leave").window(),
     act("cut_list", "Save Cut List", "Save a list of the job's parts and their sizes, as a spreadsheet (CSV)").window(),
     act("show_open_vector_ends", "Show Open Vector Ends", "Put a circle on each end of every open vector, so a gap that stops a shape being \
          pocketed or carved stands out"),

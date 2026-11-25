@@ -143,7 +143,9 @@ impl CutCraftApp {
             ));
             return;
         }
-        let hit = self.doc.pick(at, tolerance);
+        // on a rotary job, a click on a ghost past a seam picks the vector it copies
+        let pick = |p| self.doc.pick(p, tolerance);
+        let hit = self.wrap().map_or_else(|| pick(at), |w| w.pick(at, pick));
         // a picture is picked where no vector is: click picks it, Shift-click adds or
         // takes it away
         let picture = hit.is_none().then(|| self.doc.pick_bitmap(at)).flatten();
@@ -174,9 +176,11 @@ impl CutCraftApp {
             self.doc.inside_group = None;
         }
         // inside a closed shape, away from any line, picture or component: the shape and
-        // its holes, as one part
+        // its holes, as one part (inside a rotary job's ghost too, the shape it copies)
         let part = if hit.is_none() && picture.is_none() && component.is_none() {
-            self.doc.pick_part(at, tolerance)
+            let part = |p| Some(self.doc.pick_part(p, tolerance)).filter(|v| !v.is_empty());
+            let picked = self.wrap().map_or_else(|| part(at), |w| w.pick(at, part));
+            picked.unwrap_or_default()
         } else {
             Vec::new()
         };

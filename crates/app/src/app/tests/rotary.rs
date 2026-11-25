@@ -325,3 +325,62 @@ fn setup_material_shows_every_shape_whole_and_names_the_size_for_it() {
         }
     }
 }
+
+#[test]
+fn an_old_job_s_rotary_machining_opens_as_the_new_toolpaths_and_recalculates() {
+    use cut_craft_core::Command;
+    use cut_craft_core::component::{Combine, Component};
+    use cut_craft_core::document::{Along, Document, Job};
+    let mut doc = Document {
+        job: Job::rotary(60.0, 40.0, Along::X),
+        ..Document::default()
+    };
+    let model = Component::from_fn("Bump", Combine::Add, doc.job.area(), 0.5, |p| {
+        ((p.x - 30.0).abs() < 15.0).then_some(17.0)
+    });
+    let mut c = Change::builder(&doc);
+    c.add_new_component(model);
+    doc.apply(&c.finish()).unwrap();
+    // three toolpaths an older Cut Craft made: Radial, Off centre and Indexed
+    for strategy in [
+        cmd_rotary_machining_toolpath::Strategy::Radial,
+        cmd_rotary_machining_toolpath::Strategy::OffCentre,
+        cmd_rotary_machining_toolpath::Strategy::Indexed,
+    ] {
+        let p = cmd_rotary_machining_toolpath::Params {
+            strategy,
+            tool: cut_craft_core::toolpath::Tool {
+                diameter: 6.0,
+                ..cmd_rotary_machining_toolpath::Params::default().tool
+            },
+            ..cmd_rotary_machining_toolpath::Params::default()
+        };
+        let change = cmd_rotary_machining_toolpath::RotaryMachiningToolpath::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+    }
+    let opened = cut_craft_core::file::load_job(&cut_craft_core::file::save_job(&doc)).unwrap();
+    let kinds: Vec<&str> = opened
+        .toolpaths
+        .values()
+        .map(|t| t.strategy.as_str())
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            "rotary_finishing_toolpath",
+            "rotary_finishing_toolpath",
+            "rotary_locked_angles_toolpath"
+        ]
+    );
+    // the moves saved with them are kept, and each recalculates as its new kind
+    let before: Vec<usize> = doc.toolpaths.values().map(|t| t.moves.len()).collect();
+    let kept: Vec<usize> = opened.toolpaths.values().map(|t| t.moves.len()).collect();
+    assert_eq!(before, kept);
+    let registry = crate::commands::registry();
+    let again = registry.recalculate_all(&opened).unwrap();
+    let mut fresh = opened.clone();
+    fresh.apply(&again).unwrap();
+    // the new ones cut only what the toolpaths above them leave: the first finish cuts
+    let first = fresh.toolpaths.values().next().unwrap();
+    assert!(!first.moves.is_empty(), "{} cuts", first.name);
+}
