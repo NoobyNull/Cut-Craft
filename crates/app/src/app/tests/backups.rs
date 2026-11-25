@@ -15,20 +15,10 @@ fn settings_folder(name: &str) -> std::path::PathBuf {
     dir
 }
 
-fn help_menu(app: &CutCraftApp) -> Vec<crate::gui::MenuItem> {
-    app.current_menus()
-        .menus
-        .iter()
-        .find(|m| m.name == "Help")
-        .unwrap()
-        .items
-        .clone()
-}
-
 #[test]
 fn back_up_settings_lists_every_part_ticked_and_cancel_closes_it() {
     let mut h = Harness::at_start();
-    h.choose(help_menu, &["Back Up Settings..."]);
+    h.choose_on_menu_bar("Help", &["Back Up Settings..."]);
     h.frame(vec![]);
     h.frame(vec![]);
     for part in cut_craft_backup::Part::ALL {
@@ -48,14 +38,14 @@ fn back_up_settings_lists_every_part_ticked_and_cancel_closes_it() {
 fn changing_the_window_layout_backs_up_first_and_options_lists_it() {
     let dir = settings_folder("layout");
     let mut h = Harness::new();
-    h.app.backups.config = Some(dir.clone());
-    let auto = h.app.automatic_backups().unwrap();
-    let other = if h.app.options.general.layout == crate::options::WindowLayout::Canvas {
+    h.given_config_folder(dir.clone());
+    let auto = h.automatic_backups().unwrap();
+    let other = if h.options().general.layout == crate::options::WindowLayout::Canvas {
         "layout_ribbon"
     } else {
         "layout_canvas"
     };
-    h.app.set_layout(other);
+    h.set_layout(other);
     let kept = auto.kept();
     assert_eq!(kept.len(), 1);
     assert_eq!(
@@ -63,10 +53,10 @@ fn changing_the_window_layout_backs_up_first_and_options_lists_it() {
         cut_craft_backup::Reason::BeforeLayoutChange
     );
     // picking the layout already in use changes nothing, so backs up nothing
-    h.app.set_layout(other);
+    h.set_layout(other);
     assert_eq!(auto.kept().len(), 1);
 
-    h.app.options_editor.open_at("backups");
+    h.open_options_at("backups");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
@@ -81,5 +71,5 @@ fn changing_the_window_layout_backs_up_first_and_options_lists_it() {
 #[test]
 fn tests_back_up_nothing_unless_they_say_where() {
     let h = Harness::new();
-    assert!(h.app.automatic_backups().is_none());
+    assert!(h.automatic_backups().is_none());
 }
