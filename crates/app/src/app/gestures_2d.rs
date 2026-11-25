@@ -143,7 +143,9 @@ impl CutCraftApp {
             ));
             return;
         }
-        let hit = self.doc.pick(at, tolerance);
+        // on a rotary job, a click on a ghost past a seam picks the vector it copies
+        let pick = |p| self.doc.pick(p, tolerance);
+        let hit = self.wrap().map_or_else(|| pick(at), |w| w.pick(at, pick));
         // a picture is picked where no vector is: click picks it, Shift-click adds or
         // takes it away
         let picture = hit.is_none().then(|| self.doc.pick_bitmap(at)).flatten();
