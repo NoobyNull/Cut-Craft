@@ -94,6 +94,14 @@ did, or why it did not. A value put in, such as `{ $tool }`, `{ $path }` or `{ $
 filled in by Cut Craft: keep it, and move it to wherever your language puts it. An error
 put in may still show in English until the part of Cut Craft it comes from is translated.
 
+## Words in the windows
+
+`text.ftl` holds the rest of the words in Cut Craft's windows that have no name of their
+own: hints over the 2D view, tooltips on the layer and view buttons, headings and choices in
+the tool panels. Each key is its English words plus a short check, such as
+`text-hide-0c7bcd`, and a `## file` comment over each group says where it shows. If the
+English is reworded, the key changes and the new words show in English until translated.
+
 ## Tool forms and settings
 
 `settings.ftl` holds the words of every tool's form, and of the Options, Snapping Options,

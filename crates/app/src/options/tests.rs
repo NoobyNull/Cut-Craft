@@ -768,6 +768,7 @@ fn keep_out_labels_show_and_clipping_is_off_until_turned_on() {
     fields.remove("change_by_changer");
     fields.remove("file_name_underscores");
     fields.remove("bit_in_file_names");
+    fields.remove("advanced_rotary");
     let older: ToolpathSettings = serde_json::from_value(saved).unwrap();
     assert_eq!(older, o.toolpaths);
 }

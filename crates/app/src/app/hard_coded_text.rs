@@ -51,9 +51,10 @@ const SHOWN: &[&str] = &[
     "Checkbox::new",
     "SelectableLabel::new",
     "set_message",
+    "colored_label",
 ];
 
-fn sources() -> Vec<PathBuf> {
+pub(crate) fn sources() -> Vec<PathBuf> {
     fn walk(dir: &Path, files: &mut Vec<PathBuf>) {
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
@@ -91,7 +92,7 @@ fn sources() -> Vec<PathBuf> {
 }
 
 /// A source file's path from the app crate, with `/` on every computer.
-fn short(path: &Path) -> String {
+pub(crate) fn short(path: &Path) -> String {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     path.strip_prefix(root)
         .unwrap_or(path)
@@ -101,7 +102,7 @@ fn short(path: &Path) -> String {
 
 /// A file's program code: up to its test module (not a single test-only function above it),
 /// with comments blanked out.
-fn program(source: &str) -> String {
+pub(crate) fn program(source: &str) -> String {
     // an inline `#[cfg(test)] mod tests { … }` is left out up to its closing brace; `mod
     // tests;` (a test file of its own) is only a line, so the code after either is still scanned
     let mut code = String::new();
@@ -168,7 +169,7 @@ fn block_end(code: &[u8], open: usize) -> usize {
 }
 
 /// The string literals in `code`, each with where its closing quote ends.
-fn literal_at(code: &[u8], at: usize) -> Option<(String, usize)> {
+pub(crate) fn literal_at(code: &[u8], at: usize) -> Option<(String, usize)> {
     if code.get(at) != Some(&b'"') {
         return None;
     }

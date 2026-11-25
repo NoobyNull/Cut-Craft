@@ -1073,6 +1073,18 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     tool(
         Area::Toolpaths,
+        "rotary_roughing_toolpath",
+        "On a rotary job, **Rotary Roughing** takes the bulk off a level at a time, and cuts only \
+         what the toolpaths above it in the list leave.",
+    ),
+    tool(
+        Area::Toolpaths,
+        "rotary_finishing_toolpath",
+        "On a rotary job, **Rotary Finishing** keeps the bit on the model all the way round, and \
+         with **Off centre** the side of the ball cuts, not its slow tip, for a cleaner finish.",
+    ),
+    tool(
+        Area::Toolpaths,
         "rotary_machining_toolpath",
         "On a rotary job, **4-Axis Rotary Machining** finishes the model ring by ring all the \
          way round, worked out round the turning axis itself so a bit cutting deep never \
