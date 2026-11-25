@@ -107,6 +107,14 @@ The sentences in those windows with a value put in have keys of their own: `mach
 for Machine Configuration and Post-Processor, `tool-database.ftl` for the Tool Database.
 Keep each `{ $value }`, and move it to wherever your language puts it.
 
+## What a tool says when it cannot run
+
+`errors.ftl` holds every message a tool shows when it cannot run, such as "select vectors to
+copy". Keys work the same way, starting `error-`, and a `## file` comment says which tool says
+it. Cut Craft starts each message with a capital and ends it with a full stop, so write it as
+the English is. A message with a number or name put in (such as a setting's value) shows in
+English for now.
+
 ## Tool forms and settings
 
 `settings.ftl` holds the words of every tool's form, and of the Options, Snapping Options,

@@ -102,6 +102,171 @@ mod tests {
         out
     }
 
+    /// Every command's code and the core's: the files whose messages go in `errors.ftl`.
+    fn error_sources() -> Vec<(std::path::PathBuf, String)> {
+        fn walk(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    walk(&path, files);
+                } else if path.extension().is_some_and(|e| e == "rs")
+                    && !path.to_string_lossy().ends_with("tests.rs")
+                {
+                    files.push(path);
+                }
+            }
+        }
+        let app = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let crates = app.parent().unwrap_or(app);
+        let mut files = vec![];
+        walk(&crates.join("core/src"), &mut files);
+        let mut commands: Vec<_> = std::fs::read_dir(crates.join("commands"))
+            .unwrap()
+            .map(|e| e.unwrap().path().join("src"))
+            .collect();
+        commands.sort();
+        for dir in commands {
+            walk(&dir, &mut files);
+        }
+        files.sort();
+        files
+            .into_iter()
+            .map(|f| {
+                let code = program(&std::fs::read_to_string(&f).unwrap());
+                (f, code)
+            })
+            .collect()
+    }
+
+    /// Every message a command writes as it is (`Failed("…")`, `InvalidParams("…")`, or a
+    /// `&str` constant there), and [`cut_craft_core::SELECT_FIRST`]: its file and its words,
+    /// each once. A `format!` message has values in it, so no key.
+    fn every_error() -> Vec<(String, String)> {
+        let codes = error_sources();
+        let constants = constants(&codes);
+        let mut out: Vec<(String, String)> = vec![(
+            "core/src/command.rs".to_owned(),
+            cut_craft_core::SELECT_FIRST.to_owned(),
+        )];
+        for (file, code) in &codes {
+            let bytes = code.as_bytes();
+            for call in ["Failed(", "InvalidParams("] {
+                let mut from = 0;
+                while let Some(at) = code[from..].find(call) {
+                    let start = from + at;
+                    from = start + call.len();
+                    if start > 0
+                        && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_')
+                    {
+                        continue;
+                    }
+                    let open = from + code[from..].len() - code[from..].trim_start().len();
+                    let words = if bytes.get(open) == Some(&b'"') {
+                        literal_at(bytes, open).map(|(w, _)| w)
+                    } else {
+                        let name: String = code[open..]
+                            .chars()
+                            .take_while(|c| {
+                                c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_'
+                            })
+                            .collect();
+                        constants
+                            .iter()
+                            .find(|(n, _)| !name.is_empty() && *n == name)
+                            .map(|(_, w)| w.clone())
+                    };
+                    if let Some(words) = words
+                        && !out.iter().any(|(_, w)| *w == words)
+                    {
+                        out.push((short(file), words));
+                    }
+                }
+            }
+        }
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    fn error_key(words: &str) -> String {
+        cut_craft_i18n::text_key("error", words)
+    }
+
+    #[test]
+    fn every_command_message_has_its_english_words() {
+        let problems: Vec<String> = every_error()
+            .into_iter()
+            .filter_map(|(file, words)| {
+                let key = error_key(&words);
+                match english().words(&key, None) {
+                    Some(got) if got == words => None,
+                    Some(got) => Some(format!(
+                        "{file}: {key} = {got:?}, but the code says {words:?}"
+                    )),
+                    None => Some(format!("{file}: {key} is missing ({words:?})")),
+                }
+            })
+            .collect();
+        assert!(
+            problems.is_empty(),
+            "crates/i18n/locales/en/errors.ftl does not match the commands; run `cargo test -p \
+             cut-craft --bin cut-craft write_error_words -- --ignored` to write it again:\n{}",
+            problems.join("\n")
+        );
+        let keys: Vec<String> = every_error().iter().map(|(_, w)| error_key(w)).collect();
+        let stale: Vec<&String> = english()
+            .keys()
+            .iter()
+            .filter(|k| k.starts_with("error-") && !keys.contains(k))
+            .collect();
+        assert!(
+            stale.is_empty(),
+            "no command says these any more: {stale:?}"
+        );
+    }
+
+    #[test]
+    fn a_command_message_shows_in_the_chosen_language() {
+        let message = cut_craft_core::CommandError::Failed("select vectors to copy".into());
+        assert_eq!(message.to_string(), "Select vectors to copy.");
+        assert_eq!(
+            cut_craft_core::error_words("a message nobody keyed"),
+            "a message nobody keyed"
+        );
+    }
+
+    /// Writes `locales/en/errors.ftl` from the commands (`cargo test -p cut-craft --bin
+    /// cut-craft write_error_words -- --ignored`), after a command's message is added or
+    /// changed.
+    #[test]
+    #[ignore = "writes a file; run by hand"]
+    fn write_error_words() {
+        let mut out = String::from(
+            "# What a tool says when it cannot run, keyed by its English words (`error-`, its \
+             first words and a\n# check of the whole text). The app starts each with a capital \
+             and ends it with a full stop,\n# so write them as the English is. Each line says \
+             which tool says it.\n",
+        );
+        let mut last = String::new();
+        for (file, words) in every_error() {
+            if file != last {
+                let _ = write!(out, "\n## {file}\n");
+                last = file;
+            }
+            let _ = writeln!(
+                out,
+                "{} ={}",
+                error_key(&words),
+                cut_craft_i18n::ftl_value(&words)
+            );
+        }
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../i18n/locales/en/errors.ftl");
+        std::fs::write(path, out).unwrap();
+    }
+
     #[test]
     fn every_text_has_its_english_words() {
         let problems: Vec<String> = every_text()
