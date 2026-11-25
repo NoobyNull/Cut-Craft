@@ -154,6 +154,7 @@ tooltip-snap-options = Snap Options: chooses what the pointer snaps to as you dr
 tooltip-keyboard-shortcuts = Keyboard Shortcuts: lists the keys that run each tool, so you can work without the menus
 tooltip-help-contents = Help Contents: opens Cut Craft's help, with a page for every tool and a search box
 tooltip-did-you-know = Did You Know?: short tips for getting more out of Cut Craft, one at a time
+tooltip-back-up-settings = Back Up Settings: saves your settings, machines, bits and own files in one backup file, to keep safe or take to another computer
 tooltip-check-for-updates = Check for Updates: asks straight away whether there is a newer version of Cut Craft
 tooltip-about-cut-craft = About Cut Craft: its version, its licence and the people who made it
 tooltip-credits = Credits: the libraries, pictures and icons Cut Craft is built with, and their licences
