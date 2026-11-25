@@ -738,6 +738,7 @@ impl MenuSystem {
                 let pick = format!("{SELECT_COMPONENT}{}", id.0);
                 Some(
                     MenuItem::with_action(name, &pick)
+                        .named()
                         .checked(doc.selected_components.contains(id)),
                 )
             })

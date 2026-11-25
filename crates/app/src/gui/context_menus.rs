@@ -103,7 +103,7 @@ pub(super) fn group_items(doc: &Document, id: EntityId, toolpath: &Toolpath) -> 
         .toolpath_groups_in_use()
         .iter()
         .filter(|g| toolpath.group.as_ref() != Some(g))
-        .map(|g| into(&doc.toolpath_group_path(g).join(" ▸ "), vec![id], g, ""))
+        .map(|g| into(&doc.toolpath_group_path(g).join(" ▸ "), vec![id], g, "").named())
         .collect();
     // out of its group: into the group that one sits in, if any
     let up = toolpath
