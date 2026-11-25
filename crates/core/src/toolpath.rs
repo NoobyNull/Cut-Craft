@@ -78,14 +78,19 @@ pub struct Toolpath {
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
-const MODEL_STRATEGIES: [&str; 6] = [
+const MODEL_STRATEGIES: [&str; 8] = [
     "3d_roughing_toolpath",
     "3d_finishing_toolpath",
     "3d_pencil_toolpath",
     "sketch_carving_toolpath",
     "rotary_machining_toolpath",
     "rotary_lathe_toolpath",
+    "rotary_roughing_toolpath",
+    "rotary_finishing_toolpath",
 ];
+
+/// The strategies that cut only what the toolpaths above them leave.
+const CARRIED_STRATEGIES: [&str; 2] = ["rotary_roughing_toolpath", "rotary_finishing_toolpath"];
 
 /// The key a toolpath's own preview colour is kept under in its params: `[r, g, b]`, or
 /// null for no fill (the material's colour).
@@ -144,6 +149,14 @@ impl Toolpath {
             Some(given) => serde_json::from_value(given.clone()).ok(),
             None => Some(PREVIEW_PALETTE[place % PREVIEW_PALETTE.len()]),
         }
+    }
+
+    /// Whether it cuts only what the toolpaths above it in the list leave (Rotary Roughing,
+    /// unless it was made in Settings' advanced rotary mode): out of date once one of those
+    /// cuts differently, goes, or the list's order changes above it.
+    pub fn cuts_what_is_left(&self) -> bool {
+        CARRIED_STRATEGIES.contains(&self.strategy.as_str())
+            && self.params["whole_blank"].as_bool() != Some(true)
     }
 
     /// Whether the 3D model is what it cuts, so changing the model changes it.
