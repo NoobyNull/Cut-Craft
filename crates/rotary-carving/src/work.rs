@@ -551,9 +551,10 @@ impl Work<'_> {
             blocked.push(!fits);
             // outside the machining limit: not cut, never bridged over, and the material
             // there kept as it is
+            let from = (i > 0 && cuts[i - 1]).then(|| &pass[i - 1]);
             if self
                 .limit
-                .is_some_and(|l| !l.holds_point(self.along_x, point))
+                .is_some_and(|l| !l.holds_step(self.along_x, from, point))
             {
                 blocked[i] = true;
                 last = None;

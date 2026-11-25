@@ -7,6 +7,7 @@ use cut_craft_core::CommandError;
 use cut_craft_core::component::{MachiningBoundary, machining_boundary};
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, inside};
+use cut_craft_core::glam::DVec3;
 use cut_craft_core::rotary_axis::tip_of;
 use cut_craft_core::toolpath::cut_points;
 
@@ -24,6 +25,12 @@ pub struct Limit {
     pub from: f64,
     pub to: f64,
 }
+
+/// How finely the way from one point of a pass to the next is looked along, mm.
+const STEP: f64 = 0.1;
+
+/// The most places looked at on the way from one point to the next.
+const MOST_STEPS: usize = 40;
 
 /// Why a limit with nothing in it is refused.
 const EMPTY: &str = "The machining limit has nothing in it: select the closed vectors to \
@@ -98,11 +105,52 @@ impl Limit {
 
     /// Whether the bit may cut at a point of a pass: where its tip cuts, held across or not.
     #[must_use]
-    pub fn holds_point(
+    pub fn holds_point(&self, along_x: bool, point: &(DVec3, f64)) -> bool {
+        let (along, round) = self.place(along_x, point);
+        self.holds(along, round)
+    }
+
+    /// Whether the bit may cut at `to`, coming straight from `from` (where it was cutting
+    /// just before, if it was): `to` inside the limit, and the way there not leaving it for
+    /// a gap wider than [`STEP`].
+    #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "a few dozen steps"
+    )]
+    pub fn holds_step(
         &self,
         along_x: bool,
-        &(point, across): &(cut_craft_core::glam::DVec3, f64),
+        from: Option<&(DVec3, f64)>,
+        to: &(DVec3, f64),
     ) -> bool {
+        if !self.holds_point(along_x, to) {
+            return false;
+        }
+        let Some(from) = from else {
+            return true;
+        };
+        let (a, b) = (self.place(along_x, from), self.place(along_x, to));
+        // the short way round
+        let c = self.circumference;
+        let mut turn = (b.1 - a.1).rem_euclid(c);
+        if turn > c / 2.0 {
+            turn -= c;
+        }
+        let (along, round) = (b.0 - a.0, turn);
+        // looked at every tenth of a millimetre on the way (no more than a few dozen times)
+        let steps = ((along.hypot(round) / STEP).ceil() as usize).clamp(1, MOST_STEPS);
+        (1..steps).all(|k| {
+            let t = k as f64 / steps as f64;
+            self.holds(a.0 + along * t, a.1 + round * t)
+        })
+    }
+
+    /// Where on the unrolled sheet a point of a pass cuts: along, and round (mm round the
+    /// surface) where its tip is, held across or not.
+    fn place(&self, along_x: bool, &(point, across): &(DVec3, f64)) -> (f64, f64) {
         let (along, round) = if along_x {
             (point.x, point.y)
         } else {
@@ -113,7 +161,7 @@ impl Limit {
         } else {
             round
         };
-        self.holds(along, round)
+        (along, round)
     }
 
     /// `passes` with the stretches outside the limit taken out: a pass leaving it and coming
@@ -126,7 +174,7 @@ impl Limit {
             // only a stretch from the pass's own start comes down as it would have
             let mut from_start = true;
             for point in pass {
-                if self.holds_point(along_x, &point) {
+                if self.holds_step(along_x, run.last(), &point) {
                     run.push(point);
                 } else {
                     if !run.is_empty() {
@@ -150,5 +198,47 @@ pub fn limit_vectors(doc: &Document, boundary: MachiningBoundary) -> Vec<EntityI
     match boundary {
         MachiningBoundary::SelectedVectors => doc.selected_paths(|path| path.closed).0,
         _ => vec![],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 0 to 40 along and 0 to 100 round, with a slot from 20.4 to 20.6 along taken out of it.
+    fn slotted() -> Limit {
+        let ring = |points: &[(f64, f64)]| points.iter().map(|&(x, y)| Point::new(x, y)).collect();
+        Limit {
+            rings: vec![
+                ring(&[(0.0, 0.0), (40.0, 0.0), (40.0, 100.0), (0.0, 100.0)]),
+                ring(&[(20.4, 10.0), (20.6, 10.0), (20.6, 90.0), (20.4, 90.0)]),
+            ],
+            circumference: 125.0,
+            radius: 20.0,
+            from: 0.0,
+            to: 40.0,
+        }
+    }
+
+    fn at(along: f64, round: f64) -> (DVec3, f64) {
+        (DVec3::new(along, round, 0.0), 0.0)
+    }
+
+    #[test]
+    fn a_gap_narrower_than_the_points_apart_is_never_cut_across() {
+        let limit = slotted();
+        assert!(limit.holds_point(true, &at(20.0, 20.0)));
+        assert!(limit.holds_point(true, &at(21.0, 20.0)));
+        assert!(!limit.holds_step(true, Some(&at(20.0, 20.0)), &at(21.0, 20.0)));
+        // away from the slot, and coming down fresh, it cuts
+        assert!(limit.holds_step(true, Some(&at(10.0, 20.0)), &at(11.0, 20.0)));
+        assert!(limit.holds_step(true, None, &at(21.0, 20.0)));
+        // the short way round the part, not the long way back across everything
+        let round = Limit {
+            rings: vec![slotted().rings[0].clone()],
+            circumference: 100.0,
+            ..slotted()
+        };
+        assert!(round.holds_step(true, Some(&at(10.0, 99.5)), &at(10.0, 100.5)));
     }
 }
