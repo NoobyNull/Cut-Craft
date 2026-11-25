@@ -13,23 +13,23 @@ pub(super) use cut_craft_bug_report::unapplied::{Answer, Button};
 impl CutCraftApp {
     /// The options as the Options window shows them: with any changes not applied yet.
     pub(super) fn edited_options(&self) -> &Options {
-        self.options_editor.shown(&self.options)
+        self.options_editor.window.shown(&self.options)
     }
 
     /// `edited` is what the Options window now shows: kept until Apply, unless it is the
     /// options as they already are.
     pub(super) fn options_edited(&mut self, edited: Options) {
-        self.options_editor.edited(&self.options, edited);
+        self.options_editor.window.edited(&self.options, edited);
     }
 
     /// There are changes in the Options window that Apply hasn't used yet.
     pub(super) fn options_dirty(&self) -> bool {
-        self.options_editor.dirty()
+        self.options_editor.window.dirty()
     }
 
     /// Uses the changes waiting in the Options window, and keeps them.
     fn apply_options(&mut self, ctx: &egui::Context) {
-        if let Some(edited) = self.options_editor.take_changes() {
+        if let Some(edited) = self.options_editor.window.take_changes() {
             self.options_changed(ctx, edited);
         }
     }
@@ -44,7 +44,7 @@ impl CutCraftApp {
     pub(super) fn options_button(&mut self, ctx: &egui::Context, button: Button) {
         match button {
             Button::Apply => self.apply_options(ctx),
-            Button::Close if self.options_dirty() => self.options_editor.closing = true,
+            Button::Close if self.options_dirty() => self.options_editor.window.closing = true,
             Button::Cancel | Button::Close => self.close_options(),
         }
     }
@@ -57,7 +57,7 @@ impl CutCraftApp {
                 self.close_options();
             }
             Answer::Discard => self.close_options(),
-            Answer::KeepEditing => self.options_editor.closing = false,
+            Answer::KeepEditing => self.options_editor.window.closing = false,
         }
     }
 }

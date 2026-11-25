@@ -198,12 +198,13 @@ const SCENES: &[Scene] = &[
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {
-        app.options_editor.closing = true;
+        app.options_editor.window.closing = true;
     }),
     ("snapping-not-applied", snapping_not_applied),
     // Help: Moving the views (Options ▸ Mouse and Shortcuts, Trackpad mode and Invert)
     ("options-mouse-controls", |app, ctx| {
-        (app.snap_window, app.snap_draft, app.post_window) = (false, None, None);
+        app.snap.close();
+        app.post_window = None;
         options_not_applied(app, ctx);
         app.options_editor.open_at(super::shortcuts_page::CATEGORY);
         let mut edited = app.options.clone();
@@ -280,7 +281,7 @@ const SCENES: &[Scene] = &[
     ("bug-report-form", |app, ctx| {
         ctx.set_embed_viewports(true);
         (app.info, app.form, app.tool_manager) = (None, None, None);
-        (app.snap_window, app.snap_draft) = (false, None);
+        app.snap.close();
         app.first_run = None;
         cut_craft_bug_report::open_here(ctx);
     }),
@@ -383,7 +384,7 @@ fn notes(app: &mut CutCraftApp, ctx: &egui::Context, text: &str, preview: bool, 
 /// started from how long the last one took.
 fn progress_window(app: &mut CutCraftApp, _: &egui::Context) {
     app.info = None;
-    (app.snap_window, app.snap_draft) = (false, None);
+    app.snap.close();
     let kind = "screenshots:progress-window";
     cut_craft_core::eta::record(kind, 150.0);
     let (keep, wait) = std::sync::mpsc::channel::<()>();
@@ -434,10 +435,10 @@ fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
     app.form = None;
     app.pages.set_pinned(super::Page::Toolpaths, false);
     app.view = View::TwoD;
-    app.snap_window = true;
+    app.snap.open = true;
     let mut edited = app.options.snapping.clone();
     edited.smart_snapping = !edited.smart_snapping;
-    app.snap_draft = Some(edited);
+    app.snap.edited(&app.options.snapping, edited);
 }
 
 /// Edit ▸ Options on Appearance with the dark theme picked and not applied yet.
@@ -457,7 +458,7 @@ fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
 /// put away and nothing pinned over the view.
 fn everyday(app: &mut CutCraftApp) {
     app.options_editor.close();
-    (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
+    app.snap.close();
     (app.form, app.info, app.gcode_view, app.save_form) = (None, None, None, None);
     (app.search, app.guide_props, app.first_run) = (None, None, None);
     (app.machine_window, app.post_window) = (None, None);
@@ -631,7 +632,7 @@ fn z_zero(app: &mut CutCraftApp, ctx: &egui::Context, z_zero: ZZero, datum: Datu
 /// form says it is already up to date and offers Calculate as New.
 fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.options_editor.close();
-    (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
+    app.snap.close();
     app.form = None;
     app.gcode_view = None;
     app.updates = crate::update::Updates::default();

@@ -1162,7 +1162,7 @@ fn windows_over_the_view_are_left_out_of_its_picture() {
     assert_eq!(hidden, Some(true), "the picture's frame has no windows");
     h.frame(vec![]);
     assert!(shows(&h, "WEB API Running at"), "Options is back");
-    assert!(h.app.options_editor.open);
+    assert!(h.app.options_editor.window.open);
 }
 
 /// Whether any text drawn last frame holds `part`.

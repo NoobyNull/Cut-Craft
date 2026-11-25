@@ -14,11 +14,11 @@ impl CutCraftApp {
         reason = "the one Options window, with the extras some pages show under their settings"
     )]
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
-        let mut open = self.options_editor.open;
+        let mut open = self.options_editor.window.open;
         let fields = self.options_categories();
         let mut values = serde_json::to_value(self.edited_options()).expect("options serialise");
         let dirty = self.options_dirty();
-        let closing = self.options_editor.closing;
+        let closing = self.options_editor.window.closing;
         let mut button = None;
         let mut answer = None;
         let mut changed = None;

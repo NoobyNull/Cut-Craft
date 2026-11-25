@@ -56,7 +56,7 @@ impl CutCraftApp {
     pub(super) fn new_web_api_token(&mut self) {
         let token = cut_craft_web_api::new_token();
         // changes waiting in the Options window keep the new token too
-        if let Some(edited) = self.options_editor.changes_mut() {
+        if let Some(edited) = self.options_editor.window.changes_mut() {
             edited.web_api.token.clone_from(&token);
         }
         self.options.web_api.token = token;

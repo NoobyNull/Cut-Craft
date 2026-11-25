@@ -567,7 +567,7 @@ fn advanced_options_show_only_once_ticked_and_warn_first() {
 fn options_cancel_throws_away_changes_not_applied() {
     let mut h = options_with_a_change_not_applied();
     click_button(&mut h, "Cancel");
-    assert!(!h.app.options_editor.open, "closed");
+    assert!(!h.app.options_editor.window.open, "closed");
     assert_eq!(h.app.options.general.recent_file_list_size, 9, "as it was");
     assert!(!h.app.options_dirty());
     // opened again, it shows the options as they are
