@@ -112,6 +112,7 @@ mod title_bar;
 mod toolpath_output;
 mod tools_materials;
 mod trace_window;
+mod turn_rings;
 mod turning;
 mod units_ask;
 mod updates;
@@ -520,12 +521,8 @@ impl Anchor {
     }
 }
 
-/// Orientate 3D Model's rotation rings on screen (each ring's axis and its points), and the
-/// middle sphere's centre and radius.
-type Rings3d = (
-    Vec<(&'static str, Vec<egui::Pos2>)>,
-    Option<(egui::Pos2, f32)>,
-);
+#[cfg(test)]
+use turn_rings::Drawn as Rings3d;
 
 /// A command whose settings form is open.
 #[expect(
@@ -836,15 +833,8 @@ pub(crate) struct CutCraftApp {
     /// each frame the pointer moves, so the whole drag is one undo).
     drag_base: Option<(cmd_component_properties::Params, f64, Option<Value>)>,
     settings_3d: Option<Settings3d>,
-    /// Orientate 3D Model's rotation handles as drawn last frame: each ring's axis
-    /// (`x`, `y`, `z`) and its points on screen, then the middle sphere's centre and radius.
-    rings_3d: Rings3d,
-    /// The handle a drag started on, which the drag then turns the model about (`xyz`: the
-    /// sphere, all three axes).
-    turn_ring: Option<&'static str>,
-    /// While a ring is held: the way + runs round it under the pointer, on screen, and how
-    /// far it reaches from its middle, points.
-    ring_grip: Option<(egui::Vec2, f32)>,
+    /// Orientate 3D Model's rotation handles: as drawn last frame, and the one held.
+    turn_rings: turn_rings::TurnRings,
     /// An open Help window.
     info: Option<Info>,
     /// The Help window's pages, search and Back and Forward.

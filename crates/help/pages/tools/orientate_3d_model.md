@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-25
 see-also: import_component_3d_model, generate_border, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath, rotary_lathe_toolpath, view_controls
 ---
 
