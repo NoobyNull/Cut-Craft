@@ -552,7 +552,7 @@ fn moved_ago(simplify: bool, ago: f64, settle: Option<f64>) -> bool {
         h.app.view = View::ThreeD;
         h.app.moved_3d = h.time - ago;
         h.frame(vec![]);
-        h.app.fine_3d.is_some()
+        h.app.meshes.fine.value().is_some()
     }
 }
 
@@ -811,12 +811,8 @@ fn a_still_3d_view_draws_the_model_at_its_own_detail() {
     // a moment after anything moved, the view settles and is drawn finely
     h.time += 1.0;
     h.frame(vec![]);
-    let fine = h
-        .app
-        .fine_3d
-        .as_ref()
-        .map(|(_, mesh)| mesh.indices.len() / 3);
-    let (key, _) = h.app.fine_3d.as_ref().unwrap();
+    let fine = h.app.meshes.fine.value().map(|mesh| mesh.indices.len() / 3);
+    let key = h.app.meshes.fine.key().unwrap();
     let quick = view3d::mesh(
         &cut_craft_core::component::model_shape(&h.app.doc, MESH_CELLS),
         key.orbit,
@@ -830,14 +826,10 @@ fn a_still_3d_view_draws_the_model_at_its_own_detail() {
         fine.is_some_and(|t| t > 4 * quick),
         "fine {fine:?} against {quick} quick triangles"
     );
-    let kept = h.app.fine_3d.as_ref().map(|(key, _)| key.clone());
+    let kept = h.app.meshes.fine.key().cloned();
     h.time += 1.0;
     h.frame(vec![]);
-    assert_eq!(
-        h.app.fine_3d.as_ref().map(|(key, _)| key.clone()),
-        kept,
-        "kept, not rebuilt"
-    );
+    assert_eq!(h.app.meshes.fine.key().cloned(), kept, "kept, not rebuilt");
     // an edit to the model makes it again
     let mut c = Change::builder(&h.app.doc);
     c.add_component(Component::from_fn("dome", Combine::Add, rect, cell, |_| {
@@ -846,7 +838,7 @@ fn a_still_3d_view_draws_the_model_at_its_own_detail() {
     h.app.record(Ok(c.finish()), "added");
     h.time += 1.0;
     h.frame(vec![]);
-    assert_ne!(h.app.fine_3d.as_ref().map(|(key, _)| key.clone()), kept);
+    assert_ne!(h.app.meshes.fine.key().cloned(), kept);
 }
 
 #[test]
@@ -856,19 +848,15 @@ fn the_3d_views_quick_surface_is_kept_until_the_model_changes() {
     h.app.view = View::ThreeD;
     h.frame(vec![]);
     h.frame(vec![]);
-    let kept = h.app.rough_3d.as_ref().map(|(key, _)| *key);
+    let kept = h.app.meshes.rough.key().copied();
     assert!(kept.is_some(), "made once");
     h.frame(vec![]);
-    assert_eq!(h.app.rough_3d.as_ref().map(|(key, _)| *key), kept, "kept");
+    assert_eq!(h.app.meshes.rough.key().copied(), kept, "kept");
     h.app.doc.selected_components = [EntityId(1)].into();
     let change = Change::transform_selected(&h.app.doc, |_| {
         cut_craft_core::glam::DAffine2::from_translation(cut_craft_core::glam::DVec2::X)
     });
     h.app.record(change, "moved");
     h.frame(vec![]);
-    assert_ne!(
-        h.app.rough_3d.as_ref().map(|(key, _)| *key),
-        kept,
-        "made again"
-    );
+    assert_ne!(h.app.meshes.rough.key().copied(), kept, "made again");
 }

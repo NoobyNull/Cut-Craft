@@ -71,6 +71,7 @@ mod layouts;
 mod mac;
 mod machine_fit;
 mod machine_setup;
+mod meshes_3d;
 mod node_editing;
 mod notes_panel;
 mod options_apply;
@@ -941,12 +942,6 @@ pub(crate) struct CutCraftApp {
     preview_grid_kept: std::cell::Cell<Option<(GridKey, crate::preview_detail::Grid)>>,
     /// The previewed material: what the previewed toolpaths cut, and its undo.
     preview: preview::Preview,
-    /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
-    /// made once a change, not every frame.
-    rough_3d: Option<(RoughKey, Material)>,
-    /// A rotary job's full 3D models as the view draws them round the axis, kept by the
-    /// change and the import they show.
-    turned_3d: Option<TurnedModels>,
     /// The model's height, lowest point to highest, and the history's revision it was
     /// measured at: Model Position in Material's picture and warning, measured once a change.
     model_tall: std::cell::Cell<Option<(u64, f64)>>,
@@ -992,29 +987,11 @@ pub(crate) struct CutCraftApp {
     )>,
     /// The snap mark picked in the 2D view: Delete lets that point go.
     picked_constraint: Option<PickedSnap>,
-    /// The 3D view's fine mesh once it is still, with what it was made for.
-    fine_3d: Option<(FineKey, egui::Mesh)>,
-    /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,
-    /// with the history revision, job and detail when still (mesh cells) it was made for.
-    drawn_on: Option<(
-        (u64, cut_craft_core::document::Job, usize),
-        std::sync::Arc<Material>,
-    )>,
-    /// The imported model's triangles as last drawn, kept while nothing about the view or
-    /// the model changes: sorting and lighting a big model every frame is what made the
-    /// window drag while a model was being imported.
-    model_3d: Option<(ModelKey, std::sync::Arc<egui::Mesh>)>,
     /// The window's GPU, when it draws with wgpu, for the 3D view to draw on (the headless
     /// tests have none and draw the meshes above).
     gpu_3d: Option<view3d::gpu::Gpu>,
-    /// The 3D view's surface as the GPU draws it, with what it was built from.
-    surface_gpu: Option<SurfaceGpu>,
-    /// The model's walls and bottom, made with the surface they hang from (no preview).
-    solid_gpu: Option<std::sync::Arc<view3d::gpu::Geometry>>,
-    /// The imported model as the GPU draws it.
-    model_gpu: Option<ModelGpu>,
-    /// The same for the imported model's parts past the material's edges.
-    ghost_gpu: Option<ModelGpu>,
+    /// What the 3D view keeps of what it draws, each with what it was made from.
+    meshes: meshes_3d::Meshes3d,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
     /// While Auto-rotate spins the 3D view: when it last turned it (input time, seconds).

@@ -367,7 +367,7 @@ impl CutCraftApp {
                 .as_ref()
                 .map(|(m, _)| std::sync::Arc::as_ptr(m) as usize),
         );
-        if let Some((kept, model)) = &self.turned_3d
+        if let Some((kept, model)) = &self.meshes.turned
             && *kept == key
         {
             return Some(std::sync::Arc::clone(model));
@@ -377,17 +377,17 @@ impl CutCraftApp {
         if let Some(own) = &own {
             if all.is_empty() {
                 // only the import: its own faces, kept as they are
-                self.turned_3d = Some((key, std::sync::Arc::clone(own)));
+                self.meshes.turned = Some((key, std::sync::Arc::clone(own)));
                 return Some(std::sync::Arc::clone(own));
             }
             all.extend(own.iter().copied());
         }
         if all.is_empty() {
-            self.turned_3d = None;
+            self.meshes.turned = None;
             return None;
         }
         let all = std::sync::Arc::new(all);
-        self.turned_3d = Some((key, std::sync::Arc::clone(&all)));
+        self.meshes.turned = Some((key, std::sync::Arc::clone(&all)));
         Some(all)
     }
 
@@ -410,14 +410,11 @@ impl CutCraftApp {
             look,
             mark,
         };
-        if let Some((kept, mesh)) = &self.model_3d
-            && *kept == key
-        {
+        if let Some(mesh) = self.meshes.model.get(&key) {
             return std::sync::Arc::clone(mesh);
         }
         let mesh = std::sync::Arc::new(view3d::triangles(model, screen, orbit, &look, mark));
-        self.model_3d = Some((key, std::sync::Arc::clone(&mesh)));
-        mesh
+        std::sync::Arc::clone(self.meshes.model.keep(key, mesh))
     }
 
     #[expect(
@@ -530,7 +527,7 @@ impl CutCraftApp {
         // the model's body, under its surface: also while a model is imported, whose own
         // faces (all of them, or past the face limit those out of reach) are drawn as well
         let body_draw = (slot.is_some() && self.preview.material.is_none())
-            .then(|| self.solid_gpu.clone())
+            .then(|| self.meshes.solid_gpu.clone())
             .flatten()
             .map(|geometry| {
                 let at = cut_craft_core::glam::DVec3::ZERO;
@@ -566,7 +563,7 @@ impl CutCraftApp {
             .and_then(|f| f.beyond.clone())
             .filter(|g| !g.is_empty())
         else {
-            self.ghost_gpu = None;
+            self.meshes.ghost_gpu = None;
             return None;
         };
         let red = self.options.import.out_of_bounds_colour();
@@ -580,7 +577,7 @@ impl CutCraftApp {
         };
         let origin = cut_craft_core::glam::DVec3::new(-surface.origin.x, -surface.origin.y, 0.0);
         if on_gpu {
-            let geometry = faces_geometry(&mut self.ghost_gpu, &ghost);
+            let geometry = faces_geometry(&mut self.meshes.ghost_gpu, &ghost);
             return Some(view3d::gpu::Draw::new(
                 geometry, camera, area, origin, &look, red,
             ));

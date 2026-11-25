@@ -671,11 +671,10 @@ impl CutCraftApp {
             self.selected_toolpath,
             self.preview.material,
             self.preview.coarse,
-            self.fine_3d,
-            self.surface_gpu,
-            self.rough_3d,
-        ) = (None, None, None, None, None, None);
-        self.turned_3d = None;
+        ) = (None, None, None);
+        (self.meshes.surface_gpu, self.meshes.turned) = (None, None);
+        self.meshes.fine.clear();
+        self.meshes.rough.clear();
         // the old job's preview playback, its controls and its undo go with it
         self.player.close();
         self.preview.before = None;
