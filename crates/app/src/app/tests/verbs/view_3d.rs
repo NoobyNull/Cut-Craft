@@ -120,4 +120,17 @@ impl Harness {
     pub(in super::super) fn quick_made_for(&self) -> Option<RoughKey> {
         self.app.meshes.rough.key().copied()
     }
+
+    // ---- Orientate 3D Model's rings ----
+
+    /// The turning rings drawn round an imported model (each axis and its outline) and the
+    /// sphere inside them (its centre and radius).
+    pub(in super::super) fn turn_rings(&self) -> Rings3d {
+        self.app.rings_3d.clone()
+    }
+
+    /// Whether a ring or the sphere is being dragged.
+    pub(in super::super) fn turning_a_ring(&self) -> bool {
+        self.app.turn_ring.is_some()
+    }
 }
