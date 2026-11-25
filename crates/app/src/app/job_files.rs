@@ -684,7 +684,7 @@ impl CutCraftApp {
         self.save_anyway = None;
         self.save_after = None;
         self.form_back = None;
-        self.checks_accepted.clear();
+        self.saving.forget();
         self.clear_recovery();
     }
 

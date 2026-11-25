@@ -478,7 +478,7 @@ fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_unless_its_check_is_
             .any(|f| f.check == cut_craft_core::check_list::Check::Bed),
         "{found:?}"
     );
-    h.app.saving_checked = Some((h.app.history.revision(), h.app.machines.active));
+    h.app.saving.go(Vec::new(), h.app.now_checked());
     let written = h.app.write_toolpath_files(&form, &post, &path).unwrap();
     let text = std::fs::read_to_string(&written[0]).unwrap();
     assert!(

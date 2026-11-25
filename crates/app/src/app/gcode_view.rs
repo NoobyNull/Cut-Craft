@@ -463,14 +463,14 @@ impl CutCraftApp {
             return;
         }
         // agreed to the problems shown, and no others
-        self.checks_accepted = ask.asking.problems;
+        self.saving.accept(ask.asking.problems);
         if ask.sending {
             self.send_toolpaths(&ask.form);
         } else {
             self.save_toolpaths(&ask.form);
         }
         // only for that save, whatever stopped it short
-        self.checks_accepted.clear();
+        self.saving.forget();
     }
 }
 

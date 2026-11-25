@@ -91,6 +91,7 @@ mod preview;
 mod rail_list;
 mod reach;
 mod sample;
+mod saving_checks;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod selection_2d;
@@ -790,15 +791,8 @@ pub(crate) struct CutCraftApp {
     save_after: Option<gcode_view::SaveAfter>,
     /// Save Toolpaths' form, opened again once its save has asked all it asks.
     form_back: Option<SaveForm>,
-    /// The problems Save Anyway was answered for: the next save goes on despite them, and
-    /// asks again if the checks find any not among them. Empty when not answered.
-    checks_accepted: Vec<String>,
-    /// The errors (Must fix) the save under way was answered Save Anyway for: said at the
-    /// top of each file it writes. Set as each save starts, never kept for the next.
-    saving_errors: Vec<String>,
-    /// The job revision and machine the save under way was checked for: a change while it
-    /// waits on a question (the Web API can make one) stops it, to be checked again.
-    saving_checked: Option<(u64, usize)>,
+    /// What a save of toolpaths carries from the checks before cutting to its files.
+    saving: saving_checks::SavingChecks,
     /// The warnings of the checks before cutting ticked as read, by what they say: Save
     /// and Send to Machine wait until each one found is ticked.
     acknowledged: std::collections::BTreeSet<String>,

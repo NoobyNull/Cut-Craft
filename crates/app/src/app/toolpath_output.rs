@@ -247,7 +247,7 @@ impl CutCraftApp {
         let made = chrono::Local::now().naive_local();
         let vars = self.note_variables();
         let output = self.output();
-        let errors = &self.saving_errors;
+        let errors = self.saving.errors();
         let off = output.protection_off();
         let texts = || {
             let texts = output.texts(form, post, path, made, &vars)?;
@@ -318,9 +318,7 @@ impl CutCraftApp {
         sending: bool,
     ) -> Option<cut_craft_post::Post> {
         // a Save Anyway answer is for this save only, whichever way it ends
-        let accepted = std::mem::take(&mut self.checks_accepted);
-        self.saving_errors.clear();
-        self.saving_checked = None;
+        let accepted = self.saving.start();
         let post = match self.form_post(form) {
             Ok(post) => post,
             Err(e) => {
@@ -358,8 +356,7 @@ impl CutCraftApp {
             }
             output::Verdict::Go => {
                 // answered Save Anyway for these: the files say so at the top
-                self.saving_errors = output::errors(&found);
-                self.saving_checked = Some((self.history.revision(), self.machines.active));
+                self.saving.go(output::errors(&found), self.now_checked());
                 Some(post)
             }
         }
@@ -608,20 +605,18 @@ impl CutCraftApp {
         let made = chrono::Local::now().naive_local();
         let texts = self.toolpath_texts(form, post, path, made)?;
         let off = self.output().protection_off();
-        output::write(&output::marked(texts, &self.saving_errors, off.as_deref()))
+        output::write(&output::marked(texts, self.saving.errors(), off.as_deref()))
     }
 
     /// Whether the job and machine are still as the save under way was checked for: an
     /// error, and nothing written, when they changed while it waited on a question.
     fn still_as_checked(&self) -> Result<(), String> {
-        match self.saving_checked {
-            Some(checked) if checked != (self.history.revision(), self.machines.active) => Err(
-                "Nothing saved: the job changed while saving. Save again, so the checks \
-                     before cutting look at it as it is now"
-                    .to_owned(),
-            ),
-            _ => Ok(()),
-        }
+        self.saving.still_as_checked(self.now_checked())
+    }
+
+    /// The job revision and active machine, as a save is checked for.
+    pub(super) fn now_checked(&self) -> super::saving_checks::Checked {
+        (self.history.revision(), self.machines.active)
     }
 
     /// The files the form's plan makes through `post` at `path`, with their G-code as made

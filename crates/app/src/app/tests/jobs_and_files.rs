@@ -812,9 +812,9 @@ fn save_anyway_is_asked_in_the_window_not_by_a_dialog_that_can_hide_behind_it() 
     assert_eq!(h.app.status.message, "Toolpaths not saved");
     // answered Save Anyway, the same save goes on without asking again
     assert!(h.app.ready_to_save(&form, false).is_none());
-    h.app.checks_accepted = vec!["Air cutting".to_owned()];
+    h.app.saving.accept(vec!["Air cutting".to_owned()]);
     assert!(h.app.ready_to_save(&form, false).is_some(), "agreed to");
-    assert!(h.app.checks_accepted.is_empty(), "only for that save");
+    assert!(h.app.saving.accepted().is_empty(), "only for that save");
 }
 
 #[test]
@@ -843,13 +843,13 @@ fn save_anyway_counts_only_for_the_save_it_answered() {
         }]
     };
     h.app.save_checks = checks(cut_craft_core::preflight::Severity::Error, "Too deep");
-    h.app.checks_accepted = vec!["Too deep".to_owned()];
+    h.app.saving.accept(vec!["Too deep".to_owned()]);
     assert!(
         h.app.ready_to_save(&form, false).is_some(),
         "Save Anyway answered"
     );
     assert!(
-        h.app.checks_accepted.is_empty(),
+        h.app.saving.accepted().is_empty(),
         "used up by the save it was for"
     );
     // the same error, the next save: asked again, never remembered
@@ -894,7 +894,7 @@ fn saving_past_an_error_ticks_each_one_and_the_files_say_so() {
     let ask = h.app.save_anyway.take().unwrap();
     assert!(ask.ticked.contains(error));
     // Save Anyway: saved, and the file says what it was saved past
-    h.app.checks_accepted = vec![error.to_owned()];
+    h.app.saving.accept(vec![error.to_owned()]);
     let post = h
         .app
         .ready_to_save(&form, false)
@@ -909,7 +909,7 @@ fn saving_past_an_error_ticks_each_one_and_the_files_say_so() {
     assert!(text.contains("no feed rate"), "{text}");
     // the job changed before the files were written (the Web API can, while a question
     // waits): nothing written, saved again once checked as it is now
-    h.app.checks_accepted = vec![error.to_owned()];
+    h.app.saving.accept(vec![error.to_owned()]);
     let post = h.app.ready_to_save(&form, false).unwrap();
     h.rectangle(300.0, 20.0, 10.0, 10.0);
     let later = dir.join("later.nc");
@@ -1198,7 +1198,7 @@ fn save_anyway_agrees_only_to_the_problems_it_showed() {
         machine: h.app.machines.active,
         found: Some(vec![finding("Air cutting"), finding("Slow feed")]),
     }];
-    h.app.checks_accepted = vec!["Air cutting".to_owned()];
+    h.app.saving.accept(vec!["Air cutting".to_owned()]);
     assert!(
         h.app.ready_to_save(&form, false).is_none(),
         "Slow feed was never shown"
@@ -1206,14 +1206,16 @@ fn save_anyway_agrees_only_to_the_problems_it_showed() {
     assert!(h.app.save_anyway.is_some(), "asked again");
     // answered for both, it saves
     h.app.save_anyway = None;
-    h.app.checks_accepted = vec!["Slow feed".to_owned(), "Air cutting".to_owned()];
+    h.app
+        .saving
+        .accept(vec!["Slow feed".to_owned(), "Air cutting".to_owned()]);
     assert!(h.app.ready_to_save(&form, false).is_some());
 }
 
 #[test]
 fn a_new_job_forgets_a_save_anyway_answer() {
     let mut h = ready_for_output();
-    h.app.checks_accepted = vec!["Air cutting".to_owned()];
+    h.app.saving.accept(vec!["Air cutting".to_owned()]);
     h.app.reset_job();
-    assert!(h.app.checks_accepted.is_empty(), "forgotten");
+    assert!(h.app.saving.accepted().is_empty(), "forgotten");
 }
