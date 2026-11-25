@@ -323,6 +323,7 @@ tooltip-help-contents = Help Contents: opens Cut Craft's help, with a page for e
 tooltip-did-you-know = Did You Know?: short tips for getting more out of Cut Craft, one at a time
 tooltip-credits = Credits: the libraries, pictures and icons Cut Craft is built with, and their licences
 tooltip-about-cut-craft = About Cut Craft: its version, its licence and the people who made it
+tooltip-back-up-settings = Back Up Settings: saves your settings, machines, bits and own files in one backup file, to keep safe or take to another computer
 tooltip-check-for-updates = Check for Updates: asks straight away whether there is a newer version of Cut Craft
 tooltip-addons = Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts
 tooltip-open-gadgets-folder = Open My Gadgets Folder: opens the folder where your own .lua gadget files go. Each one shows up in Gadgets ▸ My Gadgets when Cut Craft starts

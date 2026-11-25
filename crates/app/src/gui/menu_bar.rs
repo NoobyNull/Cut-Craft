@@ -373,6 +373,7 @@ impl MenuSystem {
                                 .collect(),
                         ),
                         sep(),
+                        b("back_up_settings"),
                         b("check_for_updates"),
                         b("first_run_setup"),
                         b("about_cut_craft"),

@@ -25,6 +25,8 @@ a CNC machine cuts them with.
   shown each time Cut Craft starts. Each links to the page that says more.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.
+- [Backing up your settings](help:backups): Help ▸ Back Up Settings, what goes in, and the
+  backups Cut Craft makes by itself before updates and other big changes.
 - [Reporting a bug](help:bug_reports): right-click ▸ Report a Bug Here…, what each report
   sends (the details of your computer included), and how to switch those off.
 - [Protect the Machine](help:protect_the_machine): what is never saved because it could

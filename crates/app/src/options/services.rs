@@ -137,3 +137,42 @@ pub enum CrashLogs {
     #[schemars(title = "Don't send crash logs")]
     DontSend,
 }
+
+/// Options ▸ Backups: the backups Cut Craft makes by itself. Help ▸ Back Up Settings makes one
+/// any time.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Backups {
+    /// Also back up once a week, when Cut Craft starts. A backup is always made before an
+    /// update is installed, before the window layout changes, before first-time setup is run
+    /// again, and before Cut Craft rewrites a library itself
+    #[serde(default = "on")]
+    #[schemars(title = "Back up every week")]
+    pub weekly: bool,
+    /// How many automatic backups to keep. When there are more, the oldest is removed.
+    /// Backups you save yourself are never removed
+    #[serde(default = "backups_kept")]
+    #[schemars(title = "Backups to keep", range(min = 1, max = 100))]
+    pub keep: u32,
+}
+
+fn backups_kept() -> u32 {
+    u32::try_from(cut_craft_backup::KEEP).expect("a small count")
+}
+
+impl Default for Backups {
+    fn default() -> Self {
+        Self {
+            weekly: on(),
+            keep: backups_kept(),
+        }
+    }
+}
+
+impl Backups {
+    /// How many automatic backups to keep, inside the range Options allows.
+    pub fn kept(&self) -> usize {
+        usize::try_from(self.keep)
+            .unwrap_or(cut_craft_backup::MOST_KEPT)
+            .clamp(1, cut_craft_backup::MOST_KEPT)
+    }
+}

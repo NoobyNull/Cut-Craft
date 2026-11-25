@@ -36,6 +36,8 @@ impl CutCraftApp {
                 self.save_options();
             }
             Asked::Restart(program) => {
+                // the new version may change the settings as it starts: they are kept first
+                self.back_up_before(cut_craft_backup::Reason::BeforeUpdate);
                 // closing asks to save unsaved work first, then starts the new version
                 self.restart_after_close = Some(program);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);

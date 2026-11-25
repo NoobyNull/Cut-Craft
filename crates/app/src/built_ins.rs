@@ -153,6 +153,7 @@ pub const BUILT_INS: &[BuiltIn] = &[
     act("did_you_know", "Did You Know?", "Did You Know?: short tips for getting more out of Cut Craft, one at a time").window(),
     act("credits", "Credits", "Credits: the libraries, pictures and icons Cut Craft is built with, and their licences"),
     act("about_cut_craft", "About Cut Craft", "About Cut Craft: its version, its licence and the people who made it"),
+    act("back_up_settings", "Back Up Settings", "Back Up Settings: saves your settings, machines, bits and own files in one backup file, to keep safe or take to another computer").window(),
     act("check_for_updates", "Check for Updates", "Check for Updates: asks straight away whether there is a newer version of Cut Craft").window(),
     act("addons", "Add-ons", "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts").window(),
     act("open_gadgets_folder", "Open Gadgets Folder", "Open My Gadgets Folder: opens the folder where your own .lua gadget files go. Each one shows up in Gadgets ▸ My Gadgets when Cut Craft starts"),

@@ -4,6 +4,7 @@
 mod actions;
 mod app_icon;
 mod background;
+mod backups;
 mod calculate_again;
 mod canvas_2d;
 mod canvas_layout;
@@ -701,6 +702,8 @@ struct CutCraftApp {
     toolbars: custom_toolbars::ToolbarState,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
+    /// Help ▸ Back Up Settings and the automatic backups ([`cut_craft_backup`]).
+    backups: backups::Backups,
     /// The user's own spelling words, one a line; none in tests.
     words_path: Option<std::path::PathBuf>,
     /// Where how long each kind of slow job took is kept between runs

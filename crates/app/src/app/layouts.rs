@@ -36,6 +36,9 @@ impl CutCraftApp {
         let Some(&(_, layout)) = LAYOUTS.iter().find(|(item, _)| *item == id) else {
             return;
         };
+        if layout != self.options.general.layout {
+            self.back_up_before(cut_craft_backup::Reason::BeforeLayoutChange);
+        }
         self.options.general.layout = layout;
         self.save_options();
     }

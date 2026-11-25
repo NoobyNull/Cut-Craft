@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-25
-see-also: view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
+see-also: backups, view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
 # Changing settings
@@ -171,6 +171,12 @@ in Ribbon on the **Favourites** tab, in Rail with **★**, and in Classic from t
 Toolpaths side tab's right-click menu. See [Favourites](help:favourites) for every step.
 
 To pick another layout, use [Interface Layout](help:interface_layout).
+
+## Backups
+
+**Options ▸ Backups** lists the backups Cut Craft has made by itself, and sets how often and
+how many. **Help ▸ Back Up Settings** saves everything set up here, and more, in one file. See
+[Backing up your settings](help:backups).
 
 See also: [Web API](help:web_api), [3D View](help:view_3d), [Did You Know?](help:tips),
 [Interface Layout](help:interface_layout).
