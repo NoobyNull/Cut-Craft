@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-25
 see-also: finding_help, keyboard_shortcuts, interface_layout
 icon: view/zoom_box.png
 ---
