@@ -54,6 +54,7 @@ mod bit_changes;
 #[cfg(test)]
 pub(crate) mod hard_coded_text;
 mod help;
+mod help_browser;
 #[cfg(test)]
 mod help_coverage;
 #[path = "help_pictures.rs"]
@@ -850,16 +851,8 @@ pub(crate) struct CutCraftApp {
     ring_grip: Option<(egui::Vec2, f32)>,
     /// An open Help window.
     info: Option<Info>,
-    /// Help Contents' rendered pages and the `help:` links it watches.
-    help_cache: egui_commonmark::CommonMarkCache,
-    /// What is typed in the Help window's search box.
-    help_search: String,
-    /// Every help page as (topic, title, Markdown), made the first time help is searched.
-    help_index: Vec<(&'static str, String, String)>,
-    /// The help search's ranked index of [`Self::help_index`], made with it.
-    help_ranked: Option<cut_craft_help::search::Index>,
-    /// The help pages read before and after the one shown: Back and Forward.
-    help_history: cut_craft_help::wiki::History<&'static str>,
+    /// The Help window's pages, search and Back and Forward.
+    help: help_browser::HelpBrowser,
     /// The Did You Know? window, open on this tip.
     tip: Option<usize>,
     /// The Did You Know? window's rendered tips.

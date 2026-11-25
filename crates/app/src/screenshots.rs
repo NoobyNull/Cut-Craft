@@ -335,7 +335,7 @@ fn post_window(app: &mut CutCraftApp, ctx: &egui::Context, rotary: bool) {
 fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
     app.updates = crate::update::Updates::default();
     app.form = None;
-    search.clone_into(&mut app.help_search);
+    search.clone_into(&mut app.help.search);
     app.info = Some(super::Info::Help(topic));
 }
 
@@ -409,7 +409,7 @@ fn checks_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
     // the help scenes' window closed, the Toolpaths page not pinned over the windows
     app.info = None;
-    app.help_search.clear();
+    app.help.search.clear();
     app.pages.set_pinned(super::Page::Toolpaths, false);
     app.doc = cut_craft_core::document::Document::default();
     draw_shapes(app);
