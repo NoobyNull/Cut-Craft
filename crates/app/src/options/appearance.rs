@@ -320,6 +320,17 @@ pub enum OtherWays {
     AsButtons,
 }
 
+/// When a Canvas palette group lists its tools beside it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CanvasFlyouts {
+    /// As soon as the pointer is over the group
+    #[default]
+    OnHover,
+    /// When the group is clicked
+    OnClick,
+}
+
 /// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`,
 /// `docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

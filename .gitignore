@@ -8,3 +8,5 @@ __pycache__/
 /output/
 dist/
 packaging/linux/stage/
+# made by the Language packs workflow (crates/i18n/src/pig_latin.rs)
+/language-packs/en-piglatin/*.ftl

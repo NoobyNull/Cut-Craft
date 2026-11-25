@@ -64,14 +64,26 @@ fn about(layout: WindowLayout) -> String {
     }
 }
 
+/// Each layout card's width: all across, as wide as fits in most of a `screen` that wide,
+/// up to fourteen `row`s. Sized from the screen, not from the window it is in, which
+/// sizes itself to its cards: measured from that, it would grow a little every frame.
+fn card_width(screen: f32, edges: f32, gap: f32, row: f32) -> f32 {
+    let across = f32::from(u8::try_from(WindowLayout::ALL.len()).unwrap_or(u8::MAX));
+    let room = 0.85 * screen - (across - 1.0) * gap - across * edges;
+    (room / across).clamp(row, 14.0 * row)
+}
+
 /// The layouts side by side, each its picture, name and what it is like; a click
 /// on any part picks it.
 pub(super) fn layout_choices(ui: &mut egui::Ui, chosen: &mut WindowLayout) {
-    // all across, each as wide as fits, up to fourteen rows of text
-    // each card's margins and border, and the gaps between them
-    let across = f32::from(u8::try_from(WindowLayout::ALL.len()).unwrap_or(u8::MAX));
-    let gaps = (across - 1.0) * ui.spacing().item_spacing.x + across * 14.0;
-    let width = ((ui.available_width() - gaps) / across).min(14.0 * ui.spacing().interact_size.y);
+    let frame = egui::Frame::group(ui.style());
+    let edges = frame.total_margin().sum().x;
+    let width = card_width(
+        ui.ctx().content_rect().width(),
+        edges,
+        ui.spacing().item_spacing.x,
+        ui.spacing().interact_size.y,
+    );
     ui.horizontal_top(|ui| {
         for layout in WindowLayout::ALL {
             let picked = *chosen == layout;

@@ -1,6 +1,7 @@
 //! Every tip's words, in the order startup shows them.
 
 use super::{Area, Tip, icon, scene, tool};
+use crate::options::WindowLayout;
 
 /// Every tip, in the order startup shows them: the first few are what a beginner needs on day
 /// one, the rest make the work quicker, safer or easier to find. Each is true of Cut Craft as
@@ -1245,12 +1246,23 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Program,
-        "tips/three_layouts.png",
-        "Cut Craft can arrange its window three ways: **Ribbon**, **Rail** or **Classic**. Press \
-         **Interface Layout** (under 2D View Control) to see each and pick one. Every tool is in \
-         every layout.",
+        "tips/four_layouts.png",
+        "Cut Craft can arrange its window four ways: **Ribbon**, **Rail**, **Canvas** or \
+         **Classic**. Press **Interface Layout** (under 2D View Control) to see each and pick \
+         one. Every tool is in every layout.",
         "interface_layout",
     ),
+    scene(
+        Area::Program,
+        "tips/canvas_layout.png",
+        "Want more room to draw? The **Canvas** layout gives the drawing the whole window: the \
+         tools float in a small palette at the left and open as you point at them, and the \
+         open form floats on the right. Press **Try Canvas** to switch, and **Interface \
+         Layout** to switch back.",
+        "layout_canvas",
+    )
+    .tries(WindowLayout::Canvas)
+    .weighted(5),
     icon(
         Area::Program,
         "common/materials_appearance.png",

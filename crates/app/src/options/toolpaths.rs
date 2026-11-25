@@ -1,8 +1,8 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
 use super::{
-    Deserialize, Display, FileDialogDefault, JsonSchema, OtherWays, RibbonIcons, Serialize,
-    WindowLayout, egui, on,
+    CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, OtherWays, RibbonIcons,
+    Serialize, WindowLayout, egui, on,
 };
 
 /// Toolpath settings.
@@ -315,19 +315,16 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Other ways to draw a shape")]
     pub other_ways: OtherWays,
+    /// When a group in the Canvas layout's palette lists its tools beside it: On Hover as
+    /// soon as the pointer is over the group, On Click when it is clicked
+    #[serde(default)]
+    #[schemars(title = "Canvas tool lists open")]
+    pub canvas_flyouts: CanvasFlyouts,
     /// Open a short Did You Know? tip each time Cut Craft starts, a different one each
     /// time. Help ▸ Did You Know? shows them whenever you like
     #[serde(default = "on")]
     #[schemars(title = "Show a tip when Cut Craft starts")]
     pub show_tips_at_startup: bool,
-}
-
-#[expect(
-    clippy::trivially_copy_pass_by_ref,
-    reason = "serde's skip_serializing_if"
-)]
-pub(super) fn is_zero(n: &usize) -> bool {
-    *n == 0
 }
 
 pub(super) fn autosave_seconds() -> u32 {
