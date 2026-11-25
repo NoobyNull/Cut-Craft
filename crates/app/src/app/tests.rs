@@ -26,6 +26,7 @@ mod moving;
 mod nodes_and_text;
 mod previews;
 mod rotary;
+mod rotary_wrap;
 mod saving_toolpaths;
 mod selecting;
 mod snapping_and_guides;
