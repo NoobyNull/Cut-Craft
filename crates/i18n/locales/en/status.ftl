@@ -140,7 +140,7 @@ status-still-checking = Still checking the toolpaths before cutting: save again 
 status-checked-after-work = The toolpaths are checked before cutting once the work running now is done: save again then
 status-checks-cancelled = The checks before cutting were cancelled: press Check Again, then save
 
-## The Tool Database and the Materials Library
+## The Bit Library and the Materials Library
 # $error: why the library could not be read.
 status-materials-not-saved = { $error }; material changes will not be saved
 status-tools-not-saved = { $error }; bit changes will not be saved

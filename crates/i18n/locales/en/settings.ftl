@@ -78,18 +78,18 @@ setting-the-same-for-3d-roughing-a348d7 = The same for 3D roughing, finishing, t
 setting-v-carve-v-bit-carving-5d2ada = V-Carve (V-bit carving) toolpath tolerance
 setting-the-same-for-v-carving-a437b3 = The same for V-carving, prism, inlay and chamfer toolpaths
 setting-preview-multiplier-20da96 = Preview multiplier
-setting-how-many-times-faster-than-91d862 =
+setting-how-many-times-faster-than-d513e1 =
     How many times faster than the machine a toolpath preview plays when it starts: 1
-    plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the
+    plays each move at its bit's feed or plunge rate, rapids at the rapid rate; the
     slider over the preview changes it while it plays
 setting-show-keep-out-zone-labels-3b40ed = Show keep-out zone labels
 setting-write-each-keep-out-zone-3f1a9b =
     Write each keep-out zone's name on it in the 2D and 3D views ("Keep-out: Clamp 1").
     The View menu turns them on and off too
 setting-clip-toolpaths-at-keep-out-8c2a85 = Clip toolpaths at keep-out zones
-setting-off-safest-a-toolpath-that-e6d151 =
+setting-off-safest-a-toolpath-that-a2318a =
     Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
-    made. On: it is made with the part under the zone left uncut, the tool lifting over
+    made. On: it is made with the part under the zone left uncut, the bit lifting over
     the zone, as if the zone were cut out of whatever is under it. Either way, moves
     across a zone go round it. Laser and drill bank toolpaths are never clipped: move the
     part or the zone for those
@@ -821,26 +821,26 @@ setting-lengths-shown-in-millimetres-f12c0f = Lengths shown in millimetres
 setting-inches-e53ee1 = inches
 setting-lengths-shown-in-inches-873dde = Lengths shown in inches
 setting-z-zero-position-8cbfb8 = Z Zero Position
-setting-where-the-tool-is-zeroed-4e4a4a = Where the tool is zeroed in Z: on top of the material, or under it on the machine bed
+setting-where-the-bit-is-zeroed-922bab = Where the bit is zeroed in Z: on top of the material, or under it on the machine bed
 setting-material-surface-d89d4b = Material Surface
 setting-the-tool-is-zeroed-on-41e6f5 = The tool is zeroed on the top of the material
 setting-machine-bed-5b6279 = Machine Bed
 setting-the-tool-is-zeroed-under-e18095 =
     The tool is zeroed under the material: on the machine bed, or on a rotary job's
     cylinder axis
-setting-rotary-jobs-where-the-tool-5efbb4 =
-    Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis. The
+setting-rotary-jobs-where-the-bit-9af779 =
+    Rotary jobs: where the bit is zeroed in Z, on top of the cylinder or on its axis. The
     picture shows where. Pick the one you touch the bit off on at the machine: the G-code
     heights depend on it, and a wrong pick cuts too deep or in the air
 setting-material-top-3624bb = Material Top
-setting-the-tool-is-zeroed-on-14eda2 =
-    The tool is zeroed on the top of the material at A=0: touch the bit off on the
+setting-the-bit-is-zeroed-on-eda2c9 =
+    The bit is zeroed on the top of the material at A=0: touch the bit off on the
     highest point of a round blank, or the middle of a square's or board's top face. Cut
     depths go below zero, so a 3 mm deep cut is Z -3. Easiest when the blank is true; set
     zero again for each new blank
 setting-turning-axis-0e5937 = Turning Axis
-setting-the-tool-is-zeroed-on-686133 =
-    The tool is zeroed on the turning axis, the centre line the rotary spins the material
+setting-the-bit-is-zeroed-on-5c7ed2 =
+    The bit is zeroed on the turning axis, the centre line the rotary spins the material
     round (touch off on the axis, not on the machine bed or the rotary's base). Every Z is
     a distance from the axis, so on a 50 mm blank a 3 mm deep cut is Z 22. Zero stays put
     when you change blanks, and an out-of-round blank still cuts to the right finished
@@ -919,7 +919,7 @@ setting-the-material-s-colour-in-3ac8c2 =
     The material's colour in the 3D view. How the preview colours what the toolpaths cut
     is Toolpaths ▸ Preview Colors, which this leaves as it is
 setting-rapid-z-gaps-above-material-0298c2 = Rapid Z Gaps above Material
-setting-how-high-the-tool-travels-16ad0c = How high the tool travels between cuts
+setting-how-high-the-bit-travels-1fe323 = How high the bit travels between cuts
 setting-clearance-z1-4d4017 = Clearance (Z1)
 setting-safe-height-above-the-material-6cc771 = Safe height above the material for rapid moves
 setting-plunge-z2-4532b5 = Plunge (Z2)
@@ -927,7 +927,7 @@ setting-plunges-go-down-to-this-90e377 =
     Plunges go down to this gap above the material at the rapid rate, then at the plunge
     rate; the same as the clearance means no rapid plunges
 setting-home-start-position-6dddba = Home / Start Position
-setting-where-the-tool-starts-from-7a3c68 = Where the tool starts from and goes back to at the end
+setting-where-the-bit-starts-from-9b87e7 = Where the bit starts from and goes back to at the end
 setting-where-the-tool-starts-and-51bc74 = Where the tool starts and ends, across the job
 setting-where-the-tool-starts-and-1586e8 = Where the tool starts and ends, up the job
 setting-z-gap-above-material-e80c69 = Z Gap above Material
@@ -955,7 +955,7 @@ setting-cut-depth-c9349e = Cut Depth
 setting-below-the-material-surface-bc4879 = Below the material surface
 setting-cutting-depths-16d99f = Cutting Depths
 setting-tool-a15ae7 = Tool
-setting-the-bit-that-cuts-round-6e9d73 = The bit that cuts round the shapes; Select… picks one from your tools
+setting-the-bit-that-cuts-round-ea86a0 = The bit that cuts round the shapes; Select… picks one from your bits
 setting-name-e07306 = Name
 setting-end-mill-1e8e98 = End mill
 setting-flat-bottomed-31fddc = Flat bottomed
@@ -1014,17 +1014,17 @@ setting-cut-e25863 = Cut
 setting-outside-to-cut-a-part-52efb9 = Outside to cut a part out, Inside to cut a hole, On the Line to follow the line itself
 setting-which-side-of-the-line-cb5d45 = Which Side of the Line
 setting-outside-7f8b64 = Outside
-setting-cut-a-part-out-the-00714f =
-    Cut a part out: the tool goes round the outside of each shape, so the part is the size
+setting-cut-a-part-out-the-cd403a =
+    Cut a part out: the bit goes round the outside of each shape, so the part is the size
     drawn
 setting-inside-5d558d = Inside
-setting-cut-a-hole-the-tool-086726 =
-    Cut a hole: the tool goes round the inside of each shape, so the hole is the size
+setting-cut-a-hole-the-bit-56bf4b =
+    Cut a hole: the bit goes round the inside of each shape, so the hole is the size
     drawn
 setting-on-the-line-f5b32b = On the Line
-setting-the-tool-s-middle-follows-1f45c9 =
-    The tool's middle follows the line itself, open lines too, so the cut is as wide as the
-    tool
+setting-the-bit-s-middle-follows-1dba3d =
+    The bit's middle follows the line itself, open lines too, so the cut is as wide as the
+    bit
 setting-allowance-offset-923b74 = Allowance Offset
 setting-positive-leaves-the-part-bigger-128788 = Positive leaves the part bigger (or the hole smaller), negative cuts into it
 setting-machine-vectors-101156 = Machine Vectors…
@@ -1037,8 +1037,8 @@ setting-up-at-the-start-of-3aca35 = Up at the start of each tab, across, and dow
 setting-3d-tabs-63a8e2 = 3D Tabs
 setting-up-to-the-tab-s-e93560 = Up to the tab's thickness at its middle and down the other side, without stopping
 setting-lead-in-out-208d8f = Lead in / out
-setting-how-the-tool-comes-onto-402c40 =
-    How the tool comes onto each path, from the waste side; a ramp then runs along the
+setting-how-the-bit-comes-onto-49ca85 =
+    How the bit comes onto each path, from the waste side; a ramp then runs along the
     lead in, and there is no spiral
 setting-leads-520074 = Leads
 setting-straight-down-onto-the-path-e5fbfb = Straight down onto the path
@@ -1081,8 +1081,8 @@ setting-at-the-corner-of-the-727e9e = At the corner of the path nearest a point 
 setting-start-near-219cc7 = Start near
 setting-the-point-of-each-vector-7fa94b = The point of each vector's bounding box its cut starts nearest
 setting-sharp-external-corners-d3bddc = Sharp External Corners
-setting-at-outside-corners-the-tool-7596df =
-    At outside corners the tool follows the vector's angle out to a point instead of
+setting-at-outside-corners-the-bit-a0f716 =
+    At outside corners the bit follows the vector's angle out to a point instead of
     rolling round the corner
 setting-project-toolpath-onto-3d-model-9b4575 = Project toolpath onto 3D Model
 setting-drop-the-finished-toolpath-onto-158a5f =
@@ -1091,11 +1091,11 @@ setting-drop-the-finished-toolpath-onto-158a5f =
 setting-what-the-toolpath-is-called-2e1d63 = What the toolpath is called in the toolpath list
 
 ## Pocket Toolpath (pocket_toolpath)
-setting-the-bit-that-cuts-the-edfb33 = The bit that cuts the walls and finishes the pocket; Select… picks one from your tools
-setting-clearance-tools-22af3e = Clearance Tools
-setting-bigger-tools-that-clear-the-2bfff2 =
-    Bigger tools that clear the pocket first, largest first: each makes a toolpath of its
-    own and each tool after it cuts only what the ones before it left (rest machining)
+setting-the-bit-that-cuts-the-681f60 = The bit that cuts the walls and finishes the pocket; Select… picks one from your bits
+setting-clearance-bits-b6bdcb = Clearance Bits
+setting-bigger-bits-that-clear-the-ac906a =
+    Bigger bits that clear the pocket first, largest first: each makes a toolpath of its
+    own and each bit after it cuts only what the ones before it left (rest machining)
 setting-strategy-125944 = Strategy
 setting-the-pattern-that-clears-the-20d0a8 = The pattern that clears the inside of the pocket
 setting-clear-pocket-9c0b8c = Clear Pocket
@@ -1138,7 +1138,7 @@ setting-go-round-the-edge-once-d93fb8 =
 ## Drilling Toolpath (drilling_toolpath)
 setting-peck-drilling-goes-one-pass-086287 = Peck drilling goes one pass depth deeper each peck; pick a bit the size of the holes
 setting-use-peck-drilling-25843c = Use Peck Drilling
-setting-drill-in-pecks-of-the-7d3961 = Drill in pecks of the tool's pass depth, rising between them; off drills straight down
+setting-drill-in-pecks-of-the-5c8baa = Drill in pecks of the bit's pass depth, rising between them; off drills straight down
 setting-peck-drilling-3698ab = Peck Drilling
 setting-retract-a267d6 = Retract
 setting-where-a-peck-drill-rises-a1e770 = Where a peck drill rises to between pecks.
@@ -1157,8 +1157,8 @@ setting-drill-the-holes-in-the-9cf28b = Drill the holes in the order the vectors
 setting-the-feed-plunge-rate-spindle-c63986 =
     The feed, plunge rate, spindle speed and pass depth the bank's drills run at; the
     holes' sizes come from the drills themselves
-setting-drill-in-pecks-of-the-2622e9 =
-    Drill in pecks of the tool's pass depth, rising between them to clear the chips; off
+setting-drill-in-pecks-of-the-b20688 =
+    Drill in pecks of the bit's pass depth, rising between them to clear the chips; off
     drills straight down
 setting-how-far-above-the-start-e0b022 = How far above the start depth, or the last peck, the drills rise between pecks
 setting-pitch-tolerance-97dc1a = Pitch Tolerance
@@ -1281,9 +1281,9 @@ setting-how-deep-the-groove-s-459a42 =
     How deep the groove's point goes below the start depth (Fill works its depth out
     from each shape's width instead)
 setting-a-v-bit-its-stepover-dc5060 = A V-bit; its stepover sets how close together the carving passes are
-setting-end-mills-that-clear-the-18f28f =
+setting-end-mills-that-clear-the-5ae6fe =
     End mills that clear the flat bottom first, largest first (needs a flat depth): each
-    makes a toolpath of its own, and each tool after it, the V-bit last, cuts only what
+    makes a toolpath of its own, and each bit after it, the V-bit last, cuts only what
     the ones before it left (rest machining)
 setting-after-calculating-drop-the-toolpath-34bfa5 =
     After calculating, drop the toolpath onto the 3D model: its depths are then below the
@@ -1298,22 +1298,22 @@ setting-carve-the-shapes-one-after-fb25cd =
 
 ## 3D Finishing Toolpath (3d_finishing_toolpath)
 setting-tools-0196fc = Tools
-setting-in-the-order-they-run-c29e42 =
+setting-in-the-order-they-run-57df37 =
     In the order they run, a toolpath each: the first finishes all it can, each later one
-    only what the tools before it left (rest machining). A ball nose follows curves best;
+    only what the bits before it left (rest machining). A ball nose follows curves best;
     its stepover spaces the raster lines. Editing a toolpath changes its own bit; to add a
     smaller one after it, make the toolpath again with both here
 setting-minimum-detail-4b2204 = Minimum detail
-setting-with-two-tools-or-more-251be8 =
-    With two tools or more, each later tool cuts only what the tools before it left:
+setting-with-two-bits-or-more-5603b5 =
+    With two bits or more, each later bit cuts only what the bits before it left:
     areas left smaller across than this are left alone
 setting-rest-machining-47cca9 = Rest Machining
 setting-rest-overlap-08e438 = Rest overlap
-setting-with-two-tools-or-more-ad5557 =
-    With two tools or more: how far each area a later tool cuts reaches past what the
-    tools before it left, so its cuts overlap theirs and leave no step
+setting-with-two-bits-or-more-0dd9fe =
+    With two bits or more: how far each area a later bit cuts reaches past what the
+    bits before it left, so its cuts overlap theirs and leave no step
 setting-machining-limit-boundary-8a4818 = Machining Limit Boundary
-setting-where-the-tool-s-tip-ea8c01 = Where the tool's tip may go
+setting-where-the-bit-s-tip-f16034 = Where the bit's tip may go
 setting-model-boundary-266b24 = Model Boundary
 setting-round-all-the-visible-components-796acb = Round all the visible components
 setting-material-boundary-ceb2c6 = Material Boundary
@@ -1329,13 +1329,13 @@ setting-level-55597d = Level
 setting-the-level-whose-components-make-e422b7 = The level whose components make the boundary
 setting-boundary-offset-cac08a = Boundary Offset
 setting-grows-the-boundary-outward-by-a353c1 = Grows the boundary outward by this much (negative shrinks it)
-setting-the-pattern-the-tool-follows-cff565 = The pattern the tool follows over the model
+setting-the-pattern-the-bit-follows-e20bd0 = The pattern the bit follows over the model
 setting-straight-lines-across-at-the-ad13e3 = Straight lines across, at the raster angle
 setting-rings-stepping-in-from-the-6f38a4 = Rings stepping in from the machining boundary
 setting-stepover-retract-c48eb8 = Stepover retract
-setting-lift-off-the-surface-by-de66da =
+setting-lift-off-the-surface-by-016527 =
     Lift off the surface by this between offset rings, which can leave fewer marks where
-    the tool steps over
+    the bit steps over
 
 ## 3D Pencil Toolpath (3d_pencil_toolpath)
 setting-cleans-up-after-a-3d-2861df =
@@ -1544,7 +1544,7 @@ setting-of-the-prism-s-base-af4257 = Of the prism's base below the start depth; 
 setting-depth-for-full-prism-b4fcd7 = Depth for full prism
 setting-instead-use-the-least-depth-aea099 = Instead, use the least depth that brings the widest shape to a point
 setting-cut-direction-5b05fe = Cut direction
-setting-which-way-round-the-shapes-19fe22 = Which way round the shapes the tool travels
+setting-which-way-round-the-shapes-d29b69 = Which way round the shapes the bit travels
 setting-cut-direction-cdb05e = Cut Direction
 setting-climb-2c7b2a = Climb
 setting-clockwise-round-the-shapes-993e00 = Clockwise round the shapes
@@ -1581,7 +1581,7 @@ setting-overlap-variation-percent-9e6c5c = Overlap variation percent
 setting-how-much-the-overlap-varies-ea4bf3 = How much the overlap varies, as a percentage of the most it may be
 setting-between-rows-of-scallops-f7f7ec = Between rows of scallops
 setting-direction-of-the-rows-anticlockwise-38c519 = Direction of the rows, anticlockwise from the X axis
-setting-keeps-the-texture-this-far-6c73a3 = Keeps the texture this far in from the boundary (up to the tool radius in a recess)
+setting-keeps-the-texture-this-far-868788 = Keeps the texture this far in from the boundary (up to the bit radius in a recess)
 setting-seed-7208cc = Seed
 setting-another-number-gives-another-random-071b6d = Another number gives another random pattern
 setting-the-bit-that-cuts-the-efcb75 = The bit that cuts the texture, usually a ball nose
@@ -1619,7 +1619,7 @@ setting-hatch-a1e521 = Hatch
 setting-lines-along-x-f817d9 = Lines along X
 setting-cross-hatch-1b70bd = Cross hatch
 setting-lines-along-x-and-along-f3f276 = Lines along X and along Y
-setting-between-fill-lines-set-here-a2394c = Between fill lines (set here, not from the tool)
+setting-between-fill-lines-set-here-4a8465 = Between fill lines (set here, not from the bit)
 setting-passes-at-least-fe0c44 = Passes at Least
 setting-kept-from-a-job-saved-1b90ac =
     Kept from a job saved when Passes ran the pattern again at the same depth: at least this
@@ -1674,8 +1674,8 @@ setting-depth-to-take-off-00f83b = Depth to Take Off
 setting-how-much-comes-off-the-4ee62d =
     How much comes off the top: a light skim is enough to flatten. Edit Passes… takes it
     off in more than one pass
-setting-a-surfacing-bit-spoilboard-bit-f0bdff =
-    A surfacing bit (spoilboard bit or fly cutter) from your tools; its stepover and
+setting-a-surfacing-bit-spoilboard-bit-198cda =
+    A surfacing bit (spoilboard bit or fly cutter) from your bits; its stepover and
     feeds are used
 setting-cut-in-34c7fa = Cut in
 setting-rows-along-x-or-y-082777 = Rows along X or Y, or a spiral from the outside in
@@ -1761,7 +1761,7 @@ setting-a-v-bit-or-a-911c0e = A V-bit or a ball nose
 ## Thread Milling Toolpath (thread_milling_toolpath)
 setting-below-the-material-surface-where-09d0b4 = Below the material surface where the thread starts
 setting-max-depth-c2ff64 = Max depth
-setting-deepest-the-bottom-of-the-2c639e = Deepest the bottom of the tool goes below the start depth
+setting-deepest-the-bottom-of-the-d8d21f = Deepest the bottom of the bit goes below the start depth
 setting-thread-size-9f1222 = Thread size
 setting-a-standard-thread-size-which-bb815f =
     A standard thread size, which sets both the diameter and the pitch; Custom to type
@@ -1841,7 +1841,7 @@ setting-right-handed-e0a437 = Right handed
 setting-tightens-turning-clockwise-as-most-7c1ca1 = Tightens turning clockwise, as most threads do
 setting-left-handed-4b1438 = Left handed
 setting-tightens-turning-anticlockwise-5de546 = Tightens turning anticlockwise
-setting-which-way-the-tool-spirals-030adc = Which way the tool spirals along the thread
+setting-which-way-the-bit-spirals-3b1ce7 = Which way the bit spirals along the thread
 setting-spiralling-down-from-the-top-67f376 = Spiralling down from the top of the thread
 setting-spiralling-up-from-the-bottom-4c232f = Spiralling up from the bottom
 setting-create-circles-for-internal-threads-77db3d = Create Circles for Internal Threads
@@ -1853,8 +1853,8 @@ setting-thread-the-vectors-in-the-862c32 =
     Thread the vectors in the order they were selected, else in the order that cuts
     quickest
 setting-tooth-offset-6293f4 = Tooth offset
-setting-from-the-bottom-of-the-346603 =
-    From the bottom of the thread mill up to the tip of its tooth, for a tool that is not
+setting-from-the-bottom-of-the-bf2536 =
+    From the bottom of the thread mill up to the tip of its tooth, for a bit that is not
     a thread mill (a thread mill gives its own)
 setting-a-single-point-thread-mill-af41ec = A single-point thread mill; its diameter is tip to tip
 
@@ -1864,15 +1864,15 @@ setting-mitred-corners-where-the-rails-c6511f = Mitred corners where the rails h
 setting-moulding-a44808 = Moulding
 setting-carries-the-passes-this-far-20f20f = Carries the passes this far past both ends of the profile
 setting-usually-a-ball-nose-its-03fc69 = Usually a ball nose; its stepover spaces the passes
-setting-which-way-the-passes-go-154a7b =
+setting-which-way-the-passes-go-70a014 =
     Which way the passes go round the rails: climb (clockwise) or conventional
-    (anticlockwise), for any bit, a custom form tool too
+    (anticlockwise), for any bit, a custom form bit too
 setting-climb-clockwise-d1633f = Climb (clockwise)
 setting-clockwise-round-a-closed-rail-3a091d = Clockwise round a closed rail: usually the cleaner finish, the usual choice on a CNC
 setting-conventional-anticlockwise-0fb3ca = Conventional (anticlockwise)
-setting-anticlockwise-round-a-closed-rail-032aed =
+setting-anticlockwise-round-a-closed-rail-17883a =
     Anticlockwise round a closed rail, as you would push a hand router: gentler on a
-    light machine or a large form tool, sometimes rougher in the finish
+    light machine or a large form bit, sometimes rougher in the finish
 setting-every-pass-the-cut-direction-4f6f7e =
     Every pass the cut direction's way, or each pass back the way the last came (quicker
     along an open rail, but half the passes cut the other way)
@@ -1880,16 +1880,16 @@ setting-vary-stepover-21b647 = Vary Stepover
 setting-space-the-passes-by-the-dace7a =
     Space the passes by the stepover along the profile's surface, so they come closer
     together where it is steep
-setting-larger-area-clearance-tool-1b48cd = Larger Area Clearance Tool
-setting-use-larger-area-clearance-tool-731f17 =
-    Use Larger Area Clearance Tool: the first of these roughs the moulding first, in
+setting-larger-area-clearance-bit-983b2e = Larger Area Clearance Bit
+setting-use-larger-area-clearance-bit-735c64 =
+    Use Larger Area Clearance Bit: the first of these roughs the moulding first, in
     levels of its pass depth, as a toolpath of its own named [Clear]
 setting-machining-allowance-e31d67 = Machining allowance
-setting-material-the-clearance-tool-leaves-981863 = Material the clearance tool leaves on the profile for the finishing tool
+setting-material-the-clearance-bit-leaves-be8c33 = Material the clearance bit leaves on the profile for the finishing bit
 setting-machine-flat-regions-b85ed4 = Machine flat regions
-setting-the-clearance-tool-cuts-the-7bd7f8 = The clearance tool cuts the profile's flat parts it fits in to their finished height
+setting-the-clearance-bit-cuts-the-acef79 = The clearance bit cuts the profile's flat parts it fits in to their finished height
 setting-skip-flat-regions-4b8ac8 = Skip flat regions
-setting-the-finishing-tool-leaves-out-1c561c = The finishing tool leaves out the flat parts the clearance tool finished
+setting-the-finishing-bit-leaves-out-3ad72a = The finishing bit leaves out the flat parts the clearance bit finished
 
 ## Rounding Toolpath (rounding_toolpath)
 setting-blank-e40961 = Blank
@@ -1899,7 +1899,7 @@ setting-round-stock-its-size-is-6a2bc3 = Round stock; its size is the diameter
 setting-blank-size-d25c12 = Blank size
 setting-side-of-a-square-blank-52a695 = Side of a square blank or diameter of a round one
 setting-method-a2c750 = Method
-setting-the-pattern-the-tool-follows-055a7a = The pattern the tool follows round the cylinder
+setting-the-pattern-the-bit-follows-f84f87 = The pattern the bit follows round the cylinder
 setting-rounding-2bdf3d = Rounding
 setting-radial-9f548e = Radial
 setting-a-full-turn-round-the-ca5bb1 = A full turn round the cylinder, then a stepover along it, and back
@@ -1934,7 +1934,7 @@ setting-model-85e8fa = Model
 setting-the-3d-model-its-hollows-5ebe8c = The 3D model: its hollows are the lines
 setting-below-the-material-surface-where-3ea60b = Below the material surface where carving starts
 setting-cut-depth-84a63e = Cut depth
-setting-below-the-start-depth-cut-106d2c = Below the start depth, cut in passes no deeper than the tool's pass depth
+setting-below-the-start-depth-cut-b98e9b = Below the start depth, cut in passes no deeper than the bit's pass depth
 setting-how-far-the-sketch-lines-2fb9f9 = How far the sketch lines reach
 setting-bitmap-boundary-39cf98 = Bitmap boundary
 setting-the-edges-of-the-picture-c17f23 = The edges of the picture or the job
@@ -1965,8 +1965,8 @@ setting-hatch-angle-01d9d2 = Hatch angle
 setting-the-angle-of-the-hatch-5604ae = The angle of the hatch lines: 0° along X, 90° along Y
 setting-a-second-set-of-hatch-a27309 = A second set of hatch lines at right angles
 setting-round-the-shapes-as-well-d2d2e4 = Round the shapes as well, so a hatch has crisp edges
-setting-the-laser-a-laser-in-50a03f =
-    The laser, a Laser in the Tool Database (Select… picks another): its diameter is the
+setting-the-laser-a-laser-in-c80ef4 =
+    The laser, a Laser in the Bit Library (Select… picks another): its diameter is the
     kerf, its feed rate the move speed
 
 ## Laser Picture (laser_picture_toolpath)
@@ -2011,14 +2011,14 @@ setting-only-cc6917 = Only
 setting-set-on-each-array-toolpath-278a82 = Set on each array toolpath made: the one source it copies
 
 ## Merged Toolpath (merged_toolpath)
-setting-what-the-toolpath-is-called-114e98 =
+setting-what-the-toolpath-is-called-8a726a =
     What the toolpath is called in the toolpath list. It merges the toolpaths ticked
     (shown) in the toolpath list when Apply is pressed: tick them there first
     (it is marked out of date when one of them changes: recalculate it then, and the
     hidden ones out of date are recalculated first). Those
     toolpaths are then hidden, so saving the shown toolpaths does not cut them twice. They
-    must use one tool, and all is cut with the first one's feeds and speed: a toolpath
-    whose copy of that tool is set differently is warned of
+    must use one bit, and all is cut with the first one's feeds and speed: a toolpath
+    whose copy of that bit is set differently is warned of
 setting-left-to-right-c1e1cf = Left to Right
 setting-cuts-in-order-across-the-527674 =
     Cuts in order across the job; of the orders ticked, the quickest is kept. Whatever
@@ -2063,7 +2063,7 @@ setting-steps-6b8bd4 = Steps
 setting-step-width-e30967 = Step width
 setting-stepped-insert-how-far-out-68e388 = Stepped insert: how far out from the shape the shelf reaches
 setting-makes-an-insert-this-much-e4bb8d = Makes an insert this much smaller, or a cavity this much bigger, so they fit
-setting-the-same-tool-for-both-59610b = The same tool for both halves
+setting-the-same-bit-for-both-b88ce6 = The same bit for both halves
 
 ## Space Horizontally (space_horizontally)
 setting-which-object-goes-where-along-5b28e2 = Which object goes where along the span.
@@ -2126,8 +2126,8 @@ setting-shows-the-relief-as-your-3ae69a =
     Shows the relief as your bit will really carve it: pits and grooves too narrow for
     the bit fill in, and the foot of a steep wall slopes at the bit's taper
 setting-carving-bit-5a2f7c = Carving bit
-setting-the-bit-you-will-carve-123dd2 =
-    The bit you will carve it with, picked with Select… in the Tool Database: the same
+setting-the-bit-you-will-carve-c7e707 =
+    The bit you will carve it with, picked with Select… in the Bit Library: the same
     bit the 3D Finishing toolpath uses, and that Calculate checks can reach everything
 
 ## Generate Border (generate_border)
@@ -2628,10 +2628,10 @@ setting-closed-rails-the-inside-of-c9b3d5 =
     reach at it
 
 ## Nest Parts (nest_parts)
-setting-tool-diameter-c4563a = Tool diameter
-setting-the-cut-out-tool-the-424d46 = The cut-out tool: the least gap left between parts
+setting-bit-diameter-d5166b = Bit diameter
+setting-the-cut-out-bit-the-0491b1 = The cut-out bit: the least gap left between parts
 setting-clearance-d438a5 = Clearance
-setting-added-to-the-tool-diameter-14a703 = Added to the tool diameter between parts, and to the border
+setting-added-to-the-bit-diameter-6979cc = Added to the bit diameter between parts, and to the border
 setting-border-gap-2d43df = Border gap
 setting-room-left-clear-round-the-1ad13d = Room left clear round the edge of the material
 setting-rotate-parts-to-find-best-04fbcd = Rotate parts to find best fit
@@ -3606,23 +3606,23 @@ setting-the-height-of-a-capital-b863c3 =
     (0.08 in) cannot be engraved legibly, so a smaller height is made that tall
 
 ## Import Toolpaths (import_toolpaths)
-setting-the-toolpath-s-name-with-d87788 =
-    The toolpath's name; with more than one tool in the file, each is named after it and
-    its tool number
+setting-the-toolpath-s-name-with-cd9718 =
+    The toolpath's name; with more than one bit in the file, each is named after it and
+    its bit number
 setting-the-g-code-file-nc-80af1b =
     The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt). Straight moves and arcs are
     read, arcs in the XY plane and the upright XZ and YZ ones too (G17, G18, G19); a
     drilling cycle is not. Rotary-axis turns (A, B, C) are left out, with a note in red,
     so a rotary file shows and saves flat
-setting-the-tool-the-file-cuts-6c4b5d =
-    The tool the file cuts with: its shape and size draw the preview; the file's own
+setting-the-bit-the-file-cuts-a1e49d =
+    The bit the file cuts with: its shape and size draw the preview; the file's own
     feed rate (from its first cutting move), plunge rate (from its first straight-down
-    plunge), spindle speed and tool number are used where it gives them. A toolpath keeps
+    plunge), spindle speed and bit number are used where it gives them. A toolpath keeps
     one of each, so a file that cuts at a second feed rate, plunges at a second one or
-    changes the spindle speed with one tool is noted in red, as saving it again writes
+    changes the spindle speed with one bit is noted in red, as saving it again writes
     every move at those. With more than
-    one tool in the file each part's tool is named after its number (`6 mm End Mill (T3
-    in the file)`), so saving it again still changes tools between them
+    one bit in the file each part's bit is named after its number (`6 mm End Mill (T3
+    in the file)`), so saving it again still changes bits between them
 
 ## Quick Trace (quick_trace)
 setting-quick-trace-has-no-settings-aa0d3a =
