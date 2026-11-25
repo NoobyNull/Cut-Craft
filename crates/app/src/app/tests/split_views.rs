@@ -100,3 +100,25 @@ fn a_zoomed_2d_view_keeps_its_drawing_when_the_view_moves() {
     let after = h.at(0.0, 0.0) - h.app.view_2d_at.unwrap();
     assert!((before - after).length() < 0.5, "{before:?} then {after:?}");
 }
+
+#[test]
+fn the_small_view_snaps_only_when_let_go() {
+    let mut h = Harness::new();
+    h.app.split = Some(Split::Picture);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let from = last_text(&h, "3D View (F3)");
+    let to = h.ctx.content_rect().left_top() + egui::vec2(200.0, 200.0);
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(from.lerp(to, 0.5))]);
+    h.frame(vec![Event::PointerMoved(to)]);
+    assert_eq!(
+        h.app.split_layout.corner,
+        egui::Align2::RIGHT_BOTTOM,
+        "while held it only shows where it will go"
+    );
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.split_layout.corner, egui::Align2::LEFT_TOP);
+}

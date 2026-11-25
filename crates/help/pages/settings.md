@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
@@ -118,6 +118,10 @@ such as **Create Vectors ▾**, to list every tool in it; the pin beside each on
 the Ribbon or takes it off. **General ▸ Ribbon icons** set to **Every Tool** shows every
 tool as an icon instead (**Compact** is the starting choice). When the window is too narrow for every group on a tab, the groups
 carry on along a second row, in the same order, so nothing is hidden.
+
+In the Canvas layout a palette group lists its tools as soon as you point at it. Set
+**General ▸ Canvas tool lists open** to **On Click** to open a list only when you click
+its group.
 
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
 

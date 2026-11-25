@@ -1,8 +1,8 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
 use super::{
-    Deserialize, Display, FileDialogDefault, JsonSchema, RibbonIcons, Serialize, WindowLayout,
-    egui, on,
+    CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, RibbonIcons, Serialize,
+    WindowLayout, egui, on,
 };
 
 /// Toolpath settings.
@@ -310,6 +310,11 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Ribbon icons")]
     pub ribbon_icons: RibbonIcons,
+    /// When a group in the Canvas layout's palette lists its tools beside it: On Hover as
+    /// soon as the pointer is over the group, On Click when it is clicked
+    #[serde(default)]
+    #[schemars(title = "Canvas tool lists open")]
+    pub canvas_flyouts: CanvasFlyouts,
     /// Open a short Did You Know? tip each time Cut Craft starts, a different one each
     /// time. Help ▸ Did You Know? shows them whenever you like
     #[serde(default = "on")]
