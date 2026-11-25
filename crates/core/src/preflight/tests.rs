@@ -266,6 +266,17 @@ fn a_board_on_the_rotary_must_clear_the_spoilboard_the_bit_and_the_rapids_as_it_
         "{:?}",
         said(tight, &flip)
     );
+    // held off the axis, a rapid that only changes how far across turns A too
+    let mut sideways = flip.clone();
+    sideways.moves[4].to.y = 0.0;
+    sideways.across = vec![0.0, 0.0, 0.0, 0.0, 3.0];
+    assert!(
+        said(tight, &sideways)
+            .iter()
+            .any(|m| m.contains("the file lifts the bit")),
+        "{:?}",
+        said(tight, &sideways)
+    );
     // and lifted higher than Z can go
     let cramped = RotaryAxis {
         room_above: 77.0,

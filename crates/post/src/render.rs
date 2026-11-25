@@ -474,6 +474,8 @@ impl Post {
         // (kind, to, laser power, across)
         let mut lines = Vec::with_capacity(toolpath.moves.len());
         let mut from = at;
+        // how far across the bit is held where it is now
+        let mut held_across = 0.0;
         for (i, m) in toolpath.moves.iter().enumerate() {
             let across = toolpath.across.get(i).copied().unwrap_or(0.0);
             let mut to = m.to;
@@ -491,12 +493,19 @@ impl Post {
                 && (to[round] - from[round]).abs() > 1e-9
                 && from.z.min(to.z) < high - 1e-9
             {
-                lines.push((MoveKind::Rapid, from.with_z(from.z.max(high)), 0.0, across));
+                // straight up where it is, held as it is; across and round only once clear
+                lines.push((
+                    MoveKind::Rapid,
+                    from.with_z(from.z.max(high)),
+                    0.0,
+                    held_across,
+                ));
                 lines.push((MoveKind::Rapid, to.with_z(to.z.max(high)), 0.0, across));
             }
             let power = toolpath.power.get(i).copied().unwrap_or(0.0);
             lines.push((m.kind, to, power, across));
             from = to;
+            held_across = across;
         }
         let line = |&(kind, to, power, across): &(MoveKind, DVec3, f64, f64)| {
             Step::Line(kind, to, power, across)

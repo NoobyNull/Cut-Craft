@@ -565,6 +565,53 @@ fn a_rapid_turning_a_under_the_bit_lifts_clear_of_square_corners_first() {
 }
 
 #[test]
+fn the_lift_clear_of_square_corners_keeps_the_bit_held_where_it_was_until_it_is_up() {
+    use cut_craft_core::document::Blank;
+    let mut job = hundred_round();
+    if let Some(r) = job.rotary.as_mut() {
+        r.blank = Blank::Square;
+    }
+    // held 3 mm off the axis on the way to the next side: the across axis moves only up there
+    let hop = Toolpath {
+        moves: vec![
+            mv(MoveKind::Rapid, 0.0, 0.0, 5.0),
+            mv(MoveKind::Rapid, 0.0, 60.0, 5.0),
+        ],
+        across: vec![0.0, 3.0],
+        ..toolpath("Hop", "T")
+    };
+    let post = BASIC
+        .replace(
+            "begin HEADER\n",
+            "ROTARY_WRAP_Y = \"A\"\nVAR ACROSS_POSITION = [ACROSS|C|Y|1.3]\nbegin HEADER\n",
+        )
+        .replace("[Z] [F]\"", "[Z] [ACROSS] [F]\"")
+        .replace("\"G0 [X] [Y] [Z]\"", "\"G0 [X] [Y] [Z] [ACROSS]\"");
+    let lines = render_for(&post, job, vec![hop]);
+    let z = |l: &str| -> Option<f64> {
+        l.split_whitespace()
+            .find_map(|w| w.strip_prefix('Z')?.parse().ok())
+    };
+    let y = |l: &str| -> Option<f64> {
+        l.split_whitespace()
+            .find_map(|w| w.strip_prefix('Y')?.parse().ok())
+    };
+    let clear = 100.0 / std::f64::consts::PI / 2.0 + 5.0;
+    let up = lines
+        .iter()
+        .position(|l| z(l).is_some_and(|z| z > clear + 1.0))
+        .expect("lifted clear of the corners");
+    // up first, still over the axis; held off only once A turns up there
+    assert!(y(&lines[up]).is_none_or(|y| y.abs() < 1e-3), "{lines:#?}");
+    assert!(
+        lines[up + 1..]
+            .iter()
+            .any(|l| y(l).is_some_and(|y| (y.abs() - 3.0).abs() < 1e-3)),
+        "{lines:#?}"
+    );
+}
+
+#[test]
 fn a_round_blank_turns_a_at_the_clearance_as_before() {
     let hop = Toolpath {
         moves: vec![

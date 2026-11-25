@@ -792,9 +792,12 @@ fn room(
         return;
     }
     for t in toolpaths {
-        let low = t.moves.windows(2).any(|m| {
+        // held off the axis, a change of how far across turns A too
+        let across = |i: usize| t.across.get(i).copied().unwrap_or(0.0);
+        let low = t.moves.windows(2).enumerate().any(|(i, m)| {
             m[1].kind == MoveKind::Rapid
-                && (round(m[1].to) - round(m[0].to)).abs() > 1e-6
+                && ((round(m[1].to) - round(m[0].to)).abs() > 1e-6
+                    || (across(i + 1) - across(i)).abs() > 1e-6)
                 && radius + m[0].to.z.min(m[1].to.z) < lift - 1e-6
         });
         if low {
