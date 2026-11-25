@@ -84,7 +84,9 @@ is merged or closed.
 | 4.3 | #671 (toolpath list tree): merge now or hold until after 1.0 | Waiting on Matthew |
 | 4.4 | Move #587, #595 and #597 to #603 to "After 1.0" | Not started |
 | 4.5 | Decide or shelve older open questions: depth warning on Pocket, shortcut keys in tooltips, DXF blocks, direction arrow in node editing | Waiting on Matthew |
-| 4.6 | #702: tool names, tool groups, sub-tabs, page tabs and menu items move into Fluent so language packs translate them (a translator has Russian ready) | PR open |
+| 4.6 | #702: tool names, tool groups, sub-tabs, page tabs and menu items move into Fluent so language packs translate them (a translator has Russian ready) | Done (PR #703) |
+| 4.7 | Pig Latin test pack (Igpay Atinlay), made from English by the Language packs workflow, so text still in the code shows in plain English | PR open |
+| 4.8 | All on-screen text into Fluent (~3,000 strings: tool forms, app, other parts, help tours), with a CI check that warns on new hard-coded text | Waiting on Matthew |
 
 ### 5. Licence and credits settled
 

@@ -342,6 +342,9 @@ macro_rules! tr {
 }
 
 #[cfg(test)]
+mod pig_latin;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
