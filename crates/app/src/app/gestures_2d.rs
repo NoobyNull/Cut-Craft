@@ -250,7 +250,7 @@ impl CutCraftApp {
         }
         self.doc.inside_group = Some(group);
         self.select([hit], false);
-        self.status.set_message(INSIDE_GROUP);
+        self.status.set_message(&t!(INSIDE_GROUP));
     }
 
     /// Steps out of the group stepped into once it is gone (undone, deleted, ungrouped).

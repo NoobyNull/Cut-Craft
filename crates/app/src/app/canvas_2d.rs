@@ -194,12 +194,12 @@ impl CutCraftApp {
         let size = ui.text_style_height(&egui::TextStyle::Body);
         let mut text = egui::text::LayoutJob::default();
         text.append(
-            EMPTY_SHEET_TITLE,
+            &t!(EMPTY_SHEET_TITLE),
             0.0,
             egui::TextFormat::simple(egui::FontId::proportional(size * 1.4), colour),
         );
         text.append(
-            &format!("\n{EMPTY_SHEET_HINT}"),
+            &format!("\n{}", t!(EMPTY_SHEET_HINT)),
             0.0,
             egui::TextFormat::simple(egui::FontId::proportional(size), colour),
         );
@@ -223,7 +223,7 @@ impl CutCraftApp {
             .show(ui.ctx(), |ui| {
                 ui.horizontal(|ui| {
                     if !recent.is_empty() {
-                        ui.menu_button(EMPTY_SHEET_RECENT, |ui| {
+                        ui.menu_button(t!(EMPTY_SHEET_RECENT), |ui| {
                             for (i, path) in recent.iter().enumerate() {
                                 if ui
                                     .button(super::file_name(path))
@@ -237,7 +237,7 @@ impl CutCraftApp {
                         ui.weak("·");
                     }
                     if ui
-                        .link(EMPTY_SHEET_SAMPLE)
+                        .link(t!(EMPTY_SHEET_SAMPLE))
                         .on_hover_hint(tr!("start-empty-sheet-sample-tip"))
                         .clicked()
                     {

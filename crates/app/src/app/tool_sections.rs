@@ -64,14 +64,14 @@ pub(super) fn tool_picker(
             if tools.get(current).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
-                    "Not in the Tool Database: Select… one, or add it there",
+                    t!("Not in the Tool Database: Select… one, or add it there"),
                 );
             }
         }
         None => {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
-                "No tool picked yet: Select… one",
+                t!("No tool picked yet: Select… one"),
             );
         }
     }
@@ -187,17 +187,21 @@ pub(super) fn clearing_section(
         let mut on = !list.is_empty();
         let (label, hint, about) = if finishing_smallest {
             (
-                "Clear with bigger bits first",
-                "Bigger bits take out most of the material first, so the Tool above only \
-                 cuts what they could not reach: quicker, and easier on a small bit",
-                "Biggest first. The Tool above finishes: it cuts only what these left.",
+                t!("Clear with bigger bits first"),
+                t!(
+                    "Bigger bits take out most of the material first, so the Tool above only \
+                 cuts what they could not reach: quicker, and easier on a small bit"
+                ),
+                t!("Biggest first. The Tool above finishes: it cuts only what these left."),
             )
         } else {
             (
-                "Clear the flat bottom with end mills first",
-                "End mills clear the flat bottom first, so the V-bit only carves the slopes \
-                 and what they could not reach",
-                "Biggest first. The V-bit finishes: it carves only what these left.",
+                t!("Clear the flat bottom with end mills first"),
+                t!(
+                    "End mills clear the flat bottom first, so the V-bit only carves the slopes \
+                 and what they could not reach"
+                ),
+                t!("Biggest first. The V-bit finishes: it carves only what these left."),
             )
         };
         if ui.checkbox(&mut on, label).on_hover_hint(hint).changed() {
@@ -415,7 +419,7 @@ pub(super) fn tool_list(
             if tools.get(&tool.name).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
-                    "Not in the Tool Database: Select… one, or add it there",
+                    t!("Not in the Tool Database: Select… one, or add it there"),
                 );
             }
             ui.horizontal(|ui| {
@@ -475,14 +479,19 @@ pub(super) fn tools_section(
         ui.set_width(ui.available_width());
         let (heading, empty) = match ToolList::of_key(key) {
             ToolList::Before => (
-                "Bits that finished before",
-                "None: the pencil bit runs along every valley. Add the bit your 3D Finishing \
-                 toolpath used, to cut only what it left",
+                t!("Bits that finished before"),
+                t!(
+                    "None: the pencil bit runs along every valley. Add the bit your 3D Finishing \
+                 toolpath used, to cut only what it left"
+                ),
             ),
-            _ => ("Tools", "No tool picked yet: Add a tool… to pick one"),
+            _ => (
+                t!("Tools"),
+                t!("No tool picked yet: Add a tool… to pick one"),
+            ),
         };
         ui.strong(heading);
-        tool_list(ui, key, &mut params[key], tools, slots, empty, units)
+        tool_list(ui, key, &mut params[key], tools, slots, &empty, units)
     })
     .inner
 }
@@ -572,9 +581,9 @@ pub(super) fn selector_section(
             });
         });
         for (layers, label) in [
-            (Layers::AllVisibleLayers, "All visible layers"),
-            (Layers::CurrentLayerOnly, "Current layer only"),
-            (Layers::SelectedLayers, "Selected layers"),
+            (Layers::AllVisibleLayers, t!("All visible layers")),
+            (Layers::CurrentLayerOnly, t!("Current layer only")),
+            (Layers::SelectedLayers, t!("Selected layers")),
         ] {
             ui.radio_value(&mut selector.layers, layers, label);
         }

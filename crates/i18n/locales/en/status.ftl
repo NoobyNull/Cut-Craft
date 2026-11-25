@@ -178,3 +178,7 @@ status-click-to-add-tab = click on a selected vector to add a tab, or on a tab t
 status-no-open-end = No open end there: click one of the circles at the ends of open vectors
 status-end-picked = End picked: now click the end to join it to
 status-click-to-measure = click a vector, or drag between two points
+
+## Drawing tools with no step of their own
+# $about: what the tool does (its tooltip).
+status-drag-in-the-view = { $about }: drag in the view

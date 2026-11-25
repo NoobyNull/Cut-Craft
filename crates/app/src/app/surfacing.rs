@@ -94,7 +94,7 @@ fn area_end(ui: &mut egui::Ui, params: &mut Value, stock: Stock) -> bool {
             egui::Frame::group(ui.style())
                 .stroke(egui::Stroke::new(1.5, red))
                 .show(ui, |ui| {
-                    ui.colored_label(red, format!("⚠ {SPOILBOARD_WARNING}"));
+                    ui.colored_label(red, format!("⚠ {}", t!(SPOILBOARD_WARNING)));
                 });
             if stock.bed[0] <= 0.0 {
                 ui.weak(tr!("surfacing-your-machine-s-bed-size"));
@@ -103,7 +103,7 @@ fn area_end(ui: &mut egui::Ui, params: &mut Value, stock: Stock) -> bool {
         "selected_vectors" if !stock.closed => {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
-                "Select the closed outline of what to flatten",
+                t!("Select the closed outline of what to flatten"),
             );
         }
         _ => {}
