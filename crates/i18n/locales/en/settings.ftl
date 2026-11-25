@@ -3798,3 +3798,8 @@ setting-across-the-stub-left-on-ac7faa =
     Across the stub left on the turning axis, joining the part to the rest of the
     material until it is cut free (for Turn, where there is no model)
 setting-material-left-on-the-model-0c768e = Material left on the model's outline for the carving after
+setting-finish-the-outline-be4443 = Finish the outline
+setting-after-the-steps-down-one-8b1d6b =
+    After the steps down, one last pass along the outline, a finishing stepover apart, so
+    a turned part comes off smooth: for a part that is round all along, finished here with
+    no carving after
