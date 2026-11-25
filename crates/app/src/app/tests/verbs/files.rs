@@ -121,4 +121,21 @@ impl Harness {
     pub(in super::super) fn close_save_form(&mut self) {
         self.app.save_form = None;
     }
+
+    // ---- a file named on the command line ----
+
+    /// Starts with `path` named on the command line, as opening a file with the app does.
+    pub(in super::super) fn open_given(&mut self, path: &std::path::Path) {
+        self.app.open_given(Some(path));
+    }
+
+    /// Job Setup's OK.
+    pub(in super::super) fn job_setup_ok(&mut self) {
+        self.app.job_setup_ok();
+    }
+
+    /// Job Setup's Cancel.
+    pub(in super::super) fn job_setup_cancel(&mut self) {
+        self.app.job_setup_cancel();
+    }
 }

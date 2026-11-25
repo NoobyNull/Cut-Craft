@@ -168,4 +168,44 @@ impl Harness {
     pub(in super::super) fn form_opened_at_step(&self) -> usize {
         self.app.form.as_ref().expect("a form is open").undo_from
     }
+
+    /// Opens `id`'s form on its own, as the tool's button does once the page is in sight.
+    pub(in super::super) fn open_tool_form(&mut self, id: &str) {
+        self.app.start_command(id);
+    }
+
+    /// The red error at the foot of the open form, if it shows one.
+    pub(in super::super) fn form_error(&self) -> Option<&str> {
+        self.app
+            .form
+            .as_ref()
+            .expect("a form is open")
+            .error
+            .as_deref()
+    }
+
+    /// The warning at the foot of the open form, if it shows one.
+    pub(in super::super) fn form_warning(&self) -> Option<&str> {
+        self.app
+            .form
+            .as_ref()
+            .expect("a form is open")
+            .warning
+            .as_deref()
+    }
+
+    /// Puts `error` at the foot of the open form, as a failed Calculate does.
+    pub(in super::super) fn given_form_error(&mut self, error: &str) {
+        self.app.form.as_mut().expect("a form is open").error = Some(error.into());
+    }
+
+    /// The tool E (Edit Object) reopens on the selection, if it was made by one.
+    pub(in super::super) fn made_to_edit(&self) -> Option<&'static str> {
+        self.app.made_to_edit()
+    }
+
+    /// The settings the open form last made its shape with, which its next change remakes.
+    pub(in super::super) fn remade_last(&self) -> Option<Value> {
+        self.app.remade_last()
+    }
 }

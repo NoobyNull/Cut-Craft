@@ -5,9 +5,9 @@ use super::*;
 #[test]
 fn a_tool_in_other_units_leaves_the_form_in_the_jobs_units() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.invoke("pocket_toolpath");
     // an inch bit picked in a mm job: the bit's units are its own, not the form's
-    h.app.form.as_mut().unwrap().params["tool"]["units"] = Value::from("Inch");
+    h.set_form_value("/tool/units", Value::from("Inch"));
     // the Toolpaths page flies out unseen on its first frame
     h.frame(vec![]);
     h.frame(vec![]);
@@ -33,24 +33,21 @@ fn a_tool_in_other_units_leaves_the_form_in_the_jobs_units() {
 #[test]
 fn a_rail_rows_menu_adds_a_favourite_and_the_star_lists_them() {
     let mut h = Harness::new();
-    h.app.options.general.layout = crate::options::WindowLayout::Rail;
-    let menu = h.app.row_menu("draw_circle");
+    h.given_options(|o| o.general.layout = crate::options::WindowLayout::Rail);
+    let menu = h.row_menu("draw_circle");
     assert_eq!(menu[0].name, "Add to Favourites");
-    h.app.invoke(&h.ctx, &menu[0].action);
-    let menu = h.app.row_menu("pocket_toolpath");
-    h.app.invoke(&h.ctx, &menu[0].action);
-    assert_eq!(h.app.options.favourites.design, ["draw_circle"]);
-    assert_eq!(h.app.options.favourites.toolpaths, ["pocket_toolpath"]);
-    assert_eq!(
-        h.app.row_menu("draw_circle")[0].name,
-        "Remove from Favourites"
-    );
+    h.invoke(&menu[0].action);
+    let menu = h.row_menu("pocket_toolpath");
+    h.invoke(&menu[0].action);
+    assert_eq!(h.options().favourites.design, ["draw_circle"]);
+    assert_eq!(h.options().favourites.toolpaths, ["pocket_toolpath"]);
+    assert_eq!(h.row_menu("draw_circle")[0].name, "Remove from Favourites");
     h.frame(vec![]);
     let star = h.text_at("★").expect("the Rail's favourites button");
     h.press(star, true, Modifiers::NONE);
     h.press(star, false, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.rail_favourites);
+    assert!(h.rail_favourites_open());
     for name in ["Favourites", "Draw Circle", "Pocket Toolpath"] {
         assert!(h.text_at(name).is_some(), "{name}");
     }
@@ -60,8 +57,8 @@ fn a_rail_rows_menu_adds_a_favourite_and_the_star_lists_them() {
 #[test]
 fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
     use cut_craft_core::geometry::Segment;
-    let arcs = |app: &CutCraftApp| {
-        let only: Vec<_> = app.doc.vectors.values().collect();
+    let arcs = |h: &Harness| {
+        let only: Vec<_> = h.doc().vectors.values().collect();
         assert_eq!(only.len(), 1, "one shape, not a second on top");
         only[0]
             .segments
@@ -70,29 +67,29 @@ fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
             .count()
     };
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.invoke("draw_rectangle");
     h.frame(vec![]);
     let (from, to) = (h.at(100.0, 100.0), h.at(200.0, 160.0));
     h.drag(from, to);
-    assert_eq!(arcs(&h.app), 0, "drawn square");
+    assert_eq!(arcs(&h), 0, "drawn square");
     // issue #2: choosing rounded corners afterwards changes the rectangle just drawn, as
     // soon as it is chosen (issue #3), and Apply has nothing more to do
     let rounded = h.text_at("Rounded").expect("the corner choices");
     h.click(rounded, Modifiers::NONE);
-    assert_eq!(arcs(&h.app), 4, "the same rectangle, rounded");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply_form("draw_rectangle", &params).unwrap();
-    assert_eq!(arcs(&h.app), 4);
-    let rect = h.app.doc.vectors.values().next().unwrap().bounds();
+    assert_eq!(arcs(&h), 4, "the same rectangle, rounded");
+    let params = h.form_settings().clone();
+    h.apply_form("draw_rectangle", &params).unwrap();
+    assert_eq!(arcs(&h), 4);
+    let rect = h.doc().vectors.values().next().unwrap().bounds();
     // drawn from screen pixels: the same to a hundredth of a millimetre
     assert!((rect.size().x - 100.0).abs() < 1e-2, "same size: {rect:?}");
-    h.app.invoke(&h.ctx, "undo");
-    assert_eq!(arcs(&h.app), 0, "one undo puts the square back");
+    h.invoke("undo");
+    assert_eq!(arcs(&h), 0, "one undo puts the square back");
     // once let go, Apply draws a new shape
-    h.app.invoke(&h.ctx, "redo");
-    h.app.doc.selection.clear();
-    h.app.apply_form("draw_rectangle", &params).unwrap();
-    assert_eq!(h.app.doc.vectors.len(), 2);
+    h.invoke("redo");
+    h.select([]);
+    h.apply_form("draw_rectangle", &params).unwrap();
+    assert_eq!(h.doc().vectors.len(), 2);
 }
 
 /// A value dragged on a drawing form is one undo: each step takes back the drag's last one.
@@ -101,36 +98,34 @@ fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
 #[test]
 fn a_drag_on_a_form_takes_back_only_its_own_last_step() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.invoke("draw_rectangle");
     h.frame(vec![]);
     let (from, to) = (h.at(100.0, 100.0), h.at(200.0, 160.0));
     h.drag(from, to);
-    assert_eq!(h.app.doc.vectors.len(), 1);
-    let dragged = *h.app.doc.vectors.keys().next().unwrap();
+    assert_eq!(h.doc().vectors.len(), 1);
+    let dragged = *h.doc().vectors.keys().next().unwrap();
     // held on the form, a value dragged: its first step
     let on_form = h.text_at("Rounded").expect("the form is open");
     h.frame(vec![mouse(PointerButton::Primary, on_form, true)]);
-    h.app.form.as_mut().unwrap().params["width"] = Value::from(80.0);
-    h.app.form.as_mut().unwrap().dirty = true;
+    h.set_form_value("/width", Value::from(80.0));
     h.frame_holding(Modifiers::NONE, vec![]);
     // still held: that step undone, and another edit in its place
-    h.app.invoke(&h.ctx, "undo");
+    h.invoke("undo");
     let params = serde_json::json!({
         "x": 290.0, "y": 290.0, "width": 20.0, "height": 20.0, "corners": "square", "radius": 0.0
     });
-    h.app.apply("draw_rectangle", &params).unwrap();
-    assert_eq!(h.app.doc.vectors.len(), 2);
-    h.app.doc.selection = [dragged].into_iter().collect();
+    h.run("draw_rectangle", &params).unwrap();
+    assert_eq!(h.doc().vectors.len(), 2);
+    h.select([dragged]);
     // the drag goes on: it must not take back the square drawn meanwhile
-    h.app.form.as_mut().unwrap().params["width"] = Value::from(90.0);
-    h.app.form.as_mut().unwrap().dirty = true;
+    h.set_form_value("/width", Value::from(90.0));
     h.frame_holding(Modifiers::NONE, vec![]);
-    let square_stays = h.app.doc.vectors.values().any(|v| {
+    let square_stays = h.doc().vectors.values().any(|v| {
         let b = v.bounds();
         (b.center().x - 300.0).abs() < 1e-6 && (b.size().x - 20.0).abs() < 1e-6
     });
     assert!(square_stays, "the square drawn meanwhile stays");
-    assert_eq!(h.app.doc.vectors.len(), 2, "beside the one dragged");
+    assert_eq!(h.doc().vectors.len(), 2, "beside the one dragged");
 }
 
 #[test]
@@ -145,31 +140,27 @@ fn reshaping_a_made_shape_by_hand_stops_it_being_remade_from_its_settings() {
     ] {
         let mut h = Harness::new();
         h.rectangle(10.0, 10.0, 50.0, 50.0);
-        let shape = h.app.registry.get("create_shape").unwrap().default_params();
-        h.app.apply("create_shape", &shape).unwrap();
-        let id = *h.app.doc.components.keys().next().unwrap();
-        h.app.doc.selection.clear();
-        h.app.doc.selected_components = [id].into_iter().collect();
-        assert_eq!(
-            h.app.made_to_edit(),
-            Some("create_shape"),
-            "{tool}: made here"
-        );
-        let mut params = h.app.registry.get(tool).unwrap().default_params();
+        let shape = h.default_settings("create_shape");
+        h.run("create_shape", &shape).unwrap();
+        let id = *h.doc().components.keys().next().unwrap();
+        h.select([]);
+        h.given_document(|doc| doc.selected_components = [id].into_iter().collect());
+        assert_eq!(h.made_to_edit(), Some("create_shape"), "{tool}: made here");
+        let mut params = h.default_settings(tool);
         if tool == "sculpt" {
             params["points"] = serde_json::json!([{ "x": 30.0, "y": 30.0 }]);
         }
         if tool == "replace_below" {
             params["below"] = 0.5.into();
         }
-        h.app.apply(tool, &params).unwrap();
+        h.run(tool, &params).unwrap();
         assert!(
-            h.app.doc.components.values().all(|k| k.shape.is_none()),
+            h.doc().components.values().all(|k| k.shape.is_none()),
             "{tool} leaves a model, not a recipe to remake"
         );
-        let ids: Vec<_> = h.app.doc.components.keys().copied().collect();
-        h.app.doc.selected_components = ids.into_iter().collect();
-        assert_eq!(h.app.made_to_edit(), None, "{tool}: E no longer remakes it");
+        let ids: Vec<_> = h.doc().components.keys().copied().collect();
+        h.given_document(|doc| doc.selected_components = ids.into_iter().collect());
+        assert_eq!(h.made_to_edit(), None, "{tool}: E no longer remakes it");
     }
 }
 
@@ -264,32 +255,32 @@ fn start_page_and_form_pictures_are_in_the_icon_set() {
 #[test]
 fn a_tool_from_a_flown_out_page_hides_it_unless_it_opens_a_form() {
     let mut h = Harness::new();
-    h.app.pages = Pages::machining_layout();
-    h.app.pages.open(Page::Design);
-    h.app.pick(&h.ctx, Page::Design, "draw_rectangle");
+    h.invoke("machining_layout");
+    h.open_page(Page::Design);
+    h.pick_on_page(Page::Design, "draw_rectangle");
     assert_eq!(
-        h.app.pages.shown(Page::Design),
+        h.pages().shown(Page::Design),
         Shown::Flyout,
         "its form shows there"
     );
-    h.app.form = None;
-    h.app.pick(&h.ctx, Page::Design, "select_all_vectors");
-    assert_eq!(h.app.pages.shown(Page::Design), Shown::Hidden);
+    h.close_form();
+    h.pick_on_page(Page::Design, "select_all_vectors");
+    assert_eq!(h.pages().shown(Page::Design), Shown::Hidden);
 }
 
 #[test]
 fn a_tools_form_takes_the_place_of_the_page() {
     let mut h = Harness::new();
-    h.app.pages.set_pinned(Page::Design, true);
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.pin(Page::Design);
+    h.pin(Page::Toolpaths);
     h.frame(vec![]);
     assert!(h.text_at("Create Vectors").is_some());
     assert!(h.text_at("Job and Bits").is_some());
-    h.app.invoke(&h.ctx, "draw_circle");
+    h.invoke("draw_circle");
     h.frame(vec![]);
     assert!(h.text_at("Create Vectors").is_none(), "design tools hidden");
     assert!(h.text_at("Job and Bits").is_some(), "the other page stays");
-    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.invoke("profile_toolpath");
     h.frame(vec![]);
     assert!(
         h.text_at("Create Vectors").is_some(),
@@ -312,85 +303,75 @@ fn crossing_vectors_go_to_the_vector_validator_or_on_as_options_say() {
         ],
         true,
     );
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     let id = c.add(bow_tie);
     c.select(vec![id]);
-    let change = c.finish();
-    h.app.history.apply(&mut h.app.doc, change).unwrap();
-    let params = h
-        .app
-        .registry
-        .get("pocket_toolpath")
-        .unwrap()
-        .initial_params(&h.app.doc);
-    h.app.options.confirmations.toolpath_intersections = IntersectionCheck::OpenVectorValidator;
-    let why = h.app.apply("pocket_toolpath", &params).unwrap_err();
+    h.make(c.finish(), "draw");
+    let params = h.opening_settings("pocket_toolpath");
+    h.given_options(|o| {
+        o.confirmations.toolpath_intersections = IntersectionCheck::OpenVectorValidator;
+    });
+    let why = h.run("pocket_toolpath", &params).unwrap_err();
     assert!(why.contains("cross"), "{why}");
-    assert!(h.app.doc.toolpaths.is_empty());
-    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("vector_validator"));
-    assert!(h.app.doc.selection.contains(&id));
-    h.app.options.confirmations.toolpath_intersections = IntersectionCheck::DontCheck;
-    h.app.apply("pocket_toolpath", &params).unwrap();
-    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    assert!(h.doc().toolpaths.is_empty());
+    assert_eq!(h.form_id(), Some("vector_validator"));
+    assert!(h.doc().selection.contains(&id));
+    h.given_options(|o| o.confirmations.toolpath_intersections = IntersectionCheck::DontCheck);
+    h.run("pocket_toolpath", &params).unwrap();
+    assert_eq!(h.doc().toolpaths.len(), 1);
 }
 
 #[test]
 fn another_design_tab_closes_the_design_form() {
     let mut h = Harness::new();
-    h.app.pages.set_pinned(Page::Design, true);
-    h.app.start_command("document_variables");
-    assert!(h.app.form.is_some());
-    h.app.set_design_tab(h.app.design_tab);
-    assert!(h.app.form.is_some(), "the same tab keeps it");
-    let layers = DESIGN_TABS.iter().position(|&t| t == "Layers").unwrap();
-    h.app.set_design_tab(layers);
-    assert!(h.app.form.is_none(), "the Layers tab shows, not the form");
+    h.pin(Page::Design);
+    h.open_tool_form("document_variables");
+    assert!(h.form_id().is_some());
+    let same = h.design_tab();
+    h.show_design_tab(same);
+    assert!(h.form_id().is_some(), "the same tab keeps it");
+    h.show_design_tab("Layers");
+    assert!(h.form_id().is_none(), "the Layers tab shows, not the form");
 }
 
 #[test]
 fn e_on_an_embellishment_opens_embellish_on_it_and_remakes_it_in_place() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 120.0, 120.0);
-    let mut params = h.app.registry.get("embellish").unwrap().default_params();
+    let mut params = h.default_settings("embellish");
     params["objects"] = 3.into();
-    h.app.apply("embellish", &params).unwrap();
-    assert_eq!(h.app.doc.components.len(), 1);
-    let layers = h.app.doc.layers.len();
-    let id = *h.app.doc.components.keys().next().unwrap();
+    h.run("embellish", &params).unwrap();
+    assert_eq!(h.doc().components.len(), 1);
+    let layers = h.doc().layers.len();
+    let id = *h.doc().components.keys().next().unwrap();
     // its component
-    h.app.doc.selection = cut_craft_core::selection::Selection::default();
-    h.app.doc.selected_components = [id].into();
-    assert!(h.app.available("edit_object"));
+    h.select([]);
+    h.given_document(|doc| doc.selected_components = [id].into());
+    assert!(h.available("edit_object"));
     h.frame(vec![key(Key::E)]);
-    let form = h.app.form.as_mut().expect("Embellish opened");
-    assert_eq!(form.id, "embellish");
-    assert_eq!(form.params["objects"], 3);
-    let mut edited = form.params.clone();
+    assert_eq!(h.form_id(), Some("embellish"), "Embellish opened");
+    assert_eq!(h.form_value("objects"), 3);
+    let mut edited = h.form_settings().clone();
     h.frame(vec![]);
     assert!(
         h.text_at("Apply").is_some() && h.text_at("Create").is_none(),
         "it changes the one it opened on"
     );
     edited["objects"] = 8.into();
-    h.app.apply_form("embellish", &edited).unwrap();
-    assert_eq!(h.app.doc.components.len(), 1, "remade, not added");
-    assert_eq!(h.app.doc.layers.len(), layers, "on its own layer still");
+    h.apply_form("embellish", &edited).unwrap();
+    assert_eq!(h.doc().components.len(), 1, "remade, not added");
+    assert_eq!(h.doc().layers.len(), layers, "on its own layer still");
     // one of its pieces
-    h.app.form = None;
-    let layer = h.app.doc.layers.last().unwrap().id;
-    let piece = *h
-        .app
-        .doc
-        .vectors
-        .keys()
-        .find(|v| h.app.doc.layer_of(**v) == layer)
+    h.close_form();
+    let layer = h.doc().layers.last().unwrap().id;
+    let piece = *(h.doc().vectors.keys())
+        .find(|v| h.doc().layer_of(**v) == layer)
         .unwrap();
-    h.app.doc.selected_components.clear();
-    h.app.doc.selection = [piece].into();
+    h.given_document(|doc| doc.selected_components.clear());
+    h.select([piece]);
     h.frame(vec![key(Key::E)]);
-    let form = h.app.form.as_ref().expect("Embellish opened");
-    assert_eq!(form.id, "embellish");
-    assert_eq!(form.params["objects"], 8);
+    assert_eq!(h.form_id(), Some("embellish"), "Embellish opened");
+    assert_eq!(h.form_value("objects"), 8);
 }
 
 /// The opening splash shows Matthew's CC logo, which carries the name itself: it is a real,
@@ -415,7 +396,7 @@ fn a_long_forms_apply_button_and_error_stay_in_sight() {
         h.text_at("Add ramps to toolpath").is_none(),
         "the form runs on out of sight, under the pinned buttons"
     );
-    h.app.form.as_mut().unwrap().error = Some("select the vectors to profile".into());
+    h.given_form_error("select the vectors to profile");
     h.frame(vec![]);
     h.frame(vec![]);
     let error = h
@@ -433,10 +414,7 @@ fn a_long_forms_apply_button_and_error_stay_in_sight() {
 fn the_pin_buttons_are_drawn_icons() {
     let h = Harness::new();
     for icon in [super::panels::PIN_ICON, super::panels::PINNED_ICON] {
-        assert!(
-            h.app.icons.find(icon, "").is_some(),
-            "{icon} is in assets/icons"
-        );
+        assert!(h.has_icon(icon), "{icon} is in assets/icons");
     }
 }
 
@@ -444,23 +422,19 @@ fn the_pin_buttons_are_drawn_icons() {
 fn reset_puts_embellish_back_to_its_defaults_and_makes_it_again_as_new() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 160.0, 120.0);
-    let shape: Vec<EntityId> = h.app.doc.vectors.keys().copied().collect();
-    h.app.doc.selection = shape.iter().copied().collect();
-    h.app.invoke(&h.ctx, "embellish");
+    let shape: Vec<EntityId> = h.doc().vectors.keys().copied().collect();
+    h.select(shape.iter().copied());
+    h.invoke("embellish");
     h.frame(vec![]);
-    let defaults = h.app.registry.get("embellish").unwrap().default_params();
+    let defaults = h.default_settings("embellish");
     let mut params = defaults.clone();
     params["seed"] = 99.into();
     params["objects"] = 2.into();
     params["style"] = "rope".into();
-    h.app.form.as_mut().unwrap().params = params.clone();
-    h.app.apply_form("embellish", &params).unwrap();
+    h.set_form_settings(params.clone());
+    h.apply_form("embellish", &params).unwrap();
     let outlines = |h: &Harness| -> Vec<String> {
-        let mut all: Vec<String> = h
-            .app
-            .doc
-            .vectors
-            .iter()
+        let mut all: Vec<String> = (h.doc().vectors.iter())
             .filter(|(id, _)| !shape.contains(id))
             .map(|(_, v)| format!("{v:?}"))
             .collect();
@@ -468,7 +442,7 @@ fn reset_puts_embellish_back_to_its_defaults_and_makes_it_again_as_new() {
         all
     };
     let changed = outlines(&h);
-    let depth = h.app.history.undo_depth();
+    let depth = h.undo_steps();
     h.frame(vec![]);
     h.frame(vec![]);
     h.frame(vec![]);
@@ -476,27 +450,16 @@ fn reset_puts_embellish_back_to_its_defaults_and_makes_it_again_as_new() {
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    assert_eq!(
-        h.app.form.as_ref().unwrap().params,
-        defaults,
-        "every setting"
-    );
+    assert_eq!(h.form_settings(), &defaults, "every setting");
     assert_ne!(outlines(&h), changed, "made again");
-    assert_eq!(
-        h.app.history.undo_depth(),
-        depth,
-        "in place, one undo still"
-    );
+    assert_eq!(h.undo_steps(), depth, "in place, one undo still");
     // the same as making it new with the defaults
     let mut fresh = Harness::new();
     fresh.rectangle(10.0, 10.0, 160.0, 120.0);
-    fresh.app.doc.selection = fresh.app.doc.vectors.keys().copied().collect();
-    fresh.app.apply("embellish", &defaults).unwrap();
-    let mut new: Vec<String> = fresh
-        .app
-        .doc
-        .vectors
-        .values()
+    let all: Vec<EntityId> = fresh.doc().vectors.keys().copied().collect();
+    fresh.select(all);
+    fresh.run("embellish", &defaults).unwrap();
+    let mut new: Vec<String> = (fresh.doc().vectors.values())
         .skip(1)
         .map(|v| format!("{v:?}"))
         .collect();
@@ -508,8 +471,9 @@ fn reset_puts_embellish_back_to_its_defaults_and_makes_it_again_as_new() {
 fn embellishs_style_names_have_a_fixed_place_and_none_says_border() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 160.0, 120.0);
-    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
-    h.app.invoke(&h.ctx, "embellish");
+    let all: Vec<EntityId> = h.doc().vectors.keys().copied().collect();
+    h.select(all);
+    h.invoke("embellish");
     h.frame(vec![]);
     assert!(h.text_at("Rope").is_some());
     assert!(h.text_at("Rope border").is_none());
@@ -520,7 +484,7 @@ fn embellishs_style_names_have_a_fixed_place_and_none_says_border() {
         h.text_at("Repeat length").unwrap().y
     };
     let with_shape = top(&mut h);
-    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.select([]);
     let without = top(&mut h);
     assert!(
         (with_shape - without).abs() < 0.5,
@@ -579,14 +543,14 @@ fn a_form_tool_reads_in_one_line_in_the_jobs_units() {
 #[test]
 fn a_drawing_tools_form_creates_until_its_shape_is_drawn() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_circle");
+    h.invoke("draw_circle");
     h.frame(vec![]);
     assert!(h.text_at("Create").is_some(), "Create, with nothing drawn");
     assert!(h.text_at("Apply").is_none());
     let (from, to) = (h.at(100.0, 100.0), h.at(140.0, 100.0));
     h.drag(from, to);
     h.frame(vec![]);
-    assert_eq!(h.app.doc.vectors.len(), 1);
+    assert_eq!(h.doc().vectors.len(), 1);
     assert!(h.text_at("Create").is_none(), "drawn: it follows the form");
     assert!(h.text_at("Apply").is_none());
     assert!(h.text_at("Close").is_some() && h.text_at("Cancel").is_some());
@@ -601,38 +565,27 @@ fn a_drawing_tools_form_creates_until_its_shape_is_drawn() {
     let create = h.text_at("Create").expect("Create again");
     h.click(create, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(
-        h.app.doc.vectors.len(),
-        2,
-        "a second circle, the first kept"
-    );
+    assert_eq!(h.doc().vectors.len(), 2, "a second circle, the first kept");
 }
 
 #[test]
 fn embellish_drawn_finer_than_it_carves_says_so_in_red_at_the_foot_of_its_form() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 3.0, 3.0);
-    h.app.start_command("embellish");
-    let params = h
-        .app
-        .form
-        .as_ref()
-        .expect("Embellish opened")
-        .params
-        .clone();
-    h.app.apply_form("embellish", &params).unwrap();
-    let form = h.app.form.as_ref().unwrap();
-    assert!(form.error.is_none(), "{:?}", form.error);
-    let warning = form.warning.as_deref().unwrap_or_default();
+    h.open_tool_form("embellish");
+    let params = h.form_settings().clone();
+    h.apply_form("embellish", &params).unwrap();
+    assert!(h.form_error().is_none(), "{:?}", h.form_error());
+    let warning = h.form_warning().unwrap_or_default();
     assert!(warning.contains("smaller than it will carve"), "{warning}");
     // a shape it fits: the warning goes
-    h.app.form = None;
-    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.close_form();
+    h.select([]);
     h.rectangle(30.0, 10.0, 120.0, 120.0);
-    h.app.start_command("embellish");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply_form("embellish", &params).unwrap();
-    assert_eq!(h.app.form.as_ref().unwrap().warning, None);
+    h.open_tool_form("embellish");
+    let params = h.form_settings().clone();
+    h.apply_form("embellish", &params).unwrap();
+    assert_eq!(h.form_warning(), None);
 }
 
 #[test]
@@ -641,15 +594,16 @@ fn embellishs_pattern_maker_adds_samples_to_the_sequence() {
     // tall enough that the whole form shows without scrolling
     h.window = vec2(1280.0, 2400.0);
     h.rectangle(10.0, 10.0, 160.0, 120.0);
-    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
-    h.app.invoke(&h.ctx, "embellish");
-    let mut params = h.app.registry.get("embellish").unwrap().default_params();
+    let all: Vec<EntityId> = h.doc().vectors.keys().copied().collect();
+    h.select(all);
+    h.invoke("embellish");
+    let mut params = h.default_settings("embellish");
     params["style"] = "chevrons".into();
-    h.app.form.as_mut().unwrap().params = params;
+    h.set_form_settings(params);
     for _ in 0..4 {
         h.frame(vec![]);
     }
-    let sequence = |h: &Harness| h.app.form.as_ref().unwrap().params["sequence"].clone();
+    let sequence = |h: &Harness| h.form_value("sequence").clone();
     // the samples sit under the Random size tick, each named by the entry it adds
     let below = h.text_at("Random size (S)").expect("the pattern maker");
     let sample = |h: &Harness, name: &str| {
@@ -694,36 +648,36 @@ fn a_drawing_named_on_the_command_line_goes_through_job_setup_into_a_new_job() {
     )
     .unwrap();
     let mut h = Harness::at_classic_start();
-    h.app.open_given(Some(&svg));
+    h.open_given(&svg);
     h.frame(vec![]);
     assert_eq!(
-        h.app.screen,
+        h.screen(),
         Screen::NewJob,
         "Job Setup for the job to hold it"
     );
     assert!(
-        h.app.status.message.contains("square.svg"),
+        h.status_message().contains("square.svg"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
-    h.app.job_setup_ok();
+    h.job_setup_ok();
     for _ in 0..5 {
         h.frame(vec![]);
     }
-    assert_eq!(h.app.screen, Screen::Job);
-    assert!(!h.app.doc.vectors.is_empty(), "the drawing came in");
+    assert_eq!(h.screen(), Screen::Job);
+    assert!(!h.doc().vectors.is_empty(), "the drawing came in");
     // Cancel in Job Setup: back to the start page, nothing imported later
     let mut h = Harness::at_classic_start();
-    h.app.open_given(Some(&svg));
-    h.app.job_setup_cancel();
-    assert_eq!(h.app.screen, Screen::Start);
-    h.app.invoke(&h.ctx, "new");
+    h.open_given(&svg);
+    h.job_setup_cancel();
+    assert_eq!(h.screen(), Screen::Start);
+    h.invoke("new");
     h.frame(vec![]);
-    h.app.job_setup_ok();
+    h.job_setup_ok();
     for _ in 0..5 {
         h.frame(vec![]);
     }
-    assert!(h.app.doc.vectors.is_empty(), "the cancelled file stays out");
+    assert!(h.doc().vectors.is_empty(), "the cancelled file stays out");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -738,12 +692,12 @@ fn a_drawing_named_on_the_command_line_comes_into_a_blank_job() {
     )
     .unwrap();
     let mut h = Harness::at_start();
-    h.app.open_given(Some(&svg));
+    h.open_given(&svg);
     for _ in 0..5 {
         h.frame(vec![]);
     }
-    assert_eq!(h.app.screen, Screen::Job, "no Job Setup first");
-    assert!(!h.app.doc.vectors.is_empty(), "the drawing came in");
+    assert_eq!(h.screen(), Screen::Job, "no Job Setup first");
+    assert!(!h.doc().vectors.is_empty(), "the drawing came in");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -751,34 +705,35 @@ fn a_drawing_named_on_the_command_line_comes_into_a_blank_job() {
 fn an_embellish_remake_that_fails_keeps_what_it_last_made() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 160.0, 120.0);
-    h.app.doc.selection = h.app.doc.vectors.keys().copied().collect();
-    h.app.invoke(&h.ctx, "embellish");
+    let all: Vec<EntityId> = h.doc().vectors.keys().copied().collect();
+    h.select(all);
+    h.invoke("embellish");
     h.frame(vec![]);
-    let params = h.app.registry.get("embellish").unwrap().default_params();
-    h.app.form.as_mut().unwrap().params = params.clone();
-    h.app.apply_form("embellish", &params).unwrap();
-    let made = (h.app.doc.vectors.len(), h.app.doc.components.len());
-    let depth = h.app.history.undo_depth();
+    let params = h.default_settings("embellish");
+    h.set_form_settings(params.clone());
+    h.apply_form("embellish", &params).unwrap();
+    let made = (h.doc().vectors.len(), h.doc().components.len());
+    let depth = h.undo_steps();
     // a raise height of nothing cannot be made
     let mut bad = params.clone();
     bad["make"] = "both".into();
     bad["direction"] = "raised".into();
     bad["height"] = 0.0.into();
-    assert!(h.app.apply_form("embellish", &bad).is_err());
+    assert!(h.apply_form("embellish", &bad).is_err());
     assert_eq!(
-        (h.app.doc.vectors.len(), h.app.doc.components.len()),
+        (h.doc().vectors.len(), h.doc().components.len()),
         made,
         "the last ornament is still there"
     );
-    assert_eq!(h.app.history.undo_depth(), depth, "still one undo");
+    assert_eq!(h.undo_steps(), depth, "still one undo");
     assert_eq!(
-        h.app.remade_last(),
+        h.remade_last(),
         Some(params.clone()),
         "and the form still remakes it in place"
     );
     // a good change after replaces it, not adds a second one
     let mut good = params.clone();
     good["seed"] = 7.into();
-    h.app.apply_form("embellish", &good).unwrap();
-    assert_eq!(h.app.history.undo_depth(), depth, "in place");
+    h.apply_form("embellish", &good).unwrap();
+    assert_eq!(h.undo_steps(), depth, "in place");
 }
