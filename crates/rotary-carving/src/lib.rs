@@ -4,6 +4,7 @@
 //! Each rotary toolpath is a short command over it, so they all cut the same way.
 
 mod carving;
+mod finish;
 mod left;
 mod rough;
 mod shape;
@@ -12,6 +13,7 @@ mod turned;
 mod work;
 
 pub use carving::*;
+pub use finish::*;
 pub use left::*;
 pub use rough::*;
 pub use shape::*;

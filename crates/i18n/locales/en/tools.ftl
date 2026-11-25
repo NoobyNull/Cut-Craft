@@ -154,6 +154,7 @@ tools-3d-finishing-toolpath = 3D Finishing Toolpath
 tools-3d-pencil-toolpath = 3D Pencil Toolpath
 tools-rounding-toolpath = Rounding Toolpath
 tools-rotary-roughing-toolpath = Rotary Roughing
+tools-rotary-finishing-toolpath = Rotary Finishing
 tools-rotary-machining-toolpath = 4-Axis Rotary Machining
 tools-rotary-lathe-toolpath = Rotary Lathe
 tools-laser-cut-fill-toolpath = Laser Cut / Fill

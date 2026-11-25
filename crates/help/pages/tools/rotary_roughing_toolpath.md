@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-25
-see-also: rotary_machining_toolpath, rotary_lathe_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths, tool_database
+see-also: rotary_finishing_toolpath, rotary_machining_toolpath, rotary_lathe_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths, tool_database
 ---
 
 **Rotary Roughing** takes the bulk off a carved part on a rotary job: a level at a time from the
@@ -20,7 +20,7 @@ The finish after it then has only a thin, even layer left to take off.
 5. Set the **Allowance**: how much is left on the model for the finish.
 6. Press **Calculate**.
 
-When it looks right, finish the part with [4-Axis Rotary Machining](help:rotary_machining_toolpath),
+When it looks right, finish the part with [Rotary Finishing](help:rotary_finishing_toolpath),
 then [save them for your machine](help:save_toolpaths) through a **Rotary A** post.
 
 ## Direction

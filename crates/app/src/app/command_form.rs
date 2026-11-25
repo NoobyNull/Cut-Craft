@@ -45,13 +45,14 @@ impl CutCraftApp {
         let cuts = open.id != "relief_from_photo";
         // a surfacing toolpath flattens all it covers, 3D Pencil has its own bits that
         // finished before and follows the model, and 4-Axis Rotary Machining goes all the way
-        // round, and Rotary Roughing cuts only what the toolpaths above it leave: no rest
+        // round, and Rotary Roughing and Finishing cut only what the toolpaths above it leave: no rest
         // machining or vector selector
         let extras = cuts
             && ![
                 "surfacing_toolpath",
                 "3d_pencil_toolpath",
                 "rotary_roughing_toolpath",
+                "rotary_finishing_toolpath",
                 "rotary_machining_toolpath",
                 "rotary_lathe_toolpath",
             ]

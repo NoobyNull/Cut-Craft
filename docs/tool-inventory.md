@@ -395,6 +395,15 @@ say "not implemented yet".
   `whole_blank`). The holder is kept clear of the material left round each point along and of
   the chuck and tailstock (stops short, in red). Shares the carving engine
   (`crates/rotary-carving`) with 4-Axis Rotary Machining.
+- Rotary Finishing (Cut Craft's own, `rotary_finishing_toolpath`): on a rotary job, the bit
+  kept on the model all the way round, as low as it goes without touching it. Direction: Round
+  the part (rings a finishing stepover apart, the usual) or Along the part (lines along the
+  axis, A stepping round); Cut direction Climb / Conventional / Both; Bit held Over the axis or
+  Off centre (Offset mm to one side; One side, or Both sides one after the other). Like Rotary
+  Roughing it cuts only what the toolpaths above it leave (unless Advanced rotary mode), and
+  where the holder can't get down beside what is left it stays up and says so in red.
+  Registration mark and Cut away centre support as in 4-Axis Rotary Machining. Spiral (the
+  calculator choosing it over rings when quicker) is still to come.
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits
