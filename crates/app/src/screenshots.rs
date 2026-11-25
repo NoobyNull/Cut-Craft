@@ -162,6 +162,8 @@ const SCENES: &[Scene] = &[
             app.acknowledged.insert(f.message);
         }
     }),
+    ("save-anyway-errors", save_anyway_errors),
+    ("machine-damage", machine_damage),
     ("tool-number-taken", tool_number_taken),
     // Help: Post-Processor Management (the filters, then Edit Capabilities)
     ("post-filters", |app, ctx| post_window(app, ctx, false)),
@@ -525,6 +527,49 @@ fn checks_found(app: &mut CutCraftApp, ctx: &egui::Context) {
     // the pretend run before is let go, so the real checks run
     app.save_checks.clear();
     checks_job(app, ctx);
+}
+
+/// Save Anyway asking about a job saved past errors: one that will not run, one ticked in
+/// the list already, and a warning to read.
+fn save_anyway_errors(app: &mut CutCraftApp, _: &egui::Context) {
+    let form = app
+        .save_form
+        .take()
+        .unwrap_or_else(|| app.default_save_form());
+    app.gcode_view = None;
+    let wont_run = "Profile: End Mill has no feed rate, so the machine would not move while \
+                    cutting. Set the feed rate in the toolpath's bit settings";
+    let crash = "Pocket: a rapid move at X 40 Y 20 goes 2.0 mm into the material. Raise the \
+                 clearance (Z1) in Job Setup, or recalculate the toolpath";
+    let warning = "Pocket is out of date: recalculate it so it cuts what the design shows now";
+    app.acknowledged.insert(crash.to_owned());
+    let asking = super::output::Asking {
+        problems: [wont_run, crash, warning].map(str::to_owned).to_vec(),
+        errors: [wont_run, crash].map(str::to_owned).to_vec(),
+        wont_run: vec![wont_run.to_owned()],
+    };
+    app.ask_save_anyway(&form, asking, false);
+}
+
+/// Save Toolpaths with a job bigger than the bed: refused, with no tick (Protect the
+/// Machine).
+fn machine_damage(app: &mut CutCraftApp, _: &egui::Context) {
+    app.save_anyway = None;
+    app.gcode_view = None;
+    app.save_form = Some(app.default_save_form());
+    let bed = cut_craft_core::preflight::Finding::damage(
+        cut_craft_core::preflight::Check::Bed,
+        "The toolpaths cover 900 mm × 600 mm, more than the bed of Shop Router (800 mm × \
+         600 mm). Make the job smaller, split it with Toolpath Tiling (or make its tiles \
+         smaller), or pick the right machine"
+            .to_owned(),
+    );
+    for checks in &mut app.save_checks {
+        if let Some(found) = &mut checks.found {
+            found.retain(|f| f.check != cut_craft_core::preflight::Check::Bed);
+            found.insert(0, bed.clone());
+        }
+    }
 }
 
 /// The Bit Library: a bit given a bit number another bit has.

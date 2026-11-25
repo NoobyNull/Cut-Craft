@@ -9,7 +9,7 @@ text-open-a-recent-file-d3dffd = Open a recent file
 text-try-a-sample-project-e547e8 = Try a sample project
 
 ## src/app/dialog_windows.rs
-text-tick-each-under-checks-before-53a045 = Tick each ⚠ under Checks before cutting to say you have read it, then save
+text-tick-each-and-under-checks-dcf3c6 = Tick each ✖ and ⚠ under Checks before cutting to say you have read it, then save
 
 ## src/app/gestures_2d.rs
 text-inside-a-group-click-an-37b17e = Inside a group: click an item to move, size or change it on its own, double-click a group in it to go further in or text to edit it; Esc or a double-click on empty space steps out

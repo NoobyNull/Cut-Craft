@@ -444,7 +444,7 @@ fn the_window_items_tile_the_2d_and_3d_views_and_cascade_puts_them_back_in_tabs(
 }
 
 #[test]
-fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_and_says_how_to_fix_it() {
+fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_unless_its_check_is_off() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 150.0, 150.0);
     h.app.invoke(&h.ctx, "profile_toolpath");
@@ -471,10 +471,33 @@ fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_and_says_how_to_fix_
     let path = std::env::temp_dir().join(format!("cut-craft-too-big-{}.nc", std::process::id()));
     let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
     assert!(
-        refused.starts_with("Not saved:") && refused.contains("more than the bed of Desktop"),
+        refused.starts_with("Nothing saved: this could damage the machine.")
+            && refused.contains("more than the bed of Desktop"),
         "{refused}"
     );
     assert!(!path.exists(), "nothing written");
+    // only switching the check off for the machine lets it past, and the file says so
+    h.app.machines.active_mut().unwrap().protect.bed = false;
+    let found = h.app.preflight(
+        &h.app.plan(&form, &post).unwrap(),
+        crate::files::ToolChanges::ToolChanger,
+    );
+    assert!(
+        !found
+            .iter()
+            .any(|f| f.check == cut_craft_core::check_list::Check::Bed),
+        "{found:?}"
+    );
+    h.app.saving_checked = Some((h.app.history.revision(), h.app.machines.active));
+    let written = h.app.write_toolpath_files(&form, &post, &path).unwrap();
+    let text = std::fs::read_to_string(&written[0]).unwrap();
+    assert!(
+        text.contains("PROTECTION OFF: the checks for bed size were switched off for Desktop"),
+        "{text}"
+    );
+    for file in written {
+        let _ = std::fs::remove_file(file);
+    }
 }
 
 #[test]
@@ -646,7 +669,7 @@ fn save_toolpaths_offers_send_to_machine_once_the_machine_has_a_files_folder() {
 }
 
 #[test]
-fn save_toolpaths_shows_what_must_be_fixed_and_will_not_save_until_it_is() {
+fn save_toolpaths_shows_what_could_damage_the_machine_and_will_not_save_while_it_is() {
     let mut h = Harness::new();
     two_tools(&mut h);
     h.app.machines.add();
@@ -666,7 +689,14 @@ fn save_toolpaths_shows_what_must_be_fixed_and_will_not_save_until_it_is() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(shown.contains("Checks before cutting"), "{shown}");
-    assert!(shown.contains("Must fix: The toolpaths cover"), "{shown}");
+    assert!(
+        shown.contains("Could damage the machine: The toolpaths cover"),
+        "{shown}"
+    );
+    assert!(
+        shown.contains("Not saved or sent while this could damage"),
+        "{shown}"
+    );
     let checked = h.app.save_checks.clone();
     assert_eq!(checked.len(), 1);
     h.frame(vec![]);
@@ -1209,8 +1239,7 @@ fn save_toolpaths_window_steps_aside_while_the_save_asks_then_comes_back() {
     // the question over the window still steps the form aside until answered
     h.app.save_after = None;
     h.app.form_back = Some(form.clone());
-    h.app
-        .ask_save_anyway(&form, vec!["Air cutting".to_owned()], false);
+    h.app.ask_save_anyway(&form, air_cutting(), false);
     for _ in 0..3 {
         h.frame(vec![]);
     }
@@ -1227,7 +1256,7 @@ fn another_job_closes_the_gcode_shown_and_any_save_waiting_on_the_last() {
     let mut h = ready_for_output();
     h.app.view_gcode(one_file_form());
     h.app
-        .ask_save_anyway(&one_file_form(), vec!["Air cutting".to_owned()], false);
+        .ask_save_anyway(&one_file_form(), air_cutting(), false);
     h.app.form_back = Some(one_file_form());
     h.app.reset_job();
     assert!(h.app.gcode_view.is_none(), "not the last job's G-code");
@@ -1326,4 +1355,12 @@ fn the_notes_in_g_code_name_the_post_the_file_is_made_through() {
     let text = &texts[0].1;
     assert!(text.contains("Mach3"), "{text}");
     assert!(!text.contains("GRBL Arcs"), "{text}");
+}
+
+/// What Save Anyway asks with one warning, air cutting.
+fn air_cutting() -> super::super::output::Asking {
+    super::super::output::Asking {
+        problems: vec!["Air cutting".to_owned()],
+        ..Default::default()
+    }
 }
