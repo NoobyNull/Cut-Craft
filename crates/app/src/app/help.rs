@@ -1,19 +1,12 @@
 //! Help Contents (F1 help): Markdown pages, the app's own and ones made from the
 //! tools' doc comments, linked to each other with `help:` links.
 
+use super::help_browser::Step;
 use super::{CutCraftApp, Info, Page, dialog_size, egui, form, gui};
-use cut_craft_help::search::Doc;
 use cut_craft_help::wiki::{Name, Sidebar, autolink, sidebar};
 use cut_craft_i18n::tr;
 use egui_commonmark::CommonMarkViewer;
 use std::fmt::Write as _;
-
-/// Which way through the pages read the Back or Forward button goes.
-#[derive(Clone, Copy)]
-enum Step {
-    Back,
-    Forward,
-}
 
 /// The help's own pages, which the app writes: every other topic in [`CutCraftApp::help_topics`]
 /// is a tool's, headed by its button's icon.
@@ -59,9 +52,9 @@ impl CutCraftApp {
         load_pictures(ctx);
         let topics = self.all_help_topics();
         for t in &topics {
-            self.help_cache.add_link_hook(format!("help:{t}"));
+            self.help.cache.add_link_hook(format!("help:{t}"));
         }
-        let query = self.help_search.trim().to_owned();
+        let query = self.help.search.trim().to_owned();
         let found = if query.is_empty() {
             vec![]
         } else {
@@ -82,13 +75,10 @@ impl CutCraftApp {
         for uri in found_icons.iter().flatten() {
             self.load_help_icons(ctx, uri);
         }
-        let (can_back, can_forward) = (
-            self.help_history.can_go_back(),
-            self.help_history.can_go_forward(),
-        );
+        let (can_back, can_forward) = self.help.can_step();
         let mut picked = None;
         let mut step = None;
-        let (mut open, cache, search) = (true, &mut self.help_cache, &mut self.help_search);
+        let (mut open, cache, search) = (true, &mut self.help.cache, &mut self.help.search);
         let (id, size) = (egui::Id::unique("help"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Cut Craft Help", size, &mut open, |ui| {
             let (stepped, top) = top_bar(ui, search, can_back, can_forward);
@@ -114,20 +104,12 @@ impl CutCraftApp {
         let clicked = picked.or_else(|| {
             topics
                 .into_iter()
-                .find(|t| self.help_cache.get_link_hook(&format!("help:{t}")) == Some(true))
+                .find(|t| self.help.cache.get_link_hook(&format!("help:{t}")) == Some(true))
         });
         if picked.is_some() {
-            self.help_search.clear();
+            self.help.search.clear();
         }
-        let to = match (step, clicked) {
-            (Some(Step::Back), _) => self.help_history.back(topic),
-            (Some(Step::Forward), _) => self.help_history.forward(topic),
-            (None, Some(t)) if t != topic => {
-                self.help_history.visit(topic);
-                Some(t)
-            }
-            (None, other) => other,
-        };
+        let to = self.help.go(topic, step, clicked);
         self.info = match (open, to) {
             (false, _) => None,
             (true, Some(t)) => Some(Info::Help(t)),
@@ -142,8 +124,8 @@ impl CutCraftApp {
         &mut self,
         query: &str,
     ) -> Vec<(&'static str, String, String)> {
-        if self.help_index.is_empty() {
-            self.help_index = self
+        if self.help.needs_pages() {
+            let pages = self
                 .all_help_topics()
                 .into_iter()
                 .map(|t| {
@@ -154,21 +136,9 @@ impl CutCraftApp {
                     )
                 })
                 .collect();
-            self.help_ranked = None;
+            self.help.index_pages(pages);
         }
-        let ranked = self.help_ranked.get_or_insert_with(|| {
-            let docs: Vec<Doc> = self
-                .help_index
-                .iter()
-                .map(|(t, title, md)| Doc {
-                    id: (*t).to_owned(),
-                    title: title.clone(),
-                    text: md.clone(),
-                })
-                .collect();
-            cut_craft_help::search::Index::new(&docs)
-        });
-        search(&self.help_index, ranked, query)
+        self.help.results(query)
     }
 
     /// Page `topic`'s side bar as the window lists it: each list under its heading, each
@@ -416,7 +386,7 @@ impl CutCraftApp {
 /// The pages of `index` (topic, title, Markdown) that `ranked` finds for `query`, best
 /// first, each with the first line saying one of the question's words (or what means the
 /// same) as plain words.
-fn search(
+pub(super) fn search(
     index: &[(&'static str, String, String)],
     ranked: &cut_craft_help::search::Index,
     query: &str,
