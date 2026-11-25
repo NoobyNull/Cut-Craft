@@ -9,10 +9,10 @@
 /// (`tr!("status-exported", path = …)`). See [`words`].
 macro_rules! t {
     ($english:literal) => {
-        $crate::words::text($english)
+        cut_craft_i18n::text($english)
     };
     ($constant:ident) => {
-        $crate::words::text($constant)
+        cut_craft_i18n::text($constant)
     };
 }
 

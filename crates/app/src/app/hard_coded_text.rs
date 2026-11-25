@@ -66,10 +66,14 @@ pub(crate) fn sources() -> Vec<PathBuf> {
         }
     }
     let mut files = Vec::new();
-    walk(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
-        &mut files,
-    );
+    let app = Path::new(env!("CARGO_MANIFEST_DIR"));
+    walk(&app.join("src"), &mut files);
+    for other in OTHER_CRATES {
+        walk(
+            &app.parent().unwrap_or(app).join(other).join("src"),
+            &mut files,
+        );
+    }
     files.sort();
     files
         .into_iter()
@@ -78,6 +82,7 @@ pub(crate) fn sources() -> Vec<PathBuf> {
             !f.to_string_lossy()
                 .replace('\\', "/")
                 .contains("/app/tests/")
+                && !f.ends_with("tests.rs")
                 && ![
                     "app/tests.rs",
                     "web_api_tests.rs",
@@ -91,10 +96,17 @@ pub(crate) fn sources() -> Vec<PathBuf> {
         .collect()
 }
 
-/// A source file's path from the app crate, with `/` on every computer.
+/// The other crates whose windows the app shows, scanned with its own code: their paths are
+/// written from `crates/` (`machines/src/…`), the app's from its crate (`src/…`).
+pub(crate) const OTHER_CRATES: &[&str] = &["machines", "tool-database", "bug-report"];
+
+/// A source file's path from the app crate (or from `crates/` for another crate's), with `/`
+/// on every computer.
 pub(crate) fn short(path: &Path) -> String {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let crates = root.parent().unwrap_or(root);
     path.strip_prefix(root)
+        .or_else(|_| path.strip_prefix(crates))
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")

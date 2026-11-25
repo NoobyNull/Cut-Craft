@@ -3,8 +3,8 @@
 
 use super::machine_setup::bed;
 use super::{
-    CutCraftApp, OpenForm, SECTION_PICTURE_ROWS, Value, brush_dialog, egui, form, rest_section,
-    saving_path, selector_section, texture_dialog, tool_picker,
+    CutCraftApp, OpenForm, SECTION_PICTURE_ROWS, Value, brush_dialog, egui, form,
+    locked_face_section, rest_section, saving_path, selector_section, texture_dialog, tool_picker,
 };
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
@@ -45,11 +45,16 @@ impl CutCraftApp {
         let cuts = open.id != "relief_from_photo";
         // a surfacing toolpath flattens all it covers, 3D Pencil has its own bits that
         // finished before and follows the model, and 4-Axis Rotary Machining goes all the way
-        // round: no rest machining or vector selector
+        // round, and Rotary Roughing, Finishing, Locked Angles and Details cut only what the toolpaths above it leave: no rest
+        // machining or vector selector
         let extras = cuts
             && ![
                 "surfacing_toolpath",
                 "3d_pencil_toolpath",
+                "rotary_roughing_toolpath",
+                "rotary_finishing_toolpath",
+                "rotary_locked_angles_toolpath",
+                "rotary_details_toolpath",
                 "rotary_machining_toolpath",
                 "rotary_lathe_toolpath",
             ]
@@ -57,6 +62,7 @@ impl CutCraftApp {
         let suggested = open.suggested.clone();
         let form_id = open.id;
         let laser = open.kind.needs() == cut_craft_core::Needs::Laser;
+        let rotary = self.doc.job.rotary.is_some();
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
                 let (changed, ask) = super::clearing_section(
@@ -101,6 +107,9 @@ impl CutCraftApp {
             }
             if extras {
                 selector_section(ui, params, &layers, units);
+            }
+            if extras && rotary && !laser {
+                locked_face_section(ui, params);
             }
         };
         let stock = form_stock(&self.doc, &open.params, units, bed(&self.machines));

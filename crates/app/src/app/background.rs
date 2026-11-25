@@ -444,6 +444,8 @@ fn command_change_of(
     .map_err(|e: CommandError| e.to_string())?;
     let change =
         cut_craft_core::rest::with_rest(&doc.job, params, change).map_err(|e| e.to_string())?;
+    let change = cut_craft_core::locked_face::with_locked_face(&doc.job, params, change)
+        .map_err(|e| e.to_string())?;
     Ok(cut_craft_core::selector::kept(params, change))
 }
 
