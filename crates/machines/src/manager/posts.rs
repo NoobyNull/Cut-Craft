@@ -81,7 +81,7 @@ pub(super) fn posts_section(
                     filter.ui(ui, shown.len(), unused.len());
                     ui.separator();
                     if shown.is_empty() {
-                        ui.weak(NONE_SHOWN);
+                        ui.weak(cut_craft_i18n::t!(NONE_SHOWN));
                     }
                     for (title, group) in groups(&shown) {
                         ui.strong(title);
@@ -528,7 +528,7 @@ impl PostManager {
             .auto_shrink(false)
             .show(ui, |ui| {
                 if shown.is_empty() {
-                    ui.weak(NONE_SHOWN);
+                    ui.weak(cut_craft_i18n::t!(NONE_SHOWN));
                 }
                 // one grid for every group, so the columns line up down the whole list
                 egui::Grid::new("post_rows")

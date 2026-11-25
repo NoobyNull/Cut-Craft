@@ -747,7 +747,7 @@ fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
     ui.strong(cut_craft_i18n::t!(
         "May Cut Craft send these with your report?"
     ));
-    ui.weak(PUBLIC_NOTE);
+    ui.weak(cut_craft_i18n::t!(PUBLIC_NOTE));
     if let Some(image) = &draft.screenshot {
         ui.checkbox(
             &mut draft.send_screenshot,

@@ -38,7 +38,7 @@ pub fn note(ui: &mut egui::Ui, dirty: bool) {
                 "Your changes take effect when you press Apply. Cancel throws them away."
             ));
     } else {
-        ui.weak(ALL_APPLIED);
+        ui.weak(cut_craft_i18n::t!(ALL_APPLIED));
     }
 }
 
@@ -105,7 +105,7 @@ pub fn question(ctx: &egui::Context, salt: &str) -> Option<Answer> {
     let mut answer = None;
     let shown = egui::Modal::new(egui::Id::unique(salt)).show(ctx, |ui| {
         ui.set_width(ui.spacing().interact_size.x * 9.0);
-        ui.heading(ASK);
+        ui.heading(cut_craft_i18n::t!(ASK));
         ui.label(cut_craft_i18n::t!(
             "You changed some settings but haven't pressed Apply."
         ));

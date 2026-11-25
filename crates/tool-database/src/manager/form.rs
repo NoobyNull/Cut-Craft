@@ -560,7 +560,7 @@ pub(super) fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
 
 pub(super) fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
     if tool.shape == ToolShape::Laser {
-        ui.weak(LASER_CUTTING);
+        ui.weak(cut_craft_i18n::t!(LASER_CUTTING));
         return;
     }
     egui::Grid::new("tool_cutting")
