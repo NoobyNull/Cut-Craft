@@ -13,7 +13,7 @@ fn the_rail_layout_lists_a_groups_tools_by_name() {
         .iter()
         .position(|g| g.name == "Create Vectors")
         .unwrap();
-    h.app.rail_group = Some(create);
+    h.app.rail.open = super::super::rail_list::List::Group(create);
     h.frame(vec![]);
     let at = h.text_at("Draw Circle").expect("the group's tools by name");
     h.frame(vec![Event::PointerMoved(at)]);
@@ -22,7 +22,7 @@ fn the_rail_layout_lists_a_groups_tools_by_name() {
     h.frame(vec![]);
     assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
     assert!(
-        h.app.rail_group.is_none(),
+        h.app.rail.group().is_none(),
         "an unpinned list closes on a pick"
     );
     assert!(

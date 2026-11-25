@@ -91,9 +91,7 @@ impl CutCraftApp {
             pages: Pages::default(),
             search: None,
             inspector_tab: 0,
-            rail_group: None,
-            rail_pinned: false,
-            rail_favourites: false,
+            rail: super::rail_list::RailList::default(),
             page_rects: [None, None],
             flyout_rect: None,
             buttons_across: std::cell::Cell::new(0.0),
@@ -157,7 +155,6 @@ impl CutCraftApp {
             space_mouse: None,
             my_gadgets: mine,
             installed_addons: vec![],
-            rail_gadgets: false,
             unsigned_gadgets: gadgets.unsigned,
             trust,
             reporter: {

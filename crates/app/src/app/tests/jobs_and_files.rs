@@ -1130,13 +1130,13 @@ fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
     // the Rail: a last button, after Favourites, opening their list
     let mut h = harness(WindowLayout::Rail, true);
     assert!(h.text_at("Relief from Photo").is_none(), "no list open");
-    h.app.rail_gadgets = true;
+    h.app.rail.open = super::super::rail_list::List::Gadgets;
     h.frame(vec![]);
     assert!(h.text_at("Relief from Photo").is_some());
     let mut h = harness(WindowLayout::Rail, false);
-    h.app.rail_gadgets = true;
+    h.app.rail.open = super::super::rail_list::List::Gadgets;
     h.frame(vec![]);
-    assert!(!h.app.rail_gadgets, "nothing installed: no list");
+    assert!(!h.app.rail.is_open(), "nothing installed: no list");
     std::fs::remove_dir_all(dir).unwrap();
 }
 

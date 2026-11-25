@@ -946,12 +946,12 @@ fn rail(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
     app.view = View::TwoD;
     app.options.general.layout = WindowLayout::Rail;
-    app.rail_group = app
-        .tool_model()
-        .all_groups()
-        .iter()
-        .position(|g| g.name == "Create Vectors");
-    app.rail_pinned = true;
+    let create = (app.tool_model().all_groups().iter()).position(|g| g.name == "Create Vectors");
+    app.rail.open = create.map_or(
+        super::rail_list::List::Closed,
+        super::rail_list::List::Group,
+    );
+    app.rail.pinned = true;
     app.invoke(ctx, "draw_circle");
 }
 
