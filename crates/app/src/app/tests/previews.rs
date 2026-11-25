@@ -225,19 +225,22 @@ fn a_preview_plays_pauses_scrubs_and_keeps_what_is_cut() {
     h.app.form = None;
     h.app.display.animate_preview = true;
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
-    assert!(h.app.playing && h.app.playback.is_some(), "it plays");
+    assert!(
+        h.app.player.playing && h.app.player.playback.is_some(),
+        "it plays"
+    );
     assert_eq!(h.app.view, View::ThreeD);
     h.frame(vec![]);
     h.frame(vec![]);
-    let along = h.app.playback.as_ref().unwrap().at();
+    let along = h.app.player.playback.as_ref().unwrap().at();
     assert!(along > 0.0, "the tool moves on each frame");
     assert!(h.text_at("Pause").is_some() && h.text_at("Run to Retract").is_some());
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
-    assert!(!h.app.playing);
-    let paused = h.app.playback.as_ref().unwrap().at();
+    assert!(!h.app.player.playing);
+    let paused = h.app.player.playback.as_ref().unwrap().at();
     h.frame(vec![]);
     assert_eq!(
-        h.app.playback.as_ref().unwrap().at(),
+        h.app.player.playback.as_ref().unwrap().at(),
         paused,
         "paused stays put"
     );
@@ -245,12 +248,12 @@ fn a_preview_plays_pauses_scrubs_and_keeps_what_is_cut() {
     let progress = h.text_at("Progress").expect("a Progress slider");
     let from = progress + egui::vec2(80.0, 0.0);
     h.drag(from, from + egui::vec2(200.0, 0.0));
-    let on = h.app.playback.as_ref().unwrap().at();
+    let on = h.app.player.playback.as_ref().unwrap().at();
     assert!(on > paused, "dragged on: {paused} to {on}");
-    assert!(!h.app.playing, "a drag pauses it");
+    assert!(!h.app.player.playing, "a drag pauses it");
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
     assert!(
-        h.app.playback.is_none() && h.app.simulation.is_some(),
+        h.app.player.playback.is_none() && h.app.simulation.is_some(),
         "kept as far as it went"
     );
 }
@@ -262,7 +265,7 @@ fn escape_stops_a_playing_preview_keeping_what_is_cut_and_leaves_the_form_open()
     h.frame(vec![]);
     h.frame(vec![key(Key::Escape)]);
     assert!(
-        h.app.playback.is_none() && h.app.simulation.is_some(),
+        h.app.player.playback.is_none() && h.app.simulation.is_some(),
         "stopped, kept as far as it went"
     );
     assert!(
@@ -278,23 +281,23 @@ fn a_preview_can_be_stopped_from_the_2d_view_too() {
     let mut h = playing_preview();
     h.app.view = View::TwoD;
     h.frame(vec![]);
-    let along = h.app.playback.as_ref().unwrap().at();
+    let along = h.app.player.playback.as_ref().unwrap().at();
     h.frame(vec![]);
     assert!(
-        h.app.playback.as_ref().unwrap().at() > along,
+        h.app.player.playback.as_ref().unwrap().at() > along,
         "it plays on in the 2D view"
     );
     h.click(
         h.text_at("Stop").expect("Stop over the 2D view"),
         Modifiers::NONE,
     );
-    assert!(h.app.playback.is_none() && h.app.simulation.is_some());
+    assert!(h.app.player.playback.is_none() && h.app.simulation.is_some());
 }
 
 #[test]
 fn a_playing_preview_says_how_long_it_has_left() {
     let mut h = playing_preview();
-    h.app.playback_speed = 1.0;
+    h.app.player.speed = 1.0;
     h.frame(vec![]);
     let note = |h: &Harness| {
         h.texts()
@@ -303,7 +306,7 @@ fn a_playing_preview_says_how_long_it_has_left() {
             .expect("the time the machine takes")
     };
     assert!(!note(&h).contains(" at ×"), "{}", note(&h));
-    h.app.playback_speed = 10.0;
+    h.app.player.speed = 10.0;
     h.frame(vec![]);
     assert!(note(&h).contains(" at ×10"), "{}", note(&h));
 }
@@ -313,7 +316,7 @@ fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
     let mut h = playing_preview();
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
     assert!(
-        h.app.playback.is_none() && h.app.simulation.is_some(),
+        h.app.player.playback.is_none() && h.app.simulation.is_some(),
         "stopped"
     );
     assert!(h.text_at("Progress").is_some(), "the slider is still there");
@@ -323,7 +326,7 @@ fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
     let from = progress + egui::vec2(200.0, 0.0);
     h.drag(from, from - egui::vec2(100.0, 0.0));
     assert!(
-        h.app.playback.is_some() && !h.app.playing,
+        h.app.player.playback.is_some() && !h.app.player.playing,
         "scrubbing again"
     );
     h.app.invoke(&h.ctx, "reset_preview");
@@ -334,15 +337,15 @@ fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
 #[test]
 fn the_preview_controls_stay_once_it_has_played_to_the_end() {
     let mut h = playing_preview();
-    h.app.playback_speed = 1000.0;
+    h.app.player.speed = 1000.0;
     for _ in 0..600 {
-        if h.app.playback.is_none() {
+        if h.app.player.playback.is_none() {
             break;
         }
         h.frame(vec![]);
     }
     assert!(
-        h.app.playback.is_none() && h.app.simulation.is_some(),
+        h.app.player.playback.is_none() && h.app.simulation.is_some(),
         "played through"
     );
     h.frame(vec![]);
@@ -359,14 +362,14 @@ fn a_paused_preview_is_not_rebuilt_for_the_3d_view_every_frame() {
     let mut h = playing_preview();
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    let built = h.app.playback_builds;
+    let built = h.app.player.builds;
     for _ in 0..3 {
         h.frame(vec![]);
     }
-    assert_eq!(h.app.playback_builds, built, "kept while it shows the same");
+    assert_eq!(h.app.player.builds, built, "kept while it shows the same");
     h.click(h.text_at("Single Step").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.playback_builds > built, "made again once it cut on");
+    assert!(h.app.player.builds > built, "made again once it cut on");
 }
 
 #[test]
@@ -374,50 +377,50 @@ fn a_playing_preview_is_drawn_at_full_detail_and_redrawn_a_few_times_a_second() 
     let mut h = playing_preview();
     h.app.options.performance.adjust_to_frame_rate = false;
     // a test's frames are slow: the redraws are kept well apart to see them kept
-    h.app.playback_redraw = std::time::Duration::from_secs(3600);
+    h.app.player.redraw = std::time::Duration::from_secs(3600);
     h.frame(vec![]);
     h.frame(vec![]);
-    let ((_, cells, _), _) = h.app.playback_view.as_ref().expect("drawn");
+    let ((_, cells, _), _) = h.app.player.view.as_ref().expect("drawn");
     assert_eq!(
         *cells,
         h.app.options.performance.still_cells(),
         "as sharp as when still, not the moving detail"
     );
     // frames straight after one another: the cut so far is kept, not made again each one
-    let built = h.app.playback_builds;
+    let built = h.app.player.builds;
     for _ in 0..5 {
         h.frame(vec![]);
     }
     assert!(
-        h.app.playback_builds <= built + 1,
+        h.app.player.builds <= built + 1,
         "{built} then {}",
-        h.app.playback_builds
+        h.app.player.builds
     );
     // once it gets where it was sent, that is drawn at once
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
     h.click(h.text_at("Single Step").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    let shown = h.app.playback_view.as_ref().unwrap().0.0;
-    assert_eq!(shown, h.app.playback.as_ref().unwrap().revision());
+    let shown = h.app.player.view.as_ref().unwrap().0.0;
+    assert_eq!(shown, h.app.player.playback.as_ref().unwrap().revision());
 }
 
 #[test]
 fn a_long_jump_is_cut_a_little_each_frame_and_stop_ends_it() {
     let mut h = playing_preview();
     // a step a frame, as a toolpath of millions of moves would go
-    h.app.playback_budget = std::time::Duration::ZERO;
+    h.app.player.budget = std::time::Duration::ZERO;
     h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
-    let from = h.app.playback.as_ref().unwrap().at();
+    let from = h.app.player.playback.as_ref().unwrap().at();
     h.click(h.text_at("Run to Retract").unwrap(), Modifiers::NONE);
-    let goal = h.app.playback_goal.expect("on its way there");
-    let at = h.app.playback.as_ref().unwrap().at();
+    let goal = h.app.player.goal.expect("on its way there");
+    let at = h.app.player.playback.as_ref().unwrap().at();
     assert!(at > from && at < goal, "part way: {from} to {at} of {goal}");
     assert!(
         h.texts().iter().any(|t| t.contains("Esc")),
         "says how to stop it"
     );
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
-    assert!(h.app.playback.is_none() && h.app.playback_goal.is_none());
+    assert!(h.app.player.playback.is_none() && h.app.player.goal.is_none());
 }
 
 #[test]
@@ -773,8 +776,8 @@ fn a_new_job_drops_the_old_jobs_preview_playback_and_its_undo() {
     // playing, then a new job
     let mut h = playing_preview();
     h.app.reset_job();
-    assert!(h.app.playback.is_none() && h.app.kept_playback.is_none());
-    assert!(!h.app.playing && h.app.playback_goal.is_none());
+    assert!(h.app.player.playback.is_none() && h.app.player.kept.is_none());
+    assert!(!h.app.player.playing && h.app.player.goal.is_none());
     assert!(
         !h.app.available("undo_last_preview"),
         "no old preview to undo"
@@ -792,7 +795,7 @@ fn a_new_job_drops_the_old_jobs_preview_playback_and_its_undo() {
     assert!(h.app.available("reset_preview"));
     h.app.reset_job();
     h.frame(vec![]);
-    assert!(h.app.kept_playback.is_none() && h.text_at("Progress").is_none());
+    assert!(h.app.player.kept.is_none() && h.text_at("Progress").is_none());
 }
 
 #[test]
@@ -800,7 +803,7 @@ fn reset_preview_is_there_while_a_stopped_previews_controls_are() {
     let mut h = playing_preview();
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
     h.app.simulation = None;
-    assert!(h.app.kept_playback.is_some());
+    assert!(h.app.player.kept.is_some());
     assert!(
         h.app.available("reset_preview"),
         "its controls can be cleared"
@@ -816,7 +819,7 @@ fn a_change_to_the_job_closes_a_stopped_previews_controls() {
     h.rectangle(60.0, 60.0, 10.0, 10.0);
     h.frame(vec![]);
     assert!(
-        h.app.kept_playback.is_none(),
+        h.app.player.kept.is_none(),
         "its old moves not played again"
     );
     assert!(h.text_at("Progress").is_none(), "no old controls");
@@ -832,7 +835,7 @@ fn a_change_to_the_job_stops_a_playing_preview_keeping_what_is_cut() {
     let mut h = playing_preview();
     h.rectangle(60.0, 60.0, 10.0, 10.0);
     h.frame(vec![]);
-    assert!(h.app.playback.is_none() && h.app.kept_playback.is_none());
+    assert!(h.app.player.playback.is_none() && h.app.player.kept.is_none());
     assert!(h.app.simulation.is_some(), "kept as far as it went");
     assert!(h.text_at("Progress").is_none());
 }
@@ -858,7 +861,7 @@ fn a_job_setup_change_starts_the_preview_again_on_the_new_block() {
     let id = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.preview_toolpath(id);
     let fresh = h.app.fresh_material();
-    let start = h.app.playback.as_ref().expect("it plays").material();
+    let start = h.app.player.playback.as_ref().expect("it plays").material();
     assert_eq!((start.columns, start.origin), (fresh.columns, fresh.origin));
 }
 

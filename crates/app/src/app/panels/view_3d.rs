@@ -9,27 +9,28 @@ impl CutCraftApp {
     /// A playing preview's material at the moving detail, painted, as the 3D view draws it:
     /// made again only once it has cut on (or the detail or the job changed).
     pub(super) fn playback_surface(&mut self) -> Option<Material> {
-        let playback = self.playback.as_ref()?;
+        let playback = self.player.playback.as_ref()?;
         let key = (
             self.shown_revision(playback),
             self.options.performance.still_cells(),
             self.history.revision(),
         );
-        if let Some((kept, surface)) = &self.playback_view
+        if let Some((kept, surface)) = &self.player.view
             && *kept == key
         {
             return Some(surface.clone());
         }
         let coarse = view3d::on_sheet(playback.material(), self.doc.job.area(), key.1);
         let surface = self.painted(coarse);
-        self.playback_view = Some((key, surface.clone()));
-        self.playback_builds += 1;
+        self.player.view = Some((key, surface.clone()));
+        self.player.builds += 1;
         Some(surface)
     }
 
     /// The playback's revision the 3D view is to show (`playback_shown`).
     pub(super) fn shown_revision(&self, playback: &cut_craft_core::playback::Playback) -> u64 {
-        self.playback_shown
+        self.player
+            .shown
             .map_or_else(|| playback.revision(), |(shown, _)| shown)
     }
 
@@ -38,7 +39,7 @@ impl CutCraftApp {
     /// frame, and a big model takes long to mix).
     pub(in super::super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
         let cells = self.options.performance.moving_cells();
-        if self.playback.is_some() {
+        if self.player.playback.is_some() {
             return self.playback_surface().map(Cow::Owned);
         }
         if let Some(material) = &self.simulation {
@@ -80,14 +81,19 @@ impl CutCraftApp {
     /// Whether the 3D view shows the job's material uncut: no preview, and no model yet
     /// (the block Job Setup describes is there from the start, not made by the user).
     pub(in super::super) fn showing_uncut_material(&self) -> bool {
-        self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty()
+        self.simulation.is_none()
+            && self.player.playback.is_none()
+            && self.doc.components.is_empty()
     }
 
     /// Whether the 3D view shows the job turned round its axis with its full 3D models as
     /// they really are: a rotary job with one (or one being imported), the model's own view
     /// (not a preview).
     pub(in super::super) fn shows_turned(&self) -> bool {
-        if self.doc.job.rotary.is_none() || self.simulation.is_some() || self.playback.is_some() {
+        if self.doc.job.rotary.is_none()
+            || self.simulation.is_some()
+            || self.player.playback.is_some()
+        {
             return false;
         }
         let importing = self.form.as_ref().is_some_and(|f| {
@@ -181,7 +187,9 @@ impl CutCraftApp {
     /// `material` with the stock the collet, spindle or shank would hit painted red, once
     /// the preview has finished playing (before then the tool has not got there).
     pub(super) fn collisions_painted(&self, mut material: Material) -> Material {
-        if self.collisions.is_empty() || self.playback.as_ref().is_some_and(|p| !p.finished()) {
+        if self.collisions.is_empty()
+            || self.player.playback.as_ref().is_some_and(|p| !p.finished())
+        {
             return material;
         }
         let hits: Vec<cut_craft_core::collision::Hit> = self
@@ -281,7 +289,7 @@ impl CutCraftApp {
     /// (it is placed in the material, which would hide it) or a preview shows.
     pub(in super::super) fn model_on_material(&self) -> bool {
         self.simulation.is_none()
-            && self.playback.is_none()
+            && self.player.playback.is_none()
             && self.doc.job.rotary.is_none()
             && !self.importing_model()
     }
@@ -633,11 +641,12 @@ impl CutCraftApp {
         let double = at.filter(|_| response.double_clicked());
         // a single click picks while the model shows, not over a preview, where a click
         // is the first half of a double-click taking a piece away
-        let clicked = at
-            .filter(|_| response.clicked() && self.simulation.is_none() && self.playback.is_none());
+        let clicked = at.filter(|_| {
+            response.clicked() && self.simulation.is_none() && self.player.playback.is_none()
+        });
         // while a preview shows, a double-click takes away the piece cut free under it
         let removed = double
-            .filter(|_| self.playback.is_none() && self.simulation.is_some())
+            .filter(|_| self.player.playback.is_none() && self.simulation.is_some())
             .is_some_and(|at| self.remove_preview_piece(fit, at));
         let picked = clicked
             .or(double)
@@ -706,7 +715,7 @@ impl CutCraftApp {
         let since = ui.input(|i| i.time) - self.moved_3d;
         let simplify = self.options.view_3d.simplify_while_moving;
         let settle = self.options.view_3d.settle();
-        if self.playback.is_none() && (!simplify || since >= settle) {
+        if self.player.playback.is_none() && (!simplify || since >= settle) {
             return self.fine_mesh(orbit, framing, look, fit);
         }
         ui.ctx()
@@ -780,7 +789,7 @@ impl CutCraftApp {
         } else {
             self.turning_cells()
         };
-        if let Some(playback) = &self.playback {
+        if let Some(playback) = &self.player.playback {
             self.solid_gpu = None;
             let key = (
                 self.shown_revision(playback),
@@ -789,14 +798,14 @@ impl CutCraftApp {
                 wrap,
                 sides,
             );
-            if let Some((kept, geometry)) = &self.playback_gpu
+            if let Some((kept, geometry)) = &self.player.gpu
                 && *kept == key
             {
                 return std::sync::Arc::clone(geometry);
             }
             let surface = self.playback_surface().expect("a playback");
             let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
-            self.playback_gpu = Some((key, std::sync::Arc::clone(&geometry)));
+            self.player.gpu = Some((key, std::sync::Arc::clone(&geometry)));
             return geometry;
         }
         // a finished preview on the card: the sheet round it, the preview drawn over it
@@ -916,7 +925,7 @@ impl CutCraftApp {
         wrap: Option<view3d::Wrap>,
         sides: bool,
     ) -> Option<std::sync::Arc<view3d::gpu::Geometry>> {
-        if self.playback.is_some()
+        if self.player.playback.is_some()
             || wrap.is_some()
             || self.gpu_3d.is_none()
             || self.doc.job.double_sided.is_some()
@@ -985,7 +994,7 @@ impl CutCraftApp {
         let (still, fps) = (speed.still_detail, speed.fps_wanted());
         let since = now - self.moved_3d;
         let moving = since < settle
-            || (self.playing && self.playback.is_some())
+            || (self.player.playing && self.player.playback.is_some())
             || self.drag_base.is_some()
             || self.drag_3d.is_some();
         let level = self.pacer.frame(seconds, moving, still, fps);

@@ -319,7 +319,7 @@ impl CutCraftApp {
                 let fine_bit =
                     crate::display::fine_bit_note(&tools, material.cell, app.display.detail);
                 app.simulation = Some(material);
-                app.kept_playback = None;
+                app.player.kept = None;
                 (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
                 if app.display.auto_open_3d {
                     app.view = super::View::ThreeD;

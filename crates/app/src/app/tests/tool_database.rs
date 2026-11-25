@@ -813,13 +813,13 @@ fn a_fine_bit_is_noted_under_the_controls_while_its_preview_plays() {
     h.frame(vec![]);
     h.frame(vec![]);
     // paused near each end, so on the fine toolpath and on the wide one: not stopped
-    h.app.playing = false;
+    h.app.player.playing = false;
     for share in [0.01, 0.99] {
-        let playback = h.app.playback.as_mut().expect("playing");
+        let playback = h.app.player.playback.as_mut().expect("playing");
         let at = playback.length() * share;
         playback.seek(at);
         h.frame(vec![]);
-        assert!(h.app.playback.is_some() && h.app.simulation.is_none());
+        assert!(h.app.player.playback.is_some() && h.app.simulation.is_none());
         assert!(
             h.texts()
                 .iter()

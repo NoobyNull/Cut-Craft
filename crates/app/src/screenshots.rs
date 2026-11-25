@@ -367,7 +367,7 @@ fn notes(app: &mut CutCraftApp, ctx: &egui::Context, text: &str, preview: bool, 
     if app.doc.toolpaths.is_empty() {
         app.form = None;
         app.doc = cut_craft_core::document::Document::default();
-        (app.simulation, app.playback) = (None, None);
+        (app.simulation, app.player.playback) = (None, None);
         draw_shapes(app);
         toolpaths(app, ctx);
         app.view = View::TwoD;
@@ -468,7 +468,7 @@ fn everyday(app: &mut CutCraftApp) {
     (app.machine_window, app.post_window) = (None, None);
     (app.tool_manager, app.materials_window) = (None, None);
     app.updates = crate::update::Updates::default();
-    (app.simulation, app.playback) = (None, None);
+    (app.simulation, app.player.playback) = (None, None);
     app.pages.set_pinned(super::Page::Toolpaths, false);
     // a new, unchanged job: nothing to ask about saving, the view fitted to it
     app.reset_job();
@@ -601,7 +601,7 @@ fn model_position(
     app.updates = crate::update::Updates::default();
     if app.form.as_ref().is_none_or(|f| f.id != "material_setup") {
         app.doc = cut_craft_core::document::Document::default();
-        (app.simulation, app.playback) = (None, None);
+        (app.simulation, app.player.playback) = (None, None);
         model(app, ctx);
         app.invoke(ctx, "material_setup");
     }
@@ -621,7 +621,7 @@ fn model_position(
 fn z_zero(app: &mut CutCraftApp, ctx: &egui::Context, z_zero: ZZero, datum: Datum) {
     app.updates = crate::update::Updates::default();
     app.form = None;
-    (app.simulation, app.playback) = (None, None);
+    (app.simulation, app.player.playback) = (None, None);
     app.doc = cut_craft_core::document::Document::default();
     (app.doc.job.z_zero, app.doc.job.datum) = (z_zero, datum);
     model(app, ctx);
@@ -640,7 +640,7 @@ fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
     app.gcode_view = None;
     app.updates = crate::update::Updates::default();
-    (app.simulation, app.playback) = (None, None);
+    (app.simulation, app.player.playback) = (None, None);
     app.doc = cut_craft_core::document::Document::default();
     app.view = View::TwoD;
     draw_shapes(app);
@@ -1075,10 +1075,10 @@ fn rotary_turning(app: &mut CutCraftApp, _: &egui::Context) {
     app.display.animate_preview = true;
     let ids: Vec<_> = app.doc.toolpaths.keys().copied().collect();
     app.play(&ids, true, |app| {
-        app.playing = false;
+        app.player.playing = false;
         let length =
-            (app.playback.as_ref()).map_or(0.0, cut_craft_core::playback::Playback::length);
-        app.playback_goal = Some(0.75 * length);
+            (app.player.playback.as_ref()).map_or(0.0, cut_craft_core::playback::Playback::length);
+        app.player.goal = Some(0.75 * length);
     });
     app.view = View::ThreeD;
     app.framing = crate::view3d::Framing::default();

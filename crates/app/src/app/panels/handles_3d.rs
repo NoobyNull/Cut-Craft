@@ -23,7 +23,7 @@ impl CutCraftApp {
         self.handles_3d.clear();
         let importing = self.form.as_ref().is_some_and(|f| f.model.is_some());
         if self.simulation.is_some()
-            || self.playback.is_some()
+            || self.player.playback.is_some()
             || importing
             || self.view_tool != Some(ViewTool::Transform)
         {
@@ -636,7 +636,7 @@ impl CutCraftApp {
         let removed = self.simulation.as_mut().map_or(0, |m| m.remove_piece(p));
         if removed > 0 {
             // scrubbing would put the piece back
-            self.kept_playback = None;
+            self.player.kept = None;
         }
         if removed > 0 {
             self.before_preview = Some(super::super::BeforePreview(before, self.preview_side));
