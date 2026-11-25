@@ -24,7 +24,8 @@ impl CutCraftApp {
     /// The preview's material changed: its moving-detail copy and the 3D view's meshes of it
     /// go, to be made again from it.
     pub(super) fn preview_changed(&mut self) {
-        (self.preview.coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        (self.preview.coarse, self.meshes.surface_gpu) = (None, None);
+        self.meshes.fine.clear();
     }
 
     /// A job is open, not the start page.
