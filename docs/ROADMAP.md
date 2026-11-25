@@ -55,6 +55,7 @@ pictures.
 | 2.3c | Tools and bits: a button is a tool, a cutter is a bit (Bit Library, the Bit section on every toolpath form, Bit Number, bit changes, Tool Changer (ATC)); Find Tool still finds the Bit Library by "tool database", "cutter" or "end mill". Lands before 2.4 so the walk-through and help pictures say bit | Done (#707) |
 | 2.3d | Both views at once: a split with a divider to drag (past the edge to show one view) and ⇄ to swap places, plus picture in picture (the other view small in a corner, dragged to any corner, ⇄ to make it the big one) | PR open |
 | 2.3e | Did You Know tips get weights and come up unseen first (which were seen is kept on each computer only); a Canvas tip with Try Canvas comes up more often, not for those already in Canvas | PR open |
+| 2.3f | Toolbars of your own: right-click any tool or group ▸ Add to Toolbar (New Toolbar makes "My Tools"); each shows in every layout (a Ribbon and Canvas tab, a Rail button, a Classic section) or floats over the drawing where you leave it; drag or right-click to reorder, rename, delete. Favourites stay as they are | PR open |
 | 2.4 | Walk the whole path by hand on both platforms and file every snag | Not started |
 | 2.5 | Help on every step of the path, including the built-in actions with no help page | Not started (with 3.4) |
 | 2.6 | Making a toolpath across a keep-out zone still refuses, against "tools never refuse" | Not started |

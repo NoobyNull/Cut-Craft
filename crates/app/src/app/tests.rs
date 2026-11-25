@@ -11,6 +11,7 @@ mod web_api;
 mod calculating;
 mod canvas;
 mod collisions;
+mod custom_toolbars;
 mod drawing;
 mod help_pages;
 mod how_to;

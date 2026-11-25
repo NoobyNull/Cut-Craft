@@ -56,6 +56,8 @@ a CNC machine cuts them with.
   [Rail](help:layout_rail), [Canvas](help:layout_canvas) or [Classic](help:layout_classic),
   and how to switch.
 - [Favourites](help:favourites): the tools you use most, kept at hand.
+- [Toolbars of your own](help:toolbars): your own named toolbars of tools and groups,
+  in every layout or floating over the drawing.
 - [Saving and opening jobs](help:saving_jobs): Increment and Save, the recovery copy, and
   a job that won't open.
 - [Colors on screen](help:colors_on_screen): color-blind friendly colors, or your own.
