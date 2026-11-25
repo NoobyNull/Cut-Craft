@@ -284,10 +284,24 @@ impl CutCraftApp {
                     let room = ui.ctx().content_rect().bottom() - ui.cursor().top() - 3.0 * row;
                     let per_column = palette_rows(room, 1.7 * row + ui.spacing().item_spacing.y);
                     let mut picked = false;
+                    // more columns than the window is wide scroll sideways
+                    let across = ui.ctx().content_rect().right()
+                        - ui.cursor().left()
+                        - width
+                        - 4.0 * ui.spacing().item_spacing.x
+                        - 2.0 * row;
                     ui.horizontal_top(|ui| {
-                        for column in tools.chunks(per_column) {
-                            ui.vertical(|ui| picked |= self.tool_rows(ui, column));
-                        }
+                        egui::ScrollArea::horizontal()
+                            .max_width(across.max(row))
+                            .show(ui, |ui| {
+                                ui.horizontal_top(|ui| {
+                                    // names keep to one line, however far the columns go
+                                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                                    for column in tools.chunks(per_column) {
+                                        ui.vertical(|ui| picked |= self.tool_rows(ui, column));
+                                    }
+                                });
+                            });
                         ui.separator();
                         ui.vertical(|ui| {
                             ui.set_width(width);

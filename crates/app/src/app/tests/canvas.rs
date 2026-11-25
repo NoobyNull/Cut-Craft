@@ -198,3 +198,28 @@ fn a_tall_enough_window_shows_the_palette_in_one_column() {
         "{tall:?} then {short:?}"
     );
 }
+
+#[test]
+fn a_long_favourites_list_in_a_short_window_stays_inside_it() {
+    let mut h = canvas();
+    let every: Vec<String> = h
+        .app
+        .canvas_groups()
+        .iter()
+        .flat_map(|group| group.tools.iter().map(|id| (*id).to_string()))
+        .collect();
+    assert!(every.len() > 20, "{}", every.len());
+    h.app.options.favourites.design = every;
+    h.app.ribbon_tab = RIBBON_TABS.iter().position(|t| *t == "Favourites").unwrap();
+    h.window = egui::vec2(900.0, 420.0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let list = h
+        .ctx
+        .memory(|m| m.area_rect(egui::Id::unique("canvas_flyout")))
+        .expect("the favourites are listed");
+    assert!(
+        list.right() <= 900.0 && list.bottom() <= 420.0,
+        "the extra columns scroll sideways: {list:?}"
+    );
+}

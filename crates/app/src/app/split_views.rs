@@ -72,6 +72,12 @@ pub(super) fn picture_rect(room: egui::Rect, corner: egui::Align2, margin: f32) 
     corner.align_size_within_rect(size, room.shrink(margin))
 }
 
+/// Where the small view's outline is drawn while its bar, pressed at `from`, is dragged to
+/// `at`: moved as far as the pointer, wherever on the bar it was grabbed.
+pub(super) fn dragged_outline(small: egui::Rect, from: egui::Pos2, at: egui::Pos2) -> egui::Rect {
+    small.translate(at - from)
+}
+
 impl CutCraftApp {
     /// The two views in the room left, as `self.split` arranges them.
     pub(super) fn split_views(&mut self, ui: &mut egui::Ui, split: Split) {
@@ -176,14 +182,13 @@ impl CutCraftApp {
         }
     }
 
-    /// While the small view is dragged: its outline follows the pointer (`moved` from where
-    /// it sits) and the corner it will snap to when let go is shaded.
+    /// While the small view is dragged: its `outline` follows the pointer and the corner it
+    /// will snap to when let go is shaded.
     fn picture_drop_preview(
         ui: &egui::Ui,
         room: egui::Rect,
-        small: egui::Rect,
+        outline: egui::Rect,
         corner: egui::Align2,
-        moved: egui::Vec2,
     ) {
         let margin = ui.spacing().item_spacing.y;
         let target = picture_rect(room, corner, margin);
@@ -200,7 +205,7 @@ impl CutCraftApp {
             egui::StrokeKind::Inside,
         );
         painter.rect_stroke(
-            small.translate(moved),
+            outline,
             0.0,
             egui::Stroke::new(1.0, ui.visuals().text_color()),
             egui::StrokeKind::Outside,
@@ -234,7 +239,8 @@ impl CutCraftApp {
             if grab.drag_stopped() {
                 self.split_layout.corner = corner;
             } else if grab.dragged() {
-                Self::picture_drop_preview(ui, room, small, corner, at - grab.rect.center());
+                let from = ui.input(|i| i.pointer.press_origin()).unwrap_or(at);
+                Self::picture_drop_preview(ui, room, dragged_outline(small, from, at), corner);
             }
         }
         let name = if big_2d {
@@ -307,6 +313,17 @@ mod tests {
             let picture = picture_rect(room, corner, 4.0);
             assert!(room.contains_rect(picture), "{corner:?}");
             assert_eq!(nearest_corner(room, picture.center()), corner);
+        }
+    }
+
+    #[test]
+    fn the_outline_moves_as_far_as_the_pointer_wherever_the_bar_was_grabbed() {
+        let small = egui::Rect::from_min_size(egui::pos2(700.0, 400.0), egui::vec2(300.0, 200.0));
+        for from in [small.center_top(), small.left_top() + egui::vec2(10.0, 5.0)] {
+            let at = from + egui::vec2(10.0, -30.0);
+            let outline = dragged_outline(small, from, at);
+            assert_eq!(outline.min - small.min, egui::vec2(10.0, -30.0), "{from:?}");
+            assert_eq!(outline.size(), small.size());
         }
     }
 }
