@@ -264,7 +264,7 @@ impl CutCraftApp {
                     .on_disabled_hover_text(tr!("views-fix-the-problems-marked-must"))
                     .clicked()
             } else if unticked {
-                response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
+                response.on_disabled_hover_text(t!(TICK_TO_SAVE)).clicked()
             } else {
                 response.clicked()
             };
@@ -277,7 +277,7 @@ impl CutCraftApp {
                 )
                 .on_hover_hint(tr!("views-save-the-files-straight-onto"));
             send = if reachable && unticked && !errors {
-                response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
+                response.on_disabled_hover_text(t!(TICK_TO_SAVE)).clicked()
             } else if reachable {
                 response
                     .on_disabled_hover_text(tr!("views-fix-the-problems-marked-must-2"))
@@ -601,7 +601,7 @@ impl CutCraftApp {
         let result = std::fs::write(&path, fmt_export_as_stl::binary_stl(triangles));
         self.status.set_message(&result.map_or_else(
             |e| format!("{}: {e}", path.display()),
-            |()| format!("Exported {}", path.display()),
+            |()| cut_craft_i18n::tr!("status-exported", path = path.display().to_string()),
         ));
     }
 }

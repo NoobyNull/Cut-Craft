@@ -186,10 +186,11 @@ pub fn add_menu(toolbars: &[Toolbar], item: &Item) -> MenuItem {
         .enumerate()
         .map(|(n, t)| {
             let on = t.items.contains(item);
+            // called what you called it, in every language
             MenuItem {
                 is_checked: on,
                 is_enabled: !on,
-                ..MenuItem::with_action(&t.name, &format!("{ACTION}add:{n}:{key}"))
+                ..MenuItem::with_action(&t.name, &format!("{ACTION}add:{n}:{key}")).named()
             }
         })
         .collect();

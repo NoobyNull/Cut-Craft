@@ -137,9 +137,9 @@ impl CutCraftApp {
                 revision: self.history.revision(),
             });
             let kind = snap.to.kind();
-            self.status.set_message(&format!(
-                "Snap picked: this point is kept on the {}. Press Delete to let it go.",
-                kind.label().to_lowercase()
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-snap-picked",
+                kind = kind.label().to_lowercase()
             ));
             return;
         }
@@ -254,7 +254,7 @@ impl CutCraftApp {
         }
         self.doc.inside_group = Some(group);
         self.select([hit], false);
-        self.status.set_message(INSIDE_GROUP);
+        self.status.set_message(&t!(INSIDE_GROUP));
     }
 
     /// Steps out of the group stepped into once it is gone (undone, deleted, ungrouped).
@@ -276,11 +276,12 @@ impl CutCraftApp {
         self.doc.inside_group = around;
         let members = self.doc.members_under(group);
         self.select(members, false);
-        self.status.set_message(if around.is_some() {
-            "Stepped out to the group around it"
-        } else {
-            "Stepped out of the group: a click picks whole groups again"
-        });
+        self.status
+            .set_message(&cut_craft_i18n::tr!(if around.is_some() {
+                "status-stepped-out-to-group"
+            } else {
+                "status-stepped-out-of-group"
+            }));
     }
 
     /// Selection is view state: applied directly, never recorded for undo.

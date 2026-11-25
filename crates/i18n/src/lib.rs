@@ -302,6 +302,29 @@ pub fn key_of(prefix: &str, words: &str) -> String {
     key
 }
 
+/// `english` in the language in use: a text with no name of its own, known by its English
+/// words (`text.ftl`, keyed by [`text_key`] with the `text` prefix). Written `t!("…")`.
+pub fn text(english: &str) -> String {
+    tr_or(&text_key("text", english), english)
+}
+
+/// A text known by its English words, in the language in use: `t!("Clear with bigger bits
+/// first")`, or a `&str` constant's: `t!(INSIDE_GROUP)`. For text that is only words; a
+/// sentence with a value put in uses a key of its own (`tr!("status-exported", path = …)`).
+/// `text.ftl` holds every one (the app's tests check, in every crate).
+#[macro_export]
+macro_rules! t {
+    ($english:literal) => {
+        $crate::text($english)
+    };
+    ($constant:ident) => {
+        $crate::text($constant)
+    };
+    ($constant:path) => {
+        $crate::text($constant)
+    };
+}
+
 /// The key of a piece of text known by its English words, for text that has no name of its
 /// own (a setting's label or tooltip): `prefix`, its first five words, and a short check of
 /// all of it, so two texts that start alike never share a key (`setting-cut-depth-1a2b3c`).
@@ -323,6 +346,40 @@ pub fn text_key(prefix: &str, english: &str) -> String {
         key_of(prefix, &start.join(" ")),
         hash & 0x00ff_ffff
     )
+}
+
+/// A text as a Fluent value, for writing English `.ftl` files from the code's words: each line indented under the key, braces and a line's leading
+/// `[`, `*` or `.` written as literals, so Fluent reads back exactly these words.
+pub fn ftl_value(text: &str) -> String {
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let mut out = String::new();
+            for (i, c) in line.chars().enumerate() {
+                if matches!(c, '{' | '}') || (i == 0 && matches!(c, '[' | '*' | '.')) {
+                    out.push_str("{\"");
+                    out.push(c);
+                    out.push_str("\"}");
+                } else {
+                    out.push(c);
+                }
+            }
+            out
+        })
+        .collect();
+    if lines.len() == 1 {
+        format!(" {}", lines[0])
+    } else {
+        let mut out = String::new();
+        for line in lines {
+            out.push('\n');
+            if !line.is_empty() {
+                out.push_str("    ");
+                out.push_str(&line);
+            }
+        }
+        out
+    }
 }
 
 /// The words for a key, in the language in use: `tr!("start-recent")`, or with values

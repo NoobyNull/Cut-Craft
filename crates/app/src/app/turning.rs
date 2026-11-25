@@ -234,13 +234,20 @@ impl super::CutCraftApp {
         let axis = (self.machines.active())
             .filter(|m| m.has_rotary())
             .map_or_default(|m| m.rotary_axis);
+        // thinned as Save Toolpaths thins them, so the preview plays the saved file
+        let settings = &self.options.toolpaths;
+        let thin = |t: Vec<Toolpath>| -> Vec<Toolpath> {
+            t.iter()
+                .map(|t| t.thinned(settings.tolerance(cut_craft_core::simplify::family(t))))
+                .collect()
+        };
         Making::new(
             &job,
             post,
             &axis,
             self.summary.rapid,
-            earlier,
-            toolpaths,
+            thin(earlier),
+            thin(toolpaths),
             self.display.detail,
         )
     }

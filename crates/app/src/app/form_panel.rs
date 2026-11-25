@@ -209,7 +209,8 @@ impl CutCraftApp {
         } else if import && placed {
             self.form = None;
             self.pages.done_with(page);
-            self.status.set_message("Model imported");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-model-imported"));
         }
     }
 
@@ -247,8 +248,10 @@ impl CutCraftApp {
             }
         }
         self.pages.done_with(form.page);
-        self.status
-            .set_message(&format!("{} cancelled", form.label));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-cancelled",
+            tool = crate::tool_names::form_name(&self.registry, form.id, form.label)
+        ));
     }
 
     /// A form's heading: its tool's icon and name, then what to do first while the tool has
@@ -403,6 +406,56 @@ impl CutCraftApp {
         ))
     }
 
+    /// On a Rotary Lathe form: how fast A turns nearest the axis to keep the bit's feed there
+    /// (its chipload), and whether the machine's top A speed caps it (said in red then).
+    pub(super) fn lathe_a_speed(&self, form: &super::OpenForm) -> Option<(String, bool)> {
+        use cut_craft_core::rotary_axis::{a_rate_for, slowest_radius};
+        if form.id != "rotary_lathe_toolpath" {
+            return None;
+        }
+        let rotary = self.doc.job.rotary?;
+        let tool: cut_craft_core::toolpath::Tool =
+            serde_json::from_value(form.params.get("tool")?.clone()).ok()?;
+        if tool.feed_rate <= 0.0 {
+            return None;
+        }
+        // nearest the axis it cuts: the holding stub, or Job Setup's centre stock
+        let stub = form.params["holding_stub"].as_f64().unwrap_or(0.0) / 2.0;
+        let nearest = stub.max(rotary.support.beam / 2.0).max(0.5);
+        let rate = a_rate_for(tool.feed_rate, nearest);
+        let units = self.doc.job.units;
+        let most = self
+            .machines
+            .active()
+            .filter(|m| m.has_rotary())
+            .map_or(0.0, |m| m.rotary_axis.max_rate);
+        let radius = units.length(nearest, 1);
+        let feed = units.length(tool.feed_rate, 0);
+        let rate_text = format!("{rate:.0}");
+        match slowest_radius(tool.feed_rate, most).filter(|&slow| slow > nearest) {
+            Some(slow) => Some((
+                tr!(
+                    "lathe-a-speed-capped",
+                    radius = radius,
+                    rate = rate_text,
+                    feed = feed,
+                    most = format!("{most:.0}"),
+                    slow = units.length(slow, 1)
+                ),
+                true,
+            )),
+            None => Some((
+                tr!(
+                    "lathe-a-speed",
+                    radius = radius,
+                    rate = rate_text,
+                    feed = feed
+                ),
+                false,
+            )),
+        }
+    }
+
     /// What Model Position in Material needs beside its form's settings: the job's
     /// material and the model's height (measured only while a form showing it is open).
     pub(super) fn placement_room(&self) -> super::placement::Room {
@@ -490,6 +543,14 @@ impl CutCraftApp {
         // a model poking out of the material where Model Position in Material puts it
         if let Some(out) = super::placement::warning(&form.params, self.placement_room()) {
             ui.colored_label(ui.visuals().error_fg_color, out);
+        }
+        // how fast A turns on the lathe, and whether the machine's top A speed caps it
+        if let Some((note, capped)) = self.lathe_a_speed(form) {
+            if capped {
+                ui.colored_label(ui.visuals().error_fg_color, note);
+            } else {
+                ui.label(note);
+            }
         }
         // Calculate found nothing changed: said plainly, not as a warning
         if let Some(note) = self.form_note() {

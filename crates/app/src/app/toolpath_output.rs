@@ -232,7 +232,9 @@ impl CutCraftApp {
             return;
         };
         let Some(choice) = choice else {
-            return self.status.set_message("Toolpaths not saved");
+            return self
+                .status
+                .set_message(&cut_craft_i18n::tr!("status-toolpaths-not-saved"));
         };
         if remember {
             self.options.confirmations.earlier_gcode = choice;
@@ -332,13 +334,14 @@ impl CutCraftApp {
             }
         };
         let Some(found) = self.save_checks(&plan, form.changes).map(<[_]>::to_vec) else {
-            self.status.set_message(if self.checking() {
-                "Still checking the toolpaths before cutting: save again once the checks finish"
-            } else if self.busy.is_some() {
-                "The toolpaths are checked before cutting once the work running now is done: save again then"
-            } else {
-                "The checks before cutting were cancelled: press Check Again, then save"
-            });
+            self.status
+                .set_message(&cut_craft_i18n::tr!(if self.checking() {
+                    "status-still-checking"
+                } else if self.busy.is_some() {
+                    "status-checked-after-work"
+                } else {
+                    "status-checks-cancelled"
+                }));
             return None;
         };
         match output::verdict(&found, &self.acknowledged, &accepted) {
@@ -704,6 +707,12 @@ impl CutCraftApp {
         let mut params = params.clone();
         if let (Value::Object(map), Ok(around)) = (&mut params, serde_json::to_value(around)) {
             map.insert("surroundings".into(), around);
+            if ROTARY_CARRIED.contains(&id) {
+                map.insert(
+                    "whole_blank".into(),
+                    self.options.toolpaths.advanced_rotary.into(),
+                );
+            }
         }
         params
     }
@@ -724,5 +733,20 @@ pub(super) const CLIP_SETTING: &str =
     "Edit ▸ Options ▸ Toolpath Settings ▸ Clip toolpaths at keep-out zones";
 
 /// Rotary toolpaths, given the machine's holder, chuck and tailstock to keep clear of.
-pub(super) const ROTARY_SURROUNDED: [&str; 2] =
-    ["rotary_machining_toolpath", "rotary_lathe_toolpath"];
+pub(super) const ROTARY_SURROUNDED: [&str; 6] = [
+    "rotary_roughing_toolpath",
+    "rotary_finishing_toolpath",
+    "rotary_locked_angles_toolpath",
+    "rotary_details_toolpath",
+    "rotary_machining_toolpath",
+    "rotary_lathe_toolpath",
+];
+
+/// Rotary toolpaths that cut only what the toolpaths above them leave, unless Settings'
+/// advanced rotary mode is on.
+pub(super) const ROTARY_CARRIED: [&str; 4] = [
+    "rotary_roughing_toolpath",
+    "rotary_finishing_toolpath",
+    "rotary_locked_angles_toolpath",
+    "rotary_details_toolpath",
+];

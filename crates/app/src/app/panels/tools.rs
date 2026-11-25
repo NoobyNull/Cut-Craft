@@ -559,7 +559,7 @@ impl CutCraftApp {
             .filter(|m| **m != id)
             .map(|m| self.tool_label(m))
             .collect();
-        let about = gui::about(id).unwrap_or(&label).to_owned();
+        let about = gui::about(id).unwrap_or_else(|| label.clone());
         let any_available = button.members.iter().any(|m| self.available(m));
         // the tip names the tools the flyout holds too, so they are found without opening it
         let tip = self.tool_tip(id, &tooltip(&about, &others));
