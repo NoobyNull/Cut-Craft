@@ -130,4 +130,121 @@ impl Harness {
     pub(in super::super) fn has_previewed_material(&self) -> bool {
         self.app.preview.material.is_some()
     }
+
+    // ---- the preview and its control ----
+
+    /// The material as the last preview cut it, if there is one.
+    pub(in super::super) fn previewed(&self) -> Option<&Material> {
+        self.app.preview.material.as_ref()
+    }
+
+    /// The preview shows `material`, as one cut it.
+    pub(in super::super) fn given_previewed(&mut self, material: Option<Material>) {
+        self.app.preview.material = material;
+    }
+
+    /// Whether Undo Last Preview has an earlier preview to bring back.
+    pub(in super::super) fn preview_before_kept(&self) -> bool {
+        self.app.preview.before.is_some()
+    }
+
+    /// Whether the preview is playing (not paused or stopped).
+    pub(in super::super) fn playing(&self) -> bool {
+        self.app.player.playing
+    }
+
+    /// Whether a stopped preview is kept so its controls stay to scrub it.
+    pub(in super::super) fn playback_kept(&self) -> bool {
+        self.app.player.kept.is_some()
+    }
+
+    /// Where the tool is being moved to a little each frame, if it is.
+    pub(in super::super) fn playback_goal(&self) -> Option<f64> {
+        self.app.player.goal
+    }
+
+    /// How many times the playing preview's view has been made.
+    pub(in super::super) fn playback_builds(&self) -> usize {
+        self.app.player.builds
+    }
+
+    /// The playing preview's view as drawn: its playback revision and detail, if drawn.
+    pub(in super::super) fn playback_drawn(&self) -> Option<(u64, usize)> {
+        self.app
+            .player
+            .view
+            .as_ref()
+            .map(|((revision, cells, _), _)| (*revision, *cells))
+    }
+
+    /// The playing preview is redrawn no more often than `every`.
+    pub(in super::super) fn given_playback_redraw(&mut self, every: std::time::Duration) {
+        self.app.player.redraw = every;
+    }
+
+    /// A frame may spend `budget` cutting the playing preview.
+    pub(in super::super) fn given_playback_budget(&mut self, budget: std::time::Duration) {
+        self.app.player.budget = budget;
+    }
+
+    /// A double-click on the 3D view drawn in `fit`, at `at`: takes away the piece cut free
+    /// there, whether there was one.
+    pub(in super::super) fn remove_preview_piece(&mut self, fit: Rect, at: Pos2) -> bool {
+        self.app.remove_preview_piece(fit, at)
+    }
+
+    /// Create Component from Toolpath Preview.
+    pub(in super::super) fn component_from_preview(&mut self) {
+        self.app.component_from_preview();
+    }
+
+    /// An uncut block for the job as it is now.
+    pub(in super::super) fn fresh_material(&self) -> Material {
+        self.app.fresh_material()
+    }
+
+    /// The finely previewed material as the 3D view shows it, the whole sheet round it.
+    pub(in super::super) fn fine_surface(&mut self) -> Material {
+        self.app.fine_surface()
+    }
+
+    /// Starts a new job, as File ▸ New does once the old one is dealt with.
+    pub(in super::super) fn reset_job(&mut self) {
+        self.app.reset_job();
+    }
+
+    // ---- Trace Bitmap's window ----
+
+    /// Whether Trace Bitmap's window is open.
+    pub(in super::super) fn trace_window_open(&self) -> bool {
+        self.app.trace_view.is_some()
+    }
+
+    /// How many colours the window's preview traced, once it has.
+    pub(in super::super) fn traced_colours(&self) -> Option<usize> {
+        self.app
+            .trace_view
+            .as_ref()
+            .expect("the trace window is open")
+            .traced_colours()
+    }
+
+    /// Whether the window's preview shows the form's settings as they are now.
+    pub(in super::super) fn trace_up_to_date(&self) -> bool {
+        let view = self
+            .app
+            .trace_view
+            .as_ref()
+            .expect("the trace window is open");
+        view.shown_params() == self.app.form.as_ref().map(|f| &f.params)
+    }
+
+    /// Unticks the window's Live, so a change waits for Update preview.
+    pub(in super::super) fn untick_live_trace(&mut self) {
+        self.app
+            .trace_view
+            .as_mut()
+            .expect("the trace window is open")
+            .live = false;
+    }
 }
