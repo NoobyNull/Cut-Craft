@@ -42,3 +42,30 @@ fn every_layout_has_its_picture_in_the_help() {
         );
     }
 }
+
+#[test]
+fn the_cards_are_sized_from_the_screen_so_the_window_keeps_its_size() {
+    let row = 18.0;
+    let wide = card_width(1600.0, 14.0, 8.0, row);
+    assert_eq!(
+        wide,
+        card_width(1600.0, 14.0, 8.0, row),
+        "the same every frame"
+    );
+    let all = 4.0 * (wide + 14.0) + 3.0 * 8.0;
+    assert!(all <= 1600.0, "{all}");
+    assert_eq!(
+        card_width(4000.0, 14.0, 8.0, row),
+        14.0 * row,
+        "no wider than 14 rows"
+    );
+    assert!(
+        card_width(800.0, 14.0, 8.0, row) < wide,
+        "narrower in a narrow window"
+    );
+    assert_eq!(
+        card_width(50.0, 14.0, 8.0, row),
+        row,
+        "never squeezed to nothing"
+    );
+}
