@@ -258,10 +258,10 @@ pub const COMBINE_MODES: [(&str, Combine, &str); 5] = [
 /// A level's Mirror Mode submenu, in the standard order.
 pub(super) const MIRROR_MODES: [(&str, Mirror); 9] = [
     ("Off", Mirror::Off),
-    ("Left to Right", Mirror::LeftToRight),
-    ("Right to Left", Mirror::RightToLeft),
-    ("Top to Bottom", Mirror::TopToBottom),
-    ("Bottom to Top", Mirror::BottomToTop),
+    ("Left To Right", Mirror::LeftToRight),
+    ("Right To Left", Mirror::RightToLeft),
+    ("Top To Bottom", Mirror::TopToBottom),
+    ("Bottom To Top", Mirror::BottomToTop),
     ("Top Left Quadrant", Mirror::TopLeft),
     ("Top Right Quadrant", Mirror::TopRight),
     ("Bottom Left Quadrant", Mirror::BottomLeft),
