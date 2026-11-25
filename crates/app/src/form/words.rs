@@ -98,42 +98,6 @@ fn every_text() -> Vec<(String, Vec<String>)> {
     forms
 }
 
-/// A text as a Fluent value: each line indented under the key, braces and a line's leading
-/// `[`, `*` or `.` written as literals, so Fluent reads back exactly these words.
-fn ftl_value(text: &str) -> String {
-    let lines: Vec<String> = text
-        .lines()
-        .map(|line| {
-            let mut out = String::new();
-            for (i, c) in line.chars().enumerate() {
-                match c {
-                    '{' | '}' => {
-                        let _ = write!(out, "{{\"{c}\"}}");
-                    }
-                    '[' | '*' | '.' if i == 0 => {
-                        let _ = write!(out, "{{\"{c}\"}}");
-                    }
-                    c => out.push(c),
-                }
-            }
-            out
-        })
-        .collect();
-    if lines.len() == 1 {
-        format!(" {}", lines[0])
-    } else {
-        let mut out = String::new();
-        for line in lines {
-            out.push('\n');
-            if !line.is_empty() {
-                out.push_str("    ");
-                out.push_str(&line);
-            }
-        }
-        out
-    }
-}
-
 const HEADER: &str = "\
 # The words of every tool's form and of the Options, Snapping Options, Job Setup Sheet, Part
 # Labels and STL windows: each setting's name and tooltip, the choices it offers, and the
@@ -148,7 +112,12 @@ fn file() -> String {
     for (what, words) in every_text() {
         let _ = write!(out, "\n## {what}\n");
         for w in words {
-            let _ = writeln!(out, "{} ={}", setting_key(&w), ftl_value(&w));
+            let _ = writeln!(
+                out,
+                "{} ={}",
+                setting_key(&w),
+                cut_craft_i18n::ftl_value(&w)
+            );
         }
     }
     out
@@ -213,7 +182,7 @@ fn a_form_text_reads_back_from_fluent_as_written() {
         "A {curly} value",
         "[1] first\n\n*bold* second\n.dot line",
     ] {
-        let source = format!("k ={}\n", ftl_value(text));
+        let source = format!("k ={}\n", cut_craft_i18n::ftl_value(text));
         let (words, problems) = cut_craft_i18n::Catalogue::parse("en", &[("a.ftl", &source)]);
         assert!(problems.is_empty(), "{source}: {problems:?}");
         assert_eq!(words.words("k", None).as_deref(), Some(text), "{source}");

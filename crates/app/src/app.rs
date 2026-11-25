@@ -1308,7 +1308,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
         if response.hovered()
             && let Some(about) = gui::about(&item.action)
         {
-            cut_craft_bug_report::hint::hint(ui.ctx(), about);
+            cut_craft_bug_report::hint::hint(ui.ctx(), &about);
         }
         if !available {
             response = response.on_disabled_hover_text((menus.why)(&item.action));

@@ -325,6 +325,40 @@ pub fn text_key(prefix: &str, english: &str) -> String {
     )
 }
 
+/// A text as a Fluent value, for writing English `.ftl` files from the code's words: each line indented under the key, braces and a line's leading
+/// `[`, `*` or `.` written as literals, so Fluent reads back exactly these words.
+pub fn ftl_value(text: &str) -> String {
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let mut out = String::new();
+            for (i, c) in line.chars().enumerate() {
+                if matches!(c, '{' | '}') || (i == 0 && matches!(c, '[' | '*' | '.')) {
+                    out.push_str("{\"");
+                    out.push(c);
+                    out.push_str("\"}");
+                } else {
+                    out.push(c);
+                }
+            }
+            out
+        })
+        .collect();
+    if lines.len() == 1 {
+        format!(" {}", lines[0])
+    } else {
+        let mut out = String::new();
+        for line in lines {
+            out.push('\n');
+            if !line.is_empty() {
+                out.push_str("    ");
+                out.push_str(&line);
+            }
+        }
+        out
+    }
+}
+
 /// The words for a key, in the language in use: `tr!("start-recent")`, or with values
 /// `tr!("start-whats-new", version = env!("CARGO_PKG_VERSION"))`. A length or other measured
 /// number goes in already written in the job's units; a count that picks a plural goes in as

@@ -8,6 +8,9 @@
 //! `menu-item-save-as`), a sub-tab by its page and English name (`design-subtab-model`). A tool
 //! an add-on or a gadget brings has no key, and shows the name it gives.
 //!
+//! A tool's tooltip (what it does) is found by its id too: `tooltip-draw-circle`, in
+//! `tooltips.ftl`.
+//!
 //! Every layout, menu, Find Tool and help page asks here, so a tool is named the same way
 //! wherever it shows.
 
@@ -63,6 +66,18 @@ pub fn form_name(registry: &Registry, id: &str, english: &str) -> String {
         Some(tool) => name_of(registry, tool),
         None => tool_name(id, english),
     }
+}
+
+/// A tool's tooltip key: `tooltip-` and its id (`tooltip-draw-circle`), what it does as its
+/// tooltip and the status line say it.
+pub fn tooltip_key(id: &str) -> String {
+    key_of("tooltip", id)
+}
+
+/// What tool `id` does (`english`, as [`crate::gui::english_about`] says it), in the language
+/// in use.
+pub fn tooltip(id: &str, english: &str) -> String {
+    tr_or(&tooltip_key(id), english)
 }
 
 /// A page tab's key, from its English name (`page-tab-layers`): the side tabs, the Rail's
