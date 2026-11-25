@@ -48,9 +48,12 @@ leave of the blank, by cutting their moves from it in order, and cuts only that.
 turning stopped; put a second Rotary Roughing with a smaller bit or allowance under the first,
 and it takes off only the steps the first one's levels left.
 
-If nothing is left to cut, it says so in red.
+If nothing is left to cut, it says so in red. When a toolpath above it is calculated again, or
+the list's order changes above it, it goes out of date (⚠) until it is recalculated: moving
+toolpaths in the list asks first, with **Put it back** to undo the move.
 
-**Advanced rotary mode** (Edit ▸ Options ▸ Toolpath Settings) turns this off for every rotary
+**Advanced rotary mode** (Edit ▸ Options ▸ Toolpath Settings, or **Toolpaths ▸ Turn On Advanced
+Rotary Mode...**, which opens it with the setting ringed) turns this off for every rotary
 toolpath: each then cuts the whole blank, as if nothing were above it, and you decide what it
 cuts with its **Start**, **End** and **Allowance**.
 

@@ -286,6 +286,7 @@ impl MenuSystem {
                         a("Save Cut List...", "cut_list"),
                         sep(),
                         a("Clearing Settings...", "clearing_settings"),
+                        a("Turn On Advanced Rotary Mode...", "advanced_rotary_mode"),
                         a("Preview Colors...", "materials"),
                         sep(),
                         i("Tool Database..."),
