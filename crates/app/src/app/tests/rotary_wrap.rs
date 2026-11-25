@@ -106,3 +106,16 @@ fn drawing_snaps_to_a_ghost_s_end_without_tying_the_point_to_the_real_line() {
     };
     assert!(d.start.distance(ghost_end) < 1e-9, "onto the ghost's end");
 }
+
+#[test]
+fn clicking_inside_a_ghost_of_a_closed_shape_selects_the_shape() {
+    let (mut h, _) = rotary_with_line();
+    // a circle across the bottom seam: its ghost reaches up over the top seam
+    let mut c = Change::builder(&h.app.doc);
+    let circle = c.add(Path::circle(Point::new(250.0, 5.0), 20.0));
+    h.app.record(Ok(c.finish()), "circle");
+    h.frame(vec![]);
+    // inside the ghost, away from its outline, in the band above the top seam
+    h.click(h.at(250.0, turn() + 15.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.selection, [circle].into(), "the circle it copies");
+}

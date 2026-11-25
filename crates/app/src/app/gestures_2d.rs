@@ -176,9 +176,11 @@ impl CutCraftApp {
             self.doc.inside_group = None;
         }
         // inside a closed shape, away from any line, picture or component: the shape and
-        // its holes, as one part
+        // its holes, as one part (inside a rotary job's ghost too, the shape it copies)
         let part = if hit.is_none() && picture.is_none() && component.is_none() {
-            self.doc.pick_part(at, tolerance)
+            let part = |p| Some(self.doc.pick_part(p, tolerance)).filter(|v| !v.is_empty());
+            let picked = self.wrap().map_or_else(|| part(at), |w| w.pick(at, part));
+            picked.unwrap_or_default()
         } else {
             Vec::new()
         };
