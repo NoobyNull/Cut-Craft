@@ -713,7 +713,7 @@ impl CutCraftApp {
             "view_2d" => self.view = View::TwoD,
             "view_3d" => self.view = View::ThreeD,
             "first_run_setup" => self.open_first_run(),
-            "did_you_know" => self.open_tips(self.options.next_tip),
+            "did_you_know" => self.open_unseen_tip(),
             "try_sample_project" => self.open_sample(),
             super::setup_material::ID => self.open_setup_material(),
             id if id.starts_with(gui::COMMUNITY) => {

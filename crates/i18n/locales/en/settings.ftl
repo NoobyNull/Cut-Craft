@@ -168,6 +168,14 @@ setting-compact-9ead86 = Compact
 setting-the-tools-that-fit-under-d9bbf5 = The tools that fit under the group's name; the name lists the rest
 setting-every-tool-ff8f76 = Every tool
 setting-every-tool-in-the-group-cbcb49 = Every tool in the group
+setting-canvas-tool-lists-open-9c6fcc = Canvas tool lists open
+setting-when-a-group-in-the-779c12 =
+    When a group in the Canvas layout's palette lists its tools beside it: On Hover as
+    soon as the pointer is over the group, On Click when it is clicked
+setting-on-hover-b0e222 = On hover
+setting-as-soon-as-the-pointer-a3646c = As soon as the pointer is over the group
+setting-on-click-9d4b08 = On click
+setting-when-the-group-is-clicked-3b431a = When the group is clicked
 setting-show-a-tip-when-cut-8faee5 = Show a tip when Cut Craft starts
 setting-open-a-short-did-you-06c331 =
     Open a short Did You Know? tip each time Cut Craft starts, a different one each
