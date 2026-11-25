@@ -147,7 +147,10 @@ pub(super) fn plain(
         let shown = ui.add_enabled_ui(enabled, |ui| {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
-                hover(ui.strong(&section.label), section.help.as_ref());
+                hover(
+                    ui.strong(super::setting_text(&section.label)),
+                    section.help.as_ref(),
+                );
                 let value = &mut params[&section.key];
                 let picture = section
                     .icon
@@ -163,7 +166,14 @@ pub(super) fn plain(
                                 let inner: Vec<&Field> = inner.iter().collect();
                                 show_within(ui, &inner, value, look, top)
                             }
-                            kind => edit(ui, &section.label, kind, value, &Value::Null, look),
+                            kind => edit(
+                                ui,
+                                &super::setting_text(&section.label),
+                                kind,
+                                value,
+                                &Value::Null,
+                                look,
+                            ),
                         })
                         .inner
                     })

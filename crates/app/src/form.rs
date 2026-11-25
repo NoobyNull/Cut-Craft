@@ -760,23 +760,33 @@ pub fn fields(schema: &Value) -> Vec<Field> {
     fields
 }
 
-/// The fields of a params schema with the code's English words. A group's and a tab's name
-/// stay English in every language, as the code finds them by it; they are translated where
-/// they are drawn.
+/// The fields of a params schema with the code's English words. A group's, a tab's and a
+/// section's name stay English in [`fields`] too, as the code finds them by it (a section's
+/// end, such as Model Size's Scale to Fit); they are translated where they are drawn.
 pub fn english_fields(schema: &Value) -> Vec<Field> {
     object_fields(schema, schema)
 }
 
 /// A field's name, tooltip, other names and choices in the language in use.
 fn translate(f: &mut Field) {
-    f.label = setting_text(&f.label);
+    if !f.section {
+        f.label = setting_text(&f.label);
+    }
     f.help = f.help.as_deref().map(setting_text);
     if let Some(t) = &mut f.titles {
         for (_, title) in &mut t.by {
             *title = setting_text(title);
         }
     }
-    translate_kind(&mut f.kind);
+    if !is_font(f) {
+        translate_kind(&mut f.kind);
+    }
+}
+
+/// A font choice (Draw Text's, Auto Layout Text's): its choices are the fonts installed, each
+/// named as it is installed in every language, so they are neither translated nor in Fluent.
+pub fn is_font(f: &Field) -> bool {
+    f.key == "font"
 }
 
 fn translate_kind(kind: &mut Kind) {

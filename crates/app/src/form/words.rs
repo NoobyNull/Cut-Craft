@@ -4,7 +4,7 @@
 //! words are kept in the code and copied to Fluent: `write_settings_words` writes the file,
 //! and these tests say what to change when a form changes.
 
-use super::{Field, Kind, english_fields, setting_key};
+use super::{Field, Kind, english_fields, is_font, setting_key};
 use cut_craft_i18n::english;
 use serde_json::Value;
 use std::fmt::Write as _;
@@ -49,7 +49,9 @@ fn field_words(f: &Field, out: &mut Vec<String>) {
     if let Some(t) = &f.titles {
         out.extend(t.by.iter().map(|(_, title)| title.clone()));
     }
-    kind_words(&f.kind, out);
+    if !is_font(f) {
+        kind_words(&f.kind, out);
+    }
 }
 
 fn kind_words(kind: &Kind, out: &mut Vec<String>) {
