@@ -34,6 +34,9 @@ const CUTTER_AS_TOOL: &[&str] = &[
     "tool's feed",
 ];
 
+/// The files about toolbars of your own, where "My Tools" is a toolbar's name, not bits.
+const TOOLBAR_FILES: &[&str] = &["toolbars.ftl", "toolbars.md"];
+
 /// The cutter words found in `text`, each with where: `place` and the line.
 fn cutter_words(place: &str, text: &str, found: &mut Vec<String>) {
     for (n, line) in text.lines().enumerate() {
@@ -98,7 +101,11 @@ fn cutters_are_called_bits_in_the_english_words() {
     for file in ftl.iter().chain(&pages) {
         let text = std::fs::read_to_string(file).unwrap();
         // a sentence may break its line between "Tool" and "Database"
-        let joined = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut joined = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        // a toolbar of your own holds tools (buttons), so its first name is "My Tools"
+        if TOOLBAR_FILES.iter().any(|name| file.ends_with(name)) {
+            joined = joined.replace("My Tools", "");
+        }
         cutter_words(&file.display().to_string(), &joined, &mut found);
     }
     let mut code = Vec::new();
