@@ -12,8 +12,8 @@ impl CutCraftApp {
 
     /// [`Self::load_materials`] from `path`.
     pub(super) fn load_materials_at(&mut self, path: Option<std::path::PathBuf>) {
-        self.materials_path = path;
-        if let Some(path) = &self.materials_path {
+        self.materials_file.at(path);
+        if let Some(path) = self.materials_file.path() {
             match files::load_materials(path) {
                 Ok(lib) => self.materials = lib,
                 Err(e) => {
@@ -21,7 +21,7 @@ impl CutCraftApp {
                         "status-materials-not-saved",
                         error = e.clone()
                     ));
-                    self.materials_unreadable = self.materials_path.take();
+                    self.materials_file.unreadable();
                 }
             }
         }
@@ -30,10 +30,7 @@ impl CutCraftApp {
     /// Writes the Materials Library, if it has a file; an error when it could not be
     /// written, or when its file could not be read at start and so is not saved over.
     pub(super) fn save_materials(&self) -> Result<(), String> {
-        if let Some(path) = &self.materials_unreadable {
-            return Err(not_saved("Materials Library", path));
-        }
-        self.materials_path.as_deref().map_or(Ok(()), |p| {
+        (self.materials_file).save("Materials Library", |p| {
             files::write_creating(p, &self.materials.to_json())
         })
     }
@@ -74,8 +71,8 @@ impl CutCraftApp {
 
     /// [`Self::load_tools`] from `path`.
     pub(super) fn load_tools_at(&mut self, path: Option<std::path::PathBuf>) {
-        self.tools_path = path;
-        if let Some(path) = &self.tools_path {
+        self.tools_file.at(path);
+        if let Some(path) = self.tools_file.path() {
             match files::load_tools_joining(path) {
                 Ok((tools, report)) => {
                     self.tools = tools;
@@ -98,7 +95,7 @@ impl CutCraftApp {
                         "status-tools-not-saved",
                         error = e.clone()
                     ));
-                    self.tools_unreadable = self.tools_path.take();
+                    self.tools_file.unreadable();
                 }
             }
         }
@@ -234,27 +231,9 @@ impl CutCraftApp {
 
     /// Writes the bit library, if it has a file, and reports `done` or the failure.
     pub(super) fn tools_changed(&mut self, done: &str) {
-        if let Some(path) = &self.tools_unreadable {
-            let message = not_saved("Bit library", path);
-            self.status.set_message(&message);
-            return;
-        }
-        let result = self
-            .tools_path
-            .as_deref()
-            .map_or(Ok(()), |path| files::save_tools(&self.tools, path));
+        let result =
+            (self.tools_file).save("Bit library", |path| files::save_tools(&self.tools, path));
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
     }
-}
-
-/// What a save says when `what`'s file, at `path`, could not be read when Cut Craft started:
-/// the changes are kept until it closes, but not written over that file.
-pub(super) fn not_saved(what: &str, path: &std::path::Path) -> String {
-    format!(
-        "{what} not saved: {} could not be read when Cut Craft started, so it is not written \
-         over. Fix or rename that file, then restart Cut Craft; your changes are kept only \
-         until it closes",
-        path.display()
-    )
 }
