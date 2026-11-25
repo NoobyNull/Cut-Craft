@@ -270,4 +270,9 @@ impl Harness {
         edit(&mut s.params);
         s.dirty = true;
     }
+
+    /// Whether the icon set has the picture `icon`.
+    pub(in super::super) fn has_icon(&self, icon: &str) -> bool {
+        self.app.icons.find(icon, "").is_some()
+    }
 }
