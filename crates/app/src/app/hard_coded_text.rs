@@ -74,14 +74,18 @@ fn sources() -> Vec<PathBuf> {
         .into_iter()
         // test-only files (this one is all tests: its examples are not the app's words)
         .filter(|f| {
-            ![
-                "app/tests.rs",
-                "web_api_tests.rs",
-                "hard_coded_text.rs",
-                "help_coverage.rs",
-            ]
-            .iter()
-            .any(|t| f.ends_with(t))
+            !f.to_string_lossy()
+                .replace('\\', "/")
+                .contains("/app/tests/")
+                && ![
+                    "app/tests.rs",
+                    "web_api_tests.rs",
+                    "hard_coded_text.rs",
+                    "help_coverage.rs",
+                    "screenshots.rs",
+                ]
+                .iter()
+                .any(|t| f.ends_with(t))
         })
         .collect()
 }

@@ -328,7 +328,7 @@ impl CutCraftApp {
             if super::mac::is_mac(ctx) {
                 // a Mac's window can't change its title bar while open
                 self.status
-                    .set_message("The title bar changes next time Cut Craft starts.");
+                    .set_message(&cut_craft_i18n::tr!("status-title-bar-next-start"));
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }

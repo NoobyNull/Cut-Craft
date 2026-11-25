@@ -532,17 +532,17 @@ impl CutCraftApp {
             && !self.session.is_dirty(&self.history);
         if blank && !self.options.job_defaults.classic_startup {
             self.start_blank_job();
-            self.status.set_message(&format!(
-                "Set up: {machine}new jobs {size}. Draw on the sheet, or Try a sample project. \
-                 Change these any time in Machine ▸ Machine Configuration and Edit ▸ Options ▸ \
-                 Job Defaults."
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-set-up-blank",
+                machine = machine.clone(),
+                size = size.clone()
             ));
             return;
         }
-        self.status.set_message(&format!(
-            "Set up: {machine}new jobs {size}. Press Create a new file to start, or Try a \
-             sample project. Change these any time in Machine ▸ Machine Configuration and Job \
-             Setup."
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-set-up-start",
+            machine = machine,
+            size = size
         ));
     }
 
@@ -593,9 +593,8 @@ impl CutCraftApp {
         super::layout_choice::answer(&mut self.options, None);
         self.options.first_run_done = true;
         self.save_options();
-        self.status.set_message(
-            "Setup skipped. Help ▸ Run First-Time Setup Again asks the questions again.",
-        );
+        self.status
+            .set_message(&cut_craft_i18n::tr!("status-setup-skipped"));
     }
 }
 
