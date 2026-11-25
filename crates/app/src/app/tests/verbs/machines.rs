@@ -142,4 +142,37 @@ impl Harness {
     pub(in super::super) fn tool_database(&self) -> &ToolDatabase {
         &self.app.tools
     }
+
+    // ---- bits and materials ----
+
+    /// Puts `tool` in the Bit Library, as saving it there does.
+    pub(in super::super) fn given_tool(&mut self, tool: Tool) {
+        self.app.tools.put(tool);
+    }
+
+    /// Makes `material` the Bit Library's active material.
+    pub(in super::super) fn given_active_material(&mut self, material: &str) {
+        self.app.tools.material = material.into();
+    }
+
+    /// Opens the Materials Library.
+    pub(in super::super) fn open_materials_library(&mut self) {
+        let window = cut_craft_tool_database::materials::MaterialsWindow::new(
+            &self.app.materials,
+            &self.app.tools,
+        );
+        self.app.materials_window = Some(window);
+    }
+
+    /// The Materials Library's New Material.
+    pub(in super::super) fn new_material_in_library(&mut self) {
+        (self.app.materials_window.as_mut())
+            .expect("the Materials Library is open")
+            .new_material();
+    }
+
+    /// How many materials are kept.
+    pub(in super::super) fn materials_kept(&self) -> usize {
+        self.app.materials.materials.len()
+    }
 }
