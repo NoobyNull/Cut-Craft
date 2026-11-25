@@ -17,8 +17,10 @@ impl CutCraftApp {
             match files::load_materials(path) {
                 Ok(lib) => self.materials = lib,
                 Err(e) => {
-                    self.status
-                        .set_message(&format!("{e}; material changes will not be saved"));
+                    self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-materials-not-saved",
+                        error = e.to_string()
+                    ));
                     self.materials_unreadable = self.materials_path.take();
                 }
             }
@@ -84,18 +86,18 @@ impl CutCraftApp {
                         for line in &report {
                             log::warn!("joining a bit's per-material copies: {line}");
                         }
-                        let more = match report.len() {
-                            1 => String::new(),
-                            n => format!(" (and {} more; see the log)", n - 1),
-                        };
-                        self.status.set_message(&format!(
-                            "Bits listed once per material are now one bit each. {first}{more}"
+                        self.status.set_message(&cut_craft_i18n::tr!(
+                            "status-bits-joined",
+                            first = first.clone(),
+                            more = report.len() - 1
                         ));
                     }
                 }
                 Err(e) => {
-                    self.status
-                        .set_message(&format!("{e}; tool changes will not be saved"));
+                    self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-tools-not-saved",
+                        error = e.to_string()
+                    ));
                     self.tools_unreadable = self.tools_path.take();
                 }
             }

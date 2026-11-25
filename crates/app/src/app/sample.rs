@@ -49,13 +49,13 @@ impl CutCraftApp {
         self.screen = Screen::Job;
         self.view = View::TwoD;
         match self.sample_toolpaths() {
-            Ok(()) => self.status.set_message(
-                "Sample sign opened with its toolpaths made. Press Preview All Toolpaths on the \
-                 Toolpaths page to watch it cut",
-            ),
-            Err(e) => self
+            Ok(()) => self
                 .status
-                .set_message(&format!("The sample's toolpaths could not be made: {e}")),
+                .set_message(&cut_craft_i18n::tr!("status-sample-opened")),
+            Err(e) => self.status.set_message(&cut_craft_i18n::tr!(
+                "status-sample-toolpaths-not-made",
+                error = e.to_string()
+            )),
         }
         self.doc.selection = cut_craft_core::selection::Selection::new();
         self.form = None;

@@ -131,8 +131,10 @@ impl CutCraftApp {
             ));
         }
         if !warnings.is_empty() {
-            self.status
-                .set_message(&format!("Warning: {}", warnings.join("; ")));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-warning",
+                warnings = warnings.join("; ")
+            ));
         }
     }
 
@@ -305,8 +307,10 @@ impl CutCraftApp {
                                 |(id, _)| (*id, path.clone()),
                             );
                         files::export(&self.registry, id, &self.doc, &path).map(|()| {
-                            self.status
-                                .set_message(&format!("Exported {}", path.display()));
+                            self.status.set_message(&cut_craft_i18n::tr!(
+                                "status-exported",
+                                path = path.display().to_string()
+                            ));
                         })
                     }
                     None => Ok(()),
@@ -708,8 +712,10 @@ impl CutCraftApp {
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
-        self.status
-            .set_message(&format!("{} changed", cmd.meta().label));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-changed",
+            tool = crate::tool_names::name_of(&self.registry, id)
+        ));
         self.warn(&toolpaths, &notes);
         Ok(())
     }

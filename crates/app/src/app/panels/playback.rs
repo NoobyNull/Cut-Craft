@@ -406,9 +406,8 @@ impl CutCraftApp {
         }
         self.finish_playback();
         self.kept_playback = None;
-        self.status.set_message(
-            "The job changed, so the preview's controls closed: preview again to play it",
-        );
+        self.status
+            .set_message(&cut_craft_i18n::tr!("status-preview-closed-job-changed"));
     }
 
     /// Once Job Setup changes the block's size, thickness or place, the preview of the old
@@ -422,9 +421,8 @@ impl CutCraftApp {
         {
             (self.simulation, self.before_preview) = (None, None);
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-            self.status.set_message(
-                "Job Setup changed the material, so the preview starts again on the new block",
-            );
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-preview-new-material"));
         }
     }
 

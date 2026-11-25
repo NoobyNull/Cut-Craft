@@ -417,11 +417,12 @@ impl CutCraftApp {
             return;
         };
         if !go {
-            self.status.set_message(if ask.sending {
-                "Toolpaths not sent"
-            } else {
-                "Toolpaths not saved"
-            });
+            self.status
+                .set_message(&cut_craft_i18n::tr!(if ask.sending {
+                    "status-toolpaths-not-sent"
+                } else {
+                    "status-toolpaths-not-saved"
+                }));
             return;
         }
         // agreed to the problems shown, and no others
