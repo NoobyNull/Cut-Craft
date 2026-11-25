@@ -93,13 +93,6 @@ impl Harness {
             .collect()
     }
 
-    /// Opens the Rail's list of the tool group `name`, as clicking its button does.
-    pub(in super::super) fn open_rail_group(&mut self, name: &str) {
-        self.app.rail_group =
-            (self.app.tool_model().all_groups().iter()).position(|g| g.name == name);
-        assert!(self.app.rail_group.is_some(), "no tool group {name}");
-    }
-
     // ---- Did You Know? ----
 
     /// The tip the Did You Know? window shows, if it is open.
