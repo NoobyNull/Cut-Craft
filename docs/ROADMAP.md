@@ -5,6 +5,8 @@ is kept in `docs/feature-status-2026-11-01.md`.
 
 ## What 1.0 means
 
+**Target date: 1 January 2027** (set by Matthew on 2026-11-24).
+
 1.0 is "done fixing": the day all five goals below are met. New features start after 1.0;
 until then, work that does not serve a goal waits.
 
