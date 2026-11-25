@@ -184,4 +184,96 @@ impl Harness {
     ) -> Vec<cut_craft_core::preflight::Finding> {
         self.app.preflight(plan, changes)
     }
+
+    // ---- saving toolpaths: earlier files and the checks before cutting ----
+
+    /// Whether the machine in use has a tool changer to offer.
+    pub(in super::super) fn has_tool_changer(&self) -> bool {
+        self.app.has_tool_changer()
+    }
+
+    /// The checks Save Toolpaths runs on `plan`, once they have run.
+    pub(in super::super) fn save_checks(
+        &mut self,
+        plan: &[Vec<EntityId>],
+        changes: crate::files::ToolChanges,
+    ) -> Option<Vec<cut_craft_core::preflight::Finding>> {
+        self.app.save_checks(plan, changes).map(<[_]>::to_vec)
+    }
+
+    /// Save Toolpaths' window's choices, while it is open.
+    pub(in super::super) fn save_form(&self) -> SaveForm {
+        self.app.save_form.clone().expect("Save Toolpaths is open")
+    }
+
+    /// The checks before cutting for `form` through `post` as having found `found`.
+    pub(in super::super) fn given_checks_found(
+        &mut self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        found: Vec<cut_craft_core::preflight::Finding>,
+    ) {
+        self.app.save_checks = vec![SaveChecks {
+            plan: self.app.plan(form, post).expect("a plan"),
+            changes: form.changes,
+            revision: self.app.history.revision(),
+            machine: self.app.machines.active,
+            found: Some(found),
+        }];
+    }
+
+    /// Ticks the finding `message` as read, as its box on Save Toolpaths does.
+    pub(in super::super) fn tick_as_read(&mut self, message: &str) {
+        self.app.acknowledged.insert(message.to_owned());
+    }
+
+    /// Save or Send pressed with `form`: the post it saves through, or `None` when it
+    /// stops to ask (or cannot save).
+    pub(in super::super) fn ready_to_save(
+        &mut self,
+        form: &SaveForm,
+        sending: bool,
+    ) -> Option<cut_craft_post::Post> {
+        self.app.ready_to_save(form, sending)
+    }
+
+    /// Whether Save Anyway? is asked.
+    pub(in super::super) fn asking_save_anyway(&self) -> bool {
+        self.app.save_anyway.is_some()
+    }
+
+    /// Saves with `form` through `post` to `path`, asking first where an earlier save left
+    /// files of its own there.
+    pub(in super::super) fn save_over_earlier(
+        &mut self,
+        form: &SaveForm,
+        post: cut_craft_post::Post,
+        path: std::path::PathBuf,
+    ) {
+        self.app.save_over_earlier(form, post, path);
+    }
+
+    /// Send to Machine with `form` through `post`, doing `choice` with earlier files.
+    pub(in super::super) fn send_choosing(
+        &mut self,
+        form: &SaveForm,
+        post: cut_craft_post::Post,
+        choice: crate::options::EarlierGcode,
+    ) {
+        self.app.send_choosing(form, post, choice);
+    }
+
+    /// The question about an earlier save's files, while it is asked.
+    pub(in super::super) fn earlier_asked(&self) -> Option<&EarlierAsk> {
+        self.app.earlier_ask.as_ref()
+    }
+
+    /// Answers the earlier files question: `None` cancels; `remember` keeps the answer.
+    pub(in super::super) fn answer_earlier(
+        &mut self,
+        choice: Option<crate::options::EarlierGcode>,
+        remember: bool,
+    ) {
+        self.app.answer_earlier(choice, remember);
+    }
 }
