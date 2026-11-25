@@ -207,6 +207,7 @@ impl MachineManager {
             holder(ui, machine);
             tool_changer(ui, machine, None);
             keep_out(ui, machine);
+            protect(ui, machine);
             drill_bank(ui, machine);
             if let Some(asked) = g_code_folders(ui, machine) {
                 outcome = Some(asked);
@@ -955,6 +956,74 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
             machine.keep_out.push(crate::machine::Zone::default());
         }
     });
+}
+
+/// Protect the Machine: the checks that refuse a job that could damage the machine, each on
+/// unless switched off here, and how deep a cut may go into the spoilboard. Folded to one
+/// line saying which are on.
+fn protect(ui: &mut egui::Ui, machine: &mut Machine) {
+    let (per, length) = if machine.inches {
+        (INCH, " in")
+    } else {
+        (1.0, " mm")
+    };
+    let off = machine.protect.switched_off();
+    let summary = if off.is_empty() {
+        "Protect the Machine: every check on".to_owned()
+    } else {
+        format!("Protect the Machine: switched off: {}", off.join(", "))
+    };
+    egui::CollapsingHeader::new(summary)
+        .id_salt("machine_protect")
+        .show(ui, |ui| {
+            ui.weak(
+                "Save Toolpaths, Send to Machine and the Web API refuse a job these checks \
+                 find, with no Save Anyway: it could damage the machine. Switching one off \
+                 here is the only way past it, and the G-code then says it was off",
+            );
+            let protect = &mut machine.protect;
+            let rows = [
+                (
+                    &mut protect.keep_out,
+                    "Keep-out zones",
+                    "Refuse a cut into a keep-out zone, the job's or the machine's",
+                ),
+                (
+                    &mut protect.bed,
+                    "Bed size",
+                    "Refuse toolpaths bigger than the bed (each tile of a tiled job on its own)",
+                ),
+                (
+                    &mut protect.z_travel,
+                    "Z travel",
+                    "Refuse toolpaths going further up and down than the Z axis travels",
+                ),
+                (
+                    &mut protect.spoilboard,
+                    "Spoilboard depth",
+                    "Refuse a cut deeper into the spoilboard than allowed below",
+                ),
+            ];
+            for (on, label, hint) in rows {
+                ui.checkbox(on, label).on_hover_hint(hint);
+            }
+            ui.horizontal(|ui| {
+                let label = "Allowed into spoilboard";
+                ui.label(label).on_hover_hint(
+                    "How far below the material a cut may go into the spoilboard; deeper is \
+                     refused while Spoilboard depth is ticked",
+                );
+                measure(ui, label, &mut protect.spoilboard_depth, per, length);
+            });
+            ui.checkbox(
+                &mut protect.warn_spoilboard,
+                "Warn about cuts more than 1 mm into the spoilboard",
+            )
+            .on_hover_hint(
+                "Within the depth allowed, a cut more than 1 mm below the material is a \
+                 warning to read and tick: a wrong material thickness shows first this way",
+            );
+        });
 }
 
 /// G-code Files: where the machine's programs are saved on this computer, and the folder

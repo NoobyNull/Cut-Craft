@@ -35,6 +35,9 @@ pub(super) struct Output<'a> {
 /// What the checks before cutting allow with what they found.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Verdict {
+    /// Not written, and no Save Anyway: a risk of damage to the machine, each said; only
+    /// switching its check off in Machine Configuration lets it past.
+    Refused(Vec<String>),
     /// Asked first (Save Anyway): every problem found, the question shows them all.
     Ask(Asking),
     /// Written.
@@ -245,6 +248,21 @@ impl Output<'_> {
         Ok(texts)
     }
 
+    /// What the G-code says when the machine's protection had checks switched off as it was
+    /// made: which, for whoever runs it; `None` with every check on, or no machine.
+    pub(super) fn protection_off(&self) -> Option<String> {
+        let machine = self.machine?;
+        let off = machine.protect.switched_off();
+        (!off.is_empty()).then(|| {
+            format!(
+                "PROTECTION OFF: the checks for {} were switched off for {} in Machine \
+                 Configuration as this was made",
+                off.join(", "),
+                machine.name
+            )
+        })
+    }
+
     /// What saving says once `written` are saved beside `path`.
     pub(super) fn saved_message(&self, written: &[PathBuf], path: &Path) -> String {
         saved_message(written, path, self.doc.tiling.is_some())
@@ -296,24 +314,51 @@ pub(super) fn errors(found: &[Finding]) -> Vec<String> {
         .collect()
 }
 
-/// Whether every problem in `found`, errors too, was ticked as read.
+/// The risks of damage to the machine in `found`: never saved, sent or made, whatever is
+/// ticked or answered.
+pub(super) fn refused(found: &[Finding]) -> Vec<String> {
+    (found.iter())
+        .filter(|f| f.severity == Severity::Damage)
+        .map(|f| f.message.clone())
+        .collect()
+}
+
+/// What refusing `damage` says, in the status bar and to a script: nothing saved, why, and
+/// the only way past.
+pub(super) fn refusal(damage: &[String]) -> String {
+    format!(
+        "Nothing saved: this could damage the machine. {}. Put it right, or switch the check \
+         off in Machine Configuration's Protect the Machine",
+        damage.join(". ")
+    )
+}
+
+/// Whether every problem in `found` that is ticked, errors too, was ticked as read (a risk
+/// of damage to the machine has no tick: see [`refused`]).
 pub(super) fn all_acknowledged(
     found: &[Finding],
     acknowledged: &std::collections::BTreeSet<String>,
 ) -> bool {
-    found.iter().all(|f| acknowledged.contains(&f.message))
+    (found.iter())
+        .filter(|f| f.severity != Severity::Damage)
+        .all(|f| acknowledged.contains(&f.message))
 }
 
 /// What the checks before cutting allow with what they `found`: asked about (Save Anyway)
 /// unless every problem was ticked as read in `acknowledged`, or `accepted` already answers
 /// Save Anyway for each of them. Errors and the collet or spindle hitting the material
-/// ([`Severity::MustAsk`]) are asked about even when ticked: every save asks again. Nothing
-/// is refused: the operator decides.
+/// ([`Severity::MustAsk`]) are asked about even when ticked: every save asks again. Only a
+/// risk of damage to the machine is refused, whatever was ticked or answered: otherwise
+/// the operator decides.
 pub(super) fn verdict(
     found: &[Finding],
     acknowledged: &std::collections::BTreeSet<String>,
     accepted: &[String],
 ) -> Verdict {
+    let refused = refused(found);
+    if !refused.is_empty() {
+        return Verdict::Refused(refused);
+    }
     let ticked = all_acknowledged(found, acknowledged);
     let must_ask = found
         .iter()
@@ -335,19 +380,28 @@ pub(super) fn verdict(
     })
 }
 
-/// `texts` with the `errors` they were saved with (Save Anyway) said in comments at the top
-/// of each file, before its first command, so whoever runs it sees them: in the post's own
-/// comment style (`;` or brackets, as its header writes them). Unchanged without errors.
-pub(super) fn marked(texts: Vec<(PathBuf, String)>, errors: &[String]) -> Vec<(PathBuf, String)> {
-    if errors.is_empty() {
+/// `texts` with the `errors` they were saved with (Save Anyway), and which of the
+/// machine's protection was switched off (`protection_off`, see
+/// [`Output::protection_off`]), said in comments at the top of each file, before its first
+/// command, so whoever runs it sees them: in the post's own comment style (`;` or
+/// brackets, as its header writes them). Unchanged without either.
+pub(super) fn marked(
+    texts: Vec<(PathBuf, String)>,
+    errors: &[String],
+    protection_off: Option<&str>,
+) -> Vec<(PathBuf, String)> {
+    let mut lines: Vec<String> = protection_off.map(str::to_owned).into_iter().collect();
+    if !errors.is_empty() {
+        lines.push(
+            "SAVED WITH ERRORS: the checks before cutting found these, and Save Anyway was \
+             chosen"
+                .to_owned(),
+        );
+        lines.extend(cut_craft_core::notes::gcode_lines(&errors.join("\n"), &[]));
+    }
+    if lines.is_empty() {
         return texts;
     }
-    let lines: Vec<String> = std::iter::once(
-        "SAVED WITH ERRORS: the checks before cutting found these, and Save Anyway was chosen"
-            .to_owned(),
-    )
-    .chain(cut_craft_core::notes::gcode_lines(&errors.join("\n"), &[]))
-    .collect();
     (texts.into_iter())
         .map(|(path, text)| {
             // the post's own line ending: CR LF, LF, or CR alone

@@ -556,8 +556,10 @@ impl CutCraftApp {
         let texts = self
             .with_picked(gcode, |app| app.toolpath_texts(&form, &post, &path, made))
             .map_err(|e| ApiError::refused(capital(&e)))?;
-        // saved past errors: said at the top of each file
-        let texts = super::output::marked(texts, &errors);
+        // saved past errors, or with the machine's protection switched off: said at the top
+        // of each file
+        let off = self.output().protection_off();
+        let texts = super::output::marked(texts, &errors, off.as_deref());
         if saving.is_some() {
             // an earlier save there (the same names, or the tile, numbered and side files
             // an earlier layout left) is written over only when asked, and then as Save
@@ -858,15 +860,20 @@ fn web_verdict(found: &[Finding], gcode: &Gcode) -> Result<(Vec<String>, Vec<Str
         })
         .map(|f| f.message.clone())
         .collect();
+    let refused = super::output::refused(found);
     let warnings: Vec<String> = (found.iter())
-        .filter(|f| !errors.contains(&f.message))
+        .filter(|f| !errors.contains(&f.message) && !refused.contains(&f.message))
         .map(|f| f.message.clone())
         .collect();
     let verdict = super::output::verdict(found, &std::collections::BTreeSet::default(), &accepted);
+    if let super::output::Verdict::Refused(damage) = verdict {
+        // nothing a script sends gets past it: only Machine Configuration does
+        return Err(ApiError::refused(super::output::refusal(&damage)));
+    }
     if let super::output::Verdict::Ask(asking) = verdict {
         let (said, flag) = if !asking.errors.is_empty() && !gcode.accept_errors {
             let what = if asking.wont_run.is_empty() {
-                "errors that can break a bit or hit a clamp"
+                "errors that can break a bit or spoil the job"
             } else {
                 "errors: the job will not run as saved"
             };

@@ -158,6 +158,7 @@ const SCENES: &[Scene] = &[
         }
     }),
     ("save-anyway-errors", save_anyway_errors),
+    ("machine-damage", machine_damage),
     ("tool-number-taken", tool_number_taken),
     // Help: Post-Processor Management (the filters, then Edit Capabilities)
     ("post-filters", |app, ctx| post_window(app, ctx, false)),
@@ -533,15 +534,37 @@ fn save_anyway_errors(app: &mut CutCraftApp, _: &egui::Context) {
     app.gcode_view = None;
     let wont_run = "Profile: End Mill has no feed rate, so the machine would not move while \
                     cutting. Set the feed rate in the toolpath's tool settings";
-    let clamp = "Pocket cuts into the keep-out zone Clamp 1";
+    let crash = "Pocket: a rapid move at X 40 Y 20 goes 2.0 mm into the material. Raise the \
+                 clearance (Z1) in Job Setup, or recalculate the toolpath";
     let warning = "Pocket is out of date: recalculate it so it cuts what the design shows now";
-    app.acknowledged.insert(clamp.to_owned());
+    app.acknowledged.insert(crash.to_owned());
     let asking = super::output::Asking {
-        problems: [wont_run, clamp, warning].map(str::to_owned).to_vec(),
-        errors: [wont_run, clamp].map(str::to_owned).to_vec(),
+        problems: [wont_run, crash, warning].map(str::to_owned).to_vec(),
+        errors: [wont_run, crash].map(str::to_owned).to_vec(),
         wont_run: vec![wont_run.to_owned()],
     };
     app.ask_save_anyway(&form, asking, false);
+}
+
+/// Save Toolpaths with a job bigger than the bed: refused, with no tick (Protect the
+/// Machine).
+fn machine_damage(app: &mut CutCraftApp, _: &egui::Context) {
+    app.save_anyway = None;
+    app.gcode_view = None;
+    app.save_form = Some(app.default_save_form());
+    let bed = cut_craft_core::preflight::Finding::damage(
+        cut_craft_core::preflight::Check::Bed,
+        "The toolpaths cover 900 mm × 600 mm, more than the bed of Shop Router (800 mm × \
+         600 mm). Make the job smaller, split it with Toolpath Tiling (or make its tiles \
+         smaller), or pick the right machine"
+            .to_owned(),
+    );
+    for checks in &mut app.save_checks {
+        if let Some(found) = &mut checks.found {
+            found.retain(|f| f.check != cut_craft_core::preflight::Check::Bed);
+            found.insert(0, bed.clone());
+        }
+    }
 }
 
 /// The Tool Database: a bit given a tool number another bit has.

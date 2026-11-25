@@ -251,9 +251,10 @@ impl CutCraftApp {
         let vars = self.note_variables();
         let output = self.output();
         let errors = &self.saving_errors;
+        let off = output.protection_off();
         let texts = || {
             let texts = output.texts(form, post, path, made, &vars)?;
-            Ok(output::marked(texts, errors))
+            Ok(output::marked(texts, errors, off.as_deref()))
         };
         match output::write_over(texts, path, earlier, archiving, made) {
             Ok(over) => {
@@ -348,6 +349,10 @@ impl CutCraftApp {
             return None;
         };
         match output::verdict(&found, &self.acknowledged, &accepted) {
+            output::Verdict::Refused(damage) => {
+                self.status.set_message(&output::refusal(&damage));
+                None
+            }
             output::Verdict::Ask(asking) => {
                 // asked over the window: the answer saves (or sends) again
                 self.ask_save_anyway(form, asking, sending);
@@ -420,6 +425,7 @@ impl CutCraftApp {
             .filter(|m| !errors.contains(m))
             .collect();
         match output::verdict(&found, &self.acknowledged, &warnings) {
+            output::Verdict::Refused(damage) => Err(output::refusal(&damage)),
             output::Verdict::Ask(asking) => Err(format!(
                 "Save Anyway asks first: {}",
                 asking.errors.join("; ")
@@ -594,7 +600,8 @@ impl CutCraftApp {
         self.still_as_checked()?;
         let made = chrono::Local::now().naive_local();
         let texts = self.toolpath_texts(form, post, path, made)?;
-        output::write(&output::marked(texts, &self.saving_errors))
+        let off = self.output().protection_off();
+        output::write(&output::marked(texts, &self.saving_errors, off.as_deref()))
     }
 
     /// Whether the job and machine are still as the save under way was checked for: an
@@ -646,6 +653,7 @@ impl CutCraftApp {
                     library: None,
                     holding: m.holding(),
                     rotary: m.has_rotary().then_some(m.rotary_axis),
+                    protect: m.protect,
                 });
         limits.left = Some(self.options.confirmations.left());
         limits

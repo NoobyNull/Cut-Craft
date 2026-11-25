@@ -112,9 +112,9 @@ fn found_list(ui: &mut egui::Ui, checks: &Checks) {
         }
         Checks::Found(found) => {
             ui.label(tr!("gcode-view-checks-found"));
-            // errors first, as they need the operator most
+            // what could damage the machine first, then errors, as they need the operator most
             let mut sorted: Vec<_> = found.iter().collect();
-            sorted.sort_by_key(|f| f.severity != Severity::Error);
+            sorted.sort_by_key(|f| std::cmp::Reverse(f.severity));
             let height = ui.spacing().interact_size.y * 5.0;
             egui::ScrollArea::vertical()
                 .id_salt("gcode_findings")
@@ -122,7 +122,12 @@ fn found_list(ui: &mut egui::Ui, checks: &Checks) {
                 .show(ui, |ui| {
                     for f in sorted {
                         let message = f.message.clone();
-                        if f.severity == Severity::Error {
+                        if f.severity == Severity::Damage {
+                            ui.colored_label(
+                                visuals.error_fg_color,
+                                tr!("gcode-view-damage", message = message),
+                            );
+                        } else if f.severity == Severity::Error {
                             ui.colored_label(
                                 visuals.error_fg_color,
                                 tr!("gcode-view-error", message = message),
@@ -267,12 +272,17 @@ impl CutCraftApp {
             });
             ui.weak(tr!("gcode-view-what-saving-would-write-through"));
             let (_, text) = &files[view.shown];
+            // what could damage the machine is never copied out, as it is never saved
+            let refused = matches!(&checks, Checks::Found(found)
+                if !super::output::refused(found).is_empty());
             ui.horizontal(|ui| {
-                if ui
-                    .button(tr!("gcode-view-copy-all"))
-                    .on_hover_hint(tr!("gcode-view-copy-this-file-s-g"))
-                    .clicked()
-                {
+                let copy = ui.add_enabled(!refused, egui::Button::new(tr!("gcode-view-copy-all")));
+                let copy = if refused {
+                    copy.on_disabled_hover_text(tr!("gcode-view-refused-copy"))
+                } else {
+                    copy.on_hover_hint(tr!("gcode-view-copy-this-file-s-g"))
+                };
+                if copy.clicked() {
                     ui.ctx().copy_text(text.clone());
                 }
                 save = ui

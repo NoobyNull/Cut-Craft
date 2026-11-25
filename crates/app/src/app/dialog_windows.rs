@@ -193,7 +193,11 @@ impl CutCraftApp {
             ui.add_space(ui.spacing().item_spacing.y);
             // ticked in the list this frame counts at once
             let unticked = found.as_deref().is_some_and(|f| !self.all_acknowledged(f));
-            let ready = plan.is_ok() && found.is_some() && !unticked;
+            // what could damage the machine is never saved or sent, ticked or not
+            let refused = found
+                .as_deref()
+                .is_some_and(|f| !super::output::refused(f).is_empty());
+            let ready = plan.is_ok() && found.is_some() && !unticked && !refused;
             pressed = self.save_buttons(ui, ready, unticked);
         });
         if again {

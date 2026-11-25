@@ -266,7 +266,7 @@ fn files_saved_past_errors_say_so_at_the_top() {
         PathBuf::from("a.nc"),
         "; Made by Cut Craft\n; Job: sign\nG21\nG0 X0 Y0\nM30\n".to_owned(),
     )];
-    let marked_text = &marked(semicolons.clone(), &errors)[0].1;
+    let marked_text = &marked(semicolons.clone(), &errors, None)[0].1;
     let lines: Vec<&str> = marked_text.lines().collect();
     assert_eq!(lines[..2], ["; Made by Cut Craft", "; Job: sign"]);
     assert!(lines[2].starts_with("; SAVED WITH ERRORS"), "{marked_text}");
@@ -277,7 +277,7 @@ fn files_saved_past_errors_say_so_at_the_top() {
         PathBuf::from("a.nc"),
         "(Made by Cut Craft)\nG21\n".to_owned(),
     )];
-    let text = &marked(brackets, &errors)[0].1;
+    let text = &marked(brackets, &errors, None)[0].1;
     assert!(
         text.lines()
             .nth(1)
@@ -286,13 +286,13 @@ fn files_saved_past_errors_say_so_at_the_top() {
     );
     // a post ending its lines with CR alone keeps them so
     let cr = vec![(PathBuf::from("a.nc"), "; Header\rG21\rM30\r".to_owned())];
-    let text = &marked(cr, &errors)[0].1;
+    let text = &marked(cr, &errors, None)[0].1;
     assert!(!text.contains('\n'), "{text:?}");
     let lines: Vec<&str> = text.split('\r').collect();
     assert!(lines[1].starts_with("; SAVED WITH ERRORS"), "{text:?}");
     assert_eq!(lines[3], "G21", "{text:?}");
     // nothing said when saved without errors
-    assert_eq!(marked(semicolons.clone(), &[]), semicolons);
+    assert_eq!(marked(semicolons.clone(), &[], None), semicolons);
 }
 
 #[test]
@@ -477,4 +477,63 @@ fn a_failed_save_puts_the_earlier_files_back() {
     );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "old");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_risk_of_damage_to_the_machine_is_refused_whatever_is_ticked_or_answered() {
+    let damage = Finding {
+        severity: Severity::Damage,
+        message: "The toolpaths cover 800 mm × 600 mm, more than the bed".into(),
+        check: Check::Bed,
+    };
+    let found = [
+        damage.clone(),
+        finding(Severity::Warning, "Text is out of date"),
+    ];
+    let everything: Vec<String> = found.iter().map(|f| f.message.clone()).collect();
+    let ticked: BTreeSet<String> = everything.iter().cloned().collect();
+    assert_eq!(
+        verdict(&found, &ticked, &everything),
+        Verdict::Refused(vec![damage.message.clone()]),
+        "neither ticks nor Save Anyway get past it"
+    );
+    // it has no tick of its own: the rest ticked is all ticked
+    let warning_ticked: BTreeSet<String> = ["Text is out of date".to_owned()].into();
+    assert!(all_acknowledged(&found, &warning_ticked));
+    assert_eq!(refused(&found), std::slice::from_ref(&damage.message));
+    let said = refusal(&refused(&found));
+    assert!(
+        said.starts_with("Nothing saved: this could damage the machine. The toolpaths cover")
+            && said
+                .ends_with("switch the check off in Machine Configuration's Protect the Machine"),
+        "{said}"
+    );
+}
+
+#[test]
+fn files_made_with_the_machines_protection_off_say_so_at_the_top() {
+    let (mut f, _) = Fixture::new();
+    assert_eq!(
+        f.output().protection_off(),
+        None,
+        "no machine: nothing to say"
+    );
+    let mut machine = Machine {
+        name: "Shapeoko".into(),
+        ..Machine::default()
+    };
+    f.machine = Some(machine.clone());
+    assert_eq!(f.output().protection_off(), None, "every check on");
+    machine.protect.bed = false;
+    machine.protect.spoilboard = false;
+    f.machine = Some(machine);
+    let off = f.output().protection_off().unwrap();
+    assert_eq!(
+        off,
+        "PROTECTION OFF: the checks for bed size, spoilboard depth were switched off for \
+         Shapeoko in Machine Configuration as this was made"
+    );
+    let texts = vec![(PathBuf::from("a.nc"), "(Header)\nG21\n".to_owned())];
+    let text = &marked(texts, &[], Some(&off))[0].1;
+    assert_eq!(text, &format!("(Header)\n({off})\nG21\n"));
 }

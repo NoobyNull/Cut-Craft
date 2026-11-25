@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-23
-see-also: toolpaths, save_toolpaths
+reviewed: 2026-11-25
+see-also: toolpaths, save_toolpaths, protect_the_machine
 ---
 
 # Checks before cutting
@@ -28,7 +28,10 @@ a block of material to look for crashes. **Cancel** stops it; **Check Again** ru
 The line at the top counts them up, such as *✔ 15 passed · ⚠ 3 to read · 2 not checked*.
 Each check then shows how it came out, with what needs you first:
 
-- **✖ Must fix** (red): something that breaks a bit, hits a clamp or stops the job, such
+- **⛔ Could damage the machine** (red): a cut into a keep-out zone, past the bed or the Z
+  travel, or too deep into the spoilboard. It has **no tick**: nothing is saved or sent
+  while it is so. Put it right, or see [Protect the Machine](help:protect_the_machine).
+- **✖ Must fix** (red): something that breaks a bit or stops the job, such
   as a rapid move that would crash into the material. Put it right if you can. If you
   mean it, **tick it** and save anyway (see below).
 - **⚠ To read** (amber): something you should know before cutting. Read it and **tick it**.
@@ -45,7 +48,8 @@ with how to fix what it found.
 ![Every warning ticked, Save Toolpaths ready](pictures/checks/checks-ticked.png)
 
 **Save Toolpaths...** and **Send to Machine** stay greyed until every ✖ and ⚠ is ticked.
-Ticking says *I have read this, and it is what I want*. Nothing is refused: you decide.
+Ticking says *I have read this, and it is what I want*: you decide. Only a ⛔ Could
+damage the machine is refused, whatever is ticked.
 
 ## Saving with errors
 

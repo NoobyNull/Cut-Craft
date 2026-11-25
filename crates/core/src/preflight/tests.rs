@@ -401,7 +401,7 @@ fn each_finding_names_the_check_that_found_it() {
 }
 
 #[test]
-fn cutting_into_a_keep_out_zone_must_be_fixed() {
+fn cutting_into_a_keep_out_zone_is_refused_unless_switched_off() {
     let mut doc = job();
     let clamp = crate::testing::square(90.0, 40.0, 20.0);
     doc.keep_out = vec![crate::keep_out::KeepOutZone::new("Clamp 1", clamp)];
@@ -412,12 +412,27 @@ fn cutting_into_a_keep_out_zone_must_be_fixed() {
     );
     let zone: Vec<&Finding> = found.iter().filter(|f| f.check == Check::KeepOut).collect();
     assert_eq!(zone.len(), 1, "{found:?}");
-    assert_eq!(zone[0].severity, Severity::Error);
+    assert_eq!(zone[0].severity, Severity::Damage, "a risk to the machine");
     assert!(
         zone[0].message.contains("\"Clamp 1\""),
         "{}",
         zone[0].message
     );
+    // switched off for the machine: not checked, and the list says why
+    let off = Limits {
+        name: "Shapeoko".into(),
+        protect: Protect {
+            keep_out: false,
+            ..Protect::default()
+        },
+        ..Limits::default()
+    };
+    let crossing = slot("Slot", 50.0, 20.0, 180.0, 3.0);
+    assert!(!checks_of(&check(&doc, &[&crossing], &off)).contains(&Check::KeepOut));
+    assert!(not_checked(&doc, &[&crossing], &off).contains(&(
+        Check::KeepOut,
+        "Switched off for Shapeoko in Machine Configuration".to_owned()
+    )));
     // clear of the zone: nothing to say
     let found = check(
         &doc,
@@ -580,6 +595,7 @@ fn checks_that_cannot_be_made_say_why() {
         library: Some(std::collections::BTreeMap::new()),
         holding: crate::collision::Holding::default(),
         rotary: None,
+        protect: Protect::default(),
     };
     let skipped = not_checked(&job(), &[&slot], &limits);
     assert!(
@@ -875,9 +891,10 @@ fn the_machine_limits_are_checked() {
         library: None,
         holding: crate::collision::Holding::default(),
         rotary: None,
+        protect: Protect::default(),
     };
     let found = check(&job(), &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)], &limits);
-    let errors = messages(&found, Severity::Error);
+    let errors = messages(&found, Severity::Damage);
     assert_eq!(errors.len(), 2, "{found:?}");
     assert!(
         errors
@@ -980,11 +997,122 @@ fn a_cut_well_into_the_spoilboard_is_flagged() {
     let deep = slot("Cut out", 50.0, 20.0, 180.0, 21.0);
     let found = check(&job(), &[&deep], &Limits::default());
     assert!(
-        messages(&found, Severity::Warning)
+        messages(&found, Severity::Damage)
             .iter()
             .any(|m| m.contains("3.0 mm below the material")),
+        "past the 1 mm allowed unless set: {found:?}"
+    );
+}
+
+#[test]
+fn bigger_than_the_bed_or_the_z_travel_is_refused_unless_switched_off() {
+    let mut limits = Limits {
+        name: "Desktop".into(),
+        bed: [100.0, 100.0],
+        z_travel: 6.0,
+        ..Limits::default()
+    };
+    let wide = slot("Slot", 50.0, 20.0, 180.0, 3.0);
+    let refused = |limits: &Limits| {
+        (check(&job(), &[&wide], limits).into_iter())
+            .filter(|f| f.severity == Severity::Damage)
+            .map(|f| f.check)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(refused(&limits), [Check::Bed, Check::ZTravel]);
+    limits.protect.bed = false;
+    assert_eq!(refused(&limits), [Check::ZTravel]);
+    limits.protect.z_travel = false;
+    assert_eq!(refused(&limits), []);
+    let skipped = not_checked(&job(), &[&wide], &limits);
+    for c in [Check::Bed, Check::ZTravel] {
+        assert!(
+            skipped.contains(&(
+                c,
+                "Switched off for Desktop in Machine Configuration".into()
+            )),
+            "{skipped:?}"
+        );
+    }
+    assert_eq!(
+        limits.protect.switched_off(),
+        ["bed size", "Z travel"],
+        "named for the G-code"
+    );
+}
+
+#[test]
+fn a_cut_deeper_into_the_spoilboard_than_the_machine_allows_is_refused() {
+    let mut limits = Limits {
+        name: "Desktop".into(),
+        ..Limits::default()
+    };
+    let spoilboard = |depth: f64, limits: &Limits| {
+        (check(
+            &job(),
+            &[&slot("Cut out", 50.0, 20.0, 180.0, depth)],
+            limits,
+        )
+        .into_iter())
+        .filter(|f| f.check == Check::Spoilboard)
+        .map(|f| f.severity)
+        .collect::<Vec<_>>()
+    };
+    // 1 mm allowed unless set: through by a millimetre is fine, past it refused
+    assert_eq!(spoilboard(19.0, &limits), []);
+    assert_eq!(spoilboard(19.5, &limits), [Severity::Damage]);
+    // 3 mm allowed: past 1 mm a warning to tick, past 3 mm refused
+    limits.protect.spoilboard_depth = 3.0;
+    assert_eq!(spoilboard(19.5, &limits), [Severity::Warning]);
+    assert_eq!(spoilboard(21.5, &limits), [Severity::Damage]);
+    let refusal = check(
+        &job(),
+        &[&slot("Cut out", 50.0, 20.0, 180.0, 21.5)],
+        &limits,
+    );
+    assert!(
+        refusal[0].message.contains(
+            "3.5 mm below the material, deeper into the spoilboard than the 3.0 mm Desktop allows"
+        ),
+        "{refusal:?}"
+    );
+    // the warning is a setting of its own
+    limits.protect.warn_spoilboard = false;
+    assert_eq!(spoilboard(19.5, &limits), []);
+    // switched off: never refused, and the list says why
+    limits.protect.spoilboard = false;
+    assert_eq!(spoilboard(30.0, &limits), []);
+    let skipped = not_checked(&job(), &[], &limits);
+    assert!(
+        skipped.iter().any(|(c, _)| *c == Check::Spoilboard),
+        "{skipped:?}"
+    );
+}
+
+#[test]
+fn a_tiled_job_is_kept_out_of_the_machines_zones_where_each_tile_cuts() {
+    let mut doc = job();
+    doc.tiling = Some(crate::tiling::Tiling {
+        width: 100.0,
+        height: 200.0,
+        overlap: 0.0,
+        ..crate::tiling::Tiling::default()
+    });
+    // a clamp on the bed at X 30-40: the second tile's cut at X 130-140 is written there
+    let clamp = crate::testing::square(30.0, 40.0, 10.0);
+    doc.machine_keep_out = vec![crate::keep_out::KeepOutZone::new("Bed clamp", clamp)];
+    let second_tile = slot("Slot", 45.0, 130.0, 140.0, 3.0);
+    let found = check(&doc, &[&second_tile], &Limits::default());
+    assert!(
+        found
+            .iter()
+            .any(|f| f.check == Check::KeepOut && f.severity == Severity::Damage),
         "{found:?}"
     );
+    // where the job is, unmoved, the cut is clear of the clamp: untiled, nothing
+    doc.tiling = None;
+    let found = check(&doc, &[&second_tile], &Limits::default());
+    assert!(!checks_of(&found).contains(&Check::KeepOut), "{found:?}");
 }
 
 #[test]

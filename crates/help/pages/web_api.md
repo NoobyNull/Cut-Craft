@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-23
-see-also: updates, smooth_selected_components, component_properties
+reviewed: 2026-11-25
+see-also: updates, smooth_selected_components, component_properties, protect_the_machine
 ---
 
 # Web API
@@ -179,6 +179,10 @@ Toolpaths page's buttons, each with its progress window as usual.
     `"accept_errors": true` as well, which is like ticking each error in **Save Anyway**.
     When the job would not run as saved, the answer says so. The files then say at the
     top what they were saved with.
+  - Something that could damage the machine (⛔: a keep-out zone, past the bed or the Z
+    travel, too deep into the spoilboard) is always refused, whatever the script sends.
+    Only switching its check off in the machine's
+    [Protect the Machine](help:protect_the_machine) lets it past.
   - The answer lists `"warnings"` and `"errors"` it was made past, and `"left_out"`: the
     toolpaths with no moves, which have nothing to write.
 

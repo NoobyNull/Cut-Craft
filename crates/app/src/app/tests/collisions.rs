@@ -945,7 +945,7 @@ fn the_keep_out_check_at_saving_checks_the_moves_that_are_saved() {
     h.app.options.toolpaths.tolerance_2d = 0.1;
     let plan = vec![vec![id]];
     assert_eq!(h.app.not_kept_out(&h.app.doc, &plan), [] as [String; 0]);
-    // the checks before cutting check the moves as saved, thinned: Must fix
+    // the checks before cutting check the moves as saved, thinned: a risk to the machine
     let found = h
         .app
         .preflight(&plan, crate::files::ToolChanges::SeparateFiles);
@@ -955,7 +955,7 @@ fn the_keep_out_check_at_saving_checks_the_moves_that_are_saved() {
         .expect("the thinned cut enters the clamp's zone");
     assert_eq!(
         keep_out.severity,
-        cut_craft_core::preflight::Severity::Error
+        cut_craft_core::preflight::Severity::Damage
     );
     assert!(keep_out.message.contains("Clamp 1"), "{}", keep_out.message);
 }

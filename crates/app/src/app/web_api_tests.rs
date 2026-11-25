@@ -1303,3 +1303,28 @@ fn a_script_makes_g_code_past_errors_only_when_it_says_so() {
     assert!(gcode.contains("SAVED WITH ERRORS"), "{gcode}");
     assert!(gcode.contains("no feed rate"), "{gcode}");
 }
+
+#[test]
+fn a_script_never_makes_g_code_that_could_damage_the_machine() {
+    let (mut h, at, _) = with_a_toolpath();
+    // a keep-out zone across the whole job: every cut goes into it
+    let zone = cut_craft_core::testing::square(-1000.0, -1000.0, 3000.0);
+    h.app.doc.keep_out = vec![cut_craft_core::keep_out::KeepOutZone::new("Clamp 1", zone)];
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "accept_errors": true, "accept_warnings": true })),
+    );
+    assert_eq!(status, 409, "{e}");
+    let said = e["error"].as_str().unwrap();
+    assert!(
+        said.contains("could damage the machine") && said.contains("\"Clamp 1\""),
+        "{e}"
+    );
+    assert!(
+        said.contains("Protect the Machine"),
+        "the only way past: {e}"
+    );
+}
