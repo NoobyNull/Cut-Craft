@@ -194,7 +194,12 @@ impl CutCraftApp {
             .show(ui.ctx(), |ui| {
                 frame.show(ui, |ui| {
                     cut_craft_bug_report::mark(ui, "Canvas toolbar");
-                    self.toolbar_strip(ui, n, Strip::Down);
+                    // down to just above the chips; a longer toolbar scrolls
+                    let row = ui.spacing().interact_size.y;
+                    let room = ui.ctx().content_rect().bottom() - at.y - 3.0 * row;
+                    egui::ScrollArea::vertical()
+                        .max_height(room.max(row))
+                        .show(ui, |ui| self.toolbar_strip(ui, n, Strip::Down));
                 });
             });
     }
@@ -502,7 +507,10 @@ impl CutCraftApp {
             }
         }
         let dropped = response.dnd_release_payload::<Dragged>()?;
-        over(&dropped).then(|| format!("{}move:{n}:{}:{at}", toolbars::ACTION, dropped.at))
+        // the line is drawn before this item, and the move takes the dragged one out first,
+        // so one dragged from before it goes in one place earlier
+        let to = if dropped.at < at { at - 1 } else { at };
+        over(&dropped).then(|| format!("{}move:{n}:{}:{to}", toolbars::ACTION, dropped.at))
     }
 
     /// The floating toolbars, each a small strip under its name that can be dragged

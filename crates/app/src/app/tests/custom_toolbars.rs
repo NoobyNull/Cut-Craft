@@ -240,3 +240,39 @@ fn deleting_a_toolbar_from_its_tab_leaves_the_others() {
     assert_eq!(names, ["My Tools 2"]);
     assert!(h.text_at("My Tools 2").is_some(), "its tab is still there");
 }
+
+#[test]
+fn a_tool_dragged_later_lands_before_the_one_it_is_dropped_on() {
+    let mut h = with_toolbar(WindowLayout::Rail);
+    for id in ["draw_rectangle", "draw_ellipse"] {
+        h.app.invoke(&h.ctx, &format!("toolbar:add:0:tool:{id}"));
+    }
+    h.app.toolbars.rail = Some(0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let circle = h.text_at("Draw Circle").expect("listed");
+    let ellipse = h.text_at("Draw Ellipse").expect("listed");
+    h.drag(circle, ellipse);
+    let ids: Vec<String> = h.app.options.toolbars[0]
+        .items
+        .iter()
+        .map(Item::key)
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "tool:draw_rectangle",
+            "tool:draw_circle",
+            "tool:draw_ellipse"
+        ]
+    );
+}
+
+#[test]
+fn applying_options_keeps_a_toolbar_made_while_they_were_open() {
+    let mut h = Harness::new();
+    let draft = h.app.options.clone();
+    h.app.invoke(&h.ctx, "toolbar:new:tool:draw_circle");
+    h.app.options_changed(&h.ctx.clone(), draft);
+    assert_eq!(h.app.options.toolbars.len(), 1);
+}
