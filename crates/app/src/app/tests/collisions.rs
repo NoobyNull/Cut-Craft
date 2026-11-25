@@ -10,7 +10,7 @@ fn rail_and_ribbon_browsers_show_the_checks_before_cutting() {
     use crate::options::WindowLayout;
     for layout in [WindowLayout::Rail, WindowLayout::Ribbon] {
         let mut h = Harness::new();
-        h.app.options.general.layout = layout;
+        h.given_options(|o| o.general.layout = layout);
         h.frame(vec![]);
         assert!(
             h.text_at("Checks").is_some(),
@@ -21,7 +21,7 @@ fn rail_and_ribbon_browsers_show_the_checks_before_cutting() {
         h.press(tab, true, Modifiers::NONE);
         h.press(tab, false, Modifiers::NONE);
         h.frame(vec![]);
-        assert_eq!(INSPECTOR_TABS[h.app.inspector_tab], "Checks", "{layout:?}");
+        assert_eq!(h.inspector_tab(), "Checks", "{layout:?}");
         assert!(
             h.text_at("Make a toolpath (or tick one in the list) to check it here")
                 .is_some(),
@@ -38,10 +38,10 @@ fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     // a clamp over the rectangle's right-hand side
     let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
-    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    let refused = h.app.apply("profile_toolpath", &params).unwrap_err();
+    h.given_document(|d| d.keep_out = vec![KeepOutZone::new("Clamp 1", zone)]);
+    h.invoke("profile_toolpath");
+    let params = h.form_settings().clone();
+    let refused = h.run("profile_toolpath", &params).unwrap_err();
     assert!(
         refused.starts_with(super::toolpath_output::KEEP_OUT_REFUSED),
         "{refused}"
@@ -51,18 +51,13 @@ fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
         refused.contains("Clip toolpaths at keep-out zones"),
         "{refused}"
     );
-    assert_eq!(h.app.doc.toolpaths.len(), 0, "nothing made");
+    assert_eq!(h.doc().toolpaths.len(), 0, "nothing made");
     // clipping turned on in Options: made, the part under the clamp left uncut
-    h.app.options.toolpaths.clip_at_keep_out_zones = true;
-    assert!(h.app.sync_machine_keep_out());
-    h.app.apply("profile_toolpath", &params).unwrap();
-    let made = h.app.doc.toolpaths.values().next().expect("a toolpath");
-    assert_eq!(
-        h.app.zones_entered(made),
-        [] as [String; 0],
-        "{:?}",
-        made.moves
-    );
+    h.given_options(|o| o.toolpaths.clip_at_keep_out_zones = true);
+    assert!(h.sync_machine_keep_out());
+    h.run("profile_toolpath", &params).unwrap();
+    let made = h.doc().toolpaths.values().next().expect("a toolpath");
+    assert_eq!(h.zones_entered(made), [] as [String; 0], "{:?}", made.moves);
     let cuts = made.moves.iter().filter(|m| m.kind == MoveKind::Cut);
     assert!(
         cuts.clone().any(|m| m.to.x > 55.0),
@@ -70,25 +65,22 @@ fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
     );
     assert!(cuts.clone().any(|m| m.to.x < 20.0));
     // no zones: made as it was, with no warning
-    h.app.options.toolpaths.clip_at_keep_out_zones = false;
-    h.app.sync_machine_keep_out();
-    h.app.doc.keep_out.clear();
-    h.app.apply("profile_toolpath", &params).unwrap();
-    assert!(!h.app.status.message.contains("keep-out"));
+    h.given_options(|o| o.toolpaths.clip_at_keep_out_zones = false);
+    h.sync_machine_keep_out();
+    h.given_document(|d| d.keep_out.clear());
+    h.run("profile_toolpath", &params).unwrap();
+    assert!(!h.status_message().contains("keep-out"));
 }
 
 #[test]
 fn keep_out_zone_labels_turn_on_and_off_and_are_remembered() {
     let mut h = Harness::new();
-    assert!(h.app.display.keep_out_labels, "shown to start with");
-    assert_eq!(
-        h.app.display.checked("show_keep_out_zone_labels"),
-        Some(true)
-    );
-    h.app.invoke(&h.ctx, "show_keep_out_zone_labels");
-    assert!(!h.app.display.keep_out_labels);
+    assert!(h.display().keep_out_labels, "shown to start with");
+    assert_eq!(h.display().checked("show_keep_out_zone_labels"), Some(true));
+    h.invoke("show_keep_out_zone_labels");
+    assert!(!h.display().keep_out_labels);
     assert!(
-        !h.app.options.toolpaths.keep_out_labels,
+        !h.options().toolpaths.keep_out_labels,
         "kept with the options"
     );
     // over a zone the 2D view's menu names it and says where it is edited
@@ -110,63 +102,64 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
     // two parts with a gap between them, cut by one profile toolpath
     h.rectangle(10.0, 10.0, 40.0, 40.0);
     h.rectangle(110.0, 10.0, 40.0, 40.0);
-    h.app.invoke(&h.ctx, "select_all_vectors");
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
-    h.app.form = None;
-    let moves = |app: &CutCraftApp| app.doc.toolpaths.values().next().unwrap().moves.clone();
-    let rapids = |app: &CutCraftApp| {
-        moves(app)
+    h.invoke("select_all_vectors");
+    h.invoke("profile_toolpath");
+    let params = h.form_settings().clone();
+    h.run("profile_toolpath", &params).unwrap();
+    h.close_form();
+    let moves = |h: &Harness| h.doc().toolpaths.values().next().unwrap().moves.clone();
+    let rapids = |h: &Harness| {
+        moves(h)
             .iter()
             .filter(|m| m.kind == MoveKind::Rapid)
             .count()
     };
-    let straight = rapids(&h.app);
+    let straight = rapids(&h);
     // a clamp drawn across the gap, made a keep-out zone: the toolpath is made again round it
     h.rectangle(70.0, 0.0, 20.0, 60.0);
-    let clamp = *h.app.doc.vectors.keys().next_back().unwrap();
-    h.app.doc.selection = [clamp].into();
+    let clamp = *h.doc().vectors.keys().next_back().unwrap();
+    h.select([clamp]);
     let zone = serde_json::json!({ "action": "create", "clearance": 2.0 });
-    h.app.apply("keep_out_zones", &zone).unwrap();
-    assert!(!crossed(&h.app.doc.keep_out_zones(), &moves(&h.app)));
-    assert!(rapids(&h.app) > straight, "round the clamp");
+    h.run("keep_out_zones", &zone).unwrap();
+    assert!(!crossed(&h.doc().keep_out_zones(), &moves(&h)));
+    assert!(rapids(&h) > straight, "round the clamp");
     // the same clamp fixed to the machine's bed instead: every job keeps out of it
-    h.app
-        .apply(
-            "keep_out_zones",
-            &serde_json::json!({ "action": "clear", "clearance": 0.0 }),
-        )
-        .unwrap();
-    assert_eq!(rapids(&h.app), straight, "straight across again");
-    h.app.machines.add();
-    h.app.machines.active_mut().unwrap().keep_out = vec![cut_craft_machines::machine::Zone {
-        x: 70.0,
-        y: 0.0,
-        width: 20.0,
-        height: 60.0,
-        name: String::new(),
-        stands: 30.0,
-    }];
-    assert!(h.app.sync_machine_keep_out());
+    h.run(
+        "keep_out_zones",
+        &serde_json::json!({ "action": "clear", "clearance": 0.0 }),
+    )
+    .unwrap();
+    assert_eq!(rapids(&h), straight, "straight across again");
+    h.given_machine();
+    h.edit_machine(|m| {
+        m.keep_out = vec![cut_craft_machines::machine::Zone {
+            x: 70.0,
+            y: 0.0,
+            width: 20.0,
+            height: 60.0,
+            name: String::new(),
+            stands: 30.0,
+        }];
+    });
+    assert!(h.sync_machine_keep_out());
     assert_eq!(
-        h.app.doc.machine_keep_out[0].height(),
+        h.doc().machine_keep_out[0].height(),
         (30.0, false),
         "its height comes too"
     );
-    h.app.keep_out_changed();
-    assert!(!crossed(&h.app.doc.keep_out_zones(), &moves(&h.app)));
-    assert!(rapids(&h.app) > straight, "round the machine's clamp");
+    h.keep_out_changed();
+    assert!(!crossed(&h.doc().keep_out_zones(), &moves(&h)));
+    assert!(rapids(&h) > straight, "round the machine's clamp");
     // a clamp over a part: the toolpath cannot keep out, so it is not saved
-    h.app.machines.active_mut().unwrap().keep_out[0].x = 20.0;
-    h.app.sync_machine_keep_out();
-    h.app.keep_out_changed();
+    h.edit_machine(|m| m.keep_out[0].x = 20.0);
+    h.sync_machine_keep_out();
+    h.keep_out_changed();
     assert!(
-        h.app.status.message.contains("keep-out"),
+        h.status_message().contains("keep-out"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
-    let post = h.app.output_post().unwrap();
+    let post = h.output_post().unwrap();
     let form = SaveForm {
         mode: crate::files::SaveMode::VisibleToOneFile,
         group: false,
@@ -176,7 +169,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         job_sheet: true,
     };
     let path = std::env::temp_dir().join(format!("cut-craft-keep-out-{}.nc", std::process::id()));
-    let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
+    let refused = h.save_toolpaths_to(&form, &post, &path).unwrap_err();
     assert!(refused.contains("keep-out zone"), "{refused}");
     assert!(!path.exists(), "nothing written");
 }
@@ -184,9 +177,9 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
 #[test]
 fn the_tool_changer_window_loads_a_holder_with_select_tool() {
     let mut h = Harness::new();
-    h.app.machines.add();
-    h.app.machines.active_mut().unwrap().set_slot_count(3);
-    h.app.invoke(&h.ctx, "tool_changer");
+    h.given_machine();
+    h.edit_machine(|m| m.set_slot_count(3));
+    h.invoke("tool_changer");
     h.frame(vec![]);
     h.frame(vec![]);
     // each holder: its tool, then Select… to pick one in the Bit Library
@@ -194,14 +187,14 @@ fn the_tool_changer_window_loads_a_holder_with_select_tool() {
     assert_eq!(selects.len(), 3, "a Select… per holder");
     h.click(selects[1], Modifiers::NONE);
     select_in_tool_database(&mut h, "6 mm Ball Nose");
-    let machine = h.app.machines.active().unwrap();
+    let machine = h.machine().unwrap();
     assert_eq!(machine.slots[1].as_deref(), Some("6 mm Ball Nose"));
     assert_eq!(
-        h.app.tools.get("6 mm Ball Nose").unwrap().number,
+        h.tool_database().get("6 mm Ball Nose").unwrap().number,
         2,
         "loaded in holder 2, it is tool 2"
     );
-    assert!(h.app.form.is_none(), "no form was touched");
+    assert!(h.form_id().is_none(), "no form was touched");
 }
 
 #[test]
@@ -209,15 +202,17 @@ fn a_bit_with_no_shank_set_is_flagged_while_its_preview_plays() {
     let flagged = |shank: f64| {
         let mut h = Harness::new();
         h.rectangle(10.0, 10.0, 50.0, 50.0);
-        h.app.invoke(&h.ctx, "profile_toolpath");
-        let params = h.app.form.as_ref().unwrap().params.clone();
-        h.app.apply("profile_toolpath", &params).unwrap();
-        h.app.form = None;
-        for t in h.app.doc.toolpaths.values_mut() {
-            t.tool.shank_diameter = shank;
-        }
-        h.app.display.animate_preview = true;
-        h.app.invoke(&h.ctx, "preview_all_toolpaths");
+        h.invoke("profile_toolpath");
+        let params = h.form_settings().clone();
+        h.run("profile_toolpath", &params).unwrap();
+        h.close_form();
+        h.given_document(|d| {
+            for t in d.toolpaths.values_mut() {
+                t.tool.shank_diameter = shank;
+            }
+        });
+        h.given_animated_preview(true);
+        h.invoke("preview_all_toolpaths");
         h.frame(vec![]);
         h.frame(vec![]);
         h.texts()
@@ -231,35 +226,33 @@ fn a_bit_with_no_shank_set_is_flagged_while_its_preview_plays() {
 #[test]
 fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
     let mut h = Harness::new();
-    h.app.machines.add();
-    h.app.machines.active_mut().unwrap().set_slot_count(5);
+    h.given_machine();
+    h.edit_machine(|m| m.set_slot_count(5));
     // load the 3 mm end mill into slot 3 in the Bit Library, kept on OK
-    h.app.invoke(&h.ctx, "tool_database");
-    let manager = h.app.tool_manager.as_mut().unwrap();
-    manager
-        .changer
-        .as_mut()
-        .expect("the machine's tool changer")
-        .load("3 mm End Mill", Some(3));
+    h.invoke("tool_database");
+    h.in_bit_library(|manager| {
+        manager
+            .changer
+            .as_mut()
+            .expect("the machine's tool changer")
+            .load("3 mm End Mill", Some(3));
+    });
     // a new window is drawn unseen for a frame while egui sizes it
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Tool changer: My Machine").is_some());
     let ok = *h.texts_at("OK").last().unwrap();
     h.click(ok, Modifiers::NONE);
+    assert_eq!(h.machine().unwrap().slot_of("3 mm End Mill"), Some(3));
     assert_eq!(
-        h.app.machines.active().unwrap().slot_of("3 mm End Mill"),
-        Some(3)
-    );
-    assert_eq!(
-        h.app.tools.get("3 mm End Mill").unwrap().number,
+        h.tool_database().get("3 mm End Mill").unwrap().number,
         3,
         "loaded in slot 3, it is tool 3"
     );
     // the toolpath form shows the magazine first: 0 by hand, then each holder
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.invoke("profile_toolpath");
+    h.pin(Page::Toolpaths);
     h.frame(vec![]);
     h.frame(vec![]);
     // Select… opens the Bit Library, the tool changer's holders over its tree
@@ -282,12 +275,12 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
         h.text_at("T3  3 mm End Mill").is_some(),
         "the form names its holder"
     );
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
+    let params = h.form_settings().clone();
+    h.run("profile_toolpath", &params).unwrap();
     // the G-code calls slot 3
-    let post = h.app.output_post().unwrap();
+    let post = h.output_post().unwrap();
     let out = std::env::temp_dir().join(format!("cut-craft-atc-{}.nc", std::process::id()));
-    files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap();
+    h.save_through(&post, &out).unwrap();
     let gcode = std::fs::read_to_string(&out).unwrap();
     assert!(gcode.contains("M6 T3"), "{gcode}");
     assert_eq!(
@@ -295,8 +288,8 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
         "picked by its holder"
     );
     // a tool not in the magazine is changed by hand: T0
-    h.app.machines.active_mut().unwrap().slots[2] = None;
-    files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap();
+    h.edit_machine(|m| m.slots[2] = None);
+    h.save_through(&post, &out).unwrap();
     let gcode = std::fs::read_to_string(&out).unwrap();
     assert!(gcode.contains("M6 T0"), "{gcode}");
     let _ = std::fs::remove_file(out);
@@ -316,13 +309,13 @@ fn pinned_pages_keep_one_width_whatever_they_show() {
         "draw_text",
         "offset_vectors",
     ] {
-        h.app.invoke(&h.ctx, form);
+        h.invoke(form);
         seen.extend(page_widths(&mut h, 8));
-        h.app.form = None;
+        h.close_form();
         seen.extend(page_widths(&mut h, 3));
     }
-    for tab in 0..gui::DESIGN_SUBTABS.len() {
-        h.app.design_subtab = tab;
+    for tab in gui::DESIGN_SUBTABS {
+        h.show_design_subtab(tab.name);
         seen.extend(page_widths(&mut h, 3));
     }
     for widths in seen {
@@ -342,7 +335,7 @@ fn a_wide_window_widens_the_pages_to_keep_the_view_four_by_three() {
     assert_eq!(left, right, "the pages share the room evenly");
     assert!(left > narrow[0].unwrap(), "{left} from {narrow:?}");
     assert_eq!(wide[1], wide[2], "settled in the frame the window changed");
-    let view = h.app.view_area.expect("the 2D view was drawn");
+    let view = h.view_2d_area();
     let aspect = view.width() / view.height();
     assert!(
         (aspect - crate::pages::VIEW_ASPECT).abs() < 0.03,
@@ -353,15 +346,14 @@ fn a_wide_window_widens_the_pages_to_keep_the_view_four_by_three() {
 #[test]
 fn the_tool_changer_window_loads_holders_and_tools_carry_their_own_numbers() {
     let mut h = Harness::new();
-    h.app.machines.machines.push(cut_craft_machines::Machine {
+    h.given_machine_like(cut_craft_machines::Machine {
         name: "Router".into(),
         slots: vec![None; 4],
         ..cut_craft_machines::Machine::default()
     });
-    h.app.machines.active = h.app.machines.machines.len() - 1;
-    assert!(h.app.available("tool_changer"));
-    h.app.invoke(&h.ctx, "tool_changer");
-    assert!(h.app.tool_changer_window);
+    assert!(h.available("tool_changer"));
+    h.invoke("tool_changer");
+    assert!(h.tool_changer_open());
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Tool Changer (ATC)").is_some(), "the window");
@@ -372,16 +364,17 @@ fn the_tool_changer_window_loads_holders_and_tools_carry_their_own_numbers() {
 #[test]
 fn tools_loaded_in_the_tool_changer_window_take_their_slot_numbers() {
     let mut h = Harness::new();
-    h.app.machines.add();
-    let machine = h.app.machines.active_mut().unwrap();
-    machine.set_slot_count(4);
-    machine.slots[1] = Some("6 mm Ball Nose".into());
-    h.app.tool_changer_changed();
-    assert_eq!(h.app.tools.get("6 mm Ball Nose").unwrap().number, 2);
+    h.given_machine();
+    h.edit_machine(|machine| {
+        machine.set_slot_count(4);
+        machine.slots[1] = Some("6 mm Ball Nose".into());
+    });
+    h.tool_changer_changed();
+    assert_eq!(h.tool_database().get("6 mm Ball Nose").unwrap().number, 2);
     // and a tool loaded before is numbered when the Bit Library opens
-    h.app.machines.active_mut().unwrap().slots[3] = Some("3 mm End Mill".into());
-    h.app.invoke(&h.ctx, "tool_database");
-    let draft = &h.app.tool_manager.as_ref().unwrap().draft;
+    h.edit_machine(|m| m.slots[3] = Some("3 mm End Mill".into()));
+    h.invoke("tool_database");
+    let draft = &h.bit_library().unwrap().draft;
     assert_eq!(draft.get("3 mm End Mill").unwrap().number, 4);
 }
 
@@ -392,12 +385,12 @@ fn keep_out_zones_and_shadows_in_the_3d_view_turn_on_and_off_from_the_view_menu(
         ("draw_keep_out_zones_in_3d_view", true),
         ("use_shadow_shading", false),
     ] {
-        assert!(h.app.available(id), "{id}");
-        assert_eq!(h.app.display.checked(id), Some(on), "{id} as it starts");
-        h.app.invoke(&h.ctx, id);
-        assert_eq!(h.app.display.checked(id), Some(!on), "{id} turned over");
+        assert!(h.available(id), "{id}");
+        assert_eq!(h.display().checked(id), Some(on), "{id} as it starts");
+        h.invoke(id);
+        assert_eq!(h.display().checked(id), Some(!on), "{id} turned over");
     }
-    assert!(h.app.display.shadows && !h.app.display.keep_out_3d);
+    assert!(h.display().shadows && !h.display().keep_out_3d);
 }
 
 /// Print Job Sheet's page names the job's file, the active machine, its post and its tool
@@ -408,8 +401,8 @@ fn the_job_sheet_names_the_file_machine_post_and_slots() {
     let dir = std::env::temp_dir().join(format!("cut-craft-job-sheet-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     // not saved: no file of its own, so a copy goes to the recovery file
-    h.app.recovery_path = Some(dir.join("recovery.ccjob"));
-    let setup = h.app.job_setup();
+    h.given_recovery_path(dir.join("recovery.ccjob"));
+    let setup = h.job_sheet();
     assert_eq!(setup.job_file, "");
     assert_eq!(
         setup.job_copy,
@@ -418,15 +411,14 @@ fn the_job_sheet_names_the_file_machine_post_and_slots() {
     assert!(dir.join("recovery.ccjob").is_file());
     let job = dir.join("Sign.ccraft");
     std::fs::write(&job, b"job").unwrap();
-    h.app.session.path = Some(job.clone());
-    h.app.machines.machines.push(cut_craft_machines::Machine {
+    h.given_job_path(job.clone());
+    h.given_machine_like(cut_craft_machines::Machine {
         name: "Shop CNC".into(),
         posts: vec!["FluidNC".into()],
         slots: vec![None, Some("6 mm End Mill".into())],
         ..cut_craft_machines::Machine::default()
     });
-    h.app.machines.active = h.app.machines.machines.len() - 1;
-    let setup = h.app.job_setup();
+    let setup = h.job_sheet();
     assert_eq!(
         (
             setup.job_file.as_str(),
@@ -437,8 +429,8 @@ fn the_job_sheet_names_the_file_machine_post_and_slots() {
     );
     assert_eq!(setup.job_copy, "", "saved: no copy needed");
     assert_eq!(setup.slots.len(), 2);
-    assert!((setup.motion.rapid - h.app.summary.rapid).abs() < 1e-9);
-    assert!(h.app.available("print_job_sheet"));
+    assert!((setup.motion.rapid - h.rapid_rate()).abs() < 1e-9);
+    assert!(h.available("print_job_sheet"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -458,10 +450,8 @@ fn tool_changes_go_to_files_of_their_own_the_tool_changer_or_a_pause() {
             changes,
             job_sheet: true,
         };
-        let post = h.app.form_post(&form).unwrap();
-        h.app
-            .save_toolpaths_to(&form, &post, &dir.join(name))
-            .unwrap()
+        let post = h.form_post(&form).unwrap();
+        h.save_toolpaths_to(&form, &post, &dir.join(name)).unwrap()
     };
     // Cut Craft's own post has a tool changer: separate files still splits by tool
     let done = save(&h, ToolChanges::SeparateFiles, "apart.nc");
@@ -484,16 +474,16 @@ fn tool_changes_go_to_files_of_their_own_the_tool_changer_or_a_pause() {
 #[test]
 fn a_machine_with_a_tool_changer_uses_it_by_default_and_one_without_saves_files_per_tool() {
     let mut h = Harness::new();
-    h.app.machines.add();
-    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.given_machine();
+    h.invoke("save_toolpaths");
     assert_eq!(
-        h.app.save_form.as_ref().unwrap().changes,
+        h.save_form().changes,
         crate::files::ToolChanges::SeparateFiles
     );
-    h.app.machines.active_mut().unwrap().set_slot_count(4);
-    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.edit_machine(|m| m.set_slot_count(4));
+    h.invoke("save_toolpaths");
     assert_eq!(
-        h.app.save_form.as_ref().unwrap().changes,
+        h.save_form().changes,
         crate::files::ToolChanges::ToolChanger
     );
 }
@@ -519,7 +509,7 @@ fn a_cut_deeper_than_the_material_asks_first() {
     );
 
     let mut h = profile_form();
-    let thickness = h.app.doc.job.thickness;
+    let thickness = h.doc().job.thickness;
     let calculate = |h: &mut Harness| {
         let apply = h.text_at("Calculate");
         h.click(apply.expect("the form's button"), Modifiers::NONE);
@@ -527,40 +517,34 @@ fn a_cut_deeper_than_the_material_asks_first() {
         h.frame(vec![]);
     };
     // OK: made as set
-    h.app.form.as_mut().unwrap().params["depth"] = (thickness + 2.0).into();
+    h.edit_form(|p| p["depth"] = (thickness + 2.0).into());
     h.frame(vec![]);
     calculate(&mut h);
-    assert!(h.app.deep_cut.is_some(), "held for the warning");
+    assert!(h.asking_deeper_cut(), "held for the warning");
     assert!(h.text_at("Warning: deeper than the material").is_some());
-    assert!(h.app.doc.toolpaths.is_empty(), "nothing made yet");
+    assert!(h.doc().toolpaths.is_empty(), "nothing made yet");
     let ok = *h.texts_at("OK").last().unwrap();
     h.click(ok, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.deep_cut.is_none());
+    assert!(!h.asking_deeper_cut());
     for _ in 0..500 {
-        if !h.app.doc.toolpaths.is_empty() && h.app.busy.is_none() {
+        if !h.doc().toolpaths.is_empty() && !h.busy() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
         h.frame(vec![]);
     }
-    assert_eq!(h.app.doc.toolpaths.len(), 1, "made as it was set");
-    assert_eq!(
-        h.app.form.as_ref().unwrap().params["depth"].as_f64(),
-        Some(thickness + 2.0)
-    );
+    assert_eq!(h.doc().toolpaths.len(), 1, "made as it was set");
+    assert_eq!(h.form_value("depth").as_f64(), Some(thickness + 2.0));
     // Cancel: back to the form, the depth corrected
     calculate(&mut h);
-    assert!(h.app.deep_cut.is_some());
+    assert!(h.asking_deeper_cut());
     let cancel = *h.texts_at("Cancel").last().unwrap();
     h.click(cancel, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.deep_cut.is_none());
-    assert_eq!(
-        h.app.form.as_ref().unwrap().params["depth"].as_f64(),
-        Some(thickness)
-    );
-    assert!(h.app.form.is_some(), "still on the form");
+    assert!(!h.asking_deeper_cut());
+    assert_eq!(h.form_value("depth").as_f64(), Some(thickness));
+    assert!(h.form_id().is_some(), "still on the form");
 }
 
 #[test]
@@ -573,17 +557,16 @@ fn the_sample_project_opens_with_toolpaths_that_pass_the_checks() {
     let at = h.text_at("Try a sample project").unwrap();
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.screen, Screen::Job);
+    assert_eq!(h.screen(), Screen::Job);
     let names: Vec<&str> = h
-        .app
-        .doc
+        .doc()
         .toolpaths
         .values()
         .map(|t| t.name.as_str())
         .collect();
     assert_eq!(names, [super::sample::CARVE, super::sample::CUT_OUT]);
-    let toolpaths: Vec<_> = h.app.doc.toolpaths.values().collect();
-    let found = cut_craft_core::preflight::check(&h.app.doc, &toolpaths, &h.app.limits());
+    let toolpaths: Vec<_> = h.doc().toolpaths.values().collect();
+    let found = cut_craft_core::preflight::check(h.doc(), &toolpaths, &h.machine_limits());
     // where to zero the bit is asked of every job whose Material Setup was never opened
     let faults: Vec<_> = found
         .iter()
@@ -591,10 +574,10 @@ fn the_sample_project_opens_with_toolpaths_that_pass_the_checks() {
         .collect();
     assert_eq!(faults, [] as [&cut_craft_core::preflight::Finding; 0]);
     assert!(
-        !h.app.session.is_dirty(&h.app.history),
+        !h.has_unsaved_changes(),
         "closing an untouched sample asks nothing"
     );
-    assert!(h.app.session.path.is_none(), "saving asks where");
+    assert!(h.job_path().is_none(), "saving asks where");
 }
 
 #[test]
@@ -603,12 +586,12 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
     // a slot 2 mm wide: a 3 mm bit can't get into it at all
     h.rectangle(10.0, 10.0, 2.0, 50.0);
     h.click(h.at(10.0, 35.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "pocket_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
-    h.app.choose_tool("3 mm End Mill");
+    h.invoke("pocket_toolpath");
+    h.pin(Page::Toolpaths);
+    h.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     h.frame(vec![]);
-    let line = h.app.form_reach().expect("a reach line under the tool");
+    let line = h.form_reach().expect("a reach line under the tool");
     assert!(
         matches!(line, cut_craft_core::reach::Line::Short(_)),
         "{line:?}"
@@ -616,13 +599,13 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
     assert!(h.text_at(line.text()).is_some(), "shown: {line:?}");
     assert!(line.text().contains("too wide for 1 spot"), "{line:?}");
     // a wider shape fits; the starter bit has no flute length, so it reaches any depth
-    h.app.form = None;
+    h.close_form();
     h.rectangle(30.0, 10.0, 40.0, 50.0);
     h.click(h.at(70.0, 35.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "pocket_toolpath");
-    h.app.choose_tool("3 mm End Mill");
+    h.invoke("pocket_toolpath");
+    h.choose_tool("3 mm End Mill");
     h.frame(vec![]);
-    let line = h.app.form_reach().expect("a reach line");
+    let line = h.form_reach().expect("a reach line");
     assert_eq!(line.text(), "Reaches everything", "{line:?}");
 }
 
@@ -691,20 +674,20 @@ fn the_chamfer_form_says_when_it_goes_deeper_than_the_v() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 40.0, 40.0);
     h.click(h.at(10.0, 30.0), Modifiers::NONE);
-    h.app.invoke(&h.ctx, "chamfer_toolpath");
-    h.app.pages.set_pinned(Page::Toolpaths, true);
-    h.app.choose_tool("90° V-Bit");
+    h.invoke("chamfer_toolpath");
+    h.pin(Page::Toolpaths);
+    h.choose_tool("90° V-Bit");
     h.frame(vec![]);
     // 3 wide with a 90° V-bit is 3 deep: well inside its 6.35 mm V
-    let line = h.app.form_reach().expect("a reach line under the tool");
+    let line = h.form_reach().expect("a reach line under the tool");
     assert!(
         matches!(line, cut_craft_core::reach::Line::Reaches(_)),
         "{line:?}"
     );
     // from 5 below the surface it is 8 deep, past the V
-    h.app.form.as_mut().unwrap().params["start_depth"] = 5.0.into();
+    h.edit_form(|p| p["start_depth"] = 5.0.into());
     h.frame(vec![]);
-    let line = h.app.form_reach().expect("a reach line");
+    let line = h.form_reach().expect("a reach line");
     assert!(
         matches!(line, cut_craft_core::reach::Line::Short(_)),
         "{line:?}"
@@ -718,10 +701,10 @@ fn analyse_checks_off_the_window_thread_so_the_window_keeps_drawing() {
     // 12.7 million moves inside the frame, and the window (and with the card busy, his
     // desktop) froze for over ten minutes. They now run with their progress over the window.
     let mut h = analysing();
-    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.given_progress_shown_at_once();
     h.frame(vec![]);
-    let running = h.app.checking();
-    let done = h.app.save_checks.first().is_some_and(|c| c.found.is_some());
+    let running = h.checking();
+    let done = h.first_checks_done();
     assert!(running || done, "started");
     if running {
         assert!(
@@ -731,19 +714,19 @@ fn analyse_checks_off_the_window_thread_so_the_window_keeps_drawing() {
         );
     }
     let until = std::time::Instant::now() + std::time::Duration::from_mins(1);
-    while h.app.checking() && std::time::Instant::now() < until {
+    while h.checking() && std::time::Instant::now() < until {
         h.frame(vec![]);
     }
     h.frame(vec![]);
-    assert!(!h.app.checking(), "finished");
-    assert!(h.app.save_checks[0].found.is_some(), "kept");
+    assert!(!h.checking(), "finished");
+    assert!(h.first_checks_done(), "kept");
     assert!(
         h.text_at("✔ Every toolpath matches what it was made from")
             .is_some(),
         "the rest of the tab is shown once checked"
     );
     h.frame(vec![]);
-    assert!(!h.app.checking(), "not run again while nothing changes");
+    assert!(!h.checking(), "not run again while nothing changes");
 }
 
 #[test]
@@ -752,17 +735,17 @@ fn cancelled_checks_say_so_and_check_again_runs_them() {
     h.frame(vec![]);
     h.frame(vec![]);
     // as Cancel leaves them: the plan known, nothing found yet, nothing running
-    h.app.save_checks[0].found = None;
+    h.given_first_checks_cancelled();
     h.frame(vec![]);
     assert!(
         h.text_at("The checks were cancelled, so nothing has been checked yet")
             .is_some()
     );
-    assert!(h.app.busy.is_none(), "not started again by itself");
+    assert!(!h.busy(), "not started again by itself");
     h.click(h.text_at("Check Again").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    assert!(h.app.save_checks[0].found.is_some(), "checked again");
+    assert!(h.first_checks_done(), "checked again");
     assert!(h.text_at("Check Again").is_none());
 }
 
@@ -771,18 +754,13 @@ fn checks_waiting_on_other_work_say_so_rather_than_cancelled() {
     let mut h = analysing();
     h.frame(vec![]);
     h.frame(vec![]);
-    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.given_progress_shown_at_once();
     let (go, wait) = std::sync::mpsc::channel::<()>();
-    h.app.in_background(
-        "Calculating Slow Toolpath",
-        "test:slow",
-        move || {
-            wait.recv_timeout(std::time::Duration::from_secs(30)).ok();
-        },
-        |_, ()| {},
-    );
+    h.start_slow_job("Calculating Slow Toolpath", move || {
+        wait.recv_timeout(std::time::Duration::from_secs(30)).ok();
+    });
     // the job changed: the checks must run again, once the slow work is done
-    h.app.save_checks.clear();
+    h.given_no_checks_kept();
     h.frame(vec![]);
     assert!(
         h.text_at("The checks start once the work running now is done")
@@ -805,25 +783,19 @@ fn save_toolpaths_waits_for_cancelled_checks_rather_than_saving_unchecked() {
         changes: crate::files::ToolChanges::SeparateFiles,
         job_sheet: false,
     };
-    let post = h.app.form_post(&form).unwrap();
+    let post = h.form_post(&form).unwrap();
     // the form's checks, as Cancel leaves them
-    h.app.save_checks = vec![super::SaveChecks {
-        plan: h.app.plan(&form, &post).unwrap(),
-        changes: form.changes,
-        revision: h.app.history.revision(),
-        machine: h.app.machines.active,
-        found: None,
-    }];
+    h.given_checks_cancelled_for(&form, &post);
     assert!(
-        h.app.ready_to_save(&form, false).is_none(),
+        h.ready_to_save(&form, false).is_none(),
         "not saved unchecked"
     );
     assert!(
-        h.app.status.message.contains("were cancelled"),
+        h.status_message().contains("were cancelled"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
-    assert_eq!(h.app.save_checks.len(), 1, "not started again by itself");
+    assert_eq!(h.checks_kept(), 1, "not started again by itself");
 }
 
 #[test]
@@ -833,19 +805,18 @@ fn changing_the_tool_changer_checks_the_toolpaths_again() {
     use crate::files::ToolChanges;
     let mut h = Harness::new();
     two_tools(&mut h);
-    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
-    h.app.machines.add();
-    h.app.machines.active_mut().unwrap().set_slot_count(4);
+    let plan = vec![h.doc().toolpaths.keys().copied().collect::<Vec<_>>()];
+    h.given_machine();
+    h.edit_machine(|m| m.set_slot_count(4));
     let warned = |h: &mut Harness| {
-        h.app
-            .save_checks(&plan, ToolChanges::ToolChanger)
+        h.save_checks(&plan, ToolChanges::ToolChanger)
             .expect("checked")
             .iter()
             .any(|f| f.message.contains("no tool changer"))
     };
     assert!(!warned(&mut h));
-    h.app.machines.active_mut().unwrap().set_slot_count(0);
-    h.app.tool_changer_changed();
+    h.edit_machine(|m| m.set_slot_count(0));
+    h.tool_changer_changed();
     assert!(warned(&mut h), "checked again for the slots now set");
 }
 
@@ -856,37 +827,28 @@ fn loading_bits_in_the_tool_database_checks_the_toolpaths_again() {
     use crate::files::ToolChanges;
     let mut h = Harness::new();
     two_tools(&mut h);
-    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
-    h.app.machines.add();
-    h.app.machines.active_mut().unwrap().set_slot_count(5);
+    let plan = vec![h.doc().toolpaths.keys().copied().collect::<Vec<_>>()];
+    h.given_machine();
+    h.edit_machine(|m| m.set_slot_count(5));
     let unloaded = |h: &mut Harness| {
-        h.app
-            .save_checks(&plan, ToolChanges::ToolChanger)
+        h.save_checks(&plan, ToolChanges::ToolChanger)
             .expect("checked")
             .iter()
             .filter(|f| f.message.contains("not loaded in the tool changer"))
             .count()
     };
     assert_eq!(unloaded(&mut h), 2, "neither bit is loaded yet");
-    h.app.invoke(&h.ctx, "tool_database");
-    let changer = h
-        .app
-        .tool_manager
-        .as_mut()
-        .unwrap()
-        .changer
-        .as_mut()
-        .unwrap();
-    changer.load("6 mm End Mill", Some(1));
-    changer.load("3 mm End Mill", Some(2));
+    h.invoke("tool_database");
+    h.in_bit_library(|manager| {
+        let changer = manager.changer.as_mut().unwrap();
+        changer.load("6 mm End Mill", Some(1));
+        changer.load("3 mm End Mill", Some(2));
+    });
     h.frame(vec![]);
     h.frame(vec![]);
     let ok = *h.texts_at("OK").last().unwrap();
     h.click(ok, Modifiers::NONE);
-    assert_eq!(
-        h.app.machines.active().unwrap().slot_of("3 mm End Mill"),
-        Some(2)
-    );
+    assert_eq!(h.machine().unwrap().slot_of("3 mm End Mill"), Some(2));
     assert_eq!(unloaded(&mut h), 0, "checked again for the bits now loaded");
 }
 
@@ -897,24 +859,20 @@ fn a_check_started_before_the_machine_changed_never_fills_the_checks_after() {
     use crate::files::ToolChanges;
     let mut h = Harness::new();
     two_tools(&mut h);
-    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
-    h.app.machines.add();
-    h.app.wait_before_showing = std::time::Duration::ZERO;
+    let plan = vec![h.doc().toolpaths.keys().copied().collect::<Vec<_>>()];
+    h.given_machine();
+    h.given_progress_shown_at_once();
     // started with no slots, so it would warn that there is no tool changer
-    let _ = h.app.save_checks(&plan, ToolChanges::ToolChanger);
-    h.app.machines.active_mut().unwrap().set_slot_count(4);
-    h.app.forget_save_checks();
+    let _ = h.save_checks(&plan, ToolChanges::ToolChanger);
+    h.edit_machine(|m| m.set_slot_count(4));
+    h.forget_save_checks();
     let stale = h
-        .app
         .save_checks(&plan, ToolChanges::ToolChanger)
         .is_some_and(|found| found.iter().any(|f| f.message.contains("no tool changer")));
     assert!(!stale, "the old check's findings were thrown away");
-    h.app.wait_before_showing = std::time::Duration::from_mins(10);
-    if let Some(running) = h.app.busy.take() {
-        running.finish(&mut h.app);
-    }
+    h.given_progress_shown_late();
+    h.finish_slow_job();
     let found = h
-        .app
         .save_checks(&plan, ToolChanges::ToolChanger)
         .expect("checked");
     assert!(!found.iter().any(|f| f.message.contains("no tool changer")));
@@ -926,29 +884,29 @@ fn the_keep_out_check_at_saving_checks_the_moves_that_are_saved() {
     use cut_craft_core::keep_out::KeepOutZone;
     use cut_craft_core::toolpath::{Move, MoveKind};
     let mut h = Harness::new();
-    h.app.doc = cut_craft_core::testing::with_toolpath();
+    h.open_document(cut_craft_core::testing::with_toolpath());
     let id = EntityId(1);
-    let toolpath = h.app.doc.toolpaths.get_mut(&id).unwrap();
-    toolpath.tool.diameter = 6.0;
     let at = |kind, x: f64, y: f64| Move {
         kind,
         to: DVec3::new(x, y, -1.0),
     };
-    // a cut bowed 0.09 mm away from a clamp: thinned, it runs straight and 0.05 mm into it
-    toolpath.moves = vec![
-        at(MoveKind::Plunge, 0.0, 0.0),
-        at(MoveKind::Cut, 5.0, 0.09),
-        at(MoveKind::Cut, 10.0, 0.0),
-    ];
     let clamp = cut_craft_core::testing::square(4.9, -3.5, 0.55);
-    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", clamp)];
-    h.app.options.toolpaths.tolerance_2d = 0.1;
+    h.given_document(|d| {
+        let toolpath = d.toolpaths.get_mut(&id).unwrap();
+        toolpath.tool.diameter = 6.0;
+        // a cut bowed 0.09 mm away from a clamp: thinned, it runs straight and 0.05 mm into it
+        toolpath.moves = vec![
+            at(MoveKind::Plunge, 0.0, 0.0),
+            at(MoveKind::Cut, 5.0, 0.09),
+            at(MoveKind::Cut, 10.0, 0.0),
+        ];
+        d.keep_out = vec![KeepOutZone::new("Clamp 1", clamp)];
+    });
+    h.given_options(|o| o.toolpaths.tolerance_2d = 0.1);
     let plan = vec![vec![id]];
-    assert_eq!(h.app.not_kept_out(&h.app.doc, &plan), [] as [String; 0]);
+    assert_eq!(h.not_kept_out(&plan), [] as [String; 0]);
     // the checks before cutting check the moves as saved, thinned: a risk to the machine
-    let found = h
-        .app
-        .preflight(&plan, crate::files::ToolChanges::SeparateFiles);
+    let found = h.preflight(&plan, crate::files::ToolChanges::SeparateFiles);
     let keep_out = found
         .iter()
         .find(|f| f.check == cut_craft_core::check_list::Check::KeepOut)
@@ -963,23 +921,22 @@ fn the_keep_out_check_at_saving_checks_the_moves_that_are_saved() {
 #[test]
 fn a_previewed_toolpath_s_cuts_keep_its_colour_through_a_reorder() {
     let mut h = named_toolpaths();
-    h.app.job_epoch += 1;
+    h.given_it_opened_as_a_new_job();
     h.frame(vec![]);
     // the Pocket (id 1) was previewed: its cells carry its mark
-    let mark = h.app.preview_mark(EntityId(1));
-    let pocket = h.app.preview_fills()[&mark];
-    assert_eq!(pocket, h.app.doc.toolpaths[&EntityId(1)].preview_colour(0));
-    h.app
-        .apply(
-            "arrange_toolpaths",
-            &serde_json::json!({ "order": [2, 1, 3] }),
-        )
-        .unwrap();
+    let mark = h.preview_mark(EntityId(1));
+    let pocket = h.preview_fills()[&mark];
+    assert_eq!(pocket, h.doc().toolpaths[&EntityId(1)].preview_colour(0));
+    h.run(
+        "arrange_toolpaths",
+        &serde_json::json!({ "order": [2, 1, 3] }),
+    )
+    .unwrap();
     h.frame(vec![]);
-    let now = h.app.doc.toolpaths[&EntityId(2)].preview_colour(1);
-    assert_eq!(h.app.preview_fills()[&mark], now, "the Pocket's swatch");
+    let now = h.doc().toolpaths[&EntityId(2)].preview_colour(1);
+    assert_eq!(h.preview_fills()[&mark], now, "the Pocket's swatch");
     assert_eq!(
-        h.app.preview_mark(EntityId(2)),
+        h.preview_mark(EntityId(2)),
         mark,
         "previewing the Pocket again marks its cells the same"
     );
@@ -989,13 +946,15 @@ fn a_previewed_toolpath_s_cuts_keep_its_colour_through_a_reorder() {
 fn a_laser_cutting_into_a_keep_out_zone_is_not_told_to_turn_on_clipping() {
     use cut_craft_core::toolpath::{Move, MoveKind};
     let mut h = Harness::new();
-    h.app.doc = cut_craft_core::testing::with_toolpath();
-    h.app.doc.clip_keep_out = false;
-    h.app.doc.keep_out = vec![cut_craft_core::keep_out::KeepOutZone::new(
-        "Clamp",
-        cut_craft_core::testing::square(40.0, -10.0, 20.0),
-    )];
-    let mut t = h.app.doc.toolpaths.values().next().unwrap().clone();
+    h.open_document(cut_craft_core::testing::with_toolpath());
+    h.given_document(|d| {
+        d.clip_keep_out = false;
+        d.keep_out = vec![cut_craft_core::keep_out::KeepOutZone::new(
+            "Clamp",
+            cut_craft_core::testing::square(40.0, -10.0, 20.0),
+        )];
+    });
+    let mut t = h.doc().toolpaths.values().next().unwrap().clone();
     let at = |kind, x: f64, z: f64| Move {
         kind,
         to: cut_craft_core::glam::DVec3::new(x, 0.0, z),
@@ -1007,16 +966,16 @@ fn a_laser_cutting_into_a_keep_out_zone_is_not_told_to_turn_on_clipping() {
         at(MoveKind::Cut, 100.0, 0.0),
     ];
     t.power = vec![0.0, 0.0, 0.8];
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     c.add_toolpath(t.clone());
-    let why = h.app.keep_out_refusal(&c.finish()).expect("refused");
+    let why = h.keep_out_refusal(&c.finish()).expect("refused");
     assert!(!why.contains("Clip toolpaths"), "{why}");
     assert!(why.contains("laser"), "{why}");
     // a router's toolpath is still told it can be clipped
     t.power.clear();
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     c.add_toolpath(t);
-    let why = h.app.keep_out_refusal(&c.finish()).expect("refused");
+    let why = h.keep_out_refusal(&c.finish()).expect("refused");
     assert!(why.contains("Clip toolpaths"), "{why}");
 }
 
@@ -1024,17 +983,19 @@ fn a_laser_cutting_into_a_keep_out_zone_is_not_told_to_turn_on_clipping() {
 /// the nut sinks into the wood round the cut.
 fn collet_too_low() -> Harness {
     let mut h = Harness::new();
-    h.app.display.animate_preview = false;
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.given_animated_preview(false);
+    h.pin(Page::Toolpaths);
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
-    h.app.form = None;
-    for toolpath in h.app.doc.toolpaths.values_mut() {
-        toolpath.tool.flute_length = 1.0;
-        toolpath.tool.stickout = 2.0;
-    }
+    h.invoke("profile_toolpath");
+    let params = h.form_settings().clone();
+    h.run("profile_toolpath", &params).unwrap();
+    h.close_form();
+    h.given_document(|d| {
+        for toolpath in d.toolpaths.values_mut() {
+            toolpath.tool.flute_length = 1.0;
+            toolpath.tool.stickout = 2.0;
+        }
+    });
     h
 }
 
@@ -1043,35 +1004,32 @@ fn a_preview_marks_the_collet_hitting_the_wood_in_the_list_and_in_red() {
     // Matthew 2026-11-17: the uncut stock the preview keeps is what collisions are checked
     // against
     let mut h = collet_too_low();
-    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.invoke("preview_all_toolpaths");
     h.frame(vec![]);
-    let id = *h.app.doc.toolpaths.keys().next().unwrap();
-    let collided = h.app.preview.collisions.get(&id).expect("the nut hits");
+    let id = *h.doc().toolpaths.keys().next().unwrap();
+    let collided = h.collision(id).expect("the nut hits");
     assert!(
-        collided
-            .sentence
-            .contains("the collet nut would hit the material"),
-        "{}",
-        collided.sentence
+        collided.contains("the collet nut would hit the material"),
+        "{collided}"
     );
     assert!(
-        h.app
-            .status
-            .message
+        h.status_message()
             .contains("⚠ The collet or spindle would hit")
     );
     // red in the list
     h.frame(vec![]);
-    let name = h.app.doc.toolpaths[&id].name.clone();
+    let name = h.doc().toolpaths[&id].name.clone();
     assert!(h.text_at(&format!("⚠ {name}")).is_some());
     // and the wood in the way red in the 3D view
-    let surface = h.app.surface_3d().unwrap().into_owned();
+    let surface = h.surface_3d().unwrap();
     let [r, g, b, _] = super::panels::COLLISION_RED.to_array();
     let red = u32::from_be_bytes([1, r, g, b]);
     assert!(surface.paint.contains(&red));
     // recalculated, what was found no longer holds
-    h.app.doc.toolpaths.get_mut(&id).unwrap().moves.pop();
-    assert_eq!(h.app.current_collisions().count(), 0);
+    h.given_document(|d| {
+        d.toolpaths.get_mut(&id).unwrap().moves.pop();
+    });
+    assert_eq!(h.current_collisions(), 0);
 }
 
 #[test]
@@ -1079,21 +1037,22 @@ fn the_collet_nut_coming_down_over_a_clamp_is_marked_after_a_preview() {
     // Matthew 2026-11-17: keep-out zones get a height, so the collet is checked against
     // clamps too
     let mut h = Harness::new();
-    h.app.display.animate_preview = false;
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.given_animated_preview(false);
+    h.pin(Page::Toolpaths);
     h.rectangle(10.0, 10.0, 50.0, 50.0);
-    h.app.invoke(&h.ctx, "profile_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
-    h.app.form = None;
-    for toolpath in h.app.doc.toolpaths.values_mut() {
-        // the bit reaches the whole cut, so only the clamp is in the nut's way
-        toolpath.tool.flute_length = 60.0;
-        toolpath.tool.stickout = 60.0;
-    }
+    h.invoke("profile_toolpath");
+    let params = h.form_settings().clone();
+    h.run("profile_toolpath", &params).unwrap();
+    h.close_form();
+    h.given_document(|d| {
+        for toolpath in d.toolpaths.values_mut() {
+            // the bit reaches the whole cut, so only the clamp is in the nut's way
+            toolpath.tool.flute_length = 60.0;
+            toolpath.tool.stickout = 60.0;
+        }
+    });
     let deepest = h
-        .app
-        .doc
+        .doc()
         .toolpaths
         .values()
         .next()
@@ -1104,7 +1063,7 @@ fn the_collet_nut_coming_down_over_a_clamp_is_marked_after_a_preview() {
         .fold(0.0, f64::min);
     // a clamp just outside the profile, standing taller than the nut is above the deepest
     // pass
-    let o = h.app.doc.job.area().min;
+    let o = h.doc().job.area().min;
     let at = |x: f64, y: f64| cut_craft_core::geometry::Point::new(o.x + x, o.y + y);
     let clamp = cut_craft_core::geometry::Path::polyline(
         &[
@@ -1115,24 +1074,17 @@ fn the_collet_nut_coming_down_over_a_clamp_is_marked_after_a_preview() {
         ],
         true,
     );
-    h.app.doc.keep_out = vec![
-        cut_craft_core::keep_out::KeepOutZone::new("Clamp 1", clamp)
-            .standing(60.0 + deepest + 10.0),
-    ];
-    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.given_document(|d| {
+        d.keep_out = vec![
+            cut_craft_core::keep_out::KeepOutZone::new("Clamp 1", clamp)
+                .standing(60.0 + deepest + 10.0),
+        ];
+    });
+    h.invoke("preview_all_toolpaths");
     h.frame(vec![]);
-    let id = *h.app.doc.toolpaths.keys().next().unwrap();
-    let collided = h
-        .app
-        .preview
-        .collisions
-        .get(&id)
-        .expect("the nut comes over the clamp");
-    assert!(
-        collided.sentence.contains("below the top of Clamp 1"),
-        "{}",
-        collided.sentence
-    );
+    let id = *h.doc().toolpaths.keys().next().unwrap();
+    let collided = h.collision(id).expect("the nut comes over the clamp");
+    assert!(collided.contains("below the top of Clamp 1"), "{collided}");
 }
 
 #[test]
@@ -1142,35 +1094,30 @@ fn checks_asked_for_while_other_work_runs_wait_their_turn_without_holding_up_the
     use crate::files::ToolChanges;
     let mut h = Harness::new();
     two_tools(&mut h);
-    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
-    h.app.wait_before_showing = std::time::Duration::ZERO;
+    let plan = vec![h.doc().toolpaths.keys().copied().collect::<Vec<_>>()];
+    h.given_progress_shown_at_once();
     let (go, wait) = std::sync::mpsc::channel::<()>();
-    h.app.in_background(
-        "Calculating Slow Toolpath",
-        "test:slow",
-        move || {
-            wait.recv_timeout(std::time::Duration::from_secs(3)).ok();
-        },
-        |_, ()| {},
-    );
-    assert!(h.app.busy.is_some(), "the slow work is running");
+    h.start_slow_job("Calculating Slow Toolpath", move || {
+        wait.recv_timeout(std::time::Duration::from_secs(3)).ok();
+    });
+    assert!(h.busy(), "the slow work is running");
     let asked = std::time::Instant::now();
     assert!(
-        h.app.save_checks(&plan, ToolChanges::ToolChanger).is_none(),
+        h.save_checks(&plan, ToolChanges::ToolChanger).is_none(),
         "not checked yet"
     );
     assert!(
         asked.elapsed() < std::time::Duration::from_secs(2),
         "the window kept drawing"
     );
-    assert!(h.app.save_checks.is_empty(), "not counted as started");
+    assert_eq!(h.checks_kept(), 0, "not counted as started");
     go.send(()).ok();
     until_not_busy(&mut h);
     // asked for again (the next frame): checked now
-    let _ = h.app.save_checks(&plan, ToolChanges::ToolChanger);
+    let _ = h.save_checks(&plan, ToolChanges::ToolChanger);
     until_not_busy(&mut h);
     assert!(
-        h.app.save_checks(&plan, ToolChanges::ToolChanger).is_some(),
+        h.save_checks(&plan, ToolChanges::ToolChanger).is_some(),
         "checked once the worker was free"
     );
 }
