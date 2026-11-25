@@ -25,6 +25,7 @@ mod locked_face;
 mod machines;
 mod materials;
 mod models_3d;
+mod models_in_3d;
 mod moving;
 mod nodes_and_text;
 mod previews;

@@ -14,6 +14,7 @@ mod interface;
 mod job;
 mod jobs;
 mod machines;
+mod models;
 mod nodes_and_text;
 mod panels;
 mod preview;
@@ -29,7 +30,7 @@ mod views;
 mod window;
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 31] = [
+const THROUGH_THE_HARNESS: [(&str, &str); 33] = [
     ("layers_sheets.rs", include_str!("layers_sheets.rs")),
     (
         "accessibility_tests.rs",
@@ -67,6 +68,8 @@ const THROUGH_THE_HARNESS: [(&str, &str); 31] = [
     ("previews.rs", include_str!("previews.rs")),
     ("saving_toolpaths.rs", include_str!("saving_toolpaths.rs")),
     ("jobs_and_files.rs", include_str!("jobs_and_files.rs")),
+    ("models_3d.rs", include_str!("models_3d.rs")),
+    ("models_in_3d.rs", include_str!("models_in_3d.rs")),
 ];
 
 /// The lines of `source` that reach into the app past the harness.
