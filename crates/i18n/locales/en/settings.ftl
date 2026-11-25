@@ -357,6 +357,16 @@ setting-2d-view-in-the-dark-162499 = 2D view in the dark theme
 setting-the-2d-view-s-colors-4c80a7 = The 2D view's colors while the dark theme is on
 setting-grid-point-size-39e980 = Grid point size
 setting-how-big-the-snap-grid-018487 = How big the snap grid's points are drawn, in screen points
+setting-rotary-wrap-bands-1c6ba4 = Rotary wrap bands
+setting-rotary-jobs-how-far-past-1f66ea =
+    Rotary jobs: how far past each seam the 2D view shows the other side of the
+    material, so a line that runs off one edge can be seen coming back in at the other
+setting-off-c6b4aa = Off
+setting-no-bands-the-sheet-alone-73a7c1 = No bands: the sheet alone, as on a flat job
+setting-quarter-turn-fdf29a = Quarter turn
+setting-a-quarter-of-a-turn-1b8376 = A quarter of a turn (90°) past each seam
+setting-half-turn-3a7553 = Half turn
+setting-half-a-turn-180-past-ce6dfa = Half a turn (180°) past each seam: the whole of the other side at once
 setting-text-size-041143 = Text size
 setting-how-big-text-buttons-and-a5d892 =
     How big text, buttons and lines are, as a percentage: larger is easier to read and to
@@ -3125,7 +3135,6 @@ setting-hidden-levels-are-left-out-88f322 = Hidden levels are left out of the mo
 setting-raises-the-whole-level-on-4e45c6 = Raises the whole level on a flat plane this thick
 setting-mirror-mode-f9938d = Mirror Mode
 setting-a-level-s-mirror-mode-12824e = A level's mirror mode: which part of the job is drawn, the rest being its reflection.
-setting-off-c6b4aa = Off
 setting-no-mirroring-the-level-is-0a060c = No mirroring: the level is as modelled
 setting-the-left-half-is-copied-b658bc = The left half is copied, flipped, onto the right half
 setting-right-to-left-de077b = Right to Left
