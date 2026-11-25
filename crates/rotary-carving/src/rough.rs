@@ -153,12 +153,22 @@ impl Work<'_> {
                 for (&(along, round), &floor) in line.iter().zip(&grid.floors[l]) {
                     let goal = level.max(floor);
                     let lets = room(along);
-                    if lets > goal + 1e-6 && goal < at(&left, along) - GRAZE {
-                        out.short.push((along, lets - goal));
-                    }
                     let h = goal.max(lets).min(self.top);
-                    hs.push(h);
-                    points.push((self.point(along, round, h - radius), 0.0));
+                    let point = (self.point(along, round, h - radius), 0.0);
+                    // outside the machining limit nothing is cut: the material there still
+                    // reaches as far out as it did, for the holder, and nothing was cut short
+                    if self
+                        .limit
+                        .is_some_and(|limit| !limit.holds_point(self.along_x, &point))
+                    {
+                        hs.push(f64::INFINITY);
+                    } else {
+                        if lets > goal + 1e-6 && goal < at(&left, along) - GRAZE {
+                            out.short.push((along, lets - goal));
+                        }
+                        hs.push(h);
+                    }
+                    points.push(point);
                 }
                 heights.push(hs);
                 let backwards = match one_way {
@@ -299,7 +309,8 @@ impl Work<'_> {
     }
 
     /// `left` (how far out the material reaches in each `bin` along the part) lowered to
-    /// what a level, cut at `heights` on the `grid`, left of it.
+    /// what a level, cut at `heights` on the `grid`, left of it; a height that is infinite
+    /// (a point the level didn't cut) leaves its bin as it was.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
