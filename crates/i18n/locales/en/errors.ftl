@@ -388,13 +388,13 @@ error-select-the-closed-vectors-to-a33d38 = select the closed vectors to reset i
 ## commands/reset-outside-selected-vectors/src/lib.rs
 error-select-the-closed-vectors-to-7c823b = select the closed vectors to reset outside
 
+## commands/rotary-finishing-toolpath/src/lib.rs
+error-this-toolpath-turns-the-material-f20ce9 = this toolpath turns the material: set the job up as rotary in Job Setup
+error-no-room-for-the-registration-29c30f = No room for the registration mark clear of the chuck and tailstock, so it is left out: pencil a line along the material at A=0 before you start, or bring End in from the tailstock.
+
 ## commands/rotary-lathe-toolpath/src/lib.rs
 error-the-lathe-spins-the-material-5ba114 = the lathe spins the material: set the job up as rotary in Job Setup
 error-the-tool-s-stepover-must-fba4c4 = the tool's stepover must be more than 0% and at most 100%: set it in the Tool Database
-
-## commands/rotary-machining-toolpath/src/lib.rs
-error-this-toolpath-turns-the-material-f20ce9 = this toolpath turns the material: set the job up as rotary in Job Setup
-error-the-rings-must-end-further-a7914d = the rings must end further along than they start
 
 ## commands/rounding-toolpath/src/lib.rs
 error-rounding-needs-a-rotary-job-d51669 = rounding needs a rotary job: set one up in Job Setup
