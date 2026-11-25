@@ -1121,8 +1121,7 @@ fn windows_over_the_view_are_left_out_of_its_picture() {
     let (mut h, at) = switched_on();
     // a real port, which Options keeps as it is
     h.app.options.web_api.port = at.port();
-    h.app.options_window = true;
-    h.app.options_goto = Some("web_api");
+    h.app.options_editor.open_at("web_api");
     h.frame(vec![]);
     h.frame(vec![]);
     let State::Running(at) = h.app.web_api_state().clone() else {
@@ -1163,7 +1162,7 @@ fn windows_over_the_view_are_left_out_of_its_picture() {
     assert_eq!(hidden, Some(true), "the picture's frame has no windows");
     h.frame(vec![]);
     assert!(shows(&h, "WEB API Running at"), "Options is back");
-    assert!(h.app.options_window);
+    assert!(h.app.options_editor.open);
 }
 
 /// Whether any text drawn last frame holds `part`.

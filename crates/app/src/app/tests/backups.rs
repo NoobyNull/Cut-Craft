@@ -66,8 +66,7 @@ fn changing_the_window_layout_backs_up_first_and_options_lists_it() {
     h.app.set_layout(other);
     assert_eq!(auto.kept().len(), 1);
 
-    h.app.options_window = true;
-    h.app.options_goto = Some("backups");
+    h.app.options_editor.open_at("backups");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(

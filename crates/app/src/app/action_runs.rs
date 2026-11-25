@@ -289,13 +289,13 @@ impl CutCraftApp {
     /// Options, with no field ringed from an earlier hint.
     pub(super) fn open_options(&mut self, ctx: &egui::Context) {
         crate::marks::clear_spotlight(ctx);
-        self.options_window = true;
+        self.options_editor.open = true;
     }
 
     /// The toolpaths menu's hint: Options at Advanced rotary mode, ringed.
     pub(super) fn open_advanced_rotary_mode(&mut self, ctx: &egui::Context) {
-        self.options_goto = Some("toolpaths");
+        self.options_editor.open_at("toolpaths");
         crate::marks::spotlight(ctx, "field:advanced_rotary");
-        self.options_window = true;
+        self.options_editor.open = true;
     }
 }

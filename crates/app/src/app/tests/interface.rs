@@ -567,7 +567,7 @@ fn advanced_options_show_only_once_ticked_and_warn_first() {
 fn options_cancel_throws_away_changes_not_applied() {
     let mut h = options_with_a_change_not_applied();
     click_button(&mut h, "Cancel");
-    assert!(!h.app.options_window, "closed");
+    assert!(!h.app.options_editor.open, "closed");
     assert_eq!(h.app.options.general.recent_file_list_size, 9, "as it was");
     assert!(!h.app.options_dirty());
     // opened again, it shows the options as they are
@@ -1328,8 +1328,7 @@ fn a_language_pack_picked_in_options_is_used_once_applied() {
     std::fs::write(ru.join("menus.ftl"), "menu-file = Файл\n").unwrap();
     let mut h = Harness::new();
     h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
-    h.app.options_window = true;
-    h.app.options_goto = Some(crate::options::LANGUAGE);
+    h.app.options_editor.open_at(crate::options::LANGUAGE);
     h.frame(vec![]);
     h.frame(vec![]);
     // listed with how much it covers, and marked as not official (unsigned)

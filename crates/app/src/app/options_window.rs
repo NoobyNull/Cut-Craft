@@ -14,23 +14,23 @@ impl CutCraftApp {
         reason = "the one Options window, with the extras some pages show under their settings"
     )]
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
-        let mut open = self.options_window;
+        let mut open = self.options_editor.open;
         let fields = self.options_categories();
         let mut values = serde_json::to_value(self.edited_options()).expect("options serialise");
         let dirty = self.options_dirty();
-        let closing = self.options_closing;
+        let closing = self.options_editor.closing;
         let mut button = None;
         let mut answer = None;
         let mut changed = None;
         let mut reset = None;
-        if let Some(key) = self.options_goto.take()
+        if let Some(key) = self.options_editor.take_goto()
             && let Some(at) = fields.iter().position(|f| f.key == key)
         {
-            self.options_page = at;
+            self.options_editor.page = at;
         }
         // Mouse and Shortcuts lists every action's shortcuts under its settings
         let on_shortcuts = fields
-            .get(self.options_page)
+            .get(self.options_editor.page)
             .is_some_and(|f| f.key == super::shortcuts_page::CATEGORY);
         let rows = if on_shortcuts {
             self.shortcut_rows(&self.shortcut_search)
@@ -45,7 +45,7 @@ impl CutCraftApp {
                 .map_or_else(|| id.to_owned(), |(_, label)| label.clone())
         };
         let on_job_defaults = fields
-            .get(self.options_page)
+            .get(self.options_editor.page)
             .is_some_and(|f| f.key == crate::options::JOB_DEFAULTS);
         let (job_fields, mut job_params, job_error) = if on_job_defaults {
             self.job_defaults_state()
@@ -53,7 +53,7 @@ impl CutCraftApp {
             (vec![], Value::Null, None)
         };
         let on_language = fields
-            .get(self.options_page)
+            .get(self.options_editor.page)
             .is_some_and(|f| f.key == crate::options::LANGUAGE);
         if on_language && self.language_packs.is_none() {
             let dir = self.addons.dir().map(std::path::Path::to_path_buf);
@@ -71,7 +71,7 @@ impl CutCraftApp {
         }
         let language_packs = self.language_packs.clone().unwrap_or_default();
         let on_backups = fields
-            .get(self.options_page)
+            .get(self.options_editor.page)
             .is_some_and(|f| f.key == BACKUPS);
         let backups_listed = if on_backups {
             self.backups_listed()
@@ -92,8 +92,8 @@ impl CutCraftApp {
         let mut forget_unsigned = false;
         let mut job_edited = false;
         let (icons, materials) = (&self.icons, &self.materials);
-        let show_advanced = &mut self.show_advanced;
-        let page = &mut self.options_page;
+        let show_advanced = &mut self.options_editor.show_advanced;
+        let page = &mut self.options_editor.page;
         *page = (*page).min(fields.len().saturating_sub(1));
         let (id, size) = (egui::Id::unique("options"), dialog_size(ctx));
         // the categories down the left, the chosen one's settings beside them
@@ -185,7 +185,7 @@ impl CutCraftApp {
         });
         if let Some(page) = reset {
             if page == crate::options::JOB_DEFAULTS {
-                self.job_defaults_form = None;
+                self.options_editor.job_defaults_form = None;
             }
             changed = Some(self.edited_options().reset(&page));
         }
@@ -247,7 +247,7 @@ impl CutCraftApp {
                 inner.retain(|f| f.key != "wayland_native");
             }
         }
-        if !self.show_advanced {
+        if !self.options_editor.show_advanced {
             fields.retain(|f| f.key != "advanced");
         }
         fields

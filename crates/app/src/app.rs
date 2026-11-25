@@ -76,6 +76,7 @@ mod meshes_3d;
 mod node_editing;
 mod notes_panel;
 mod options_apply;
+mod options_editor;
 mod options_window;
 mod output;
 mod pace;
@@ -1020,27 +1021,12 @@ pub(crate) struct CutCraftApp {
     guide_drag: Option<(bool, Option<usize>)>,
     /// Transform mode's corners rotate rather than scale.
     rotating: bool,
-    /// Edit ▸ Options, kept between runs, and whether its window is open.
+    /// Edit ▸ Options, kept between runs.
     options: crate::options::Options,
-    options_window: bool,
-    /// Changes made in the Options window and not applied yet; `None` when it shows the
-    /// options as they are. They take effect only on Apply.
-    options_draft: Option<crate::options::Options>,
-    /// Options ▸ Job Defaults' job settings as being edited, and why the job they make was
-    /// refused, if it was (kept as typed until it is put right).
-    job_defaults_form: Option<(Value, Option<String>)>,
-    /// Close was pressed with changes not applied: the window asks Apply or Discard.
-    options_closing: bool,
-    /// The Options category shown, by its place in the list.
-    options_page: usize,
-    /// Show advanced settings is ticked: the Advanced category lists. Off at every start, so
-    /// reaching them is always a deliberate step.
-    show_advanced: bool,
+    /// The Options window: whether it is open, its page, and the changes not applied yet.
+    options_editor: options_editor::OptionsEditor,
     /// Options ▸ Web API: the server, if it is listening, and the calls waiting to run.
     web_api: web_api::WebApi,
-    /// The Options category to show when the window next draws, by its key (Help ▸
-    /// Keyboard Shortcuts' Change Shortcuts opens Mouse and Shortcuts).
-    options_goto: Option<&'static str>,
     /// A shortcut being set in Options ▸ Mouse and Shortcuts: the next key or mouse button
     /// pressed is taken for it, and runs nothing.
     capture: Option<ShortcutCapture>,

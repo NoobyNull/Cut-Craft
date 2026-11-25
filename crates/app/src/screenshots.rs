@@ -198,14 +198,14 @@ const SCENES: &[Scene] = &[
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {
-        app.options_closing = true;
+        app.options_editor.closing = true;
     }),
     ("snapping-not-applied", snapping_not_applied),
     // Help: Moving the views (Options ▸ Mouse and Shortcuts, Trackpad mode and Invert)
     ("options-mouse-controls", |app, ctx| {
         (app.snap_window, app.snap_draft, app.post_window) = (false, None, None);
         options_not_applied(app, ctx);
-        app.options_goto = Some(super::shortcuts_page::CATEGORY);
+        app.options_editor.open_at(super::shortcuts_page::CATEGORY);
         let mut edited = app.options.clone();
         (edited.controls.trackpad, edited.controls.invert_drag_y) = (true, true);
         app.options_edited(edited);
@@ -213,8 +213,7 @@ const SCENES: &[Scene] = &[
     // Help: Changing settings ▸ Job Defaults
     ("options-job-defaults", |app, ctx| {
         (app.form, app.tool_manager, app.materials_window) = (None, None, None);
-        app.options_closing = false;
-        app.options_draft = None;
+        app.options_editor.close();
         app.open_job_defaults();
         ctx.set_embed_viewports(true);
     }),
@@ -235,15 +234,13 @@ const SCENES: &[Scene] = &[
     // Help: Confirmation Choices
     ("options-confirmations", |app, ctx| {
         everyday(app);
-        app.options_window = true;
-        app.options_goto = Some("confirmations");
+        app.options_editor.open_at("confirmations");
         ctx.set_embed_viewports(true);
     }),
     // Help: Using Cut Craft in another language (Options ▸ Language)
     ("options-language", |app, ctx| {
         everyday(app);
-        app.options_window = true;
-        app.options_goto = Some("language");
+        app.options_editor.open_at("language");
         // an official pack as it shows once installed: who translated it, how much is done
         let pack = crate::languages::Pack {
             id: "language-ru".into(),
@@ -265,8 +262,7 @@ const SCENES: &[Scene] = &[
     // Help: Screen readers (Options ▸ Appearance, where the text size is)
     ("options-appearance", |app, ctx| {
         everyday(app);
-        app.options_window = true;
-        app.options_goto = Some("appearance");
+        app.options_editor.open_at("appearance");
         ctx.set_embed_viewports(true);
     }),
     // Help: Help Contents (the Help window open on it)
@@ -433,7 +429,7 @@ fn checks_job(app: &mut CutCraftApp, ctx: &egui::Context) {
 
 /// Snapping Options (F4) with Smart snapping unticked and not applied yet.
 fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
-    (app.options_window, app.options_draft, app.options_closing) = (false, None, false);
+    app.options_editor.close();
     // Material Setup's page put away, so nothing covers the window
     app.form = None;
     app.pages.set_pinned(super::Page::Toolpaths, false);
@@ -449,8 +445,7 @@ fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.updates = crate::update::Updates::default();
     app.gcode_view = None;
     app.info = None;
-    app.options_window = true;
-    app.options_goto = Some("appearance");
+    app.options_editor.open_at("appearance");
     let mut edited = app.options.clone();
     edited.appearance.theme = crate::options::Theme::Dark;
     app.options_edited(edited);
@@ -461,7 +456,7 @@ fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
 /// The everyday help pages' start: a new blank job in the 2D view, every window and form
 /// put away and nothing pinned over the view.
 fn everyday(app: &mut CutCraftApp) {
-    (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
+    app.options_editor.close();
     (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
     (app.form, app.info, app.gcode_view, app.save_form) = (None, None, None, None);
     (app.search, app.guide_props, app.first_run) = (None, None, None);
@@ -635,7 +630,7 @@ fn z_zero(app: &mut CutCraftApp, ctx: &egui::Context, z_zero: ZZero, datum: Datu
 /// A Profile toolpath calculated, then Calculate pressed again with nothing changed: the
 /// form says it is already up to date and offers Calculate as New.
 fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
-    (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
+    app.options_editor.close();
     (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
     app.form = None;
     app.gcode_view = None;
