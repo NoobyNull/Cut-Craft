@@ -3707,6 +3707,17 @@ setting-cut-away-the-centre-stock-3b5b5d =
     the model: for the last toolpath, once everything else is cut. The ends the part is
     kept joined at stay as they are
 
+## Rotary Locked Angles (rotary_locked_angles_toolpath)
+setting-a-locked-at-one-angle-276e9e =
+    A locked at one angle after another, each where it reaches the most of what is left, and
+    the side facing the bit finished with A held still.
+setting-most-angles-1497ba = Most angles
+setting-the-most-angles-a-locks-1f62a1 =
+    The most angles A locks at. Each is picked where it reaches the most of what is left,
+    and it stops sooner when nothing worth another is left
+setting-where-along-the-axis-it-b9de76 = Where along the axis it starts, from the job's start (the chuck end)
+setting-where-along-the-axis-it-0fada5 = Where along the axis it ends, from the job's start; 0 runs to the job's end
+
 ## 4-Axis Rotary Machining (rotary_machining_toolpath)
 setting-the-bit-a-ball-nose-40e65e = The bit: a ball nose follows curves best. Its finishing stepover spaces the rings
 setting-how-the-bit-goes-round-a6e7cf = How the bit goes round the part
@@ -3770,7 +3781,6 @@ setting-cuts-a-groove-one-bit-39bfe9 =
 setting-where-along-the-axis-it-44e8c0 =
     Where along the axis it starts, from the job's start (the chuck end); for Part off,
     where the groove is
-setting-where-along-the-axis-it-0fada5 = Where along the axis it ends, from the job's start; 0 runs to the job's end
 setting-holding-stub-aa4acc = Holding stub
 setting-across-the-stub-left-on-ac7faa =
     Across the stub left on the turning axis, joining the part to the rest of the
