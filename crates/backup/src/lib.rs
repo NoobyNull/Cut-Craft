@@ -360,7 +360,7 @@ fn gather(config: &Path, choice: &Choice) -> Result<Vec<Gathered>, Error> {
     let mut gathered = vec![];
     for &part in &choice.parts {
         for place in part.places() {
-            for path in place_files(config, place) {
+            for path in place_files(config, place)? {
                 let bytes = std::fs::read(config.join(&path))
                     .map_err(|e| Error::File(config.join(&path), e))?;
                 let bytes = if choice.secrets {
@@ -383,52 +383,58 @@ fn gather(config: &Path, choice: &Choice) -> Result<Vec<Gathered>, Error> {
     Ok(gathered)
 }
 
-/// The files at `place` that are there, by their `/` path in `config`.
-fn place_files(config: &Path, place: &Place) -> Vec<String> {
+/// The files at `place` that are there, by their `/` path in `config`. A folder that is not
+/// there holds nothing; one that cannot be read fails the backup rather than leave it short.
+fn place_files(config: &Path, place: &Place) -> Result<Vec<String>, Error> {
+    let mut found = vec![];
     match place {
         Place::File(name) => {
             if config.join(name).is_file() {
-                vec![(*name).to_owned()]
-            } else {
-                vec![]
+                found.push((*name).to_owned());
             }
         }
-        Place::Folder(name) => {
-            let mut found = vec![];
-            walk(&config.join(name), name, &mut found);
-            found.sort();
-            found
-        }
+        Place::Folder(name) => walk(&config.join(name), name, &mut found)?,
         Place::AddOnRecords => {
-            let mut found: Vec<String> = std::fs::read_dir(config.join(ADD_ONS))
-                .into_iter()
-                .flatten()
-                .flatten()
-                .filter(|e| e.path().join(ADD_ON_RECORD).is_file())
-                .map(|e| {
-                    format!(
+            for entry in entries(&config.join(ADD_ONS))? {
+                if entry.path().join(ADD_ON_RECORD).is_file() {
+                    found.push(format!(
                         "{ADD_ONS}/{}/{ADD_ON_RECORD}",
-                        e.file_name().to_string_lossy()
-                    )
-                })
-                .collect();
-            found.sort();
-            found
+                        entry.file_name().to_string_lossy()
+                    ));
+                }
+            }
         }
+    }
+    found.sort();
+    Ok(found)
+}
+
+/// What is in `dir`: nothing when it is not there, an error when it cannot be read.
+fn entries(dir: &Path) -> Result<Vec<std::fs::DirEntry>, Error> {
+    let failed = |e| Error::File(dir.to_owned(), e);
+    match std::fs::read_dir(dir) {
+        Ok(read) => read.collect::<Result<_, _>>().map_err(failed),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(vec![]),
+        Err(e) => Err(failed(e)),
     }
 }
 
-/// Every file under `dir`, named `prefix/...`.
-fn walk(dir: &Path, prefix: &str, found: &mut Vec<String>) {
-    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+/// Every file under `dir`, named `prefix/...`. A link to a folder is not followed, so a link
+/// back up the tree cannot make the walk go round for ever; a link to a file is backed up as
+/// the file.
+fn walk(dir: &Path, prefix: &str, found: &mut Vec<String>) -> Result<(), Error> {
+    for entry in entries(dir)? {
         let name = format!("{prefix}/{}", entry.file_name().to_string_lossy());
-        let path = entry.path();
-        if path.is_dir() {
-            walk(&path, &name, found);
-        } else if path.is_file() {
+        let kind = entry
+            .file_type()
+            .map_err(|e| Error::File(entry.path(), e))?;
+        if kind.is_dir() {
+            walk(&entry.path(), &name, found)?;
+        } else if entry.path().is_file() {
             found.push(name);
         }
     }
+    Ok(())
 }
 
 /// `bytes` of the file at `path` with [`SECRETS`] taken out; as they are when there are none,

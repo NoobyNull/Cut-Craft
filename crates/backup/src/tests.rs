@@ -257,3 +257,41 @@ fn two_backups_in_the_same_second_get_names_of_their_own() {
     assert_ne!(first, second);
     assert_eq!(auto.kept().len(), 2);
 }
+
+#[cfg(unix)]
+#[test]
+fn a_link_back_up_the_folders_is_not_followed() {
+    let dir = settings_folder("link-loop");
+    std::os::unix::fs::symlink(dir.join("templates"), dir.join("templates/signs/again")).unwrap();
+    let to = dir.join("out.ccbackup");
+    let choice = Choice {
+        parts: [Part::Templates].into(),
+        secrets: false,
+    };
+    let manifest = write(&dir, &choice, Reason::ByHand, "0.7.7", 1, &to).unwrap();
+    assert_eq!(paths(&manifest), ["templates/signs/oval.ccjobt"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_folder_that_cannot_be_read_fails_the_backup_rather_than_leave_it_short() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = settings_folder("unreadable");
+    let locked = dir.join("templates/signs");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    // a user who can read anything (root, as in some containers) reads it anyway
+    let readable = fs::read_dir(&locked).is_ok();
+    let made = write(
+        &dir,
+        &Choice::default(),
+        Reason::ByHand,
+        "0.7.7",
+        1,
+        &dir.join("out.ccbackup"),
+    );
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+    if !readable {
+        assert!(matches!(made, Err(Error::File(path, _)) if path == locked));
+        assert!(!dir.join("out.ccbackup").exists());
+    }
+}
