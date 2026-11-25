@@ -91,6 +91,8 @@ mod surfacing;
 mod tabs;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::document_menus;
 mod tips;
 mod title_bar;
 mod toolpath_output;

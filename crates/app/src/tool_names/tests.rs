@@ -64,8 +64,9 @@ fn every_page_tab() -> Vec<&'static str> {
     names
 }
 
-/// Every menu item the menu bar shows, with and without a job, and the right-click menus of a
-/// tool and of a sub-tab.
+/// Every menu item the menu bar shows, with and without a job, the right-click menus of a
+/// tool and of a sub-tab, and those of a job's toolpaths, layers, sheets, levels, components
+/// and groups.
 fn every_menu_item() -> Vec<String> {
     let menus = MenuSystem::new();
     let mut items: Vec<gui::MenuItem> = Vec::new();
@@ -93,8 +94,12 @@ fn every_menu_item() -> Vec<String> {
         items.extend(set.menu(name, &[]));
         items.extend(set.menu(name, &[name.to_owned()]));
     }
+    let (document, own) = crate::app::document_menus();
+    items.extend(document);
     let mut names = Vec::new();
     menu_item_names(&items, &mut names);
+    // the job's own names (a layer's, a sheet's) are the person's words
+    names.retain(|n| !own.contains(n));
     names
 }
 
