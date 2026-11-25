@@ -640,10 +640,107 @@ impl Harness {
     pub(super) fn busy(&self) -> bool {
         self.app.busy.is_some()
     }
+
+    // ---- the mouse and the views it moves ----
+
+    /// How the 2D view maps the job to the screen, as last drawn.
+    pub(super) fn view_2d_transform(&self) -> ViewTransform {
+        self.app.view_transform.expect("the 2D view was drawn")
+    }
+
+    /// The 3D view's area on screen.
+    pub(super) fn view_3d_area(&self) -> Rect {
+        self.app.view_3d_area.expect("the 3D view is drawn")
+    }
+
+    /// How the 3D view is panned and zoomed.
+    pub(super) fn framing_3d(&self) -> view3d::Framing {
+        self.app.framing
+    }
+
+    /// The view tool in hand (Pan, Zoom Box, ...), if one is.
+    pub(super) fn view_tool(&self) -> Option<ViewTool> {
+        self.app.view_tool
+    }
+
+    /// Puts the view tool down, back to selecting.
+    pub(super) fn put_down_view_tool(&mut self) {
+        self.app.view_tool = None;
+    }
+
+    /// The buttons drawn as words, as where the icons are missing.
+    pub(super) fn given_no_icons(&mut self) {
+        self.app.icons = Icons::load(std::path::Path::new("/no/icons"));
+    }
+
+    /// What Copy or Cut put on Cut Craft's clipboard.
+    pub(super) fn clipboard(&self) -> &[Path] {
+        &self.app.clipboard
+    }
+
+    // ---- the window ----
+
+    /// The desktop's own title bar, as chosen at start (the menus then start at the left).
+    pub(super) fn given_desktop_title_bar(&mut self) {
+        self.app.title_bar_at_start = true;
+    }
+
+    // ---- shortcuts ----
+
+    /// Opens Options at its Shortcuts page.
+    pub(super) fn open_shortcut_options(&mut self) {
+        self.app.options_window = true;
+        self.app.options_goto = Some(super::super::shortcuts_page::CATEGORY);
+    }
+
+    /// Whether the Options window is open.
+    pub(super) fn options_window_open(&self) -> bool {
+        self.app.options_window
+    }
+
+    /// A press on the Shortcuts page: Add…, Reset, Move it here, ...
+    pub(super) fn edit_shortcuts(&mut self, edit: super::super::shortcuts_page::Edit) {
+        self.app.apply_shortcut_edit(edit);
+    }
+
+    /// The Shortcuts page waiting for the next key or button, if it is.
+    pub(super) fn waiting_for_shortcut(&self) -> Option<&super::super::settings::ShortcutCapture> {
+        self.app.capture.as_ref()
+    }
+
+    /// The keys and buttons the Shortcuts page lists for `id` (applied or not).
+    pub(super) fn shortcuts_of(&self, id: &str) -> Vec<shortcut::Trigger> {
+        self.app.shortcuts_of(id)
+    }
+
+    /// Adds `trigger` to `id` on the Shortcuts page (used once applied).
+    pub(super) fn add_shortcut(&mut self, id: &str, trigger: shortcut::Trigger) {
+        self.app.add_shortcut(id, trigger);
+    }
+
+    /// Takes `trigger` off `id` on the Shortcuts page (gone once applied).
+    pub(super) fn remove_shortcut(&mut self, id: &str, trigger: shortcut::Trigger) {
+        self.app.remove_shortcut(id, trigger);
+    }
+
+    /// Every key and button in use now, with the action each runs.
+    pub(super) fn shortcuts_in_use(&self) -> Vec<(String, shortcut::Trigger)> {
+        self.app.bindings(&self.ctx)
+    }
+
+    /// `id`'s shortcut as the menus show it.
+    pub(super) fn shortcut_text(&self, id: &str) -> Option<String> {
+        self.app.shortcut_text(id)
+    }
+
+    /// The Shortcuts page's rows when its search box holds `search`.
+    pub(super) fn shortcut_rows(&self, search: &str) -> Vec<super::super::shortcuts_page::Row> {
+        self.app.shortcut_rows(search)
+    }
 }
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 11] = [
+const THROUGH_THE_HARNESS: [(&str, &str); 12] = [
     ("layers_sheets.rs", include_str!("layers_sheets.rs")),
     (
         "accessibility_tests.rs",
@@ -658,6 +755,7 @@ const THROUGH_THE_HARNESS: [(&str, &str); 11] = [
     ("rotary.rs", include_str!("rotary.rs")),
     ("moving.rs", include_str!("moving.rs")),
     ("calculating.rs", include_str!("calculating.rs")),
+    ("keys_and_mouse.rs", include_str!("keys_and_mouse.rs")),
 ];
 
 /// The lines of `source` that reach into the app past the harness.
