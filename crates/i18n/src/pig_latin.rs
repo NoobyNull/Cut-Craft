@@ -182,7 +182,13 @@ mod tests {
         assert_eq!(pack.coverage(), english().coverage());
         for (name, src) in &files {
             let en = ENGLISH.iter().find(|(n, _)| n == name).unwrap().1;
-            let placeables = |s: &str| s.matches("{ $").count();
+            // comments are not carried into the pack
+            let placeables = |s: &str| {
+                s.lines()
+                    .filter(|l| !l.trim_start().starts_with('#'))
+                    .map(|l| l.matches("{ $").count())
+                    .sum::<usize>()
+            };
             assert_eq!(
                 placeables(src),
                 placeables(en),

@@ -266,11 +266,10 @@ impl CutCraftApp {
             if released {
                 self.drag_3d = None;
                 self.status
-                    .set_message("Let go off the material: nothing was changed");
+                    .set_message(&cut_craft_i18n::tr!("status-let-go-off-material"));
             } else {
-                self.status.set_message(
-                    "The pointer is off the material: bring it back, or let go to cancel",
-                );
+                self.status
+                    .set_message(&cut_craft_i18n::tr!("status-pointer-off-material"));
             }
             return;
         };
@@ -296,7 +295,8 @@ impl CutCraftApp {
         if let Some((.., Some(_))) = self.drag_base.take() {
             self.history.undo(&mut self.doc);
         }
-        self.status.set_message("Cancelled: nothing was changed");
+        self.status
+            .set_message(&cut_craft_i18n::tr!("status-cancelled-nothing-done"));
     }
 
     /// A height handle's drag: the component follows the pointer (made again at most every
@@ -641,9 +641,8 @@ impl CutCraftApp {
         if removed > 0 {
             self.before_preview = Some(super::super::BeforePreview(before, self.preview_side));
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-            self.status.set_message(
-                "Removed the piece cut free: Undo Last Preview on the Toolpaths page brings it back",
-            );
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-removed-piece-cut-free"));
         }
         removed > 0
     }

@@ -205,8 +205,10 @@ impl CutCraftApp {
         {
             Ok(p) => p,
             Err(e) => {
-                self.status
-                    .set_message(&format!("Suggest could not read the form: {e}"));
+                self.status.set_message(&cut_craft_i18n::tr!(
+                    "status-suggest-could-not-read",
+                    error = e.to_string()
+                ));
                 return;
             }
         };
@@ -280,8 +282,10 @@ impl CutCraftApp {
         let texture = self.texture_params()?.to_vtexture();
         std::fs::write(path, texture)
             .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-        self.status
-            .set_message(&format!("Saved texture {}", path.display()));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-saved-texture",
+            path = path.display().to_string()
+        ));
         Ok(())
     }
 
@@ -303,8 +307,10 @@ impl CutCraftApp {
         }
         form.params = loaded;
         form.dirty = true;
-        self.status
-            .set_message(&format!("Loaded texture {}", path.display()));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-loaded-texture",
+            path = path.display().to_string()
+        ));
         Ok(())
     }
 
@@ -655,7 +661,8 @@ impl CutCraftApp {
         });
         match result {
             Ok(()) => {
-                self.status.set_message("Depth estimated");
+                self.status
+                    .set_message(&cut_craft_i18n::tr!("status-depth-estimated"));
                 self.relief_after_estimate(id);
             }
             Err(e) => self.status.set_message(&e),

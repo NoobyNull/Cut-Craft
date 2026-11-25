@@ -62,7 +62,7 @@ impl CutCraftApp {
         self.options.web_api.token = token;
         self.save_options();
         self.status
-            .set_message("Made a new Web API token: scripts need the new one from now on");
+            .set_message(&cut_craft_i18n::tr!("status-new-web-api-token"));
     }
 
     /// Options ▸ Web API ▸ Try Again: starts it afresh with the same settings.
@@ -471,7 +471,9 @@ impl CutCraftApp {
     /// What was pressed below Options ▸ Web API's settings, done.
     pub(super) fn web_api_pressed(&mut self, pressed: Pressed) {
         match pressed {
-            Pressed::Copied => self.status.set_message("Copied"),
+            Pressed::Copied => self
+                .status
+                .set_message(&cut_craft_i18n::tr!("status-copied")),
             Pressed::NewToken => self.new_web_api_token(),
             Pressed::TryAgain => self.retry_web_api(),
         }
