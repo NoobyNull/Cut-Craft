@@ -336,7 +336,7 @@ impl CutCraftApp {
     /// Puts the toolpaths as `arranged` says (none: nothing to do): their cut order, the
     /// group each named toolpath goes in and the group each named group goes inside, as
     /// one step to undo; the picked toolpaths stay picked in their new places.
-    pub(super) fn arrange(&mut self, arranged: Option<crate::toolpath_order::Arranged>) {
+    pub(in crate::app) fn arrange(&mut self, arranged: Option<crate::toolpath_order::Arranged>) {
         let Some(arranged) = arranged else { return };
         let to = &arranged.order;
         let slots: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
@@ -360,12 +360,59 @@ impl CutCraftApp {
             .iter()
             .filter_map(|&id| place(id))
             .collect();
+        let behind = |doc: &cut_craft_core::document::Document| -> Vec<String> {
+            doc.toolpaths
+                .values()
+                .filter(|t| t.stale && t.cuts_what_is_left())
+                .map(|t| t.name.clone())
+                .collect()
+        };
+        let before = behind(&self.doc).len();
         match self.apply("arrange_toolpaths", &params) {
             Ok(()) => {
                 self.selected_toolpath = selected;
                 self.more_toolpaths = more;
+                let after = behind(&self.doc);
+                if after.len() > before {
+                    self.reorder_ask = Some(after);
+                }
             }
             Err(e) => self.status.set_message(&e),
+        }
+    }
+
+    /// The question after a new order left toolpaths that cut only what the toolpaths above
+    /// them leave out of date: Put it back (undo the new order) or keep it.
+    pub(in crate::app) fn reorder_question(&mut self, ctx: &egui::Context) {
+        let Some(names) = self.reorder_ask.as_ref() else {
+            return;
+        };
+        let (mut back, mut keep) = (false, false);
+        egui::Modal::new(egui::Id::unique("reorder_ask")).show(ctx, |ui| {
+            ui.set_max_width(ui.spacing().interact_size.x * 7.0);
+            ui.heading(tr!("reorder-ask-title"));
+            ui.label(tr!(
+                "reorder-ask",
+                count = names.len(),
+                names = names.join(", ")
+            ));
+            ui.separator();
+            ui.horizontal(|ui| {
+                back = ui
+                    .button(tr!("reorder-put-back"))
+                    .on_hover_hint(tr!("reorder-put-back.tooltip"))
+                    .clicked();
+                keep = ui
+                    .button(tr!("reorder-keep"))
+                    .on_hover_hint(tr!("reorder-keep.tooltip"))
+                    .clicked();
+            });
+        });
+        if back || keep {
+            self.reorder_ask = None;
+        }
+        if back && self.history.undo(&mut self.doc) {
+            self.status.set_message(&tr!("reorder-put-back-done"));
         }
     }
 

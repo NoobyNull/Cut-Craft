@@ -354,6 +354,12 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
          and whether rows and loops keep climb on the way back",
     ),
     (
+        "advanced_rotary_mode",
+        "Turn On Advanced Rotary Mode",
+        "Open Options at Advanced rotary mode: each rotary toolpath then cuts the whole blank, \
+         not only what the toolpaths above it leave",
+    ),
+    (
         "cut_list",
         "Save Cut List",
         "Save a list of the job's parts and their sizes, as a spreadsheet (CSV)",

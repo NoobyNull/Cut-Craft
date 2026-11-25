@@ -775,6 +775,9 @@ struct CutCraftApp {
     units_ask: Option<units_ask::UnitsAsk>,
     /// Save Toolpaths held for the question about G-code an earlier save left there.
     earlier_ask: Option<EarlierAsk>,
+    /// The toolpaths a new order left out of date, as they cut only what is above them:
+    /// waiting on Put it back or Keep the new order.
+    reorder_ask: Option<Vec<String>>,
     /// View G-code's window, while open.
     gcode_view: Option<gcode_view::GcodeView>,
     /// Save Toolpaths held for the question about what the checks before cutting found.
