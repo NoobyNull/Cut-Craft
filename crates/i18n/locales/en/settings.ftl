@@ -107,6 +107,11 @@ setting-bit-name-in-multiple-file-40f2b8 = Bit name in multiple file names
 setting-when-toolpaths-are-saved-to-88ecbc =
     When toolpaths are saved to multiple files, each file's name says the bit to fit as
     well as the toolpath
+setting-advanced-rotary-mode-af9e8b = Advanced rotary mode
+setting-off-the-usual-each-rotary-269e56 =
+    Off (the usual): each rotary toolpath cuts only what the toolpaths above it in the
+    list leave of the blank. On: each cuts the whole blank, as if nothing were above it,
+    and you decide what it cuts with its Start, End and allowance
 setting-general-settings-95789c = General Settings
 setting-general-settings-da55d6 = General settings.
 setting-recent-file-list-size-ed84cd = Recent file list size
@@ -3630,6 +3635,39 @@ setting-quick-trace-has-no-settings-aa0d3a =
     colour picture comes out in its colours and a black and white or grey one as dark shapes.
     Open Trace Bitmap to see a preview and change any of them.
 
+## Rotary Roughing (rotary_roughing_toolpath)
+setting-takes-the-bulk-off-a-37c1c2 =
+    Takes the bulk off a carved part a level at a time, all the way round at each level, down to
+    the allowance on the model: only what the toolpaths above it in the list leave.
+setting-the-bit-an-end-mill-0474e4 =
+    The bit: an end mill clears the bulk quickest. Its stepover spaces the passes at the
+    outside of the blank, and its pass depth sets how deep each level goes
+setting-which-way-the-bit-goes-66e0b7 =
+    Which way the bit goes over the part: along it, A turning a step between passes, or
+    round it, stepping along between passes
+setting-along-the-part-80c0b2 = Along the part
+setting-the-bit-runs-the-whole-4af24f =
+    The bit runs the whole length of the part with A held still, then A turns a step and
+    it runs back: best for clearing the bulk, and for long parts
+setting-round-the-part-316eb5 = Round the part
+setting-a-turns-the-bit-all-9697d1 =
+    A turns the bit all the way round the part, then it steps along: best for finishing
+    round shapes, and for short parts
+setting-climb-or-conventional-cut-every-bae012 =
+    Climb or Conventional cut every pass the same way, lifting back to start each one;
+    Both cuts back and forth, staying down
+setting-every-pass-the-same-way-2d1c53 =
+    Every pass the same way, the edge biting into the material as it comes to it: a
+    cleaner cut on most woods, but it lifts the bit back to start each pass
+setting-every-pass-the-same-way-56f469 =
+    Every pass the same way, the edge cutting up out of the material: gentler on a light
+    machine with play in it, lifting back the same way
+setting-back-and-forth-staying-down-40d8e4 = Back and forth, staying down between passes: the quickest
+setting-material-left-on-the-model-6111e1 = Material left on the model for the finish to take off, all the way round
+setting-where-along-the-axis-the-c43487 = Where along the axis the roughing starts, from the job's start (the chuck end)
+setting-end-93764a = End
+setting-where-along-the-axis-the-5fe3ba = Where along the axis the roughing ends, from the job's start; 0 runs to the job's end
+
 ## 4-Axis Rotary Machining (rotary_machining_toolpath)
 setting-the-bit-a-ball-nose-40e65e = The bit: a ball nose follows curves best. Its finishing stepover spaces the rings
 setting-how-the-bit-goes-round-a6e7cf = How the bit goes round the part
@@ -3671,8 +3709,6 @@ setting-the-angles-a-locks-at-e92e6d =
     The angles A locks at for the details, in degrees, in order (such as 15, 165, 45).
     Left empty, they are picked by themselves
 setting-where-along-the-axis-the-386a30 = Where along the axis the rings start, from the job's start (the chuck end)
-setting-along-the-part-80c0b2 = Along the part
-setting-end-93764a = End
 setting-where-along-the-axis-the-f38825 = Where along the axis the rings end, from the job's start; 0 runs to the job's end
 setting-material-left-on-the-part-de02f0 = Material left on the part for a later pass, all the way round
 setting-registration-mark-ad2169 = Registration mark

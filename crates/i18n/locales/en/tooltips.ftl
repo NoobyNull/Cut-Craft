@@ -290,6 +290,7 @@ tooltip-reset-outside-selected-vectors = Reset Outside Selected Vectors: clears 
 tooltip-reverse-direction = Reverse Direction: the vector under the point runs the other way
 tooltip-rotary-lathe-toolpath = Rotary Lathe: on a rotary job, A spins the material steadily while the bit stays straight over the turning axis and steps down, as on a lathe: to face an end, to turn the part round to its outline, or to part it off
 tooltip-rotary-machining-toolpath = 4-Axis Rotary Machining: finishes a model all the way round a turning cylinder, ring by ring, the bit kept on the true round surface: X (or Y), Z and A move together
+tooltip-rotary-roughing-toolpath = Rotary Roughing: takes the bulk off a carved part on a rotary job, a level at a time from the outside in, all the way round at each level before the next, down to the allowance left on the model for the finish
 tooltip-rotate = Rotate: turns the selected objects by an angle, about a point of their box
 tooltip-rounding-toolpath = Rounding Toolpath: on a rotary job, turns a square or round blank down to the job's diameter in levels, either round the cylinder or along it
 tooltip-scale-model-z-height = Scale Model Z Height: stretches or squashes the model to a new height, scaling every visible component's heights, base heights and tilts, and the shown levels' base heights, by the same factor
