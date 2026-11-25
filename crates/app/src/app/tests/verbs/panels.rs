@@ -126,4 +126,16 @@ impl Harness {
     pub(in super::super) fn pick_on_page(&mut self, page: Page, id: &str) {
         self.app.pick(&self.ctx, page, id);
     }
+
+    /// Picks the item at `path` in the menu bar's menu `menu` (File, Help, ...).
+    pub(in super::super) fn choose_on_menu_bar(&mut self, menu: &str, path: &[&str]) {
+        let items = |app: &CutCraftApp| {
+            (app.current_menus().menus.iter())
+                .find(|m| m.name == menu)
+                .unwrap_or_else(|| panic!("no {menu} menu"))
+                .items
+                .clone()
+        };
+        self.choose(items, path);
+    }
 }
