@@ -30,6 +30,7 @@ pub mod handles;
 pub mod import_layers;
 pub mod import_settings;
 pub mod keep_out;
+pub mod locked_face;
 pub mod material_class;
 pub mod material_library;
 pub mod medial;
