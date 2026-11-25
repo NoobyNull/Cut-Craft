@@ -86,7 +86,7 @@ impl CutCraftApp {
             form.params["through"] = false.into();
             form.dirty = true;
             self.status
-                .set_message("Cut depth set to the material's thickness");
+                .set_message(&cut_craft_i18n::tr!("status-cut-depth-is-thickness"));
         }
     }
 

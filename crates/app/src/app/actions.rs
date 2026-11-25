@@ -51,9 +51,9 @@ impl CutCraftApp {
         menus.add_gadgets(&gadgets.built_in, &items);
         let mut status = gui::StatusBar::new();
         if !gadgets.problems.is_empty() {
-            status.set_message(&format!(
-                "Some gadgets could not be loaded: {}",
-                gadgets.problems.join("; ")
+            status.set_message(&cut_craft_i18n::tr!(
+                "status-gadgets-not-loaded",
+                problems = gadgets.problems.join("; ")
             ));
         }
         Self {
@@ -499,12 +499,14 @@ impl CutCraftApp {
         match id {
             "undo" => {
                 if self.history.undo(&mut self.doc) {
-                    self.status.set_message("Undone");
+                    self.status
+                        .set_message(&cut_craft_i18n::tr!("status-undone"));
                 }
             }
             "redo" => {
                 if self.history.redo(&mut self.doc) {
-                    self.status.set_message("Redone");
+                    self.status
+                        .set_message(&cut_craft_i18n::tr!("status-redone"));
                 }
             }
             // closing goes through the close request, which checks for unsaved work
@@ -620,7 +622,7 @@ impl CutCraftApp {
                 }
                 None => self
                     .status
-                    .set_message("No machine yet: add one in Machine ▸ Machine Configuration"),
+                    .set_message(&cut_craft_i18n::tr!("status-no-machine-yet")),
             },
             "add_machine" => {
                 self.machine_window =
@@ -806,7 +808,8 @@ impl CutCraftApp {
                     // made before Swap Sides: turned over to the side the job is on now
                     self.preview_side = side;
                     self.follow_side();
-                    self.status.set_message("Undid the last preview");
+                    self.status
+                        .set_message(&cut_craft_i18n::tr!("status-undid-last-preview"));
                 }
             }
             "reset_preview" => {
@@ -823,7 +826,7 @@ impl CutCraftApp {
                 // the Preview tab's detail goes back to Options' default
                 self.display.detail = self.options.performance.preview_detail.min(100);
                 self.status
-                    .set_message("Preview reset: Undo Last Preview brings it back");
+                    .set_message(&cut_craft_i18n::tr!("status-preview-reset"));
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
@@ -1028,8 +1031,10 @@ impl CutCraftApp {
         let k = self.doc.components.get(&id).ok_or("no such component")?;
         let bytes = fmt_export_as_3d_clipart::clip_bytes(k).map_err(|e| e.to_string())?;
         std::fs::write(path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-        self.status
-            .set_message(&format!("Saved sculpting brush {}", path.display()));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-saved-brush",
+            path = path.display().to_string()
+        ));
         Ok(())
     }
 
@@ -1119,9 +1124,9 @@ impl CutCraftApp {
             self.apply_live();
         }
         if changed {
-            self.status.set_message(&format!(
-                "Warning: {} has changed since it was imported; imported again as it is now",
-                path.display()
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-import-changed",
+                path = path.display().to_string()
             ));
         }
     }
@@ -1221,7 +1226,10 @@ impl CutCraftApp {
                 "toolpath": id, "name": name, "visible": t.visible, "notes": notes
             });
             match self.apply("toolpath_properties", &params) {
-                Ok(()) => self.status.set_message(&format!("Notes kept with {name}")),
+                Ok(()) => self.status.set_message(&cut_craft_i18n::tr!(
+                    "status-notes-kept",
+                    name = name.clone()
+                )),
                 Err(e) => self.status.set_message(&e),
             }
         }

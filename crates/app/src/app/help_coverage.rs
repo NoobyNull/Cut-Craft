@@ -262,7 +262,7 @@ pub(super) fn gaps(app: &CutCraftApp) -> Vec<Gap> {
             continue;
         }
         let label = app.tool_label(&id);
-        gaps.extend(tooltip_gaps(&id, &label, crate::gui::about(&id)));
+        gaps.extend(tooltip_gaps(&id, &label, crate::gui::english_about(&id)));
         // a built-in tool with no form still needs a page saying what it does
         let (intro, _) = app.tool_help(&id);
         let schema = app
@@ -273,12 +273,16 @@ pub(super) fn gaps(app: &CutCraftApp) -> Vec<Gap> {
     }
     for (action, name) in menu_actions(app) {
         if seen.insert(action.clone()) {
-            gaps.extend(tooltip_gaps(&action, &name, crate::gui::about(&action)));
+            gaps.extend(tooltip_gaps(
+                &action,
+                &name,
+                crate::gui::english_about(&action),
+            ));
         }
     }
     let tooltips = seen
         .iter()
-        .filter_map(|id| Some((id.as_str(), crate::gui::about(id)?)));
+        .filter_map(|id| Some((id.as_str(), crate::gui::english_about(id)?)));
     for (id, other) in shared_tooltips(tooltips) {
         gaps.push(Gap {
             id: id.to_owned(),
