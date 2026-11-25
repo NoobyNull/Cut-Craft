@@ -33,7 +33,7 @@ A **variable** is a value Cut Craft fills in for you, written between double bra
 and the notes change with it. While writing, a variable shows as a coloured chip (red if
 it is spelt wrong); point at one to see its value. **Preview** shows every value.
 
-![The Variable Explorer searched for "pocket": the pocket toolpath's tool, feed rate, plunge rate and spindle speed, each with its value now](pictures/notes-explorer.png)
+![The Variable Explorer searched for "pocket": the pocket toolpath's bit, feed rate, plunge rate and spindle speed, each with its value now](pictures/notes-explorer.png)
 
 The **Variable Explorer** lists every variable by where it comes from:
 
@@ -45,10 +45,10 @@ The **Variable Explorer** lists every variable by where it comes from:
 - **Machine**: the machine, its controller, post processor, bed size and tool changer,
   and its collet nut and spindle size and whether bits have their own holder (see
   [Collet and Holder Collisions](help:collisions)).
-- **Tools**: each bit the toolpaths use, numbered, with its diameter, pass depth,
+- **Bits**: each bit the toolpaths use, numbered, with its diameter, pass depth,
   stepover, feeds, speed, flutes, stick-out (marked "guessed" when it isn't set in the
-  Tool Database) and the holder it sits in, plus a list of them all.
-- **Toolpaths**: each toolpath, numbered in list order, with its tool and tool number,
+  Bit Library) and the holder it sits in, plus a list of them all.
+- **Toolpaths**: each toolpath, numbered in list order, with its bit and its number,
   feeds and speed, stepover, pass depth, run time and its own notes from the Toolpath
   Summary, plus a list of them all and the total run time.
 - **Document Variables**: the ones you set in Edit ▸ Document Variables.

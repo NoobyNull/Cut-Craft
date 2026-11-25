@@ -11,7 +11,7 @@ see-also: checks_before_cutting, check_generic_tool, check_machine_speeds
 
 For a bit from a maker's catalogue, whether the toolpath's feed rate, plunge rate or
 spindle speed is more than 10% away from the maker's figure for the material picked in
-the Tool Database. It says how far, and which way.
+the Bit Library. It says how far, and which way.
 
 ## Why it matters
 

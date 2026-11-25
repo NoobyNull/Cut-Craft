@@ -411,7 +411,7 @@ fn every_form() -> Vec<(String, Value)> {
 /// Each number field in `fields` (inside groups and lists too) as its path and its kind.
 fn numbers<'a>(prefix: &str, fields: &'a [Field], out: &mut Vec<(String, &'a Kind)>) {
     for f in fields {
-        // the Tool Database's tools are drawn by their own block and keep their own units
+        // the Bit Library's tools are drawn by their own block and keep their own units
         if f.key == "tool" || TOOL_LISTS.contains(&f.key.as_str()) {
             continue;
         }

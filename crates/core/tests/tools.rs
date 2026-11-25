@@ -21,7 +21,7 @@ fn the_starter_database_has_uniquely_named_tools_including_the_default() {
         .get(&Tool::default().name)
         .cloned()
         .expect("the default tool");
-    assert_eq!(default.group, "Metric Tools/End Mills");
+    assert_eq!(default.group, "Metric Bits/End Mills");
     default.group.clear();
     assert_eq!(default, Tool::default());
 }
@@ -586,7 +586,7 @@ fn a_catalogue_tool_copied_into_my_tools_keeps_its_name_and_the_copy_is_used() {
     });
     db.tools[1].group = "Mine".into();
     db.tools[1].feed_rate = 1500.0;
-    assert_eq!(db.index_of("46171 End Mill"), Some(1), "My Tools first");
+    assert_eq!(db.index_of("46171 End Mill"), Some(1), "My Bits first");
     assert_eq!(db.get("46171 End Mill").unwrap().feed_rate, 1500.0);
     // a put changes the copy, never the catalogue
     let mut changed = db.get("46171 End Mill").unwrap().clone();
@@ -619,7 +619,7 @@ fn putting_a_catalogue_tool_back_adds_it_to_my_tools() {
     assert_eq!(db.tools[1].group, "Amana/V-Bits");
     assert!(
         !db.is_catalogue(&db.tools[1]),
-        "My Tools' Amana is not the catalogue"
+        "My Bits' Amana is not the catalogue"
     );
 }
 
@@ -629,7 +629,7 @@ fn the_starter_tools_have_a_surfacing_bit_that_cuts_flat_and_steps_over_wide() {
     let bit = db.get("1 in Surfacing Bit").unwrap();
     assert_eq!(bit.shape, ToolShape::SurfacingBit);
     assert!(bit.shape.is_flat());
-    assert_eq!(bit.group, "Imperial Tools/Surfacing Bits");
+    assert_eq!(bit.group, "Imperial Bits/Surfacing Bits");
     assert!(bit.stepover >= 0.7);
     assert_eq!(
         bit.profile(bit.diameter / 2.0 - 0.1),
@@ -685,7 +685,7 @@ fn the_starter_tools_have_a_laser_and_a_database_without_one_gets_it() {
         .find(|t| t.shape == ToolShape::Laser)
         .expect("a laser to pick");
     assert_eq!(laser.diameter, 0.15, "its diameter is the kerf");
-    assert_eq!(laser.group, "Metric Tools/Lasers");
+    assert_eq!(laser.group, "Metric Bits/Lasers");
     assert!(laser.is_laser() && !Tool::default().is_laser());
     let mut starter = starter;
     assert!(!starter.add_laser_if_none(), "it has one already");
@@ -700,4 +700,40 @@ fn the_starter_tools_have_a_laser_and_a_database_without_one_gets_it() {
         ToolShape::Laser
     );
     assert!(!old.add_laser_if_none(), "only once");
+}
+
+#[test]
+fn a_library_saved_with_the_old_starter_group_names_reads_them_as_bits() {
+    let mut old = ToolDatabase::starter();
+    for t in &mut old.tools {
+        t.group = t
+            .group
+            .replace("Metric Bits", "Metric Tools")
+            .replace("Imperial Bits", "Imperial Tools")
+            .replace("Form Bits", "Form Tools");
+    }
+    for g in &mut old.groups {
+        g.path = g.path.replace(" Bits", " Tools");
+    }
+    let mut own = tool("My Old Bit", 4.0);
+    own.group = "Metric Tools/Form Tools".into();
+    old.tools.push(own);
+    let mut shop = tool("Shop Bit", 5.0);
+    shop.group = "Shop/Metric Tools".into();
+    old.tools.push(shop);
+    let db = ToolDatabase::from_json(&old.to_json()).unwrap();
+    let group_of = |name: &str| db.get(name).unwrap().group.clone();
+    assert_eq!(group_of("My Old Bit"), "Metric Bits/Form Bits");
+    assert_eq!(
+        group_of("Shop Bit"),
+        "Shop/Metric Tools",
+        "only the starter groups"
+    );
+    let paths: Vec<&str> = db.groups.iter().map(|g| g.path.as_str()).collect();
+    assert_eq!(paths, ["Metric Bits", "Imperial Bits"]);
+    assert!(
+        db.tools
+            .iter()
+            .all(|t| !t.group.starts_with("Metric Tools"))
+    );
 }

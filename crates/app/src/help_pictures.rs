@@ -83,7 +83,7 @@ pub struct HelpShots {
 impl HelpShots {
     pub fn new(ctx: &egui::Context, dir: PathBuf, only: &[String]) -> Self {
         crate::marks::switch_on(ctx);
-        // dialogs (Help, the Tool Database, Save Toolpaths) drawn inside the main window, so
+        // dialogs (Help, the Bit Library, Save Toolpaths) drawn inside the main window, so
         // its picture shows them
         ctx.set_embed_viewports(true);
         Self {

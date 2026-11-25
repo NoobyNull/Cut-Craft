@@ -513,7 +513,7 @@ impl Post {
         self.blocks.get("TOOLCHANGE").is_some_and(|b| !b.is_empty())
     }
 
-    /// Its tool changes stop the machine for the tool to be changed by hand: a `TOOLCHANGE`
+    /// Its bit changes stop the machine for the tool to be changed by hand: a `TOOLCHANGE`
     /// block with a stop (`M0`/`M1`) and no automatic change (`M6`).
     pub fn pauses_for_tools(&self) -> bool {
         let has = |codes: &[&str]| {
@@ -527,11 +527,11 @@ impl Post {
         has(&["M0", "M00", "M1", "M01"]) && !has(&["M6", "M06"])
     }
 
-    /// This post with each tool change a stop to change the tool by hand: its own tool
+    /// This post with each bit change a stop to change the tool by hand: its own tool
     /// change when it already pauses, else one that lifts to the safe Z, stops the spindle,
     /// names the next tool, stops (`M0`), starts the spindle again and waits for it, using
     /// only the variables the post has. Either way `pause` adds the trip to the change
-    /// position and sets the wait ([`Self::paused_as`]). The header's tool change (`M6`)
+    /// position and sets the wait ([`Self::paused_as`]). The header's bit change (`M6`)
     /// becomes a note to fit the first tool before starting.
     #[must_use]
     pub fn with_pauses(&self, pause: Pause) -> Self {
@@ -573,7 +573,7 @@ impl Post {
         post.paused_as(pause)
     }
 
-    /// This pausing post with `pause` made in its tool change: the head lifted to the
+    /// This pausing post with `pause` made in its bit change: the head lifted to the
     /// change position's Z and taken to its X Y around the spindle stopping (`M5`, else just
     /// before the stop), and the wait after the spindle starts again (`G4`) set to
     /// `pause`'s spin-up. A rotary (wrapping) post keeps the head where it lifted, as its
@@ -961,7 +961,7 @@ fn parts(toolpath: &Toolpath) -> Vec<(Option<&BankHit>, std::borrow::Cow<'_, Too
 
 /// Each tool's name once, in the order the toolpaths use them.
 /// Each tool's `[T]`: on a machine with a tool changer its holder, or 0 for a bit not in
-/// the magazine (changed by hand); without one, its own tool number, else the order it is
+/// the magazine (changed by hand); without one, its own bit number, else the order it is
 /// first used.
 fn tool_numbers<'a>(
     tools: &[(&str, u32)],

@@ -99,6 +99,10 @@ fn every_menu_item() -> Vec<String> {
         items.extend(set.menu(name, &[]));
         items.extend(set.menu(name, &[name.to_owned()]));
     }
+    // toolbars of your own, with none made yet (one's own name is its own)
+    let item = crate::custom_toolbars::Item::Tool("draw_circle".to_owned());
+    items.push(crate::custom_toolbars::add_menu(&[], &item));
+    items.extend(crate::custom_toolbars::item_menu(&[], 0, 0));
     let (document, own) = crate::app::document_menus();
     items.extend(document);
     let mut names = Vec::new();

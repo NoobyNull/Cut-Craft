@@ -182,7 +182,7 @@ pub(super) struct GuideProps {
 /// A toolpath's row in the Toolpath Summary: its id, name, time, whether it is shown, and
 /// its notes.
 /// Each toolpath's cutting time, minutes: the shown ones cut one after another from the
-/// job's home (getting to each and its tool change included), a hidden one on its own; and
+/// job's home (getting to each and its bit change included), a hidden one on its own; and
 /// the whole job's, the trip back home included.
 #[derive(Debug, Default)]
 pub(crate) struct CutTimes {
@@ -262,7 +262,7 @@ pub(super) const LINE_SCALE: f32 = 1.5;
 /// Easy-to-read UI fonts, the first installed used; egui's own stay behind for symbols.
 pub(super) const UI_FONTS: [&str; 5] =
     ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI", "Arial"];
-/// A preview starts at ten times the machine's own speed (×1: each move at its tool's feed
+/// A preview starts at ten times the machine's own speed (×1: each move at its bit's feed
 /// or plunge rate, rapids at the Toolpath Summary's rapid rate).
 pub(crate) const PLAYBACK_SPEED: f64 = 10.0;
 /// What a playing preview's GPU surface was made from: the playback's revision, the detail,

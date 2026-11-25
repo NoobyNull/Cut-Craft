@@ -292,7 +292,7 @@ fn the_same_tool_at_a_new_spindle_speed_sets_the_new_speed() {
     assert!(header.is_some() && second > header, "{lines:#?}");
     assert!(
         !lines.contains(&"M0".to_owned()),
-        "no tool change: {lines:#?}"
+        "no bit change: {lines:#?}"
     );
     // the same speed again writes nothing new
     let lines = render(BASIC, vec![toolpath("A", "6 mm"), toolpath("B", "6 mm")]);
@@ -323,7 +323,7 @@ fn the_first_rapid_after_a_tool_change_always_says_its_height() {
         let change = lines
             .iter()
             .rposition(|l| l.contains("M0") || l.contains("M6"))
-            .unwrap_or_else(|| panic!("a tool change: {lines:#?}"));
+            .unwrap_or_else(|| panic!("a bit change: {lines:#?}"));
         let rapid = lines[change..]
             .iter()
             .find(|l| l.starts_with("G0") && (l.contains('X') || l.contains('Y')))
@@ -356,11 +356,11 @@ fn pausing_for_tools_swaps_a_tool_changer_for_a_stop_to_change_by_hand() {
     );
     let at = lines.iter().position(|l| l == "M0").expect("a stop");
     assert!(lines[at - 1].contains("3 mm"), "names the tool: {lines:#?}");
-    // a post that already pauses keeps its own tool change
+    // a post that already pauses keeps its own bit change
     let grbl = Post::parse(include_str!("../posts/grbl_straight_mm.pp")).unwrap();
     assert!(grbl.pauses_for_tools());
     assert_eq!(grbl.with_pauses(Pause::default()).blocks, grbl.blocks);
-    // one without any tool change gets one
+    // one without any bit change gets one
     let plain = Post::parse(
         "POST_NAME = \"Plain (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
              begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\n\

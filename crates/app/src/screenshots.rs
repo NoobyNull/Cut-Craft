@@ -527,10 +527,10 @@ fn checks_found(app: &mut CutCraftApp, ctx: &egui::Context) {
     checks_job(app, ctx);
 }
 
-/// The Tool Database: a bit given a tool number another bit has.
+/// The Bit Library: a bit given a bit number another bit has.
 fn tool_number_taken(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.save_form = None;
-    // nothing pinned over the Tool Database's window
+    // nothing pinned over the Bit Library's window
     app.pages.set_pinned(super::Page::Toolpaths, false);
     if let Some(first) = app.tools.tools.first_mut() {
         first.number = 2;
@@ -855,7 +855,7 @@ fn toolpaths(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, ZOOM_3D);
 }
 
-/// The Tool Database, a tool picked.
+/// The Bit Library, a tool picked.
 fn tool_database(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.invoke(ctx, "reset_preview");
     app.view = View::TwoD;

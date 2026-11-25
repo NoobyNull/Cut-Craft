@@ -1,4 +1,4 @@
-//! One shape per bit. Some makers' tool databases list a bit once per material, each copy
+//! One shape per bit. Some makers' bit libraries list a bit once per material, each copy
 //! in a material's folder (`V-BIT/SOFTWOOD/1/4" SHANK`) with that material's feeds and
 //! speeds; imported, the copies get a number after the name (`… 2`, `… 3`) and only one
 //! of them may carry the shank and lengths. [`ToolDatabase::join_material_copies`] makes
@@ -287,7 +287,7 @@ mod tests {
         assert_eq!(bit.name, BIT);
         assert_eq!(bit.group, format!("{TOP}/{SHANK}"));
         assert_eq!(bit.shank_diameter, 6.35, "the shank is the bit's");
-        assert_eq!(bit.number, 3, "a copy's tool number is kept");
+        assert_eq!(bit.number, 3, "a copy's bit number is kept");
         let feed = |m: &str| bit.for_material(m).feed_rate;
         assert_eq!(
             [
@@ -402,15 +402,15 @@ mod tests {
             db.join_material_copies();
             assert!(db.tools.len() > before - 3, "the odd one stays apart");
         }
-        // New Tool and New Tool 2, made in one group, stay two tools
+        // New Tool and New Bit 2, made in one group, stay two tools
         let mut db = ToolDatabase {
             tools: vec![
                 Tool {
-                    name: "New Tool".into(),
+                    name: "New Bit".into(),
                     ..Tool::default()
                 },
                 Tool {
-                    name: "New Tool 2".into(),
+                    name: "New Bit 2".into(),
                     ..Tool::default()
                 },
             ],

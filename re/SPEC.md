@@ -1004,6 +1004,16 @@ instead of half-cell steps.
   imported, so where it sits is chosen at import, not found later in Material Setup. Its
   "Depth Below Top" (where the zero plane cuts the model) is unchanged and separate.
 
+## Tools and bits (deliberate difference)
+
+- CAM programs call the cutter a "tool" (Tool Database, Tool Number, tool change) [inf], the
+  same word as the buttons that run commands. With a Find Tool search box (Ctrl+K) that word
+  meant two things, so Cut Craft says **bit** for anything in the spindle: the Bit Library
+  (was Tool Database), the Bit section on every toolpath form, Bit Number (the G-code `T`
+  number, still written `T1`, `T2`), bit changes. "Tool changer" keeps its name, shown as
+  Tool Changer (ATC). Find Tool still finds the Bit Library by "tool database", "tooling",
+  "cutter" or "end mill", and the help search treats them as the same words.
+
 ## Drawing in the 3D view [inf] (help: What's New in Aspire V12.0, "Drawing in the 3D View")
 
 #### Aspire behaviour (sources)

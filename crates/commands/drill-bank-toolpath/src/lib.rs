@@ -27,7 +27,7 @@ pub struct Params {
     /// The feed, plunge rate, spindle speed and pass depth the bank's drills run at; the
     /// holes' sizes come from the drills themselves
     pub tool: Tool,
-    /// Drill in pecks of the tool's pass depth, rising between them to clear the chips; off
+    /// Drill in pecks of the bit's pass depth, rising between them to clear the chips; off
     /// drills straight down
     #[serde(default = "yes")]
     #[schemars(title = "Use Peck Drilling", extend("x-group" = "Peck Drilling"))]
