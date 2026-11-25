@@ -11,7 +11,7 @@ see-also: material_setup, profile_toolpath, collisions
 
    ![Step 1](pictures/keep_out_zones/step-1.png)
 
-2. On the Toolpaths page, press **Keep-Out Zones** (under Job and Tools).
+2. On the Toolpaths page, press **Keep-Out Zones** (under Job and Bits).
 
    ![Step 2](pictures/keep_out_zones/step-2.png)
 

@@ -284,18 +284,18 @@ fn a_tools_form_takes_the_place_of_the_page() {
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
     assert!(h.text_at("Create Vectors").is_some());
-    assert!(h.text_at("Job and Tools").is_some());
+    assert!(h.text_at("Job and Bits").is_some());
     h.app.invoke(&h.ctx, "draw_circle");
     h.frame(vec![]);
     assert!(h.text_at("Create Vectors").is_none(), "design tools hidden");
-    assert!(h.text_at("Job and Tools").is_some(), "the other page stays");
+    assert!(h.text_at("Job and Bits").is_some(), "the other page stays");
     h.app.invoke(&h.ctx, "profile_toolpath");
     h.frame(vec![]);
     assert!(
         h.text_at("Create Vectors").is_some(),
         "back once its form went"
     );
-    assert!(h.text_at("Job and Tools").is_none(), "toolpath page hidden");
+    assert!(h.text_at("Job and Bits").is_none(), "toolpath page hidden");
 }
 
 #[test]

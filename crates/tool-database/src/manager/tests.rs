@@ -115,7 +115,7 @@ fn the_window_draws_groups_tools_and_holds_its_size() {
     }
     let later = ctx.memory(|mem| mem.area_rect(tool_window()));
     assert_eq!(first, later, "panels inside the window do not grow it");
-    m.pick = Some(Pick::Group("Metric Tools".into()));
+    m.pick = Some(Pick::Group("Metric Bits".into()));
     assert_eq!(frame(&mut m, &ctx), None);
 }
 
@@ -407,7 +407,7 @@ fn a_question_never_moves_the_tree_or_the_buttons_under_it() {
 fn deleting_a_group_asks_first_naming_its_hidden_and_loaded_tools() {
     let db = ToolDatabase::starter();
     let mut m = Manager::new(&db);
-    let group = "Metric Tools".to_owned();
+    let group = "Metric Bits".to_owned();
     let inside: Vec<String> = db
         .tools
         .iter()
@@ -425,7 +425,7 @@ fn deleting_a_group_asks_first_naming_its_hidden_and_loaded_tools() {
     m.act(TreeAction::Delete);
     assert_eq!(m.draft.tools.len(), db.tools.len(), "nothing gone yet");
     let question = m.delete_question().expect("it asks");
-    assert!(question.contains("Metric Tools"), "{question}");
+    assert!(question.contains("Metric Bits"), "{question}");
     assert!(
         question.contains(&format!("{} bits", inside.len())),
         "{question}"
@@ -498,17 +498,17 @@ fn a_renamed_tool_is_not_asked_about_as_deleted() {
 fn tree_buttons_add_copy_and_delete_in_the_copy_only() {
     let db = ToolDatabase::starter();
     let mut m = Manager::new(&db);
-    m.pick = Some(Pick::Group("Metric Tools/End Mills".into()));
+    m.pick = Some(Pick::Group("Metric Bits/End Mills".into()));
     m.act(TreeAction::NewTool);
     let Some(Pick::Tool(i)) = m.pick else {
         panic!("the new tool is picked")
     };
-    assert_eq!(m.draft.tools[i].group, "Metric Tools/End Mills");
+    assert_eq!(m.draft.tools[i].group, "Metric Bits/End Mills");
     m.act(TreeAction::Copy);
     assert_eq!(m.draft.tools.len(), db.tools.len() + 2);
     m.act(TreeAction::Delete);
     assert_eq!(m.draft.tools.len(), db.tools.len() + 1);
-    m.pick = Some(Pick::Group("Imperial Tools".into()));
+    m.pick = Some(Pick::Group("Imperial Bits".into()));
     let Some(Outcome::Export(out)) = m.act(TreeAction::Export) else {
         panic!("exports")
     };

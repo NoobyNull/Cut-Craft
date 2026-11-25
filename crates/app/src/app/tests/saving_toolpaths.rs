@@ -717,7 +717,7 @@ fn first_time_setup_picks_the_machine_units_and_material_for_new_jobs() {
     let machine = h.app.machines.active().expect("the machine set up");
     assert_eq!(machine.name, "Sienci LongMill MK2 30x30");
     assert_eq!(machine.post(), Some("Cut Craft GRBL Arcs (inch) (*.nc)"));
-    assert_eq!(h.app.tools.groups[0].path, "Imperial Tools");
+    assert_eq!(h.app.tools.groups[0].path, "Imperial Bits");
     // a new job starts as answered
     h.app.invoke(&h.ctx, "new");
     h.app.job_setup_ok();

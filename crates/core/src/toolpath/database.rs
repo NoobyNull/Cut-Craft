@@ -117,9 +117,9 @@ impl ToolDatabase {
         ];
         for tool in &mut tools {
             let set = if tool.name.contains(" in ") {
-                "Imperial Tools"
+                STARTER_IMPERIAL
             } else {
-                "Metric Tools"
+                STARTER_METRIC
             };
             tool.group = format!("{set}/{}", shape_group(tool.shape));
         }
@@ -130,15 +130,15 @@ impl ToolDatabase {
         Self {
             tools,
             groups: vec![
-                group("Metric Tools", "Starter tools sized in millimetres."),
-                group("Imperial Tools", "Starter tools sized in inches."),
+                group(STARTER_METRIC, "Starter bits sized in millimetres."),
+                group(STARTER_IMPERIAL, "Starter bits sized in inches."),
             ],
             ..Self::default()
         }
     }
 
     /// A database from before lasers were a tool type, with no laser in My Bits: the
-    /// starter laser added (in `Metric Tools/Lasers`), so the laser toolpaths have one to
+    /// starter laser added (in `Metric Bits/Lasers`), so the laser toolpaths have one to
     /// pick. Whether it was added.
     pub fn add_laser_if_none(&mut self) -> bool {
         if self.my_tools().any(|t| t.shape == ToolShape::Laser) {
@@ -148,7 +148,7 @@ impl ToolDatabase {
         while self.tools.iter().any(|t| t.name == laser.name) {
             laser.name.push_str(" 2");
         }
-        laser.group = format!("Metric Tools/{}", shape_group(ToolShape::Laser));
+        laser.group = format!("{STARTER_METRIC}/{}", shape_group(ToolShape::Laser));
         self.tools.push(laser);
         true
     }
@@ -391,9 +391,62 @@ impl ToolDatabase {
         serde_json::to_vec_pretty(self).expect("tools always serialize")
     }
 
+    /// A library read from its file, the starter groups of a library saved before cutters
+    /// were bits renamed ([`Self::rename_old_starter_groups`]).
     pub fn from_json(bytes: &[u8]) -> Result<Self, serde_json::Error> {
-        serde_json::from_slice(bytes)
+        let mut db: Self = serde_json::from_slice(bytes)?;
+        db.rename_old_starter_groups();
+        Ok(db)
     }
+
+    /// Libraries saved before a cutter was a bit filed the starter bits under "Metric
+    /// Tools" and "Imperial Tools" (form bits under "Form Tools"): those top groups take
+    /// the new names, unless one of that name is already there. Groups the person made, and
+    /// catalogues, keep theirs. Whether anything was renamed.
+    pub fn rename_old_starter_groups(&mut self) -> bool {
+        let mut changed = false;
+        for (old, new) in [
+            ("Metric Tools", STARTER_METRIC),
+            ("Imperial Tools", STARTER_IMPERIAL),
+        ] {
+            let taken = self.groups.iter().any(|g| g.path == new)
+                || self.tools.iter().any(|t| within(&t.group, new));
+            if taken {
+                continue;
+            }
+            let moved = |path: &str| -> Option<String> {
+                let rest = path.strip_prefix(old)?;
+                if !(rest.is_empty() || rest.starts_with('/')) {
+                    return None;
+                }
+                let rest = rest.replacen("/Form Tools", "/Form Bits", 1);
+                Some(format!("{new}{rest}"))
+            };
+            for t in &mut self.tools {
+                if let Some(path) = moved(&t.group) {
+                    t.group = path;
+                    changed = true;
+                }
+            }
+            for g in &mut self.groups {
+                if let Some(path) = moved(&g.path) {
+                    g.path = path;
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
+}
+
+/// The starter bits' top groups.
+pub const STARTER_METRIC: &str = "Metric Bits";
+pub const STARTER_IMPERIAL: &str = "Imperial Bits";
+
+/// Whether group `path` is `group` or inside it.
+fn within(path: &str, group: &str) -> bool {
+    path.strip_prefix(group)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
 }
 
 /// The group a starter tool of `shape` goes in.
@@ -404,7 +457,7 @@ pub fn shape_group(shape: ToolShape) -> &'static str {
         ToolShape::VBit => "V-Bits",
         ToolShape::RadiusedEndMill => "Radiused End Mills",
         ToolShape::ThreadMill => "Thread Mills",
-        ToolShape::FormTool => "Form Tools",
+        ToolShape::FormTool => "Form Bits",
         ToolShape::SurfacingBit => "Surfacing Bits",
         ToolShape::Laser => "Lasers",
     }

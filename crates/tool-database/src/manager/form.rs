@@ -188,7 +188,7 @@ pub(super) fn name_format(
     ui.vertical(|ui| {
         ui.add(
             egui::TextEdit::singleline(&mut tool.name_format)
-                .hint_text("{Tool Type} {Diameter|F}")
+                .hint_text("{Bit Type} {Diameter|F}")
                 .desired_width(f32::INFINITY),
         )
         .on_hover_hint(

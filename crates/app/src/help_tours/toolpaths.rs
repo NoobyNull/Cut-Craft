@@ -841,7 +841,7 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::Everything,
             },
             Step {
-                caption: "On the Toolpaths page, press **Keep-Out Zones** (under Job and Tools).",
+                caption: "On the Toolpaths page, press **Keep-Out Zones** (under Job and Bits).",
                 setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
                 mark: Mark::At("tool:keep_out_zones"),
             },

@@ -38,11 +38,8 @@ const CUTTER_AS_TOOL: &[&str] = &[
 fn cutter_words(place: &str, text: &str, found: &mut Vec<String>) {
     for (n, line) in text.lines().enumerate() {
         let lower = line.to_lowercase();
-        // file kinds of other programs, and the name-format variable `{Tool Type}` saved in
-        // people's bit libraries, keep their own names
-        let lower = lower
-            .replace("vectric tool database", "")
-            .replace("{tool type", "");
+        // file kinds of other programs keep their own names
+        let lower = lower.replace("vectric tool database", "");
         for words in CUTTER_AS_TOOL {
             if holds(&lower, words) {
                 found.push(format!("{place}:{}: {words:?} in {line:?}", n + 1));

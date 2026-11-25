@@ -116,7 +116,7 @@ down. Its Drill only tick sits beside its Bit Type in the Bit Library, to see or
 Picked for any toolpath but Drilling, the form says so in red at its foot, and the checks
 before saving warn of it too.
 
-A laser is a bit type of its own in the Bit Library (Laser, under Metric Tools ▸
+A laser is a bit type of its own in the Bit Library (Laser, under Metric Bits ▸
 Lasers): its Kerf is the width it burns and its Speed how fast it moves; it has no pass
 depth, flutes or spindle. The Laser Cut / Fill and Laser Picture forms start with it and
 read it as "Laser, 0.15 mm kerf, 1500 mm/min"; Select… there picks another laser. A router

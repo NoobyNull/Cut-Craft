@@ -7,7 +7,7 @@ see-also: first_time_setup, pocket_toolpath, profile_toolpath, stepover, collisi
 
 ![The steps, one after another](pictures/tool_database/tour.gif)
 
-1. The Bit Library keeps your bits, each with its size, shape, feeds and speeds. On the Toolpaths page, press **Bit Library** (under Job and Tools).
+1. The Bit Library keeps your bits, each with its size, shape, feeds and speeds. On the Toolpaths page, press **Bit Library** (under Job and Bits).
 
    ![Step 1](pictures/tool_database/step-1.png)
 

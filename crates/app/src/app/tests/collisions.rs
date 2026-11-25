@@ -672,7 +672,7 @@ fn the_buttons_already_there_keep_their_places() {
     // the Toolpaths page was regrouped on purpose (Matthew, 2026-11-13); its new groups
     // keep their places from here on
     starts(
-        "Job and Tools",
+        "Job and Bits",
         &[
             "material_setup",
             "materials",

@@ -112,7 +112,7 @@ pub struct CuttingData {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Tool {
     pub name: String,
-    /// The Bit Library's name format its name is made from (`{Tool Type} {Diameter|F}`,
+    /// The Bit Library's name format its name is made from (`{Bit Type} {Diameter|F}`,
     /// see [`crate::tool_names`]); empty for a name typed as it is (added with name formats)
     #[serde(default, skip_serializing_if = "String::is_empty")]
     #[schemars(skip)]
@@ -223,7 +223,7 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "is_nothing")]
     #[schemars(skip)]
     pub last_pass: f64,
-    /// The Bit Library group it sits in, `/` between levels (`Metric Tools/End Mills`);
+    /// The Bit Library group it sits in, `/` between levels (`Metric Bits/End Mills`);
     /// empty at the top (added with tool groups)
     #[serde(default, skip_serializing_if = "String::is_empty")]
     #[schemars(skip)]
@@ -373,7 +373,7 @@ impl Tool {
             ToolShape::VBit => "V-Bits",
             ToolShape::RadiusedEndMill => "Radiused End Mills",
             ToolShape::ThreadMill => "Thread Mills",
-            ToolShape::FormTool => "Form Tools",
+            ToolShape::FormTool => "Form Bits",
             ToolShape::SurfacingBit => "Surfacing Bits",
             ToolShape::Laser => "Lasers",
         };
