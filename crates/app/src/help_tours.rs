@@ -119,8 +119,30 @@ fn preview_3d(app: &mut CutCraftApp, ctx: &egui::Context) {
 }
 
 /// A new job, nothing drawn, the 2D view.
+/// The active machine (one made if none is set up) fitted with what a toolpath `needs`: a
+/// laser, or a 4th axis on firmware that drives one, so its tool shows on the Toolpaths page.
+fn fitted(app: &mut CutCraftApp, needs: cut_craft_core::Needs) {
+    if app.machines.active().is_none() {
+        app.machines.add();
+    }
+    let Some(machine) = app.machines.active_mut() else {
+        return;
+    };
+    match needs {
+        cut_craft_core::Needs::Laser => machine.laser = true,
+        cut_craft_core::Needs::Rotary => {
+            machine.rotary = true;
+            machine.firmware = Some(cut_craft_machines::machine::Firmware::GrblHal);
+        }
+        cut_craft_core::Needs::Nothing => {}
+    }
+}
+
 fn fresh_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
+    // the pictures are taken in the Classic window, where every group shows its tools; to
+    // be taken again in Ribbon, the layout a new install starts in
+    app.options.general.layout = crate::options::WindowLayout::Classic;
     // the last tour's windows closed, so none is left in the next tour's pictures
     (app.tool_manager, app.info, app.part_labels_window) = (None, None, false);
     // the Design tab down the left (not Sheets, Layers or the Library)

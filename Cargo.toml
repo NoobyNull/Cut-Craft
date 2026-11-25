@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/app", "crates/help", "crates/i18n", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/window-owner", "crates/priority", "crates/updater", "crates/machines", "crates/rotary", "crates/depth-addon", "crates/border-tile", "crates/web-api", "crates/content-pack", "crates/packs/*", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
-version = "0.7.5"
+version = "0.7.6"
 edition = "2024"
 license-file = "LICENSE"
 
@@ -51,6 +51,9 @@ missing_panics_doc = "allow"
 # exact float equality is deliberate in the tests (values built to be exact); newer clippy
 # flags assert_eq! on floats too
 float_cmp = "allow"
+# a function too tangled to follow in one read (if, match and loop nesting) fails CI; split it
+# into named steps, or give it an #[expect] with the reason it reads better as one
+cognitive_complexity = "warn"
 
 # geometry-heavy code (toolpaths, simulation) is far too slow unoptimised, in tests and runs;
 # line tables keep panics and backtraces readable at a fraction of full debug info's size

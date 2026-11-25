@@ -6,7 +6,7 @@ use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, cut_points, hatch_lines, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, Needs, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -205,6 +205,9 @@ impl Command for LaserPictureToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/laser_picture.png",
             shortcut: "",
+            form: Form::Toolpath {
+                needs: Needs::Laser,
+            },
         }
     }
 

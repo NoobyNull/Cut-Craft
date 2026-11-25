@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::{Along, Document};
 use cut_craft_core::geometry::{Path, Point};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -119,6 +119,7 @@ impl Command for WrappedFlutingLayout {
             group: "Gadgets",
             icon: "",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

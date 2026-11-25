@@ -210,6 +210,47 @@ pub fn save_plan(
     Ok(plan)
 }
 
+/// `ids` with the toolpaths using the same bit together, each bit's in list order, the
+/// bits in the order they are first used (Group by bit).
+pub fn by_first_use(doc: &Document, ids: &[EntityId]) -> Vec<EntityId> {
+    let tool = |id: &EntityId| doc.toolpaths[id].tool.name.as_str();
+    let mut bits: Vec<&str> = vec![];
+    for id in ids {
+        if !bits.contains(&tool(id)) {
+            bits.push(tool(id));
+        }
+    }
+    bits.iter()
+        .flat_map(|bit| ids.iter().filter(|id| tool(id) == *bit).copied())
+        .collect()
+}
+
+/// `plan` cut bit by bit (Group by bit): each file's toolpaths [`by_first_use`], then the
+/// files in the order their bits are first used, where `merge` (Group Where Possible) puts
+/// files next to each other that use one same bit into one.
+pub fn grouped_by_bit(doc: &Document, plan: &[Vec<EntityId>], merge: bool) -> Vec<Vec<EntityId>> {
+    let tool = |id: &EntityId| doc.toolpaths[id].tool.name.clone();
+    let plan: Vec<Vec<EntityId>> = plan.iter().map(|ids| by_first_use(doc, ids)).collect();
+    let firsts: Vec<EntityId> = plan.iter().filter_map(|ids| ids.first().copied()).collect();
+    let order = by_first_use(doc, &firsts);
+    let mut files: Vec<Vec<EntityId>> = vec![];
+    for first in order {
+        let Some(ids) = plan.iter().find(|ids| ids.first() == Some(&first)) else {
+            continue;
+        };
+        let one_bit = |ids: &[EntityId]| ids.iter().all(|id| tool(id) == tool(&ids[0]));
+        match files.last_mut() {
+            Some(last)
+                if merge && one_bit(last) && one_bit(ids) && tool(&last[0]) == tool(&ids[0]) =>
+            {
+                last.extend(ids);
+            }
+            _ => files.push(ids.clone()),
+        }
+    }
+    files
+}
+
 /// `plan` with each file split where its tool changes, for a post that cannot change tools:
 /// a file for each tool in turn, run in order.
 pub fn by_tool(doc: &Document, plan: Vec<Vec<EntityId>>) -> Vec<Vec<EntityId>> {
@@ -229,11 +270,45 @@ pub fn by_tool(doc: &Document, plan: Vec<Vec<EntityId>>) -> Vec<Vec<EntityId>> {
     files
 }
 
+/// How Save Toolpaths names its files (Options ▸ Toolpaths).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileNames {
+    /// Every space in a name becomes an underscore.
+    pub underscores: bool,
+    /// Multiple Files names add each file's bit to its toolpath's name.
+    pub bit_names: bool,
+}
+
+impl Default for FileNames {
+    fn default() -> Self {
+        Self {
+            underscores: false,
+            bit_names: true,
+        }
+    }
+}
+
+impl FileNames {
+    /// `name` made safe as part of a file name, by the same rule as the name typed: the
+    /// characters Windows refuses become `_`, runs of spaces one, at most 64 characters,
+    /// and spaces underscores when asked.
+    pub fn part(self, name: &str) -> String {
+        let safe = cut_craft_machines::send::safe_name(name, false);
+        if self.underscores {
+            safe.replace(' ', "_")
+        } else {
+            safe
+        }
+    }
+}
+
 /// Each file of `plan` as the path it is saved at and the job with only its toolpaths.
-/// One file keeps `path`; several get the number and first toolpath's name after the stem.
-/// `side` (Top or Bottom) goes on the end of each name. A file whose toolpaths use more than
-/// one tool needs a post that changes tools. `per_tool` names several files after their
-/// tool instead (a file for each tool, for a post that cannot change tools).
+/// One file keeps `path`; several get their number (padded to the count's width, so they
+/// sort in order: `_01_` … `_12_`) and a label after the stem: the first toolpath's name,
+/// with its bit's when `names` says so, or with `per_tool` the bit's name alone (a file for
+/// each tool, for a post that cannot change tools). `side` (Top or Bottom) goes on the end
+/// of each name. A file whose toolpaths use more than one tool needs a post that changes
+/// tools.
 pub fn save_files(
     post: &Post,
     doc: &Document,
@@ -241,9 +316,16 @@ pub fn save_files(
     path: &Path,
     side: Option<&str>,
     per_tool: bool,
+    names: FileNames,
 ) -> Result<Vec<(PathBuf, Document)>, String> {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let stem = if names.underscores {
+        stem.replace(' ', "_")
+    } else {
+        stem.into_owned()
+    };
     let extension = path.extension().unwrap_or_default().to_string_lossy();
+    let width = plan.len().to_string().len();
     plan.iter()
         .enumerate()
         .map(|(n, ids)| {
@@ -259,25 +341,17 @@ pub fn save_files(
                     post.name
                 ));
             }
-            let mut name = stem.to_string();
+            let mut name = stem.clone();
             if plan.len() > 1 {
                 let first = &doc.toolpaths[&ids[0]];
-                let first = if per_tool {
-                    &first.tool.name
+                let label = if per_tool {
+                    first.tool.name.clone()
+                } else if names.bit_names && !first.tool.name.trim().is_empty() {
+                    format!("{}_{}", first.name, first.tool.name)
                 } else {
-                    &first.name
+                    first.name.clone()
                 };
-                let first: String = first
-                    .chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '-' {
-                            c
-                        } else {
-                            '_'
-                        }
-                    })
-                    .collect();
-                name = format!("{name}_{}_{first}", n + 1);
+                name = format!("{name}_{:0width$}_{}", n + 1, names.part(&label));
             }
             if let Some(side) = side {
                 name = format!("{name}_{side}");
@@ -454,11 +528,16 @@ pub fn orphaned_recovery(dir: &Path, own: &Path) -> Option<PathBuf> {
 
 /// Whether the file `name` is one a save as `stem`.`extension` writes: that name itself, or
 /// a numbered, tiled or sided file beside it (`sign_1_Profile.nc`, `sign_tile2.nc`,
-/// `sign_Top.nc`).
+/// `sign_Top.nc`). A stem with spaces also owns the files saved with them made underscores
+/// (Underscores for spaces in G-code file names).
 pub fn of_earlier_save(name: &str, stem: &str, extension: &str) -> bool {
+    let Some(name) = name.strip_suffix(&format!(".{extension}")) else {
+        return false;
+    };
+    let underscored = stem.replace(' ', "_");
     let Some(rest) = name
-        .strip_suffix(&format!(".{extension}"))
-        .and_then(|n| n.strip_prefix(stem))
+        .strip_prefix(stem)
+        .or_else(|| name.strip_prefix(underscored.as_str()))
     else {
         return false;
     };
@@ -876,6 +955,15 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
             // once both are loaded into another job (at other ids)
             if let Some(params) = t.params.as_object_mut() {
                 params.insert(TEMPLATE_ID.into(), serde_json::json!(id.0));
+                // a group inside another: the groups holding it too, so it comes back
+                // nested (an older version reads the toolpath's own group only)
+                let path = t
+                    .group
+                    .as_deref()
+                    .map_or_else(Vec::new, |g| doc.toolpath_group_path(g));
+                if path.len() > 1 {
+                    params.insert(TEMPLATE_GROUP_PATH.into(), serde_json::json!(path));
+                }
             }
             t
         })
@@ -885,6 +973,36 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
 
 /// The key a template keeps each toolpath's id under, in its settings.
 const TEMPLATE_ID: &str = "template_id";
+
+/// The key a template keeps the groups holding each toolpath under, in its settings:
+/// outermost first, its own group last; only for a group inside another.
+const TEMPLATE_GROUP_PATH: &str = "template_group_path";
+
+/// The groups a template's toolpaths came with, added to `doc`'s: each group the job
+/// doesn't have yet joins the list, inside the group holding it in the template; a group
+/// the job has stays where it is.
+fn template_groups(c: &mut cut_craft_core::ChangeBuilder, doc: &Document, paths: &[Vec<String>]) {
+    let had = doc.toolpath_groups_in_use();
+    let mut groups = doc.toolpath_groups.clone();
+    let mut parents = doc.toolpath_group_parents.clone();
+    for path in paths {
+        for (i, group) in path.iter().enumerate() {
+            if had.contains(group) {
+                continue;
+            }
+            if !groups.contains(group) {
+                groups.push(group.clone());
+            }
+            if let Some(parent) = i.checked_sub(1).map(|p| &path[p]) {
+                parents
+                    .entry(group.clone())
+                    .or_insert_with(|| parent.clone());
+            }
+        }
+    }
+    c.set_toolpath_groups(groups);
+    c.set_toolpath_group_parents(parents);
+}
 
 /// Each id in `params` naming another toolpath: a Merged toolpath's `sources`, and an
 /// Array Copy's `sources` and `only` (the one it copies).
@@ -915,12 +1033,22 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
     // the template's ids, and where those toolpaths are now
     let mut moved = std::collections::BTreeMap::new();
     let mut added = vec![];
+    let mut paths = vec![];
     for mut t in toolpaths {
         let was = t
             .params
             .as_object_mut()
             .and_then(|p| p.remove(TEMPLATE_ID))
             .and_then(|id| id.as_u64());
+        let path: Option<Vec<String>> = t
+            .params
+            .as_object_mut()
+            .and_then(|p| p.remove(TEMPLATE_GROUP_PATH))
+            .and_then(|p| serde_json::from_value(p).ok());
+        // only a path ending in the toolpath's own group
+        if let Some(path) = path.filter(|p| p.last() == t.group.as_ref()) {
+            paths.push(path);
+        }
         added.push((c.add_toolpath(t.clone()), t));
         if let Some(was) = was {
             moved.insert(was, added.last().map(|(id, _)| *id).expect("just added"));
@@ -960,6 +1088,7 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
         }
         c.replace_toolpath(id, t);
     }
+    template_groups(&mut c, doc, &paths);
     Ok(c.finish())
 }
 

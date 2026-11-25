@@ -280,3 +280,48 @@ fn an_import_s_size_is_locked_and_set_once_whichever_way_it_is_turned() {
     assert!((shown(&h) - 20.0).abs() < 0.05, "{}", shown(&h));
     let _ = std::fs::remove_file(file);
 }
+
+/// Setup Material on a rotary job: every Shape choice shows whole, Board too (it was cut off
+/// at the panel's edge), and the size is named for the shape chosen.
+#[test]
+fn setup_material_shows_every_shape_whole_and_names_the_size_for_it() {
+    use cut_craft_core::document::{Along, Blank, Job, Rotary};
+    for (blank, name) in [
+        (Blank::Round, "Diameter (D)"),
+        (Blank::Square, "Side (D)"),
+        (Blank::Board { width: 150.0 }, "Thickness (D)"),
+    ] {
+        let mut h = Harness::new();
+        let mut job = Job::rotary(300.0, 50.0, Along::X);
+        job.rotary = job.rotary.map(|r| Rotary { blank, ..r });
+        h.app.doc.job = job;
+        // a system font a little wider than the tests' own, as on some desktops
+        h.ctx.all_styles_mut(|style| {
+            for font in style.text_styles.values_mut() {
+                font.size *= 1.25;
+            }
+        });
+        h.app.invoke(&h.ctx, "setup_material");
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        assert!(h.text_at(name).is_some(), "{blank:?}");
+        for shape in ["Round", "Square", "Board"] {
+            let (text, clip) = h
+                .shapes
+                .iter()
+                .find_map(|c| match &c.shape {
+                    egui::Shape::Text(t) if t.galley.text() == shape => Some((
+                        egui::Rect::from_min_size(t.pos, t.galley.size()),
+                        c.clip_rect,
+                    )),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{shape} not shown"));
+            assert!(
+                clip.contains_rect(text.shrink(0.5)),
+                "{shape} cut off: {text:?} in {clip:?}"
+            );
+        }
+    }
+}

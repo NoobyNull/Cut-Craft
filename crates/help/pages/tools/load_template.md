@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-14
+reviewed: 2026-11-24
 see-also: save_selected_toolpath_as_template, save_all_visible_toolpaths_as_template
 ---
 
@@ -14,3 +14,11 @@ see-also: save_selected_toolpath_as_template, save_all_visible_toolpaths_as_temp
 2. Its toolpaths join the list, ready for you to pick the vectors each one cuts: select the shapes, edit the toolpath and press **Calculate**.
 
    ![Step 2](pictures/load_template/step-2.png)
+
+## Good to know
+
+- Toolpaths come back in the groups they were saved in, groups inside groups too, at the end
+  of the [Toolpath List](help:group_toolpaths).
+- A group this job already has keeps its place in the list; the template's toolpaths join
+  it there.
+- Templates saved by an older Cut Craft load as before, with their groups one level deep.

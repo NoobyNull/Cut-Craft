@@ -1,8 +1,8 @@
 //! The material as triangles to draw: its faces, sides, underside and edges.
 
 use super::{
-    Camera, Color32, DVec3, Framing, Look, Material, Mesh, Orbit, Pos2, Rect, Wrap, brightness,
-    lit, paint_of, shaded, shadow_map, shadowed_brightness, wrapped_quads,
+    Camera, Color32, DVec2, DVec3, Framing, Look, Material, Mesh, Orbit, Pos2, Rect, Wrap,
+    brightness, lit, paint_of, shaded, shadow_map, shadowed_brightness, wrapped_quads,
 };
 
 /// The material seen from `orbit`, placed by [`screen_of`] and drawn far to near.
@@ -414,6 +414,32 @@ pub fn cylinder_edges(along_x: bool, radius: f64, from: f64, to: f64) -> Vec<[DV
             ]
         })
         .collect()
+}
+
+/// A wireframe of a rotary job's material round the axis from `from` to `to` along it: the
+/// cylinder of `radius`, or with an `outline` (half width across, half thickness up, as
+/// [`Wrap::outline`]) the square's or board's box.
+pub fn stock_edges(
+    along_x: bool,
+    radius: f64,
+    outline: Option<DVec2>,
+    from: f64,
+    to: f64,
+) -> Vec<[DVec3; 2]> {
+    let Some(half) = outline else {
+        return cylinder_edges(along_x, radius, from, to);
+    };
+    if along_x {
+        box_edges(
+            DVec3::new(from, -half.x, -half.y),
+            DVec3::new(to, half.x, half.y),
+        )
+    } else {
+        box_edges(
+            DVec3::new(-half.x, from, -half.y),
+            DVec3::new(half.x, to, half.y),
+        )
+    }
 }
 
 /// The twelve edges of the box from `lo` to `hi`.

@@ -46,6 +46,10 @@ impl CutCraftApp {
                 .and_then(|m| m.slots.get(slot - 1).cloned().flatten())
                 .unwrap_or_default();
             self.select_tool(&current);
+            // a holder takes any tool, whatever form is open
+            if let Some(manager) = &mut self.tool_manager {
+                manager.lasers = None;
+            }
             self.picking = Some(super::PickFor::Holder(slot));
         }
     }
@@ -99,7 +103,7 @@ impl CutCraftApp {
     pub(super) fn open_window(&mut self, id: &str) {
         self.info = match id {
             "keyboard_shortcuts" => Some(Info::Shortcuts),
-            "third_party_licenses" => Some(Info::Licenses),
+            "credits" => Some(Info::Credits),
             "toolpath_summary" => Some(Info::Summary),
             "about_cut_craft" => Some(Info::About),
             "help_contents" => Some(Info::Help("contents")),

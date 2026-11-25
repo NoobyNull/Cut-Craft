@@ -1,7 +1,8 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
 use super::{
-    Deserialize, Display, FileDialogDefault, JsonSchema, Serialize, WindowLayout, egui, on,
+    CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, RibbonIcons, Serialize,
+    WindowLayout, egui, on,
 };
 
 /// Toolpath settings.
@@ -65,6 +66,16 @@ pub struct ToolpathSettings {
     #[serde(default = "change_by_changer")]
     #[schemars(title = "Bit change by tool changer", extend("x-unit" = "min"), range(min = 0))]
     pub change_by_changer: f64,
+    /// Off: a G-code file's name keeps its spaces, as typed. On: every space becomes an
+    /// underscore, for controllers and USB readers that cannot open names with spaces
+    #[serde(default)]
+    #[schemars(title = "Underscores for spaces in G-code file names")]
+    pub file_name_underscores: bool,
+    /// When toolpaths are saved to multiple files, each file's name says the bit to fit as
+    /// well as the toolpath
+    #[serde(default = "on")]
+    #[schemars(title = "Bit name in multiple file names")]
+    pub bit_in_file_names: bool,
 }
 
 /// Two minutes to stop, change a bit by hand and zero it again.
@@ -82,6 +93,14 @@ pub(super) fn preview_speed() -> f64 {
 }
 
 impl ToolpathSettings {
+    /// How saved G-code files are named.
+    pub fn file_names(&self) -> crate::files::FileNames {
+        crate::files::FileNames {
+            underscores: self.file_name_underscores,
+            bit_names: self.bit_in_file_names,
+        }
+    }
+
     /// The preview's starting speed, times the machine's, kept to the slider's range.
     pub fn preview_speed(&self) -> f64 {
         self.preview_multiplier.clamp(0.25, 1000.0)
@@ -254,9 +273,10 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "File dialog default")]
     pub file_dialog_default: FileDialogDefault,
-    /// How the window is arranged: the Design and Toolpaths pages with side tabs, a rail of
-    /// tool groups with an inspector, or a ribbon of tabs over the view
-    #[serde(default)]
+    /// How the window is arranged: a ribbon of tabs over the view, a rail of tool groups
+    /// down the left, or the Classic Design and Toolpaths pages with side tabs. Every tool
+    /// is in every layout
+    #[serde(default = "WindowLayout::before_the_setting")]
     #[schemars(title = "Window layout")]
     pub layout: WindowLayout,
     /// How often unsaved work is copied, so it can be opened again after a crash or a power
@@ -284,19 +304,22 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Fold tool groups into one button")]
     pub fold_tool_groups: bool,
+    /// How many tools each group shows as icons in the Ribbon layout. Compact shows those
+    /// that fit under the group's name, and the name lists the rest (pin any tool to show
+    /// it); Every Tool shows them all, the groups going on to more rows as they need
+    #[serde(default)]
+    #[schemars(title = "Ribbon icons")]
+    pub ribbon_icons: RibbonIcons,
+    /// When a group in the Canvas layout's palette lists its tools beside it: On Hover as
+    /// soon as the pointer is over the group, On Click when it is clicked
+    #[serde(default)]
+    #[schemars(title = "Canvas tool lists open")]
+    pub canvas_flyouts: CanvasFlyouts,
     /// Open a short Did You Know? tip each time Cut Craft starts, a different one each
     /// time. Help ▸ Did You Know? shows them whenever you like
     #[serde(default = "on")]
     #[schemars(title = "Show a tip when Cut Craft starts")]
     pub show_tips_at_startup: bool,
-}
-
-#[expect(
-    clippy::trivially_copy_pass_by_ref,
-    reason = "serde's skip_serializing_if"
-)]
-pub(super) fn is_zero(n: &usize) -> bool {
-    *n == 0
 }
 
 pub(super) fn autosave_seconds() -> u32 {

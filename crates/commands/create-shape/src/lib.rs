@@ -6,7 +6,7 @@
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Rect, inside, polyline_distance};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_named};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -267,6 +267,7 @@ impl Command for CreateShape {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Create,
         }
     }
 

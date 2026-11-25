@@ -10,8 +10,8 @@
 //!
 //! Close (keep what is there) and Cancel (take back what the form did) are always offered.
 
-use super::{LIVE_FORMS, REMAKE_FORMS};
 use crate::pages::Page;
+use cut_craft_core::Form;
 use cut_craft_i18n::tr;
 
 /// What a form's commit button does.
@@ -44,73 +44,24 @@ impl Commit {
     }
 }
 
-/// Tools used only on the canvas: a stroke, a click or a drag is what they do, so their form
-/// holds settings for the next one and nothing to press.
-pub(super) const GESTURE_TOOLS: &[&str] = &["sculpt", "draw_freehand", "interactive_vector_trim"];
-
-/// Forms that make new pieces from their settings, each press another.
-pub(super) const CREATE_FORMS: &[&str] = &[
-    "add_layer",
-    "add_sheet",
-    "array_copy",
-    "celtic_weave",
-    "circular_copy",
-    "copy_along_vectors",
-    "create_component_from_bitmap",
-    "create_shape",
-    "draw_arc",
-    "draw_curve",
-    "engrave_part_names",
-    "extrude_and_weave",
-    "insert_level",
-    "plate_production",
-    "quick_trace",
-    "texture_area",
-    "turn_and_spin",
-    "two_rail_sweep",
-    "vector_boundary",
-    "wrapped_fluting_layout",
-    "wrapped_spiral_layout",
-];
-
-/// Forms whose button asks an add-on for something new, saved to the Library.
-pub(super) const GENERATE_FORMS: &[&str] = &["generate_border"];
-
-/// Live forms that make nothing until asked: Create makes their piece once, and from then
-/// on it follows the form. Relief from Photo waits for a picture with its depth, so making
-/// it as the form opens would only say what is missing.
-const CREATE_FIRST: &[&str] = &["relief_from_photo"];
-
-/// Remaking forms that still show Apply once what they made follows them.
-const KEEPS_APPLY: &[&str] = &["embellish"];
-
-/// The commit button form `id` shows, if any. `drawing`: the tool can be drawn with the
-/// mouse; `made`: what the form made still follows its settings.
-pub(super) fn commit(id: &str, page: Page, drawing: bool, made: bool) -> Option<Commit> {
-    if CREATE_FIRST.contains(&id) {
-        return (!made).then_some(Commit::Create);
+/// The commit button a form of `kind` shows, if any (each command says its kind in its
+/// [`Meta`](cut_craft_core::Meta)). `drawing`: the tool can be drawn with the mouse; `made`:
+/// what the form made still follows its settings, or the form was opened on something it
+/// made earlier.
+pub(super) fn commit(kind: Form, page: Page, drawing: bool, made: bool) -> Option<Commit> {
+    match kind {
+        Form::Live { create_first: true } => (!made).then_some(Commit::Create),
+        Form::Gesture | Form::Live { .. } => None,
+        // Embellish keeps an Apply once made, for changes to be seen to go on the one there
+        // (Matthew's ask: tweak it later without deleting and remaking it)
+        Form::Remake { keeps_apply: true } if made => Some(Commit::Apply),
+        Form::Remake { .. } => (!made).then_some(Commit::Create),
+        _ if drawing => (!made).then_some(Commit::Create),
+        Form::Toolpath { .. } if page == Page::Toolpaths => Some(Commit::Calculate),
+        Form::Generate => Some(Commit::Generate),
+        Form::Create => Some(Commit::Create),
+        Form::Apply | Form::Toolpath { .. } => Some(Commit::Apply),
     }
-    if GESTURE_TOOLS.contains(&id) || LIVE_FORMS.contains(&id) {
-        return None;
-    }
-    // Embellish keeps an Apply once made, for changes to be seen to go on the one there
-    // (Matthew's ask: tweak it later without deleting and remaking it)
-    if KEEPS_APPLY.contains(&id) && made {
-        return Some(Commit::Apply);
-    }
-    if drawing || REMAKE_FORMS.contains(&id) {
-        return (!made).then_some(Commit::Create);
-    }
-    if page == Page::Toolpaths && id.ends_with("_toolpath") {
-        return Some(Commit::Calculate);
-    }
-    if GENERATE_FORMS.contains(&id) {
-        return Some(Commit::Generate);
-    }
-    if CREATE_FORMS.contains(&id) {
-        return Some(Commit::Create);
-    }
-    Some(Commit::Apply)
 }
 
 /// What the commit button's hint says it will do.
@@ -125,8 +76,8 @@ pub(super) fn hint(commit: Commit, drawing: bool, editing: bool) -> String {
 
 /// The line a form with no commit button shows where the button would be, saying why there
 /// is none.
-pub(super) fn live_note(id: &str, drawing: bool) -> String {
-    if GESTURE_TOOLS.contains(&id) {
+pub(super) fn live_note(kind: Form, drawing: bool) -> String {
+    if kind == Form::Gesture {
         tr!("commit-none-canvas")
     } else if drawing {
         tr!("commit-none-drawing")
@@ -136,108 +87,4 @@ pub(super) fn live_note(id: &str, drawing: bool) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_drawing_tool_offers_create_until_its_shape_follows_the_form() {
-        let c = |made| commit("draw_circle", Page::Design, true, made);
-        assert_eq!(c(false), Some(Commit::Create));
-        assert_eq!(c(true), None, "the shape already follows the form");
-    }
-
-    #[test]
-    fn canvas_only_tools_and_live_forms_have_no_commit_button() {
-        for id in GESTURE_TOOLS {
-            for made in [false, true] {
-                assert_eq!(commit(id, Page::Design, true, made), None, "{id}");
-            }
-        }
-        for id in LIVE_FORMS {
-            assert_eq!(commit(id, Page::Design, true, true), None, "{id}");
-        }
-    }
-
-    /// Relief from Photo made nothing at all: with no button and nothing made yet, its
-    /// settings had nothing to follow (Matthew, 2026-11-22: "nothing happens after I import").
-    #[test]
-    fn relief_from_photo_offers_create_until_its_relief_follows_the_form() {
-        let c = |made| commit("relief_from_photo", Page::Design, false, made);
-        assert_eq!(c(false), Some(Commit::Create));
-        assert_eq!(c(true), None, "the relief already follows the form");
-    }
-
-    #[test]
-    fn a_remaking_form_creates_once_then_follows_its_settings() {
-        for id in REMAKE_FORMS {
-            assert_eq!(commit(id, Page::Design, false, false), Some(Commit::Create));
-            let once_made = if KEEPS_APPLY.contains(id) {
-                Some(Commit::Apply)
-            } else {
-                None
-            };
-            assert_eq!(commit(id, Page::Design, false, true), once_made, "{id}");
-        }
-    }
-
-    #[test]
-    fn toolpaths_calculate_and_the_toolpath_pages_settings_apply() {
-        for id in ["profile_toolpath", "pocket_toolpath", "merged_toolpath"] {
-            assert_eq!(
-                commit(id, Page::Toolpaths, false, false),
-                Some(Commit::Calculate),
-                "{id}"
-            );
-        }
-        for id in ["material_setup", "keep_out_zones", "job_setup"] {
-            assert_eq!(
-                commit(id, Page::Toolpaths, false, false),
-                Some(Commit::Apply),
-                "{id}"
-            );
-        }
-        // a toolpath command that only edits the list is no calculation
-        assert_eq!(
-            commit("delete_toolpath", Page::Design, false, false),
-            Some(Commit::Apply)
-        );
-    }
-
-    #[test]
-    fn making_forms_create_and_changing_forms_apply() {
-        for id in CREATE_FORMS {
-            assert_eq!(
-                commit(id, Page::Design, false, false),
-                Some(Commit::Create),
-                "{id}"
-            );
-        }
-        for id in ["move", "offset_vectors", "layer_properties", "set_size"] {
-            assert_eq!(
-                commit(id, Page::Design, false, false),
-                Some(Commit::Apply),
-                "{id}"
-            );
-        }
-    }
-
-    #[test]
-    fn every_listed_tool_is_one_the_app_has() {
-        let registry = crate::commands::registry();
-        for id in GESTURE_TOOLS.iter().chain(CREATE_FORMS) {
-            assert!(registry.get(id).is_some(), "{id} is not a command");
-        }
-        for id in GESTURE_TOOLS {
-            assert!(registry.get(id).unwrap().interactive(), "{id} is drawn");
-        }
-    }
-
-    #[test]
-    fn the_labels_and_hints_say_what_pressing_does() {
-        assert_eq!(Commit::Calculate.label(), "Calculate");
-        assert!(hint(Commit::Create, true, false).contains("drag on the canvas"));
-        assert!(hint(Commit::Calculate, false, true).contains("again"));
-        assert!(live_note("sculpt", true).contains("canvas"));
-        assert!(live_note("draw_circle", true).contains("selected shape"));
-    }
-}
+mod tests;

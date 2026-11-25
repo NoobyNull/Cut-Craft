@@ -11,7 +11,9 @@ use cut_craft_core::geometry::{
 use cut_craft_core::params::Anchor;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Tool, cut_points, made_by, project_onto_model};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive, tool_does_not_fit};
+use cut_craft_core::{
+    Change, Command, CommandError, Form, Meta, ensure_positive, tool_does_not_fit,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -261,6 +263,7 @@ impl Command for ProfileToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/profile_toolpath.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 

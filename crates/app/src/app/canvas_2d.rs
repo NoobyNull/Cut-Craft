@@ -43,11 +43,22 @@ impl CutCraftApp {
         }
     }
 
+    /// The 2D view moved on screen (a split's divider, a corner picture): the zoom and pan
+    /// move with it, so the drawing stays where it was in the view.
+    fn follow_view_2d(&mut self, ui: &egui::Ui) {
+        let at = ui.available_rect_before_wrap().min;
+        if let (Some(was), Some(camera)) = (self.view_2d_at, self.camera.as_mut()) {
+            camera.origin += at - was;
+        }
+        self.view_2d_at = Some(at);
+    }
+
     pub(super) fn view_2d(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "2D view");
         self.forget_gone_group();
         let job = self.shown_job();
-        let mut canvas = Canvas::new(ui, &job, self.camera);
+        self.follow_view_2d(ui);
+        let mut canvas = Canvas::new(ui, &job, self.camera, self.wrap());
         self.clipart_dropped_2d(ui, &canvas);
         let area = canvas.area;
         self.zoom_and_pan(ui, &mut canvas);
@@ -151,6 +162,12 @@ impl CutCraftApp {
         self.view_area = Some(area);
         self.cursor = canvas.cursor();
         self.act_2d(ui, gesture, &canvas, reach, area, modes);
+    }
+
+    /// A rotary job's wrap, as the 2D view shows it: none on a flat job, or with Options ▸
+    /// Appearance's rotary wrap bands off.
+    pub(super) fn wrap(&self) -> Option<view2d::Wrap> {
+        view2d::Wrap::of(&self.shown_job(), self.options.appearance.rotary_wrap)
     }
 
     /// Whether the sheet has nothing on it yet: no vectors, pictures or 3D components.
@@ -337,7 +354,7 @@ impl CutCraftApp {
             ));
         }
         self.view_tool = None;
-        "Select".clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label("select");
     }
 
     /// What open forms mark in the 2D view: Draw Text's arc handles, Sketch Carving's areas,

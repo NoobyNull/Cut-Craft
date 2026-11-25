@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-25
 see-also: job_setup, check_zeroing, 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
 ---
 
@@ -134,3 +134,19 @@ the spot like a flat job. On a slower computer the
 model is drawn a little coarser while it turns, and sharp again once you stop it.
 
 See also: [Design page](help:design), [Toolpaths page](help:toolpaths).
+
+## Both views at once
+
+The three split buttons beside **2D View** and **3D View**, in the bar over the view, show
+2D and 3D together. Press the lit button again to go back to one view.
+
+- **2D over 3D** and **2D beside 3D** share the room between the two. Drag the bar between
+  them to give one more room. Drag it right to the edge to show just the other view. **⇄**
+  on the bar swaps their places.
+- **One view in a corner of the other** keeps the view you picked (2D or 3D) big and shows
+  the other small in a corner. Drag the small view's bar to another corner: while you
+  drag, the corner it will go to is shaded, and it moves there when you let go. **⇄** on it
+  makes the small view the big one.
+
+**Window ▸ Tile Windows Horizontal** and **Tile Windows Vertical** do the same as the first
+two, and **Cascade Windows** goes back to one view.

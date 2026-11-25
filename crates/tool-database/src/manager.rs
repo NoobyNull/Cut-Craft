@@ -86,6 +86,9 @@ pub struct Manager {
     /// Opened from a toolpath form's Select…: titled Select Tool, with Select for the tool
     /// shown in place of OK.
     pub selecting: bool,
+    /// What a toolpath form's Select… may pick: `Some(true)` only lasers (a laser
+    /// toolpath's), `Some(false)` only bits; `None` every tool.
+    pub lasers: Option<bool>,
     index: crate::search::SearchIndex,
     /// The Materials Library: its materials are offered as the active material, and a
     /// bit's feeds for their class are placed by their hardness.
@@ -305,6 +308,7 @@ impl Manager {
             hide_unset: false,
             search: String::new(),
             selecting: false,
+            lasers: None,
             index: crate::search::SearchIndex::default(),
             library: cut_craft_core::material_library::MaterialLibrary::starter(),
             pending: None,
@@ -347,6 +351,11 @@ impl Manager {
         manager.selecting = true;
         manager.pick = db.index_of(current).map(Pick::Tool);
         manager
+    }
+
+    /// Whether `tool` is one the form asking may pick ([`Self::lasers`]).
+    fn may_pick(&self, tool: &Tool) -> bool {
+        self.lasers.is_none_or(|lasers| tool.is_laser() == lasers)
     }
 
     /// The name of the tool shown, when one is.
@@ -699,7 +708,8 @@ impl Manager {
         if self.index.is_stale(&self.draft) {
             self.index = crate::search::SearchIndex::new(&self.draft);
         }
-        let found = self.index.find(&self.search);
+        let mut found = self.index.find(&self.search);
+        found.retain(|&i| self.may_pick(&self.draft.tools[i]));
         if found.is_empty() {
             ui.weak("No tool has that name");
         }
@@ -788,7 +798,7 @@ impl Manager {
         for i in tree::tools_in(&self.draft, group) {
             let tool = &self.draft.tools[i];
             let unset = !tool.has_data_for(&self.draft.material);
-            if unset && self.hide_unset {
+            if (unset && self.hide_unset) || !self.may_pick(tool) {
                 continue;
             }
             ui.horizontal(|ui| {

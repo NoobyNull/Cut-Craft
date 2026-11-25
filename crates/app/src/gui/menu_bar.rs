@@ -330,12 +330,13 @@ impl MenuSystem {
                         sub(
                             "Window Layout",
                             vec![
+                                MenuItem::with_action("Ribbon", "layout_ribbon"),
+                                MenuItem::with_action("Rail", "layout_rail"),
+                                MenuItem::with_action("Canvas", "layout_canvas"),
                                 MenuItem::with_action(
                                     "Classic (Design and Toolpaths pages)",
                                     "layout_classic",
                                 ),
-                                MenuItem::with_action("Rail and Inspector", "layout_rail"),
-                                MenuItem::with_action("Ribbon", "layout_ribbon"),
                             ],
                         ),
                     ],
@@ -357,7 +358,7 @@ impl MenuSystem {
                         i("Help Contents"),
                         MenuItem::with_action("Did You Know?...", "did_you_know"),
                         i("Keyboard Shortcuts"),
-                        i("Third Party Licenses"),
+                        i("Credits"),
                         sub(
                             "Community",
                             crate::app::LINKS

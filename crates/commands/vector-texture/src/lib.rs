@@ -13,7 +13,7 @@ mod scroll;
 use cut_craft_core::document::{Document, Units};
 use cut_craft_core::geometry::{Path, Point, Rect, inside};
 use cut_craft_core::random::Random;
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -148,6 +148,7 @@ impl Command for VectorTexture {
             group: "Create Vectors",
             icon: "drawing/create_vectors/vector_texture.png",
             shortcut: "",
+            form: Form::Remake { keeps_apply: false },
         }
     }
 

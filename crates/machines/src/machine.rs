@@ -6,6 +6,10 @@ use std::path::Path;
 /// The Machine Configuration: what the machine is, and the posts it uses.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Machine Configuration's own tick boxes"
+)]
 pub struct Machine {
     pub name: String,
     pub manufacturer: String,
@@ -42,6 +46,8 @@ pub struct Machine {
     /// A 4th axis (A) turning the material, for rotary jobs (2.5 axes + A): those are saved
     /// through the machine's post that wraps their side round onto A.
     pub rotary: bool,
+    /// A laser on the head (Laser fitted): only then are the laser toolpaths offered.
+    pub laser: bool,
     /// Where the 4th axis lies, which way it turns, how fast, and its chuck and tailstock:
     /// used once [`Self::has_rotary`]. A machine saved before these settings loads with
     /// [`RotaryAxis::saved_before`](cut_craft_core::rotary_axis::RotaryAxis::saved_before), so
@@ -66,6 +72,38 @@ pub struct Machine {
     /// zones, bed size, Z travel, spoilboard depth), all on unless switched off here, and how
     /// deep a cut may go into the spoilboard.
     pub protect: cut_craft_core::preflight::Protect,
+    /// How a job with several bits is saved when the machine has no tool changer: a file
+    /// for each bit (the default), or one file pausing at each change.
+    pub hand_changes: HandChanges,
+    /// Where the head goes for a bit to be changed at a pause, from the job's X0 Y0 and
+    /// above the top of the material, mm; `None` lifts straight up to the safe Z.
+    pub change_position: Option<ChangePosition>,
+    /// How long the spindle is given to come up to speed after a pause, seconds; 0 keeps
+    /// the post's own wait (3 seconds in Cut Craft's posts).
+    pub spin_up: f64,
+    /// Group by bit: toolpaths using the same bit are cut together, saving bit changes,
+    /// though the order they are listed in changes. Off: always cut in list order.
+    pub group_by_bit: bool,
+}
+
+/// How bits are changed on a machine without a tool changer (Machine Configuration).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HandChanges {
+    /// A file for each bit, run one after another: change the bit and set Z zero between
+    /// files. The safest, and the only way on controllers that cannot jog while paused.
+    #[default]
+    SeparateFiles,
+    /// One file that stops (M0) at each bit change, to be resumed once the bit is changed.
+    Pause,
+}
+
+/// Where the head waits for a bit change at a pause: X and Y from the job's X0 Y0, and Z
+/// above the top of the material, mm.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ChangePosition {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
 }
 
 /// The firmware a machine's controller runs: it decides whether the machine can have a 4th
@@ -157,10 +195,36 @@ impl Machine {
             .unwrap_or_else(|| Firmware::guess(&self.controller))
     }
 
+    /// How its pauses for a bit change are written: where the head goes, and how long the
+    /// spindle is given to come up to speed.
+    pub fn pause(&self) -> cut_craft_post::Pause {
+        cut_craft_post::Pause {
+            spin_up: (self.spin_up > 0.0).then_some(self.spin_up),
+            park: self.change_position.map(|p| [p.x, p.y, p.z]),
+        }
+    }
+
+    /// Whether its controller cannot jog while paused (standard GRBL holds at `M0` and
+    /// refuses to jog), which makes setting Z zero at a pause hard.
+    pub fn cannot_jog_when_paused(&self) -> bool {
+        self.firmware() == Firmware::Grbl
+    }
+
     /// It has a 4th axis (A) its firmware can drive: ticked, on firmware other than standard
     /// GRBL. A tick kept from before stays, and counts again if the firmware is changed.
     pub fn has_rotary(&self) -> bool {
         self.rotary && self.firmware().has_a_axis()
+    }
+
+    /// Whether it has what a toolpath `needs` ([`Needs`](cut_craft_core::Needs)): a laser
+    /// fitted, or a 4th axis it can drive.
+    pub fn has(&self, needs: cut_craft_core::Needs) -> bool {
+        use cut_craft_core::Needs;
+        match needs {
+            Needs::Nothing => true,
+            Needs::Laser => self.laser,
+            Needs::Rotary => self.has_rotary(),
+        }
     }
 
     /// How it holds its bits, for the collet and holder checks.
@@ -430,6 +494,31 @@ mod tests {
             "a default no longer associated is passed over"
         );
         assert_eq!(Machine::default().post(), None);
+    }
+
+    /// Laser and rotary toolpaths are offered only on a machine that has a laser fitted or
+    /// a 4th axis its firmware drives; a machine saved before Laser fitted has none.
+    #[test]
+    fn a_machine_has_what_a_toolpath_needs_only_when_fitted() {
+        use cut_craft_core::Needs;
+        let mut machine = Machine {
+            controller: "grblHAL".into(),
+            ..Machine::default()
+        };
+        assert!(machine.has(Needs::Nothing));
+        assert!(!machine.has(Needs::Laser));
+        assert!(!machine.has(Needs::Rotary));
+        machine.laser = true;
+        assert!(machine.has(Needs::Laser));
+        machine.rotary = true;
+        assert!(machine.has(Needs::Rotary));
+        machine.firmware = Some(Firmware::Grbl);
+        assert!(
+            !machine.has(Needs::Rotary),
+            "standard GRBL drives no A axis"
+        );
+        let old: Machine = serde_json::from_str(r#"{"name": "Old"}"#).unwrap();
+        assert!(!old.laser);
     }
 
     #[test]

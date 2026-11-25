@@ -223,6 +223,66 @@ fn a_template_s_merged_toolpath_merges_the_template_s_own_toolpaths() {
 }
 
 #[test]
+fn a_template_keeps_groups_inside_groups_but_never_moves_the_jobs_own_groups() {
+    use cut_craft_core::document::EntityId;
+    // 1 in Outside, 2 in Tabs inside Outside, 3 in none
+    let mut saved = cut_craft_core::testing::three_toolpaths();
+    for t in saved.toolpaths.values_mut() {
+        t.params = serde_json::json!({ "name": t.name });
+    }
+    saved.toolpath_groups = vec!["Outside".into(), "Tabs".into()];
+    saved
+        .toolpath_group_parents
+        .insert("Tabs".into(), "Outside".into());
+    saved.toolpaths.get_mut(&EntityId(1)).unwrap().group = Some("Outside".into());
+    saved.toolpaths.get_mut(&EntityId(2)).unwrap().group = Some("Tabs".into());
+    let ids: Vec<EntityId> = saved.toolpaths.keys().copied().collect();
+    let bytes = super::toolpath_template(&saved, &ids);
+    // an older version reads the same list of toolpaths
+    let plain: Vec<cut_craft_core::toolpath::Toolpath> = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(plain.len(), 3);
+
+    // a job without those groups: they come back nested
+    let mut doc = Document::default();
+    doc.apply(&super::load_toolpath_template(&doc, &bytes).unwrap())
+        .unwrap();
+    assert_eq!(doc.toolpath_group_path("Tabs"), ["Outside", "Tabs"]);
+    assert!(
+        doc.toolpaths
+            .values()
+            .all(|t| t.params.get("template_group_path").is_none()),
+        "the path is not left in the settings"
+    );
+    let groups: Vec<_> = doc.toolpaths.values().map(|t| t.group.clone()).collect();
+    assert_eq!(groups, [Some("Outside".into()), Some("Tabs".into()), None]);
+
+    // a job that already has Tabs at the top: it stays there
+    let mut doc = Document {
+        toolpath_groups: vec!["Tabs".into()],
+        ..Document::default()
+    };
+    doc.apply(&super::load_toolpath_template(&doc, &bytes).unwrap())
+        .unwrap();
+    assert_eq!(doc.toolpath_group_parent("Tabs"), None);
+    assert!(doc.toolpath_groups_in_use().contains(&"Outside".to_owned()));
+
+    // an older template (no paths) loads flat, as before
+    let mut old: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+    for t in &mut old {
+        t["params"]
+            .as_object_mut()
+            .unwrap()
+            .remove("template_group_path");
+    }
+    let mut doc = Document::default();
+    let old = serde_json::to_vec(&old).unwrap();
+    doc.apply(&super::load_toolpath_template(&doc, &old).unwrap())
+        .unwrap();
+    assert!(doc.toolpath_group_parents.is_empty());
+    assert_eq!(doc.toolpaths_in_group("Tabs").len(), 1);
+}
+
+#[test]
 fn templates_and_saved_settings_leave_out_the_picture_a_toolpath_was_made_from() {
     // a Photo V-Carve made from picture 7 of its job
     let mut doc = cut_craft_core::testing::with_toolpath();
@@ -333,12 +393,21 @@ fn a_post_without_tool_changes_gets_a_file_for_each_tool_in_turn() {
     let path = Path::new("/out/sign.nc");
     let job = cut_craft_core::document::Job::default();
     let plan = vec![vec![ids[0], ids[1]], vec![ids[2]]];
-    let files = save_files(&Post::default_for(&job), &doc, &plan, path, None, true).unwrap();
-    let names: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
+    let names = FileNames::default();
+    let files = save_files(
+        &Post::default_for(&job),
+        &doc,
+        &plan,
+        path,
+        None,
+        true,
+        names,
+    );
+    let names: Vec<_> = files.unwrap().into_iter().map(|(p, _)| p).collect();
     assert_eq!(
         names,
         [
-            path.with_file_name("sign_1_End_Mill.nc"),
+            path.with_file_name("sign_1_End Mill.nc"),
             path.with_file_name("sign_2_V-Bit.nc")
         ]
     );
@@ -351,7 +420,11 @@ fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tool
     let changer = Post::default_for(&job);
     let path = Path::new("/out/widget.nc");
     let plan = vec![vec![ids[0], ids[1]], vec![ids[2]]];
-    let files = save_files(&changer, &doc, &plan, path, Some("Top"), false).unwrap();
+    let bare = FileNames {
+        bit_names: false,
+        ..FileNames::default()
+    };
+    let files = save_files(&changer, &doc, &plan, path, Some("Top"), false, bare).unwrap();
     // compared as paths: Windows joins the folder and name with a backslash
     let names: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
     assert_eq!(
@@ -363,7 +436,16 @@ fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tool
     );
     assert_eq!(files[0].1.toolpaths.len(), 2);
     assert!(files[1].1.toolpaths.contains_key(&ids[2]));
-    let one = save_files(&changer, &doc, &[ids[..3].to_vec()], path, None, false).unwrap();
+    let one = save_files(
+        &changer,
+        &doc,
+        &[ids[..3].to_vec()],
+        path,
+        None,
+        false,
+        bare,
+    );
+    let one = one.unwrap();
     assert_eq!(one[0].0, path);
     // a post without tool changes refuses a file mixing end mill and V-bit
     let no_changes = Post::parse(
@@ -372,9 +454,145 @@ fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tool
              begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n",
     )
     .unwrap();
-    let why = save_files(&no_changes, &doc, &[ids[..3].to_vec()], path, None, false).unwrap_err();
+    let why = save_files(
+        &no_changes,
+        &doc,
+        &[ids[..3].to_vec()],
+        path,
+        None,
+        false,
+        bare,
+    );
+    let why = why.unwrap_err();
     assert!(why.contains("different tools"), "{why}");
-    assert!(save_files(&no_changes, &doc, &[ids[..2].to_vec()], path, None, false).is_ok());
+    let two = save_files(
+        &no_changes,
+        &doc,
+        &[ids[..2].to_vec()],
+        path,
+        None,
+        false,
+        bare,
+    );
+    assert!(two.is_ok());
+}
+
+/// The names `plan` of `doc` is saved under at `path`, file name only.
+fn names_of(
+    doc: &Document,
+    plan: &[Vec<EntityId>],
+    path: &Path,
+    per_tool: bool,
+    names: FileNames,
+) -> Vec<String> {
+    let job = cut_craft_core::document::Job::default();
+    save_files(
+        &Post::default_for(&job),
+        doc,
+        plan,
+        path,
+        None,
+        per_tool,
+        names,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
+    .collect()
+}
+
+#[test]
+fn file_numbers_are_padded_so_ten_or_more_files_sort_in_cutting_order() {
+    let (doc, ids) = four_toolpaths();
+    let plan: Vec<Vec<EntityId>> = (0..12).map(|n| vec![ids[n % 4]]).collect();
+    let names = names_of(
+        &doc,
+        &plan,
+        Path::new("/out/sign.nc"),
+        true,
+        FileNames::default(),
+    );
+    assert_eq!(names[0], "sign_01_End Mill.nc");
+    assert_eq!(names[11], "sign_12_End Mill.nc");
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(
+        sorted, names,
+        "a file list sorts them in the order they are cut"
+    );
+    // fewer than ten keep their single digit, as they always were
+    let few = names_of(
+        &doc,
+        &plan[..3],
+        Path::new("/out/sign.nc"),
+        true,
+        FileNames::default(),
+    );
+    assert_eq!(few[0], "sign_1_End Mill.nc");
+}
+
+#[test]
+fn every_part_of_a_file_name_is_cleaned_by_the_same_rule_and_kept_short() {
+    let (mut doc, ids) = four_toolpaths();
+    let first = doc.toolpaths.get_mut(&ids[0]).unwrap();
+    first.name = format!("Pocket: \"lid\"   {}", "x".repeat(100));
+    first.tool.name = "6.35mm End Mill".into();
+    let plan = vec![vec![ids[0]], vec![ids[2]]];
+    let path = Path::new("/out/My Sign.nc");
+    let names = FileNames::default();
+    let by_bit = names_of(&doc, &plan, path, true, names);
+    // spaces and dots kept, as in the name typed; only what Windows refuses is replaced
+    assert_eq!(
+        by_bit,
+        ["My Sign_1_6.35mm End Mill.nc", "My Sign_2_V-Bit.nc"]
+    );
+    let by_toolpath = names_of(&doc, &plan, path, false, names);
+    let label = by_toolpath[0]
+        .strip_prefix("My Sign_1_")
+        .and_then(|n| n.strip_suffix(".nc"))
+        .unwrap();
+    assert!(label.starts_with("Pocket_ _lid_ x"), "{label}");
+    assert!(
+        label.chars().count() <= 64,
+        "a long toolpath name is cut short: {label}"
+    );
+    let underscores = FileNames {
+        underscores: true,
+        ..names
+    };
+    let by_bit = names_of(&doc, &plan, path, true, underscores);
+    assert_eq!(
+        by_bit,
+        ["My_Sign_1_6.35mm_End_Mill.nc", "My_Sign_2_V-Bit.nc"]
+    );
+    assert!(!names_of(&doc, &plan[..1], path, false, underscores)[0].contains(' '));
+}
+
+#[test]
+fn multiple_files_names_say_the_bit_to_fit_unless_turned_off() {
+    let (doc, ids) = four_toolpaths();
+    let plan = vec![vec![ids[0]], vec![ids[2]]];
+    let path = Path::new("/out/sign.nc");
+    assert_eq!(
+        names_of(&doc, &plan, path, false, FileNames::default()),
+        ["sign_1_Pocket_End Mill.nc", "sign_2_Text_V-Bit.nc"]
+    );
+    let bare = FileNames {
+        bit_names: false,
+        ..FileNames::default()
+    };
+    assert_eq!(
+        names_of(&doc, &plan, path, false, bare),
+        ["sign_1_Pocket.nc", "sign_2_Text.nc"]
+    );
+}
+
+#[test]
+fn an_earlier_save_with_underscores_for_spaces_is_still_found() {
+    assert!(of_earlier_save("My_Sign_01_End_Mill.nc", "My Sign", "nc"));
+    assert!(of_earlier_save("My_Sign.nc", "My Sign", "nc"));
+    assert!(of_earlier_save("My Sign_2_V-Bit.nc", "My Sign", "nc"));
+    assert!(!of_earlier_save("My_Signs.nc", "My Sign", "nc"));
 }
 
 use super::*;

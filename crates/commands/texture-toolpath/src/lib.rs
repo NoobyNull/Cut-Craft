@@ -9,7 +9,7 @@ use cut_craft_core::random::Random;
 use cut_craft_core::toolpath::{
     Move, Tool, contour_moves, cut_points, follow, hatch_lines, made_by, project_onto_model,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -259,6 +259,7 @@ impl Command for TextureToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/texture_toolpath.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 

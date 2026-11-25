@@ -311,7 +311,7 @@ impl CutCraftApp {
         let tools_page = |page: Page, intro: &str| {
             let mut md = format!("[Contents](help:contents)\n\n{intro}");
             for g in self.help_groups(page) {
-                let _ = write!(md, "\n## {}\n\n", g.name);
+                let _ = write!(md, "\n## {}\n\n", crate::tool_names::group_name(g.name));
                 for id in g.tools {
                     let icon = self
                         .help_icon_uri(id, LIST_ICON)
@@ -339,7 +339,7 @@ impl CutCraftApp {
                 format!("[Contents](help:contents)\n\n{words}\n")
             }
             id => {
-                let (page, name) = match self.page_of(id) {
+                let (page, name) = match self.tool_model().kind_of(id) {
                     Page::Design => ("design", "Design"),
                     Page::Toolpaths => ("toolpaths", "Toolpaths"),
                 };
@@ -663,7 +663,7 @@ fn concept_title(id: &str) -> String {
 }
 
 /// Hands the help's pictures to the window's picture loader, once.
-fn load_pictures(ctx: &egui::Context) {
+pub(super) fn load_pictures(ctx: &egui::Context) {
     let done = egui::Id::unique("help-pictures-loaded");
     if ctx.data(|d| d.get_temp::<bool>(done).unwrap_or(false)) {
         return;

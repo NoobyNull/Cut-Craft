@@ -5,7 +5,7 @@
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::toolpath::{Move, MoveKind, Toolpath, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -152,6 +152,7 @@ impl Command for ArrayCopyToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/array_copy_toolpath.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 

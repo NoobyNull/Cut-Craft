@@ -6,6 +6,7 @@ mod app_icon;
 mod background;
 mod calculate_again;
 mod canvas_2d;
+mod canvas_layout;
 mod check_list;
 mod command_form;
 mod commit;
@@ -31,13 +32,14 @@ mod tool_sections;
 #[cfg(test)]
 use tool_sections::{KNIFE_LINE, held_name, tool_line};
 use tool_sections::{
-    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, is_laser_form,
-    put_listed, rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
+    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, put_listed,
+    rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
 };
 mod dialogs;
+pub(crate) use dialogs::message_dialog;
 use dialogs::{
     DIALOG_FOLDER, DIALOG_PARENT, brush_dialog, file_dialog, filtered_dialog, form_settings_dialog,
-    job_dialog, message_dialog, on_the_desktop, saving_path, template_dialog, texture_dialog,
+    job_dialog, on_the_desktop, saving_path, template_dialog, texture_dialog,
     toolpath_template_dialog,
 };
 mod readouts;
@@ -46,6 +48,7 @@ use readouts::{
 };
 mod settings;
 pub use settings::*;
+mod bit_changes;
 #[cfg(test)]
 mod hard_coded_text;
 mod help;
@@ -59,8 +62,10 @@ mod installed;
 mod job_files;
 mod keyboard;
 mod language_page;
+mod layout_choice;
 mod layouts;
 mod mac;
+mod machine_fit;
 mod machine_setup;
 mod node_editing;
 mod notes_panel;
@@ -81,6 +86,7 @@ mod send;
 mod setup_material;
 mod shortcuts_page;
 mod snapping;
+mod split_views;
 mod surfacing;
 mod tabs;
 #[cfg(test)]
@@ -134,6 +140,15 @@ const INSPECTOR_TABS: [&str; 6] = [
 /// The ribbon's tabs: the drawing, modeling and toolpath groups.
 /// The Ribbon's tabs; Gadgets shows only once a gadget or add-on is installed.
 const RIBBON_TABS: [&str; 5] = ["Design", "Model", "Toolpaths", "Favourites", "Gadgets"];
+/// Every page tab's English name, each with its words in `locales/en/subtabs.ftl`.
+#[cfg(test)]
+pub(crate) fn page_tabs() -> impl Iterator<Item = &'static str> {
+    DESIGN_TABS
+        .into_iter()
+        .chain(INSPECTOR_TABS)
+        .chain(RIBBON_TABS)
+        .chain(["Toolpaths"])
+}
 /// Actions the app handles itself rather than through a command.
 /// What the 3D view's fine mesh was made for: the model as at this revision, seen so.
 #[derive(Clone, Debug, PartialEq)]
@@ -396,6 +411,8 @@ enum Split {
     Stacked,
     /// 2D left of 3D
     SideBySide,
+    /// The view picked fills the room, the other in a corner of it
+    Picture,
 }
 
 /// The picked components' outlines, with the components and revision they were traced for.
@@ -503,6 +520,9 @@ struct OpenForm {
     id: &'static str,
     label: &'static str,
     icon: &'static str,
+    /// How it behaves, as its command says: what its button says, and whether what it made
+    /// follows it.
+    kind: cut_craft_core::Form,
     fields: Vec<Field>,
     params: Value,
     error: Option<String>,
@@ -543,7 +563,7 @@ struct OpenForm {
     beyond: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
-    /// A form that remakes what it made ([`REMAKE_FORMS`]): the history's revision and the selection
+    /// A form that remakes what it made ([`Form::Remake`](cut_craft_core::Form::Remake)): the history's revision and the selection
     /// just after its pieces were made, and the settings it was made with. While nothing else
     /// has been done or picked since, a change of settings takes them back and makes them
     /// again.
@@ -649,6 +669,8 @@ struct CutCraftApp {
     shaded_saved: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
+    /// Where the 2D view's top left corner was on screen last frame, to move `camera` with it.
+    view_2d_at: Option<egui::Pos2>,
     view_tool: Option<ViewTool>,
     /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
     pages: Pages,
@@ -668,8 +690,10 @@ struct CutCraftApp {
     rail_pinned: bool,
     /// Whether the Rail layout's list shows the favourites (its ★ button) instead of a group.
     rail_favourites: bool,
-    /// The Ribbon layout's tab (`RIBBON_TABS`).
+    /// The Ribbon layout's tab (`RIBBON_TABS`), which the Canvas layout's header shares.
     ribbon_tab: usize,
+    /// What the Canvas layout has open.
+    canvas: canvas_layout::CanvasState,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
     /// The user's own spelling words, one a line; none in tests.
@@ -721,6 +745,8 @@ struct CutCraftApp {
     machine_window: Option<cut_craft_machines::MachineManager>,
     /// First-time setup's questions, while they are shown.
     first_run: Option<first_run::Setup>,
+    /// The window layout question, while it is open.
+    layout_question: Option<layout_choice::LayoutQuestion>,
     post_window: Option<cut_craft_machines::PostManager>,
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
@@ -780,12 +806,11 @@ struct CutCraftApp {
     installed_addons: Vec<(String, Option<&'static str>, bool)>,
     /// Rail: the Gadgets list is open.
     rail_gadgets: bool,
-    /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
-    unsigned_gadgets: std::collections::HashMap<String, String>,
-    /// The unsigned gadgets the user has said yes to running this session.
-    unsigned_gadgets_allowed: std::collections::HashSet<String>,
-    /// Asks whether to run the unsigned gadget with this label (a dialog; tests answer).
-    unsigned_gadget_ok: fn(&str) -> bool,
+    /// Gadgets from the My Gadgets folder or unsigned add-ons, not from Cut Craft's own
+    /// signed builds, by command id.
+    unsigned_gadgets: std::collections::HashMap<String, crate::gadgets::Unsigned>,
+    /// The one check before unsigned code runs: gadgets and add-on programs alike.
+    trust: crate::trust::Trust,
     /// A SpaceMouse's moves, once the app is running (not in tests or screenshots).
     space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
@@ -835,6 +860,8 @@ struct CutCraftApp {
     tip: Option<usize>,
     /// The Did You Know? window's rendered tips.
     tips_cache: egui_commonmark::CommonMarkCache,
+    /// Help ▸ Credits: its search and rendered licence texts.
+    credits: crate::credits::Window,
     /// Sketch Carving's green areas, with the form settings, revision and selection they
     /// were found for.
     sketch_areas: Option<SketchAreas>,
@@ -1077,6 +1104,8 @@ struct CutCraftApp {
     shortcut_search: String,
     /// Both views shown at once.
     split: Option<Split>,
+    /// How the two views share the room while both show.
+    split_layout: split_views::SplitLayout,
     /// The Library tab.
     clipart: crate::clipart::Clipart,
     /// Files from the Library waiting to be added, one after another, each with the level
@@ -1146,7 +1175,9 @@ fn menu_items(
         .iter()
         .map(|i| {
             let shortcut = (menus.shortcut_of)(&i.action).unwrap_or_else(|| i.shortcut.clone());
-            text(&i.name) + text(&shortcut_label(ui.ctx(), &shortcut)) + room
+            text(&crate::tool_names::menu_item_name(i))
+                + text(&shortcut_label(ui.ctx(), &shortcut))
+                + room
         })
         .fold(0.0, f32::max);
     for category in gui::categories(items) {
@@ -1250,15 +1281,16 @@ fn paint_focus_ring(ctx: &egui::Context) {
 }
 
 fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &mut Option<String>) {
+    let name = crate::tool_names::menu_item_name(item);
     if item.action == "recent_files" {
         ui.add_enabled_ui(!menus.recent.is_empty(), |ui| {
-            ui.menu_button(&item.name, |ui| {
+            ui.menu_button(&name, |ui| {
                 menu_items(ui, menus.recent, menus, clicked);
             });
         });
     } else if !item.children.is_empty() {
         ui.add_enabled_ui(item.is_enabled, |ui| {
-            ui.menu_button(&item.name, |ui| {
+            ui.menu_button(&name, |ui| {
                 menu_items(ui, &item.children, menus, clicked);
             });
         });
@@ -1268,9 +1300,9 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
             Some(picture) => {
                 let edge = ui.spacing().interact_size.y;
                 let picture = picture.fit_to_exact_size(egui::Vec2::splat(edge));
-                egui::Button::image_and_text(picture, &item.name)
+                egui::Button::image_and_text(picture, &name)
             }
-            None => egui::Button::new(&item.name),
+            None => egui::Button::new(&name),
         }
         .shortcut_text(shortcut_label(
             ui.ctx(),
@@ -1339,7 +1371,8 @@ fn file_name(path: &std::path::Path) -> String {
 }
 
 /// How the 3D view wraps `surface` round a rotary job's axis, when Auto-Wrapping is `on`: a
-/// preview's surface is at 0, the model placed as Material Setup says.
+/// preview's surface is at 0, its uncut material out to a square's or board's own faces;
+/// the model placed as Material Setup says.
 fn wrap_for(
     job: &cut_craft_core::document::Job,
     on: bool,
@@ -1349,6 +1382,7 @@ fn wrap_for(
     job.rotary.filter(|_| on).map(|r| view3d::Wrap {
         along_x: r.along == cut_craft_core::document::Along::X,
         radius: r.diameter / 2.0,
+        outline: view3d::outline_of(&r).filter(|_| previewing),
         surface: if previewing {
             0.0
         } else {

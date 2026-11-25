@@ -293,6 +293,7 @@ impl CutCraftApp {
         let mut seen = BTreeSet::new();
         let mut list = vec![];
         let tools = self
+            .tool_model()
             .all_groups()
             .into_iter()
             .flat_map(|g| g.tools.iter().map(|&t| (t.to_owned(), self.tool_label(t))));
@@ -308,6 +309,10 @@ impl CutCraftApp {
 
     /// `POST invoke`: presses a button or menu item, as a click does.
     fn web_invoke(&mut self, ctx: &egui::Context, action: &str) -> Answer {
+        // a script never brings up the unsigned-code question on someone's screen
+        if let Some(why) = self.not_allowed_yet(action) {
+            return Err(ApiError::refused(why));
+        }
         if NOT_FROM_THE_API.contains(&action) {
             return Err(ApiError::refused(format!(
                 "\"{action}\" cannot be pressed from the Web API: it would close Cut Craft."
@@ -315,7 +320,11 @@ impl CutCraftApp {
         }
         let known = self.registry.get(action).is_some()
             || menu_items(self).iter().any(|(id, _)| id == action)
-            || self.all_groups().iter().any(|g| g.tools.contains(&action));
+            || self
+                .tool_model()
+                .all_groups()
+                .iter()
+                .any(|g| g.tools.contains(&action));
         if !known {
             return Err(ApiError::not_found(format!(
                 "There is no button or menu item \"{action}\". GET {}actions lists them.",
@@ -340,6 +349,9 @@ impl CutCraftApp {
     /// one Undo step, with no form.
     fn web_run(&mut self, command: &str, given: &Value) -> Answer {
         self.job_needed()?;
+        if let Some(why) = self.not_allowed_yet(command) {
+            return Err(ApiError::refused(why));
+        }
         // a call naming a component works on it as if it were picked in the window, so the
         // settings it leaves out are that component's own, not those of the one picked
         if let Some(id) = given.get("component").and_then(Value::as_u64) {

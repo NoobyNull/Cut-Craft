@@ -7,6 +7,7 @@ use super::{
     saving_path,
 };
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_core::Form;
 use cut_craft_i18n::tr;
 
 impl CutCraftApp {
@@ -19,16 +20,13 @@ impl CutCraftApp {
         }
         let drawing = self.drawing_tool().is_some();
         let made = self.drawn_shape().is_some() || self.remade_last().is_some();
-        // opened on an embellishment it made (E): pressing it changes that one
-        let reopened = !made
-            && open.id == <cmd_embellish::Embellish as cut_craft_core::Command>::ID
-            && cmd_embellish::edits_selection(&self.doc);
-        commit::commit(open.id, open.page, drawing, made).map(|c| {
-            let c = if reopened && c == commit::Commit::Create {
-                commit::Commit::Apply
-            } else {
-                c
-            };
+        // opened on something it made (Embellish on its embellishment, E): pressing it
+        // changes that one
+        let reopened = self
+            .registry
+            .get(open.id)
+            .is_some_and(|c| c.reopens(&self.doc));
+        commit::commit(open.kind, open.page, drawing, made || reopened).map(|c| {
             let again = open.editing.is_some() || open.made.is_some();
             (c.label(), commit::hint(c, drawing, again))
         })
@@ -63,7 +61,7 @@ impl CutCraftApp {
             (false, false)
         };
         if committing.is_none() {
-            new_shape = live_row(ui, open.id, drawing, made);
+            new_shape = live_row(ui, open.kind, drawing, made);
         }
         let as_new = as_new_offered && calculate_as_new_row(ui);
         let mut reset = false;
@@ -266,7 +264,11 @@ impl CutCraftApp {
                         .fit_to_exact_size(egui::vec2(edge, edge)),
                 );
             }
-            ui.strong(open.label);
+            ui.strong(crate::tool_names::form_name(
+                &self.registry,
+                open.id,
+                open.label,
+            ));
         });
         let step = self.form_guidance();
         if FIXED_TEXT_FORMS.contains(&open.id) {
@@ -287,7 +289,7 @@ impl CutCraftApp {
             });
         }
         // what a toolpath (or the Vector Selector) will be made from, and what it leaves out
-        if open.id.ends_with("_toolpath") || open.id == "vector_selector" {
+        if open.kind.is_toolpath() || open.id == "vector_selector" {
             let count = self.doc.selected_vector_count();
             if let Some(text) = count.text() {
                 ui.weak(text)
@@ -333,7 +335,7 @@ impl CutCraftApp {
     /// when the toolpath is not Drilling.
     fn drill_sideways(form: &super::OpenForm) -> Option<String> {
         let tool = form.params.get("tool")?;
-        if !form.id.ends_with("_toolpath") || tool.get("drill_only") != Some(&Value::Bool(true)) {
+        if !form.kind.is_toolpath() || tool.get("drill_only") != Some(&Value::Bool(true)) {
             return None;
         }
         let tool = cut_craft_core::toolpath::Tool {
@@ -347,12 +349,12 @@ impl CutCraftApp {
     /// The warning for a toolpath form whose tool is the wrong kind: a router bit on a laser
     /// toolpath, or a laser on a router's (as soon as it is picked; never refused).
     fn wrong_kind_of_tool(form: &super::OpenForm) -> Option<String> {
-        if !form.id.ends_with("_toolpath") {
+        if !form.kind.is_toolpath() {
             return None;
         }
         let tool: cut_craft_core::toolpath::Tool =
             serde_json::from_value(form.params.get("tool")?.clone()).ok()?;
-        let laser_form = super::is_laser_form(form.id);
+        let laser_form = form.kind.needs() == cut_craft_core::Needs::Laser;
         if laser_form && !tool.is_laser() {
             Some(format!(
                 "{} is not a laser: this toolpath takes its diameter as the kerf and its feed \
@@ -477,6 +479,10 @@ impl CutCraftApp {
         if let Some(wrong) = Self::wrong_kind_of_tool(form) {
             ui.colored_label(ui.visuals().error_fg_color, wrong);
         }
+        // a laser or rotary toolpath on a machine without one (one already in the job)
+        if let Some(lacks) = self.machine_lacks(form.kind.needs()) {
+            ui.colored_label(ui.visuals().error_fg_color, lacks);
+        }
         // tiles that, with their overlap, will not fit the machine: said as they are set
         if let Some(past) = self.tiles_past_bed(form) {
             ui.colored_label(ui.visuals().error_fg_color, past);
@@ -588,9 +594,9 @@ pub(super) fn reset_button(ui: &mut egui::Ui, id: &str) -> bool {
             .clicked()
 }
 
-pub(super) fn live_row(ui: &mut egui::Ui, id: &str, drawing: bool, made: bool) -> bool {
+pub(super) fn live_row(ui: &mut egui::Ui, kind: Form, drawing: bool, made: bool) -> bool {
     ui.horizontal_wrapped(|ui| {
-        ui.weak(commit::live_note(id, drawing));
+        ui.weak(commit::live_note(kind, drawing));
         drawing
             && made
             && ui

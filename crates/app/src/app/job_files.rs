@@ -179,6 +179,10 @@ impl CutCraftApp {
 
     /// Runs a registered command: straight away if it has no settings, else opens its form.
     pub(super) fn start_command(&mut self, id: &str) {
+        // unsigned code runs only once the user has said yes to it, however it is started
+        if !self.may_run_gadget(id) {
+            return;
+        }
         self.import_level = None;
         // a new job's setup is accepted, as OK would, before another form takes its place:
         // the new-job screen shows only that form, so it would be left bare (issue #17)
@@ -194,7 +198,7 @@ impl CutCraftApp {
                 .set_message(&format!("{}: not implemented yet", gui::title_case(id)));
             return;
         };
-        let page = self.page_of(cmd.id());
+        let page = self.tool_model().kind_of(cmd.id());
         let (id, interactive) = (cmd.id(), cmd.interactive());
         let (meta, fields, mut params) = (
             cmd.meta(),
@@ -225,7 +229,7 @@ impl CutCraftApp {
         } else {
             fields
         };
-        meta.label.clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label(cmd.id());
         self.view_tool = None;
         if fields.is_empty() {
             if let Err(e) = self.apply(cmd.id(), &params) {
@@ -247,6 +251,7 @@ impl CutCraftApp {
                 id: cmd.id(),
                 label: meta.label,
                 icon: meta.icon,
+                kind: meta.form,
                 fields,
                 params,
                 error: None,
@@ -295,7 +300,7 @@ impl CutCraftApp {
         if let Some(form) = self.form.as_mut().filter(|f| f.id == variant.command) {
             form.way = variant.way;
             form.label = variant.label;
-            variant.label.clone_into(&mut self.status.current_tool);
+            self.status.current_tool = self.tool_label(variant.id);
         }
     }
 
@@ -690,7 +695,7 @@ impl CutCraftApp {
         self.reset_job();
         self.view = View::TwoD;
         self.screen = Screen::Job;
-        "Select".clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label("select");
     }
 
     /// What Cut Craft shows once it has started: the file named on the command line, if
@@ -762,7 +767,7 @@ impl CutCraftApp {
                 self.picked_constraint = None;
                 self.screen = Screen::Job;
                 self.status.set_message("New job created");
-                "Select".clone_into(&mut self.status.current_tool);
+                self.status.current_tool = self.tool_label("select");
                 if let Some(path) = self.import_after_setup.take() {
                     self.import_file(&path);
                 }
@@ -777,7 +782,7 @@ impl CutCraftApp {
     pub(super) fn job_setup_cancel(&mut self) {
         self.import_after_setup = None;
         self.reset_job();
-        "Select".clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label("select");
         self.screen = Screen::Start;
     }
 

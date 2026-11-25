@@ -76,6 +76,9 @@ const NUMBERS: &[&str] = &[
     "XH",
     "YH",
     "ZH",
+    "PARKX",
+    "PARKY",
+    "PARKZ",
     "XLENGTH",
     "YLENGTH",
     "ZLENGTH",
@@ -102,6 +105,7 @@ const NUMBERS: &[&str] = &[
     "Radius",
     "Angle",
     "DWELL",
+    "SPINUP",
     "DB",
     "DBX",
     "DBY",
@@ -119,6 +123,9 @@ const LENGTHS: &[&str] = &[
     "XH",
     "YH",
     "ZH",
+    "PARKX",
+    "PARKY",
+    "PARKZ",
     "XLENGTH",
     "YLENGTH",
     "ZLENGTH",
@@ -152,6 +159,9 @@ const THREE_PLACES: &[&str] = &[
     "XH",
     "YH",
     "ZH",
+    "PARKX",
+    "PARKY",
+    "PARKZ",
     "XLENGTH",
     "YLENGTH",
     "ZLENGTH",
@@ -177,8 +187,9 @@ const THREE_PLACES: &[&str] = &[
     "Radius",
     "Angle",
 ];
-const TEXTS: [&str; 19] = [
+const TEXTS: [&str; 20] = [
     "TOOLNAME",
+    "SPINUP_SECONDS",
     "TOOLPATH_NAME",
     "TP_FILENAME",
     "TP_DIR",
@@ -307,6 +318,44 @@ pub struct Post {
     /// between the first two (`VAR DRILL_LIST = [DL|prefix|separator|first separator]`).
     drill_list: (String, String, String),
     blocks: HashMap<String, Vec<String>>,
+    /// Where a pause for a bit change takes the head ([`Pause::park`]); printed as `[PARKX]`
+    /// `[PARKY]` `[PARKZ]`.
+    park: Option<[f64; 3]>,
+    /// How long a pause for a bit change waits for the spindle, seconds; printed as
+    /// `[SPINUP]` the way the post prints its own dwell (`[DWELL]`), so a post that gives
+    /// dwells in milliseconds gets milliseconds.
+    spin_up: f64,
+}
+
+/// The block written after `SPINDLE_ON` at a bit change: the spin-up wait, when the tool
+/// change leaves starting the spindle to `SPINDLE_ON`. Not a name a post file can use.
+pub(crate) const AFTER_SPINDLE_ON: &str = "+SPIN_UP";
+
+/// The spindle's time to come up to speed after a pause Cut Craft writes, seconds.
+pub const DEFAULT_SPIN_UP: f64 = 3.0;
+
+/// The note before the wait for the spindle after a pause, saying how long it is in
+/// seconds whatever units the dwell prints in.
+pub(crate) const SPIN_UP_NOTE: &str =
+    "(Waits [SPINUP_SECONDS] s for the spindle to come up to speed)";
+
+/// `value` seconds as a note says them: to a tenth, without a trailing `.0`.
+pub(crate) fn seconds(value: f64) -> String {
+    let text = format!("{:.1}", value.max(0.0));
+    text.strip_suffix(".0")
+        .map_or_else(|| text.clone(), str::to_owned)
+}
+
+/// How [`Post::with_pauses`] stops for a bit to be changed by hand.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Pause {
+    /// The spindle's time to come up to speed once resumed, seconds; `None` keeps the
+    /// post's own wait.
+    pub spin_up: Option<f64>,
+    /// Where the head waits for the change: X and Y from the job's X0 Y0, and Z above the
+    /// top of the material (never lower than the safe Z), mm. `None` stays where the bit
+    /// lifted to the safe Z. A post that wraps onto a rotary axis always stays.
+    pub park: Option<[f64; 3]>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -480,13 +529,14 @@ impl Post {
 
     /// This post with each tool change a stop to change the tool by hand: its own tool
     /// change when it already pauses, else one that lifts to the safe Z, stops the spindle,
-    /// names the next tool, stops (`M0`) and starts the spindle again, using only the
-    /// variables the post has. The header's tool change (`M6`) becomes a note to fit the
-    /// first tool before starting.
+    /// names the next tool, stops (`M0`), starts the spindle again and waits for it, using
+    /// only the variables the post has. Either way `pause` adds the trip to the change
+    /// position and sets the wait ([`Self::paused_as`]). The header's tool change (`M6`)
+    /// becomes a note to fit the first tool before starting.
     #[must_use]
-    pub fn with_pauses(&self) -> Self {
+    pub fn with_pauses(&self, pause: Pause) -> Self {
         if self.pauses_for_tools() {
-            return self.clone();
+            return self.paused_as(pause);
         }
         let has = |label: &str| self.formats.contains_key(label);
         let mut lines = vec![];
@@ -502,9 +552,11 @@ impl Post {
         lines.push(format!("(Change to {tool}, set Z zero, then resume)"));
         lines.push("M0".to_owned());
         lines.push(if has("S") { "[S] M3" } else { "M3" }.to_owned());
-        // the spindle's time to come up to speed
-        lines.push("G4 P3".to_owned());
+        // the spindle's time to come up to speed, in the post's own dwell units
+        lines.push(SPIN_UP_NOTE.to_owned());
+        lines.push("G4 [SPINUP]".to_owned());
         let mut post = self.clone();
+        post.spin_up_as_dwell();
         post.blocks.insert("TOOLCHANGE".to_owned(), lines);
         // the first tool is fitted by hand before starting, not loaded by the changer
         let fitted = format!("(First tool {tool}, fitted and zeroed before starting)");
@@ -518,7 +570,121 @@ impl Post {
                 }
             }
         }
+        post.paused_as(pause)
+    }
+
+    /// This pausing post with `pause` made in its tool change: the head lifted to the
+    /// change position's Z and taken to its X Y around the spindle stopping (`M5`, else just
+    /// before the stop), and the wait after the spindle starts again (`G4`) set to
+    /// `pause`'s spin-up. A rotary (wrapping) post keeps the head where it lifted, as its
+    /// position would print as an angle.
+    fn paused_as(&self, pause: Pause) -> Self {
+        let mut post = self.clone();
+        let Some(lines) = self.blocks.get("TOOLCHANGE") else {
+            return post;
+        };
+        let words = |line: &str| -> Vec<String> {
+            line.split_whitespace()
+                .map(str::to_ascii_uppercase)
+                .collect()
+        };
+        let is =
+            |line: &str, codes: &[&str]| words(line).iter().any(|w| codes.contains(&w.as_str()));
+        let stop = lines
+            .iter()
+            .position(|l| is(l, &["M0", "M00", "M1", "M01"]));
+        let timed = pause.spin_up.is_some();
+        if let Some(seconds) = pause.spin_up {
+            post.spin_up = seconds.max(0.0);
+        }
+        let Some(lines) = post.blocks.get_mut("TOOLCHANGE") else {
+            return post;
+        };
+        let mut after_start = false;
+        if timed {
+            // the wait follows the spindle starting again after the stop: a wait there is
+            // replaced, else one is added after the start, else (the start left to
+            // SPINDLE_ON) it is written after that block
+            let after = stop.unwrap_or(0);
+            let start = lines
+                .iter()
+                .skip(after)
+                .position(|l| is(l, &["M3", "M03", "M4", "M04"]))
+                .map(|at| after + at);
+            match start {
+                Some(start) => {
+                    let wait = lines
+                        .iter()
+                        .skip(start)
+                        .position(|l| is(l, &["G4", "G04"]))
+                        .map(|at| start + at);
+                    let at = if let Some(wait) = wait {
+                        lines.remove(wait);
+                        wait
+                    } else {
+                        start + 1
+                    };
+                    lines.insert(at, "G4 [SPINUP]".to_owned());
+                    if lines.get(at - 1).map(String::as_str) != Some(SPIN_UP_NOTE) {
+                        lines.insert(at, SPIN_UP_NOTE.to_owned());
+                    }
+                }
+                None => after_start = true,
+            }
+        }
+        let park = pause.park.filter(|_| self.wrap.is_none());
+        if let (Some(park), Some(stop)) = (park, stop) {
+            let off = lines[..stop].iter().position(|l| is(l, &["M5", "M05"]));
+            // lift where the bit is, stop the spindle, then cross to the change position
+            let (up, across) = off.map_or((stop, stop), |at| (at, at + 1));
+            lines.insert(across, "G0 [PARKX] [PARKY]".to_owned());
+            lines.insert(up, "G0 [PARKZ]".to_owned());
+            for (label, axis) in [("PARKX", "X"), ("PARKY", "Y"), ("PARKZ", "Z")] {
+                let mut format = self
+                    .formats
+                    .get(axis)
+                    .cloned()
+                    .unwrap_or_else(|| Format::default_for(axis));
+                // a post that writes the letter in its own lines (`X[X]`) has no prefix
+                if format.prefix.is_empty() {
+                    axis.clone_into(&mut format.prefix);
+                }
+                format.only_changes = false;
+                post.formats.insert(label.to_owned(), format);
+            }
+            post.park = Some(park);
+        }
+        if after_start {
+            post.blocks.insert(
+                AFTER_SPINDLE_ON.to_owned(),
+                vec![SPIN_UP_NOTE.to_owned(), "G4 [SPINUP]".to_owned()],
+            );
+        }
+        if timed {
+            post.spin_up_as_dwell();
+        }
         post
+    }
+
+    /// `[SPINUP]` printed as the post prints its own dwell (`[DWELL]`: its letter, places
+    /// and multiplier, so seconds or milliseconds as its controller reads them), else as
+    /// `P` and seconds to a tenth.
+    fn spin_up_as_dwell(&mut self) {
+        let mut format = self
+            .formats
+            .get("DWELL")
+            .cloned()
+            .unwrap_or_else(|| Format {
+                prefix: "P".to_owned(),
+                decimals: 1,
+                ..Format::default()
+            });
+        // a post that writes the letter in its own dwell line (`G4 P[DWELL]`) has none
+        if format.prefix.is_empty() {
+            "P".clone_into(&mut format.prefix);
+        }
+        format.only_changes = false;
+        self.formats.insert("SPINUP".to_owned(), format);
     }
 
     /// This post writing for a machine whose rotary is `axis`: A wound no further than it may
@@ -555,6 +721,8 @@ impl Post {
             formats: HashMap::new(),
             drill_list: (String::new(), ",".into(), ",".into()),
             blocks: HashMap::new(),
+            park: None,
+            spin_up: DEFAULT_SPIN_UP,
         };
         let mut block: Option<String> = None;
         for line in text.lines().map(str::trim) {
@@ -671,9 +839,9 @@ fn z_origin(job: &Job) -> &'static str {
     match (job.z_zero, job.rotary) {
         (ZZero::MaterialSurface, None) => "Material Surface",
         (ZZero::MachineBed, None) => "Machine Bed",
-        // an unrolled cylinder's top is its surface, and under it is its axis
-        (ZZero::MaterialSurface, Some(_)) => "Cylinder Surface",
-        (ZZero::MachineBed, Some(_)) => "Cylinder Axis",
+        // as Job Setup names them: the top of the material at A=0, or the axis it turns on
+        (ZZero::MaterialSurface, Some(_)) => "Material Top",
+        (ZZero::MachineBed, Some(_)) => "Turning Axis",
     }
 }
 

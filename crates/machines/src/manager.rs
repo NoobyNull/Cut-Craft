@@ -4,7 +4,7 @@
 
 use crate::capabilities::{Capabilities, CapabilityDb, Family, Filter, Moves};
 use crate::library::{Entry, Library, Source};
-use crate::machine::{Firmware, Machine, Machines, NO_A_AXIS};
+use crate::machine::{ChangePosition, Firmware, HandChanges, Machine, Machines, NO_A_AXIS};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use eframe::egui;
@@ -206,6 +206,7 @@ impl MachineManager {
             limits(ui, machine);
             holder(ui, machine);
             tool_changer(ui, machine, None);
+            bit_changes(ui, machine);
             keep_out(ui, machine);
             protect(ui, machine);
             drill_bank(ui, machine);
@@ -367,6 +368,13 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_fir
                     }
                     ui.end_row();
                 }
+                ui.label("Laser");
+                ui.checkbox(&mut machine.laser, "Laser fitted")
+                    .on_hover_hint(
+                        "Tick if a laser is fitted to the head: only then are the laser \
+                         toolpaths offered on the Toolpaths page",
+                    );
+                ui.end_row();
             });
         // a 4th axis ticked before, that its firmware cannot drive (below the grid, so it
         // wraps to the window)
@@ -611,7 +619,7 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                         .on_hover_hint(format!(
                             "From work zero across to the turning axis, in {across}. 0 when you \
                          zero {across} on the axis, as is usual. (Its height comes from Job \
-                         Setup: Z zero on the axis or on the cylinder's top)"
+                         Setup: Z zero on the turning axis or on the material's top)"
                         ));
                     let mut v = axis.centre_across / per;
                     if ui
@@ -881,6 +889,135 @@ pub fn tool_changer(
         });
     });
     (machine.slots != before, select)
+}
+
+/// Bit Changes: how a job with several bits is saved without a tool changer (a file for
+/// each bit, or one file that pauses), where a pause takes the head and how long the
+/// spindle gets to come up to speed, and Group by bit, which cuts each bit's toolpaths
+/// together. Folded to one line saying how bits are changed.
+fn bit_changes(ui: &mut egui::Ui, machine: &mut Machine) {
+    let how = match (machine.slots.is_empty(), machine.hand_changes) {
+        (false, _) => "by the tool changer",
+        (true, HandChanges::SeparateFiles) => "a separate file for each bit",
+        (true, HandChanges::Pause) => "one file that pauses",
+    };
+    let grouped = if machine.group_by_bit {
+        ", grouped by bit"
+    } else {
+        ""
+    };
+    egui::CollapsingHeader::new(format!("Bit Changes: {how}{grouped}"))
+        .id_salt("bit_changes")
+        .show(ui, |ui| {
+            if machine.slots.is_empty() {
+                hand_changes(ui, machine);
+            } else {
+                ui.weak("The tool changer changes the bits; a pause chosen in Save Toolpaths uses these:");
+            }
+            change_position(ui, machine);
+            ui.horizontal(|ui| {
+                ui.label("Spindle spin-up after a pause");
+                ui.add(
+                    Number::new(&mut machine.spin_up)
+                        .range(0.0..=120.0)
+                        .max_decimals(1)
+                        .suffix(" s")
+                        .name("Spindle spin-up"),
+                )
+                .on_hover_hint(
+                    "How long the machine waits for the spindle to come up to speed before \
+                     cutting again; 0 keeps the post's own wait (3 s in Cut Craft's posts). \
+                     It is written in the units the post gives its dwells",
+                );
+            });
+            ui.checkbox(&mut machine.group_by_bit, "Group by bit")
+                .on_hover_hint(
+                    "Off (safest): toolpaths are cut in the order they are listed. On: each \
+                     bit's toolpaths are cut together, for fewer bit changes, which changes \
+                     the order. The checks before cutting show the new order to look over",
+                );
+        });
+}
+
+/// What Save Toolpaths starts on for a job with several bits on a machine without a tool
+/// changer: a file for each bit, or one file that pauses (warned on standard GRBL).
+fn hand_changes(ui: &mut egui::Ui, machine: &mut Machine) {
+    ui.label("When a job uses more than one bit, save it as:");
+    ui.radio_value(
+        &mut machine.hand_changes,
+        HandChanges::SeparateFiles,
+        "A separate file for each bit",
+    )
+    .on_hover_hint(
+        "The safest: run the files in number order, changing the bit and setting Z zero \
+         between them. Save Toolpaths starts on this choice",
+    );
+    ui.radio_value(
+        &mut machine.hand_changes,
+        HandChanges::Pause,
+        "One file that pauses at each bit change",
+    )
+    .on_hover_hint(
+        "The machine stops (M0) at each change; change the bit, set Z zero, then resume. \
+         Standard GRBL cannot jog while paused, so use separate files there",
+    );
+    if machine.hand_changes == HandChanges::Pause && machine.cannot_jog_when_paused() {
+        ui.colored_label(
+            ui.visuals().warn_fg_color,
+            "⚠ Standard GRBL cannot jog while paused, so setting Z zero at a pause is hard. \
+             Pick the firmware above if yours is not standard GRBL",
+        );
+    }
+}
+
+/// Go to a bit change position at each pause, and where: X and Y from the job's X0 Y0, Z
+/// above the material.
+fn change_position(ui: &mut egui::Ui, machine: &mut Machine) {
+    let (per, unit) = if machine.inches {
+        (INCH, " in")
+    } else {
+        (1.0, " mm")
+    };
+    let mut moving = machine.change_position.is_some();
+    if ui
+        .checkbox(&mut moving, "Go to a bit change position at each pause")
+        .on_hover_hint(
+            "Off: the bit lifts straight up to the safe Z, often over the work. On: the head \
+             also goes to this spot, out of the way, to change the bit",
+        )
+        .changed()
+    {
+        machine.change_position = moving.then(|| ChangePosition {
+            z: 50.0,
+            ..ChangePosition::default()
+        });
+    }
+    let Some(position) = machine.change_position.as_mut() else {
+        return;
+    };
+    egui::Grid::new("bit_change_position")
+        .num_columns(2)
+        .show(ui, |ui| {
+            let across = "From the job's X0 Y0";
+            let up = "Above the top of the material; never lower than the safe Z";
+            for (label, value, hint) in [
+                ("X", &mut position.x, across),
+                ("Y", &mut position.y, across),
+                ("Z", &mut position.z, up),
+            ] {
+                ui.label(label).on_hover_hint(hint);
+                let mut shown = *value / per;
+                let field = Number::new(&mut shown)
+                    .speed(1.0 / per)
+                    .max_decimals(3)
+                    .suffix(unit)
+                    .name(label);
+                if ui.add(field).on_hover_hint(hint).changed() {
+                    *value = shown * per;
+                }
+                ui.end_row();
+            }
+        });
 }
 
 /// Keep-Out Zones: rectangles of the bed no toolpath of any job may pass over, such as

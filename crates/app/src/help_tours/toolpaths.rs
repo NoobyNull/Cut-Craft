@@ -2,9 +2,10 @@
 
 use super::{
     CIRCLE_R, CIRCLE_X, CIRCLE_Y, Mark, Page, RECT_H, RECT_Y, RECT2_X, Step, Tour, View, calculate,
-    circle, dome, draw, egui, fresh_job, holes, lines, moulding_shapes, picture, preview_3d, rect,
-    select, set, small_profile, star, turned_bead, two_shapes, with,
+    circle, dome, draw, egui, fitted, fresh_job, holes, lines, moulding_shapes, picture,
+    preview_3d, rect, select, set, small_profile, star, turned_bead, two_shapes, with,
 };
+use cut_craft_core::Needs;
 
 pub(super) const TOURS: &[Tour] = &[
     Tour {
@@ -971,8 +972,10 @@ pub(super) const TOURS: &[Tour] = &[
             },
             Step {
                 caption: "On the Toolpaths page, press **4-Axis Rotary Machining** (under 3D \
-                          Toolpaths).",
+                          Toolpaths). It shows once **4th axis** is ticked in Machine \
+                          Configuration.",
                 setup: |app, _| {
+                    fitted(app, Needs::Rotary);
                     app.view = View::TwoD;
                     app.pages.set_pinned(Page::Toolpaths, true);
                 },
@@ -1014,8 +1017,10 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::None,
             },
             Step {
-                caption: "On the Toolpaths page, press **Rotary Lathe** (under 3D Toolpaths).",
+                caption: "On the Toolpaths page, press **Rotary Lathe** (under 3D Toolpaths). \
+                          It shows once **4th axis** is ticked in Machine Configuration.",
                 setup: |app, _| {
+                    fitted(app, Needs::Rotary);
                     app.view = View::TwoD;
                     app.pages.set_pinned(Page::Toolpaths, true);
                 },
@@ -1113,8 +1118,12 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::Everything,
             },
             Step {
-                caption: "On the Toolpaths page, press **Laser Cut / Fill** (under Laser).",
-                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                caption: "On the Toolpaths page, press **Laser Cut / Fill** (under Laser). It \
+                          shows once **Laser fitted** is ticked in Machine Configuration.",
+                setup: |app, _| {
+                    fitted(app, Needs::Laser);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
                 mark: Mark::At("tool:laser_cut_fill_toolpath"),
             },
             Step {
@@ -1160,8 +1169,12 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::None,
             },
             Step {
-                caption: "On the Toolpaths page, press **Laser Picture** (under Laser).",
-                setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
+                caption: "On the Toolpaths page, press **Laser Picture** (under Laser). It shows \
+                          once **Laser fitted** is ticked in Machine Configuration.",
+                setup: |app, _| {
+                    fitted(app, Needs::Laser);
+                    app.pages.set_pinned(Page::Toolpaths, true);
+                },
                 mark: Mark::At("tool:laser_picture_toolpath"),
             },
             Step {

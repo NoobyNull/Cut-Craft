@@ -580,6 +580,7 @@ mod job {
                 group: "Edit",
                 icon: "",
                 shortcut: "",
+                form: cut_craft_core::Form::Apply,
             }
         }
         fn run(

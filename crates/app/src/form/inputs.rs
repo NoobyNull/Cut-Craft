@@ -144,7 +144,11 @@ pub(super) fn choose(
             // stacked, so their size does not depend on the width the layout gives them
             ui.vertical(|ui| radios(ui, options, &current)).inner
         }
-        Widget::Row => ui.horizontal(|ui| radios(ui, options, &current)).inner,
+        // side by side, onto another line when the panel is too narrow for them all
+        Widget::Row => {
+            ui.horizontal_wrapped(|ui| radios(ui, options, &current))
+                .inner
+        }
         Widget::Auto => drop_down(ui, options, &current),
         Widget::DropDown => {
             ui.vertical(|ui| {

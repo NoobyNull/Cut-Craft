@@ -30,11 +30,42 @@ pub struct Appearance {
     #[serde(default = "grid_point_size")]
     #[schemars(range(min = 0.5, max = 10))]
     pub grid_point_size: f32,
+    /// Rotary jobs: how far past each seam the 2D view shows the other side of the
+    /// material, so a line that runs off one edge can be seen coming back in at the other
+    #[serde(default)]
+    #[schemars(title = "Rotary wrap bands")]
+    pub rotary_wrap: WrapBands,
     /// How big text, buttons and lines are, as a percentage: larger is easier to read and to
     /// click, smaller fits more on a small screen (from the next start)
     #[serde(default = "text_size")]
     #[schemars(title = "Text size", extend("x-unit" = "%"), range(min = 80, max = 200))]
     pub text_size: u32,
+}
+
+/// How far the 2D view's wrap bands reach past each seam of a rotary job.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WrapBands {
+    /// No bands: the sheet alone, as on a flat job
+    Off,
+    /// A quarter of a turn (90°) past each seam
+    #[default]
+    #[schemars(title = "Quarter turn")]
+    QuarterTurn,
+    /// Half a turn (180°) past each seam: the whole of the other side at once
+    #[schemars(title = "Half turn")]
+    HalfTurn,
+}
+
+impl WrapBands {
+    /// How far each band reaches, in turns of the material.
+    pub fn turns(self) -> f64 {
+        match self {
+            Self::Off => 0.0,
+            Self::QuarterTurn => 0.25,
+            Self::HalfTurn => 0.5,
+        }
+    }
 }
 
 /// The size Cut Craft has always drawn its text at: egui's, plus 15%.
@@ -51,6 +82,7 @@ impl Default for Appearance {
             light_2d: CanvasColours::light(),
             dark_2d: CanvasColours::dark(),
             grid_point_size: grid_point_size(),
+            rotary_wrap: WrapBands::default(),
             text_size: text_size(),
         }
     }
@@ -298,17 +330,56 @@ impl Theme {
     }
 }
 
-/// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`).
+/// How many tools each Ribbon group shows as icons.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RibbonIcons {
+    /// The tools that fit under the group's name; the name lists the rest
+    #[default]
+    Compact,
+    /// Every tool in the group
+    EveryTool,
+}
+
+/// When a Canvas palette group lists its tools beside it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CanvasFlyouts {
+    /// As soon as the pointer is over the group
+    #[default]
+    OnHover,
+    /// When the group is clicked
+    OnClick,
+}
+
+/// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`,
+/// `docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowLayout {
-    /// Design page left, Toolpaths page right, side tabs
+    /// Tabs of tool groups across the top; your sheets, layers and toolpaths on the left,
+    /// the open tool's settings on the right
     #[default]
-    Classic,
-    /// A rail of tool groups on the left opening a list of tools; an inspector on the right
-    Rail,
-    /// Tabs of tool groups across the top; the browser left, the form right
     Ribbon,
+    /// A column of tool groups on the left, each opening its list of tools by name; the
+    /// open tool's settings on the right
+    Rail,
+    /// The whole window is the drawing: the tools, the open tool's settings and your
+    /// sheets, layers and toolpaths float over it
+    Canvas,
+    /// The Design page of tool icons on the left, the Toolpaths page on the right, and
+    /// tabs down the sides
+    Classic,
+}
+
+impl WindowLayout {
+    /// Every layout, in the order offered.
+    pub const ALL: [Self; 4] = [Self::Ribbon, Self::Rail, Self::Canvas, Self::Classic];
+
+    /// The layout options saved before the setting existed had: Classic.
+    pub fn before_the_setting() -> Self {
+        Self::Classic
+    }
 }
 
 // ponytail: the third choice, a folder remembered for each kind of operation, is left out

@@ -511,14 +511,6 @@ fn library_adds_several_in_turn() {
 }
 
 #[test]
-fn built_in_gadgets_need_no_warning() {
-    let mut h = Harness::new();
-    h.app.unsigned_gadget_ok = |_| panic!("a built-in gadget is signed with the app");
-    h.app.invoke(&h.ctx, "gadget_drill_grid");
-    assert!(h.app.form.is_some());
-}
-
-#[test]
 fn what_a_slow_job_made_is_not_used_if_the_job_changed_meanwhile() {
     let mut h = Harness::new();
     h.app.wait_before_showing = std::time::Duration::ZERO;
@@ -1065,7 +1057,12 @@ fn my_gadgets_marks_what_is_not_official() {
         ("Box Maker".to_owned(), "gadget_box_maker"),
         ("Star Burst".to_owned(), "gadget_star_burst"),
     ];
-    h.app.unsigned_gadgets = [("gadget_star_burst".to_owned(), "Star Burst".to_owned())].into();
+    let code = crate::trust::Code::gadget("gadget_star_burst", "Star Burst", b"");
+    let unsigned = crate::gadgets::Unsigned {
+        code,
+        waiting: None,
+    };
+    h.app.unsigned_gadgets = [("gadget_star_burst".to_owned(), unsigned)].into();
     h.app.installed_addons = vec![(
         "Depth (Relief from Photo)".to_owned(),
         Some("relief_from_photo"),

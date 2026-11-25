@@ -5,6 +5,7 @@ use super::{
     CutCraftApp, PIN_ICON, PINNED_ICON, Page, TOOL_BOX_MARGIN, TOOL_ICON_ROWS, egui, file_name,
     files, flyout_arrow, gui, picked_message, tool_cell, tool_cell_size, tr,
 };
+use crate::tool_model::Place;
 
 impl CutCraftApp {
     /// The Materials Library window; its edits (to the library and the bits' feeds) are
@@ -263,21 +264,12 @@ impl CutCraftApp {
         groups: &[gui::ToolGroup],
         page: Page,
     ) {
-        let (favourites, only) = self.options.favourites.of(page);
-        if !only {
+        if !self.options.favourites.of(page).1 {
             self.tool_groups(ui, groups, page);
             return;
         }
         // in the order picked; a tool no longer on the page is left out
-        let tools: Vec<&'static str> = favourites
-            .iter()
-            .filter_map(|f| {
-                groups
-                    .iter()
-                    .flat_map(|g| g.tools.iter().copied())
-                    .find(|id| id == f)
-            })
-            .collect();
+        let tools = self.tool_model().favourites(page, &self.options.favourites);
         if tools.is_empty() {
             ui.weak(tr!("panels-no-favourites-yet-right-click"));
             if ui.button(tr!("panels-show-all-tools")).clicked() {
@@ -312,15 +304,33 @@ impl CutCraftApp {
         page: Page,
         among: bool,
     ) {
+        // a laser or rotary toolpath only on a machine that has one; a group left with
+        // nothing offered is left out whole
+        let sections: Vec<(&str, Vec<&'static str>)> = sections
+            .iter()
+            .map(|(name, tools)| {
+                let tools = tools
+                    .iter()
+                    .copied()
+                    .filter(|id| self.offered(id))
+                    .collect();
+                (*name, tools)
+            })
+            .filter(|(_, tools): &(&str, Vec<_>)| !tools.is_empty())
+            .collect();
+        let sections = sections.as_slice();
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
         let folded = self.options.general.fold_tool_groups;
         let mut clicked = None;
         let mut chosen = None;
-        // plain sections: a heading over its tools
+        // plain sections: a heading over its tools (none for an unnamed one, which the
+        // Ribbon names under its icons)
         for (name, tools) in sections {
-            ui.strong(*name);
+            if !name.is_empty() {
+                ui.strong(crate::tool_names::group_name(name));
+            }
             if !among && !folded {
-                self.spread_tools(ui, tools, page, edge, &mut clicked, &mut chosen);
+                self.spread_tools(ui, tools, edge, &mut clicked, &mut chosen);
                 ui.add_space(ui.spacing().item_spacing.y);
                 continue;
             }
@@ -352,7 +362,7 @@ impl CutCraftApp {
                         }
                         response
                     };
-                    if let Some(action) = self.tool_menu_on(&response, page, id, among, folded) {
+                    if let Some(action) = self.tool_menu_on(&response, id, among, folded) {
                         chosen = Some(action);
                     }
                 }
@@ -373,18 +383,23 @@ impl CutCraftApp {
         }
     }
 
-    /// A tool button's right-click menu, and the action picked from it.
-    pub(super) fn tool_menu_on(
+    /// A tool button's right-click menu, and the action picked from it: a grid's, or the
+    /// favourites' when shown `among` them.
+    pub(in super::super) fn tool_menu_on(
         &self,
         response: &egui::Response,
-        page: Page,
         id: &str,
         among: bool,
         folded: bool,
     ) -> Option<String> {
-        let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
+        let place = if among {
+            Place::Favourites
+        } else {
+            Place::Grid
+        };
         self.popup(response, || {
-            gui::tool_menu(page, id, favourite, among, folded)
+            self.tool_model()
+                .menu(id, place, &self.options.favourites, folded)
         })
     }
 
@@ -396,7 +411,6 @@ impl CutCraftApp {
         &self,
         ui: &mut egui::Ui,
         tools: &[&'static str],
-        page: Page,
         edge: f32,
         clicked: &mut Option<&'static str>,
         chosen: &mut Option<String>,
@@ -412,37 +426,26 @@ impl CutCraftApp {
         let room = full - 2.0 * margin - 2.0 + spacing.x;
         let across = (room / (button + spacing.x)).floor();
         self.buttons_across.set(across);
-        let captions: Vec<&str> = clusters
+        let captions: Vec<String> = clusters
             .iter()
-            .map(|c| c.name.unwrap_or_default())
+            .map(|c| {
+                c.name
+                    .map_or_else(String::new, crate::tool_names::group_name)
+            })
             .collect();
         let widths: Vec<f32> = clusters
             .iter()
             .zip(&captions)
             .map(|(cluster, caption)| {
-                let n = f32::from(u16::try_from(cluster.tools.len()).unwrap_or(u16::MAX));
                 let caption_width = ui
                     .painter()
-                    .layout_no_wrap((*caption).to_owned(), caption_font.clone(), caption_color)
+                    .layout_no_wrap(caption.clone(), caption_font.clone(), caption_color)
                     .size()
                     .x;
-                let icons = n * button + (n - 1.0).max(0.0) * spacing.x;
-                (icons.max(caption_width) + 2.0 * margin + 2.0).min(full)
+                box_width(cluster.tools.len(), caption_width, button, spacing.x).min(full)
             })
             .collect();
-        // the rows the boxes go in, a box going to the next row whole when this one has
-        // no room for it
-        let mut rows: Vec<Vec<usize>> = Vec::new();
-        let mut left = 0.0;
-        for (i, &width) in widths.iter().enumerate() {
-            if rows.is_empty() || left < width {
-                rows.push(Vec::new());
-                left = full;
-            }
-            left -= width + spacing.x;
-            rows.last_mut().expect("a row").push(i);
-        }
-        for row in rows {
+        for row in box_rows(&widths, full, spacing.x) {
             // loose tools line up with the tools of a box beside them
             let boxed_row = row.iter().any(|&i| clusters[i].name.is_some());
             ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
@@ -458,7 +461,7 @@ impl CutCraftApp {
                         ui.set_max_width(width - 2.0 * margin - 2.0);
                         ui.vertical(|ui| {
                             if cluster.name.is_some() {
-                                let text = egui::RichText::new(captions[i])
+                                let text = egui::RichText::new(&captions[i])
                                     .small()
                                     .color(caption_color);
                                 ui.add(
@@ -484,7 +487,7 @@ impl CutCraftApp {
                                             *clicked = Some(id);
                                         }
                                         if let Some(action) =
-                                            self.tool_menu_on(&response, page, id, false, false)
+                                            self.tool_menu_on(&response, id, false, false)
                                         {
                                             *chosen = Some(action);
                                         }
@@ -499,7 +502,12 @@ impl CutCraftApp {
     }
 
     /// One tool's icon button: enabled when it is built, highlighted while in hand.
-    pub(super) fn tool_button(&self, ui: &mut egui::Ui, id: &str, edge: f32) -> egui::Response {
+    pub(in super::super) fn tool_button(
+        &self,
+        ui: &mut egui::Ui,
+        id: &str,
+        edge: f32,
+    ) -> egui::Response {
         let label = self.tool_label(id);
         let explicit = self.explicit_icon(id);
         let button = self
@@ -676,4 +684,28 @@ impl CutCraftApp {
         };
         self.icon_button(icon, "", label, edge).selected(pinned)
     }
+}
+
+/// How wide a box of `n` tool buttons is laid out on one row, with its `caption`'s width,
+/// its margin and border: as wide as the icons or the caption, whichever is wider.
+fn box_width(n: usize, caption: f32, button: f32, gap: f32) -> f32 {
+    let n = f32::from(u16::try_from(n).unwrap_or(u16::MAX));
+    let icons = n * button + (n - 1.0).max(0.0) * gap;
+    icons.max(caption) + 2.0 * TOOL_BOX_MARGIN + 2.0
+}
+
+/// The rows boxes `widths` wide go in across `full`, `gap` apart: a box going to the next
+/// row whole when this one has no room for it.
+fn box_rows(widths: &[f32], full: f32, gap: f32) -> Vec<Vec<usize>> {
+    let mut rows: Vec<Vec<usize>> = Vec::new();
+    let mut left = 0.0;
+    for (i, &width) in widths.iter().enumerate() {
+        if rows.is_empty() || left < width {
+            rows.push(Vec::new());
+            left = full;
+        }
+        left -= width + gap;
+        rows.last_mut().expect("a row").push(i);
+    }
+    rows
 }

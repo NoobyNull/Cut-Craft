@@ -103,19 +103,13 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
 }
 
 #[test]
-fn f11_designs_f12_machines_and_switch_layout_swaps() {
+fn f11_designs_and_f12_machines() {
     let mut h = Harness::new();
     assert_eq!(h.app.pages, Pages::design_layout());
     h.frame(vec![key(Key::F12)]);
     assert_eq!(h.app.pages, Pages::machining_layout());
     h.frame(vec![key(Key::F11)]);
     assert_eq!(h.app.pages, Pages::design_layout());
-    h.app.invoke(&h.ctx, "interface_layout");
-    assert_eq!(
-        h.app.pages,
-        Pages::machining_layout(),
-        "the Switch Layout button"
-    );
 }
 
 #[test]
@@ -146,7 +140,9 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
         h.app.output_post().is_ok(),
         "kept in the custom posts, not read from where it was"
     );
-    // the Machine menu opens its windows; the online ones stay greyed
+    // the Machine menu opens its windows; the online ones stay greyed (on a screen tall
+    // enough for the whole of Machine Configuration, so its posts are drawn)
+    h.window.y = 1100.0;
     for id in [
         "machine_configuration",
         "post_processor_management",
@@ -322,7 +318,7 @@ fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
         .save_toolpaths_to(&form, &plain, &dir.join("sign.nc"))
         .unwrap();
     assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
-    for name in ["sign_1_6_mm_End_Mill.nc", "sign_2_3_mm_End_Mill.nc"] {
+    for name in ["sign_1_6 mm End Mill.nc", "sign_2_3 mm End Mill.nc"] {
         assert!(dir.join(name).exists(), "{name}");
     }
     let _ = std::fs::remove_dir_all(dir);
@@ -642,7 +638,7 @@ fn selecting_a_post_that_does_not_suit_the_open_job_says_which_post_it_saves_thr
 }
 
 #[test]
-fn a_rotary_job_s_z_zero_reads_cylinder_axis_not_machine_bed() {
+fn a_rotary_job_s_z_zero_reads_turning_axis_not_machine_bed() {
     use cut_craft_core::document::{Along, Job};
     for form in ["material_setup", "job_setup"] {
         let mut h = Harness::new();
@@ -651,7 +647,7 @@ fn a_rotary_job_s_z_zero_reads_cylinder_axis_not_machine_bed() {
         for _ in 0..3 {
             h.frame(vec![]);
         }
-        assert!(h.text_at("Cylinder Axis").is_some(), "{form}");
+        assert!(h.text_at("Turning Axis").is_some(), "{form}");
         assert!(h.text_at("Machine Bed").is_none(), "{form}");
         // a flat job keeps the bed
         h.app.form = None;
@@ -661,7 +657,7 @@ fn a_rotary_job_s_z_zero_reads_cylinder_axis_not_machine_bed() {
             h.frame(vec![]);
         }
         assert!(h.text_at("Machine Bed").is_some(), "{form}");
-        assert!(h.text_at("Cylinder Axis").is_none(), "{form}");
+        assert!(h.text_at("Turning Axis").is_none(), "{form}");
     }
 }
 
@@ -709,4 +705,59 @@ fn a_rotary_jobs_3d_origin_is_on_the_axis_for_machine_bed() {
         panels::origin_3d(&job, true).abs() < 1e-9,
         "the outline's bottom, its top being the blank's radius up"
     );
+}
+
+/// Laser and rotary toolpaths are offered only on a machine with a laser fitted or a 4th
+/// axis (Matthew, 2026-11-23: "like the ATC"); one opened anyway says, in red at its foot,
+/// how to fit the machine for it.
+#[test]
+fn laser_and_rotary_toolpaths_show_only_on_a_machine_that_has_them() {
+    let mut h = Harness::new();
+    let found = |h: &Harness, text: &str| {
+        h.app
+            .search_matches(text)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect::<Vec<_>>()
+    };
+    assert!(found(&h, "laser").is_empty(), "no machine: no laser");
+    assert!(!found(&h, "rotary").contains(&"rotary_lathe_toolpath"));
+    assert!(found(&h, "pocket").contains(&"pocket_toolpath"));
+    h.app.machines.add();
+    assert!(
+        found(&h, "laser").is_empty(),
+        "a machine with no laser fitted"
+    );
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.laser = true;
+    machine.controller = "grblHAL".into();
+    machine.rotary = true;
+    assert_eq!(
+        found(&h, "laser"),
+        ["laser_cut_fill_toolpath", "laser_picture_toolpath"]
+    );
+    assert!(found(&h, "rotary").contains(&"rotary_lathe_toolpath"));
+    // on the Toolpaths page too
+    crate::marks::switch_on(&h.ctx);
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    let shown = |h: &mut Harness, id: &str| {
+        let mark = format!("tool:{id}");
+        crate::marks::forget(&h.ctx, &mark);
+        h.frame(vec![]);
+        h.frame(vec![]);
+        crate::marks::get(&h.ctx, &mark).is_some()
+    };
+    assert!(shown(&mut h, "laser_picture_toolpath"));
+    assert!(shown(&mut h, "rotary_machining_toolpath"));
+    h.app.machines.active_mut().unwrap().laser = false;
+    assert!(!shown(&mut h, "laser_picture_toolpath"));
+    assert!(shown(&mut h, "pocket_toolpath"));
+    // a laser toolpath opened on a machine without one is said to be so, never refused
+    let lacks = crate::app::machine_fit::lacks(None, cut_craft_core::Needs::Laser).unwrap();
+    h.app.invoke(&h.ctx, "laser_cut_fill_toolpath");
+    h.frame(vec![]);
+    assert!(h.text_at(lacks).is_some(), "said in red");
+    h.app.machines.active_mut().unwrap().laser = true;
+    h.frame(vec![]);
+    assert!(h.text_at(lacks).is_none());
 }

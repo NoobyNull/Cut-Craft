@@ -233,8 +233,10 @@ While it plays, the view is always drawn round the axis, even with Auto-Wrapping
 Each move takes as long as the file's feed says (most rotary posts write feeds in inverse
 time, G93), and the turning material keeps to the same point through the job as the
 Progress slider. Previewing one toolpath after others carries on from what those cut. The
-material is cut as small cells, about two million over the job, and drawn smoothed, so very
-fine detail shows only roughly. If the job can't be saved for the active machine (a machine
+material is cut as small cells and drawn smoothed. How small follows the Performance ◀ ▶
+Detail slider on the Preview tab: in the middle, about a third of a millimetre on a 300 mm by
+80 mm blank, fine enough to show a finish's passes. If the preview looks striped or stepped,
+move the slider towards Detail and preview again; towards Performance it plays faster. If the job can't be saved for the active machine (a machine
 on standard GRBL has no A axis, say), the preview plays unrolled as before, and Save
 Toolpaths says why.
 

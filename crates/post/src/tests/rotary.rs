@@ -10,7 +10,7 @@ fn wrapping_y_prints_it_as_degrees_round_the_cylinder() {
         "ROTARY_WRAP_Y = \"A\"\nbegin HEADER\n\"([WRAP_DIA] [Z_ORIGIN])\"\n",
     );
     let lines = render_for(&post, hundred_round(), vec![toolpath("P", "T")]);
-    assert_eq!(lines[0], "(31.831 Cylinder Axis)");
+    assert_eq!(lines[0], "(31.831 Turning Axis)");
     assert!(
         lines.contains(&"G1 X25.400 A91.440 Z12.915".to_owned()),
         "25.4 mm round is 91.44 degrees, 3 mm into a 15.915 radius: {lines:#?}"
@@ -33,8 +33,8 @@ fn a_rotary_job_zeroed_on_its_surface_or_its_axis_gets_the_right_z() {
         },
         vec![toolpath("P", "T")],
     );
-    assert_eq!(axis[0], "(Cylinder Axis)");
-    assert_eq!(surface[0], "(Cylinder Surface)");
+    assert_eq!(axis[0], "(Turning Axis)");
+    assert_eq!(surface[0], "(Material Top)");
     // 3 mm deep: below the top of the cylinder, or 3 mm short of its 15.915 radius
     assert!(
         surface.contains(&"G1 X25.400 A91.440 Z-3.000".to_owned()),

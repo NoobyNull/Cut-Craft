@@ -130,6 +130,62 @@ pub struct Rotary {
     /// The material's shape across the axis: round, square, or a flat board
     #[serde(default)]
     pub blank: Blank,
+    /// What of the material is left to hold the part while it is cut (added with support
+    /// beams)
+    #[serde(default)]
+    pub support: Support,
+}
+
+/// What of a rotary job's material the rotary toolpaths leave to hold the part while it is
+/// cut, so it doesn't flex or break free before the end.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct Support {
+    /// Where the part stays joined to the material: past the model's end there the material
+    /// is left whole, so that end of the model is a flat face to saw it free on. Neither
+    /// cuts the material away past both ends
+    #[schemars(title = "Keep Joined At", extend("x-widget" = "drop-down"))]
+    pub joined: Joined,
+    /// Leave a round beam of material this far across along the turning axis, from the
+    /// chuck to the tailstock, through the model and past it: the rotary toolpaths cut round
+    /// it, so a long or thin part is held at both ends. 0 leaves none. Needs the material
+    /// turning true on the axis (centred in the chuck). A last toolpath with Cut Away the
+    /// Support ticked takes it off
+    #[schemars(title = "Centre Stock Diameter", extend("x-unit" = "mm"), range(min = 0))]
+    pub beam: f64,
+}
+
+/// The ends of a rotary job's material its part stays joined to.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Joined {
+    /// Neither end: the material past the model is cut away at both ends
+    #[default]
+    Neither,
+    /// The chuck end (the job's start)
+    #[schemars(title = "Chuck end")]
+    Chuck,
+    /// The tailstock end (the job's end)
+    #[schemars(title = "Tailstock end")]
+    Tailstock,
+    /// Both ends: the material is left whole past the model at the chuck and the
+    /// tailstock, and the part is sawn free at both
+    Both,
+}
+
+impl Joined {
+    /// Whether the part stays joined at the chuck end, and at the tailstock end.
+    #[must_use]
+    pub fn ends(self) -> (bool, bool) {
+        match self {
+            Self::Neither => (false, false),
+            Self::Chuck => (true, false),
+            Self::Tailstock => (false, true),
+            Self::Both => (true, true),
+        }
+    }
 }
 
 /// The shape of the material held on the rotary, across its axis.
@@ -156,6 +212,7 @@ impl Rotary {
             diameter,
             along,
             blank: Blank::Round,
+            support: Support::default(),
         }
     }
 

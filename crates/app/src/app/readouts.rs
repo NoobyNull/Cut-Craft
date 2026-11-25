@@ -192,6 +192,7 @@ pub(super) fn summary_fields() -> [crate::form::Field; 2] {
             dim: None,
             diagram: None,
             axis: None,
+            titles: None,
         },
         crate::form::Field {
             key: "scale_factor".into(),
@@ -217,6 +218,7 @@ pub(super) fn summary_fields() -> [crate::form::Field; 2] {
             dim: None,
             diagram: None,
             axis: None,
+            titles: None,
         },
     ]
 }

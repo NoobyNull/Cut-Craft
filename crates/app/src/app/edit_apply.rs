@@ -279,8 +279,13 @@ impl CutCraftApp {
         }
     }
 
-    /// Runs a command and records it for undo.
+    /// Runs a command and records it for undo. Unsigned code the user has not said yes to is
+    /// refused, saying how to allow it.
     pub(super) fn apply(&mut self, id: &str, params: &Value) -> Result<(), String> {
+        // never asks: the window asks as a tool starts; whatever runs one directly refuses
+        if let Some(why) = self.not_allowed_yet(id) {
+            return Err(why);
+        }
         self.crossings_allowed(id, params)?;
         let surrounded = self.with_surroundings(id, params);
         let change = super::background::command_change(&self.registry, &self.doc, id, &surrounded);

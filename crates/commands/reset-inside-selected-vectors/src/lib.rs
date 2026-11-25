@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::inside;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct ResetInsideSelectedVectors;
 
@@ -18,6 +18,7 @@ impl Command for ResetInsideSelectedVectors {
             group: "Modeling",
             icon: "",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

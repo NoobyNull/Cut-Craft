@@ -1,0 +1,99 @@
+# Shared tool model and the switch to a new layout
+
+Agreed with Matthew on 2026-11-24 (road to 1.0, item 2.3a). The window layouts (Ribbon, Rail,
+Classic) stop wiring their tools up separately. One **tool model** says what the tools are;
+each layout is a pair of **templates** that only decide where those tools sit on screen.
+This is built in two pull requests.
+
+## The tool model (`crates/app/src/tool_model.rs`)
+
+Defined once, read by every layout:
+
+- **Two kinds of tools**, named by `Page`: the **Create/Edit** tools (`Page::Design`:
+  drawing, editing, arranging, modeling, importing) and the **Process** tools
+  (`Page::Toolpaths`: toolpaths and the files the machine runs). The kinds say what the
+  tools are, not where they sit: Ribbon puts Create/Edit across the top, Classic down the
+  left. "Left for shapes, right for process" holds for Classic only.
+- **Groups and their order**: `gui::Toolbar`, read through `ToolModel::groups(kind)` and
+  `all_groups()` (Create/Edit then Process).
+- **Sections**: each kind's sub-tabs and the groups always shown over them
+  (`gui::DESIGN`, `gui::TOOLPATHS`), through `ToolModel::sections(kind)`.
+- **A tool's kind**: `kind_of(id)`. Gadgets and add-on tools count as Create/Edit and are
+  always shown last.
+- **Favourites**: `favourites(kind)` and `every_favourite()`, in the order picked, leaving out
+  anything that is no longer a tool of that kind.
+- **Right-click menu**: `menu(id, place)`. Every layout puts Add to (or Remove from)
+  Favourites first. What follows depends on where the button is: a grid of icons can fold
+  tool groups, a tool among the favourites moves along them, and a row in a list has
+  nothing more.
+
+## Templates and layouts
+
+A layout is a fixed pair of templates, one for each kind. People pick whole layouts only;
+picking a template for each kind separately can come after 1.0, because the model already
+allows it. There are no layout files from themes or add-ons before 1.0.
+
+| Layout | Create/Edit template | Process template |
+| --- | --- | --- |
+| Ribbon | Tabs across the top, each group's icons in two rows | The same tabs |
+| Rail | A column of group icons opening a list of tools by name | The same column |
+| Classic | A page of icon grids with sub-tabs, down the left | A page with sub-tabs, on the right |
+
+## PR 1: the shared model (no visible change)
+
+Rail, Ribbon and Classic read groups, kinds, favourites, menus and use counts from
+`ToolModel`. The parallel code they had (`all_groups`, `page_of`, `favourite_tools`,
+`rail_menu`, `group_uses`, `holds_a_favourite`, the favourites filter in
+`tools_or_favourites`, the page passed to `tool_menu_on`) is gone. Tests live with the module
+(`tool_model/tests.rs`) and check what it gives, not how.
+
+## PR 2: switch to the new layout
+
+- **Ribbon is the default** for new installs. Everywhere layouts are listed, the order is
+  Ribbon, Rail, Classic.
+- **The Interface Layout button becomes the layout picker**: Ribbon, Rail, Classic, and
+  Classic with the Design and Toolpaths sides swapped.
+- **First-run setup** asks which layout to use, with a picture of each and Ribbon picked.
+- **Existing installs** get the same question once after updating. Closing it keeps the
+  layout they have.
+- **A Did You Know tip** shows the layouts and where the picker is.
+- **Help**: the Interface Layout page becomes an overview with the three pictures, and
+  Ribbon, Rail and Classic each get a page of their own.
+- `docs/ROADMAP.md` gains item 2.3a.
+
+## Look and feel
+
+The layouts borrow ways of working (a ribbon of tabs, a rail with an inspector), not another
+program's screens, menus or icons. No layout, menu or help page names another program.
+
+## Narrow windows (agreed 2026-11-24)
+
+The Ribbon never folds a group away, and is designed for a 1920-wide screen. Each group is
+its icons on a tight grid two high, with no boxes inside it, and its name under them; the
+names line up along the row. When the window is too narrow for every group, the groups go
+on to a second row (or more), in order, each group whole.
+
+**Options ▸ General ▸ Ribbon icons**: **Compact** (the default) shows as many of a group's
+tools as fit under its name (two columns at least), which keeps each tab to one row at 1920
+wide; **Every Tool** shows them all. Either way the group's name (**Create Vectors ▾**) lists
+every tool in it by icon and name, each with a pin that puts it on the Ribbon or takes it
+off (`options.ribbon_pins`). The use counts that chose which group to fold are gone.
+
+## Canvas, the fourth layout (agreed 2026-11-24)
+
+Matthew asked for "a panel like fusion uses": the whole window as canvas, with the tools
+floating over it. `WindowLayout::Canvas` (listed after Rail, before Classic; Ribbon stays
+the default) draws:
+
+- a thin header: the Ribbon's tabs (`ribbon_tab` is shared) and, on the right, a Find a
+  Tool box. Ctrl+K puts the keyboard in it; matches drop down under it; Enter runs the
+  first. The Find Tool window is not shown in this layout.
+- a palette of the tab's groups down the left (only groups with a tool for the machine),
+  one icon each; a click flies the group's tools out beside it by icon and name, with the
+  tip box under them. Favourites and Gadgets list their tools with no palette.
+- the open form floating on the right (`form_panel`, up to 80% of the view's height).
+- chips along the foot for `INSPECTOR_TABS`; a click opens that list floating above them.
+
+The view keeps its own bar (2D / 3D, the split, sheet, layer, level, snapping). The 2D/3D
+split already existed (Window ▸ Tile, and the two split buttons); picture-in-picture 3D
+with a swap and a draggable split divider come in the next PR.

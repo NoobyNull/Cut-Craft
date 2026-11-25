@@ -105,3 +105,11 @@ views-keep-out-job-zone = { $zone }: no toolpath cuts here. With Clip toolpaths 
 # What a screen reader calls the new guide's box.
 views-new-guide-offset = New guide offset
 views-new-guide-position = New guide position
+
+# src/app/split_views.rs
+views-split-divider = Drag to give one view more room; drag it right to the edge to show just the other view
+views-split-swap = Swap the views' places
+views-picture-bar = Drag to another corner
+views-picture-swap = Swap: make this view the big one
+# 2D view, rotary jobs: the A axis angle written beside a seam or a wrap band's edge. $degrees: a whole number, may be negative.
+views-rotary-seam-angle = A { $degrees }°

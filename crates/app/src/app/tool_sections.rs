@@ -20,17 +20,14 @@ pub(crate) const KNIFE_LINE: &str = "Drag knife: zero Z with the blade tip touch
                                      material. It presses in by the Pressure, a share of the \
                                      Spring Travel, so no flute length is needed";
 
-/// Whether the form `id` is a laser toolpath's, whose tool is a laser.
-pub(crate) fn is_laser_form(id: &str) -> bool {
-    id.starts_with("laser_") && id.ends_with("_toolpath")
-}
-
 /// A toolpath form's tool, kept short: its name (with its tool changer holder), its size and
 /// pass in one line, Select… to pick it in the Tool Database (where the tool changer's
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
+/// `laser`: the form is a laser toolpath's, whose tool is a laser.
 pub(super) fn tool_picker(
     ui: &mut egui::Ui,
     id: &str,
+    laser: bool,
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
@@ -51,7 +48,7 @@ pub(super) fn tool_picker(
             ui.strong(held_name(current, slots));
             if id == cut_craft_core::drag_knife::STRATEGY {
                 ui.label(KNIFE_LINE);
-            } else if is_laser_form(id) && tool.is_laser() {
+            } else if laser && tool.is_laser() {
                 // a laser from before lasers were a tool type reads as the laser it is
                 let laser = Tool {
                     shape: cut_craft_core::toolpath::ToolShape::Laser,
@@ -82,7 +79,7 @@ pub(super) fn tool_picker(
         let select = ui.button(tr!("tool-select"));
         crate::marks::note(ui, "button:Select…", select.rect);
         let select = select
-            .on_hover_hint(tr!(if is_laser_form(id) {
+            .on_hover_hint(tr!(if laser {
                 "tool-select.tooltip-laser"
             } else {
                 "tool-select.tooltip"

@@ -654,3 +654,24 @@ fn a_tool_s_group_follows_its_maker_and_type_until_moved() {
     frame(&mut m, &ctx);
     assert_eq!(m.draft.tools[i].group, "Catalogues/Amana/Up-cut");
 }
+
+/// A laser toolpath's Select… offers only lasers, any other toolpath's only bits; the Tool
+/// Database opened on its own (or for a holder) shows every tool.
+#[test]
+fn a_toolpath_forms_select_offers_only_the_kind_of_tool_it_cuts_with() {
+    let laser = Tool {
+        name: "5 W Laser".into(),
+        shape: ToolShape::Laser,
+        ..Tool::default()
+    };
+    let bit = Tool {
+        name: "6 mm End Mill".into(),
+        ..Tool::default()
+    };
+    let mut m = Manager::new(&ToolDatabase::default());
+    assert!(m.may_pick(&laser) && m.may_pick(&bit));
+    m.lasers = Some(true);
+    assert!(m.may_pick(&laser) && !m.may_pick(&bit));
+    m.lasers = Some(false);
+    assert!(!m.may_pick(&laser) && m.may_pick(&bit));
+}

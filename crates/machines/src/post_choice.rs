@@ -180,6 +180,7 @@ mod tests {
             rotary: Some(Rotary {
                 diameter: 50.0,
                 along,
+                support: cut_craft_core::document::Support::default(),
                 blank: cut_craft_core::document::Blank::default(),
             }),
             ..Job::default()

@@ -6,7 +6,7 @@ use cut_craft_core::entry::{Ways, contour_ways};
 use cut_craft_core::geometry::{Path, winding};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, cut_points, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -113,6 +113,7 @@ impl Command for PrismToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/prism_carving.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 

@@ -6,7 +6,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::polygon;
 use cut_craft_core::toolpath::{Tool, contour_moves, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -139,6 +139,7 @@ impl Command for KeyholeToolpath {
             group: "Toolpath Operations",
             icon: "toolpaths/keyhole_toolpath.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 

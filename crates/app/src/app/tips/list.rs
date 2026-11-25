@@ -1,6 +1,7 @@
 //! Every tip's words, in the order startup shows them.
 
 use super::{Area, Tip, icon, scene, tool};
+use crate::options::WindowLayout;
 
 /// Every tip, in the order startup shows them: the first few are what a beginner needs on day
 /// one, the rest make the work quicker, safer or easier to find. Each is true of Cut Craft as
@@ -38,8 +39,8 @@ pub(in super::super) const TIPS: &[Tip] = &[
     scene(
         Area::Start,
         "tips/design_then_toolpaths.png",
-        "Cut Craft works in two steps. **Design** (down the left) is where you draw what you \
-         want. **Toolpaths** (down the right) is where you tell the machine how to cut it.",
+        "Cut Craft works in two steps. **Design** is where you draw what you want. \
+         **Toolpaths** is where you tell the machine how to cut it.",
         "getting_started",
     ),
     scene(
@@ -1054,6 +1055,12 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     tool(
         Area::Toolpaths,
+        "laser_cut_fill_toolpath",
+        "Have a laser on your machine? Tick **Laser fitted** in **Machine ▸ Machine \
+         Configuration** and the **Laser** toolpaths show on the Toolpaths page.",
+    ),
+    tool(
+        Area::Toolpaths,
         "photo_vcarve_toolpath",
         "**Photo V-Carve Toolpath** carves a photo with nothing but a V-bit, as grooves that are \
          deeper, and so wider, where the picture is darker.",
@@ -1236,12 +1243,25 @@ pub(in super::super) const TIPS: &[Tip] = &[
          name, and press Enter to open the first match.",
         "find_tool",
     ),
-    tool(
+    scene(
         Area::Program,
+        "tips/four_layouts.png",
+        "Cut Craft can arrange its window four ways: **Ribbon**, **Rail**, **Canvas** or \
+         **Classic**. Press **Interface Layout** (under 2D View Control) to see each and pick \
+         one. Every tool is in every layout.",
         "interface_layout",
-        "**View ▸ Window Layout** offers Classic (Design and Toolpaths pages), Rail and \
-         Inspector, or Ribbon: pick whichever suits your screen.",
     ),
+    scene(
+        Area::Program,
+        "tips/canvas_layout.png",
+        "Want more room to draw? The **Canvas** layout gives the drawing the whole window: the \
+         tools float in a small palette at the left and open as you point at them, and the \
+         open form floats on the right. Press **Try Canvas** to switch, and **Interface \
+         Layout** to switch back.",
+        "layout_canvas",
+    )
+    .tries(WindowLayout::Canvas)
+    .weighted(5),
     icon(
         Area::Program,
         "common/materials_appearance.png",

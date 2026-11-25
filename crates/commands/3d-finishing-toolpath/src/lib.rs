@@ -12,7 +12,7 @@ use cut_craft_core::simulation::rest_areas;
 use cut_craft_core::toolpath::{
     Drop, Tool, ToolDatabase, ToolShape, Toolpath, cut_points, follow_linked, made_by, raster_lines,
 };
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -158,6 +158,7 @@ impl Command for FinishingToolpath3d {
             group: "3D Toolpaths",
             icon: "toolpaths/3d_finishing_toolpath.png",
             shortcut: "",
+            form: Form::TOOLPATH,
         }
     }
 

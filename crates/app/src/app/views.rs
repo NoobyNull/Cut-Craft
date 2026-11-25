@@ -418,11 +418,7 @@ impl CutCraftApp {
                 });
                 self.page_rects = [Some(rect), None];
             }
-            Screen::Job => match self.options.general.layout {
-                WindowLayout::Classic => self.job_pages(ui),
-                WindowLayout::Rail => self.rail_layout(ui),
-                WindowLayout::Ribbon => self.ribbon_layout(ui),
-            },
+            Screen::Job => self.job_layout(ui),
         }
         egui::CentralPanel::default().show(ui, |ui| {
             self.top_bar(ui);
@@ -430,19 +426,7 @@ impl CutCraftApp {
             // a preview playing: its controls over whichever view shows, Stop always to hand
             self.playback_bar(ui);
             if let Some(split) = self.split {
-                let whole = ui.available_rect_before_wrap();
-                let (first, second) = match split {
-                    Split::Stacked => whole.split_top_bottom_at_fraction(0.5),
-                    Split::SideBySide => whole.split_left_right_at_fraction(0.5),
-                };
-                ui.scope_builder(egui::UiBuilder::new().max_rect(first), |ui| {
-                    ui.set_clip_rect(first);
-                    self.view_2d(ui);
-                });
-                ui.scope_builder(egui::UiBuilder::new().max_rect(second), |ui| {
-                    ui.set_clip_rect(second);
-                    self.view_3d(ui);
-                });
+                self.split_views(ui, split);
                 return;
             }
             match self.view {
@@ -453,6 +437,16 @@ impl CutCraftApp {
                 }
             }
         });
+    }
+
+    /// A job's panels around the views, as its window layout arranges them.
+    fn job_layout(&mut self, ui: &mut egui::Ui) {
+        match self.options.general.layout {
+            WindowLayout::Classic => self.job_pages(ui),
+            WindowLayout::Rail => self.rail_layout(ui),
+            WindowLayout::Ribbon => self.ribbon_layout(ui),
+            WindowLayout::Canvas => self.canvas_layout(ui),
+        }
     }
 
     /// The top bar's sheet, layer and level drop-downs: a command to apply, if one was
@@ -580,11 +574,11 @@ impl CutCraftApp {
     /// The top bar's split and snapping toggles.
     pub(super) fn top_bar_toggle(&mut self, id: &str) {
         match id {
-            "split_stacked" | "split_side_by_side" => {
-                let split = if id == "split_stacked" {
-                    Split::Stacked
-                } else {
-                    Split::SideBySide
+            "split_stacked" | "split_side_by_side" | "split_picture" => {
+                let split = match id {
+                    "split_stacked" => Split::Stacked,
+                    "split_side_by_side" => Split::SideBySide,
+                    _ => Split::Picture,
                 };
                 self.split = (self.split != Some(split)).then_some(split);
             }
@@ -625,6 +619,12 @@ impl CutCraftApp {
                         "view/split_side_by_side.png",
                         "2D beside 3D",
                         Split::SideBySide,
+                    ),
+                    (
+                        "split_picture",
+                        "view/split_picture_in_picture.png",
+                        "One view in a corner of the other",
+                        Split::Picture,
                     ),
                 ] {
                     let button = self
@@ -696,38 +696,38 @@ impl CutCraftApp {
 
     /// Zoom and pan: the 2D view controls.
     pub(super) fn view_action(&mut self, ctx: &egui::Context, id: &str) {
-        let label = match id {
+        let tool = match id {
             "pan" => {
                 self.view_tool = Some(ViewTool::Pan);
-                "Pan"
+                "pan"
             }
             "measure_inspect" => {
                 self.view_tool = Some(ViewTool::Measure);
-                "Measure"
+                "measure_inspect"
             }
             "transform" => {
                 self.rotating = false;
                 if self.view_tool == Some(ViewTool::Transform) {
                     self.view_tool = None;
-                    "Select"
+                    "select"
                 } else {
                     self.view_tool = Some(ViewTool::Transform);
-                    "Transform"
+                    "transform"
                 }
             }
             "node_edit" => {
                 self.node_mirror = [false, false];
                 if self.view_tool == Some(ViewTool::NodeEdit) {
                     self.view_tool = None;
-                    "Select"
+                    "select"
                 } else {
                     self.view_tool = Some(ViewTool::NodeEdit);
-                    "Node Edit"
+                    "node_edit"
                 }
             }
             "zoom_box" => {
                 self.view_tool = Some(ViewTool::ZoomBox);
-                "Zoom Box"
+                "zoom_box"
             }
             "zoom_selected" => {
                 let margin = ctx.global_style().spacing.interact_size.y;
@@ -745,7 +745,7 @@ impl CutCraftApp {
                 return;
             }
         };
-        label.clone_into(&mut self.status.current_tool);
+        self.status.current_tool = self.tool_label(tool);
     }
 }
 

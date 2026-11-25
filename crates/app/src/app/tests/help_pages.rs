@@ -56,11 +56,13 @@ fn about_states_cut_craft_s_own_licence() {
     assert!(h.text_at("License").is_some());
     let licence = super::actions::LICENCE_SUMMARY;
     assert!(licence.contains("not open source"), "{licence}");
-    assert!(licence.contains("noncommercial"), "{licence}");
     assert!(
-        licence.contains("PolyForm Noncommercial License 1.0.0"),
+        licence.contains("PolyForm Strict License 1.0.0"),
         "{licence}"
     );
+    assert!(licence.contains("one-person businesses"), "{licence}");
+    assert!(licence.contains("making and selling things"), "{licence}");
+    assert!(licence.contains("Nobody may share"), "{licence}");
 }
 
 /// FNV-1a, so the test needs no hashing crate.
@@ -74,13 +76,13 @@ fn fnv1a(text: &str) -> u64 {
 fn licence_file_keeps_the_polyform_text_word_for_word() {
     let licence = include_str!("../../../../../LICENSE");
     let start = licence
-        .find("# PolyForm Noncommercial License 1.0.0")
+        .find("# PolyForm Strict License 1.0.0")
         .expect("the PolyForm text is in LICENSE");
     // a Windows checkout may turn line ends into CR LF
     let polyform = licence[start..].replace('\r', "");
     // the official text, from github.com/polyformproject/polyform-licenses at tag 1.0.0:
     // Cut Craft's own terms go above it, never into it
-    assert_eq!(polyform.len(), 4_563, "the PolyForm text was changed");
+    assert_eq!(polyform.len(), 3_593, "the PolyForm text was changed");
     assert_eq!(
         fnv1a(&polyform),
         POLYFORM_FNV1A,
@@ -88,17 +90,27 @@ fn licence_file_keeps_the_polyform_text_word_for_word() {
     );
 }
 
-const POLYFORM_FNV1A: u64 = 0xcf71_f592_48dd_cd09;
+const POLYFORM_FNV1A: u64 = 0x7c09_e7bf_377a_4bc9;
 
 #[test]
-fn licence_file_is_plain_polyform_noncommercial_with_the_credit_line() {
+fn licence_file_is_polyform_strict_with_the_credit_line_and_the_extra_permission() {
     let licence = include_str!("../../../../../LICENSE").replace('\r', "");
     let ours = &licence[..licence.find("# PolyForm").unwrap()];
-    // nothing but the credit line goes above the PolyForm text: no extra terms
-    assert_eq!(
-        ours.trim(),
-        "Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)"
-    );
+    assert!(ours.starts_with(
+        "Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)\n"
+    ));
+    // the permission only adds to Strict's permitted purposes: any purpose for people and
+    // one-person businesses, never sharing, selling or changing Cut Craft itself
+    for words in [
+        "# Cut Craft Additional Permission",
+        "in addition to the PolyForm Strict License 1.0.0 terms below",
+        "run by that individual alone with no employees, any purpose is a permitted purpose",
+        "designing, making and selling products",
+        "does not allow you to distribute, sell, rent or sublicense the software",
+        "only to offer them to the licensor for inclusion",
+    ] {
+        assert!(ours.contains(words), "{words:?} in LICENSE");
+    }
 }
 
 #[test]
@@ -116,6 +128,7 @@ fn rail_and_ribbon_show_the_hovered_tools_guidance_in_a_tip_box() {
     assert!(h.texts_at("Next:").is_empty(), "no list open, no tip box");
     h.app.rail_group = h
         .app
+        .tool_model()
         .all_groups()
         .iter()
         .position(|g| g.name == "Create Vectors");
@@ -127,12 +140,61 @@ fn rail_and_ribbon_show_the_hovered_tools_guidance_in_a_tip_box() {
 }
 
 #[test]
+fn about_s_credits_button_opens_the_credits_window() {
+    let mut h = Harness::new();
+    h.app.info = Some(Info::About);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    click_button(&mut h, "Credits…");
+    assert_eq!(h.app.info, Some(Info::Credits));
+}
+
+#[test]
+fn the_credits_window_thanks_lists_and_searches_every_credit() {
+    let total = crate::credits::all().len();
+    let mut h = Harness::new();
+    h.app.info = Some(Info::Credits);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("Cut Craft is built with free libraries"))
+    );
+    assert!(
+        h.text_at(&format!("Showing {total} of {total}")).is_some(),
+        "{:?}",
+        h.texts()
+    );
+    h.app.credits.search = "usvg".to_owned();
+    h.frame(vec![]);
+    // usvg is under MIT in one version and the MPL in older ones
+    assert!(
+        h.text_at(&format!("Showing 2 of {total}")).is_some(),
+        "{:?}",
+        h.texts()
+    );
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("Mozilla Public License 2.0: "))
+    );
+    h.app.credits.search = "no-such-library".to_owned();
+    h.frame(vec![]);
+    assert!(
+        h.texts()
+            .iter()
+            .any(|t| t.starts_with("Nothing matches \"no-such-library\""))
+    );
+}
+
+#[test]
 fn help_items_open_their_windows() {
     let mut h = Harness::new();
     for (id, info) in [
         ("about_cut_craft", Info::About),
         ("keyboard_shortcuts", Info::Shortcuts),
-        ("third_party_licenses", Info::Licenses),
+        ("credits", Info::Credits),
         ("toolpath_summary", Info::Summary),
     ] {
         h.app.invoke(&h.ctx, id);
@@ -353,7 +415,7 @@ fn the_rails_tool_rows_and_a_flyouts_list_carry_the_guidance_too() {
     let mut h = Harness::new();
     h.app.options.general.layout = crate::options::WindowLayout::Rail;
     h.frame(vec![]);
-    let groups = h.app.all_groups();
+    let groups = h.app.tool_model().all_groups();
     h.app.rail_group = groups.iter().position(|g| g.name == "Create Vectors");
     h.frame(vec![]);
     // the Rail's list of Create Vectors: its rows name each tool
@@ -838,33 +900,6 @@ fn orientate_3d_models_rings_turn_the_model_about_their_axis_and_the_sphere_abou
 }
 
 #[test]
-fn an_unsigned_gadget_warns_once_before_it_runs() {
-    let mut h = Harness::new();
-    h.app.unsigned_gadgets = [("gadget_hole_pattern".to_owned(), "Hole Pattern".to_owned())].into();
-    // the user says no: nothing opens, and they are asked again next time
-    h.app.unsigned_gadget_ok = |_| false;
-    h.app.invoke(&h.ctx, "gadget_hole_pattern");
-    assert!(h.app.form.is_none(), "cancelled: no form");
-    // the user says yes: the form opens, and the gadget is not asked about again this session
-    h.app.unsigned_gadget_ok = |label| label == "Hole Pattern";
-    h.app.invoke(&h.ctx, "gadget_hole_pattern");
-    assert!(h.app.form.is_some());
-    h.app.form = None;
-    h.app.unsigned_gadget_ok = |_| panic!("asked twice");
-    h.app.invoke(&h.ctx, "gadget_hole_pattern");
-    assert!(h.app.form.is_some());
-}
-
-#[test]
-fn the_unsigned_warning_says_who_is_responsible() {
-    let text = super::actions::unsigned_warning("Star Burst");
-    assert!(text.contains("Star Burst"));
-    assert!(text.contains("not responsible"));
-    assert!(text.contains("Undo"));
-    assert!(text.contains("not an official Cut Craft gadget"), "{text}");
-}
-
-#[test]
 fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_off() {
     use crate::options::EarlierGcode;
     let mut h = Harness::new();
@@ -1037,6 +1072,11 @@ fn help_search_lists_matching_pages_and_opens_one() {
 fn did_you_know_steps_through_the_tips() {
     let mut h = Harness::at_start();
     assert_eq!(h.app.tip, None, "tests start without it");
+    // it opens on a tip not seen yet: here, only the first
+    h.app.options.seen_tips = super::tips::TIPS[1..]
+        .iter()
+        .map(super::tips::Tip::key)
+        .collect();
     h.choose(help_menu, &["Did You Know?..."]);
     assert_eq!(h.app.tip, Some(0));
     h.frame(vec![]);
@@ -1073,19 +1113,24 @@ fn did_you_know_steps_through_the_tips() {
 }
 
 #[test]
-fn a_different_tip_shows_each_start_unless_turned_off() {
+fn each_start_shows_a_tip_not_seen_yet_unless_turned_off() {
+    use super::tips::TIPS;
     let mut h = Harness::at_start();
-    h.app.options.next_tip = 3;
-    h.app.tip_at_startup();
-    assert_eq!(h.app.tip, Some(3));
-    assert_eq!(h.app.options.next_tip, 4, "the next one next time");
+    let mut shown = std::collections::HashSet::new();
+    for _ in 0..TIPS.len() {
+        h.app.tip = None;
+        h.app.tip_at_startup();
+        let n = h.app.tip.expect("a tip at start");
+        h.frame(vec![]);
+        assert!(shown.insert(n), "tip {n} came up twice before the rest");
+    }
+    // tests start in Classic, so the Canvas tip is among them
+    assert_eq!(shown.len(), TIPS.len(), "every tip once");
     h.app.tip = None;
-    h.app.options.next_tip = super::tips::TIPS.len() - 1;
     h.app.tip_at_startup();
-    assert_eq!(
-        h.app.options.next_tip, 0,
-        "back to the first after the last"
-    );
+    assert!(h.app.tip.is_some(), "then round again");
+    h.frame(vec![]);
+    assert_eq!(h.app.options.seen_tips.len(), 1, "starting over");
     h.app.tip = None;
     h.app.options.general.show_tips_at_startup = false;
     h.app.tip_at_startup();
@@ -1094,6 +1139,66 @@ fn a_different_tip_shows_each_start_unless_turned_off() {
     h.app.open_first_run();
     h.app.tip_at_startup();
     assert_eq!(h.app.tip, None, "not over first-time setup");
+}
+
+#[test]
+fn paging_through_tips_counts_them_as_seen() {
+    let mut h = Harness::at_start();
+    h.app.open_tips(0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    for _ in 0..3 {
+        let next = h.text_at("Next ▶").unwrap();
+        h.click(next, Modifiers::NONE);
+        h.frame(vec![]);
+    }
+    let seen: Vec<u64> = super::tips::TIPS[..4]
+        .iter()
+        .map(super::tips::Tip::key)
+        .collect();
+    assert_eq!(h.app.options.seen_tips, seen);
+}
+
+/// Where the Canvas tip is in the list.
+fn canvas_tip() -> usize {
+    super::tips::TIPS
+        .iter()
+        .position(|t| t.tries == Some(crate::options::WindowLayout::Canvas))
+        .expect("a tip offers Canvas")
+}
+
+#[test]
+fn the_canvas_tip_switches_to_canvas_and_is_not_shown_in_canvas() {
+    let mut h = Harness::at_start();
+    let n = canvas_tip();
+    assert!(super::tips::TIPS[n].weight > 1, "it comes up more often");
+    h.app.open_tips(n);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the words name the button too: the button is under them
+    let try_it = *h.texts_at("Try Canvas").last().expect("a button to try it");
+    h.click(try_it, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.options.general.layout,
+        crate::options::WindowLayout::Canvas
+    );
+    assert_eq!(h.app.tip, None, "the tip closes");
+    // in Canvas: never at start, and Next and Previous step over it
+    h.app.options.seen_tips.clear();
+    for _ in 0..super::tips::TIPS.len() {
+        h.app.tip = None;
+        h.app.tip_at_startup();
+        assert_ne!(h.app.tip, Some(n), "not offered in Canvas");
+        h.frame(vec![]);
+    }
+    h.app.open_tips(n - 1);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let next = h.text_at("Next ▶").unwrap();
+    h.click(next, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.tip, Some(n + 1), "stepped over");
 }
 
 #[test]
@@ -1216,7 +1321,7 @@ fn a_tip_about_a_tool_shows_that_tools_icon() {
 #[test]
 fn the_tips_window_shows_the_illustration_above_the_words() {
     let mut h = Harness::at_start();
-    h.choose(help_menu, &["Did You Know?..."]);
+    h.app.open_tips(0);
     h.frame(vec![]);
     h.frame(vec![]);
     let starting = |start: &str| {

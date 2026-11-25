@@ -402,11 +402,15 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "interface_layout",
-        "Switch Layout: swaps between the layout for drawing and the layout for making toolpaths",
+        "Interface Layout: pick how the window is arranged: Ribbon, Rail, Canvas or Classic",
     ),
     (
         "layout_classic",
         "Classic Layout: the Design page on the left and the Toolpaths page on the right, opened from tabs at the sides",
+    ),
+    (
+        "layout_canvas",
+        "Canvas Layout: the whole window is the drawing; the tools, the settings and the job's lists float over it",
     ),
     (
         "layout_rail",
@@ -614,8 +618,8 @@ pub const HINTS: &[(&str, &str)] = &[
         "About Cut Craft: its version, its licence and the people who made it",
     ),
     (
-        "third_party_licenses",
-        "Third Party Licences: the licences of the free software Cut Craft is built with",
+        "credits",
+        "Credits: the libraries, pictures and icons Cut Craft is built with, and their licences",
     ),
     (
         "open_application_data_folder",

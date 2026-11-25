@@ -441,10 +441,15 @@ impl CutCraftApp {
     }
 
     /// How tools are changed unless the form says otherwise: by the tool changer when the
-    /// active machine has one, else a file for each tool.
+    /// active machine has one, else as its Machine Configuration says (a file for each
+    /// tool, or one file that pauses).
     pub(super) fn default_changes(&self) -> files::ToolChanges {
+        let machine = self.machines.active();
         if self.has_tool_changer() {
             files::ToolChanges::ToolChanger
+        } else if machine.is_some_and(|m| m.hand_changes == cut_craft_machines::HandChanges::Pause)
+        {
+            files::ToolChanges::Pause
         } else {
             files::ToolChanges::SeparateFiles
         }
@@ -497,7 +502,11 @@ impl CutCraftApp {
             let tolerances = self.options.toolpaths.clone();
             let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
             let limits = self.check_limits(&ids, changes);
-            let no_changer = self.no_tool_changer_for(changes);
+            let mut no_changer: Vec<_> = self.no_tool_changer_for(changes).into_iter().collect();
+            let machine = self.machines.active();
+            no_changer.extend(super::bit_changes::findings(
+                &self.doc, machine, plan, changes,
+            ));
             let started = key.clone();
             self.in_background(
                 super::CHECKING,

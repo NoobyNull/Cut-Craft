@@ -65,6 +65,27 @@ still partway done.
 5. **Menu and window names inside sentences**, such as "Edit ▸ Options ▸ Job Defaults",
    should use the same words as your translation of those menus, so people can follow them.
 
+## Tool names, groups, tabs and menus
+
+The tools' names and everything that groups them are in four files of their own, so you
+can translate them on their own:
+
+| File | What it holds | Key |
+| --- | --- | --- |
+| `tools.ftl` | Every tool's name: its button, Find Tool (Ctrl+K), the menus and its help page | `tools-` and the tool's id, such as `tools-draw-circle` |
+| `tool-groups.ftl` | The names over groups of tools, and the captioned boxes of tools that do one job different ways | `group-` and the English name, such as `group-create-vectors` |
+| `subtabs.ftl` | The Design and Toolpaths sub-tabs (with `.hint`, their tooltip), the side tabs, the browser tabs and the Ribbon's tabs | `design-subtab-…`, `toolpaths-subtab-…`, `page-tab-…` |
+| `menu-items.ftl` | The menu bar's items and a tool's and a sub-tab's right-click menus | `menu-item-` and the English name |
+
+A menu item named just as the tool it runs (Edit ▸ Draw Circle) isn't in `menu-items.ftl`:
+it uses the tool's words from `tools.ftl`, so you translate each tool once.
+
+A tool's key comes from its id, which never changes, so your translation stays when its
+English name is reworded. Group and menu keys come from their English names: if one is
+reworded, its key changes too, and the new one shows in English until it's translated.
+
+Keep tool names short. A Ribbon or Rail button has room for about as much as the English.
+
 ## Words to keep in English
 
 - **G-code, GRBL, Mach, FluidNC, DXF, SVG, STL** and other file and machine names.
@@ -92,6 +113,12 @@ still partway done.
   cut off. Shorten them, as nothing in Cut Craft moves to make room.
 - Edit ▸ Options ▸ Language ▸ **Test language** (with Show advanced settings ticked) shows
   English stretched by 40%. It's a quick way to see where long words won't fit.
+- The **Igpay Atinlay (test)** pack, installed from Gadgets ▸ Add-ons ▸ Languages like any
+  other, shows every word in Pig Latin. Anything still in plain English is written into the
+  code and needs a key. Its words are made from English by the Language packs workflow
+  (`crates/i18n/src/pig_latin.rs`), so it always has every key; its folder,
+  `language-packs/en-piglatin/`, holds only its `addon.toml`. To make its files yourself:
+  `cargo test -p cut-craft-i18n write_pig_latin_pack -- --ignored`.
 
 ## Publish
 

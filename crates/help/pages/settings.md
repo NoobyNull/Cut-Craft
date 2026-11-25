@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
+reviewed: 2026-11-25
+see-also: view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
 # Changing settings
@@ -79,6 +79,10 @@ The other windows that hold settings work the same way:
   **OK**, **Cancel** and **Apply** where they always were. **Apply** is greyed out until you
   change something, the same **● Changes not applied yet** note shows beside it while
   changes wait, and **OK** keeps them and closes.
+- In **Machine Configuration**, tick **Laser fitted** if your machine has a laser on its head,
+  and **4th axis** if it has a rotary. The [laser toolpaths](help:laser_cut_fill_toolpath)
+  and the [rotary toolpaths](help:rotary_machining_toolpath) show on the Toolpaths page only
+  for a machine that has them, so a machine without them has fewer tools to wade through.
 - Closing any of them with its own close box while changes wait asks **Apply your
   changes?** first, just as Options does.
 
@@ -93,38 +97,57 @@ then the old shortcut still runs.
 **Mouse and Shortcuts** also holds **Trackpad mode** and an **Invert** box for each way of
 moving the views: see [Moving the views](help:view_controls).
 
-## How the window looks: three layouts, light or dark
+## How the window looks: four layouts, light or dark
 
-Cut Craft can arrange its tools three ways. Pick one in **Options ▸ General ▸ Window
-layout** (or **View ▸ Window Layout**) and press **Apply**. Every tool is in every layout;
-only where the buttons sit changes. **Ctrl+K** finds a tool by name whichever you use.
+Cut Craft can arrange its tools four ways: **Ribbon** (the one it starts with), **Rail**,
+**Canvas** and **Classic**. Press [Interface Layout](help:interface_layout) under 2D View Control to see
+each and pick one, or use **View ▸ Window Layout** or **Options ▸ General ▸ Window layout**.
+Every tool is in every layout; only where the buttons sit changes. **Ctrl+K** finds a tool by
+name whichever you use.
+
+**General ▸ Show a tip when Cut Craft starts** shows a [Did You Know?](help:tips) tip you have
+not seen yet each time Cut Craft opens. Which tips you have seen is kept with these settings,
+on this computer only.
 
 Each layout also comes light or dark: **Options ▸ Appearance ▸ Theme** picks **Light**,
 **Dark**, or **System** to follow your desktop. In the pictures below the light theme is on
-the left and the dark theme on the right.
+the left and the dark theme on the right. **Options ▸ Appearance ▸ Rotary wrap bands** sets
+how far past each seam a rotary job's 2D view shows the other side of the material (see
+[Moving around the 2D view](help:view_2d)).
 
-**Classic** (the one Cut Craft starts with): the Design page with its tool groups down the
-left, tabs down the side for Sheets, Layers, Components and Library, and the Toolpaths page
+**[Ribbon](help:layout_ribbon)**: Design, Model and Toolpaths tabs across the top, each a row
+of tool groups, the sheets, layers and toolpath list on the left, and the open form on the
+right. A **Favourites** tab holds the tools you keep at hand.
+
+Each Ribbon group shows the tools that fit under its name as icons. Click a group's name,
+such as **Create Vectors ▾**, to list every tool in it; the pin beside each one puts it on
+the Ribbon or takes it off. **General ▸ Ribbon icons** set to **Every Tool** shows every
+tool as an icon instead (**Compact** is the starting choice). When the window is too narrow for every group on a tab, the groups
+carry on along a second row, in the same order, so nothing is hidden.
+
+In the Canvas layout a palette group lists its tools as soon as you point at it. Set
+**General ▸ Canvas tool lists open** to **On Click** to open a list only when you click
+its group.
+
+![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
+
+**[Rail](help:layout_rail)**: one icon for each tool group down the far left. Click one and
+that group's tools are listed by name beside it. The open tool's form sits in the inspector
 on the right.
-
-![The Classic layout, light theme on the left and dark on the right](pictures/layouts/classic-light-and-dark.png)
-
-**Rail**: one icon for each tool group down the far left. Click one and that group's tools
-are listed by name beside it. The open tool's form sits in the inspector on the right.
 
 ![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
 
-**Ribbon**: Design, Model and Toolpaths tabs across the top, each a row of tool groups, the
-sheets, layers and toolpath list on the left, and the open form on the right. A fourth tab,
-**Favourites**, holds the tools you keep at hand.
+**[Canvas](help:layout_canvas)**: the whole window is the drawing. A palette of tool groups
+floats down the left, the open tool's form floats on the right, and the sheets, layers and
+toolpaths open from chips along the foot. A box in the header finds a tool by name.
 
-When the window is too narrow for every group on a Ribbon tab, Cut Craft folds some groups
-into one button, such as **Align Objects ▾**. Click it to list that group's tools by name.
-It folds the groups whose tools you have picked least first, and never a group holding one
-of your favourites (see **Favourites** below), so the tools you use stay in
-sight. Widen the window and the groups open again.
+![The Canvas layout, light theme on the left and dark on the right](pictures/layouts/canvas-light-and-dark.png)
 
-![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
+**[Classic](help:layout_classic)**: the Design page with its tool groups down the left, tabs
+down the side for Sheets, Layers, Components and Library, and the Toolpaths page on the
+right.
+
+![The Classic layout, light theme on the left and dark on the right](pictures/layouts/classic-light-and-dark.png)
 
 In Rail and Ribbon, the panel that lists sheets, layers, components, the library and the
 toolpaths has a **Checks** tab too. It runs the same
@@ -144,11 +167,10 @@ Ribbon.
 ## Favourites: the tools you keep at hand
 
 Right-click any tool button and pick **Add to Favourites**, then show just your favourites:
-in Classic from the Design or Toolpaths side tab's right-click menu, in Rail with **★**,
-and in Ribbon on the **Favourites** tab. See [Favourites](help:favourites) for every step.
+in Ribbon on the **Favourites** tab, in Rail with **★**, and in Classic from the Design or
+Toolpaths side tab's right-click menu. See [Favourites](help:favourites) for every step.
 
-To move panels about within a layout, or save an arrangement of your own, use
-[Interface Layout](help:interface_layout).
+To pick another layout, use [Interface Layout](help:interface_layout).
 
 See also: [Web API](help:web_api), [3D View](help:view_3d), [Did You Know?](help:tips),
 [Interface Layout](help:interface_layout).

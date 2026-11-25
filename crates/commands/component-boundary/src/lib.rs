@@ -4,7 +4,7 @@
 
 use cut_craft_core::component::silhouette;
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Form, Meta, NoParams};
 
 pub struct ComponentBoundary;
 
@@ -18,6 +18,7 @@ impl Command for ComponentBoundary {
             group: "Modeling",
             icon: "modeling/create_vector_boundary_around_selected_components.png",
             shortcut: "",
+            form: Form::Apply,
         }
     }
 

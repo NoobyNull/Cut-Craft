@@ -34,15 +34,15 @@ fn a_tool_in_other_units_leaves_the_form_in_the_jobs_units() {
 fn a_rail_rows_menu_adds_a_favourite_and_the_star_lists_them() {
     let mut h = Harness::new();
     h.app.options.general.layout = crate::options::WindowLayout::Rail;
-    let menu = h.app.rail_menu("draw_circle");
+    let menu = h.app.row_menu("draw_circle");
     assert_eq!(menu[0].name, "Add to Favourites");
     h.app.invoke(&h.ctx, &menu[0].action);
-    let menu = h.app.rail_menu("pocket_toolpath");
+    let menu = h.app.row_menu("pocket_toolpath");
     h.app.invoke(&h.ctx, &menu[0].action);
     assert_eq!(h.app.options.favourites.design, ["draw_circle"]);
     assert_eq!(h.app.options.favourites.toolpaths, ["pocket_toolpath"]);
     assert_eq!(
-        h.app.rail_menu("draw_circle")[0].name,
+        h.app.row_menu("draw_circle")[0].name,
         "Remove from Favourites"
     );
     h.frame(vec![]);
@@ -591,7 +591,8 @@ fn a_drawing_tools_form_creates_until_its_shape_is_drawn() {
     assert!(h.text_at("Apply").is_none());
     assert!(h.text_at("Close").is_some() && h.text_at("Cancel").is_some());
     assert!(
-        h.text_at(&commit::live_note("draw_circle", true)).is_some(),
+        h.text_at(&commit::live_note(cut_craft_core::Form::Apply, true))
+            .is_some(),
         "says why there is no button"
     );
     let new = h.text_at("New Shape").expect("a way to type another");

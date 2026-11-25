@@ -9,6 +9,7 @@ mod accessibility;
 mod web_api;
 
 mod calculating;
+mod canvas;
 mod collisions;
 mod drawing;
 mod help_pages;
@@ -24,13 +25,17 @@ mod moving;
 mod nodes_and_text;
 mod previews;
 mod rotary;
+mod rotary_wrap;
 mod saving_toolpaths;
 mod selecting;
 mod snapping_and_guides;
+mod split_views;
 mod tool_database;
 mod toolpath_list;
 mod toolpaths;
+mod unsigned_code;
 mod updating;
+mod verbs;
 mod view_3d;
 
 /// A headless frame's output: no renderer takes its texture changes, so they are let go.
@@ -83,6 +88,9 @@ impl Harness {
             screenshot: None,
             window: vec2(1280.0, 800.0),
         };
+        // the tests were written against the Classic window; a test of another layout
+        // picks it
+        h.app.options.general.layout = crate::options::WindowLayout::Classic;
         // previews appear cut at once unless a test plays one
         h.app.display.animate_preview = false;
         // slow jobs finish in place, as quick ones do, unless a test waits on one

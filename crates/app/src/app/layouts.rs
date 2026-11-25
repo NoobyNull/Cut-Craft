@@ -7,14 +7,17 @@ use super::{
     side_panel,
 };
 use crate::options::WindowLayout;
+use crate::tool_model::{Place, ToolModel};
+use crate::tool_names::{group_name, page_tab_name};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
 /// View ▸ Window Layout's items and the layouts they pick.
-const LAYOUTS: [(&str, WindowLayout); 3] = [
-    ("layout_classic", WindowLayout::Classic),
-    ("layout_rail", WindowLayout::Rail),
+const LAYOUTS: [(&str, WindowLayout); 4] = [
     ("layout_ribbon", WindowLayout::Ribbon),
+    ("layout_rail", WindowLayout::Rail),
+    ("layout_canvas", WindowLayout::Canvas),
+    ("layout_classic", WindowLayout::Classic),
 ];
 
 impl CutCraftApp {
@@ -45,15 +48,9 @@ impl CutCraftApp {
         }
     }
 
-    /// Every tool group: the drawing groups, then the modeling and toolpath ones.
-    pub(super) fn all_groups(&self) -> Vec<gui::ToolGroup> {
-        let t = &self.toolbar;
-        t.groups
-            .iter()
-            .chain(&t.modeling_groups)
-            .chain(&t.toolpath_groups)
-            .copied()
-            .collect()
+    /// The tools every layout shows, read the same way by each ([`crate::tool_model`]).
+    pub(super) fn tool_model(&self) -> ToolModel<'_> {
+        ToolModel::new(&self.toolbar)
     }
 
     /// The icon a tool names: its command's, or a built-in tool's own (empty when its icon
@@ -68,24 +65,17 @@ impl CutCraftApp {
 
     /// A tool's name: the command's label, or its id in words.
     pub(super) fn tool_label(&self, id: &str) -> String {
-        if let Some(variant) = crate::flyout::variant(id) {
-            return variant.label.to_owned();
-        }
-        if let Some(label) = gui::built_in_label(id) {
-            return label.to_owned();
-        }
-        self.registry
-            .get(id)
-            .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())
+        crate::tool_names::name_of(&self.registry, id)
     }
 
-    /// The available tools whose names contain `text` (any case), in group order.
+    /// The available tools offered on the active machine whose names contain `text` (any case), in group order.
     pub(super) fn search_matches(&self, text: &str) -> Vec<(&'static str, String)> {
         let text = text.trim().to_lowercase();
-        self.all_groups()
+        self.tool_model()
+            .all_groups()
             .iter()
             .flat_map(|g| g.tools.iter().copied())
-            .filter(|id| self.available(id))
+            .filter(|id| self.available(id) && self.offered(id))
             .map(|id| (id, self.tool_label(id)))
             .filter(|(_, label)| label.to_lowercase().contains(&text))
             .collect()
@@ -94,6 +84,11 @@ impl CutCraftApp {
     /// Find Tool (Ctrl+K): a window over the view listing the tools whose names contain the
     /// text typed; a click runs one, Enter the first, Escape (in `shortcuts`) closes.
     pub(super) fn tool_search(&mut self, ctx: &egui::Context) {
+        // the Canvas layout finds tools in its header instead
+        if self.options.general.layout == WindowLayout::Canvas && self.screen == super::Screen::Job
+        {
+            return;
+        }
         let Some(mut text) = self.search.clone() else {
             return;
         };
@@ -160,11 +155,16 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Browser");
         ui.horizontal_wrapped(|ui| {
             for (i, tab) in INSPECTOR_TABS.iter().enumerate() {
-                ui.selectable_value(&mut self.inspector_tab, i, *tab);
+                ui.selectable_value(&mut self.inspector_tab, i, page_tab_name(tab));
             }
         });
         ui.separator();
-        match INSPECTOR_TABS[self.inspector_tab] {
+        self.browser_list(ui, INSPECTOR_TABS[self.inspector_tab]);
+    }
+
+    /// One of the browser's lists: `tab` is its English name in `INSPECTOR_TABS`.
+    pub(super) fn browser_list(&mut self, ui: &mut egui::Ui, tab: &str) {
+        match tab {
             "Toolpaths" => self.toolpath_list(ui, false),
             tab => {
                 egui::ScrollArea::vertical().show(ui, |ui| match tab {
@@ -180,27 +180,10 @@ impl CutCraftApp {
         }
     }
 
-    /// `page`'s favourites that are still tools, in the order picked.
-    pub(super) fn favourite_tools(&self, page: Page) -> Vec<&'static str> {
-        let all = self.all_groups();
-        self.options
-            .favourites
-            .of(page)
-            .0
-            .iter()
-            .filter_map(|f| {
-                all.iter()
-                    .flat_map(|g| g.tools.iter().copied())
-                    .find(|id| id == f)
-            })
-            .collect()
-    }
-
-    /// A Rail row's right-click menu: the tool added to its page's favourites, or taken off.
-    pub(super) fn rail_menu(&self, id: &str) -> Vec<gui::MenuItem> {
-        let page = self.page_of(id);
-        let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
-        vec![gui::favourite_item(page, id, favourite)]
+    /// A Rail row's right-click menu, as every layout gives a tool in a list by name.
+    pub(super) fn row_menu(&self, id: &str) -> Vec<gui::MenuItem> {
+        self.tool_model()
+            .menu(id, Place::Row, &self.options.favourites, false)
     }
 
     /// Tools by icon and name, one per row, each with its right-click menu; whether one was
@@ -229,7 +212,7 @@ impl CutCraftApp {
             if response.clicked() {
                 clicked = Some(id);
             }
-            if let Some(action) = self.popup(&response, || self.rail_menu(id)) {
+            if let Some(action) = self.popup(&response, || self.row_menu(id)) {
                 chosen = Some(action);
             }
         }
@@ -237,7 +220,7 @@ impl CutCraftApp {
             self.invoke(ui.ctx(), &action);
         }
         if let Some(id) = clicked {
-            self.pick(ui.ctx(), self.page_of(id), id);
+            self.pick(ui.ctx(), self.tool_model().kind_of(id), id);
         }
         clicked.is_some()
     }
@@ -249,7 +232,7 @@ impl CutCraftApp {
         let spacing = &style.spacing;
         let margin = spacing.item_spacing.y;
         let edge = TOOL_ICON_ROWS * spacing.interact_size.y;
-        let groups = self.all_groups();
+        let groups = self.tool_model().all_groups();
         let gadgets = self.gadget_tools();
         // what was installed can be removed while its list is open
         self.rail_gadgets &= !gadgets.is_empty();
@@ -269,17 +252,18 @@ impl CutCraftApp {
                                 let explicit = self.explicit_icon(id);
                                 self.icons.find(explicit, id)
                             });
+                            let name = group_name(group.name);
                             let button = match icon {
                                 Some(path) => egui::Button::image(
                                     self.icons
                                         .image(path)
                                         .fit_to_exact_size(egui::vec2(edge, edge)),
                                 ),
-                                None => egui::Button::new(group.name)
+                                None => egui::Button::new(name.as_str())
                                     .wrap_mode(egui::TextWrapMode::Truncate),
                             }
                             .selected(self.rail_group == Some(i));
-                            if ui.add(button).on_hover_hint(group.name).clicked() {
+                            if ui.add(button).on_hover_hint(&name).clicked() {
                                 self.rail_group = (self.rail_group != Some(i)).then_some(i);
                                 (self.rail_favourites, self.rail_gadgets) = (false, false);
                             }
@@ -302,9 +286,10 @@ impl CutCraftApp {
                     });
             });
         let list = if self.rail_favourites {
-            let mut tools = self.favourite_tools(Page::Design);
-            tools.extend(self.favourite_tools(Page::Toolpaths));
-            Some(("Favourites", tools))
+            Some((
+                "Favourites",
+                self.tool_model().every_favourite(&self.options.favourites),
+            ))
         } else if self.rail_gadgets {
             Some((GADGETS, gadgets))
         } else {
@@ -316,7 +301,7 @@ impl CutCraftApp {
             side_panel(egui::Panel::left("rail_flyout"), ui.ctx()).show(ui, |ui| {
                 cut_craft_bug_report::mark(ui, "Rail flyout");
                 ui.horizontal(|ui| {
-                    ui.strong(name);
+                    ui.strong(group_name(name));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         let row = ui.spacing().interact_size.y;
                         if ui
@@ -403,7 +388,7 @@ impl CutCraftApp {
             ui.horizontal(|ui| {
                 for (i, tab) in RIBBON_TABS.iter().enumerate() {
                     if *tab != GADGETS || !gadgets.is_empty() {
-                        ui.selectable_value(&mut self.ribbon_tab, i, *tab);
+                        ui.selectable_value(&mut self.ribbon_tab, i, page_tab_name(tab));
                     }
                 }
             });
@@ -420,49 +405,7 @@ impl CutCraftApp {
                 _ => {}
             }
             let (groups, page) = self.ribbon_groups();
-            let font = egui::TextStyle::Body.resolve(ui.style());
-            let text_width = |text: String| {
-                ui.painter()
-                    .layout_no_wrap(text, font.clone(), egui::Color32::PLACEHOLDER)
-                    .size()
-                    .x
-            };
-            let cell = edge + 2.0 * spacing.button_padding.x + spacing.item_spacing.x;
-            // what each group takes open and folded, with the separator after it
-            let gap = 2.0 * spacing.item_spacing.x + 1.0;
-            let fits: Vec<GroupFit> = groups
-                .iter()
-                .map(|group| {
-                    // two rows of icons: half the tools across, rounded up, but never
-                    // narrower than the group's name
-                    let columns = u16::try_from(group.tools.len().div_ceil(2)).unwrap_or(u16::MAX);
-                    let name = text_width(group.name.to_owned());
-                    let folded =
-                        text_width(folded_label(group.name)) + 2.0 * spacing.button_padding.x + gap;
-                    GroupFit {
-                        open: (f32::from(columns) * cell).max(name + cell) + gap,
-                        folded,
-                        uses: self.group_uses(group),
-                        kept: self.holds_a_favourite(group),
-                    }
-                })
-                .collect();
-            let folds = fold_plan(&fits, ui.available_width());
-            egui::ScrollArea::horizontal().show(ui, |ui| {
-                ui.horizontal_top(|ui| {
-                    for ((group, fit), folded) in groups.iter().zip(&fits).zip(folds) {
-                        if folded {
-                            self.folded_group(ui, *group);
-                        } else {
-                            ui.vertical(|ui| {
-                                ui.set_max_width(fit.open - gap);
-                                self.tool_groups(ui, std::slice::from_ref(group), page);
-                            });
-                        }
-                        ui.separator();
-                    }
-                });
-            });
+            self.ribbon_rows(ui, &groups, page, edge);
         });
         side_panel(egui::Panel::left("browser"), ui.ctx()).show(ui, |ui| {
             // the hovered tool's guidance at the browser's foot, a fixed height so the
@@ -484,41 +427,215 @@ impl CutCraftApp {
         }
     }
 
-    /// How many times a group's tools have been picked, all told.
-    fn group_uses(&self, group: &gui::ToolGroup) -> u32 {
-        group
-            .tools
+    /// Ribbon ▸ a group's list ▸ a pin: `on:<id>` puts the tool on the Ribbon, `off:<id>`
+    /// takes it off; kept in the options.
+    pub(super) fn set_ribbon_pin(&mut self, action: &str) {
+        let (on, id) = match action.split_once(':') {
+            Some(("on", id)) => (true, id),
+            Some(("off", id)) => (false, id),
+            _ => return,
+        };
+        self.options.ribbon_pins.insert(id.to_owned(), on);
+        self.save_options();
+    }
+
+    /// A Ribbon tab's groups, as many to a row as fit and the rest on further rows, in order
+    /// and each group whole. Each group is its icons on a tight grid two high, as wide as
+    /// its name under them; it shows as many of its tools as fill that width (two columns
+    /// at least) until pinned or unpinned by hand. A group with none of its tools on this
+    /// machine is left off.
+    fn ribbon_rows(&mut self, ui: &mut egui::Ui, groups: &[gui::ToolGroup], page: Page, edge: f32) {
+        let spacing = ui.spacing().clone();
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let room = ui.available_width();
+        let cell = super::panels::tool_cell_size(&spacing, edge);
+        let step = cell.x + spacing.item_spacing.x;
+        // the line after each group, and the room either side of it
+        let gap = 2.0 * spacing.item_spacing.x + 1.0;
+        // a group with no tool this machine has (Laser without a laser) is left off
+        let groups: Vec<gui::ToolGroup> = groups
             .iter()
-            .filter_map(|id| self.options.tool_uses.get(*id))
-            .fold(0, |sum, n| sum.saturating_add(*n))
+            .copied()
+            .filter(|group| group.tools.iter().any(|id| self.offered(id)))
+            .collect();
+        let plans: Vec<(Vec<&'static str>, f32)> = groups
+            .iter()
+            .map(|group| {
+                let name = ui
+                    .painter()
+                    .layout_no_wrap(
+                        group_label(group.name),
+                        font.clone(),
+                        egui::Color32::PLACEHOLDER,
+                    )
+                    .size()
+                    .x
+                    + 2.0 * spacing.button_padding.x;
+                // compact: as many columns as fit under the name; every tool when asked
+                let starter = if self.options.general.ribbon_icons
+                    == crate::options::RibbonIcons::EveryTool
+                {
+                    usize::MAX
+                } else {
+                    2 * starter_columns(name, step)
+                };
+                let offered: Vec<_> = group
+                    .tools
+                    .iter()
+                    .copied()
+                    .filter(|id| self.offered(id))
+                    .collect();
+                let shown = on_ribbon(&offered, &self.options.ribbon_pins, starter);
+                let across = shown.len().div_ceil(2);
+                let icons = f32::from(u16::try_from(across).unwrap_or(u16::MAX)) * step
+                    - spacing.item_spacing.x;
+                (shown, icons.max(name))
+            })
+            .collect();
+        let widths: Vec<f32> = plans.iter().map(|(_, w)| w + gap).collect();
+        // two rows of icons, the same height in every group, so the names line up
+        let icons_height = 2.0 * (cell.y + spacing.item_spacing.y);
+        // never more than 40% of the window, so very large text never pushes the job
+        // view away: further rows scroll
+        let most = 0.4 * ui.ctx().content_rect().height();
+        // inside a top panel the area otherwise starts short: size it to its rows
+        let rows = f32::from(u16::try_from(wrap_rows(&widths, room).len()).unwrap_or(u16::MAX));
+        let row = icons_height + spacing.interact_size.y + 3.0 * spacing.item_spacing.y + 1.0;
+        egui::ScrollArea::vertical()
+            .max_height(most)
+            .min_scrolled_height((rows * row).min(most))
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                self.ribbon_wrapped(
+                    ui,
+                    &groups,
+                    &plans,
+                    &widths,
+                    room,
+                    (gap, icons_height),
+                    page,
+                    edge,
+                );
+            });
     }
 
-    /// Whether any of a group's tools is a favourite of either page: such a group never folds.
-    fn holds_a_favourite(&self, group: &gui::ToolGroup) -> bool {
-        [Page::Design, Page::Toolpaths].into_iter().any(|page| {
-            self.options
-                .favourites
-                .of(page)
-                .0
-                .iter()
-                .any(|f| group.tools.contains(&f.as_str()))
-        })
-    }
-
-    /// A group folded into one button for want of room: a click lists its tools by icon and
-    /// name, as the Rail does.
-    fn folded_group(&mut self, ui: &mut egui::Ui, group: gui::ToolGroup) {
-        ui.vertical(|ui| {
-            ui.add_space(ui.spacing().item_spacing.y);
-            let response = ui.menu_button(folded_label(group.name), |ui| {
-                if self.tool_rows(ui, group.tools) {
-                    ui.close();
+    /// The rows of [`Self::ribbon_rows`]: each group whole, a line after each.
+    #[allow(clippy::too_many_arguments)]
+    fn ribbon_wrapped(
+        &mut self,
+        ui: &mut egui::Ui,
+        groups: &[gui::ToolGroup],
+        plans: &[(Vec<&'static str>, f32)],
+        widths: &[f32],
+        room: f32,
+        (gap, icons_height): (f32, f32),
+        page: Page,
+        edge: f32,
+    ) {
+        let spacing = ui.spacing().clone();
+        let line = ui.visuals().widgets.noninteractive.bg_stroke;
+        for (n, row) in wrap_rows(widths, room).into_iter().enumerate() {
+            if n > 0 {
+                ui.separator();
+            }
+            let mut ends = vec![];
+            let drawn = ui.horizontal_top(|ui| {
+                for i in row {
+                    let (shown, width) = &plans[i];
+                    let group = ui.vertical(|ui| {
+                        ui.set_width(*width);
+                        self.ribbon_group(ui, groups[i], shown, page, edge, icons_height);
+                    });
+                    ends.push(group.response.rect.right() + gap / 2.0);
+                    ui.add_space(gap - spacing.item_spacing.x);
                 }
             });
-            response
-                .response
-                .on_hover_hint(tr!("layouts-group-folded", group = group.name));
+            // a line after each group, as tall as the row and no taller
+            let rect = drawn.response.rect;
+            for x in ends {
+                ui.painter().vline(x, rect.y_range(), line);
+            }
+        }
+    }
+
+    /// One Ribbon group: its pinned tools' icons two high, and under them its name, which
+    /// lists every tool in it by icon and name, each with a pin that puts it on the Ribbon
+    /// or takes it off.
+    fn ribbon_group(
+        &mut self,
+        ui: &mut egui::Ui,
+        group: gui::ToolGroup,
+        shown: &[&'static str],
+        page: Page,
+        edge: f32,
+        icons_height: f32,
+    ) {
+        let mut clicked = None;
+        let mut chosen = None;
+        let across = shown.len().div_ceil(2).max(1);
+        let top = ui.cursor().min.y;
+        for row in shown.chunks(across) {
+            ui.horizontal(|ui| {
+                for &id in row {
+                    let response = self.tool_button(ui, id, edge);
+                    if response.clicked() {
+                        clicked = Some(id);
+                    }
+                    if let Some(action) = self.tool_menu_on(&response, id, false, false) {
+                        chosen = Some(action);
+                    }
+                }
+            });
+        }
+        let used = ui.cursor().min.y - top;
+        ui.add_space((icons_height - used).max(0.0));
+        let response = ui.menu_button(group_label(group.name), |ui| {
+            let row = ui.spacing().interact_size.y;
+            let mut pin = None;
+            egui::Grid::new(("ribbon list", group.name))
+                .num_columns(2)
+                .show(ui, |ui| {
+                    let listed: Vec<&'static str> = group
+                        .tools
+                        .iter()
+                        .copied()
+                        .filter(|id| self.offered(id))
+                        .collect();
+                    for id in listed {
+                        if self.tool_rows(ui, &[id]) {
+                            ui.close();
+                        }
+                        let pinned = shown.contains(&id);
+                        if ui
+                            .add(self.pin_button(pinned, row))
+                            .on_hover_hint(tr!(if pinned {
+                                "layouts-ribbon-unpin"
+                            } else {
+                                "layouts-ribbon-pin"
+                            }))
+                            .clicked()
+                        {
+                            pin = Some(if pinned { "off:" } else { "on:" }.to_owned() + id);
+                        }
+                        ui.end_row();
+                    }
+                });
+            ui.separator();
+            ui.weak(tr!("layouts-ribbon-pins-note"));
+            if let Some(pin) = pin {
+                self.invoke(ui.ctx(), &[gui::RIBBON_PIN, &pin].concat());
+            }
         });
+        response.response.on_hover_hint(tr!(
+            "layouts-ribbon-group-list",
+            group = group_name(group.name)
+        ));
+        if let Some(action) = chosen {
+            self.invoke(ui.ctx(), &action);
+        }
+        if let Some(id) = clicked {
+            self.pick(ui.ctx(), page, id);
+        }
     }
 
     /// The Ribbon's Favourites tab: each page's favourites as a group of icons, in the order
@@ -530,7 +647,13 @@ impl CutCraftApp {
         ];
         let lists: Vec<_> = pages
             .into_iter()
-            .map(|(page, name)| (page, name, self.favourite_tools(page)))
+            .map(|(page, name)| {
+                (
+                    page,
+                    name,
+                    self.tool_model().favourites(page, &self.options.favourites),
+                )
+            })
             .filter(|(_, _, tools)| !tools.is_empty())
             .collect();
         if lists.is_empty() {
@@ -558,44 +681,61 @@ impl CutCraftApp {
 }
 
 /// What a favourites list says while it has none, and how to add one.
-const NO_FAVOURITES: &str = "No favourites yet: right-click a tool ▸ Add to Favourites";
+pub(super) const NO_FAVOURITES: &str = "No favourites yet: right-click a tool ▸ Add to Favourites";
 
 /// How many rows of text the Ribbon keeps for the tool tip at the browser's foot.
 const RIBBON_TIP_ROWS: f32 = 6.0;
 
-/// A folded group's button: its name and a down arrow.
-fn folded_label(name: &str) -> String {
-    format!("{name} ▾")
+/// A Ribbon group's name under its icons, with the arrow that lists its tools.
+fn group_label(name: &str) -> String {
+    format!("{} ▾", group_name(name))
 }
 
-/// How wide a Ribbon group is open and folded, how often its tools are used, and whether it
-/// is kept open whatever (it holds a favourite).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct GroupFit {
-    pub open: f32,
-    pub folded: f32,
-    pub uses: u32,
-    pub kept: bool,
-}
-
-/// Which groups fold into one button so the row fits in `room`: the least used first, the
-/// rightmost of those used alike first (the end of the row goes first, as a reader expects),
-/// never one kept open. Nothing folds while all fit; when folding all it can still leaves the
-/// row too wide, the row scrolls.
-pub(super) fn fold_plan(groups: &[GroupFit], room: f32) -> Vec<bool> {
-    let mut folded = vec![false; groups.len()];
-    let mut width: f32 = groups.iter().map(|g| g.open).sum();
-    while width > room {
-        let next = groups
-            .iter()
-            .enumerate()
-            .filter(|&(i, g)| !folded[i] && !g.kept && g.folded < g.open)
-            .min_by(|(i, a), (j, b)| a.uses.cmp(&b.uses).then(j.cmp(i)));
-        let Some((i, g)) = next else {
-            break;
-        };
-        folded[i] = true;
-        width -= g.open - g.folded;
+/// The rows a Ribbon tab's groups go in, by each group's width: as many to a row as fit in
+/// `room`, in order, a group that does not fit starting the next row whole (one wider than
+/// `room` has a row to itself).
+pub(super) fn wrap_rows(widths: &[f32], room: f32) -> Vec<Vec<usize>> {
+    let mut rows: Vec<Vec<usize>> = Vec::new();
+    let mut used = 0.0;
+    for (i, &width) in widths.iter().enumerate() {
+        match rows.last_mut() {
+            Some(row) if used + width <= room => row.push(i),
+            _ => {
+                rows.push(vec![i]);
+                used = 0.0;
+            }
+        }
+        used += width;
     }
-    folded
+    rows
+}
+
+/// How many columns of icons a Ribbon group shows until its tools are pinned or unpinned by
+/// hand: as many as fit under its name (`name` wide, a column every `step`), two at least.
+pub(super) fn starter_columns(name: f32, step: f32) -> usize {
+    // whole columns only; a name narrower than two still gets two
+    let fit = (name / step).floor();
+    if fit >= 2.0 {
+        // a width in columns, small and positive: no truncation
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let fit = fit as usize;
+        fit
+    } else {
+        2
+    }
+}
+
+/// The tools of a Ribbon group drawn as icons, in order: those pinned by hand, and of the
+/// rest the group's first `starter` unless unpinned by hand (`pins`).
+pub(super) fn on_ribbon(
+    tools: &[&'static str],
+    pins: &std::collections::BTreeMap<String, bool>,
+    starter: usize,
+) -> Vec<&'static str> {
+    tools
+        .iter()
+        .enumerate()
+        .filter(|&(i, id)| pins.get(*id).copied().unwrap_or(i < starter))
+        .map(|(_, id)| *id)
+        .collect()
 }

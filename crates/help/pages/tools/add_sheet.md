@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 see-also: activate_sheet, sheet_properties, nest_parts, delete_sheet
 ---
 

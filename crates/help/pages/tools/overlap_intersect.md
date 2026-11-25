@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-23
 see-also: weld_vectors, subtract_vectors, trim_objects
 ---
 

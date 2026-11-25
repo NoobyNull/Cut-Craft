@@ -96,10 +96,21 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[schemars(skip)]
     pub first_run_done: bool,
-    /// The Did You Know? tip shown at the next start, so each start shows another.
-    #[serde(default, skip_serializing_if = "is_zero")]
+    /// Whether the window layout question was answered (or closed), in first-time setup or
+    /// once after updating to a version that asks it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[schemars(skip)]
+    pub layout_asked: bool,
+    /// No longer read (startup picks an unseen tip by weight); kept so settings saved by
+    /// older versions load without a word about it.
+    #[serde(default, skip_serializing)]
     #[schemars(skip)]
     pub next_tip: usize,
+    /// The Did You Know? tips shown on this computer, by `Tip::key`, so each start shows one
+    /// not seen yet; emptied once all have been.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub seen_tips: Vec<u64>,
     /// The favourite tools of the Design and Toolpaths tabs, and whether each shows only
     /// them (right-click the tab).
     #[serde(default)]
@@ -118,11 +129,12 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
     pub flyout_faces: crate::flyout::Faces,
-    /// How many times each tool has been picked from a tool button, by id: the Ribbon folds
-    /// the groups used least first when the window is too narrow for them all.
+    /// The tools pinned to the Ribbon (`true`) or taken off it (`false`) by hand, by id;
+    /// any other tool is on it when it is one of its group's first few. A group's list has
+    /// every tool either way.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
-    pub tool_uses: std::collections::BTreeMap<String, u32>,
+    pub ribbon_pins: std::collections::BTreeMap<String, bool>,
 }
 
 /// Each tool page's favourite tools, in the order shown, and whether it shows only those.
@@ -192,6 +204,8 @@ impl Default for Options {
                 clip_at_keep_out_zones: false,
                 change_by_hand: change_by_hand(),
                 change_by_changer: change_by_changer(),
+                file_name_underscores: false,
+                bit_in_file_names: true,
             },
             language: Language::default(),
             performance: Performance::default(),
@@ -204,6 +218,8 @@ impl Default for Options {
                 autosave_seconds: autosave_seconds(),
                 flyout_hold_seconds: flyout_hold_seconds(),
                 fold_tool_groups: false,
+                ribbon_icons: RibbonIcons::Compact,
+                canvas_flyouts: CanvasFlyouts::OnHover,
                 show_tips_at_startup: true,
             },
             job_defaults: JobDefaults::default(),
@@ -222,12 +238,14 @@ impl Default for Options {
             web_api: WebApi::default(),
             default_job: None,
             first_run_done: false,
+            layout_asked: false,
             next_tip: 0,
+            seen_tips: Vec::new(),
             favourites: Favourites::default(),
             design_sections: vec![],
             toolpath_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
-            tool_uses: std::collections::BTreeMap::new(),
+            ribbon_pins: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -317,6 +335,16 @@ impl Options {
             }
         }
         carry_over(&mut file);
+        // options saved before the layout setting had the Classic window: said here, so a
+        // file read setting by setting keeps it too
+        if let Some(general) = file
+            .get_mut("general")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            general.entry("layout").or_insert_with(|| {
+                serde_json::to_value(WindowLayout::before_the_setting()).expect("layout serialises")
+            });
+        }
         let (mut options, unread) = match serde_json::from_value::<Self>(file.clone()) {
             Ok(options) => (options, vec![]),
             Err(_) => Self::read_each(file),

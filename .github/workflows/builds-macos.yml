@@ -46,9 +46,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }} # empty: the commit this run is for
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      # rust-toolchain.toml pins the Rust every build uses, so the two Mac targets go on that
+      # one (installing them for "stable" left the pinned Rust without the Intel target)
+      - name: Rust and both Mac targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
       - name: Tools for the app icon
         run: brew install librsvg

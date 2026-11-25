@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: settings, addons, bug_reports
 ---
 
@@ -27,6 +27,10 @@ as **Translated by Ivan · 92% translated**.
 - **Community supported**: volunteers write the words and keep them up to date, not Cut
   Craft's author. So a pack can have the odd wrong word, and new parts of Cut Craft show in
   English until its translators catch up.
+
+**Igpay Atinlay (test)** is a pack for testing: it shows Cut Craft in Pig Latin. Any word
+still in plain English while it is picked has no translation key yet, so no pack can
+translate it. Right-click it and choose **Report a Bug Here…** to tell Cut Craft.
 
 A pack that isn't signed still works, but it is marked **⚠ not official**, the same as any
 other [add-on](help:addons).
@@ -57,7 +61,10 @@ To go back, pick **English (built in)** and press **Apply**.
 ## Words still in English
 
 Translating takes time, so a pack can be partway done. Anything a pack has no translation
-for shows in English, so nothing is ever missing or blank. When a newer pack is published,
+for shows in English, so nothing is ever missing or blank. A pack can translate the tools'
+names too: the tool buttons, their groups, the sub-tabs and page tabs, the menus, **Find
+Tool** (**Ctrl+K**) and the help pages' titles all use the same words, so a tool is named the
+same way wherever you see it. When a newer pack is published,
 **Gadgets ▸ Add-ons** offers to update it.
 
 If a pack you picked is removed, Cut Craft goes back to English the next time it starts

@@ -168,7 +168,7 @@ say "not implemented yet".
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
-  `x-hide-when`). Rotary Z Zero reads Cylinder Surface / Cylinder Axis, with its own
+  `x-hide-when`). Rotary Z Zero reads Material Top / Turning Axis, with its own
   pictures (Material Setup too), and the post's `[Z_ORIGIN]` and the job sheet name them
   the same; Flip design is not done.
 - Save Toolpaths (a form, as Aspire's): the machine and its posts suiting the job (the
@@ -241,7 +241,8 @@ say "not implemented yet".
   the model off the plane, up to the material's top. Every dragged value moves the model as
   it is dragged. [inf: Aspire's slider
   beside the picture is not drawn; Overcut Distance is not offered.]
-- Help: About, Keyboard Shortcuts, Third Party Licenses, Check for Updates (crate
+- Help: About, Keyboard Shortcuts, Credits (searchable, from the committed `credits` folder:
+  `scripts/credits` remakes it from Cargo.lock with cargo-about, CI checks it), Check for Updates (crate
   `crates/updater`). Asks GitHub's releases (never a mirror) for a newer stable version,
   at every startup (Options ▸ Updates turns that off) and from the menu. "A new
   version (X) is available. Download, install and relaunch?" Install Now downloads the release's file for this install (Windows .zip, Linux .tar.gz or

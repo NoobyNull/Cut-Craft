@@ -8,7 +8,7 @@ fn the_rail_layout_lists_a_groups_tools_by_name() {
     h.app.options.general.layout = crate::options::WindowLayout::Rail;
     h.frame(vec![]);
     assert!(h.text_at("Draw Circle").is_none());
-    let groups = h.app.all_groups();
+    let groups = h.app.tool_model().all_groups();
     let create = groups
         .iter()
         .position(|g| g.name == "Create Vectors")
@@ -1260,87 +1260,168 @@ fn a_new_job_lets_go_of_the_form_kept_behind_a_placing_tool() {
 }
 
 #[test]
-fn the_ribbon_folds_the_least_used_groups_first_and_never_a_favourites() {
-    use super::layouts::{GroupFit, fold_plan};
-    let fit = |uses, kept| GroupFit {
-        open: 100.0,
-        folded: 40.0,
-        uses,
-        kept,
-    };
-    let groups = [fit(5, false), fit(0, false), fit(0, false), fit(9, false)];
-    assert_eq!(fold_plan(&groups, 400.0), [false; 4], "all fit");
-    // one fold saves 60: the rightmost of the two used least goes first
-    assert_eq!(fold_plan(&groups, 340.0), [false, false, true, false]);
-    assert_eq!(fold_plan(&groups, 280.0), [false, true, true, false]);
-    assert_eq!(fold_plan(&groups, 220.0), [true, true, true, false]);
-    // a group holding a favourite stays open, even if never used
-    let kept = [fit(5, false), fit(0, true), fit(0, false)];
-    assert_eq!(fold_plan(&kept, 200.0), [true, false, true]);
-    // room for nothing: everything that may fold does, and the row scrolls
-    assert_eq!(fold_plan(&kept, 10.0), [true, false, true]);
+fn ribbon_groups_wrap_onto_more_rows_in_order() {
+    use super::layouts::wrap_rows;
+    // all fit: one row
+    assert_eq!(wrap_rows(&[100.0, 100.0, 100.0], 400.0), [vec![0, 1, 2]]);
+    // a group that does not fit goes to the next row whole, the order kept
+    assert_eq!(
+        wrap_rows(&[100.0, 100.0, 100.0, 100.0], 250.0),
+        [vec![0, 1], vec![2, 3]]
+    );
+    // a group wider than the window has a row to itself
+    assert_eq!(
+        wrap_rows(&[100.0, 500.0, 100.0], 250.0),
+        [vec![0], vec![1], vec![2]]
+    );
+    assert_eq!(wrap_rows(&[], 250.0), [] as [Vec<usize>; 0]);
 }
 
 #[test]
-fn a_narrow_ribbon_folds_the_groups_used_least_and_picks_are_counted() {
-    let folded = |h: &Harness| -> Vec<String> {
-        h.shapes
-            .iter()
-            .filter_map(|c| match &c.shape {
-                egui::Shape::Text(t) if t.galley.text().ends_with('▾') => {
-                    Some(t.galley.text().to_owned())
-                }
-                _ => None,
-            })
-            .collect()
-    };
+fn a_ribbon_group_shows_as_many_tools_as_fit_under_its_name_until_pinned() {
+    use super::layouts::{on_ribbon, starter_columns};
+    // two columns at least, more while its name is wider
+    assert_eq!(starter_columns(50.0, 60.0), 2);
+    assert_eq!(starter_columns(200.0, 60.0), 3);
+    let tools = ["a", "b", "c", "d", "e", "f"];
+    let mut pins = std::collections::BTreeMap::new();
+    assert_eq!(on_ribbon(&tools, &pins, 4), tools[..4]);
+    // pinned by hand, in its place; unpinned by hand, gone
+    pins.insert("f".to_owned(), true);
+    pins.insert("b".to_owned(), false);
+    assert_eq!(on_ribbon(&tools, &pins, 4), ["a", "c", "d", "f"]);
+}
+
+#[test]
+fn a_ribbon_tab_fits_in_two_rows_of_groups_and_each_name_lists_and_pins_every_tool() {
     let mut h = Harness::new();
     h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
-    h.window = vec2(5000.0, 800.0);
+    for tab in 0..3 {
+        h.app.ribbon_tab = tab;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        // nothing folded away: every group of the tab is there under its own name, in
+        // order, a second row taking what the first has no room for
+        let (groups, _) = h.app.ribbon_groups();
+        let rows: Vec<f32> = groups
+            .iter()
+            .filter(|g| g.tools.iter().any(|id| h.app.offered(id)))
+            .map(|g| {
+                h.text_at(&format!("{} ▾", g.name))
+                    .unwrap_or_else(|| panic!("{} not shown", g.name))
+                    .y
+            })
+            .collect();
+        assert!(rows.windows(2).all(|w| w[0] <= w[1] + 0.5), "{rows:?}");
+        let mut distinct = rows.clone();
+        distinct.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+        assert!(
+            distinct.len() <= 2,
+            "tab {tab}: {} rows of groups",
+            distinct.len()
+        );
+        // and the view still has most of the window
+        assert!(
+            rows.iter().all(|&y| y < 0.5 * h.window.y),
+            "tab {tab}: the ribbon is too tall: {rows:?}"
+        );
+    }
+    // a group's name lists every tool in it by name, those off the ribbon too
+    h.app.ribbon_tab = 0;
     h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(folded(&h).is_empty(), "room for all: {:?}", folded(&h));
-    h.window = vec2(2600.0, 800.0);
-    h.frame(vec![]);
-    h.frame(vec![]);
-    let before = folded(&h);
-    assert!(before.contains(&"Align Objects ▾".to_owned()), "{before:?}");
-    // Align Left used a lot: its group opens and another folds instead
-    h.app.options.tool_uses.insert("align_left".into(), 50);
-    h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(h.text_at("Align Objects ▾").is_none(), "{:?}", folded(&h));
-    assert!(h.text_at("Align Objects").is_some());
-    // a favourite's group never folds
-    h.app.options.favourites.design = vec!["weld_vectors".into()];
-    h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(
-        h.text_at("Join, Combine and Trim ▾").is_none(),
-        "{:?}",
-        folded(&h)
-    );
-    // a folded group's button lists its tools
-    let button = folded(&h).first().cloned().expect("something still folded");
-    let group = h
-        .app
-        .all_groups()
-        .into_iter()
-        .find(|g| format!("{} ▾", g.name) == button)
-        .unwrap();
+    let (groups, _) = h.app.ribbon_groups();
+    let group = *groups
+        .iter()
+        .find(|g| g.tools.len() > 6)
+        .expect("a group with more tools than are pinned");
     let first = h.app.tool_label(group.tools[0]);
-    assert!(h.text_at(&first).is_none(), "{first} hidden while folded");
-    let at = h.text_at(&button).unwrap();
-    h.press(at, true, Modifiers::NONE);
-    h.press(at, false, Modifiers::NONE);
+    let last = h.app.tool_label(group.tools.last().unwrap());
+    let at = h.text_at(&format!("{} ▾", group.name)).unwrap();
+    h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(
-        h.text_at(&first).is_some(),
-        "{button} lists {first} by name"
-    );
-    // a pick from a button counts
+    assert!(h.text_at(&first).is_some(), "{} lists {first}", group.name);
+    assert!(h.text_at(&last).is_some(), "{} lists {last}", group.name);
+    // and a pin puts a tool on the ribbon or takes it off, kept in the options
     let ctx = h.ctx.clone();
-    h.app.pick(&ctx, Page::Design, "draw_circle");
-    assert_eq!(h.app.options.tool_uses.get("draw_circle"), Some(&1));
+    let pin = |on: &str, id: &str| [gui::RIBBON_PIN, on, ":", id].concat();
+    h.app.invoke(&ctx, &pin("off", group.tools[0]));
+    assert_eq!(h.app.options.ribbon_pins.get(group.tools[0]), Some(&false));
+    let late = *group.tools.last().unwrap();
+    h.app.invoke(&ctx, &pin("on", late));
+    assert_eq!(h.app.options.ribbon_pins.get(late), Some(&true));
+    h.frame(vec![]);
+    h.frame(vec![]);
+}
+
+#[test]
+fn every_tool_on_the_ribbon_is_a_setting_compact_by_default() {
+    use crate::options::RibbonIcons;
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    assert_eq!(h.app.options.general.ribbon_icons, RibbonIcons::Compact);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let (groups, _) = h.app.ribbon_groups();
+    let last = groups.last().unwrap().name;
+    let compact = h.text_at(&format!("{last} ▾")).unwrap().y;
+    // every tool: the groups need more room, so the last goes further down, or out of
+    // sight where the Ribbon, kept to 40% of the window, scrolls
+    h.app.options.general.ribbon_icons = RibbonIcons::EveryTool;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let full = h.text_at(&format!("{last} ▾")).map(|p| p.y);
+    assert!(full.is_none_or(|y| y > compact), "{full:?} below {compact}");
+    let first = h.text_at(&format!("{} ▾", groups[0].name)).unwrap().y;
+    assert!(first < 0.4 * h.window.y, "the first row shows");
+}
+
+#[test]
+fn at_1920_wide_every_ribbon_tab_is_one_row_of_groups() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    h.window = vec2(1920.0, 1080.0);
+    for tab in 0..3 {
+        h.app.ribbon_tab = tab;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        let (groups, _) = h.app.ribbon_groups();
+        let groups: Vec<_> = groups
+            .iter()
+            .filter(|g| g.tools.iter().any(|id| h.app.offered(id)))
+            .collect();
+        let rows: Vec<f32> = groups
+            .iter()
+            .filter_map(|g| h.text_at(&format!("{} ▾", g.name)).map(|p| p.y))
+            .collect();
+        assert_eq!(rows.len(), groups.len(), "tab {tab}");
+        assert!(
+            rows.iter().all(|y| (y - rows[0]).abs() < 0.5),
+            "tab {tab}: {rows:?}"
+        );
+    }
+}
+
+#[test]
+fn a_ribbon_group_with_no_tool_for_this_machine_is_left_off() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    h.window = vec2(1920.0, 1080.0);
+    h.app.ribbon_tab = 2;
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().controller = "grblHAL".into();
+    let laser = |h: &mut Harness, fitted: bool| {
+        h.app.machines.active_mut().unwrap().laser = fitted;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        h.text_at("Laser ▾").is_some()
+    };
+    assert!(
+        laser(&mut h, true),
+        "a machine with a laser has the Laser group"
+    );
+    assert!(
+        !laser(&mut h, false),
+        "one without has no empty Laser group"
+    );
+    assert!(h.text_at("Holes ▾").is_some(), "the other groups stay");
 }

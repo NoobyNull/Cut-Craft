@@ -1423,3 +1423,45 @@ fn a_list_of_objects_starts_with_a_blank_one() {
         serde_json::json!({ "segment": "", "axis": "x", "position": 0.0 })
     );
 }
+
+#[test]
+fn a_label_can_follow_another_choice() {
+    let s = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "shape": { "enum": ["round", "square", "board"] },
+            "diameter": {
+                "type": "number",
+                "title": "Diameter (D)",
+                "x-titles": { "shape": { "square": "Side (D)", "board": "Thickness (D)" } }
+            },
+            "length": { "type": "number", "title": "Length (L)" }
+        }
+    });
+    let f = fields(&s);
+    let named = |key, shape: &str| {
+        let params = serde_json::json!({ "shape": shape });
+        field(&f, key).label_for(&params, &Value::Null).to_owned()
+    };
+    assert_eq!(named("diameter", "round"), "Diameter (D)");
+    assert_eq!(named("diameter", "square"), "Side (D)");
+    assert_eq!(named("diameter", "board"), "Thickness (D)");
+    assert_eq!(named("length", "board"), "Length (L)", "no titles: its own");
+}
+
+#[test]
+fn job_setup_s_rotary_size_is_named_for_the_material_s_shape() {
+    let f = fields(&schema("job_setup"));
+    let Kind::Group(size) = &field(&f, "size").kind else {
+        panic!("size is a section");
+    };
+    let named = |shape: &str| {
+        let params = serde_json::json!({ "shape": shape });
+        field(size, "diameter")
+            .label_for(&params, &Value::Null)
+            .to_owned()
+    };
+    assert_eq!(named("round"), "Diameter (D)");
+    assert_eq!(named("square"), "Side (D)");
+    assert_eq!(named("board"), "Thickness (D)");
+}

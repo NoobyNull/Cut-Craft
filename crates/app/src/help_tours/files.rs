@@ -584,7 +584,7 @@ pub(super) const TOURS: &[Tour] = &[
         tool: "interface_layout",
         steps: &[
             Step {
-                caption: "Choose how the panels are laid out, and save layouts of your own.",
+                caption: "Pick how the window is arranged: Ribbon, Rail or Classic.",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
                     shapes_none(app);
@@ -597,7 +597,7 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:interface_layout"),
             },
             Step {
-                caption: "Pick a layout, or save the one you have.",
+                caption: "Click the layout you want, then press **Use This Layout**.",
                 setup: |app, ctx| {
                     app.invoke(ctx, "interface_layout");
                 },

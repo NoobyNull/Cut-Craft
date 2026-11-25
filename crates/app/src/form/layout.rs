@@ -216,9 +216,10 @@ pub(super) fn grid(
                             if let Some(dim) = &f.dim {
                                 dim_letter(ui, dim);
                             }
+                            let name = f.label_for(params, top);
                             let label = match f.axis {
-                                Some(axis) => ui.label(crate::axes::label(&f.label, axis)),
-                                None => ui.label(&f.label),
+                                Some(axis) => ui.label(crate::axes::label(name, axis)),
+                                None => ui.label(name),
                             };
                             hover(label, f.help.as_ref());
                         });
