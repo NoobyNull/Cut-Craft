@@ -5,6 +5,7 @@
 
 mod carving;
 mod finish;
+mod follow;
 mod left;
 mod limit;
 mod locked;
@@ -16,6 +17,7 @@ mod work;
 
 pub use carving::*;
 pub use finish::*;
+pub use follow::*;
 pub use left::*;
 pub use limit::*;
 pub use locked::*;

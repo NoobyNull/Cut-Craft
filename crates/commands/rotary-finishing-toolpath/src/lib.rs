@@ -35,6 +35,9 @@ pub enum Held {
     /// A set distance to one side of the turning axis: the side of the ball cuts, not its
     /// slow-turning tip, for a cleaner finish, and walls that face sideways are reached
     OffCentre,
+    /// A and the bit's place across the axis change together, so the bit meets the model
+    /// square on: flat faces are cut with A still, steep sides by the side of the ball
+    FollowsTheSurface,
 }
 
 /// Which sides of the axis an off-centre finish is held to.
@@ -73,7 +76,8 @@ pub struct Params {
     /// Both cuts back and forth, staying down
     #[schemars(title = "Cut direction", extend("x-group" = "Strategy"))]
     pub cut_direction: CutDirection,
-    /// Where the bit is held: over the turning axis, or to one side of it
+    /// Where the bit is held: over the turning axis, to one side of it, or following the
+    /// surface
     #[schemars(title = "Bit held", extend("x-group" = "Strategy"))]
     pub held: Held,
     /// How far to one side of the turning axis the bit is held. Positive is the way the part
@@ -187,7 +191,7 @@ const NOTHING_LEFT: &str = "Nothing is left to finish between Start and End: the
 /// How far across the bit is held for each run over the whole part.
 fn held(p: &Params) -> Vec<f64> {
     match (p.held, p.sides) {
-        (Held::OverTheAxis, _) => vec![0.0],
+        (Held::OverTheAxis | Held::FollowsTheSurface, _) => vec![0.0],
         (Held::OffCentre, Sides::OneSide) => vec![p.offset],
         (Held::OffCentre, Sides::BothSides) => vec![p.offset, -p.offset],
     }
@@ -240,6 +244,7 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
             direction: p.cut_direction,
             held: held(p),
             head,
+            follow: p.held == Held::FollowsTheSurface,
         },
     )?;
     if !finished.kept_off.is_empty() {
@@ -257,7 +262,7 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
             Err(why) => notes.push(why),
         }
     }
-    let held_off = p.held == Held::OffCentre;
+    let held_off = p.held != Held::OverTheAxis;
     let (mut moves, across) = joined(
         &passes,
         doc.job.turning_gap(),

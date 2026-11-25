@@ -148,6 +148,7 @@ fn round_the_part(head: Head) -> Finish {
         direction: CutDirection::Both,
         held: vec![0.0],
         head,
+        follow: false,
     }
 }
 

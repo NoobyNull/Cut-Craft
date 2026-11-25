@@ -41,8 +41,15 @@ down; **Climb** and **Conventional** cut every pass the same way, lifting back t
   are reached. **One side** holds it there for the whole finish; **Both sides** goes over the
   whole part from one side, then again from the other, for walls facing either way, in twice
   the time.
+- **Follows the surface**: A and the bit's place across the axis change together at every
+  point, so the bit always meets the model square on. A flat face is cut with A still and the
+  bit moving across it. A steep side is cut by the side of the ball facing it, not its
+  slow-turning tip. It is the least to set up and reaches the most in one finish. A four-axis
+  machine can't tilt the bit, so the part is turned to face it instead, never more than 60°
+  from straight under the bit, so the collet nut stays clear of the part.
 
-An off-centre finish needs a post that moves the bit across the axis: the Rotary A posts do.
+An off-centre or surface-following finish needs a post that moves the bit across the axis:
+the Rotary A posts do.
 
 ## It cuts only what is left
 

@@ -10,7 +10,7 @@ use cut_craft_core::progress;
 use cut_craft_core::work::parallel;
 use cut_craft_rotary::{Head, Voxels};
 
-use crate::{Check, CutDirection, Pass, Way, Work, forward_climbs, reach_along};
+use crate::{Check, CutDirection, Pass, Posed, Way, Work, forward_climbs, reach_along};
 
 /// How a finish goes over the part.
 pub struct Finish {
@@ -21,6 +21,10 @@ pub struct Finish {
     pub held: Vec<f64>,
     /// The holder, chuck and tailstock to keep clear of.
     pub head: Head,
+    /// Follows the surface: `held` aside, A and the bit's place across the axis change
+    /// together at every point so the bit meets the model square on (see
+    /// [`Work::following`]).
+    pub follow: bool,
 }
 
 /// What a finish worked out: the passes, and the places along the part where the holder
@@ -76,17 +80,16 @@ impl Work<'_> {
         };
         let lines = self.finish_lines(finish.way);
         let mut out = Finished::default();
-        let runs = finish.held.len();
-        for (r, &across) in finish.held.iter().enumerate() {
+        let runs_held = if finish.follow {
+            vec![0.0]
+        } else {
+            finish.held.clone()
+        };
+        let runs = runs_held.len();
+        for (r, &across) in runs_held.iter().enumerate() {
             progress::stage("Following the model");
             progress::stop_if_cancelled()?;
-            // the bit as low as it goes at every point, over every core
-            let heights: Vec<Vec<f64>> = parallel(lines.len(), |l| {
-                lines[l]
-                    .iter()
-                    .map(|&(along, round)| self.tip(along, round, across).min(self.top))
-                    .collect()
-            });
+            let poses = self.posed(&lines, finish, across);
             let room: Vec<f64> = {
                 let mut alongs: Vec<f64> = lines.iter().flatten().map(|p| p.0).collect();
                 alongs.sort_by(f64::total_cmp);
@@ -103,9 +106,15 @@ impl Work<'_> {
             };
             let mut passes: Vec<Pass> = vec![];
             let mut pass: Pass = vec![];
-            for (l, line) in lines.iter().enumerate() {
+            for (l, line) in poses.iter().enumerate() {
                 let mut points: Pass = Vec::with_capacity(line.len());
-                for (&(along, round), &tip) in line.iter().zip(&heights[l]) {
+                for &Posed {
+                    along,
+                    round,
+                    across,
+                    tip,
+                } in line
+                {
                     let allowed = lets(along);
                     let h = if allowed > tip + 1e-6 {
                         // kept off, where there is still something to cut there
@@ -128,8 +137,8 @@ impl Work<'_> {
                 if one_way.is_some() {
                     passes.push(points);
                 } else {
-                    if let (Some(&(from, _)), Some(&(to, _))) = (pass.last(), points.first()) {
-                        pass.extend(self.across_to(from, to, across, &lets));
+                    if let (Some(&(from, held)), Some(&(to, _))) = (pass.last(), points.first()) {
+                        pass.extend(self.across_to(from, to, held, &lets));
                     }
                     pass.extend(points);
                 }
@@ -144,6 +153,26 @@ impl Work<'_> {
             progress::report_steps(r + 1, runs);
         }
         Ok(out)
+    }
+
+    /// Where A turns to, how far across the bit is held and how low it goes at every point
+    /// of `lines`, over every core: held `across` the axis, or following the surface.
+    fn posed(&self, lines: &[Vec<(f64, f64)>], finish: &Finish, across: f64) -> Vec<Vec<Posed>> {
+        parallel(lines.len(), |l| {
+            if finish.follow {
+                self.following(&lines[l], finish.way)
+            } else {
+                lines[l]
+                    .iter()
+                    .map(|&(along, round)| Posed {
+                        along,
+                        round,
+                        across,
+                        tip: self.tip(along, round, across).min(self.top),
+                    })
+                    .collect()
+            }
+        })
     }
 
     /// The finish's lines: rings round the part a step apart along it, or lines along the

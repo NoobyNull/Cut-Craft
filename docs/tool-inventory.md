@@ -402,8 +402,12 @@ say "not implemented yet".
   Off centre (Offset mm to one side; One side, or Both sides one after the other). Like Rotary
   Roughing it cuts only what the toolpaths above it leave (unless Advanced rotary mode), and
   where the holder can't get down beside what is left it stays up and says so in red.
-  Registration mark and Cut away centre support as in 4-Axis Rotary Machining. Spiral (the
-  calculator choosing it over rings when quicker) is still to come.
+  Registration mark and Cut away centre support as in 4-Axis Rotary Machining. Bit held
+  Follows the surface (`Work::following`, crates/rotary-carving/src/follow.rs): each point of
+  a line is turned so the model faces straight up at it (its slope round the part, evened out
+  over the ball's width, at most 60°), the bit held across to stay over it, so flat faces are
+  cut with A still. Spiral (the calculator choosing it over rings when quicker) is still to
+  come.
 - Rotary Locked Angles (Cut Craft's own, `rotary_locked_angles_toolpath`): on a rotary job, A
   locked at one angle after another (of every 15°), each picked where it reaches the most of
   what is left, and the side facing the bit finished back and forth along the part with A held

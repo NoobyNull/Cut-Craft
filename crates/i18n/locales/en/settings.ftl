@@ -3685,13 +3685,19 @@ setting-which-way-the-bit-goes-b4a0ef =
     Which way the bit goes over the part: round it, stepping along between passes, or
     along it, A turning a step between passes
 setting-bit-held-5d70bf = Bit held
-setting-where-the-bit-is-held-324509 = Where the bit is held: over the turning axis, or to one side of it
+setting-where-the-bit-is-held-af1ac8 =
+    Where the bit is held: over the turning axis, to one side of it, or following the
+    surface
 setting-over-the-axis-28664d = Over the axis
 setting-straight-over-the-turning-axis-8046b4 = Straight over the turning axis: the tip of the bit cuts
 setting-off-centre-07cf25 = Off centre
 setting-a-set-distance-to-one-cfc04e =
     A set distance to one side of the turning axis: the side of the ball cuts, not its
     slow-turning tip, for a cleaner finish, and walls that face sideways are reached
+setting-follows-the-surface-7505f9 = Follows the surface
+setting-a-and-the-bit-s-ea8d54 =
+    A and the bit's place across the axis change together, so the bit meets the model
+    square on: flat faces are cut with A still, steep sides by the side of the ball
 setting-how-far-to-one-side-3d44a4 =
     How far to one side of the turning axis the bit is held. Positive is the way the part
     comes up towards the bit as A turns back
