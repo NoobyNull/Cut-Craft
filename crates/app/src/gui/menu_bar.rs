@@ -332,6 +332,7 @@ impl MenuSystem {
                             vec![
                                 MenuItem::with_action("Ribbon", "layout_ribbon"),
                                 MenuItem::with_action("Rail", "layout_rail"),
+                                MenuItem::with_action("Canvas", "layout_canvas"),
                                 MenuItem::with_action(
                                     "Classic (Design and Toolpaths pages)",
                                     "layout_classic",

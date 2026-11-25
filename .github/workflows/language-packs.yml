@@ -4,7 +4,9 @@
 # addon.toml and .ftl files, each signed with Cut Craft's release key (FILE.minisig beside
 # it) so it installs as official. Each language is downloaded on its own; none ever ships
 # with Cut Craft (Matthew, 2026-11-20).
-# Started when a pack changes on main, or by "Run workflow". Every release carries every pack;
+# The Pig Latin test pack (language-packs/en-piglatin) holds only its addon.toml: its words are
+# made from English here, before zipping, so it always has every key.
+# Started when a pack or the English words change on main, or by "Run workflow". Every release carries every pack;
 # its version is 1.0.<run number>, so it is always newer than the one before. Needs
 # ADDON_RELEASE_TOKEN (a token that may write releases on TRANSLATIONS_REPO) and the release
 # key: MINISIGN_SECRET_KEY and MINISIGN_PASSWORD.
@@ -13,7 +15,11 @@ name: Language packs
 on:
   push:
     branches: [main]
-    paths: ['language-packs/**', '.github/workflows/language-packs.yml']
+    paths:
+      - 'language-packs/**'
+      - 'crates/i18n/locales/en/**'
+      - 'crates/i18n/src/pig_latin.rs'
+      - '.github/workflows/language-packs.yml'
   workflow_dispatch:
 
 permissions:
@@ -27,6 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Make the Pig Latin test pack from English
+        run: cargo test -p cut-craft-i18n write_pig_latin_pack -- --ignored
       - name: Zip each pack
         run: |
           mkdir -p out

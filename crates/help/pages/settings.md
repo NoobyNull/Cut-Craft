@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
@@ -97,13 +97,17 @@ then the old shortcut still runs.
 **Mouse and Shortcuts** also holds **Trackpad mode** and an **Invert** box for each way of
 moving the views: see [Moving the views](help:view_controls).
 
-## How the window looks: three layouts, light or dark
+## How the window looks: four layouts, light or dark
 
-Cut Craft can arrange its tools three ways: **Ribbon** (the one it starts with), **Rail** and
-**Classic**. Press [Interface Layout](help:interface_layout) under 2D View Control to see
+Cut Craft can arrange its tools four ways: **Ribbon** (the one it starts with), **Rail**,
+**Canvas** and **Classic**. Press [Interface Layout](help:interface_layout) under 2D View Control to see
 each and pick one, or use **View ▸ Window Layout** or **Options ▸ General ▸ Window layout**.
 Every tool is in every layout; only where the buttons sit changes. **Ctrl+K** finds a tool by
 name whichever you use.
+
+**General ▸ Show a tip when Cut Craft starts** shows a [Did You Know?](help:tips) tip you have
+not seen yet each time Cut Craft opens. Which tips you have seen is kept with these settings,
+on this computer only.
 
 Each layout also comes light or dark: **Options ▸ Appearance ▸ Theme** picks **Light**,
 **Dark**, or **System** to follow your desktop. In the pictures below the light theme is on
@@ -119,6 +123,10 @@ the Ribbon or takes it off. **General ▸ Ribbon icons** set to **Every Tool** s
 tool as an icon instead (**Compact** is the starting choice). When the window is too narrow for every group on a tab, the groups
 carry on along a second row, in the same order, so nothing is hidden.
 
+In the Canvas layout a palette group lists its tools as soon as you point at it. Set
+**General ▸ Canvas tool lists open** to **On Click** to open a list only when you click
+its group.
+
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
 
 **[Rail](help:layout_rail)**: one icon for each tool group down the far left. Click one and
@@ -126,6 +134,12 @@ that group's tools are listed by name beside it. The open tool's form sits in th
 on the right.
 
 ![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
+
+**[Canvas](help:layout_canvas)**: the whole window is the drawing. A palette of tool groups
+floats down the left, the open tool's form floats on the right, and the sheets, layers and
+toolpaths open from chips along the foot. A box in the header finds a tool by name.
+
+![The Canvas layout, light theme on the left and dark on the right](pictures/layouts/canvas-light-and-dark.png)
 
 **[Classic](help:layout_classic)**: the Design page with its tool groups down the left, tabs
 down the side for Sheets, Layers, Components and Library, and the Toolpaths page on the

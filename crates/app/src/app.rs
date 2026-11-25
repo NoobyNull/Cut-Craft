@@ -6,6 +6,7 @@ mod app_icon;
 mod background;
 mod calculate_again;
 mod canvas_2d;
+mod canvas_layout;
 mod check_list;
 mod command_form;
 mod commit;
@@ -85,6 +86,7 @@ mod send;
 mod setup_material;
 mod shortcuts_page;
 mod snapping;
+mod split_views;
 mod surfacing;
 mod tabs;
 #[cfg(test)]
@@ -409,6 +411,8 @@ enum Split {
     Stacked,
     /// 2D left of 3D
     SideBySide,
+    /// The view picked fills the room, the other in a corner of it
+    Picture,
 }
 
 /// The picked components' outlines, with the components and revision they were traced for.
@@ -665,6 +669,8 @@ struct CutCraftApp {
     shaded_saved: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
+    /// Where the 2D view's top left corner was on screen last frame, to move `camera` with it.
+    view_2d_at: Option<egui::Pos2>,
     view_tool: Option<ViewTool>,
     /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
     pages: Pages,
@@ -684,8 +690,10 @@ struct CutCraftApp {
     rail_pinned: bool,
     /// Whether the Rail layout's list shows the favourites (its ★ button) instead of a group.
     rail_favourites: bool,
-    /// The Ribbon layout's tab (`RIBBON_TABS`).
+    /// The Ribbon layout's tab (`RIBBON_TABS`), which the Canvas layout's header shares.
     ribbon_tab: usize,
+    /// What the Canvas layout has open.
+    canvas: canvas_layout::CanvasState,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
     /// The user's own spelling words, one a line; none in tests.
@@ -1090,6 +1098,8 @@ struct CutCraftApp {
     shortcut_search: String,
     /// Both views shown at once.
     split: Option<Split>,
+    /// How the two views share the room while both show.
+    split_layout: split_views::SplitLayout,
     /// The Library tab.
     clipart: crate::clipart::Clipart,
     /// Files from the Library waiting to be added, one after another, each with the level

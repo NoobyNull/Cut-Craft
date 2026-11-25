@@ -331,3 +331,12 @@ fn a_lasers_marks_at_the_surface_are_cuts_not_joins() {
     assert!(is_join("laser_cut_fill_toolpath", MoveKind::Cut, 2.0, 2.0));
     assert!(!is_join("profile_toolpath", MoveKind::Rapid, 5.0, 5.0));
 }
+
+#[test]
+fn a_view_too_small_for_its_margin_still_fits_the_job_the_right_way_round() {
+    for size in [vec2(400.0, 22.0), vec2(22.0, 22.0), vec2(0.0, 0.0)] {
+        let area = Rect::from_min_size(pos2(0.0, 0.0), size);
+        let t = ViewTransform::fit(area, 18.0, Job::default().area());
+        assert!(t.scale > 0.0, "{size:?}: {}", t.scale);
+    }
+}

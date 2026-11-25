@@ -155,12 +155,13 @@ fn an_older_file_read_setting_by_setting_still_keeps_classic() {
 }
 
 #[test]
-fn layouts_are_listed_ribbon_rail_classic() {
+fn layouts_are_listed_ribbon_rail_canvas_classic_last() {
     assert_eq!(
         WindowLayout::ALL,
         [
             WindowLayout::Ribbon,
             WindowLayout::Rail,
+            WindowLayout::Canvas,
             WindowLayout::Classic
         ]
     );

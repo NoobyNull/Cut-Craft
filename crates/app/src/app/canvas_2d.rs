@@ -43,10 +43,21 @@ impl CutCraftApp {
         }
     }
 
+    /// The 2D view moved on screen (a split's divider, a corner picture): the zoom and pan
+    /// move with it, so the drawing stays where it was in the view.
+    fn follow_view_2d(&mut self, ui: &egui::Ui) {
+        let at = ui.available_rect_before_wrap().min;
+        if let (Some(was), Some(camera)) = (self.view_2d_at, self.camera.as_mut()) {
+            camera.origin += at - was;
+        }
+        self.view_2d_at = Some(at);
+    }
+
     pub(super) fn view_2d(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "2D view");
         self.forget_gone_group();
         let job = self.shown_job();
+        self.follow_view_2d(ui);
         let mut canvas = Canvas::new(ui, &job, self.camera);
         self.clipart_dropped_2d(ui, &canvas);
         let area = canvas.area;

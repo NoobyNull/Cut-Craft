@@ -53,7 +53,8 @@ a CNC machine cuts them with.
 - [Number fields](help:number_fields): the arrows, dragging, and typing sums such as W/2.
 - [Snapping](help:snapping) and [Guide lines](help:guide_lines): lining things up exactly.
 - [Window layouts](help:interface_layout): [Ribbon](help:layout_ribbon),
-  [Rail](help:layout_rail) or [Classic](help:layout_classic), and how to switch.
+  [Rail](help:layout_rail), [Canvas](help:layout_canvas) or [Classic](help:layout_classic),
+  and how to switch.
 - [Favourites](help:favourites): the tools you use most, kept at hand.
 - [Saving and opening jobs](help:saving_jobs): Increment and Save, the recovery copy, and
   a job that won't open.

@@ -9,6 +9,7 @@ mod accessibility;
 mod web_api;
 
 mod calculating;
+mod canvas;
 mod collisions;
 mod drawing;
 mod help_pages;
@@ -27,6 +28,7 @@ mod rotary;
 mod saving_toolpaths;
 mod selecting;
 mod snapping_and_guides;
+mod split_views;
 mod tool_database;
 mod toolpath_list;
 mod toolpaths;

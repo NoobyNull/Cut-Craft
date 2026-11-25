@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-24
-see-also: interface_layout, layout_rail, layout_classic, favourites, find_tool
+see-also: interface_layout, layout_rail, layout_canvas, layout_classic, favourites, find_tool
 ---
 
 # Ribbon layout

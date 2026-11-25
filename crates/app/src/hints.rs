@@ -402,11 +402,15 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "interface_layout",
-        "Interface Layout: pick how the window is arranged: Ribbon, Rail or Classic",
+        "Interface Layout: pick how the window is arranged: Ribbon, Rail, Canvas or Classic",
     ),
     (
         "layout_classic",
         "Classic Layout: the Design page on the left and the Toolpaths page on the right, opened from tabs at the sides",
+    ),
+    (
+        "layout_canvas",
+        "Canvas Layout: the whole window is the drawing; the tools, the settings and the job's lists float over it",
     ),
     (
         "layout_rail",

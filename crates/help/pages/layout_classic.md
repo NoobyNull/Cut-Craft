@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-24
-see-also: interface_layout, layout_ribbon, layout_rail, favourites, design, toolpaths
+see-also: interface_layout, layout_ribbon, layout_rail, layout_canvas, favourites, design, toolpaths
 ---
 
 # Classic layout

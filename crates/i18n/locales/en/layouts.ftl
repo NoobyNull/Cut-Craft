@@ -9,3 +9,7 @@ layouts-ribbon-group-list = Every tool in { $group }, by name. Pin a tool to sho
 layouts-ribbon-pin = Pin: show this tool on the ribbon
 layouts-ribbon-unpin = Unpin: keep this tool only in its group's list
 layouts-ribbon-pins-note = Pinned tools show on the ribbon. Each group starts with the tools that fit under its name, or with every tool when Ribbon icons is set to Every Tool.
+
+# src/app/canvas_layout.rs
+layouts-canvas-find = Find a tool (Ctrl+K)
+layouts-canvas-chip = { $list }: opens it over the drawing. Click again to close it

@@ -1,4 +1,4 @@
-//! Choosing the window layout: the same three choices, each with a picture, wherever it is
+//! Choosing the window layout: the same choices, each with a picture, wherever it is
 //! asked. First-time setup asks it, installs that had Cut Craft before ask it once after
 //! updating, and the Interface Layout button (under 2D View Control) opens it any time
 //! (`docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
@@ -39,6 +39,7 @@ pub(super) fn picture(layout: WindowLayout) -> &'static str {
     match layout {
         WindowLayout::Ribbon => "layouts/ribbon-light-and-dark.png",
         WindowLayout::Rail => "layouts/rail-light-and-dark.png",
+        WindowLayout::Canvas => "layouts/canvas-light-and-dark.png",
         WindowLayout::Classic => "layouts/classic-light-and-dark.png",
     }
 }
@@ -48,6 +49,7 @@ pub(super) fn name(layout: WindowLayout) -> String {
     match layout {
         WindowLayout::Ribbon => tr!("layout-choice-ribbon"),
         WindowLayout::Rail => tr!("layout-choice-rail"),
+        WindowLayout::Canvas => tr!("layout-choice-canvas"),
         WindowLayout::Classic => tr!("layout-choice-classic"),
     }
 }
@@ -57,17 +59,31 @@ fn about(layout: WindowLayout) -> String {
     match layout {
         WindowLayout::Ribbon => tr!("layout-choice-ribbon-about"),
         WindowLayout::Rail => tr!("layout-choice-rail-about"),
+        WindowLayout::Canvas => tr!("layout-choice-canvas-about"),
         WindowLayout::Classic => tr!("layout-choice-classic-about"),
     }
 }
 
-/// The three layouts side by side, each its picture, name and what it is like; a click
+/// Each layout card's width: all across, as wide as fits in most of a `screen` that wide,
+/// up to fourteen `row`s. Sized from the screen, not from the window it is in, which
+/// sizes itself to its cards: measured from that, it would grow a little every frame.
+fn card_width(screen: f32, edges: f32, gap: f32, row: f32) -> f32 {
+    let across = f32::from(u8::try_from(WindowLayout::ALL.len()).unwrap_or(u8::MAX));
+    let room = 0.85 * screen - (across - 1.0) * gap - across * edges;
+    (room / across).clamp(row, 14.0 * row)
+}
+
+/// The layouts side by side, each its picture, name and what it is like; a click
 /// on any part picks it.
 pub(super) fn layout_choices(ui: &mut egui::Ui, chosen: &mut WindowLayout) {
-    // three across, each as wide as fits, up to fourteen rows of text
-    // each card's margins and border, and the gaps between them
-    let gaps = 2.0 * ui.spacing().item_spacing.x + 3.0 * 14.0;
-    let width = ((ui.available_width() - gaps) / 3.0).min(14.0 * ui.spacing().interact_size.y);
+    let frame = egui::Frame::group(ui.style());
+    let edges = frame.total_margin().sum().x;
+    let width = card_width(
+        ui.ctx().content_rect().width(),
+        edges,
+        ui.spacing().item_spacing.x,
+        ui.spacing().interact_size.y,
+    );
     ui.horizontal_top(|ui| {
         for layout in WindowLayout::ALL {
             let picked = *chosen == layout;

@@ -386,9 +386,10 @@ pub(crate) fn menu_key(name: &str) -> String {
     cut_craft_i18n::key_of("menu", name)
 }
 /// The top bar's split and snapping toggles.
-pub(super) const TOP_BAR_TOGGLES: [&str; 5] = [
+pub(super) const TOP_BAR_TOGGLES: [&str; 6] = [
     "split_stacked",
     "split_side_by_side",
+    "split_picture",
     "toggle_geometry_snapping",
     "toggle_smart_snapping",
     "toggle_grid_snapping",

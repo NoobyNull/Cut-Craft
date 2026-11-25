@@ -309,6 +309,17 @@ pub enum RibbonIcons {
     EveryTool,
 }
 
+/// When a Canvas palette group lists its tools beside it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CanvasFlyouts {
+    /// As soon as the pointer is over the group
+    #[default]
+    OnHover,
+    /// When the group is clicked
+    OnClick,
+}
+
 /// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`,
 /// `docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -321,6 +332,9 @@ pub enum WindowLayout {
     /// A column of tool groups on the left, each opening its list of tools by name; the
     /// open tool's settings on the right
     Rail,
+    /// The whole window is the drawing: the tools, the open tool's settings and your
+    /// sheets, layers and toolpaths float over it
+    Canvas,
     /// The Design page of tool icons on the left, the Toolpaths page on the right, and
     /// tabs down the sides
     Classic,
@@ -328,7 +342,7 @@ pub enum WindowLayout {
 
 impl WindowLayout {
     /// Every layout, in the order offered.
-    pub const ALL: [Self; 3] = [Self::Ribbon, Self::Rail, Self::Classic];
+    pub const ALL: [Self; 4] = [Self::Ribbon, Self::Rail, Self::Canvas, Self::Classic];
 
     /// The layout options saved before the setting existed had: Classic.
     pub fn before_the_setting() -> Self {
