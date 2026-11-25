@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: preview_detail, rotary_machining_toolpath, rotary_firmware, job_setup
+reviewed: 2026-11-25
+see-also: preview_detail, rotary_machining_toolpath, rotary_locked_angles_toolpath, rotary_firmware, job_setup
 ---
 
 # Toolpaths
@@ -209,6 +209,27 @@ Raster and Adaptive pockets can also leave the edge pass out (Profile Pass: None
 rings always end on the edge. Only Raster offers First, round the edge before the rows:
 Adaptive always goes round the edge last, so switching a pocket set to First over to Adaptive
 picks Last.
+
+## Flat cuts on a rotary job
+
+On a rotary job, a flat toolpath (Profile, Pocket, Drilling, V-Carve and the others) is
+usually wrapped round the part: A turns as the bit moves round, so a line drawn round the sheet
+is cut round the material. To cut a flat face instead, such as a pocket on one side of a
+square bar or a flat spot on a dowel, tick **Flat on a locked face** at the foot of the
+toolpath's form.
+
+1. Draw the vectors on the sheet where the face is: the middle of what they cut sets the angle
+   A turns to.
+2. Tick **Flat on a locked face** and press **Calculate**.
+
+A turns to that angle and stays there. The bit moves across the face instead of A turning,
+and the depth is measured down from the face, so a pocket 3 mm deep is 3 mm deep all across
+it. On a square or a board, A turns to the nearest flat face. On a round blank, the face is
+the flat touching the top of the material, so it cuts deepest in the middle. Tick **Set the
+angle myself** to type the angle in instead.
+
+The bit is held to one side of the turning axis, so this needs a post that moves the bit
+across the axis: the **Rotary A** posts do.
 
 ## Previewing a rotary job
 

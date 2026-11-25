@@ -307,29 +307,33 @@ impl Filter {
         ui.horizontal(|ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.search)
-                    .hint_text("Search posts…")
+                    .hint_text(cut_craft_i18n::t!("Search posts…"))
                     .desired_width(200.0),
             )
-            .on_hover_hint("Words in the post's name or notes");
+            .on_hover_hint(cut_craft_i18n::t!("Words in the post's name or notes"));
             egui::ComboBox::from_id_salt(ui.scope_id().with("post_family"))
                 .selected_text(self.family.map_or("Any controller", Family::label))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.family, None, "Any controller");
+                    ui.selectable_value(
+                        &mut self.family,
+                        None,
+                        cut_craft_i18n::t!("Any controller"),
+                    );
                     for f in Family::ALL {
                         ui.selectable_value(&mut self.family, Some(f), f.label());
                     }
                 })
                 .response
-                .on_hover_hint("The controller your machine runs");
+                .on_hover_hint(cut_craft_i18n::t!("The controller your machine runs"));
         });
         ui.horizontal_wrapped(|ui| {
-            ui.label("Units");
-            ui.checkbox(&mut self.mm, "mm")
-                .on_hover_hint("Posts that write millimetres");
-            ui.checkbox(&mut self.inch, "inch")
-                .on_hover_hint("Posts that write inches");
+            ui.label(cut_craft_i18n::t!("Units"));
+            ui.checkbox(&mut self.mm, cut_craft_i18n::t!("mm"))
+                .on_hover_hint(cut_craft_i18n::t!("Posts that write millimetres"));
+            ui.checkbox(&mut self.inch, cut_craft_i18n::t!("inch"))
+                .on_hover_hint(cut_craft_i18n::t!("Posts that write inches"));
             ui.add_space(12.0);
-            ui.label("Moves");
+            ui.label(cut_craft_i18n::t!("Moves"));
             ui.checkbox(&mut self.arcs, Moves::Arcs.label())
                 .on_hover_hint(Moves::Arcs.hint());
             ui.checkbox(&mut self.straight, Moves::Straight.label())
@@ -338,11 +342,15 @@ impl Filter {
                 .on_hover_hint(Moves::Rotary.hint());
         });
         ui.horizontal(|ui| {
-            ui.weak(format!("Showing {shown} of {total}"));
+            ui.weak(cut_craft_i18n::tr!(
+                "machines-showing",
+                shown = shown,
+                total = total
+            ));
             if shown < total
                 && ui
-                    .small_button("Show All")
-                    .on_hover_hint("Clear the filters")
+                    .small_button(cut_craft_i18n::t!("Show All"))
+                    .on_hover_hint(cut_craft_i18n::t!("Clear the filters"))
                     .clicked()
             {
                 *self = Self::all();

@@ -89,6 +89,8 @@ impl CutCraftApp {
         self.units_question(ctx);
         // a save that would replace G-code from an earlier save: Replace or Archive?
         self.earlier_question(ctx);
+        // a new toolpath order that left toolpaths cutting what is left out of date
+        self.reorder_question(ctx);
         // what the checks before cutting found: save anyway?
         self.save_anyway_question(ctx);
         // Save or Send pressed in Save Toolpaths: once its window has closed

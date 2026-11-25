@@ -511,3 +511,120 @@ fn inverse_time_needs_wrapping() {
     let why = Post::parse(&post).unwrap_err();
     assert!(why.contains("INVERSE_TIME_MODE"), "{why}");
 }
+
+#[test]
+fn a_rapid_turning_a_under_the_bit_lifts_clear_of_square_corners_first() {
+    use cut_craft_core::document::Blank;
+    // a 31.8 mm square on its axis: its corners swing 22.5 mm out, 6.6 past its top, so the
+    // job's 5 mm clearance isn't enough for A to turn under the bit
+    let mut job = hundred_round();
+    if let Some(r) = job.rotary.as_mut() {
+        r.blank = Blank::Square;
+    }
+    let gap = job.turning_gap();
+    assert!(gap > job.clearance + 6.0, "{gap}");
+    let hop = Toolpath {
+        moves: vec![
+            mv(MoveKind::Rapid, 0.0, 0.0, 5.0),
+            mv(MoveKind::Plunge, 0.0, 0.0, -1.0),
+            mv(MoveKind::Cut, 0.0, 10.0, -1.0),
+            mv(MoveKind::Rapid, 0.0, 10.0, 5.0),
+            // over to 216 degrees at the clearance: under a corner
+            mv(MoveKind::Rapid, 0.0, 60.0, 5.0),
+            mv(MoveKind::Plunge, 0.0, 60.0, -1.0),
+            mv(MoveKind::Cut, 0.0, 70.0, -1.0),
+            mv(MoveKind::Rapid, 0.0, 70.0, 5.0),
+        ],
+        ..toolpath("Hop", "T")
+    };
+    let post =
+        Post::parse(&BASIC.replace("begin HEADER\n", "ROTARY_WRAP_Y = \"A\"\nbegin HEADER\n"))
+            .unwrap();
+    let lines = render_with(&post, job, vec![hop]);
+    let z = |l: &str| -> Option<f64> {
+        l.split_whitespace()
+            .find_map(|w| w.strip_prefix('Z')?.parse().ok())
+    };
+    // the axis is the Z zero here: the corners need the bit above radius + gap
+    let clear = 100.0 / std::f64::consts::PI / 2.0 + gap - 1e-3;
+    let turn = lines
+        .iter()
+        .position(|l| l.contains("A216.000"))
+        .expect("A turns to 216");
+    assert!(
+        z(&lines[turn]).is_some_and(|z| z >= clear),
+        "A turns with the bit clear of the corners: {lines:#?}"
+    );
+    // and comes back down to the clearance before plunging, as the toolpath asked
+    assert!(
+        lines[turn + 1..]
+            .iter()
+            .any(|l| l.contains("A216.000") && z(l).is_some_and(|z| (z - 20.915).abs() < 1e-3)),
+        "{lines:#?}"
+    );
+}
+
+#[test]
+fn the_lift_clear_of_square_corners_keeps_the_bit_held_where_it_was_until_it_is_up() {
+    use cut_craft_core::document::Blank;
+    let mut job = hundred_round();
+    if let Some(r) = job.rotary.as_mut() {
+        r.blank = Blank::Square;
+    }
+    // held 3 mm off the axis on the way to the next side: the across axis moves only up there
+    let hop = Toolpath {
+        moves: vec![
+            mv(MoveKind::Rapid, 0.0, 0.0, 5.0),
+            mv(MoveKind::Rapid, 0.0, 60.0, 5.0),
+        ],
+        across: vec![0.0, 3.0],
+        ..toolpath("Hop", "T")
+    };
+    let post = BASIC
+        .replace(
+            "begin HEADER\n",
+            "ROTARY_WRAP_Y = \"A\"\nVAR ACROSS_POSITION = [ACROSS|C|Y|1.3]\nbegin HEADER\n",
+        )
+        .replace("[Z] [F]\"", "[Z] [ACROSS] [F]\"")
+        .replace("\"G0 [X] [Y] [Z]\"", "\"G0 [X] [Y] [Z] [ACROSS]\"");
+    let lines = render_for(&post, job, vec![hop]);
+    let z = |l: &str| -> Option<f64> {
+        l.split_whitespace()
+            .find_map(|w| w.strip_prefix('Z')?.parse().ok())
+    };
+    let y = |l: &str| -> Option<f64> {
+        l.split_whitespace()
+            .find_map(|w| w.strip_prefix('Y')?.parse().ok())
+    };
+    let clear = 100.0 / std::f64::consts::PI / 2.0 + 5.0;
+    let up = lines
+        .iter()
+        .position(|l| z(l).is_some_and(|z| z > clear + 1.0))
+        .expect("lifted clear of the corners");
+    // up first, still over the axis; held off only once A turns up there
+    assert!(y(&lines[up]).is_none_or(|y| y.abs() < 1e-3), "{lines:#?}");
+    assert!(
+        lines[up + 1..]
+            .iter()
+            .any(|l| y(l).is_some_and(|y| (y.abs() - 3.0).abs() < 1e-3)),
+        "{lines:#?}"
+    );
+}
+
+#[test]
+fn a_round_blank_turns_a_at_the_clearance_as_before() {
+    let hop = Toolpath {
+        moves: vec![
+            mv(MoveKind::Rapid, 0.0, 0.0, 5.0),
+            mv(MoveKind::Rapid, 0.0, 60.0, 5.0),
+        ],
+        ..toolpath("Hop", "T")
+    };
+    let post =
+        Post::parse(&BASIC.replace("begin HEADER\n", "ROTARY_WRAP_Y = \"A\"\nbegin HEADER\n"))
+            .unwrap();
+    let lines = render_with(&post, hundred_round(), vec![hop]);
+    let turns: Vec<&String> = lines.iter().filter(|l| l.contains("A216.000")).collect();
+    assert_eq!(turns.len(), 1, "no lift: {lines:#?}");
+    assert!(turns[0].contains("Z20.915"), "{lines:#?}");
+}

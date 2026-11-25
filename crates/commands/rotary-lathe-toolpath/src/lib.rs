@@ -14,7 +14,9 @@
 //! beside the cut. Where they would not let the bit down as far as it should go it stops
 //! short, and says so in red.
 
-use cut_craft_core::component::{Combine, model_shape_at_resolution, placed_model};
+use cut_craft_core::component::{
+    Combine, MachiningBoundary, model_shape_at_resolution, placed_model,
+};
 use cut_craft_core::document::{Along, Document, Units};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
@@ -62,6 +64,19 @@ pub struct Params {
     /// Where along the axis it ends, from the job's start; 0 runs to the job's end
     #[schemars(extend("x-unit" = "mm", "x-group" = "Along the part", "x-hide-when" = {"operation": "part_off"}), range(min = 0))]
     pub end: f64,
+    /// Where on the material the bit may cut: all of it, or within the model's outline, a
+    /// level's, or the selected closed vectors. Drawn on the job, they wrap round the part
+    #[serde(default)]
+    #[schemars(title = "Machining limit", extend("x-group" = "Machining Limit Boundary"))]
+    pub machining_boundary: MachiningBoundary,
+    /// The level whose components make the limit
+    #[serde(default)]
+    #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}, "x-group" = "Machining Limit Boundary"))]
+    pub boundary_level: String,
+    /// Grows the limit outward by this much (negative shrinks it)
+    #[serde(default)]
+    #[schemars(title = "Boundary Offset", extend("x-unit" = "mm", "x-group" = "Machining Limit Boundary", "x-hide-when" = {"machining_boundary": "material"}))]
+    pub machining_boundary_offset: f64,
     /// Across the stub left on the turning axis, joining the part to the rest of the
     /// material until it is cut free (for Turn, where there is no model)
     #[schemars(extend("x-unit" = "mm", "x-group" = "Lathe"), range(min = 0))]
@@ -69,6 +84,11 @@ pub struct Params {
     /// Material left on the model's outline for the carving after
     #[schemars(extend("x-unit" = "mm", "x-group" = "Lathe", "x-show-when" = {"operation": "turn"}), range(min = 0))]
     pub allowance: f64,
+    /// After the steps down, one last pass along the outline, a finishing stepover apart, so
+    /// a turned part comes off smooth: for a part that is round all along, finished here with
+    /// no carving after
+    #[schemars(title = "Finish the outline", extend("x-group" = "Lathe", "x-show-when" = {"operation": "turn"}))]
+    pub finish: bool,
     /// The holder above the bit, and the chuck and tailstock: filled in from Machine
     /// Configuration as the toolpath is made (the usual ones without)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,8 +104,12 @@ impl Default for Params {
             operation: Operation::Face,
             start: 0.0,
             end: 0.0,
+            machining_boundary: MachiningBoundary::Material,
+            boundary_level: String::new(),
+            machining_boundary_offset: 0.0,
             holding_stub: 8.0,
             allowance: 0.5,
+            finish: false,
             surroundings: None,
         }
     }
@@ -203,24 +227,14 @@ fn turned(
     let mut notes = vec![];
 
     // where it cuts along the part: kept out of the chuck and tailstock
-    let (start, end) = if p.operation == Operation::PartOff {
-        let at = p.start.clamp(0.0, length);
-        (at - reach, at + reach)
-    } else {
-        let end = if p.end > 0.0 {
-            p.end.min(length)
-        } else {
-            length
-        };
-        (p.start.clamp(0.0, length), end)
-    };
+    let (start, end) = span_along(doc, p, length, reach)?;
     if end <= start {
         notes.push(format!(
             "End ({}) must be further along than Start ({}), so there is nothing to cut.",
             units.length(end, 1),
             units.length(start, 1),
         ));
-        return Ok((made(p, tool, vec![]), notes));
+        return Ok((made(doc, p, tool, vec![]), notes));
     }
     let (free_from, free_to) = head.free();
     let (from, to) = (start.max(free_from), end.min(free_to));
@@ -233,7 +247,7 @@ fn turned(
         ));
     }
     if to < from + 1e-9 {
-        return Ok((made(p, tool, vec![]), notes));
+        return Ok((made(doc, p, tool, vec![]), notes));
     }
 
     // where the material is to come down to
@@ -258,7 +272,7 @@ fn turned(
                  job first, or use Face to take the material down to the holding stub."
                     .into(),
             );
-            return Ok((made(p, tool, vec![]), notes));
+            return Ok((made(doc, p, tool, vec![]), notes));
         }
         progress::stage("Placing the model");
         let origin = doc.job.area().min;
@@ -327,7 +341,7 @@ fn turned(
              is cut: move them further apart, or use a narrower bit.",
             units.length(tool.diameter, 1),
         ));
-        return Ok((made(p, tool, vec![]), notes));
+        return Ok((made(doc, p, tool, vec![]), notes));
     }
     let places: Vec<f64> = if to - from <= 1e-9 {
         vec![f64::midpoint(from, to)]
@@ -351,6 +365,26 @@ fn turned(
     let points = ((circumference / round_cell).ceil() as usize).max(8);
     let mut passes: Vec<Vec<DVec3>> = vec![];
     let mut short: Vec<(f64, f64)> = vec![];
+    // round the part once `along` at `r` from the axis, cutting only where the material
+    // reaches past the bit
+    let ring = |along: f64, r: f64| -> Vec<Vec<DVec3>> {
+        let ring: Vec<(DVec3, bool)> = (0..=points)
+            .map(|j| {
+                let round = j as f64 * circumference / points as f64;
+                let turn = round / radius;
+                let cuts = stock
+                    .drop(&cutter, along, 0.0, turn)
+                    .is_some_and(|top| r < top - GRAZE);
+                let p = if along_x {
+                    DVec3::new(along, round, r - radius)
+                } else {
+                    DVec3::new(round, along, r - radius)
+                };
+                (p, cuts)
+            })
+            .collect();
+        stretches(&ring, reach)
+    };
     let mut level = swing;
     progress::stage("Turning");
     while level > lowest_target + 1e-9 {
@@ -375,23 +409,40 @@ fn turned(
             if r >= left.under(along, half) - GRAZE {
                 continue;
             }
-            // round the part once, cutting only where the material reaches past the bit
-            let ring: Vec<(DVec3, bool)> = (0..=points)
-                .map(|j| {
-                    let round = j as f64 * circumference / points as f64;
-                    let turn = round / radius;
-                    let cuts = stock
-                        .drop(&cutter, along, 0.0, turn)
-                        .is_some_and(|top| r < top - GRAZE);
-                    let p = if along_x {
-                        DVec3::new(along, round, r - radius)
-                    } else {
-                        DVec3::new(round, along, r - radius)
-                    };
-                    (p, cuts)
-                })
-                .collect();
-            passes.extend(stretches(&ring, reach));
+            passes.extend(ring(along, r));
+            left.lower(along, half, r);
+        }
+    }
+    if p.finish && p.operation == Operation::Turn {
+        // the outline once more, a finishing stepover apart: the steps the turns left on
+        // its slopes taken off
+        progress::stage("Finishing the outline");
+        let fine = (tool.finishing_stepover() * tool.diameter).max(cell);
+        let n = ((to - from) / fine).ceil().max(0.0) as usize;
+        let mut line: Vec<f64> = (0..=n)
+            .map(|k| {
+                if n == 0 {
+                    f64::midpoint(from, to)
+                } else {
+                    from + (to - from) * k as f64 / n as f64
+                }
+            })
+            .collect();
+        if passes.len() % 2 == 1 {
+            line.reverse();
+        }
+        for along in line {
+            progress::stop_if_cancelled()?;
+            let goal = target.under(along, half);
+            let room = head.lowest_over(along, |a| left.at(a), cell);
+            let r = goal.max(room);
+            if r > goal + 1e-6 {
+                short.push((along, r - goal));
+            }
+            if r >= left.under(along, half) - GRAZE {
+                continue;
+            }
+            passes.extend(ring(along, r));
             left.lower(along, half, r);
         }
     }
@@ -415,12 +466,60 @@ fn turned(
             m
         })
         .collect();
-    Ok((made(p, tool, moves), notes))
+    Ok((made(doc, p, tool, moves), notes))
 }
 
+/// Where along the part the lathe cuts, from the job's start: Start to End (a bit's width
+/// round Start for Part off), kept within how far along a machining limit reaches, from its
+/// first outline's start to its last one's end. The lathe turns all the way round, so only
+/// that counts.
+///
+/// # Errors
+/// When the limit can't be made, or Part off's groove is outside it.
+fn span_along(
+    doc: &Document,
+    p: &Params,
+    length: f64,
+    reach: f64,
+) -> Result<(f64, f64), CommandError> {
+    let limit = cut_craft_rotary_carving::Limit::of(
+        doc,
+        p.machining_boundary,
+        p.machining_boundary_offset,
+        &p.boundary_level,
+    )?;
+    if p.operation == Operation::PartOff {
+        let at = p.start.clamp(0.0, length);
+        if limit.is_some_and(|l| at < l.from || at > l.to) {
+            return Err(CommandError::InvalidParams(PART_OFF_OUTSIDE.into()));
+        }
+        return Ok((at - reach, at + reach));
+    }
+    let end = if p.end > 0.0 {
+        p.end.min(length)
+    } else {
+        length
+    };
+    let start = p.start.clamp(0.0, length);
+    Ok(match limit {
+        Some(l) => (start.max(l.from), end.min(l.to)),
+        None => (start, end),
+    })
+}
+
+/// Why Part off is refused outside its machining limit.
+const PART_OFF_OUTSIDE: &str = "Part off's Start is outside the machining limit: move Start to \
+    where the limit reaches along the part, or pick Material as the limit.";
+
 /// The toolpath made of `moves`.
-fn made(p: &Params, tool: &Tool, moves: Vec<Move>) -> cut_craft_core::toolpath::Toolpath {
-    made_by::<RotaryLatheToolpath>(p, p.name.clone(), tool.clone(), vec![], moves)
+fn made(
+    doc: &Document,
+    p: &Params,
+    tool: &Tool,
+    moves: Vec<Move>,
+) -> cut_craft_core::toolpath::Toolpath {
+    let vectors = cut_craft_rotary_carving::limit_vectors(doc, p.machining_boundary);
+    made_by::<RotaryLatheToolpath>(p, p.name.clone(), tool.clone(), vectors, moves)
 }
 
 /// In red: the holder stopped the bit short of where it should go.
@@ -887,6 +986,96 @@ mod tests {
             .map(|c| 20.0 + c.z)
             .fold(f64::INFINITY, f64::min);
         assert!((lowest - 6.5).abs() < 0.3, "{lowest}");
+    }
+
+    #[test]
+    fn finishing_the_outline_takes_off_the_steps_the_turns_left_on_a_slope() {
+        // a cone, 8 out from the axis at the start rising to the bar's 20 at the end
+        let cone = |x: f64| 8.0 + 0.12 * x;
+        let mut doc = round_job(100.0, 40.0);
+        let model = Component::from_fn("Cone", Combine::Add, doc.job.area(), 0.5, |p| {
+            Some(cone(p.x))
+        });
+        let mut c = Change::builder(&doc);
+        c.add_new_component(model);
+        doc.apply(&c.finish()).unwrap();
+        let rough = Params {
+            operation: Operation::Turn,
+            allowance: 0.0,
+            tool: Tool {
+                finish_stepover: 0.1,
+                ..Tool::starter()
+            },
+            ..Params::default()
+        };
+        let finished = Params {
+            finish: true,
+            ..rough.clone()
+        };
+        let (roughed, _) = cuts_of(&doc, &rough);
+        let (cuts, notes) = cuts_of(&doc, &finished);
+        assert!(cuts.len() > roughed.len(), "{notes:?}");
+        let half = rough.tool.diameter / 2.0;
+        // never into the cone under any of the bit
+        for c in &cuts {
+            let r = 20.0 + c.z;
+            let under = cone((c.x + half).min(100.0));
+            assert!(r >= under - 0.6, "{c:?} over {under}");
+        }
+        // the finish's rings are a finishing stepover apart along the slope, each right on it
+        let step = rough.tool.finishing_stepover() * rough.tool.diameter;
+        let mut alongs: Vec<f64> = cuts
+            .iter()
+            .filter(|c| (20.0 + c.z - cone((c.x + half).min(100.0))).abs() < 0.6)
+            .map(|c| c.x)
+            .collect();
+        alongs.sort_by(f64::total_cmp);
+        alongs.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+        let widest = alongs
+            .windows(2)
+            .map(|w| w[1] - w[0])
+            .fold(0.0f64, f64::max);
+        assert!(widest <= step + 0.5, "{widest} apart, {step} asked");
+    }
+
+    #[test]
+    fn a_machining_limit_keeps_the_lathe_within_how_far_along_it_reaches() {
+        let mut doc = round_job(100.0, 40.0);
+        let mut c = Change::builder(&doc);
+        let at = Point::new;
+        // a box from 30 to 60 along, only part of the way round: the lathe goes all the way
+        let id = c.add(cut_craft_core::geometry::Path::polyline(
+            &[
+                at(30.0, 10.0),
+                at(60.0, 10.0),
+                at(60.0, 40.0),
+                at(30.0, 40.0),
+            ],
+            true,
+        ));
+        c.select([id]);
+        doc.apply(&c.finish()).unwrap();
+        let p = Params {
+            machining_boundary: MachiningBoundary::SelectedVectors,
+            ..Params::default()
+        };
+        let (cuts, notes) = cuts_of(&doc, &p);
+        assert!(!cuts.is_empty(), "{notes:?}");
+        for c in &cuts {
+            assert!((30.0 - 1e-6..=60.0 + 1e-6).contains(&c.x), "{c:?}");
+        }
+        assert!(cuts.iter().any(|c| c.y > 100.0), "all the way round");
+        // parting off outside it is refused, not grooved round anyway
+        let off = Params {
+            operation: Operation::PartOff,
+            start: 10.0,
+            ..p
+        };
+        let err = turned(&doc, &off).unwrap_err();
+        assert!(
+            err.to_string().contains("outside the machining limit"),
+            "{err}"
+        );
     }
 
     #[test]

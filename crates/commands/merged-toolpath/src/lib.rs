@@ -86,6 +86,21 @@ impl Default for Params {
     }
 }
 
+/// Refused when one of `sources` holds the bit off the turning axis: that goes move by move
+/// with its own moves, and put in another order its places across would no longer match.
+fn refuse_held_off(sources: &[&Toolpath]) -> Result<(), CommandError> {
+    match sources
+        .iter()
+        .find(|t| t.across.iter().any(|a| a.abs() > 1e-9))
+    {
+        Some(held) => Err(CommandError::Failed(format!(
+            "{} holds the bit off the turning axis, so it can't be merged: leave it as it is, or hide it before merging",
+            held.name
+        ))),
+        None => Ok(()),
+    }
+}
+
 /// One plunge-to-retract run of feed moves, with each move's laser power.
 #[derive(Clone)]
 struct Cut {
@@ -375,6 +390,7 @@ impl Command for MergedToolpath {
                 first.name, first.tool.name, other.name, other.tool.name
             )));
         }
+        refuse_held_off(&sources)?;
         let notes = tool_differences(first, &sources);
         let in_order: Vec<Cut> = sources.iter().flat_map(|t| cuts(t)).collect();
         let height = doc.job.height;
@@ -648,6 +664,19 @@ mod tests {
         doc.apply(&c.finish()).unwrap();
         let err = MergedToolpath::run(&doc, &Params::default()).unwrap_err();
         assert!(err.to_string().contains("drill bank"), "{err}");
+    }
+
+    #[test]
+    fn toolpaths_holding_the_bit_off_the_axis_do_not_merge() {
+        let mut doc = two();
+        let id = *doc.toolpaths.keys().last().unwrap();
+        let mut held = doc.toolpaths[&id].clone();
+        held.across = vec![3.0; held.moves.len()];
+        let mut c = Change::builder(&doc);
+        c.replace_toolpath(id, held);
+        doc.apply(&c.finish()).unwrap();
+        let err = MergedToolpath::run(&doc, &Params::default()).unwrap_err();
+        assert!(err.to_string().contains("off the turning axis"), "{err}");
     }
 
     #[test]

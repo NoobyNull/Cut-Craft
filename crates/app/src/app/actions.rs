@@ -145,6 +145,7 @@ impl CutCraftApp {
             deep_cut: None,
             units_ask: None,
             earlier_ask: None,
+            reorder_ask: None,
             gcode_view: None,
             save_anyway: None,
             checks_accepted: Vec::new(),

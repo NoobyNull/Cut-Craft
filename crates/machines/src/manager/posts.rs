@@ -20,9 +20,11 @@ pub(super) fn posts_section(
     let mut asked = None;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Associated Post-Processors");
+        ui.strong(cut_craft_i18n::t!("Associated Post-Processors"));
         if machine.posts.is_empty() {
-            ui.weak("None: toolpaths are saved through Cut Craft's own FluidNC post");
+            ui.weak(cut_craft_i18n::t!(
+                "None: toolpaths are saved through Cut Craft's own FluidNC post"
+            ));
         }
         let default = machine.post().map(str::to_owned);
         let mut make_default = None;
@@ -34,7 +36,7 @@ pub(super) fn posts_section(
             }
             let row = ui.selectable_label(*picked == Some(i), text);
             let row = if missing {
-                row.on_hover_hint("Not in the post library")
+                row.on_hover_hint(cut_craft_i18n::t!("Not in the post library"))
             } else {
                 row
             };
@@ -42,11 +44,11 @@ pub(super) fn posts_section(
                 *picked = Some(i);
             }
             cut_craft_bug_report::context_menu(&row, |ui| {
-                if ui.button("View").clicked() {
+                if ui.button(cut_craft_i18n::t!("View")).clicked() {
                     *viewing = entries.iter().find(|e| &e.name == name).and_then(view);
                     ui.close();
                 }
-                if ui.button("Make Default").clicked() {
+                if ui.button(cut_craft_i18n::t!("Make Default")).clicked() {
                     make_default = Some(name.clone());
                     ui.close();
                 }
@@ -79,7 +81,7 @@ pub(super) fn posts_section(
                     filter.ui(ui, shown.len(), unused.len());
                     ui.separator();
                     if shown.is_empty() {
-                        ui.weak(NONE_SHOWN);
+                        ui.weak(cut_craft_i18n::t!(NONE_SHOWN));
                     }
                     for (title, group) in groups(&shown) {
                         ui.strong(title);
@@ -100,11 +102,16 @@ pub(super) fn posts_section(
             {
                 machine.posts.remove(i);
             }
-            if ui.button("Post-Processor Management…").clicked() {
+            if ui
+                .button(cut_craft_i18n::t!("Post-Processor Management…"))
+                .clicked()
+            {
                 asked = Some(MachineOutcome::ManagePosts);
             }
         });
-        ui.weak("The default (bold) saves toolpaths; right-click a post for more");
+        ui.weak(cut_craft_i18n::t!(
+            "The default (bold) saves toolpaths; right-click a post for more"
+        ));
     });
     asked
 }
@@ -127,11 +134,14 @@ pub(super) fn buttons(ui: &mut egui::Ui, can_keep: bool, dirty: bool) -> Option<
     });
     ui.separator();
     ui.horizontal(|ui| {
-        if ui.add_enabled(can_keep, egui::Button::new("OK")).clicked() {
+        if ui
+            .add_enabled(can_keep, egui::Button::new(cut_craft_i18n::t!("OK")))
+            .clicked()
+        {
             outcome = Some(MachineOutcome::Ok);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("Cancel").clicked() {
+            if ui.button(cut_craft_i18n::t!("Cancel")).clicked() {
                 outcome = Some(MachineOutcome::Cancel);
             }
         });
@@ -210,11 +220,13 @@ pub(super) fn corrector(
     let title = format!("Edit Capabilities: {}", entry.name);
     cut_craft_bug_report::dialog(ctx, id, &title, egui::vec2(460.0, 420.0), &mut open, |ui| {
         cut_craft_bug_report::mark(ui, "Edit Capabilities");
-        ui.weak("How the filters in the post lists see this post. The post itself is not changed.");
+        ui.weak(cut_craft_i18n::t!(
+            "How the filters in the post lists see this post. The post itself is not changed."
+        ));
         egui::Grid::new("post_capabilities")
             .num_columns(2)
             .show(ui, |ui| {
-                ui.label("Controller");
+                ui.label(cut_craft_i18n::t!("Controller"));
                 egui::ComboBox::from_id_salt("post_capability_family")
                     .selected_text(caps.family.label())
                     .show_ui(ui, |ui| {
@@ -223,13 +235,13 @@ pub(super) fn corrector(
                         }
                     });
                 ui.end_row();
-                ui.label("Units");
+                ui.label(cut_craft_i18n::t!("Units"));
                 ui.horizontal(|ui| {
-                    ui.radio_value(&mut caps.inches, false, "mm");
-                    ui.radio_value(&mut caps.inches, true, "inch");
+                    ui.radio_value(&mut caps.inches, false, cut_craft_i18n::t!("mm"));
+                    ui.radio_value(&mut caps.inches, true, cut_craft_i18n::t!("inch"));
                 });
                 ui.end_row();
-                ui.label("Moves");
+                ui.label(cut_craft_i18n::t!("Moves"));
                 ui.vertical(|ui| {
                     for m in Moves::ALL {
                         ui.radio_value(&mut caps.moves, m, m.label())
@@ -240,19 +252,24 @@ pub(super) fn corrector(
                 ui.label("");
                 ui.add_enabled(
                     caps.moves == Moves::Rotary,
-                    egui::Checkbox::new(&mut caps.inverse_time, "Inverse-time feeds (G93)"),
+                    egui::Checkbox::new(
+                        &mut caps.inverse_time,
+                        cut_craft_i18n::t!("Inverse-time feeds (G93)"),
+                    ),
                 )
-                .on_hover_hint("Rotary feeds written as one over each move's time in minutes");
+                .on_hover_hint(cut_craft_i18n::t!(
+                    "Rotary feeds written as one over each move's time in minutes"
+                ));
                 ui.end_row();
             });
-        ui.label("What it is for (shown on hover)");
+        ui.label(cut_craft_i18n::t!("What it is for (shown on hover)"));
         ui.add(
             egui::TextEdit::multiline(&mut caps.about)
                 .desired_rows(3)
                 .desired_width(f32::INFINITY),
         );
         ui.horizontal(|ui| {
-            if ui.button("Save").clicked() {
+            if ui.button(cut_craft_i18n::t!("Save")).clicked() {
                 let kept = caps.clone();
                 outcome = Some(PostOutcome::Message(match db.set(entry, Some(kept)) {
                     Ok(()) => format!("Capabilities kept for {}", entry.name),
@@ -261,9 +278,16 @@ pub(super) fn corrector(
                 done = true;
             }
             if ui
-                .add_enabled(db.corrected(entry), egui::Button::new("Read From the Post"))
-                .on_hover_hint("Forget the correction and go by what the post's lines say")
-                .on_disabled_hover_text("Nothing corrected yet: this is what its lines say")
+                .add_enabled(
+                    db.corrected(entry),
+                    egui::Button::new(cut_craft_i18n::t!("Read From the Post")),
+                )
+                .on_hover_hint(cut_craft_i18n::t!(
+                    "Forget the correction and go by what the post's lines say"
+                ))
+                .on_disabled_hover_text(cut_craft_i18n::t!(
+                    "Nothing corrected yet: this is what its lines say"
+                ))
                 .clicked()
             {
                 outcome = Some(PostOutcome::Message(match db.set(entry, None) {
@@ -272,7 +296,7 @@ pub(super) fn corrector(
                 }));
                 done = true;
             }
-            if ui.button("Cancel").clicked() {
+            if ui.button(cut_craft_i18n::t!("Cancel")).clicked() {
                 done = true;
             }
         });
@@ -331,38 +355,47 @@ pub(super) fn editor(ctx: &egui::Context, editing: &mut Option<Editing>) -> Opti
         cut_craft_bug_report::mark(ui, "Edit Post-Processor");
         match cut_craft_post::Post::parse(&edit.text) {
             Ok(post) if post.name == edit.name => {
-                ui.weak("Reads as a post-processor");
+                ui.weak(cut_craft_i18n::t!("Reads as a post-processor"));
             }
             // machines know a post by its name, so a new one leaves them looking for the old
             Ok(post) => {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
-                    format!(
-                        "Renamed {}: machines using {} need it chosen again",
-                        post.name, edit.name
+                    cut_craft_i18n::tr!(
+                        "machines-post-renamed",
+                        name = post.name.clone(),
+                        old = edit.name.clone()
                     ),
                 );
             }
             Err(why) => {
-                ui.colored_label(ui.visuals().error_fg_color, format!("Will not load: {why}"));
+                ui.colored_label(
+                    ui.visuals().error_fg_color,
+                    cut_craft_i18n::tr!("machines-post-will-not-load", why = why.clone()),
+                );
             }
         }
         let changed = edit.text != edit.saved;
         ui.horizontal(|ui| {
-            if ui.add_enabled(changed, egui::Button::new("Save")).clicked() {
+            if ui
+                .add_enabled(changed, egui::Button::new(cut_craft_i18n::t!("Save")))
+                .clicked()
+            {
                 outcome = Some(PostOutcome::Message(match edit.save() {
                     Ok(()) => format!("Saved {}", edit.name),
                     Err(e) => e,
                 }));
             }
             if ui
-                .add_enabled(changed, egui::Button::new("Revert"))
+                .add_enabled(changed, egui::Button::new(cut_craft_i18n::t!("Revert")))
                 .clicked()
             {
                 edit.text.clone_from(&edit.saved);
             }
             if changed {
-                ui.weak("Unsaved changes are lost when this closes");
+                ui.weak(cut_craft_i18n::t!(
+                    "Unsaved changes are lost when this closes"
+                ));
             }
         });
         text_view(ui, &mut edit.text);
@@ -456,14 +489,13 @@ impl PostManager {
                     outcome = Some(PostOutcome::Install);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Close").clicked() {
+                    if ui.button(cut_craft_i18n::t!("Close")).clicked() {
                         outcome = Some(PostOutcome::Close);
                     }
                     let picked = self.picked.clone();
                     let select = ui
-                        .add_enabled(picked.is_some(), egui::Button::new("Select"))
-                        .on_hover_hint(
-                            "Make it the post the active machine saves toolpaths through, for the jobs it suits: a flat post for flat jobs, a wrapping one for rotary jobs",
+                        .add_enabled(picked.is_some(), egui::Button::new(cut_craft_i18n::t!("Select")))
+                        .on_hover_hint(cut_craft_i18n::t!("Make it the post the active machine saves toolpaths through, for the jobs it suits: a flat post for flat jobs, a wrapping one for rotary jobs"),
                         );
                     if select.clicked()
                         && let Some(name) = picked
@@ -496,7 +528,7 @@ impl PostManager {
             .auto_shrink(false)
             .show(ui, |ui| {
                 if shown.is_empty() {
-                    ui.weak(NONE_SHOWN);
+                    ui.weak(cut_craft_i18n::t!(NONE_SHOWN));
                 }
                 // one grid for every group, so the columns line up down the whole list
                 egui::Grid::new("post_rows")
@@ -511,7 +543,7 @@ impl PostManager {
                                     .strong();
                             if ui
                                 .selectable_label(false, heading)
-                                .on_hover_hint("Fold or unfold this group")
+                                .on_hover_hint(cut_craft_i18n::t!("Fold or unfold this group"))
                                 .clicked()
                                 && !self.folded.remove(title)
                             {
@@ -575,15 +607,18 @@ impl PostManager {
         match Library::text(entry).ok().and_then(|t| Library::version(&t)) {
             Some(version) => {
                 ui.weak(version)
-                    .on_hover_hint("Version: the date of its last change");
+                    .on_hover_hint(cut_craft_i18n::t!("Version: the date of its last change"));
             }
             None => {
                 ui.label("");
             }
         }
-        ui.weak(caps.tags())
-            .on_hover_hint("What it writes: units, moves, and G93 for inverse-time feeds");
-        let button = ui.menu_button("Inspect ▾", |ui| self.inspect(ui, library, entry, caps));
+        ui.weak(caps.tags()).on_hover_hint(cut_craft_i18n::t!(
+            "What it writes: units, moves, and G93 for inverse-time feeds"
+        ));
+        let button = ui.menu_button(cut_craft_i18n::t!("Inspect ▾"), |ui| {
+            self.inspect(ui, library, entry, caps)
+        });
         if let Some(Some(a)) = button.inner {
             asked = Some(a);
         }
@@ -606,17 +641,19 @@ impl PostManager {
         caps: &Capabilities,
     ) -> Option<PostOutcome> {
         let mut asked = None;
-        if ui.button("View").clicked() {
+        if ui.button(cut_craft_i18n::t!("View")).clicked() {
             self.viewing = view(entry);
             ui.close();
         }
-        if ui.button("Changelog").clicked() {
+        if ui.button(cut_craft_i18n::t!("Changelog")).clicked() {
             self.viewing = change_log(entry);
             ui.close();
         }
         if ui
-            .button("Edit Capabilities…")
-            .on_hover_hint("Correct its controller, units or moves, for the filters")
+            .button(cut_craft_i18n::t!("Edit Capabilities…"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Correct its controller, units or moves, for the filters"
+            ))
             .clicked()
         {
             self.correcting = Some((entry.clone(), caps.clone()));
@@ -624,7 +661,7 @@ impl PostManager {
         }
         match &entry.source {
             Source::BuiltIn(_) => {
-                if ui.button("Customize").clicked() {
+                if ui.button(cut_craft_i18n::t!("Customize")).clicked() {
                     asked = Some(match library.customize(entry) {
                         Ok(copy) => {
                             self.picked = Some(copy.name.clone());
@@ -637,17 +674,20 @@ impl PostManager {
                 }
             }
             Source::Custom(path) => {
-                if ui.button("Edit…").clicked() {
+                if ui.button(cut_craft_i18n::t!("Edit…")).clicked() {
                     self.editing = Editing::of(entry);
                     ui.close();
                 }
-                if ui.button("Open File Location…").clicked() {
+                if ui
+                    .button(cut_craft_i18n::t!("Open File Location…"))
+                    .clicked()
+                {
                     asked = path
                         .parent()
                         .map(|d| PostOutcome::OpenFolder(d.to_path_buf()));
                     ui.close();
                 }
-                if ui.button("Delete…").clicked() {
+                if ui.button(cut_craft_i18n::t!("Delete…")).clicked() {
                     self.deleting = Some(entry.clone());
                     ui.close();
                 }
@@ -663,20 +703,17 @@ impl PostManager {
         ui.group(|ui| {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
-                format!(
-                    "Delete {}? Its file is removed, which cannot be undone.",
-                    entry.name
-                ),
+                cut_craft_i18n::tr!("machines-delete-post", name = entry.name.clone()),
             );
             ui.horizontal(|ui| {
-                if ui.button("Delete").clicked() {
+                if ui.button(cut_craft_i18n::t!("Delete")).clicked() {
                     self.deleting = None;
                     asked = Some(PostOutcome::Message(match Library::delete(&entry) {
                         Ok(()) => format!("Deleted {}", entry.name),
                         Err(e) => e,
                     }));
                 }
-                if ui.button("Keep").clicked() {
+                if ui.button(cut_craft_i18n::t!("Keep")).clicked() {
                     self.deleting = None;
                 }
             });

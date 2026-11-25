@@ -30,7 +30,8 @@ pub struct ToolpathSettings {
     #[serde(default = "tolerance")]
     #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_2d: f64,
-    /// The same for 3D roughing, finishing, texture, moulding and the like
+    /// The same for 3D roughing, finishing, texture, moulding, rotary carving and turning, and
+    /// the like. A rotary toolpath's moves keep where the bit is held across the turning axis
     #[serde(default = "tolerance")]
     #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_3d: f64,
@@ -76,6 +77,12 @@ pub struct ToolpathSettings {
     #[serde(default = "on")]
     #[schemars(title = "Bit name in multiple file names")]
     pub bit_in_file_names: bool,
+    /// Off (the usual): each rotary toolpath cuts only what the toolpaths above it in the
+    /// list leave of the blank. On: each cuts the whole blank, as if nothing were above it,
+    /// and you decide what it cuts with its Start, End and allowance
+    #[serde(default)]
+    #[schemars(title = "Advanced rotary mode")]
+    pub advanced_rotary: bool,
 }
 
 /// Two minutes to stop, change a bit by hand and zero it again.
@@ -138,15 +145,12 @@ impl ToolpathSettings {
         &self,
         doc: &cut_craft_core::document::Document,
     ) -> cut_craft_core::document::Document {
-        use cut_craft_core::simplify::{family, simplify};
+        use cut_craft_core::simplify::family;
         let mut doc = doc.clone();
         for toolpath in doc.toolpaths.values_mut() {
-            // a laser's power goes move by move, and so does how far a rotary toolpath holds
-            // the bit off the turning axis, so their moves stay as they are (thinning them
-            // alone would pair each move with another move's power or place across the axis)
-            if toolpath.power.is_empty() && toolpath.across.is_empty() {
-                toolpath.moves = simplify(&toolpath.moves, self.tolerance(family(toolpath)));
-            }
+            // a laser's power and a rotary toolpath's place across the axis are thinned with
+            // their moves, so each move keeps its own
+            *toolpath = toolpath.thinned(self.tolerance(family(toolpath)));
         }
         doc
     }
