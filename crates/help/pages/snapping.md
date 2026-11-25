@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-25
 see-also: guide_lines, settings, draw_polyline, keyboard_shortcuts
 icon: snapping/grid_snapping_on.png
 ---
