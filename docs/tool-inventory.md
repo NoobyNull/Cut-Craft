@@ -385,6 +385,16 @@ say "not implemented yet".
   across axis (`[ACROSS]`, centre line + side from "+A turns") and Z. Posts without
   `[ACROSS]` refuse such toolpaths. A spiral pattern (needs a preview that wraps at the
   seam) is still to come; the model is radii round the axis, so true undercuts are not.
+- Rotary Roughing (Cut Craft's own, `rotary_roughing_toolpath`): on a rotary job, the bulk
+  taken off a level at a time (the bit's pass depth) from the blank's swing down to the
+  allowance above the model, all the way round at each level. Direction: Along the part (lines
+  along the axis, A stepping the stepover at the outside) or Round the part (rings, stepping
+  along); Cut direction Climb / Conventional / Both. Cuts only what the toolpaths above it in
+  the list leave (their moves cut from a voxel blank in order; `cut_craft_rotary_carving::cut_by`)
+  unless Options ▸ Toolpath Settings ▸ Advanced rotary mode is on (the app fills in
+  `whole_blank`). The holder is kept clear of the material left round each point along and of
+  the chuck and tailstock (stops short, in red). Shares the carving engine
+  (`crates/rotary-carving`) with 4-Axis Rotary Machining.
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits

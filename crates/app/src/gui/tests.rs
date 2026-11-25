@@ -123,6 +123,7 @@ fn the_toolpaths_page_keeps_every_tool_it_had() {
         "3d_finishing_toolpath",
         "3d_pencil_toolpath",
         "rounding_toolpath",
+        "rotary_roughing_toolpath",
         "rotary_machining_toolpath",
         "rotary_lathe_toolpath",
         "laser_cut_fill_toolpath",

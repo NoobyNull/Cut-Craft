@@ -2013,6 +2013,18 @@ version = "0.7.6"
 dependencies = [
  "cut-craft-core",
  "cut-craft-rotary",
+ "cut-craft-rotary-carving",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-rotary-roughing-toolpath"
+version = "0.7.6"
+dependencies = [
+ "cut-craft-core",
+ "cut-craft-rotary",
+ "cut-craft-rotary-carving",
  "schemars",
  "serde",
 ]
@@ -2755,6 +2767,7 @@ dependencies = [
  "cmd-reverse-direction",
  "cmd-rotary-lathe-toolpath",
  "cmd-rotary-machining-toolpath",
+ "cmd-rotary-roughing-toolpath",
  "cmd-rotate",
  "cmd-rounding-toolpath",
  "cmd-scale-model-z-height",
@@ -2971,6 +2984,16 @@ dependencies = [
  "cmd-rotary-machining-toolpath",
  "cut-craft-core",
  "cut-craft-post",
+]
+
+[[package]]
+name = "cut-craft-rotary-carving"
+version = "0.7.6"
+dependencies = [
+ "cut-craft-core",
+ "cut-craft-rotary",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

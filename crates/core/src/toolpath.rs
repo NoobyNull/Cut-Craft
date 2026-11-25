@@ -78,13 +78,14 @@ pub struct Toolpath {
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
-const MODEL_STRATEGIES: [&str; 6] = [
+const MODEL_STRATEGIES: [&str; 7] = [
     "3d_roughing_toolpath",
     "3d_finishing_toolpath",
     "3d_pencil_toolpath",
     "sketch_carving_toolpath",
     "rotary_machining_toolpath",
     "rotary_lathe_toolpath",
+    "rotary_roughing_toolpath",
 ];
 
 /// The key a toolpath's own preview colour is kept under in its params: `[r, g, b]`, or
