@@ -118,7 +118,8 @@ impl CutCraftApp {
             return;
         };
         if cancel {
-            self.status.set_message("Import cancelled");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-import-cancelled"));
             return;
         }
         let factor = ask.chosen.per() / ask.guess.taken.per();

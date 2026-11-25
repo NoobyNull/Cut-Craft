@@ -59,6 +59,7 @@ pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<M
                         sheet,
                     },
                 )
+                .named()
             }),
         )
         .enabled(doc.sheets.len() > 1),
@@ -102,7 +103,7 @@ pub(super) fn group_items(doc: &Document, id: EntityId, toolpath: &Toolpath) -> 
         .toolpath_groups_in_use()
         .iter()
         .filter(|g| toolpath.group.as_ref() != Some(g))
-        .map(|g| into(&doc.toolpath_group_path(g).join(" ▸ "), vec![id], g, ""))
+        .map(|g| into(&doc.toolpath_group_path(g).join(" ▸ "), vec![id], g, "").named())
         .collect();
     // out of its group: into the group that one sits in, if any
     let up = toolpath
@@ -258,10 +259,10 @@ pub const COMBINE_MODES: [(&str, Combine, &str); 5] = [
 /// A level's Mirror Mode submenu, in the standard order.
 pub(super) const MIRROR_MODES: [(&str, Mirror); 9] = [
     ("Off", Mirror::Off),
-    ("Left to Right", Mirror::LeftToRight),
-    ("Right to Left", Mirror::RightToLeft),
-    ("Top to Bottom", Mirror::TopToBottom),
-    ("Bottom to Top", Mirror::BottomToTop),
+    ("Left To Right", Mirror::LeftToRight),
+    ("Right To Left", Mirror::RightToLeft),
+    ("Top To Bottom", Mirror::TopToBottom),
+    ("Bottom To Top", Mirror::BottomToTop),
     ("Top Left Quadrant", Mirror::TopLeft),
     ("Top Right Quadrant", Mirror::TopRight),
     ("Bottom Left Quadrant", Mirror::BottomLeft),
@@ -411,6 +412,7 @@ pub(super) fn move_to_level(doc: &Document, component: &Component) -> MenuItem {
                     &l.name,
                     &cmd_move_to_level::Params { level: id },
                 )
+                .named()
                 .checked(component.level == id)
             })
             .collect(),

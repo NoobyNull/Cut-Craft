@@ -333,7 +333,7 @@ mod tests {
         for command in registry.commands() {
             let id = command.id();
             check(format!("{id} name"), command.meta().label);
-            if let Some(about) = crate::gui::about(id) {
+            if let Some(about) = crate::gui::english_about(id) {
                 check(format!("{id} description"), about);
             }
             let mut texts = Vec::new();

@@ -6,7 +6,8 @@
 # - Languages: `cargo nextest run -p cut-craft -p cut-craft-i18n --profile languages`
 #   (Languages workflow): reading and falling back between languages, the English words, the
 #   test language, and the hard-coded text check. The hard-coded text check also stays in the
-#   ordinary run, so no pull request writes new words straight into the code. See
+#   ordinary run. It only warns (it never fails): its output is shown even when it passes, so
+#   each new text written into the code is a warning on the pull request. See
 #   crates/i18n/src/lib.rs and crates/app/src/app/hard_coded_text.rs.
 [profile.default]
 default-filter = "not test(=app::help_coverage::coverage::every_tool_has_help) and not package(cut-craft-i18n)"
@@ -20,5 +21,13 @@ default-filter = "test(/^app::help_coverage::/)"
 [profile.rotary]
 default-filter = "package(cut-craft-rotary) | package(cut-craft-rotary-carving) | package(cmd-rotary-roughing-toolpath) | package(cmd-rotary-finishing-toolpath) | package(cmd-rotary-machining-toolpath) | package(cmd-rotary-lathe-toolpath) | test(/rotary|winding|turn|held_off|indexed|off_centre|across/)"
 
+[[profile.default.overrides]]
+filter = "test(=app::hard_coded_text::warns_of_new_text_written_into_the_code)"
+success-output = "immediate"
+
 [profile.languages]
 default-filter = "package(cut-craft-i18n) or test(/^app::hard_coded_text::/) or test(=commands::tests::english_words_do_not_name_other_programs)"
+
+[[profile.languages.overrides]]
+filter = "test(=app::hard_coded_text::warns_of_new_text_written_into_the_code)"
+success-output = "immediate"

@@ -403,7 +403,7 @@ impl CutCraftApp {
         let schema = cmd.schema();
         let about = schema["description"]
             .as_str()
-            .map(String::from)
+            .map(form::setting_text)
             .or_else(own);
         let fields = form::fields(&schema)
             .into_iter()

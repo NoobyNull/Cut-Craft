@@ -273,7 +273,7 @@ impl CutCraftApp {
             Some((v, params)) => self.edit_shape(v, id, params),
             None => self
                 .status
-                .set_message("Shift-click a shape this tool drew to edit it"),
+                .set_message(&cut_craft_i18n::tr!("status-shift-click-to-edit")),
         }
     }
 
@@ -305,13 +305,12 @@ impl CutCraftApp {
         let key = |k: Key| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
         if key(Key::S) {
             self.polyline.toggle_curves();
-            let mode = if self.polyline.curved {
-                "curves"
-            } else {
-                "straight lines"
-            };
             self.status
-                .set_message(&format!("Drawing {mode} (S swaps)"));
+                .set_message(&cut_craft_i18n::tr!(if self.polyline.curved {
+                    "status-drawing-curves"
+                } else {
+                    "status-drawing-lines"
+                }));
         }
         // what is typed goes to the next point, not to the shortcuts
         let typed: String = ctx.input(|i| {
@@ -339,8 +338,10 @@ impl CutCraftApp {
                 key(k);
             }
             self.polyline.typed.push_str(&typed);
-            self.status
-                .set_message(&format!("Next point: {}", self.polyline.typed));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-next-point",
+                typed = self.polyline.typed.clone()
+            ));
         }
         if key(Key::Enter) && !self.polyline.typed.is_empty() {
             let unit = crate::form::unit_mm(self.doc.job.units);
@@ -354,7 +355,7 @@ impl CutCraftApp {
                 Some(at) => self.polyline.click(at),
                 None => self
                     .status
-                    .set_message("Type a length, x,y, or an angle A length L"),
+                    .set_message(&cut_craft_i18n::tr!("status-type-a-point")),
             }
             self.polyline.typed.clear();
         }
@@ -400,7 +401,7 @@ impl CutCraftApp {
         (self.polyline.curved, self.polyline.extends) = (curved, Some((id, path)));
         self.polyline.click(end);
         self.status
-            .set_message("Drawing on from the end: Space or Esc finishes, Tab closes it");
+            .set_message(&cut_craft_i18n::tr!("status-drawing-on-from-end"));
     }
 
     /// The polyline drawn so far made (closed or not), and a new one begun in the same mode.
