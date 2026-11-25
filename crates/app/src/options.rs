@@ -219,6 +219,7 @@ impl Default for Options {
                 flyout_hold_seconds: flyout_hold_seconds(),
                 fold_tool_groups: false,
                 ribbon_icons: RibbonIcons::Compact,
+                canvas_flyouts: CanvasFlyouts::OnHover,
                 show_tips_at_startup: true,
             },
             job_defaults: JobDefaults::default(),
