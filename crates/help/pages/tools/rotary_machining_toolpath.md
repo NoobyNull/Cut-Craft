@@ -53,8 +53,8 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
 
 ## Settings
 
-- **Tool**: a ball nose follows curves best. A flat-bottomed bit works too, resting on the
-  highest point under it. Its **finishing stepover** (in the Tool Database) is the distance
+- **Bit**: a ball nose follows curves best. A flat-bottomed bit works too, resting on the
+  highest point under it. Its **finishing stepover** (in the Bit Library) is the distance
   from one ring to the next.
 - **Strategy**: how the bit goes round the part (see Four ways round, below):
   - **Radial** keeps the bit straight over the turning axis while A turns.
@@ -147,7 +147,7 @@ collet nut and spindle above every bit of material left at the angle A is locked
 the bit's tip off the model, so a deep cut beside a tall wing never brings the nut down onto it.
 The sizes come from your machine: the holder from [Machine Configuration](help:collisions)
 (the usual ER20 nut and a 65 mm spindle if none is set), and how far the bit sticks out from its
-stick-out in the [Tool Database](help:tool_database).
+stick-out in the [Bit Library](help:tool_database).
 
 It also keeps out of the **Chuck** and **Tailstock** set in Machine Configuration's rotary
 settings: nothing is cut where they hold the material. (The other ways round cut between
@@ -167,7 +167,7 @@ no finish could get down to.
 - **Some of the model is left rough**: no angle tried let the holder get down there. The note
   says where along the part, and which angles A locked at. A bit that sticks out further, a
   slimmer holder, more **Tilts**, or the model sliced into parts would reach it. If the
-  [Tool Database](help:tool_database) doesn't say how far the bit sticks out of the collet
+  [Bit Library](help:tool_database) doesn't say how far the bit sticks out of the collet
   (its stick-out, or its flute length), 25 mm is taken and the note says so. That guess is
   often what leaves a detailed model rough: measure the bit in the collet and set it.
 - A model joined to the material at the chuck or tailstock end (Job Setup's **Keep Joined

@@ -1,6 +1,6 @@
 //! Pocket Toolpath: clears the inside of the selected closed vectors at each depth, with
 //! rings that step in from the outline (worked from the middle outwards), with raster
-//! lines and a profile pass round the edge, or adaptively, the tool keeping a thin, steady
+//! lines and a profile pass round the edge, or adaptively, the bit keeping a thin, steady
 //! bite everywhere so it never cuts with more than a sliver of its edge.
 
 use cut_craft_core::adaptive::{self, Clearing, Piece};
@@ -88,12 +88,12 @@ pub struct Params {
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_pocket.png"))]
     pub depth: f64,
-    /// The bit that cuts the walls and finishes the pocket; Select… picks one from your tools
+    /// The bit that cuts the walls and finishes the pocket; Select… picks one from your bits
     pub tool: Tool,
-    /// Bigger tools that clear the pocket first, largest first: each makes a toolpath of its
-    /// own and each tool after it cuts only what the ones before it left (rest machining)
+    /// Bigger bits that clear the pocket first, largest first: each makes a toolpath of its
+    /// own and each bit after it cuts only what the ones before it left (rest machining)
     #[serde(default)]
-    #[schemars(title = "Clearance Tools")]
+    #[schemars(title = "Clearance Bits")]
     pub clearance_tools: Vec<Tool>,
     /// The pattern that clears the inside of the pocket
     #[serde(default)]
@@ -163,7 +163,7 @@ pub struct Params {
     #[serde(default = "ramp_distance")]
     #[schemars(skip)]
     pub ramp_distance: f64,
-    /// How the tool goes down into the material (helix, zig-zag, ramp or straight down), set
+    /// How the bit goes down into the material (helix, zig-zag, ramp or straight down), set
     /// in the Entry window: once in each area of the pocket, fitted to the room there, then
     /// each ring links on to the next at depth. Unset on toolpaths made before entry modes
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -260,20 +260,21 @@ impl Command for PocketToolpath {
     }
 }
 
-/// The depth and the tool's sizes, checked.
+/// The depth and the bit's sizes, checked.
 fn check(p: &Params) -> Result<(), CommandError> {
     ensure_positive("depth", p.depth)?;
-    ensure_positive("tool diameter", p.tool.diameter)?;
+    ensure_positive("bit diameter", p.tool.diameter)?;
     ensure_positive("pass depth", p.tool.pass_depth)?;
     if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
         return Err(CommandError::InvalidParams(
-            "set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database".into(),
+            "set the bit's clearing stepover to more than 0% and at most 100% in the Bit Library"
+                .into(),
         ));
     }
     Ok(())
 }
 
-/// The selected closed vectors `p` pockets, and where its tool's centre keeps inside them.
+/// The selected closed vectors `p` pockets, and where its bit's centre keeps inside them.
 fn pocket_edge(
     doc: &Document,
     p: &Params,
@@ -298,7 +299,7 @@ fn pocket_edge(
     Ok((ids, edge))
 }
 
-/// The pocket for `p`'s own tool.
+/// The pocket for `p`'s own bit.
 fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpath, CommandError> {
     {
         check(p)?;
@@ -436,7 +437,7 @@ fn edge_at_full_depth(
 
 /// Where a pocket's clearing stops and when its pass round the edge comes.
 struct EdgePass {
-    /// Where the clearing's tool centre keeps inside: the edge, or less the skim left for
+    /// Where the clearing's bit centre keeps inside: the edge, or less the skim left for
     /// the edge pass.
     inner: Vec<Path>,
     /// Whether `inner` stops short of the edge.
@@ -448,7 +449,7 @@ struct EdgePass {
 }
 
 impl EdgePass {
-    /// For `p`, whose tool centre keeps inside `edge`: offset rings always end on the edge,
+    /// For `p`, whose bit centre keeps inside `edge`: offset rings always end on the edge,
     /// raster and adaptive clearing go round it unless their edge pass is None. Full depth
     /// only where the bit's flutes reach (or their length is not known); else each pass.
     fn of(p: &Params, edge: &[Path]) -> Self {
@@ -483,7 +484,7 @@ impl EdgePass {
     }
 }
 
-/// How `p` goes down into the pocket whose tool centre keeps inside `edge`.
+/// How `p` goes down into the pocket whose bit centre keeps inside `edge`.
 fn entry_for(p: &Params, edge: &[Path]) -> Entry {
     Entry {
         ramp: if p.ramp_plunge_moves && p.entry.is_none() {
@@ -503,7 +504,7 @@ fn entry_for(p: &Params, edge: &[Path]) -> Entry {
     }
 }
 
-/// The rings and lines `paths` cut at `z`, entering from `above` only where the tool must go
+/// The rings and lines `paths` cut at `z`, entering from `above` only where the bit must go
 /// down into the material: a closed ring within a bit's width of where the last one ended,
 /// with a straight way across to it in the pocket, is cut next, linked to at depth, so each
 /// area of the pocket is entered once. With `lines`, an open path (a raster line) whose start
@@ -562,7 +563,7 @@ fn linked(
     moves
 }
 
-/// Where the tool was at depth `z` before it lifted at the end of `moves`.
+/// Where the bit was at depth `z` before it lifted at the end of `moves`.
 fn at_depth(moves: &[Move], z: f64) -> Option<Point> {
     let last = moves.iter().rev().find(|m| m.kind != MoveKind::Rapid)?;
     ((last.to.z - z).abs() < 1e-9).then(|| last.to.truncate())
@@ -577,7 +578,7 @@ fn nearest_vertex(points: &[Point], at: Point) -> Option<(usize, f64)> {
         .min_by(|a, b| a.1.total_cmp(&b.1))
 }
 
-/// The adaptive clearing of the pocket whose tool centre keeps inside `edge`, the same at
+/// The adaptive clearing of the pocket whose bit centre keeps inside `edge`, the same at
 /// every depth; empty unless `p` clears adaptively.
 fn adaptive_plan(
     p: &Params,
@@ -690,7 +691,7 @@ fn adaptive_moves(plan: &[Piece], z: f64, above: f64, safe: f64, entry: &Entry) 
 }
 
 /// One pass round each of the pocket's `rings` (turned the way they cut) at depth `z`, for a
-/// clean wall after adaptive clearing: from the tool's place `from` (at depth, in the cleared
+/// clean wall after adaptive clearing: from the bit's place `from` (at depth, in the cleared
 /// pocket) across to the nearest corner of each ring where the way is clear, else up and
 /// over. Ends lifted to `safe`.
 fn walls(
@@ -775,7 +776,7 @@ fn oriented(direction: Direction, ring: &Path) -> Vec<Point> {
     direction.orient(points, outline)
 }
 
-/// The trochoidal clearing of the region inside `edge` (where the tool's middle may go):
+/// The trochoidal clearing of the region inside `edge` (where the bit's middle may go):
 /// looping bands from the outline in, each band's loops reaching from the one outside it to
 /// the one inside, then plain rings for a middle too small for a band. `back`: each band runs
 /// the other way round, its loops still turning `loops`' way.
@@ -883,7 +884,7 @@ pub struct Candidate {
     pub loaded: bool,
 }
 
-/// What a tool change costs, minutes: by hand, or by the tool changer.
+/// What a bit change costs, minutes: by hand, or by the tool changer.
 #[derive(Clone, Copy, Debug)]
 pub struct Changes {
     pub by_hand: f64,
@@ -907,7 +908,7 @@ const SUGGEST_SIZES: usize = 6;
 /// more bits already in the tool changer wins, then the one with fewer bits.
 const SAME_TIME: f64 = 0.03;
 
-/// The quickest way to `p`'s pocket finished by its own tool: alone, after one bigger bit
+/// The quickest way to `p`'s pocket finished by its own bit: alone, after one bigger bit
 /// from `candidates`, or after two. Bigger end mills only, one of each size (a loaded one
 /// first); each plan is calculated as Calculate would make it and timed at `rapid`, with
 /// `changes` for each bit change (the finishing bit's own `finishing_loaded`).

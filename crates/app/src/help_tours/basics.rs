@@ -292,8 +292,8 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:place"),
             },
             Step {
-                caption: "Check the bit is a **V-bit**. **Select…** picks one from your Tool \
-                          Database; its angle sets how deep each part is carved.",
+                caption: "Check the bit is a **V-bit**. **Select…** picks one from your Bit \
+                          Library; its angle sets how deep each part is carved.",
                 setup: |_, _| {},
                 mark: Mark::At("button:Select…"),
             },

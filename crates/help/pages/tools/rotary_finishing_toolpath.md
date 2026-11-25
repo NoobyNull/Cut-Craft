@@ -15,7 +15,7 @@ only a thin, even layer to take off.
    **4th axis** is ticked in Machine Configuration (see
    [The 4th axis and your firmware](help:rotary_firmware)).
 3. Pick a ball nose: it follows curves best. Its **finishing stepover** (in the
-   [Tool Database](help:tool_database)) is how far apart the passes are: smaller for a
+   [Bit Library](help:tool_database)) is how far apart the passes are: smaller for a
    smoother part.
 4. Choose the **Direction**, the **Cut direction** and where the **Bit** is **held** (below).
 5. Press **Calculate**.

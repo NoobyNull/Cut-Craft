@@ -16,7 +16,7 @@ tabs-edit = Edit Tabs…
 
 # The form's tabs in one line. $length and $thickness come with their unit, such as "6 mm".
 tabs-summary-size = { $length } long, { $thickness } thick
-tabs-summary-size-from-tool = { $length } long, { $thickness } thick (from the tool)
+tabs-summary-size-from-tool = { $length } long, { $thickness } thick (from the bit)
 # $distance comes with its unit.
 tabs-summary-automatic = about one every { $distance }, 3 or more a shape (fewer if small)
 tabs-summary-number = { $number } a shape
@@ -48,7 +48,7 @@ tabs-flat = 2D Tabs
     .tooltip = Up at the start of each tab, across it flat, down at its end
 tabs-triangular = 3D Tabs
     .tooltip = Up to the tab's thickness at its middle and down the other side
-tabs-size-from-tool = Size from the tool
+tabs-size-from-tool = Size from the bit
     .tooltip = As thick as the pass depth (at most half the cut), twice as long
 tabs-length = Length (width along the path)
 tabs-thickness = Thickness (height)

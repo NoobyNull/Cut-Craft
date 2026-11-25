@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-25
-see-also: view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
+see-also: backups, view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
 # Changing settings
@@ -66,7 +66,7 @@ processor's cores to start with, at a priority that gives way to your other prog
 holds the speed-or-detail choices for previews and the 3D view. See
 [Keeping the computer responsive](help:performance).
 
-## Snapping Options, Machine Configuration and the Tool Database
+## Snapping Options, Machine Configuration and the Bit Library
 
 The other windows that hold settings work the same way:
 
@@ -75,7 +75,7 @@ The other windows that hold settings work the same way:
 
 ![Snapping Options with a change not applied yet](pictures/snapping-not-applied.png)
 
-- **Machine Configuration**, the **Tool Database** and the **Materials Library** keep their
+- **Machine Configuration**, the **Bit Library** and the **Materials Library** keep their
   **OK**, **Cancel** and **Apply** where they always were. **Apply** is greyed out until you
   change something, the same **● Changes not applied yet** note shows beside it while
   changes wait, and **OK** keeps them and closes.
@@ -171,6 +171,12 @@ in Ribbon on the **Favourites** tab, in Rail with **★**, and in Classic from t
 Toolpaths side tab's right-click menu. See [Favourites](help:favourites) for every step.
 
 To pick another layout, use [Interface Layout](help:interface_layout).
+
+## Backups
+
+**Options ▸ Backups** lists the backups Cut Craft has made by itself, and sets how often and
+how many. **Help ▸ Back Up Settings** saves everything set up here, and more, in one file. See
+[Backing up your settings](help:backups).
 
 See also: [Web API](help:web_api), [3D View](help:view_3d), [Did You Know?](help:tips),
 [Interface Layout](help:interface_layout).

@@ -131,7 +131,7 @@ impl Default for Params {
                 .tools
                 .into_iter()
                 .find(|t| t.shape == ToolShape::BallNose)
-                .expect("the starter tools include a ball nose"),
+                .expect("the starter bits include a ball nose"),
             strategy: Strategy::Radial,
             offset: 3.0,
             faces: 4,
@@ -199,11 +199,11 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         ));
     };
     let tool = &p.tool;
-    ensure_positive("tool diameter", tool.diameter)?;
+    ensure_positive("bit diameter", tool.diameter)?;
     let stepover = tool.finishing_stepover();
     if !(stepover > 0.0 && stepover <= 1.0) {
         return Err(CommandError::InvalidParams(
-            "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
+            "the bit's finishing stepover must be more than 0% and at most 100%: set it in the Bit Library".into(),
         ));
     }
     let carving = Carving::of(

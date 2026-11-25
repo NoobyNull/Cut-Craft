@@ -1,4 +1,4 @@
-//! Searching the Tool Database by tool name: each name's words are indexed, and a search
+//! Searching the Bit Library by tool name: each name's words are indexed, and a search
 //! finds the tools with a word starting with each word typed, in any order and case.
 
 use cut_craft_core::toolpath::ToolDatabase;

@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-20
-see-also: checks_before_cutting, check_bed
+reviewed: 2026-11-25
+see-also: checks_before_cutting, check_bed, protect_the_machine
 ---
 
 # Fits the Z axis travel
@@ -22,5 +22,9 @@ on the way up, or cannot reach the depth on the way down.
 - Lower the **Clearance (Z1)** in Job Setup: a few millimetres above clamps is plenty.
 - Cut less deep, or set the bit to stick out further.
 - If it says *not checked*, give the machine its Z travel in Machine Configuration.
+
+This is **⛔ Could damage the machine**: never saved, sent or made through the Web API while
+it is so, with no tick and no Save Anyway. The only way past is switching **Z travel** off
+in the machine's [Protect the Machine](help:protect_the_machine).
 
 See also [Checks before cutting](help:checks_before_cutting).

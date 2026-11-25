@@ -32,3 +32,5 @@ see-also: profile_toolpath, merged_toolpath
    ![Step 6](pictures/array_copy_toolpath/step-6.png)
 
 When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+Copies may reach up to a bit's radius past the edge of the material, as the edge of a cut-out part does.

@@ -1,4 +1,4 @@
-//! The side panels and windows: Tool Database, layers, sheets, clipart, the component tree,
+//! The side panels and windows: Bit Library, layers, sheets, clipart, the component tree,
 //! playback and the 3D view.
 
 use super::RING_SHARE;

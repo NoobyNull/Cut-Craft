@@ -192,6 +192,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
             }
             app.space_mouse = Some(crate::spacemouse::listen(cc.egui_ctx.clone()));
             app.check_for_updates_at_startup(&cc.egui_ctx);
+            app.weekly_backup_at_startup();
             // only now: a panic setting up the app (above) still says why in a message box,
             // rather than the window never appearing and nothing said
             crate::startup::window_opened();

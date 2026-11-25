@@ -1,5 +1,5 @@
 # src/app/actions.rs
-actions-tool = Tool
+actions-tool = Bit
 
 # Why a built-in action is greyed out, shown on hover (src/app/built_ins.rs).
 actions-why-nothing-to-undo = Nothing to undo yet

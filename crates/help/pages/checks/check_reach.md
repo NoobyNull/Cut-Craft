@@ -21,7 +21,7 @@ can snap the bit.
 ## How to fix it
 
 - Pick a bit with longer flutes, or cut less deep.
-- Set the bit's real **Flute Length** in the Tool Database (measure the cutting part).
+- Set the bit's real **Flute Length** in the Bit Library (measure the cutting part).
 - For a V-bit, a deeper cut needs a wider V-bit.
 
 See also [Checks before cutting](help:checks_before_cutting).

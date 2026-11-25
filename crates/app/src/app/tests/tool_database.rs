@@ -1,8 +1,8 @@
-//! The Tool Database: bits, their feeds, and the tools toolpath forms pick from it.
+//! The Bit Library: bits, their feeds, and the tools toolpath forms pick from it.
 
 use super::*;
 
-/// Vendor tool databases are not part of the repo: `CUT_CRAFT_VENDOR_FILES` names a
+/// Vendor bit libraries are not part of the repo: `CUT_CRAFT_VENDOR_FILES` names a
 /// folder holding some to try them.
 #[test]
 fn a_vendor_tool_database_imports_when_one_is_given() {
@@ -83,7 +83,7 @@ fn relief_from_photo_carves_only_what_the_bit_can() {
     let params = form.params.clone();
     let refused = h.app.apply_form("relief_from_photo", &params).unwrap_err();
     assert!(refused.contains("Select…"), "{refused}");
-    // the bit comes from the Tool Database, as on a toolpath form; no passes or rest there
+    // the bit comes from the Bit Library, as on a toolpath form; no passes or rest there
     h.frame(vec![]);
     assert!(h.text_at("Select…").is_some(), "the form's tool");
     assert!(h.text_at("Edit Passes…").is_none());
@@ -112,11 +112,7 @@ fn toolpath_forms_take_their_tool_from_the_database_and_follow_its_edits() {
     );
     assert_eq!(h.app.form.as_ref().unwrap().params["tool"]["diameter"], 3.0);
     h.app.edit_tool(&h.ctx, Some("3 mm End Mill".into()));
-    let manager = h
-        .app
-        .tool_manager
-        .as_mut()
-        .expect("the Tool Database opens");
+    let manager = h.app.tool_manager.as_mut().expect("the Bit Library opens");
     let Some(cut_craft_tool_database::Pick::Tool(i)) = manager.pick else {
         panic!("on the form's tool")
     };
@@ -163,7 +159,7 @@ fn three_d_finishing_picks_its_tools_in_the_tool_database() {
     let first = h.app.form.as_ref().unwrap().params["tools"][0]["name"].clone();
     // no drop-down of tools: each has Select… and Edit…, and Add a tool… opens the database
     assert!(h.text_at("Select…").is_some(), "the first tool's Select…");
-    let add = h.text_at("Add a tool…").expect("an Add button");
+    let add = h.text_at("Add a bit…").expect("an Add button");
     h.click(add, Modifiers::NONE);
     select_in_tool_database(&mut h, "6 mm Ball Nose");
     let form = h.app.form.as_ref().unwrap();
@@ -196,7 +192,7 @@ fn rest_machining_picks_its_earlier_tools_in_the_tool_database() {
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.app.choose_tool("3 mm End Mill");
     h.frame(vec![]);
-    // what Rest Machining's Add a tool… asks for: Select Tool, for its list
+    // what Rest Machining's Add a tool… asks for: Select Bit, for its list
     h.app
         .ask_listed(&h.ctx, ToolList::Rest, ListAsk::Select(ListSlot::New));
     select_in_tool_database(&mut h, "6 mm End Mill");
@@ -259,7 +255,7 @@ fn the_tool_database_window_shows_the_chip_load() {
     h.frame(vec![]);
     h.frame(vec![]);
     // the details scroll: down to the feeds
-    let details = h.text_at("Tool Info").expect("the tool's details");
+    let details = h.text_at("Bit Info").expect("the tool's details");
     for _ in 0..3 {
         h.frame(vec![
             Event::PointerMoved(details),
@@ -366,7 +362,7 @@ fn pocket_clears_with_bigger_bits_picked_in_the_tool_database() {
         "clearing does its job"
     );
     assert!(
-        h.text_at("Add a tool…").is_none(),
+        h.text_at("Add a bit…").is_none(),
         "no menus of tools on the form"
     );
     let tick = h
@@ -376,11 +372,11 @@ fn pocket_clears_with_bigger_bits_picked_in_the_tool_database() {
         h.app.form.as_ref().unwrap().params["clearance_tools"],
         serde_json::json!([])
     );
-    // ticking it opens the Tool Database to pick the clearing bit in
+    // ticking it opens the Bit Library to pick the clearing bit in
     h.click(tick, Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
+    let manager = h.app.tool_manager.as_mut().expect("Select Bit");
     assert!(manager.selecting);
     let big = manager
         .draft
@@ -414,7 +410,7 @@ fn pocket_clears_with_bigger_bits_picked_in_the_tool_database() {
     );
     h.frame(vec![]);
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
+    let manager = h.app.tool_manager.as_mut().expect("Select Bit");
     let middle = manager
         .draft
         .tools
@@ -519,7 +515,7 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_the_jobs_toolpaths_too() {
     two_tools(&mut h);
     h.app.rename_toolpath_tools(
         &[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())],
-        "Tool database saved",
+        "Bit library saved",
     );
     let names: Vec<(String, String)> = h
         .app
@@ -577,7 +573,7 @@ fn a_tool_renamed_in_the_tool_database_is_renamed_in_other_saved_jobs_when_they_
     // another job, saved before the bit was renamed
     let other = dir.join("other.ccjob");
     h.app.save_to(&other);
-    // renamed in the Tool Database window, then OK
+    // renamed in the Bit Library window, then OK
     h.app.invoke(&h.ctx, "tool_database");
     h.frame(vec![]);
     let manager = h.app.tool_manager.as_mut().unwrap();
@@ -648,7 +644,7 @@ fn a_laser_form_shows_its_laser_from_the_tool_database_and_says_when_a_bit_is_pi
     );
     assert!(!texts.iter().any(|t| t.contains("end mill")), "{texts:?}");
     assert!(
-        !texts.iter().any(|t| t.contains("Not in the Tool Database")),
+        !texts.iter().any(|t| t.contains("Not in the Bit Library")),
         "the laser is in it"
     );
     assert!(!texts.iter().any(|t| t.contains("is not a laser")));
@@ -688,9 +684,9 @@ fn a_tool_database_or_materials_library_that_could_not_be_read_is_never_said_sav
     std::fs::write(&materials, "{ not json").unwrap();
     h.app.load_tools_at(Some(tools.clone()));
     h.app.load_materials_at(Some(materials.clone()));
-    h.app.tools_changed("Tool database saved");
+    h.app.tools_changed("Bit library saved");
     let message = h.app.status.message.clone();
-    assert!(message.starts_with("Tool database not saved"), "{message}");
+    assert!(message.starts_with("Bit library not saved"), "{message}");
     assert!(message.contains("tools.json"), "{message}");
     assert!(message.contains("rename that file"), "{message}");
     let saved = h.app.save_materials();
@@ -721,7 +717,7 @@ fn the_materials_library_s_add_tool_keeps_a_catalogue_bit_copied_into_my_tools()
         .unwrap();
     window.pick = Some(MaterialPick::Material(maple));
     h.app.materials_window = Some(window);
-    // Add Tool, then Copy to My Tools and Select on the catalogue bit
+    // Add Tool, then Copy to My Bits and Select on the catalogue bit
     let mut picker = cut_craft_tool_database::Manager::selecting(&h.app.tools, "Maker Bit");
     cut_craft_tool_database::tree::copy_to_mine(&mut picker.draft, catalogue);
     h.app.tool_manager = Some(picker);
@@ -736,7 +732,7 @@ fn the_materials_library_s_add_tool_keeps_a_catalogue_bit_copied_into_my_tools()
     let has_maple =
         |t: &cut_craft_core::toolpath::Tool| t.materials.iter().any(|d| d.material == "Hard Maple");
     let mine = h.app.tools.get("Maker Bit").unwrap();
-    assert!(!h.app.tools.is_catalogue(mine), "the My Tools copy is kept");
+    assert!(!h.app.tools.is_catalogue(mine), "the My Bits copy is kept");
     assert!(has_maple(mine), "with the material's feeds");
     assert!(
         !has_maple(&h.app.tools.tools[catalogue]),
@@ -788,12 +784,12 @@ fn a_renamed_tool_s_toolpaths_never_say_an_unreadable_tool_database_was_saved() 
     std::fs::write(&tools, "{ not json").unwrap();
     h.app.load_tools_at(Some(tools.clone()));
     h.app.tools_kept(
-        "Tool database saved",
+        "Bit library saved",
         &[("6 mm End Mill".to_owned(), "Spiral 6".to_owned())],
     );
     let message = h.app.status.message.clone();
-    assert!(message.starts_with("Tool database not saved"), "{message}");
-    assert!(!message.contains("Tool database saved"), "{message}");
+    assert!(message.starts_with("Bit library not saved"), "{message}");
+    assert!(!message.contains("Bit library saved"), "{message}");
     let names: Vec<_> = h.app.doc.toolpaths.values().map(|t| &t.tool.name).collect();
     assert!(names.iter().any(|n| *n == "Spiral 6"), "{names:?}");
     std::fs::remove_dir_all(&dir).ok();

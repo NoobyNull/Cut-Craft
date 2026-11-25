@@ -16,8 +16,8 @@ see-also: checks_before_cutting, profile_toolpath, pocket_toolpath, collisions, 
    ![Step 2](pictures/save_toolpaths/step-2.png)
 
 3. Under **Checks before cutting**, every check is listed with how it came out. Fix anything
-   marked ✖ Must fix, then read each ⚠ and tick it. **Save Toolpaths...** and **Send to
-   Machine** wait until every ⚠ is ticked.
+   marked ✖ Must fix if you can, then read each ✖ and ⚠ and tick it. **Save Toolpaths...**
+   and **Send to Machine** wait until every one is ticked.
 
    ![The checks done: what each found](pictures/checks/checks-found.png)
 
@@ -30,7 +30,10 @@ checks list it as **⚠ Check** and Save always asks before writing the file, wh
 Options say. See [Collet and Holder Collisions](help:collisions).
 
 When Save asks, it lists every problem the checks found. **Save Anyway** goes on despite
-those problems only. If the checks find one it did not list (say you changed a toolpath
+those problems only. A ✖ Must fix error is asked about every time, each with a tick of its
+own, and the saved file says at the top what it was saved with: see
+[Saving with errors](help:checks_before_cutting). When the job would not run as saved, Save
+says so and offers **Save Anyway** or **Go Back**. If the checks find one it did not list (say you changed a toolpath
 in between), Save asks again. A new or opened job always asks afresh.
 
 The checks run in the background, so the window keeps working while they do. If a
@@ -50,14 +53,14 @@ match and can cut into the model: save them again with this version before cutti
 
 ## Jobs with more than one bit
 
-Under **Tool Changes**, Save Toolpaths offers three ways to save a job that uses several bits:
+Under **Bit Changes**, Save Toolpaths offers three ways to save a job that uses several bits:
 
-- **Separate file for each tool**: the default on a machine without a tool changer. Each
+- **Separate file for each bit**: the default on a machine without a tool changer. Each
   bit gets its own file, numbered in cutting order. Run them in turn, changing the bit and
   setting Z zero between files.
 - **Tool changer (ATC)**: one file, and the tool changer swaps the bits. You can only pick
   it when the machine has a tool changer set up in Machine Configuration.
-- **One file, pause to change the tool**: one file that lifts the bit, stops the spindle and
+- **One file, pause to change the bit**: one file that lifts the bit, stops the spindle and
   pauses (`M0`) at each change. Change the bit, set Z zero, then resume. Standard GRBL cannot
   jog while paused, so use separate files there.
 

@@ -142,6 +142,8 @@ pub enum Which {
 /// What `POST gcode` makes: as Save Toolpaths' form would.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
+// each flag is its own JSON switch a script sends; they are not one state in disguise
+#[allow(clippy::struct_excessive_bools)]
 pub struct Gcode {
     /// Only this toolpath; else every shown one.
     #[serde(default)]
@@ -165,6 +167,12 @@ pub struct Gcode {
     /// Go ahead though the checks before cutting found warnings (as answering Save Anyway).
     #[serde(default)]
     pub accept_warnings: bool,
+    /// Go ahead though the checks before cutting found errors (Must fix: a crash, a clamp,
+    /// a job that will not run): answered on its own, as each error is ticked in Save
+    /// Anyway, so a script never goes past one by accident. The files then say so at the
+    /// top.
+    #[serde(default)]
+    pub accept_errors: bool,
 }
 
 /// Which vectors `POST select` picks. Locked and hidden layers' vectors are never picked.

@@ -1,4 +1,4 @@
-//! Finding the valleys a pencil pass runs along, on a grid of tool tip heights: where the
+//! Finding the valleys a pencil pass runs along, on a grid of bit tip heights: where the
 //! surface the bit's tip can reach bends up on both sides (a crease), thinned to lines one
 //! cell wide and traced into polylines. Cut Craft's own method.
 

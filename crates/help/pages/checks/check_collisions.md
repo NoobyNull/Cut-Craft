@@ -14,7 +14,7 @@ above the flutes run into wood that is still there: the plain shank (where it is
 the cut), the **collet nut** that holds the bit, and the **spindle** body above it, and
 whether they come down over a clamp (a keep-out zone given a height). It uses
 the sizes in Machine Configuration ▸ Spindle and Collet Nut, and each bit's **Stick-out**
-from the Tool Database.
+from the Bit Library.
 
 ## Why it matters
 
@@ -31,7 +31,7 @@ crash into the work is never saved by a tick alone. Nothing is refused: you deci
 ## How to fix it
 
 - Use a bit with longer flutes, or one that sticks out further from the collet nut, and set
-  its **Stick-out** in the Tool Database to what you measure.
+  its **Stick-out** in the Bit Library to what you measure.
 - Cut less deep in one toolpath, or clear the wood beside the cut first with a wider pocket.
 - Check the nut and spindle sizes in Machine Configuration: until you set them, an ER20 nut
   (35 mm across, 20 mm tall) and a 65 mm spindle are assumed.

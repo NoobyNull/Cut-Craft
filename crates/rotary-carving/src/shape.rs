@@ -311,7 +311,7 @@ pub fn left_note(
     let (stickout, guessed) = cut_craft_core::collision::stickout(tool);
     let guess = if guessed {
         format!(
-            " The Tool Database doesn't say how far this bit sticks out of the collet, so {} \
+            " The Bit Library doesn't say how far this bit sticks out of the collet, so {} \
              was taken: set its stick-out there if it sticks out further.",
             units.length(stickout, 0)
         )
