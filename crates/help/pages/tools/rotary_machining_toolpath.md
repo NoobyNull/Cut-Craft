@@ -1,11 +1,18 @@
 ---
 reviewed: 2026-11-25
-see-also: rotary_roughing_toolpath, rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, tool_database, web_api, performance
+see-also: rotary_roughing_toolpath, rotary_finishing_toolpath, rotary_locked_angles_toolpath, rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, tool_database, web_api, performance
 ---
 
 **4-Axis Rotary Machining** finishes a 3D model all the way round a turning cylinder. The bit
 moves along the part and up and down while A turns the material under it: X, Z and A move
 together.
+
+Its Radial, Off centre and Indexed strategies now have toolpaths of their own:
+[Rotary Finishing](help:rotary_finishing_toolpath) (over the axis or off centre) and
+[Rotary Locked Angles](help:rotary_locked_angles_toolpath). A job saved with one of them opens
+as the new toolpath, with the moves it had, so it cuts the same until you recalculate it.
+Recalculated, it cuts only what the toolpaths above it in the list leave. Sides then details
+stays here.
 
 It is worked out round the turning axis itself, not on the unrolled sheet. Deep in the part, the
 bit reaches further round than it does at the surface, so a toolpath made on the flat sheet can
